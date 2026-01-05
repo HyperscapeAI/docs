@@ -1,90 +1,102 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "quill",
+  "theme": "palm",
   "name": "Hyperscape",
   "description": "The first AI-native MMORPG where autonomous agents play alongside humans",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#4ADE80",
-    "dark": "#15803D",
+    "primary": "#CA8A04",
+    "light": "#18181B",
+    "dark": "#FACC15"
+  },
+  "appearance": {
+    "default": "dark",
     "background": {
-      "light": "#FAFAFA",
-      "dark": "#09090B"
+      "decoration": "windows",
+      "color": {
+        "light": "#FAFAF9",
+        "dark": "#09090B"
+      }
     }
   },
+  "icons": {
+    "library": "lucide"
+  },
+  "styling": {
+    "codeblocks": {
+      "theme": {
+        "light": "github-light",
+        "dark": "one-dark-pro"
+      }
+    },
+    "eyebrow": "breadcrumbs"
+  },
   "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
   "navigation": {
     "tabs": [
       {
         "tab": "Getting Started",
+        "icon": "rocket",
         "groups": [
           {
             "group": "Overview",
-            "pages": [
-              "index",
-              "quickstart",
-              "architecture"
-            ]
+            "icon": "home",
+            "pages": ["index", "quickstart", "architecture"]
           }
         ]
       },
       {
         "tab": "Guides",
+        "icon": "book-open",
         "groups": [
           {
             "group": "User Guides",
-            "pages": [
-              "guides/playing",
-              "guides/development"
-            ]
+            "icon": "user",
+            "pages": ["guides/playing", "guides/development"]
           },
           {
             "group": "Content Creation",
-            "pages": [
-              "guides/adding-content",
-              "guides/ai-agents"
-            ]
+            "icon": "puzzle",
+            "pages": ["guides/adding-content", "guides/ai-agents"]
           },
           {
             "group": "Deployment",
-            "pages": [
-              "guides/deployment",
-              "guides/mobile"
-            ]
+            "icon": "cloud-upload",
+            "pages": ["guides/deployment", "guides/mobile"]
           }
         ]
       },
       {
         "tab": "Concepts",
+        "icon": "lightbulb",
         "groups": [
           {
             "group": "Architecture",
-            "pages": [
-              "concepts/ecs",
-              "concepts/multiplayer"
-            ]
+            "icon": "layers",
+            "pages": ["concepts/ecs", "concepts/multiplayer"]
           },
           {
             "group": "Game Systems",
-            "pages": [
-              "concepts/combat",
-              "concepts/skills",
-              "concepts/economy"
-            ]
+            "icon": "swords",
+            "pages": ["concepts/combat", "concepts/skills", "concepts/economy"]
           },
           {
             "group": "Data Design",
-            "pages": [
-              "concepts/manifests"
-            ]
+            "icon": "database",
+            "pages": ["concepts/manifests"]
           }
         ]
       },
       {
         "tab": "Packages",
+        "icon": "package",
         "groups": [
           {
             "group": "Package Reference",
+            "icon": "folder-open",
             "pages": [
               "packages/overview",
               "packages/shared",
@@ -98,9 +110,11 @@
       },
       {
         "tab": "DevOps",
+        "icon": "settings",
         "groups": [
           {
             "group": "Operations",
+            "icon": "wrench",
             "pages": [
               "devops/configuration",
               "devops/docker",
@@ -119,16 +133,12 @@
           "icon": "github"
         },
         {
-          "anchor": "Play Now",
+          "anchor": "Play Game",
           "href": "https://hyperscape.game",
-          "icon": "gamepad"
+          "icon": "gamepad-2"
         }
       ]
     }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
   },
   "navbar": {
     "links": [
@@ -144,13 +154,7 @@
     }
   },
   "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "claude",
-      "cursor",
-      "vscode"
-    ]
+    "options": ["copy", "view", "claude", "cursor", "vscode"]
   },
   "footer": {
     "socials": {
