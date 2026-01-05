@@ -1,0 +1,97 @@
+---
+title: "Development Setup"
+description: "Local development workflow, hot reload, and debugging"
+---
+
+## Development Commands
+
+### Core Commands
+
+| Command | Description |
+|---------|-------------|
+| `bun run dev` | Start game (client + server + shared) |
+| `bun run dev:ai` | Game + ElizaOS AI agents |
+| `bun run dev:all` | Everything: game + AI + AssetForge |
+| `bun run build` | Build all packages |
+| `bun start` | Start production server |
+
+### Package-Specific
+
+```bash
+bun run dev:client    # Client only (port 3333)
+bun run dev:server    # Server only (port 5555)
+bun run dev:shared    # Shared package with watch mode
+bun run dev:forge     # AssetForge tools
+```
+
+## Port Allocation
+
+| Port | Service | Started By |
+|------|---------|------------|
+| 3333 | Game Client | `bun run dev` |
+| 5555 | Game Server | `bun run dev` |
+| 8080 | Asset CDN | `bun run dev` |
+| 5432 | PostgreSQL | Docker (auto) |
+| 4001 | ElizaOS API | `bun run dev:ai` |
+| 3400 | AssetForge UI | `bun run dev:forge` |
+| 3401 | AssetForge API | `bun run dev:forge` |
+
+## Hot Reload
+
+The dev server provides:
+
+- **Client**: Vite HMR for instant updates
+- **Server**: Auto-restart on file changes
+- **Shared**: Watch mode with rebuild
+
+## Docker Services
+
+```bash
+bun run cdn:up      # Start CDN container
+bun run cdn:down    # Stop CDN container
+```
+
+<Info>
+  The CDN starts automatically with `bun run dev`. Only run manually if using services separately.
+</Info>
+
+## Testing
+
+```bash
+npm test                              # Run all tests
+npm test --workspace=packages/server  # Test specific package
+```
+
+<Warning>
+  Tests use real Hyperscape instances with Playwright—no mocks allowed. The server must not be running before tests.
+</Warning>
+
+## Linting
+
+```bash
+npm run lint        # Lint codebase
+npm run typecheck   # TypeScript type checking
+```
+
+## Common Workflows
+
+### Adding a New Feature
+
+1. Make changes in `packages/shared/src/`
+2. Hot reload applies automatically
+3. Test in browser at localhost:3333
+
+### Debugging Server
+
+1. Check terminal output for errors
+2. Server logs show WebSocket activity
+3. Database queries logged in dev mode
+
+### Clean Rebuild
+
+```bash
+bun run clean
+rm -rf node_modules packages/*/node_modules
+bun install
+bun run build
+```

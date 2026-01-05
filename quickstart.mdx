@@ -1,80 +1,101 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get Hyperscape running locally in minutes"
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, ensure you have:
 
-### Step 1: Set up your local environment
+- [Bun](https://bun.sh) v1.1.38 or higher
+- [Git LFS](https://git-lfs.com) for large file support
+- [Docker](https://docker.com) for PostgreSQL and CDN
+- [Privy](https://privy.io) account for authentication
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    brew install git-lfs
+    git lfs install
+    ```
+  </Tab>
+  <Tab title="Linux">
+    ```bash
+    apt install git-lfs
+    git lfs install
+    ```
+  </Tab>
+</Tabs>
+
+## Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/HyperscapeAI/hyperscape.git
+    cd hyperscape
+    bun install
+    ```
+  </Step>
+  
+  <Step title="Configure environment">
+    ```bash
+    cp packages/client/.env.example packages/client/.env
+    cp packages/server/.env.example packages/server/.env
+    ```
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    Set your Privy credentials in both files:
+    - `packages/client/.env`: Set `PUBLIC_PRIVY_APP_ID`
+    - `packages/server/.env`: Set `PUBLIC_PRIVY_APP_ID` and `PRIVY_APP_SECRET`
+  </Step>
+  
+  <Step title="Build the project">
+    ```bash
+    bun run build
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    <Info>First build takes 5-10 minutes due to PhysX WASM compilation.</Info>
+  </Step>
+  
+  <Step title="Start the game">
+    ```bash
+    bun run dev
+    ```
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    Open [http://localhost:3333](http://localhost:3333) in your browser.
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+<Warning>
+  Without Privy credentials, the game runs in anonymous mode where users get a new identity on every page refresh. Characters will appear to vanish because they're tied to the old anonymous account.
+</Warning>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+## Running with AI Agents
 
-### Step 3: Go live
+To run the game with ElizaOS AI agents:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+```bash
+bun run dev:ai
+```
 
-## Next steps
+This starts the game server plus the ElizaOS agent runtime on port 4001.
 
-Now that you have your docs running, explore these key features:
+## What Gets Started
+
+| Service | Port | Description |
+|---------|------|-------------|
+| Client | 3333 | Vite dev server with hot reload |
+| Server | 5555 | Game server (Fastify + WebSockets) |
+| CDN | 8080 | Asset server (Docker nginx) |
+| PostgreSQL | 5432 | Database (Docker) |
+
+## Next Steps
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Learn about the monorepo structure
+  </Card>
+  <Card title="Development" icon="code" href="/guides/development">
+    Set up your development workflow
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
