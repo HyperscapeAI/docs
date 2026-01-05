@@ -1,0 +1,165 @@
+---
+title: "Docker Setup"
+description: "CDN, PostgreSQL, and container management"
+---
+
+## Overview
+
+Hyperscape uses Docker for:
+
+- **Asset CDN**: nginx serving game assets
+- **PostgreSQL**: Database for player data
+- **Development services**: Local infrastructure
+
+## Prerequisites
+
+- [Docker Desktop](https://docker.com/products/docker-desktop) (macOS/Windows)
+- Or Docker Engine on Linux: `apt install docker.io`
+
+## CDN Container
+
+### Start CDN
+
+```bash
+bun run cdn:up
+```
+
+This starts an nginx container serving assets from `packages/server/world/assets/` on port 8080.
+
+### Stop CDN
+
+```bash
+bun run cdn:down
+```
+
+### Automatic Start
+
+The CDN starts automatically with `bun run dev`. Only run manually if using services separately.
+
+## PostgreSQL Container
+
+PostgreSQL starts automatically when the server runs via Docker Compose.
+
+### Configuration
+
+Default connection:
+
+```
+Host: localhost
+Port: 5432
+Database: hyperscape
+User: postgres
+Password: postgres
+```
+
+### Manual Control
+
+```bash
+cd packages/server
+docker-compose up postgres    # Start PostgreSQL
+docker-compose down postgres  # Stop PostgreSQL
+```
+
+## Docker Compose
+
+The server package includes `docker-compose.yml`:
+
+```yaml
+services:
+  postgres:
+    image: postgres:15
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: hyperscape
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  cdn:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./world/assets:/usr/share/nginx/html:ro
+```
+
+## Resetting Containers
+
+### Reset Database
+
+<Warning>
+  This deletes all local data (characters, inventory, progress).
+</Warning>
+
+```bash
+# Stop containers
+docker stop hyperscape-postgres
+docker rm hyperscape-postgres
+
+# Remove volumes
+docker volume rm hyperscape-postgres-data
+docker volume rm server_postgres-data
+
+# Verify
+docker volume ls | grep hyperscape
+
+# Restart
+bun run dev
+```
+
+### Reset CDN
+
+```bash
+docker stop hyperscape-cdn
+docker rm hyperscape-cdn
+bun run cdn:up
+```
+
+## No Docker Alternative
+
+If you can't run Docker locally:
+
+### External PostgreSQL
+
+Use a hosted database (e.g., [Neon](https://neon.tech)):
+
+```bash
+# packages/server/.env
+DATABASE_URL=postgresql://user:pass@host.neon.tech:5432/db
+```
+
+### External CDN
+
+Host assets on cloud storage:
+
+```bash
+# packages/server/.env and packages/client/.env
+PUBLIC_CDN_URL=https://your-cdn.example.com
+```
+
+## Container Status
+
+Check running containers:
+
+```bash
+docker ps
+```
+
+Expected output when running:
+
+```
+CONTAINER ID   IMAGE           PORTS
+abc123         postgres:15     0.0.0.0:5432->5432/tcp
+def456         nginx:alpine    0.0.0.0:8080->80/tcp
+```
+
+## Logs
+
+View container logs:
+
+```bash
+docker logs hyperscape-postgres
+docker logs hyperscape-cdn
+```

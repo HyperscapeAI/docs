@@ -1,0 +1,132 @@
+---
+title: "Configuration"
+description: "Environment variables and port allocation"
+---
+
+## Environment Files
+
+Each package has its own `.env` file:
+
+| Package | File | Purpose |
+|---------|------|---------|
+| Server | `packages/server/.env` | Server configuration |
+| Client | `packages/client/.env` | Client configuration |
+| Plugin | `packages/plugin-hyperscape/.env` | AI agent config |
+| AssetForge | `packages/asset-forge/.env` | Asset tools config |
+
+Copy from examples:
+
+```bash
+cp packages/client/.env.example packages/client/.env
+cp packages/server/.env.example packages/server/.env
+```
+
+## Server Environment
+
+### Required
+
+```bash
+# Database (production)
+DATABASE_URL=postgresql://user:pass@host:5432/db
+
+# Security
+JWT_SECRET=your-random-secret-key
+
+# Authentication
+PRIVY_APP_ID=your-privy-app-id
+PRIVY_APP_SECRET=your-privy-app-secret
+```
+
+### Optional
+
+```bash
+# Server
+PORT=5555
+
+# Assets
+PUBLIC_CDN_URL=http://localhost:8080
+
+# Voice Chat
+LIVEKIT_API_KEY=your-livekit-key
+LIVEKIT_API_SECRET=your-livekit-secret
+LIVEKIT_URL=wss://your-livekit-server
+```
+
+## Client Environment
+
+### Required
+
+```bash
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
+```
+
+<Warning>
+  `PUBLIC_PRIVY_APP_ID` must match between client and server.
+</Warning>
+
+### Production
+
+```bash
+PUBLIC_API_URL=https://api.hyperscape.game
+PUBLIC_WS_URL=wss://api.hyperscape.game
+PUBLIC_CDN_URL=https://cdn.hyperscape.game
+```
+
+## AI Agent Environment
+
+```bash
+# ElizaOS
+ELIZAOS_PORT=4001
+
+# LLM Providers (at least one required)
+OPENAI_API_KEY=your-openai-key
+ANTHROPIC_API_KEY=your-anthropic-key
+```
+
+## AssetForge Environment
+
+```bash
+OPENAI_API_KEY=your-openai-key
+MESHY_API_KEY=your-meshy-key
+ASSET_FORGE_PORT=3400
+ASSET_FORGE_API_PORT=3401
+```
+
+## Port Allocation
+
+All services have unique default ports:
+
+| Port | Service | Environment Variable | Started By |
+|------|---------|---------------------|------------|
+| 3333 | Game Client | `VITE_PORT` | `bun run dev` |
+| 5555 | Game Server | `PORT` | `bun run dev` |
+| 8080 | Asset CDN | - | Docker |
+| 5432 | PostgreSQL | - | Docker |
+| 4001 | ElizaOS API | `ELIZAOS_PORT` | `bun run dev:ai` |
+| 3400 | AssetForge UI | `ASSET_FORGE_PORT` | `bun run dev:forge` |
+| 3401 | AssetForge API | `ASSET_FORGE_API_PORT` | `bun run dev:forge` |
+
+## Zero-Config Development
+
+Default values work out of the box for local development:
+
+```bash
+bun run dev   # Just works
+```
+
+Only configure `.env` files when:
+- Using Privy authentication
+- Connecting to external database
+- Deploying to production
+- Running AI agents
+
+## Privy Configuration
+
+1. Create account at [dashboard.privy.io](https://dashboard.privy.io)
+2. Create a new app
+3. Copy App ID and App Secret
+4. Set in both client and server `.env` files
+
+<Info>
+  Without Privy, the game runs in anonymous mode with temporary identities.
+</Info>

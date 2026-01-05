@@ -1,0 +1,135 @@
+---
+title: "server"
+description: "Game server with Fastify, WebSockets, and database"
+---
+
+## Overview
+
+The `server` package runs the authoritative game server:
+
+- Fastify HTTP API
+- WebSocket game state
+- Drizzle ORM database
+- LiveKit voice chat integration
+
+## Package Location
+
+```
+packages/server/
+├── src/
+│   ├── database/       # Drizzle schema and queries
+│   ├── infrastructure/ # Docker, config
+│   ├── scripts/        # Utility scripts
+│   ├── shared/         # Shared server utilities
+│   ├── startup/        # Server initialization
+│   ├── systems/        # Server-specific systems
+│   ├── types/          # TypeScript types
+│   └── index.ts        # Entry point
+├── world/
+│   └── assets/         # Game assets (Git LFS)
+├── drizzle.config.ts   # Drizzle configuration
+└── .env.example        # Environment template
+```
+
+## Entry Point
+
+`src/index.ts` initializes:
+
+1. Database connection
+2. Asset CDN (Docker)
+3. Fastify HTTP server
+4. WebSocket handlers
+5. Game world and systems
+
+## API Routes
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/health` | GET | Health check |
+| `/auth` | POST | Authentication |
+| `/ws` | WS | Game connection |
+
+## Database
+
+### Schema
+
+Defined in `src/database/schema.ts`:
+
+| Table | Purpose |
+|-------|---------|
+| `players` | Player accounts |
+| `characters` | Character data |
+| `inventory` | Item ownership |
+| `bank` | Banked items |
+| `skills` | XP and levels |
+
+### Commands
+
+```bash
+cd packages/server
+bunx drizzle-kit push      # Apply schema
+bunx drizzle-kit generate  # Generate migrations
+bunx drizzle-kit migrate   # Run migrations
+```
+
+## Environment Variables
+
+```bash
+# Required
+DATABASE_URL=postgresql://...
+JWT_SECRET=your-secret
+
+# Authentication
+PRIVY_APP_ID=your-app-id
+PRIVY_APP_SECRET=your-app-secret
+
+# Optional
+PORT=5555
+PUBLIC_CDN_URL=http://localhost:8080
+LIVEKIT_API_KEY=...
+LIVEKIT_API_SECRET=...
+```
+
+## Running
+
+### Development
+
+```bash
+bun run dev:server    # With hot reload
+```
+
+### Production
+
+```bash
+bun run build:server  # Build
+bun start             # Start production
+```
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `fastify` | HTTP server |
+| `ws` | WebSockets |
+| `drizzle-orm` | Database ORM |
+| `@hyperscape/shared` | Core engine |
+
+## Docker Services
+
+The server manages Docker containers:
+
+```bash
+bun run cdn:up    # Start asset CDN
+bun run cdn:down  # Stop asset CDN
+```
+
+PostgreSQL starts automatically via Docker Compose.
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/index.ts` | Server entry |
+| `src/database/schema.ts` | DB schema |
+| `drizzle.config.ts` | Drizzle config |
+| `.env.example` | Env template |

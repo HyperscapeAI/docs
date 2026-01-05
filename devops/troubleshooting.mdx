@@ -1,0 +1,178 @@
+---
+title: "Troubleshooting"
+description: "Common issues and solutions"
+---
+
+## Common Issues
+
+### Characters Vanishing
+
+**Symptom**: Characters disappear after page refresh
+
+**Cause**: Missing Privy credentials—each refresh creates a new anonymous identity
+
+**Solution**: Configure Privy authentication:
+
+```bash
+# packages/client/.env
+PUBLIC_PRIVY_APP_ID=your-app-id
+
+# packages/server/.env
+PUBLIC_PRIVY_APP_ID=your-app-id
+PRIVY_APP_SECRET=your-app-secret
+```
+
+### Assets Not Loading
+
+**Symptom**: 404 errors for models/avatars
+
+**Cause**: CDN container not running
+
+**Solution**:
+
+```bash
+bun run cdn:up
+```
+
+Or ensure you're using `bun run dev` which starts it automatically.
+
+### Database Schema Errors
+
+**Symptom**: Errors about missing columns or tables
+
+**Cause**: Schema changed but migrations not run
+
+**Solution**:
+
+```bash
+cd packages/server
+bunx drizzle-kit push
+```
+
+For a complete reset (destroys data):
+
+```bash
+docker stop hyperscape-postgres
+docker rm hyperscape-postgres
+docker volume rm hyperscape-postgres-data
+docker volume rm server_postgres-data
+bun run dev
+```
+
+### Port Conflicts
+
+**Symptom**: "Port already in use" errors
+
+**Solution**: Kill processes on conflicting ports:
+
+```bash
+lsof -ti:3333 | xargs kill -9   # Client
+lsof -ti:5555 | xargs kill -9   # Server
+lsof -ti:8080 | xargs kill -9   # CDN
+lsof -ti:4001 | xargs kill -9   # ElizaOS
+```
+
+### Build Errors
+
+**Symptom**: Compilation fails
+
+**Solution**: Clean rebuild:
+
+```bash
+bun run clean
+rm -rf node_modules packages/*/node_modules
+bun install
+bun run build
+```
+
+### PhysX Build Fails
+
+**Symptom**: Errors during PhysX compilation
+
+**Cause**: PhysX WASM build requires emscripten
+
+**Solution**: PhysX is pre-built and committed. If you must rebuild:
+
+```bash
+cd packages/physx-js-webidl
+./make.sh   # Requires emscripten toolchain
+```
+
+### Tests Failing
+
+**Symptom**: Tests timeout or fail unexpectedly
+
+**Causes**:
+- Server running during tests
+- Stale test data
+- Port conflicts
+
+**Solution**:
+
+```bash
+# Stop any running servers
+lsof -ti:5555 | xargs kill -9
+
+# Check logs
+ls /logs/
+
+# Run tests
+npm test
+```
+
+### WebSocket Connection Failed
+
+**Symptom**: Can't connect to game server
+
+**Causes**:
+- Server not running
+- Wrong port configuration
+- Firewall blocking
+
+**Solution**:
+
+1. Verify server is running: `lsof -i:5555`
+2. Check client config: `PUBLIC_WS_URL`
+3. Ensure no firewall blocks
+
+### Hot Reload Not Working
+
+**Symptom**: Changes don't appear in browser
+
+**Causes**:
+- Build cache stale
+- Wrong directory
+
+**Solution**:
+
+```bash
+bun run dev:reset
+```
+
+## Logs
+
+### Server Logs
+
+Check terminal output where `bun run dev` is running.
+
+### Test Logs
+
+```bash
+ls packages/server/logs/
+```
+
+### Docker Logs
+
+```bash
+docker logs hyperscape-postgres
+docker logs hyperscape-cdn
+```
+
+## Getting Help
+
+1. Check [GitHub Issues](https://github.com/HyperscapeAI/hyperscape/issues)
+2. Search existing discussions
+3. Open a new issue with:
+   - Error message
+   - Steps to reproduce
+   - Environment details (OS, Node version, Bun version)
