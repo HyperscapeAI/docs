@@ -1,0 +1,122 @@
+---
+title: "shared"
+description: "Core 3D engine with ECS, Three.js, PhysX, and networking"
+icon: "share-2"
+---
+
+## Overview
+
+The `shared` package is the core Hyperscape engine, providing:
+
+- Entity Component System (ECS)
+- Three.js 3D rendering
+- PhysX physics simulation
+- Real-time networking
+- React UI components
+
+## Package Location
+
+```
+packages/shared/
+├── src/
+│   ├── components/     # ECS components
+│   ├── constants/      # Game constants
+│   ├── core/           # Core engine classes
+│   ├── data/           # Game manifests
+│   ├── entities/       # Entity definitions
+│   ├── extras/         # Utilities
+│   ├── libs/           # External integrations
+│   ├── nodes/          # Scene graph nodes
+│   ├── physics/        # PhysX wrapper
+│   ├── platform/       # Platform detection
+│   ├── runtime/        # Game loop
+│   ├── systems/        # ECS systems
+│   ├── types/          # TypeScript types
+│   └── utils/          # Helper functions
+├── index.ts            # Server exports
+└── index.client.ts     # Client exports
+```
+
+## Key Exports
+
+### Entities
+
+| Export | Purpose |
+|--------|---------|
+| `Entity` | Base entity class |
+| `CombatantEntity` | Combat-capable entities |
+| `InteractableEntity` | Interactive objects |
+| `PlayerEntity` | Player characters |
+| `MobEntity` | NPCs and mobs |
+
+### Systems
+
+| Export | Purpose |
+|--------|---------|
+| `PersistenceSystem` | Database saves |
+| `ServerBot` | Bot management |
+| `ServerLoader` | Asset loading |
+| `ServerRuntime` | Game loop |
+| `ServerLiveKit` | Voice chat |
+
+### Data
+
+| Export | Purpose |
+|--------|---------|
+| `DataManager` | Manifest access |
+| `npcs` | NPC definitions |
+| `items` | Item definitions |
+| `worldAreas` | Zone data |
+
+## Entry Points
+
+### Server (index.ts)
+
+Exports for server-side usage:
+
+```typescript
+import { Entity, DataManager, PersistenceSystem } from '@hyperscape/shared';
+```
+
+### Client (index.client.ts)
+
+Exports for client-side usage:
+
+```typescript
+import { Entity, ClientRenderer, UIComponents } from '@hyperscape/shared/client';
+```
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `three` | 3D rendering |
+| `@pixiv/three-vrm` | VRM avatar support |
+| `@hyperscape/physx-js-webidl` | Physics |
+| `react` | UI components |
+
+## Building
+
+```bash
+cd packages/shared
+bun run build    # Production build
+bun run dev      # Watch mode
+```
+
+<Info>
+  Shared must be built before other packages that depend on it.
+</Info>
+
+## Key Patterns
+
+### ECS Architecture
+
+All game logic uses Entity Component System. See [ECS Concepts](/concepts/ecs).
+
+### Manifest-Driven Data
+
+Game content defined in `src/data/`. See [Manifests](/concepts/manifests).
+
+### Type Safety
+
+Strong TypeScript typing throughout—no `any` types allowed.

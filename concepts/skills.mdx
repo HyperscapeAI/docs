@@ -1,0 +1,140 @@
+---
+title: "Skills System"
+description: "Skill progression, XP formulas, and resource gathering"
+icon: "trophy"
+---
+
+## Overview
+
+Hyperscape features a RuneScape-inspired skill system with leveling, XP gain, and level requirements for equipment and activities.
+
+## Available Skills
+
+### Combat Skills
+
+| Skill | Purpose |
+|-------|---------|
+| **Attack** | Melee accuracy, weapon requirements |
+| **Strength** | Melee damage |
+| **Defense** | Damage reduction, armor requirements |
+| **Constitution** | Health points |
+| **Range** | Ranged combat |
+
+### Gathering Skills
+
+| Skill | Activity |
+|-------|----------|
+| **Woodcutting** | Chop trees for logs |
+| **Fishing** | Catch fish at water edges |
+| **Mining** | Extract ores from rocks |
+
+### Processing Skills
+
+| Skill | Activity |
+|-------|----------|
+| **Firemaking** | Create fires from logs |
+| **Cooking** | Prepare food from raw fish |
+
+## XP and Leveling
+
+### XP Formula
+
+Hyperscape uses RuneScape's XP curve:
+
+```
+XP for Level N = floor(sum(floor(L + 300 * 2^(L/7))) / 4) for L = 1 to N-1
+```
+
+### Level Milestones
+
+| Level | Total XP |
+|-------|----------|
+| 10 | 1,154 |
+| 20 | 4,470 |
+| 30 | 13,363 |
+| 50 | 101,333 |
+| 70 | 737,627 |
+| 99 | 13,034,431 |
+
+## Resource Gathering
+
+### Woodcutting
+
+Requirements:
+- Hatchet equipped
+- Click tree to chop
+
+Success rate improves with level. Higher-level trees require higher Woodcutting levels.
+
+| Tree | Level | XP |
+|------|-------|-----|
+| Normal | 1 | 25 |
+| Oak | 15 | 37 |
+| Willow | 30 | 68 |
+
+### Fishing
+
+Requirements:
+- Fishing rod equipped
+- Click water edge
+
+| Fish | Level | XP |
+|------|-------|-----|
+| Shrimp | 1 | 10 |
+| Trout | 20 | 50 |
+| Lobster | 40 | 90 |
+
+### Mining
+
+Requirements:
+- Pickaxe equipped
+- Click ore rock
+
+| Ore | Level | XP |
+|-----|-------|-----|
+| Copper | 1 | 17 |
+| Iron | 15 | 35 |
+| Coal | 30 | 50 |
+
+## Processing Skills
+
+### Firemaking
+
+Use tinderbox on logs in inventory to create a fire.
+
+| Log | Level | XP |
+|-----|-------|-----|
+| Normal | 1 | 40 |
+| Oak | 15 | 60 |
+| Willow | 30 | 90 |
+
+### Cooking
+
+Use raw fish on a fire to cook.
+
+| Food | Level | XP | Heals |
+|------|-------|-----|-------|
+| Shrimp | 1 | 30 | 3 HP |
+| Trout | 15 | 70 | 7 HP |
+| Lobster | 40 | 120 | 12 HP |
+
+<Info>
+  Cooking can fail at low levels, burning the food.
+</Info>
+
+## Level Requirements
+
+Equipment and activities have level gates:
+
+| Tier | Attack/Defense | Range |
+|------|----------------|-------|
+| Bronze | 1 | 1 |
+| Steel | 10 | 10 |
+| Mithril | 20 | 20 |
+
+## Skill Data Files
+
+Skill configuration is in `packages/shared/src/data/`:
+
+- `skill-unlocks.ts`: Level requirements
+- `skill-icons.ts`: UI icons

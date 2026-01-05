@@ -1,0 +1,185 @@
+---
+title: "Database Management"
+description: "Drizzle ORM, migrations, and schema management"
+icon: "database"
+---
+
+## Overview
+
+Hyperscape uses [Drizzle ORM](https://orm.drizzle.team) for database access:
+
+- **Development**: SQLite (zero config)
+- **Production**: PostgreSQL
+
+## Schema Location
+
+Database schema is defined in:
+
+```
+packages/server/src/database/schema.ts
+```
+
+## Tables
+
+| Table | Purpose |
+|-------|---------|
+| `players` | Player accounts and auth |
+| `characters` | Character data |
+| `inventory` | Item ownership |
+| `bank` | Banked items |
+| `skills` | XP and levels |
+| `world_state` | Persistent world data |
+
+## Drizzle Commands
+
+Run from `packages/server/`:
+
+### Push Schema
+
+Apply schema changes directly (development):
+
+```bash
+bunx drizzle-kit push
+```
+
+### Generate Migrations
+
+Create migration files for changes:
+
+```bash
+bunx drizzle-kit generate
+```
+
+### Run Migrations
+
+Apply pending migrations:
+
+```bash
+bunx drizzle-kit migrate
+```
+
+### Studio
+
+Open Drizzle Studio to browse data:
+
+```bash
+bunx drizzle-kit studio
+```
+
+## Configuration
+
+`packages/server/drizzle.config.ts`:
+
+```typescript
+export default {
+  schema: './src/database/schema.ts',
+  out: './drizzle',
+  driver: 'pg',
+  dbCredentials: {
+    connectionString: process.env.DATABASE_URL
+  }
+};
+```
+
+## Development vs Production
+
+### Development (SQLite)
+
+No configuration needed—uses local SQLite file:
+
+```
+packages/server/hyperscape.db
+```
+
+### Production (PostgreSQL)
+
+Set `DATABASE_URL` in environment:
+
+```bash
+DATABASE_URL=postgresql://user:pass@host:5432/hyperscape
+```
+
+## Schema Changes
+
+<Steps>
+  <Step title="Edit schema">
+    Modify `packages/server/src/database/schema.ts`
+  </Step>
+  
+  <Step title="Generate migration">
+    ```bash
+    cd packages/server
+    bunx drizzle-kit generate
+    ```
+  </Step>
+  
+  <Step title="Apply migration">
+    ```bash
+    bunx drizzle-kit migrate
+    ```
+  </Step>
+</Steps>
+
+## Reset Database
+
+### Development Reset
+
+Delete the SQLite file:
+
+```bash
+rm packages/server/hyperscape.db
+bun run dev
+```
+
+### Docker PostgreSQL Reset
+
+```bash
+docker stop hyperscape-postgres
+docker rm hyperscape-postgres
+docker volume rm hyperscape-postgres-data
+docker volume rm server_postgres-data
+bun run dev
+```
+
+<Warning>
+  This permanently deletes all player data.
+</Warning>
+
+## Backup and Restore
+
+### PostgreSQL Backup
+
+```bash
+docker exec hyperscape-postgres pg_dump -U postgres hyperscape > backup.sql
+```
+
+### PostgreSQL Restore
+
+```bash
+docker exec -i hyperscape-postgres psql -U postgres hyperscape < backup.sql
+```
+
+## Troubleshooting
+
+### Schema Out of Sync
+
+If you see schema errors after pulling updates:
+
+```bash
+cd packages/server
+bunx drizzle-kit push
+```
+
+### Connection Refused
+
+Ensure PostgreSQL is running:
+
+```bash
+docker ps | grep postgres
+```
+
+If not running:
+
+```bash
+bun run dev   # Auto-starts PostgreSQL
+```

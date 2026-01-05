@@ -1,0 +1,133 @@
+---
+title: "Adding Content"
+description: "Create NPCs, items, and world areas using JSON manifests"
+icon: "file-plus"
+---
+
+## Manifest-Driven Design
+
+Hyperscape uses JSON manifests for game content. Add new NPCs, items, stores, and world areas by editing TypeScript files in `packages/shared/src/data/`.
+
+<Info>
+  No code changes required—just edit the manifest files and reload.
+</Info>
+
+## Content Files
+
+| File | Purpose |
+|------|---------|
+| `npcs.ts` | NPC and mob definitions |
+| `items.ts` | Item properties and stats |
+| `banks-stores.ts` | Shop inventories |
+| `world-areas.ts` | Zone configuration |
+| `skill-unlocks.ts` | Level requirements |
+| `avatars.ts` | Character models |
+
+## Adding NPCs
+
+NPCs are defined with combat stats, drops, and spawn locations:
+
+```typescript
+{
+  id: "goblin",
+  name: "Goblin",
+  combatLevel: 2,
+  stats: {
+    attack: 1,
+    strength: 1,
+    defense: 1,
+    constitution: 5
+  },
+  aggressive: true,
+  aggroRange: 3,
+  drops: [
+    { itemId: "coins", quantity: [1, 10], chance: 1.0 },
+    { itemId: "bronze_sword", quantity: 1, chance: 0.05 }
+  ],
+  respawnTime: 15000
+}
+```
+
+### Difficulty Levels
+
+| Level | Examples |
+|-------|----------|
+| 1 | Goblins, Bandits, Barbarians |
+| 2 | Hobgoblins, Guards, Dark Warriors |
+| 3 | Black Knights, Ice Warriors, Dark Rangers |
+
+## Adding Items
+
+Items include equipment, resources, and consumables:
+
+```typescript
+{
+  id: "bronze_sword",
+  name: "Bronze Sword",
+  type: "weapon",
+  slot: "weapon",
+  requirements: { attack: 1 },
+  stats: { attackBonus: 4, strengthBonus: 3 },
+  tradeable: true,
+  stackable: false
+}
+```
+
+### Item Types
+
+- **weapon**: Swords, bows
+- **armor**: Helmets, bodies, legs
+- **tool**: Hatchets, fishing rods
+- **consumable**: Food, potions
+- **resource**: Logs, fish, ores
+
+## Adding Shops
+
+Shops define available items and prices:
+
+```typescript
+{
+  id: "general_store",
+  name: "General Store",
+  items: [
+    { itemId: "bronze_hatchet", stock: 10, price: 50 },
+    { itemId: "fishing_rod", stock: 10, price: 25 },
+    { itemId: "tinderbox", stock: 10, price: 15 }
+  ]
+}
+```
+
+## Adding World Areas
+
+World areas define zones with biomes and mob spawns:
+
+```typescript
+{
+  id: "mistwood_valley",
+  name: "Mistwood Valley",
+  biome: "forest",
+  difficulty: 1,
+  spawns: [
+    { npcId: "goblin", count: 5 },
+    { npcId: "bandit", count: 3 }
+  ],
+  resources: [
+    { type: "tree", count: 10 },
+    { type: "fishing_spot", count: 2 }
+  ]
+}
+```
+
+### Biomes
+
+- Mistwood Valley (foggy forest)
+- Goblin Wastes (barren lands)
+- Darkwood Forest (dense shadows)
+- Northern Reaches (frozen tundra)
+- Blasted Lands (corrupted areas)
+
+## Testing Changes
+
+1. Edit manifest file
+2. Save (hot reload applies)
+3. Verify in game at localhost:3333

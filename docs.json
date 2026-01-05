@@ -1,68 +1,125 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "theme": "palm",
+  "name": "Hyperscape",
+  "description": "The first AI-native MMORPG where autonomous agents play alongside humans",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#CA8A04",
+    "light": "#18181B",
+    "dark": "#FACC15"
+  },
+  "appearance": {
+    "default": "dark",
+    "background": {
+      "decoration": "windows",
+      "color": {
+        "light": "#FAFAF9",
+        "dark": "#09090B"
+      }
+    }
+  },
+  "icons": {
+    "library": "lucide"
+  },
+  "styling": {
+    "codeblocks": {
+      "theme": {
+        "light": "github-light",
+        "dark": "one-dark-pro"
+      }
+    },
+    "eyebrow": "breadcrumbs"
   },
   "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Getting Started",
+        "icon": "rocket",
         "groups": [
           {
-            "group": "Getting started",
-            "pages": [
-              "index",
-              "quickstart",
-              "development"
-            ]
+            "group": "Overview",
+            "icon": "home",
+            "pages": ["index", "quickstart", "architecture"]
+          }
+        ]
+      },
+      {
+        "tab": "Guides",
+        "icon": "book-open",
+        "groups": [
+          {
+            "group": "User Guides",
+            "icon": "user",
+            "pages": ["guides/playing", "guides/development"]
           },
           {
-            "group": "Customization",
-            "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
+            "group": "Content Creation",
+            "icon": "puzzle",
+            "pages": ["guides/adding-content", "guides/ai-agents"]
           },
           {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
+            "group": "Deployment",
+            "icon": "cloud-upload",
+            "pages": ["guides/deployment", "guides/mobile"]
+          }
+        ]
+      },
+      {
+        "tab": "Concepts",
+        "icon": "lightbulb",
+        "groups": [
+          {
+            "group": "Architecture",
+            "icon": "layers",
+            "pages": ["concepts/ecs", "concepts/multiplayer"]
           },
           {
-            "group": "AI tools",
+            "group": "Game Systems",
+            "icon": "swords",
+            "pages": ["concepts/combat", "concepts/skills", "concepts/economy"]
+          },
+          {
+            "group": "Data Design",
+            "icon": "database",
+            "pages": ["concepts/manifests"]
+          }
+        ]
+      },
+      {
+        "tab": "Packages",
+        "icon": "package",
+        "groups": [
+          {
+            "group": "Package Reference",
+            "icon": "folder-open",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "packages/overview",
+              "packages/shared",
+              "packages/server",
+              "packages/client",
+              "packages/plugin-hyperscape",
+              "packages/asset-forge"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "DevOps",
+        "icon": "settings",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Operations",
+            "icon": "wrench",
             "pages": [
-              "api-reference/introduction"
-            ]
-          },
-          {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "devops/configuration",
+              "devops/docker",
+              "devops/database",
+              "devops/troubleshooting"
             ]
           }
         ]
@@ -71,52 +128,38 @@
     "global": {
       "anchors": [
         {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
+          "anchor": "GitHub",
+          "href": "https://github.com/HyperscapeAI/hyperscape",
+          "icon": "github"
         },
         {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
+          "anchor": "Play Game",
+          "href": "https://hyperscape.game",
+          "icon": "gamepad-2"
         }
       ]
     }
   },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
   "navbar": {
     "links": [
       {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
+        "label": "GitHub",
+        "href": "https://github.com/HyperscapeAI/hyperscape"
       }
     ],
     "primary": {
       "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "label": "Play Game",
+      "href": "https://hyperscape.game"
     }
   },
   "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
+    "options": ["copy", "view", "claude", "cursor", "vscode"]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "x": "https://x.com/HyperscapeAI",
+      "github": "https://github.com/HyperscapeAI"
     }
   }
 }

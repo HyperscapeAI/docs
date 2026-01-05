@@ -1,0 +1,136 @@
+---
+title: "Mobile Development"
+description: "Build Hyperscape for iOS and Android with Capacitor"
+icon: "smartphone"
+---
+
+## Overview
+
+Hyperscape uses [Capacitor](https://capacitorjs.com) to build native mobile apps from the web client.
+
+## Prerequisites
+
+### iOS
+
+- macOS with Xcode installed
+- Apple Developer account (for device testing)
+
+### Android
+
+- Android Studio installed
+- Android SDK configured
+
+## Build Commands
+
+### iOS
+
+```bash
+npm run ios          # Build, sync, and open Xcode
+npm run ios:dev      # Sync and open without rebuild
+npm run ios:build    # Production build
+```
+
+### Android
+
+```bash
+npm run android      # Build, sync, and open Android Studio
+npm run android:dev  # Sync and open without rebuild
+npm run android:build # Production build
+```
+
+### Sync Commands
+
+```bash
+npm run cap:sync          # Sync both platforms
+npm run cap:sync:ios      # iOS only
+npm run cap:sync:android  # Android only
+```
+
+## Development Workflow
+
+<Steps>
+  <Step title="Build the web client">
+    ```bash
+    cd packages/client
+    bun run build
+    ```
+  </Step>
+  
+  <Step title="Sync to native project">
+    ```bash
+    npm run cap:sync
+    ```
+  </Step>
+  
+  <Step title="Open in IDE">
+    ```bash
+    npm run ios:dev      # Opens Xcode
+    # or
+    npm run android:dev  # Opens Android Studio
+    ```
+  </Step>
+  
+  <Step title="Run on device/simulator">
+    Use the native IDE to build and run on your target device.
+  </Step>
+</Steps>
+
+## Configuration
+
+### Capacitor Config
+
+The Capacitor configuration is in `packages/client/capacitor.config.ts`:
+
+```typescript
+{
+  appId: 'game.hyperscape.app',
+  appName: 'Hyperscape',
+  webDir: 'dist',
+  server: {
+    // Production API URLs
+    url: 'https://hyperscape.game'
+  }
+}
+```
+
+### Environment Variables
+
+For mobile builds, ensure these are set:
+
+```bash
+PUBLIC_API_URL=https://api.hyperscape.game
+PUBLIC_WS_URL=wss://api.hyperscape.game
+PUBLIC_CDN_URL=https://cdn.hyperscape.game
+```
+
+## Platform-Specific Notes
+
+### iOS
+
+- Minimum iOS version: 14.0
+- Requires provisioning profile for device testing
+- Use TestFlight for beta distribution
+
+### Android
+
+- Minimum SDK: 24 (Android 7.0)
+- Generate signed APK for distribution
+- Use Play Console for beta testing
+
+## Debugging
+
+### iOS
+
+1. Open Xcode from `npm run ios:dev`
+2. Select simulator or connected device
+3. Use Safari Web Inspector for debugging
+
+### Android
+
+1. Open Android Studio from `npm run android:dev`
+2. Select emulator or connected device
+3. Use Chrome DevTools for debugging
+
+<Info>
+  Enable USB debugging on Android devices and trust your computer on iOS devices.
+</Info>

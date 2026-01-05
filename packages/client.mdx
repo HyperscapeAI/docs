@@ -1,0 +1,128 @@
+---
+title: "client"
+description: "Web client with Vite, React, and 3D rendering"
+icon: "monitor"
+---
+
+## Overview
+
+The `client` package is the web game client:
+
+- Vite for fast builds
+- React 19 UI framework
+- Three.js 3D rendering
+- Capacitor for mobile
+
+## Package Location
+
+```
+packages/client/
+├── src/
+│   ├── auth/           # Privy authentication
+│   ├── components/     # React components
+│   ├── constants/      # Client constants
+│   ├── game/           # Game loop and logic
+│   ├── hooks/          # React hooks
+│   ├── lib/            # Networking, utilities
+│   ├── screens/        # UI screens
+│   ├── types/          # TypeScript types
+│   ├── utils/          # Helper functions
+│   ├── index.tsx       # React entry
+│   ├── index.html      # HTML template
+│   └── index.css       # Global styles
+├── capacitor.config.ts # Mobile config
+├── vite.config.ts      # Vite config
+└── .env.example        # Environment template
+```
+
+## Screens
+
+| Screen | Purpose |
+|--------|---------|
+| Login | Authentication |
+| Character Select | Choose character |
+| Character Create | New character |
+| Game | Main gameplay |
+
+## Components
+
+### UI Components
+
+- HUD (health, stamina, combat)
+- Inventory panel
+- Bank interface
+- Skills panel
+- Chat window
+- Equipment display
+
+### Game Components
+
+- 3D renderer
+- Camera controller
+- Input handler
+- Entity renderer
+
+## Environment Variables
+
+```bash
+# Required
+PUBLIC_PRIVY_APP_ID=your-app-id
+
+# Server URLs (production)
+PUBLIC_API_URL=https://api.hyperscape.game
+PUBLIC_WS_URL=wss://api.hyperscape.game
+PUBLIC_CDN_URL=https://cdn.hyperscape.game
+```
+
+## Running
+
+### Development
+
+```bash
+bun run dev:client    # Vite dev server with HMR
+```
+
+Opens at [http://localhost:3333](http://localhost:3333)
+
+### Production Build
+
+```bash
+cd packages/client
+bun run build         # Build to dist/
+```
+
+## Mobile Builds
+
+### iOS
+
+```bash
+npm run ios           # Build and open Xcode
+npm run ios:dev       # Sync and open
+```
+
+### Android
+
+```bash
+npm run android       # Build and open Android Studio
+npm run android:dev   # Sync and open
+```
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `react` | UI framework |
+| `vite` | Build tool |
+| `three` | 3D rendering |
+| `@capacitor/core` | Mobile builds |
+| `@hyperscape/shared` | Core engine |
+| `@privy-io/react-auth` | Authentication |
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/index.tsx` | React entry |
+| `src/game/` | Game logic |
+| `vite.config.ts` | Vite config |
+| `capacitor.config.ts` | Mobile config |

@@ -1,0 +1,110 @@
+---
+title: "Package Overview"
+description: "Overview of all packages in the Hyperscape monorepo"
+icon: "layout-grid"
+---
+
+## Monorepo Structure
+
+Hyperscape is organized as a Turbo monorepo with 7 packages:
+
+```
+packages/
+├── shared/              # Core 3D engine
+├── server/              # Game server
+├── client/              # Web client
+├── plugin-hyperscape/   # ElizaOS AI plugin
+├── physx-js-webidl/     # PhysX WASM bindings
+├── asset-forge/         # AI asset generation
+└── docs-site/           # Legacy documentation
+```
+
+## Package Dependencies
+
+```mermaid
+flowchart TD
+    A[physx-js-webidl] --> B[shared]
+    B --> C[server]
+    B --> D[client]
+    B --> E[plugin-hyperscape]
+    B --> F[asset-forge]
+```
+
+## Package Summary
+
+<CardGroup cols={2}>
+  <Card title="shared" icon="cube" href="/packages/shared">
+    Core 3D engine with ECS, Three.js, PhysX, and networking
+  </Card>
+  <Card title="server" icon="server" href="/packages/server">
+    Game server with Fastify, WebSockets, and database
+  </Card>
+  <Card title="client" icon="browser" href="/packages/client">
+    Web client with Vite, React, and 3D rendering
+  </Card>
+  <Card title="plugin-hyperscape" icon="robot" href="/packages/plugin-hyperscape">
+    ElizaOS integration for AI agents
+  </Card>
+  <Card title="asset-forge" icon="wand-magic-sparkles" href="/packages/asset-forge">
+    AI-powered 3D asset generation
+  </Card>
+</CardGroup>
+
+## Build Order
+
+Due to dependencies, packages must build in order:
+
+1. **physx-js-webidl** (5-10 min first time)
+2. **shared** (depends on physx)
+3. **All other packages** (depend on shared)
+
+Turbo handles this automatically with `dependsOn: ["^build"]`.
+
+## Package Commands
+
+### Build
+
+```bash
+bun run build           # Build all packages
+bun run build:shared    # Build shared only
+bun run build:client    # Build client only
+bun run build:server    # Build server only
+```
+
+### Development
+
+```bash
+bun run dev             # All packages with watch
+bun run dev:shared      # Shared with watch
+bun run dev:client      # Client with HMR
+bun run dev:server      # Server with restart
+```
+
+## Package Managers
+
+All packages use **Bun** as the package manager and runtime.
+
+```bash
+bun install             # Install all dependencies
+bun run <script>        # Run package scripts
+```
+
+## Workspaces
+
+Defined in root `package.json`:
+
+```json
+{
+  "workspaces": ["packages/*"]
+}
+```
+
+Cross-package imports use workspace protocol:
+
+```json
+{
+  "dependencies": {
+    "@hyperscape/shared": "workspace:*"
+  }
+}
+```

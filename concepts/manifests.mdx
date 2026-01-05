@@ -1,0 +1,140 @@
+---
+title: "Manifest-Driven Design"
+description: "Data-driven content through JSON manifests"
+icon: "file-json"
+---
+
+## Overview
+
+Hyperscape uses manifest-driven design where game content is defined in TypeScript data files rather than hardcoded in logic. This enables content creation without code changes.
+
+## Design Philosophy
+
+### Separation of Concerns
+
+| Layer | Responsibility |
+|-------|----------------|
+| **Manifests** | Content definitions (what exists) |
+| **Systems** | Game logic (how things work) |
+| **Entities** | Runtime instances |
+
+### Benefits
+
+- **Content creators** can add items, NPCs, areas without coding
+- **Designers** iterate quickly on balance
+- **Developers** focus on systems, not data
+- **Modders** can extend content easily
+
+## Manifest Files
+
+All manifests are in `packages/shared/src/data/`:
+
+| File | Content |
+|------|---------|
+| `npcs.ts` | Mobs and NPCs |
+| `items.ts` | Equipment, resources, consumables |
+| `banks-stores.ts` | Shop inventories |
+| `world-areas.ts` | Zones and regions |
+| `skill-unlocks.ts` | Level requirements |
+| `avatars.ts` | Character models |
+| `playerEmotes.ts` | Emote animations |
+
+## Manifest Structure
+
+### NPCs
+
+```typescript
+export const npcs = {
+  goblin: {
+    id: "goblin",
+    name: "Goblin",
+    combatLevel: 2,
+    stats: { attack: 1, strength: 1, defense: 1, constitution: 5 },
+    aggressive: true,
+    aggroRange: 3,
+    drops: [
+      { itemId: "coins", quantity: [1, 10], chance: 1.0 }
+    ],
+    respawnTime: 15000,
+    model: "goblin.glb"
+  }
+};
+```
+
+### Items
+
+```typescript
+export const items = {
+  bronze_sword: {
+    id: "bronze_sword",
+    name: "Bronze Sword",
+    type: "weapon",
+    slot: "weapon",
+    requirements: { attack: 1 },
+    stats: { attackBonus: 4, strengthBonus: 3 },
+    tradeable: true,
+    stackable: false,
+    weight: 1.8
+  }
+};
+```
+
+### World Areas
+
+```typescript
+export const worldAreas = {
+  mistwood_valley: {
+    id: "mistwood_valley",
+    name: "Mistwood Valley",
+    biome: "forest",
+    difficulty: 1,
+    bounds: { x1: 0, z1: 0, x2: 100, z2: 100 },
+    spawns: [
+      { npcId: "goblin", count: 5, positions: [...] }
+    ]
+  }
+};
+```
+
+## DataManager
+
+The `DataManager` class loads and provides access to all manifests:
+
+```typescript
+const npc = DataManager.getNPC("goblin");
+const item = DataManager.getItem("bronze_sword");
+const area = DataManager.getArea("mistwood_valley");
+```
+
+## Adding Content
+
+### Step 1: Edit Manifest
+
+Add your content to the appropriate manifest file.
+
+### Step 2: Hot Reload
+
+Save the file—changes apply automatically in dev mode.
+
+### Step 3: Verify
+
+Check the game to ensure content appears correctly.
+
+## Validation
+
+Manifests are validated at load time:
+
+- Required fields must exist
+- References must resolve (itemId, npcId)
+- Stats must be within valid ranges
+
+<Warning>
+  Invalid manifests will cause server startup to fail with descriptive errors.
+</Warning>
+
+## Best Practices
+
+1. **Use descriptive IDs**: `bronze_sword` not `sword1`
+2. **Follow naming conventions**: snake_case for IDs
+3. **Document unusual values**: Add comments for non-obvious choices
+4. **Test after changes**: Verify in-game before committing
