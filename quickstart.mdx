@@ -9,9 +9,9 @@ icon: "zap"
 Before you begin, ensure you have:
 
 - [Bun](https://bun.sh) v1.1.38 or higher
-- [Git LFS](https://git-lfs.com) for large file support
-- [Docker](https://docker.com) for PostgreSQL and CDN
-- [Privy](https://privy.io) account for authentication
+- [Git LFS](https://git-lfs.com) for large file support (game assets)
+- [Docker](https://docker.com) (optional, for CDN and PostgreSQL)
+- [Privy](https://privy.io) account for authentication (optional)
 
 <Tabs>
   <Tab title="macOS">
@@ -39,15 +39,17 @@ Before you begin, ensure you have:
     ```
   </Step>
   
-  <Step title="Configure environment">
+  <Step title="Configure environment (optional)">
+    Create `.env` files if you want persistent authentication:
+    
     ```bash
     cp packages/client/.env.example packages/client/.env
     cp packages/server/.env.example packages/server/.env
     ```
     
-    Set your Privy credentials in both files:
+    Set your Privy credentials:
     - `packages/client/.env`: Set `PUBLIC_PRIVY_APP_ID`
-    - `packages/server/.env`: Set `PUBLIC_PRIVY_APP_ID` and `PRIVY_APP_SECRET`
+    - `packages/server/.env`: Set `PRIVY_APP_ID` and `PRIVY_APP_SECRET`
   </Step>
   
   <Step title="Build the project">
@@ -55,15 +57,22 @@ Before you begin, ensure you have:
     bun run build
     ```
     
-    <Info>First build takes 5-10 minutes due to PhysX WASM compilation.</Info>
+    <Info>First build takes 5-10 minutes due to PhysX WASM compilation. Subsequent builds are cached.</Info>
   </Step>
   
   <Step title="Start the game">
+    **Production mode:**
+    ```bash
+    bun start
+    ```
+    Open [http://localhost:5555](http://localhost:5555) in your browser.
+    
+    **Development mode (with hot reload):**
     ```bash
     bun run dev
     ```
-    
-    Open [http://localhost:3333](http://localhost:3333) in your browser.
+    - Client: [http://localhost:3333](http://localhost:3333) (Vite HMR)
+    - Server: `ws://localhost:5555/ws`
   </Step>
 </Steps>
 
@@ -76,19 +85,76 @@ Before you begin, ensure you have:
 To run the game with ElizaOS AI agents:
 
 ```bash
-bun run dev:ai
+bun run dev:elizaos
 ```
 
-This starts the game server plus the ElizaOS agent runtime on port 4001.
+This starts the game server plus the ElizaOS agent runtime. The AI agent will connect as a player and autonomously play the game.
+
+<Info>
+  You need ElizaOS configured with an LLM provider (OpenAI, Anthropic, or OpenRouter) in your environment variables.
+</Info>
 
 ## What Gets Started
 
 | Service | Port | Description |
 |---------|------|-------------|
-| Client | 3333 | Vite dev server with hot reload |
+| Client | 3333 | Vite dev server with hot reload (dev mode) |
 | Server | 5555 | Game server (Fastify + WebSockets) |
-| CDN | 8080 | Asset server (Docker nginx) |
-| PostgreSQL | 5432 | Database (Docker) |
+| CDN | 8080 | Asset server (Docker nginx, if started) |
+
+## Quick Play Guide
+
+1. **Start the game** - Your character spawns in a starter town
+2. **Find green cubes** (goblins) - Click to attack
+3. **Gain XP** - Level up Attack, Strength, Defense, Constitution
+4. **Collect loot** - Coins and equipment drops
+5. **Visit shops** - Buy tools (hatchet, fishing rod, tinderbox)
+6. **Train skills** - Chop trees, fish, cook food
+
+## Commands Reference
+
+```bash
+# From package.json scripts
+# Production
+bun start                 # Start game server (cd packages/server && bun run start)
+
+# Development  
+bun run dev               # All packages with hot reload (via dev-with-elizaos.mjs)
+bun run dev:elizaos       # With AI agents (START_ELIZAOS=true)
+bun run dev:client        # Client only
+bun run dev:server        # Server only
+bun run dev:turbo         # Turbo-based dev (excludes asset-forge)
+bun run dev:reset         # Clean rebuild and restart
+
+# Build
+bun run build             # Build all packages (with docs generation)
+bun run build:shared      # Build core engine
+bun run build:client      # Build web client
+bun run build:server      # Build game server
+
+# Mobile
+bun run ios               # Run iOS simulator
+bun run ios:dev           # iOS dev mode
+bun run android           # Run Android emulator
+bun run android:dev       # Android dev mode
+bun run cap:sync          # Sync Capacitor assets
+
+# CDN
+bun run cdn:up            # Start Docker CDN (nginx)
+bun run cdn:down          # Stop CDN
+
+# Documentation
+bun run docs:dev          # Start docs dev server
+bun run docs:build        # Build documentation
+bun run docs:generate     # Generate API docs (typedoc)
+
+# Testing
+bun run test              # Run all tests (Turbo)
+bun run lint              # Run ESLint
+
+# Cleanup
+bun run clean             # Remove build artifacts
+```
 
 ## Next Steps
 

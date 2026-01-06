@@ -6,12 +6,12 @@ icon: "bot"
 
 ## Overview
 
-The `plugin-hyperscape` package enables AI agents to play Hyperscape autonomously using ElizaOS:
+The `@hyperscape/plugin-hyperscape` package enables AI agents to play Hyperscape autonomously using ElizaOS:
 
 - Agent actions (combat, skills, movement)
 - World state providers
-- LLM decision-making
-- Spectator mode
+- LLM decision-making via OpenAI/Anthropic/OpenRouter
+- Full player capabilities
 
 ## Package Location
 
@@ -41,74 +41,94 @@ packages/plugin-hyperscape/
 
 ## Actions
 
-Agent capabilities organized by category:
+Agent capabilities are defined in `src/actions/`:
 
-### Combat
+```typescript
+// From packages/plugin-hyperscape/src/index.ts (lines 161-188)
+actions: [
+  // Movement
+  moveToAction,
+  followEntityAction,
+  stopMovementAction,
 
-| Action | Purpose |
-|--------|---------|
-| `attackMob` | Engage enemy |
-| `setAttackStyle` | Choose XP focus |
-| `flee` | Disengage |
+  // Combat
+  attackEntityAction,
+  changeCombatStyleAction,
 
-### Skills
+  // Skills
+  chopTreeAction,
+  catchFishAction,
+  lightFireAction,
+  cookFoodAction,
 
-| Action | Purpose |
-|--------|---------|
-| `chopTree` | Woodcutting |
-| `catchFish` | Fishing |
-| `lightFire` | Firemaking |
-| `cookFood` | Cooking |
+  // Inventory
+  equipItemAction,
+  useItemAction,
+  dropItemAction,
 
-### Movement
+  // Social
+  chatMessageAction,
 
-| Action | Purpose |
-|--------|---------|
-| `moveTo` | Navigate to position |
-| `moveToEntity` | Follow entity |
-| `moveToArea` | Travel to zone |
+  // Banking
+  bankDepositAction,
+  bankWithdrawAction,
+],
+```
 
-### Inventory
+### Action Categories
 
-| Action | Purpose |
-|--------|---------|
-| `equipItem` | Wear equipment |
-| `dropItem` | Remove from inventory |
-| `useItem` | Consume or use |
-| `bankDeposit` | Store in bank |
-| `bankWithdraw` | Retrieve from bank |
+| Category | Actions | Source File |
+|----------|---------|-------------|
+| **Movement** | moveTo, followEntity, stopMovement | `actions/movement.ts` |
+| **Combat** | attackEntity, changeCombatStyle | `actions/combat.ts` |
+| **Skills** | chopTree, catchFish, lightFire, cookFood | `actions/skills.ts` |
+| **Inventory** | equipItem, useItem, dropItem | `actions/inventory.ts` |
+| **Social** | chatMessage | `actions/social.ts` |
+| **Banking** | bankDeposit, bankWithdraw | `actions/banking.ts` |
 
 ## Providers
 
-World state accessible to agents:
+World state is accessible to agents via 6 providers:
+
+```typescript
+// From packages/plugin-hyperscape/src/index.ts (lines 148-156)
+providers: [
+  gameStateProvider,        // Player health, stamina, position, combat status
+  inventoryProvider,        // Inventory items, coins, free slots
+  nearbyEntitiesProvider,   // Players, NPCs, resources nearby
+  skillsProvider,           // Skill levels and XP
+  equipmentProvider,        // Equipped items
+  availableActionsProvider, // Context-aware available actions
+],
+```
 
 | Provider | Data |
 |----------|------|
-| `inventoryProvider` | Current inventory |
-| `statsProvider` | Player stats |
-| `nearbyProvider` | Entities in range |
-| `equipmentProvider` | Worn items |
-| `skillsProvider` | XP and levels |
+| `gameStateProvider` | Health, stamina, position, combat status |
+| `inventoryProvider` | Current inventory items and coins |
+| `nearbyEntitiesProvider` | Players, NPCs, resources in range |
+| `skillsProvider` | Skill levels and XP |
+| `equipmentProvider` | Currently equipped items |
+| `availableActionsProvider` | Context-aware actions (e.g., "can cook fish") |
 
 ## Configuration
 
 ```bash
-# ElizaOS
-ELIZAOS_PORT=4001
-
-# LLM Provider
-OPENAI_API_KEY=your-key
+# LLM Provider (at least one required)
+OPENAI_API_KEY=your-openai-key
 # or
-ANTHROPIC_API_KEY=your-key
+ANTHROPIC_API_KEY=your-anthropic-key
+# or
+OPENROUTER_API_KEY=your-openrouter-key
 ```
 
 ## Running
 
 ```bash
-bun run dev:ai    # Game + AI agents
+bun run dev:elizaos    # Game + AI agents
 ```
 
-This starts ElizaOS on port 4001 alongside the game.
+This starts ElizaOS alongside the game server. The AI agent connects as a real player and plays autonomously.
 
 ## Agent Architecture
 
@@ -118,24 +138,42 @@ flowchart TD
     B --> C[Providers]
     B --> D[Actions]
     C --> E[World State]
-    D --> F[Game Server]
+    D --> F[Game Server via WebSocket]
     E --> G[LLM Decision]
     G --> D
 ```
 
 ## Dependencies
 
-| Package | Purpose |
-|---------|---------|
-| `@elizaos/core` | ElizaOS framework |
-| `@hyperscape/shared` | Core engine |
-| `ws` | WebSocket client |
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `@elizaos/core` | ^1.2.9 | ElizaOS framework |
+| `@elizaos/plugin-anthropic` | ^1.5.12 | Anthropic LLM |
+| `@elizaos/plugin-openai` | 1.5.16 | OpenAI LLM |
+| `@elizaos/plugin-openrouter` | ^1.5.15 | OpenRouter LLM |
+| `@elizaos/plugin-sql` | ^1.6.4 | SQL database |
+| `@hyperscape/shared` | workspace | Core engine |
+| `ws` | ^8.18.3 | WebSocket client |
+| `zod` | ^3.25.67 | Schema validation |
+
+## Building
+
+```bash
+cd packages/plugin-hyperscape
+bun run build    # Compile TypeScript
+bun run dev      # Watch mode
+```
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/index.ts` | Plugin registration |
-| `src/service.ts` | Main service |
+| `src/service.ts` | Main service class |
 | `src/actions/` | All agent actions |
 | `src/providers/` | State providers |
+| `src/templates/` | LLM prompt templates |
+
+## License
+
+MIT License - can be used in any ElizaOS agent.

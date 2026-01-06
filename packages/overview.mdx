@@ -10,13 +10,13 @@ Hyperscape is organized as a Turbo monorepo with 7 packages:
 
 ```
 packages/
-├── shared/              # Core 3D engine
-├── server/              # Game server
-├── client/              # Web client
-├── plugin-hyperscape/   # ElizaOS AI plugin
-├── physx-js-webidl/     # PhysX WASM bindings
-├── asset-forge/         # AI asset generation
-└── docs-site/           # Legacy documentation
+├── shared/              # Core 3D engine (@hyperscape/shared)
+├── server/              # Game server (@hyperscape/server)
+├── client/              # Web client (@hyperscape/client)
+├── plugin-hyperscape/   # ElizaOS AI plugin (@hyperscape/plugin-hyperscape)
+├── physx-js-webidl/     # PhysX WASM bindings (@hyperscape/physx-js-webidl)
+├── asset-forge/         # AI asset generation (3d-asset-forge)
+└── docs-site/           # Documentation (Docusaurus)
 ```
 
 ## Package Dependencies
@@ -27,8 +27,11 @@ flowchart TD
     B --> C[server]
     B --> D[client]
     B --> E[plugin-hyperscape]
-    B --> F[asset-forge]
 ```
+
+<Info>
+  `asset-forge` is independent and doesn't depend on other packages.
+</Info>
 
 ## Package Summary
 
@@ -54,11 +57,21 @@ flowchart TD
 
 Due to dependencies, packages must build in order:
 
-1. **physx-js-webidl** (5-10 min first time)
+1. **physx-js-webidl** (5-10 min first time, cached after)
 2. **shared** (depends on physx)
 3. **All other packages** (depend on shared)
 
 Turbo handles this automatically with `dependsOn: ["^build"]`.
+
+## Package Versions
+
+| Package | Version | Description |
+|---------|---------|-------------|
+| `@hyperscape/shared` | 0.13.0 | Core engine |
+| `@hyperscape/server` | 0.13.0 | Game server |
+| `@hyperscape/client` | 0.13.0 | Web client |
+| `@hyperscape/plugin-hyperscape` | 1.0.0 | ElizaOS plugin |
+| `3d-asset-forge` | 1.0.0 | Asset generation |
 
 ## Package Commands
 
@@ -76,17 +89,25 @@ bun run build:server    # Build server only
 ```bash
 bun run dev             # All packages with watch
 bun run dev:shared      # Shared with watch
-bun run dev:client      # Client with HMR
-bun run dev:server      # Server with restart
+bun run dev:client      # Client with HMR (port 3333)
+bun run dev:server      # Server with restart (port 5555)
+bun run dev:elizaos     # With AI agents
 ```
 
-## Package Managers
+### Testing
 
-All packages use **Bun** as the package manager and runtime.
+```bash
+npm test                # Run all tests (Playwright)
+```
+
+## Package Manager
+
+All packages use **Bun** as the package manager and runtime (v1.1.38+).
 
 ```bash
 bun install             # Install all dependencies
 bun run <script>        # Run package scripts
+bun start               # Start production server
 ```
 
 ## Workspaces
@@ -104,7 +125,21 @@ Cross-package imports use workspace protocol:
 ```json
 {
   "dependencies": {
-    "@hyperscape/shared": "workspace:*"
+    "@hyperscape/shared": "workspace:*",
+    "@hyperscape/plugin-hyperscape": "workspace:*"
   }
 }
 ```
+
+## Engine Requirements
+
+| Requirement | Version |
+|-------------|---------|
+| Node.js | ≥22.11.0 |
+| Bun | ≥1.1.38 |
+
+## License
+
+- Core packages: **GPL-3.0-only**
+- plugin-hyperscape: **MIT**
+- asset-forge: **MIT**

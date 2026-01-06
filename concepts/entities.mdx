@@ -1,0 +1,239 @@
+---
+title: "Entities"
+description: "Game objects with 3D representation, networking, and components"
+icon: "cube"
+---
+
+## Overview
+
+Entities are the core game objects in Hyperscape. Every player, mob, item, and resource is an Entity with 3D representation, networking, physics, and component-based functionality.
+
+## Entity Hierarchy
+
+```typescript
+// From packages/shared/src/entities/Entity.ts (lines 26-38)
+// Entity (base class)
+// ├── InteractableEntity (can be interacted with)
+// │   ├── ResourceEntity (trees, rocks, fishing spots)
+// │   ├── ItemEntity (ground items)
+// │   └── NPCEntity (dialogue, shops)
+// ├── CombatantEntity (can fight)
+// │   ├── PlayerEntity (base player)
+// │   │   ├── PlayerLocal (client-side local player)
+// │   │   └── PlayerRemote (client-side remote players)
+// │   └── MobEntity (enemies)
+// └── HeadstoneEntity (player death markers)
+```
+
+## Key Features
+
+From `packages/shared/src/entities/Entity.ts`:
+
+```typescript
+// Key Features:
+// - **3D Representation**: Three.js Object3D with mesh, position, rotation, scale
+// - **Component System**: Modular components for combat, stats, interaction, etc.
+// - **Physics**: Optional PhysX rigid body integration
+// - **Networking**: State synchronization across clients
+// - **Lifecycle**: spawn(), update(), fixedUpdate(), destroy()
+// - **Events**: Local and world event system for inter-entity communication
+// - **Serialization**: Network serialization for state sync
+```
+
+## Entity Class
+
+```typescript
+// From packages/shared/src/entities/Entity.ts (lines 111-145)
+export class Entity implements IEntity {
+  world: World;
+  data: EntityData;
+  id: string;
+  name: string;
+  type: string;
+  node: THREE.Object3D<THREE.Object3DEventMap>;
+  components: Map<string, Component>;
+  velocity: Vector3;
+  isPlayer: boolean;
+  active: boolean = true;
+  destroyed: boolean = false;
+
+  // Physics body reference
+  private rigidBody?: PhysXRigidDynamic;
+
+  // UI elements
+  protected nameSprite: THREE.Sprite | null = null;
+  protected healthSprite: THREE.Sprite | null = null;
+
+  // Network state
+  public networkDirty = false;
+  public networkVersion = 0;
+}
+```
+
+## Lifecycle Methods
+
+```typescript
+// 1. Constructor: Creates entity with initial data/config
+constructor(world: World, dataOrConfig: EntityData | EntityConfig, local?: boolean)
+
+// 2. init(): Async initialization (load models, set up interactions)
+async init(): Promise<void>
+
+// 3. update(delta): Called every frame for visual updates
+update(delta: number): void
+
+// 4. fixedUpdate(delta): Called at fixed timestep (30 FPS) for physics
+fixedUpdate(delta: number): void
+
+// 5. destroy(): Cleanup when entity is removed
+destroy(local?: boolean): void
+```
+
+## Component Management
+
+```typescript
+// Add a component
+entity.addComponent("health", {
+  current: 100,
+  max: 100,
+  regenerationRate: 1.0,
+  isDead: false,
+});
+
+// Get a component
+const health = entity.getComponent<HealthComponent>("health");
+if (health?.data) {
+  console.log(`Health: ${health.data.current}/${health.data.max}`);
+}
+
+// Check if entity has component
+if (entity.hasComponent("combat")) {
+  // Entity can fight
+}
+
+// Remove a component
+entity.removeComponent("movement");
+```
+
+## Default Components
+
+Every entity automatically gets these components:
+
+```typescript
+// From packages/shared/src/entities/Entity.ts (lines 752-794)
+protected initializeRPGComponents(): void {
+  this.addHealthComponent();   // Health, regen, isDead
+  this.addCombatComponent();   // Combat state, target, cooldown
+  this.addVisualComponent();   // Mesh, name sprite, health sprite
+}
+```
+
+## Network Synchronization
+
+```typescript
+// Mark entity as needing network sync
+entity.markNetworkDirty();
+
+// Get data for network transmission
+const networkData = entity.getNetworkData();
+// Returns: { id, type, name, position, rotation, scale, visible, networkVersion, properties }
+
+// Serialize for network packet
+const serialized = entity.serialize();
+// Returns: EntityData with current position/quaternion from node
+```
+
+## Health and Damage
+
+```typescript
+// From Entity base class
+entity.setHealth(newHealth);     // Set health (clamped to max, updates UI)
+entity.damage(amount, source);   // Apply damage, emit event
+entity.heal(amount);             // Heal entity
+entity.isAlive();                // Check if health > 0
+entity.isDead();                 // Check if health <= 0
+entity.getHealth();              // Get current health
+entity.getMaxHealth();           // Get max health
+```
+
+## Position and Transform
+
+```typescript
+// Get/set position
+const pos = entity.getPosition();  // Returns Position3D { x, y, z }
+entity.setPosition({ x: 10, y: 5, z: 10 });
+entity.setPosition(10, 5, 10);     // Overload with x, y, z
+
+// Distance calculations
+const distance = entity.getDistanceTo(otherPosition);
+const inRange = entity.isPlayerInRange(playerPosition);
+```
+
+## PlayerEntity
+
+The player entity extends CombatantEntity with player-specific features:
+
+```typescript
+// From packages/shared/src/entities/player/PlayerEntity.ts (lines 105-123)
+// Default skills on construction:
+playerData.skills = {
+  attack: { level: 1, xp: 0 },
+  strength: { level: 1, xp: 0 },
+  defense: { level: 1, xp: 0 },
+  constitution: { level: 10, xp: 1154 },  // Starts at level 10
+  ranged: { level: 1, xp: 0 },
+  woodcutting: { level: 1, xp: 0 },
+  fishing: { level: 1, xp: 0 },
+  firemaking: { level: 1, xp: 0 },
+  cooking: { level: 1, xp: 0 },
+};
+```
+
+### Player Components
+
+```typescript
+// Player-specific components added in constructor:
+this.addComponent("stamina", { current: 100, max: 100, drainRate: 20.0, regenRate: 15.0 });
+this.addComponent("movement", { isMoving: false, isRunning: false, speed: 3.0, runSpeed: 6.0 });
+this.addComponent("inventory", { items: [], capacity: 28, coins: 0 });
+this.addComponent("equipment", { weapon: null, shield: null, helmet: null, body: null, legs: null, arrows: null });
+this.addComponent("stats", { attack, strength, defense, constitution, ranged, woodcutting, fishing, firemaking, cooking });
+```
+
+## MobEntity
+
+Mob entities represent hostile NPCs with AI behavior:
+
+```typescript
+// MobEntity AI States (from types/entities.ts)
+export enum MobAIState {
+  IDLE = "idle",
+  WANDER = "wander",
+  CHASE = "chase",
+  ATTACK = "attack",
+  RETURN = "return",
+  DEAD = "dead",
+}
+```
+
+## Events
+
+Entities can emit and listen to events:
+
+```typescript
+// Local entity events
+entity.on("health-changed", (data) => { /* ... */ });
+entity.emit("player-died", { playerId: this.playerId, position: this.getPosition() });
+entity.off("health-changed", handler);
+
+// World events (propagated globally)
+this.world.emit(EventType.ENTITY_DAMAGED, { entityId: this.id, damage: amount });
+```
+
+## Best Practices
+
+1. **Use components for data** - Don't add properties directly to entities
+2. **Check component existence** - Always null-check `getComponent()` results
+3. **Mark network dirty** - Call `markNetworkDirty()` after state changes
+4. **Override lifecycle methods** - Implement `createMesh()`, `onInit()`, `onInteract()` in subclasses
+5. **Clean up properly** - Override `destroy()` and call `super.destroy()`

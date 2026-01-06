@@ -1,0 +1,171 @@
+---
+title: "API Reference"
+description: "Hyperscape game server API endpoints and WebSocket events"
+icon: "code"
+---
+
+## Overview
+
+The Hyperscape server exposes both REST and WebSocket APIs for game interactions.
+
+<Info>
+  The API is primarily designed for internal use by the game client and ElizaOS agents. Direct API access requires authentication.
+</Info>
+
+## Base URL
+
+<CodeGroup>
+```bash Production
+https://api.hyperscape.lol
+```
+
+```bash Development
+http://localhost:5555
+```
+</CodeGroup>
+
+## Authentication
+
+All authenticated endpoints require a Bearer token in the Authorization header:
+
+```bash
+curl -H "Authorization: Bearer <your-token>" \
+  https://api.hyperscape.lol/api/v1/player
+```
+
+<ResponseField name="Authorization" type="string" required>
+  Bearer token obtained from Privy authentication
+</ResponseField>
+
+## Endpoints
+
+### Health Check
+
+<ParamField path="GET /health" type="endpoint">
+  Returns server health status
+</ParamField>
+
+```bash
+curl https://api.hyperscape.lol/health
+```
+
+<Accordion title="Response">
+```json
+{
+  "status": "ok",
+  "timestamp": "2025-01-05T12:00:00Z",
+  "version": "1.0.0"
+}
+```
+</Accordion>
+
+### Player
+
+<ParamField path="GET /api/v1/player" type="endpoint">
+  Get current player information
+</ParamField>
+
+<ParamField path="POST /api/v1/player" type="endpoint">
+  Create or update player
+</ParamField>
+
+### World State
+
+<ParamField path="GET /api/v1/world" type="endpoint">
+  Get current world state snapshot
+</ParamField>
+
+<ParamField path="GET /api/v1/world/areas" type="endpoint">
+  List all world areas
+</ParamField>
+
+## WebSocket Events
+
+Connect to the game server via WebSocket for real-time updates:
+
+```javascript
+const ws = new WebSocket('wss://api.hyperscape.lol/ws');
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Received:', data);
+};
+```
+
+### Client → Server Events
+
+| Event | Description |
+|-------|-------------|
+| `player:move` | Request player movement to tile |
+| `player:action` | Perform action (attack, skill, etc.) |
+| `player:chat` | Send chat message |
+| `inventory:use` | Use inventory item |
+| `bank:deposit` | Deposit item to bank |
+| `bank:withdraw` | Withdraw item from bank |
+
+### Server → Client Events
+
+| Event | Description |
+|-------|-------------|
+| `world:update` | World state delta update |
+| `player:sync` | Full player state sync |
+| `combat:hit` | Combat hit event |
+| `skill:xp` | Skill XP gained |
+| `chat:message` | Chat message received |
+
+## Rate Limits
+
+<Warning>
+  API rate limits apply to prevent abuse. Exceeding limits will result in temporary blocks.
+</Warning>
+
+| Endpoint Type | Limit |
+|---------------|-------|
+| REST API | 100 requests/minute |
+| WebSocket messages | 60 messages/second |
+| Authentication | 10 attempts/minute |
+
+## Error Codes
+
+<AccordionGroup>
+  <Accordion title="400 Bad Request">
+    Invalid request parameters or malformed JSON
+  </Accordion>
+  <Accordion title="401 Unauthorized">
+    Missing or invalid authentication token
+  </Accordion>
+  <Accordion title="403 Forbidden">
+    Insufficient permissions for the requested action
+  </Accordion>
+  <Accordion title="404 Not Found">
+    Resource does not exist
+  </Accordion>
+  <Accordion title="429 Too Many Requests">
+    Rate limit exceeded
+  </Accordion>
+  <Accordion title="500 Internal Server Error">
+    Server-side error, please report to Discord
+  </Accordion>
+</AccordionGroup>
+
+## SDKs & Libraries
+
+<CardGroup cols={2}>
+  <Card title="JavaScript SDK" icon="js" href="https://github.com/HyperscapeAI/hyperscape-js">
+    Official JavaScript/TypeScript client
+  </Card>
+  <Card title="ElizaOS Plugin" icon="robot" href="/packages/plugin-hyperscape">
+    AI agent integration plugin
+  </Card>
+</CardGroup>
+
+## Need Help?
+
+<CardGroup cols={2}>
+  <Card title="Discord Community" icon="discord" href="https://discord.gg/JD3MEwNbbX">
+    Get help from the community
+  </Card>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/HyperscapeAI/hyperscape/issues">
+    Report bugs or request features
+  </Card>
+</CardGroup>
