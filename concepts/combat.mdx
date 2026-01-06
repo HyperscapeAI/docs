@@ -12,9 +12,21 @@ Hyperscape uses RuneScape-style tick-based combat with authentic mechanics inclu
 
 Combat operates on a **600ms tick** cycle, matching Old School RuneScape:
 
-- Actions resolve once per tick
-- Attack speed determined by weapon
-- Damage calculated each hit
+```typescript
+// From packages/shared/src/constants/CombatConstants.ts
+export const COMBAT_CONSTANTS = {
+  MELEE_RANGE: 2,
+  RANGED_RANGE: 10,
+  ATTACK_COOLDOWN_MS: 2400,      // 2.4 seconds - standard weapon (4 ticks)
+  COMBAT_TIMEOUT_MS: 10000,      // 10 seconds without attacks ends combat
+  TICK_DURATION_MS: 600,         // 0.6 seconds per game tick
+  BASE_CONSTANT: 64,             // Added to equipment bonuses
+  EFFECTIVE_LEVEL_CONSTANT: 8,   // Added to effective levels
+  DAMAGE_DIVISOR: 640,           // Used in max hit calculation
+  MIN_DAMAGE: 0,                 // OSRS: Can hit 0 (miss)
+  MAX_DAMAGE: 200,               // OSRS damage cap
+};
+```
 
 ```mermaid
 sequenceDiagram
@@ -60,19 +72,41 @@ Players choose how XP is distributed:
 
 ## Damage Calculation
 
-### Accuracy Roll
+The combat system uses OSRS-style formulas with equipment bonuses:
 
-```
-Accuracy = AttackLevel * AttackBonus * Style Modifier
-Evasion = DefenseLevel * DefenseBonus
-Hit Chance = Accuracy / (Accuracy + Evasion)
+```typescript
+// From packages/shared/src/systems/shared/combat/CombatSystem.ts
+// CombatSystem extracts stats from entities:
+
+// For players - get stats from components:
+const statsComponent = attacker.getComponent("stats");
+attackerData = {
+  stats: {
+    attack: stats.attack.level,    // Skill level
+    strength: stats.strength.level,
+    defense: stats.defense.level,
+    ranged: stats.ranged.level,
+  },
+};
+
+// For mobs - get stats from mob data:
+const mobData = attackerMob.getMobData();
+attackerData = {
+  config: { attackPower: mobData.attackPower },
+};
+
+// Equipment bonuses from EquipmentSystem are added to damage
+const equipmentStats = this.playerEquipmentStats.get(attacker.id);
+const result = calculateDamage(attackerData, targetData, AttackType.MELEE, equipmentStats);
 ```
 
-### Max Hit
+### OSRS Constants
 
-```
-MaxHit = floor((StrengthLevel + StrengthBonus) * StyleModifier / 10)
-Damage = random(0, MaxHit)
+```typescript
+// From CombatConstants.ts
+BASE_CONSTANT: 64,             // Added to equipment bonuses in formulas
+EFFECTIVE_LEVEL_CONSTANT: 8,   // Added to effective levels
+DAMAGE_DIVISOR: 640,           // Used in max hit calculation
 ```
 
 ## Ranged Combat
@@ -98,20 +132,37 @@ When health reaches zero:
 
 ## Mob Aggression
 
+```typescript
+// From packages/shared/src/constants/CombatConstants.ts
+export const AGGRO_CONSTANTS = {
+  DEFAULT_BEHAVIOR: "passive",
+  AGGRO_UPDATE_INTERVAL_MS: 100,
+  ALWAYS_AGGRESSIVE_LEVEL: 999, // Ignores level differences
+  MOB_BEHAVIORS: {
+    default: {
+      behavior: "passive",
+      detectionRange: 5,
+      leashRange: 10,
+      levelIgnoreThreshold: 0,
+    },
+  },
+};
+```
+
 | Behavior | Description |
 |----------|-------------|
 | **Passive** | Never attacks first |
 | **Aggressive** | Attacks players in range |
-| **Level-gated** | Ignores high-level players |
-| **Always Aggressive** | Attacks regardless of level |
+| **Level-gated** | Ignores players above threshold |
+| **Always Aggressive** | Attacks regardless of level (levelIgnoreThreshold: 999) |
 
 ### Aggro Range
 
-Each mob has an aggro radius. Entering this range triggers combat for aggressive mobs.
+Each mob has a `detectionRange`. Entering this range triggers combat for aggressive mobs.
 
 ### Chase Behavior
 
-Mobs return to spawn point if player escapes their chase range.
+Mobs return to spawn point if player escapes their `leashRange`.
 
 ## Loot System
 

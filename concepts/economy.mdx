@@ -18,9 +18,23 @@ Hyperscape features a player-driven economy with banking, shops, loot drops, and
 
 ## Inventory
 
+### Configuration
+
+```typescript
+// From packages/shared/src/constants/GameConstants.ts
+export const INVENTORY_CONSTANTS = {
+  MAX_INVENTORY_SLOTS: 28,
+  MAX_BANK_SLOTS: 100,
+  MAX_STACK_SIZE: 1000,
+  DEFAULT_ITEM_VALUE: 1,
+} as const;
+```
+
 ### Capacity
 
-- **28 slots** in active inventory
+- **28 slots** in active inventory (RuneScape-style)
+- **100 slots** in bank storage
+- **1000 max stack** for stackable items
 - Items must be managed carefully
 - Stackable items (coins, arrows) share a slot
 
@@ -28,7 +42,7 @@ Hyperscape features a player-driven economy with banking, shops, loot drops, and
 
 | Property | Description |
 |----------|-------------|
-| **Stackable** | Multiple units per slot |
+| **Stackable** | Multiple units per slot (up to 1000) |
 | **Tradeable** | Can be exchanged |
 | **Weight** | Affects run energy |
 | **Requirements** | Level gates for use |
@@ -84,14 +98,40 @@ All mobs drop loot on death:
 
 ### Drop Tables
 
-Configured in `packages/shared/src/data/npcs.ts`:
+Drop tables are defined in NPC manifests and calculated at runtime:
 
 ```typescript
-drops: [
-  { itemId: "coins", quantity: [5, 20], chance: 1.0 },
-  { itemId: "steel_sword", quantity: 1, chance: 0.1 }
-]
+// From packages/shared/src/data/npcs.ts (lines 107-149)
+export function calculateNPCDrops(
+  npcId: string,
+): Array<{ itemId: string; quantity: number }> {
+  const npc = getNPCById(npcId);
+  if (!npc) return [];
+
+  const drops: Array<{ itemId: string; quantity: number }> = [];
+
+  // Add default drop if enabled
+  if (npc.drops.defaultDrop.enabled) {
+    drops.push({
+      itemId: npc.drops.defaultDrop.itemId,
+      quantity: npc.drops.defaultDrop.quantity,
+    });
+  }
+
+  // Roll for drop tiers: always, common, uncommon, rare, veryRare
+  npc.drops.always.forEach(processDrop);
+  npc.drops.common.forEach(processDrop);
+  npc.drops.uncommon.forEach(processDrop);
+  npc.drops.rare.forEach(processDrop);
+  npc.drops.veryRare.forEach(processDrop);
+
+  return drops;
+}
 ```
+
+<Info>
+  Drop tables are defined in `world/assets/manifests/npcs.json` and loaded by DataManager.
+</Info>
 
 ## Economy Flow
 

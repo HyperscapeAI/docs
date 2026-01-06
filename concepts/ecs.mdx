@@ -12,26 +12,45 @@ Hyperscape uses an Entity Component System (ECS) architecture for all game logic
 
 ### Entities
 
-Entities are unique identifiers for game objects. They have no behavior or data themselves—just an ID.
+Entities are game objects with 3D representation, networking, physics, and component-based architecture:
 
-Examples:
-- Players
-- Mobs (goblins, knights)
-- Items (swords, logs)
-- Resources (trees, fishing spots)
-- Banks, shops
+```typescript
+// From packages/shared/src/entities/Entity.ts (lines 7-13)
+// Key Features:
+// - **3D Representation**: Three.js Object3D with mesh, position, rotation, scale
+// - **Component System**: Modular components for combat, stats, interaction, etc.
+// - **Physics**: Optional PhysX rigid body integration
+// - **Networking**: State synchronization across clients
+// - **Lifecycle**: spawn(), update(), fixedUpdate(), destroy()
+```
+
+Examples: Players, Mobs, Items, Resources, NPCs, Headstones
 
 ### Components
 
-Components are pure data containers attached to entities. They define what an entity "has."
+Components are registered data containers. Hyperscape uses a component factory system:
+
+```typescript
+// From packages/shared/src/entities/Entity.ts (lines 17-23)
+// Component Architecture:
+// - CombatComponent: Health, attack, defense
+// - StatsComponent: Skills, levels, XP
+// - InteractionComponent: Player interaction handlers
+// - DataComponent: Custom data storage
+// - UsageComponent: Item usage logic
+// - VisualComponent: 3D model, materials, animations
+```
 
 | Component | Data |
 |-----------|------|
-| `Position` | x, y, z coordinates |
-| `Health` | current, max HP |
-| `Inventory` | item slots |
-| `Combat` | attack style, target |
-| `Stats` | attack, strength, defense levels |
+| `transform` | Position, rotation, scale (auto-added) |
+| `health` | Current/max HP, regeneration rate, isDead |
+| `combat` | Attack style, target, cooldown, range |
+| `stats` | All skills with levels and XP |
+| `inventory` | 28 item slots with quantities |
+| `equipment` | Weapon, armor slots |
+| `movement` | Speed, destination, path, isRunning |
+| `stamina` | Current/max, drain/regen rates |
 
 ### Systems
 
@@ -78,25 +97,56 @@ flowchart TD
 
 ## Working with ECS
 
-### Getting Systems
+### Adding Components
 
 ```typescript
-const combatSystem = world.getSystem('combat') as CombatSystem;
+// From packages/shared/src/entities/Entity.ts (lines 409-446)
+addComponent<T extends Component = Component>(
+  type: string,
+  data?: Record<string, unknown>,
+): T {
+  const component = createComponent(type, this, data);
+  this.components.set(type, component);
+  if (component.init) component.init();
+  return component as T;
+}
 ```
 
-### Querying Entities
+### Getting Components
 
 ```typescript
-const players = world.getEntitiesByType('Player');
-const mobs = world.getEntitiesWithComponent('Combat');
+// Get component with type safety
+const healthComponent = entity.getComponent<HealthComponent>('health');
+if (healthComponent?.data) {
+  const currentHealth = healthComponent.data.current;
+}
+
+// Check if entity has component
+if (entity.hasComponent('combat')) {
+  // Entity can fight
+}
 ```
 
-### Event Handling
+### Entity Lifecycle
 
 ```typescript
-world.on('inventory:add', (event: InventoryAddEvent) => {
-  // Handle item added to inventory
-});
+// From packages/shared/src/entities/Entity.ts (lines 40-46)
+// Lifecycle:
+// 1. Constructor: Creates entity with initial data/config
+// 2. spawn(): Called when entity is added to world (override in subclasses)
+// 3. update(delta): Called every frame for visual updates
+// 4. fixedUpdate(delta): Called at fixed timestep (30 FPS) for physics
+// 5. destroy(): Cleanup when entity is removed
+```
+
+### Network Synchronization
+
+```typescript
+// Mark entity as needing network sync
+entity.markNetworkDirty();
+
+// Get data for network transmission
+const networkData = entity.getNetworkData();
 ```
 
 ## Key Files

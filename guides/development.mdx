@@ -11,7 +11,7 @@ icon: "code"
 | Command | Description |
 |---------|-------------|
 | `bun run dev` | Start game (client + server + shared) |
-| `bun run dev:ai` | Game + ElizaOS AI agents |
+| `bun run dev:elizaos` | Game + ElizaOS AI agents |
 | `bun run dev:all` | Everything: game + AI + AssetForge |
 | `bun run build` | Build all packages |
 | `bun start` | Start production server |
@@ -19,10 +19,18 @@ icon: "code"
 ### Package-Specific
 
 ```bash
+# From package.json scripts
 bun run dev:client    # Client only (port 3333)
 bun run dev:server    # Server only (port 5555)
 bun run dev:shared    # Shared package with watch mode
-bun run dev:forge     # AssetForge tools
+bun run dev:turbo     # Turbo-based dev (excludes asset-forge)
+bun run dev:reset     # Clean + rebuild + dev (nuclear option)
+
+# Asset Forge (in packages/asset-forge/)
+cd packages/asset-forge
+bun run dev           # Frontend (Vite) + Backend (Elysia) concurrently
+bun run dev:frontend  # Vite only
+bun run dev:backend   # Elysia API only
 ```
 
 ## Port Allocation
@@ -33,7 +41,7 @@ bun run dev:forge     # AssetForge tools
 | 5555 | Game Server | `bun run dev` |
 | 8080 | Asset CDN | `bun run dev` |
 | 5432 | PostgreSQL | Docker (auto) |
-| 4001 | ElizaOS API | `bun run dev:ai` |
+| 4001 | ElizaOS API | `bun run dev:elizaos` |
 | 3400 | AssetForge UI | `bun run dev:forge` |
 | 3401 | AssetForge API | `bun run dev:forge` |
 

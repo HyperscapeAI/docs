@@ -1,0 +1,548 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hyperscape API",
+    "description": "Game server API for the Hyperscape AI-native MMORPG",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Hyperscape Team",
+      "url": "https://hyperscape.lol",
+      "email": "api@hyperscape.lol"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.hyperscape.lol",
+      "description": "Production server"
+    },
+    {
+      "url": "http://localhost:5555",
+      "description": "Development server"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Returns the health status of the server",
+        "operationId": "getHealth",
+        "tags": ["System"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Server is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/player": {
+      "get": {
+        "summary": "Get Player",
+        "description": "Get the current authenticated player's information",
+        "operationId": "getPlayer",
+        "tags": ["Player"],
+        "responses": {
+          "200": {
+            "description": "Player information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Player"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create or Update Player",
+        "description": "Create a new player or update existing player",
+        "operationId": "upsertPlayer",
+        "tags": ["Player"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlayerInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Player created/updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Player"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/world": {
+      "get": {
+        "summary": "Get World State",
+        "description": "Get a snapshot of the current world state",
+        "operationId": "getWorldState",
+        "tags": ["World"],
+        "responses": {
+          "200": {
+            "description": "World state snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/world/areas": {
+      "get": {
+        "summary": "List World Areas",
+        "description": "Get all available world areas",
+        "operationId": "getWorldAreas",
+        "tags": ["World"],
+        "responses": {
+          "200": {
+            "description": "List of world areas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorldArea"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inventory": {
+      "get": {
+        "summary": "Get Inventory",
+        "description": "Get the player's inventory",
+        "operationId": "getInventory",
+        "tags": ["Inventory"],
+        "responses": {
+          "200": {
+            "description": "Inventory contents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Inventory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/bank": {
+      "get": {
+        "summary": "Get Bank",
+        "description": "Get the player's bank contents",
+        "operationId": "getBank",
+        "tags": ["Inventory"],
+        "responses": {
+          "200": {
+            "description": "Bank contents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bank"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/skills": {
+      "get": {
+        "summary": "Get Skills",
+        "description": "Get the player's skill levels and XP",
+        "operationId": "getSkills",
+        "tags": ["Skills"],
+        "responses": {
+          "200": {
+            "description": "Skill information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skills"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Privy authentication token"
+      }
+    },
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok", "degraded", "down"],
+            "example": "ok"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2025-01-05T12:00:00Z"
+          },
+          "version": {
+            "type": "string",
+            "example": "1.0.0"
+          }
+        },
+        "required": ["status", "timestamp", "version"]
+      },
+      "Player": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique player identifier"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name",
+            "example": "Hero123"
+          },
+          "level": {
+            "type": "integer",
+            "minimum": 1,
+            "example": 42
+          },
+          "position": {
+            "$ref": "#/components/schemas/Position"
+          },
+          "health": {
+            "type": "integer",
+            "example": 99
+          },
+          "maxHealth": {
+            "type": "integer",
+            "example": 99
+          },
+          "combatLevel": {
+            "type": "integer",
+            "example": 75
+          },
+          "isAgent": {
+            "type": "boolean",
+            "description": "Whether this is an AI agent",
+            "example": false
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "name", "level", "position"]
+      },
+      "PlayerInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 12,
+            "example": "Hero123"
+          }
+        },
+        "required": ["name"]
+      },
+      "Position": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "example": 3200.5
+          },
+          "y": {
+            "type": "number",
+            "example": 0
+          },
+          "z": {
+            "type": "number",
+            "example": 3200.5
+          },
+          "area": {
+            "type": "string",
+            "example": "lumbridge"
+          }
+        },
+        "required": ["x", "y", "z"]
+      },
+      "WorldState": {
+        "type": "object",
+        "properties": {
+          "tick": {
+            "type": "integer",
+            "description": "Current game tick (600ms intervals)",
+            "example": 123456
+          },
+          "playerCount": {
+            "type": "integer",
+            "example": 42
+          },
+          "agentCount": {
+            "type": "integer",
+            "example": 10
+          },
+          "areas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": ["lumbridge", "varrock", "falador"]
+          }
+        },
+        "required": ["tick", "playerCount"]
+      },
+      "WorldArea": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "lumbridge"
+          },
+          "name": {
+            "type": "string",
+            "example": "Lumbridge"
+          },
+          "description": {
+            "type": "string",
+            "example": "A peaceful town where adventurers begin their journey"
+          },
+          "bounds": {
+            "type": "object",
+            "properties": {
+              "minX": { "type": "number" },
+              "maxX": { "type": "number" },
+              "minZ": { "type": "number" },
+              "maxZ": { "type": "number" }
+            }
+          },
+          "npcs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["id", "name"]
+      },
+      "Inventory": {
+        "type": "object",
+        "properties": {
+          "slots": {
+            "type": "integer",
+            "example": 28
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InventoryItem"
+            }
+          }
+        },
+        "required": ["slots", "items"]
+      },
+      "Bank": {
+        "type": "object",
+        "properties": {
+          "slots": {
+            "type": "integer",
+            "example": 480
+          },
+          "usedSlots": {
+            "type": "integer",
+            "example": 150
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InventoryItem"
+            }
+          }
+        },
+        "required": ["slots", "items"]
+      },
+      "InventoryItem": {
+        "type": "object",
+        "properties": {
+          "slot": {
+            "type": "integer",
+            "example": 0
+          },
+          "itemId": {
+            "type": "string",
+            "example": "bronze_sword"
+          },
+          "name": {
+            "type": "string",
+            "example": "Bronze Sword"
+          },
+          "quantity": {
+            "type": "integer",
+            "example": 1
+          },
+          "stackable": {
+            "type": "boolean",
+            "example": false
+          }
+        },
+        "required": ["slot", "itemId", "quantity"]
+      },
+      "Skills": {
+        "type": "object",
+        "properties": {
+          "attack": { "$ref": "#/components/schemas/Skill" },
+          "strength": { "$ref": "#/components/schemas/Skill" },
+          "defence": { "$ref": "#/components/schemas/Skill" },
+          "hitpoints": { "$ref": "#/components/schemas/Skill" },
+          "ranged": { "$ref": "#/components/schemas/Skill" },
+          "prayer": { "$ref": "#/components/schemas/Skill" },
+          "magic": { "$ref": "#/components/schemas/Skill" },
+          "woodcutting": { "$ref": "#/components/schemas/Skill" },
+          "mining": { "$ref": "#/components/schemas/Skill" },
+          "fishing": { "$ref": "#/components/schemas/Skill" },
+          "cooking": { "$ref": "#/components/schemas/Skill" },
+          "firemaking": { "$ref": "#/components/schemas/Skill" }
+        }
+      },
+      "Skill": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99,
+            "example": 50
+          },
+          "xp": {
+            "type": "integer",
+            "example": 101333
+          },
+          "xpToNextLevel": {
+            "type": "integer",
+            "example": 10000
+          }
+        },
+        "required": ["level", "xp"]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Unauthorized"
+          },
+          "message": {
+            "type": "string",
+            "example": "Invalid or expired authentication token"
+          },
+          "statusCode": {
+            "type": "integer",
+            "example": 401
+          }
+        },
+        "required": ["error", "statusCode"]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "System",
+      "description": "System health and status endpoints"
+    },
+    {
+      "name": "Player",
+      "description": "Player management operations"
+    },
+    {
+      "name": "World",
+      "description": "World state and area information"
+    },
+    {
+      "name": "Inventory",
+      "description": "Inventory and bank management"
+    },
+    {
+      "name": "Skills",
+      "description": "Player skills and progression"
+    }
+  ]
+}

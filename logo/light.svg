@@ -1,13 +1,13 @@
 <svg width="180" height="32" viewBox="0 0 180 32" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="logoGradientLight" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#CA8A04"/>
-      <stop offset="100%" stop-color="#A16207"/>
+      <stop offset="0%" stop-color="#C9A227"/>
+      <stop offset="100%" stop-color="#8B7021"/>
     </linearGradient>
   </defs>
   <!-- H icon -->
   <rect x="0" y="4" width="24" height="24" rx="5" fill="url(#logoGradientLight)"/>
-  <path d="M7 10V22M17 10V22M7 16H17" stroke="#FAFAF9" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M7 10V22M17 10V22M7 16H17" stroke="#FAF9F7" stroke-width="2.5" stroke-linecap="round"/>
   <!-- HYPERSCAPE text -->
-  <text x="32" y="22" font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="17" font-weight="700" letter-spacing="0.5" fill="#171717">HYPERSCAPE</text>
+  <text x="32" y="22" font-family="Cinzel, serif" font-size="16" font-weight="600" letter-spacing="1.5" fill="#1A1A1D">HYPERSCAPE</text>
 </svg>

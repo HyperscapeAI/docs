@@ -6,11 +6,11 @@ icon: "server"
 
 ## Overview
 
-The `server` package runs the authoritative game server:
+The `@hyperscape/server` package runs the authoritative game server:
 
-- Fastify HTTP API
-- WebSocket game state
-- Drizzle ORM database
+- Fastify 5 HTTP API with rate limiting
+- WebSocket real-time game state
+- PostgreSQL (production) / SQLite (local) database
 - LiveKit voice chat integration
 
 ## Package Location
@@ -18,17 +18,18 @@ The `server` package runs the authoritative game server:
 ```
 packages/server/
 ├── src/
-│   ├── database/       # Drizzle schema and queries
-│   ├── infrastructure/ # Docker, config
+│   ├── database/       # Database schema and queries
+│   ├── infrastructure/ # Docker, CDN configuration
 │   ├── scripts/        # Utility scripts
 │   ├── shared/         # Shared server utilities
 │   ├── startup/        # Server initialization
 │   ├── systems/        # Server-specific systems
 │   ├── types/          # TypeScript types
+│   ├── types.ts        # Core type definitions
 │   └── index.ts        # Entry point
 ├── world/
 │   └── assets/         # Game assets (Git LFS)
-├── drizzle.config.ts   # Drizzle configuration
+├── docker-compose.yml  # Docker services
 └── .env.example        # Environment template
 ```
 
@@ -36,9 +37,9 @@ packages/server/
 
 `src/index.ts` initializes:
 
-1. Database connection
-2. Asset CDN (Docker)
-3. Fastify HTTP server
+1. Database connection (PostgreSQL or SQLite)
+2. Asset CDN (Docker nginx, optional)
+3. Fastify HTTP server with plugins
 4. WebSocket handlers
 5. Game world and systems
 
@@ -48,47 +49,87 @@ packages/server/
 |-------|--------|---------|
 | `/health` | GET | Health check |
 | `/auth` | POST | Authentication |
-| `/ws` | WS | Game connection |
+| `/ws` | WS | Game WebSocket connection |
 
 ## Database
 
-### Schema
+The server supports both PostgreSQL (production via Neon) and SQLite (local development). Schema is defined with Drizzle ORM.
 
-Defined in `src/database/schema.ts`:
+### Key Tables
+
+```typescript
+// From packages/server/src/database/schema.ts
+export const characters = pgTable("characters", {
+  id: text("id").primaryKey(),
+  accountId: text("accountId").notNull(),
+  name: text("name").notNull(),
+  // Combat stats
+  combatLevel: integer("combatLevel").default(3),
+  attackLevel: integer("attackLevel").default(1),
+  strengthLevel: integer("strengthLevel").default(1),
+  defenseLevel: integer("defenseLevel").default(1),
+  constitutionLevel: integer("constitutionLevel").default(10),
+  rangedLevel: integer("rangedLevel").default(1),
+  // Gathering skills
+  woodcuttingLevel: integer("woodcuttingLevel").default(1),
+  fishingLevel: integer("fishingLevel").default(1),
+  firemakingLevel: integer("firemakingLevel").default(1),
+  cookingLevel: integer("cookingLevel").default(1),
+  // XP for all skills...
+  health: integer("health").default(100),
+  coins: integer("coins").default(0),
+  positionX: real("positionX").default(0),
+  positionY: real("positionY").default(10),
+  positionZ: real("positionZ").default(0),
+});
+```
 
 | Table | Purpose |
 |-------|---------|
-| `players` | Player accounts |
-| `characters` | Character data |
-| `inventory` | Item ownership |
-| `bank` | Banked items |
-| `skills` | XP and levels |
+| `users` | Account authentication with Privy/Farcaster IDs |
+| `characters` | Full character data with all skills and XP |
+| `inventory` | Player items (28 slots with quantities) |
+| `equipment` | Worn items by slot type |
+| `items` | Item definitions and stats |
+| `worldChunks` | Persistent world modifications |
+| `playerSessions` | Login/logout tracking |
+| `playerDeaths` | Death locks to prevent duplication |
+| `npcKills` | Kill statistics per player |
 
-### Commands
+### Database Commands
 
 ```bash
 cd packages/server
-bunx drizzle-kit push      # Apply schema
+
+# Using Drizzle Kit
+bunx drizzle-kit push      # Apply schema to database
 bunx drizzle-kit generate  # Generate migrations
-bunx drizzle-kit migrate   # Run migrations
+bunx drizzle-kit studio    # Open Drizzle Studio GUI
 ```
 
 ## Environment Variables
 
 ```bash
-# Required
-DATABASE_URL=postgresql://...
-JWT_SECRET=your-secret
+# Database (choose one)
+DATABASE_URL=postgresql://user:pass@host/db    # PostgreSQL (production)
+# or SQLite is used automatically for local development
 
-# Authentication
-PRIVY_APP_ID=your-app-id
-PRIVY_APP_SECRET=your-app-secret
+# Authentication (required for persistent accounts)
+PRIVY_APP_ID=your-privy-app-id
+PRIVY_APP_SECRET=your-privy-app-secret
+JWT_SECRET=your-jwt-secret
 
-# Optional
+# Server Configuration
 PORT=5555
+NODE_ENV=development
+
+# CDN (optional)
 PUBLIC_CDN_URL=http://localhost:8080
-LIVEKIT_API_KEY=...
-LIVEKIT_API_SECRET=...
+
+# Voice Chat (optional)
+LIVEKIT_API_KEY=your-livekit-key
+LIVEKIT_API_SECRET=your-livekit-secret
+LIVEKIT_URL=wss://your-livekit-url
 ```
 
 ## Running
@@ -96,41 +137,67 @@ LIVEKIT_API_SECRET=...
 ### Development
 
 ```bash
-bun run dev:server    # With hot reload
+bun run dev:server    # With hot reload and auto-restart
 ```
 
 ### Production
 
 ```bash
-bun run build:server  # Build
-bun start             # Start production
+bun run build:server  # Build to dist/
+bun start             # Start production server
 ```
+
+Server runs at `http://localhost:5555` by default.
 
 ## Dependencies
 
 | Package | Purpose |
 |---------|---------|
-| `fastify` | HTTP server |
-| `ws` | WebSockets |
-| `drizzle-orm` | Database ORM |
+| `fastify` | HTTP server (v5) |
+| `@fastify/websocket` | WebSocket support |
+| `@fastify/cors` | CORS handling |
+| `@fastify/rate-limit` | Rate limiting |
+| `pg` | PostgreSQL client |
 | `@hyperscape/shared` | Core engine |
+| `@privy-io/server-auth` | Authentication |
+| `livekit-server-sdk` | Voice chat |
+| `msgpackr` | Binary serialization |
 
 ## Docker Services
 
-The server manages Docker containers:
+The server can use Docker for CDN and PostgreSQL:
 
 ```bash
-bun run cdn:up    # Start asset CDN
-bun run cdn:down  # Stop asset CDN
+# Asset CDN
+bun run cdn:up       # Start nginx CDN container
+bun run cdn:down     # Stop CDN
+bun run cdn:logs     # View CDN logs
+bun run cdn:verify   # Verify CDN is working
+
+# Asset Management
+bun run assets:sync   # Sync assets from Git LFS
+bun run assets:deploy # Deploy to R2 (production)
 ```
 
-PostgreSQL starts automatically via Docker Compose.
+## Deployment
+
+### Cloudflare Workers
+
+```bash
+bun run deploy        # Deploy to staging
+bun run deploy:prod   # Deploy to production
+```
+
+### Railway
+
+The `railway.server.json` in the project root configures Railway deployment.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/index.ts` | Server entry |
-| `src/database/schema.ts` | DB schema |
-| `drizzle.config.ts` | Drizzle config |
-| `.env.example` | Env template |
+| `src/index.ts` | Server entry point |
+| `src/database/` | Database schema and queries |
+| `src/startup/` | Initialization logic |
+| `docker-compose.yml` | Docker service configuration |
+| `.env.example` | Environment template |

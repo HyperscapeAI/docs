@@ -11,7 +11,7 @@ Hyperscape integrates [ElizaOS](https://elizaos.ai) to enable AI agents that pla
 ## Starting AI Agents
 
 ```bash
-bun run dev:ai
+bun run dev:elizaos
 ```
 
 This starts:
@@ -23,26 +23,55 @@ This starts:
 
 ### Available Actions
 
-AI agents can perform all player actions:
+AI agents have 17 actions across 6 categories:
 
-| Category | Actions |
-|----------|---------|
-| **Combat** | Attack enemies, select attack styles |
-| **Movement** | Navigate to locations, pathfinding |
-| **Skills** | Woodcutting, fishing, cooking, firemaking |
-| **Inventory** | Equip items, drop, pick up, manage |
-| **Banking** | Deposit, withdraw, organize |
-| **Social** | Chat, emotes |
+```typescript
+// From packages/plugin-hyperscape/src/index.ts (lines 161-188)
+actions: [
+  // Movement (3 actions)
+  moveToAction,
+  followEntityAction,
+  stopMovementAction,
 
-### World State Access
+  // Combat (2 actions)
+  attackEntityAction,
+  changeCombatStyleAction,
 
-Agents can query:
+  // Skills (4 actions)
+  chopTreeAction,
+  catchFishAction,
+  lightFireAction,
+  cookFoodAction,
 
-- Current inventory contents
-- Player stats and levels
-- Nearby entities (players, mobs, items)
-- Equipment status
-- Skill XP and progress
+  // Inventory (3 actions)
+  equipItemAction,
+  useItemAction,
+  dropItemAction,
+
+  // Social (1 action)
+  chatMessageAction,
+
+  // Banking (2 actions)
+  bankDepositAction,
+  bankWithdrawAction,
+],
+```
+
+### World State Access (Providers)
+
+Agents query world state via 6 providers:
+
+```typescript
+// From packages/plugin-hyperscape/src/index.ts (lines 148-156)
+providers: [
+  gameStateProvider,        // Health, stamina, position, combat status
+  inventoryProvider,        // Items, coins, free slots
+  nearbyEntitiesProvider,   // Players, NPCs, resources nearby
+  skillsProvider,           // Skill levels and XP
+  equipmentProvider,        // Equipped items
+  availableActionsProvider, // Context-aware available actions
+],
+```
 
 ## Agent Architecture
 
@@ -71,19 +100,54 @@ The `plugin-hyperscape` package contains:
 
 Watch AI agents play in real-time:
 
-1. Start with `bun run dev:ai`
+1. Start with `bun run dev:elizaos`
 2. Open localhost:3333
 3. Select an agent to spectate
 4. Observe decision-making in action
 
 ## Configuration
 
-Agent configuration in `packages/plugin-hyperscape/.env`:
+The plugin validates configuration using Zod:
+
+```typescript
+// From packages/plugin-hyperscape/src/index.ts (lines 62-83)
+const configSchema = z.object({
+  HYPERSCAPE_SERVER_URL: z
+    .string()
+    .url()
+    .optional()
+    .default("ws://localhost:5555/ws")
+    .describe("WebSocket URL for Hyperscape server"),
+  HYPERSCAPE_AUTO_RECONNECT: z
+    .string()
+    .optional()
+    .default("true")
+    .transform((val) => val !== "false")
+    .describe("Automatically reconnect on disconnect"),
+  HYPERSCAPE_AUTH_TOKEN: z
+    .string()
+    .optional()
+    .describe("Privy auth token for authenticated connections"),
+  HYPERSCAPE_PRIVY_USER_ID: z
+    .string()
+    .optional()
+    .describe("Privy user ID for authenticated connections"),
+});
+```
+
+### Environment Variables
 
 ```bash
-ELIZAOS_PORT=4001
-OPENAI_API_KEY=your-key
-# Additional LLM provider keys
+# LLM Provider (at least one required)
+OPENAI_API_KEY=your-openai-key
+ANTHROPIC_API_KEY=your-anthropic-key
+OPENROUTER_API_KEY=your-openrouter-key
+
+# Hyperscape Connection
+HYPERSCAPE_SERVER_URL=ws://localhost:5555/ws
+HYPERSCAPE_AUTO_RECONNECT=true
+HYPERSCAPE_AUTH_TOKEN=optional-privy-token
+HYPERSCAPE_PRIVY_USER_ID=optional-privy-user-id
 ```
 
 ## Agent Actions Reference

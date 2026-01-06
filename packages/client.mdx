@@ -6,12 +6,14 @@ icon: "monitor"
 
 ## Overview
 
-The `client` package is the web game client:
+The `@hyperscape/client` package is the web game client:
 
-- Vite for fast builds
+- Vite for fast builds with HMR
 - React 19 UI framework
 - Three.js 3D rendering
-- Capacitor for mobile
+- Capacitor for iOS/Android mobile builds
+- Privy authentication
+- Farcaster miniapp SDK
 
 ## Package Location
 
@@ -19,59 +21,105 @@ The `client` package is the web game client:
 packages/client/
 ├── src/
 │   ├── auth/           # Privy authentication
-│   ├── components/     # React components
+│   ├── components/     # React UI components
 │   ├── constants/      # Client constants
 │   ├── game/           # Game loop and logic
 │   ├── hooks/          # React hooks
 │   ├── lib/            # Networking, utilities
+│   ├── public/         # Static assets
 │   ├── screens/        # UI screens
 │   ├── types/          # TypeScript types
 │   ├── utils/          # Helper functions
-│   ├── index.tsx       # React entry
+│   ├── index.tsx       # React entry point
 │   ├── index.html      # HTML template
-│   └── index.css       # Global styles
-├── capacitor.config.ts # Mobile config
-├── vite.config.ts      # Vite config
+│   └── index.css       # Global styles (Tailwind)
+├── ios/                # iOS native project (Capacitor)
+├── android/            # Android native project (Capacitor)
+├── capacitor.config.ts # Mobile configuration
+├── vite.config.ts      # Vite configuration
 └── .env.example        # Environment template
 ```
 
 ## Screens
 
+Located in `src/screens/`:
+
+```typescript
+// From packages/client/src/screens/
+LoginScreen.tsx           // Privy authentication
+LoadingScreen.tsx         // Asset loading
+UsernameSelectionScreen.tsx  // First-time username
+CharacterSelectScreen.tsx // Choose character
+CharacterEditorScreen.tsx // Create/edit character with VRM preview
+DashboardScreen.tsx       // Game hub / lobby
+GameClient.tsx            // Main 3D gameplay
+```
+
 | Screen | Purpose |
 |--------|---------|
-| Login | Authentication |
-| Character Select | Choose character |
-| Character Create | New character |
-| Game | Main gameplay |
+| `LoginScreen` | Privy authentication |
+| `UsernameSelectionScreen` | First-time username entry |
+| `CharacterSelectScreen` | Choose existing character |
+| `CharacterEditorScreen` | Create/edit character (VRM preview) |
+| `DashboardScreen` | Game hub and lobby |
+| `GameClient` | Main 3D gameplay |
+| `LoadingScreen` | Asset loading state |
 
-## Components
+## UI Components
 
-### UI Components
+Located in `src/components/`:
 
-- HUD (health, stamina, combat)
-- Inventory panel
-- Bank interface
-- Skills panel
+```typescript
+// From packages/client/src/components/
+CharacterPreview.tsx      // VRM character preview
+DraggableWindow.tsx       // Draggable UI windows
+EmbeddedGameClient.tsx    // Embedded game in dashboard
+GameWindow.tsx            // Main game container
+MinimapCompass.tsx        // Minimap with compass
+MinimapStaminaBar.tsx     // Stamina display
+MenuButton.tsx            // Menu buttons
+Portal.tsx                // React portal for overlays
+Fields.tsx                // Form field components
+Icons.tsx                 // Icon components
+
+// Subfolders
+character/                // Character-related components
+dashboard/                // Dashboard components
+```
+
+### HUD Components
+
+- Health/Constitution display
+- Combat status indicators
+- Skills panel with XP progress
+- 28-slot inventory grid
+- Equipment slots display
+- Bank interface (unlimited storage)
 - Chat window
-- Equipment display
+- Minimap with compass
 
 ### Game Components
 
-- 3D renderer
-- Camera controller
-- Input handler
-- Entity renderer
+- Three.js 3D renderer
+- Camera controller (third-person, click-to-move)
+- Input handler (WASD movement, click actions)
+- Entity renderers (players, mobs, items)
+- VRM avatar display with emotes
 
 ## Environment Variables
 
 ```bash
 # Required
-PUBLIC_PRIVY_APP_ID=your-app-id
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
 
 # Server URLs (production)
-PUBLIC_API_URL=https://api.hyperscape.game
-PUBLIC_WS_URL=wss://api.hyperscape.game
-PUBLIC_CDN_URL=https://cdn.hyperscape.game
+PUBLIC_API_URL=https://api.hyperscape.lol
+PUBLIC_WS_URL=wss://api.hyperscape.lol
+PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+
+# Farcaster (optional)
+PUBLIC_ENABLE_FARCASTER=true
+PUBLIC_APP_URL=https://hyperscape.lol
 ```
 
 ## Running
@@ -89,40 +137,71 @@ Opens at [http://localhost:3333](http://localhost:3333)
 ```bash
 cd packages/client
 bun run build         # Build to dist/
+bun run preview       # Preview production build
 ```
 
 ## Mobile Builds
 
 ### iOS
 
+Requires macOS with Xcode installed.
+
 ```bash
-npm run ios           # Build and open Xcode
-npm run ios:dev       # Sync and open
+bun run ios           # Build and open Xcode
+bun run ios:dev       # Sync and open (no rebuild)
+bun run ios:build     # Production build
 ```
 
 ### Android
 
+Requires Android Studio installed.
+
 ```bash
-npm run android       # Build and open Android Studio
-npm run android:dev   # Sync and open
+bun run android       # Build and open Android Studio
+bun run android:dev   # Sync and open (no rebuild)
+bun run android:build # Production build
+```
+
+### Capacitor Sync
+
+```bash
+bun run cap:sync          # Sync both platforms
+bun run cap:sync:ios      # iOS only
+bun run cap:sync:android  # Android only
 ```
 
 ## Dependencies
 
 | Package | Purpose |
 |---------|---------|
-| `react` | UI framework |
+| `react` | UI framework (v19) |
+| `react-dom` | React DOM renderer |
 | `vite` | Build tool |
 | `three` | 3D rendering |
 | `@capacitor/core` | Mobile builds |
 | `@hyperscape/shared` | Core engine |
 | `@privy-io/react-auth` | Authentication |
+| `@farcaster/miniapp-sdk` | Farcaster integration |
+| `styled-components` | CSS-in-JS |
+| `tailwindcss` | Utility CSS |
+| `livekit-client` | Voice chat |
+
+## Deployment
+
+### Cloudflare Pages
+
+```bash
+bun run deploy        # Deploy to staging
+bun run deploy:prod   # Deploy to production
+```
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/index.tsx` | React entry |
-| `src/game/` | Game logic |
-| `vite.config.ts` | Vite config |
-| `capacitor.config.ts` | Mobile config |
+| `src/index.tsx` | React entry point |
+| `src/game/` | Game loop and logic |
+| `src/screens/` | UI screens |
+| `vite.config.ts` | Vite configuration |
+| `capacitor.config.ts` | Mobile configuration |
+| `wrangler.toml` | Cloudflare Pages config |

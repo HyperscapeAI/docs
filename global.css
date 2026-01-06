@@ -1,0 +1,525 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * HYPERSCAPE DOCUMENTATION - LUXURY BLACK & GOLD THEME
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * Design Philosophy:
+ * Premium luxury aesthetic inspired by high-end fashion and gaming brands.
+ * True 24K gold tones paired with warm charcoal blacks.
+ * 
+ * Gold Spectrum:
+ *   - Champagne Gold: #F5D061 (dark mode highlights)
+ *   - Vegas Gold: #E8C547 (bright accents)
+ *   - Old Gold: #D4AF37 (primary brand gold - THE luxury gold)
+ *   - Antique Gold: #C9A227 (depth, gradients)
+ *   - Dark Goldenrod: #B8860B (light mode accents)
+ *   - Antique Brass: #A8935C (muted/subtle)
+ *   - Deep Bronze: #8B7021 (shadows)
+ * 
+ * Warm Black Spectrum:
+ *   - Ivory Warm: #FAF9F7 (light background)
+ *   - Cultured: #F5F4F0 (light surfaces)
+ *   - Jet: #2D2D32 (body text)
+ *   - Raisin Black: #1C1C21 (hover states)
+ *   - Eerie Black: #161619 (cards, modals)
+ *   - Obsidian: #0D0D0F (dark background)
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CSS CUSTOM PROPERTIES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ─────────────────────────────────────────────────────────────────────────
+     GOLD SPECTRUM - Luxury Metallic Gold
+     ───────────────────────────────────────────────────────────────────────── */
+  --gold-champagne: #F5D061;
+  --gold-vegas: #E8C547;
+  --gold-old: #D4AF37;
+  --gold-antique: #C9A227;
+  --gold-dark: #B8860B;
+  --gold-brass: #A8935C;
+  --gold-bronze: #8B7021;
+  --gold-glow: rgba(212, 175, 55, 0.15);
+  
+  /* ─────────────────────────────────────────────────────────────────────────
+     WARM BLACK SPECTRUM - Sophisticated Dark Tones
+     ───────────────────────────────────────────────────────────────────────── */
+  --black-obsidian: #0D0D0F;
+  --black-eerie: #161619;
+  --black-raisin: #1C1C21;
+  --black-jet: #2D2D32;
+  
+  /* ─────────────────────────────────────────────────────────────────────────
+     LIGHT THEME - Warm Ivory Tones
+     ───────────────────────────────────────────────────────────────────────── */
+  --light-ivory: #FAF9F7;
+  --light-cultured: #F5F4F0;
+  --light-text: #2D2D32;
+  
+  /* ─────────────────────────────────────────────────────────────────────────
+     MINTLIFY OVERRIDES - RGB Format
+     ───────────────────────────────────────────────────────────────────────── */
+  --primary: 212 175 55;            /* #D4AF37 - Old Gold */
+  --primary-light: 184 134 11;      /* #B8860B - Dark Goldenrod */
+  --primary-dark: 245 208 97;       /* #F5D061 - Champagne Gold */
+  --background-light: 250 249 247;  /* #FAF9F7 - Ivory Warm */
+  --background-dark: 13 13 15;      /* #0D0D0F - Obsidian */
+  
+  /* Warm grayscale */
+  --gray-50: 250 249 247;
+  --gray-100: 245 244 240;
+  --gray-200: 235 233 228;
+  --gray-300: 200 198 193;
+  --gray-400: 150 148 143;
+  --gray-500: 100 98 94;
+  --gray-600: 70 69 66;
+  --gray-700: 45 45 50;
+  --gray-800: 28 28 33;
+  --gray-900: 22 22 25;
+  --gray-950: 13 13 15;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE - OBSIDIAN & OLD GOLD
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   HEADINGS - Luxury Gold Titles
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark h1,
+html[data-theme="dark"] h1 {
+  color: var(--gold-old) !important;
+  text-shadow: 0 0 30px var(--gold-glow);
+}
+
+.dark h2,
+html[data-theme="dark"] h2 {
+  color: var(--gold-champagne) !important;
+}
+
+.dark h3,
+html[data-theme="dark"] h3 {
+  color: var(--gold-vegas) !important;
+}
+
+.dark h4,
+.dark h5,
+.dark h6,
+html[data-theme="dark"] h4,
+html[data-theme="dark"] h5,
+html[data-theme="dark"] h6 {
+  color: var(--gold-antique) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   BODY TEXT - Warm Off-White
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark body,
+.dark p,
+.dark li,
+.dark td,
+html[data-theme="dark"] body,
+html[data-theme="dark"] p,
+html[data-theme="dark"] li,
+html[data-theme="dark"] td {
+  color: #E8E6E3;
+}
+
+.dark strong,
+.dark b,
+html[data-theme="dark"] strong,
+html[data-theme="dark"] b {
+  color: var(--light-ivory);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   LINKS - Gold with Glow on Hover
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark a:not([class]),
+html[data-theme="dark"] a:not([class]) {
+  color: var(--gold-champagne);
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.dark a:not([class]):hover,
+html[data-theme="dark"] a:not([class]):hover {
+  color: var(--gold-vegas);
+  text-shadow: 0 0 8px var(--gold-glow);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   CODE - Eerie Black Background with Gold Text
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark code:not([class*="language-"]),
+html[data-theme="dark"] code:not([class*="language-"]) {
+  background-color: var(--black-raisin) !important;
+  color: var(--gold-champagne) !important;
+  border: 1px solid var(--black-jet);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+
+.dark pre,
+html[data-theme="dark"] pre {
+  background-color: var(--black-eerie) !important;
+  border: 1px solid var(--black-jet);
+  border-radius: 8px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   TABLES - Luxury Ledger Style
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark th,
+html[data-theme="dark"] th {
+  color: var(--gold-old) !important;
+  background-color: var(--black-eerie) !important;
+  border-color: var(--black-jet) !important;
+  font-weight: 600;
+}
+
+.dark td,
+html[data-theme="dark"] td {
+  border-color: var(--black-jet) !important;
+}
+
+.dark tr:hover td,
+html[data-theme="dark"] tr:hover td {
+  background-color: var(--black-raisin);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   BLOCKQUOTES - Premium Callouts
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark blockquote,
+html[data-theme="dark"] blockquote {
+  border-left: 3px solid var(--gold-old);
+  background: linear-gradient(90deg, var(--gold-glow), transparent);
+  padding: 1em 1.5em;
+  color: #D4D0C8;
+}
+
+.dark blockquote strong,
+html[data-theme="dark"] blockquote strong {
+  color: var(--gold-champagne);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   HORIZONTAL RULES - Ornamental Dividers
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark hr,
+html[data-theme="dark"] hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent, 
+    var(--gold-antique) 20%, 
+    var(--gold-old) 50%, 
+    var(--gold-antique) 80%, 
+    transparent
+  );
+  opacity: 0.6;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CARDS & COMPONENTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Card hover - subtle effect only */
+.dark [class*="card"]:hover,
+.dark [class*="Card"]:hover,
+html[data-theme="dark"] [class*="card"]:hover {
+  box-shadow: none;
+  transition: none;
+}
+
+/* Card titles */
+.dark [class*="card"] h3,
+.dark [class*="card"] h4,
+.dark [class*="Card"] h3,
+.dark [class*="Card"] h4 {
+  color: var(--gold-champagne) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   NAVIGATION
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark [aria-current="page"],
+.dark .active,
+html[data-theme="dark"] [aria-current="page"] {
+  color: var(--gold-old) !important;
+  background: var(--gold-glow);
+}
+
+.dark nav a:hover,
+.dark aside a:hover {
+  color: var(--gold-champagne) !important;
+}
+
+/* Sidebar section headers */
+.dark nav h3,
+.dark nav h4,
+.dark aside h3,
+.dark aside h4 {
+  color: var(--gold-antique) !important;
+  text-transform: uppercase;
+  font-size: 0.75em;
+  letter-spacing: 0.1em;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SIDEBAR COLLAPSE BUTTON - Larger Click Target
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Sidebar toggle/collapse button - increase clickable area */
+aside button,
+[class*="sidebar"] button,
+nav > button {
+  min-width: 40px !important;
+  min-height: 40px !important;
+  padding: 10px !important;
+  position: relative;
+  z-index: 10;
+}
+
+/* Expand clickable area with pseudo-element for better hit target */
+aside button::before,
+[class*="sidebar"] button::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  bottom: -6px;
+  left: -6px;
+}
+
+/* Add spacing between sidebar header/toggle and anchors */
+aside > div:first-child,
+[class*="sidebar"] > div:first-child,
+[class*="sidebar-header"],
+[class*="SidebarHeader"] {
+  margin-bottom: 16px !important;
+  padding-bottom: 8px !important;
+}
+
+/* Global anchors - add spacing from toggle button */
+[class*="anchor"],
+[class*="Anchor"] {
+  margin-top: 8px !important;
+}
+
+/* Sidebar group headers - larger click target */
+aside [role="button"],
+nav [role="button"],
+[class*="group-header"],
+[class*="GroupHeader"] {
+  min-height: 40px !important;
+  padding: 10px 12px !important;
+  cursor: pointer;
+}
+
+/* Ensure proper spacing between navigation items */
+aside ul > li,
+nav ul > li,
+[class*="sidebar"] ul > li {
+  margin-bottom: 4px !important;
+}
+
+/* Extra padding on anchor links to prevent misclicks */
+aside a[href^="http"],
+nav a[href^="http"],
+[class*="anchor"] a {
+  padding: 12px 16px !important;
+  display: block;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   TABS
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark [role="tab"][aria-selected="true"],
+html[data-theme="dark"] [role="tab"][aria-selected="true"] {
+  color: var(--gold-old) !important;
+  border-bottom-color: var(--gold-old) !important;
+}
+
+.dark [role="tab"]:hover,
+html[data-theme="dark"] [role="tab"]:hover {
+  color: var(--gold-champagne) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   CALLOUTS & NOTES
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark [class*="callout"] strong,
+.dark [class*="note"] strong,
+.dark [class*="warning"] strong,
+.dark [class*="info"] strong,
+.dark [class*="tip"] strong {
+  color: var(--gold-champagne) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT MODE - IVORY WARM & DARK GOLDENROD
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--light-text);
+}
+
+a:not([class]) {
+  color: var(--gold-dark);
+  transition: color 0.2s ease;
+}
+
+a:not([class]):hover {
+  color: var(--gold-antique);
+}
+
+code:not([class*="language-"]) {
+  background-color: var(--light-cultured);
+  color: var(--gold-bronze);
+  border: 1px solid #E8E6E1;
+}
+
+th {
+  background-color: var(--light-cultured);
+  color: var(--light-text);
+}
+
+blockquote {
+  border-left: 3px solid var(--gold-dark);
+  background: linear-gradient(90deg, rgba(184, 134, 11, 0.08), transparent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SPECIAL EFFECTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SELECTION HIGHLIGHT
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark ::selection,
+html[data-theme="dark"] ::selection {
+  background-color: rgba(212, 175, 55, 0.35);
+  color: var(--light-ivory);
+}
+
+::selection {
+  background-color: rgba(184, 134, 11, 0.25);
+  color: var(--light-text);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SCROLLBAR
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark ::-webkit-scrollbar,
+html[data-theme="dark"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.dark ::-webkit-scrollbar-track,
+html[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: var(--black-obsidian);
+}
+
+.dark ::-webkit-scrollbar-thumb,
+html[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--black-jet);
+  border-radius: 5px;
+  border: 2px solid var(--black-obsidian);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover,
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--gold-antique);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   FOCUS STATES
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark *:focus-visible,
+html[data-theme="dark"] *:focus-visible {
+  outline: 2px solid var(--gold-old);
+  outline-offset: 2px;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--gold-dark);
+  outline-offset: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   BUTTON HOVER
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark button:hover,
+.dark [role="button"]:hover,
+html[data-theme="dark"] button:hover {
+  box-shadow: 0 0 15px var(--gold-glow);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Subtle gold shimmer for main title */
+@keyframes goldShimmer {
+  0%, 100% {
+    text-shadow: 0 0 20px var(--gold-glow);
+  }
+  50% {
+    text-shadow: 0 0 35px rgba(212, 175, 55, 0.25);
+  }
+}
+
+.dark h1:first-of-type,
+html[data-theme="dark"] h1:first-of-type {
+  animation: goldShimmer 4s ease-in-out infinite;
+}
+
+/* Card hover - disabled lift effect to reduce visual noise */
+.dark [class*="card"],
+.dark [class*="Card"] {
+  transition: none;
+}
+
+.dark [class*="card"]:hover,
+.dark [class*="Card"]:hover {
+  transform: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRINT STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media print {
+  h1, h2, h3, h4, h5, h6 {
+    color: #2D2D32 !important;
+  }
+  
+  a {
+    color: #8B7021 !important;
+  }
+  
+  code {
+    background: #F5F4F0 !important;
+    color: #2D2D32 !important;
+  }
+}

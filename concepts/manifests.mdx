@@ -1,12 +1,12 @@
 ---
 title: "Manifest-Driven Design"
-description: "Data-driven content through JSON manifests"
+description: "Data-driven content through TypeScript manifest files"
 icon: "file-json"
 ---
 
 ## Overview
 
-Hyperscape uses manifest-driven design where game content is defined in TypeScript data files rather than hardcoded in logic. This enables content creation without code changes.
+Hyperscape uses manifest-driven design where game content is defined in TypeScript data files rather than hardcoded in logic. This enables content creation without modifying game systems.
 
 ## Design Philosophy
 
@@ -20,7 +20,7 @@ Hyperscape uses manifest-driven design where game content is defined in TypeScri
 
 ### Benefits
 
-- **Content creators** can add items, NPCs, areas without coding
+- **Content creators** can add items, NPCs, areas without deep coding
 - **Designers** iterate quickly on balance
 - **Developers** focus on systems, not data
 - **Modders** can extend content easily
@@ -35,51 +35,83 @@ All manifests are in `packages/shared/src/data/`:
 | `items.ts` | Equipment, resources, consumables |
 | `banks-stores.ts` | Shop inventories |
 | `world-areas.ts` | Zones and regions |
-| `skill-unlocks.ts` | Level requirements |
+| `world-structure.ts` | World layout |
 | `avatars.ts` | Character models |
 | `playerEmotes.ts` | Emote animations |
+| `equipment-requirements.json` | Level requirements for gear |
+| `equipment-stats.json` | Stat bonuses for equipment |
 
 ## Manifest Structure
 
-### NPCs
+### NPCs (`npcs.ts`)
+
+NPC data is loaded from JSON manifests at runtime by DataManager:
 
 ```typescript
-export const npcs = {
-  goblin: {
-    id: "goblin",
-    name: "Goblin",
-    combatLevel: 2,
-    stats: { attack: 1, strength: 1, defense: 1, constitution: 5 },
-    aggressive: true,
-    aggroRange: 3,
-    drops: [
-      { itemId: "coins", quantity: [1, 10], chance: 1.0 }
-    ],
-    respawnTime: 15000,
-    model: "goblin.glb"
-  }
-};
+// From packages/shared/src/data/npcs.ts (lines 1-21)
+/**
+ * NPC Database
+ *
+ * ALL NPC data is loaded from JSON manifests at runtime by DataManager.
+ * This keeps NPC definitions data-driven and separate from code.
+ *
+ * Available 3D model types (in /assets/world/forge/):
+ * - goblin/goblin_rigged.glb     → Used for goblins
+ * - thug/thug_rigged.glb         → Used for bandits
+ * - human/human_rigged.glb       → Used for guards, knights, warriors
+ * - troll/troll_rigged.glb       → Used for hobgoblins
+ * - imp/imp_rigged.glb           → Used for dark warriors
+ *
+ * To add new NPCs:
+ * 1. Add entry to world/assets/manifests/npcs.json
+ * 2. Use one of the existing modelPath types above
+ * 3. OR generate new model in 3D Asset Forge
+ * 4. Restart server to reload manifests
+ */
+
+// NPC Database - Populated at runtime from JSON manifests
+export const ALL_NPCS: Map<string, NPCData> = new Map();
 ```
 
-### Items
+<Info>
+  NPC definitions are in `world/assets/manifests/npcs.json`, not hardcoded in TypeScript.
+</Info>
+
+### Items (`items.ts`)
+
+Items are loaded from JSON manifests similar to NPCs:
 
 ```typescript
-export const items = {
-  bronze_sword: {
-    id: "bronze_sword",
-    name: "Bronze Sword",
-    type: "weapon",
-    slot: "weapon",
-    requirements: { attack: 1 },
-    stats: { attackBonus: 4, strengthBonus: 3 },
-    tradeable: true,
-    stackable: false,
-    weight: 1.8
-  }
-};
+// From packages/shared/src/data/items.ts (lines 1-25)
+/**
+ * Item Database
+ *
+ * Items are loaded from world/assets/manifests/items.json by DataManager.
+ * This file provides the empty Map that gets populated at runtime.
+ *
+ * To add new items:
+ * 1. Add entries to world/assets/manifests/items.json
+ * 2. Generate 3D models in 3D Asset Forge (optional)
+ * 3. Restart the server to reload manifests
+ */
+
+// Item Database - Populated by DataManager
+export const ITEMS: Map<string, Item> = new Map();
+
+// Helper functions
+export function getItem(itemId: string): Item | null {
+  return ITEMS.get(itemId) || null;
+}
+
+export function getItemsByType(type: ItemType): Item[] {
+  return Array.from(ITEMS.values()).filter((item) => item.type === type);
+}
+
+// Shop items available for purchase
+export const SHOP_ITEMS = ["bronze_hatchet", "fishing_rod", "tinderbox", "arrows"];
 ```
 
-### World Areas
+### World Areas (`world-areas.ts`)
 
 ```typescript
 export const worldAreas = {
@@ -96,11 +128,36 @@ export const worldAreas = {
 };
 ```
 
+### Equipment Requirements (`equipment-requirements.json`)
+
+```json
+{
+  "weapons": {
+    "bronze_sword": { "attack": 1, "strength": 0, "defense": 0, "ranged": 0 },
+    "steel_sword": { "attack": 10, "strength": 0, "defense": 0, "ranged": 0 },
+    "mithril_sword": { "attack": 20, "strength": 0, "defense": 0, "ranged": 0 }
+  }
+}
+```
+
+### Equipment Stats (`equipment-stats.json`)
+
+```json
+{
+  "weapons": {
+    "bronze_sword": { "attack": 4, "strength": 5, "defense": 0, "ranged": 0 },
+    "iron_sword": { "attack": 6, "strength": 7, "defense": 0, "ranged": 0 }
+  }
+}
+```
+
 ## DataManager
 
-The `DataManager` class loads and provides access to all manifests:
+The `DataManager` class in `packages/shared/src/data/DataManager.ts` loads and provides access to all manifests:
 
 ```typescript
+import { DataManager } from '@hyperscape/shared';
+
 const npc = DataManager.getNPC("goblin");
 const item = DataManager.getItem("bronze_sword");
 const area = DataManager.getArea("mistwood_valley");
@@ -110,11 +167,17 @@ const area = DataManager.getArea("mistwood_valley");
 
 ### Step 1: Edit Manifest
 
-Add your content to the appropriate manifest file.
+Add your content to the appropriate manifest file in `packages/shared/src/data/`.
 
-### Step 2: Hot Reload
+### Step 2: Build or Hot Reload
 
-Save the file—changes apply automatically in dev mode.
+In development mode, save the file—changes apply on next build. Run:
+
+```bash
+bun run build:shared
+```
+
+Or restart the dev server.
 
 ### Step 3: Verify
 
@@ -122,14 +185,15 @@ Check the game to ensure content appears correctly.
 
 ## Validation
 
-Manifests are validated at load time:
+Manifests are TypeScript files, so you get:
 
-- Required fields must exist
-- References must resolve (itemId, npcId)
-- Stats must be within valid ranges
+- **Type checking**: Invalid fields caught at compile time
+- **Autocomplete**: IDE suggestions for valid properties
+- **Required fields**: Missing fields cause build errors
+- **References**: TypeScript catches invalid itemId/npcId references
 
 <Warning>
-  Invalid manifests will cause server startup to fail with descriptive errors.
+  Invalid manifests will cause TypeScript compilation to fail with descriptive errors.
 </Warning>
 
 ## Best Practices
@@ -138,3 +202,4 @@ Manifests are validated at load time:
 2. **Follow naming conventions**: snake_case for IDs
 3. **Document unusual values**: Add comments for non-obvious choices
 4. **Test after changes**: Verify in-game before committing
+5. **Keep data flat**: Avoid deep nesting in manifest structures

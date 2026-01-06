@@ -10,6 +10,8 @@ Hyperscape features a RuneScape-inspired skill system with leveling, XP gain, an
 
 ## Available Skills
 
+Hyperscape has **9 skills** total:
+
 ### Combat Skills
 
 | Skill | Purpose |
@@ -18,15 +20,14 @@ Hyperscape features a RuneScape-inspired skill system with leveling, XP gain, an
 | **Strength** | Melee damage |
 | **Defense** | Damage reduction, armor requirements |
 | **Constitution** | Health points |
-| **Range** | Ranged combat |
+| **Ranged** | Ranged combat accuracy and damage |
 
 ### Gathering Skills
 
 | Skill | Activity |
 |-------|----------|
 | **Woodcutting** | Chop trees for logs |
-| **Fishing** | Catch fish at water edges |
-| **Mining** | Extract ores from rocks |
+| **Fishing** | Catch fish at water spots |
 
 ### Processing Skills
 
@@ -34,6 +35,10 @@ Hyperscape features a RuneScape-inspired skill system with leveling, XP gain, an
 |-------|----------|
 | **Firemaking** | Create fires from logs |
 | **Cooking** | Prepare food from raw fish |
+
+<Info>
+  Mining is partially implemented in the resource system but not yet as a trainable player skill.
+</Info>
 
 ## XP and Leveling
 
@@ -61,7 +66,7 @@ XP for Level N = floor(sum(floor(L + 300 * 2^(L/7))) / 4) for L = 1 to N-1
 ### Woodcutting
 
 Requirements:
-- Hatchet equipped
+- Hatchet in inventory
 - Click tree to chop
 
 Success rate improves with level. Higher-level trees require higher Woodcutting levels.
@@ -75,26 +80,14 @@ Success rate improves with level. Higher-level trees require higher Woodcutting 
 ### Fishing
 
 Requirements:
-- Fishing rod equipped
-- Click water edge
+- Fishing rod in inventory
+- Click fishing spot
 
 | Fish | Level | XP |
 |------|-------|-----|
 | Shrimp | 1 | 10 |
 | Trout | 20 | 50 |
 | Lobster | 40 | 90 |
-
-### Mining
-
-Requirements:
-- Pickaxe equipped
-- Click ore rock
-
-| Ore | Level | XP |
-|-----|-------|-----|
-| Copper | 1 | 17 |
-| Iron | 15 | 35 |
-| Coal | 30 | 50 |
 
 ## Processing Skills
 
@@ -118,23 +111,53 @@ Use raw fish on a fire to cook.
 | Trout | 15 | 70 | 7 HP |
 | Lobster | 40 | 120 | 12 HP |
 
-<Info>
+<Warning>
   Cooking can fail at low levels, burning the food.
-</Info>
+</Warning>
 
-## Level Requirements
+## Equipment Level Requirements
 
 Equipment and activities have level gates:
 
-| Tier | Attack/Defense | Range |
-|------|----------------|-------|
+| Tier | Attack/Defense | Ranged |
+|------|----------------|--------|
 | Bronze | 1 | 1 |
+| Iron | 5 | - |
 | Steel | 10 | 10 |
 | Mithril | 20 | 20 |
+| Adamant | 30 | - |
+| Rune | 40 | - |
+| Dragon | 60 | - |
 
 ## Skill Data Files
 
 Skill configuration is in `packages/shared/src/data/`:
 
-- `skill-unlocks.ts`: Level requirements
-- `skill-icons.ts`: UI icons
+| File | Purpose |
+|------|---------|
+| `equipment-requirements.json` | Level requirements for equipment |
+| `equipment-stats.json` | Stat bonuses for equipment |
+
+## Default Skill Values
+
+Skills start at level 1 with 0 XP, except Constitution which starts at level 10:
+
+```typescript
+// From packages/shared/src/entities/player/PlayerEntity.ts (lines 111-123)
+playerData.skills = {
+  attack: { level: 1, xp: 0 },
+  strength: { level: 1, xp: 0 },
+  defense: { level: 1, xp: 0 },
+  constitution: { level: 10, xp: 1154 },  // Starts at level 10
+  ranged: { level: 1, xp: 0 },
+  woodcutting: { level: 1, xp: 0 },
+  fishing: { level: 1, xp: 0 },
+  firemaking: { level: 1, xp: 0 },
+  cooking: { level: 1, xp: 0 },
+};
+```
+
+<Info>
+  Constitution starts at level 10 (1,154 XP) like RuneScape's Hitpoints.
+  Player health equals their Constitution level.
+</Info>

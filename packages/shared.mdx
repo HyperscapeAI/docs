@@ -6,13 +6,14 @@ icon: "share-2"
 
 ## Overview
 
-The `shared` package is the core Hyperscape engine, providing:
+The `@hyperscape/shared` package is the core Hyperscape engine, providing:
 
 - Entity Component System (ECS)
 - Three.js 3D rendering
 - PhysX physics simulation
 - Real-time networking
 - React UI components
+- Game data manifests
 
 ## Package Location
 
@@ -22,15 +23,22 @@ packages/shared/
 │   ├── components/     # ECS components
 │   ├── constants/      # Game constants
 │   ├── core/           # Core engine classes
-│   ├── data/           # Game manifests
+│   ├── data/           # Game manifests (npcs, items, etc.)
 │   ├── entities/       # Entity definitions
-│   ├── extras/         # Utilities
+│   │   ├── player/     # PlayerEntity, PlayerLocal, PlayerRemote
+│   │   ├── npc/        # MobEntity, NPCEntity
+│   │   ├── world/      # World entities
+│   │   └── managers/   # Entity managers
+│   ├── extras/         # Additional utilities
 │   ├── libs/           # External integrations
 │   ├── nodes/          # Scene graph nodes
 │   ├── physics/        # PhysX wrapper
 │   ├── platform/       # Platform detection
 │   ├── runtime/        # Game loop
 │   ├── systems/        # ECS systems
+│   │   ├── client/     # Client-only systems
+│   │   ├── server/     # Server-only systems
+│   │   └── shared/     # Shared systems (combat, economy, etc.)
 │   ├── types/          # TypeScript types
 │   └── utils/          # Helper functions
 ├── index.ts            # Server exports
@@ -39,34 +47,72 @@ packages/shared/
 
 ## Key Exports
 
-### Entities
+### Entity Hierarchy
+
+The entity system follows a clear inheritance pattern:
+
+```typescript
+// From packages/shared/src/entities/Entity.ts (lines 26-38)
+// Entity (base class)
+// ├── InteractableEntity (can be interacted with)
+// │   ├── ResourceEntity (trees, rocks, fishing spots)
+// │   ├── ItemEntity (ground items)
+// │   └── NPCEntity (dialogue, shops)
+// ├── CombatantEntity (can fight)
+// │   ├── PlayerEntity (base player)
+// │   │   ├── PlayerLocal (client-side local player)
+// │   │   └── PlayerRemote (client-side remote players)
+// │   └── MobEntity (enemies)
+// └── HeadstoneEntity (player death markers)
+```
 
 | Export | Purpose |
 |--------|---------|
-| `Entity` | Base entity class |
-| `CombatantEntity` | Combat-capable entities |
-| `InteractableEntity` | Interactive objects |
-| `PlayerEntity` | Player characters |
-| `MobEntity` | NPCs and mobs |
+| `Entity` | Base entity class with components, physics, networking |
+| `CombatantEntity` | Combat-capable entities with health, damage |
+| `InteractableEntity` | Objects players can interact with |
+| `PlayerEntity` | Server-side player with full stats, inventory |
+| `PlayerLocal` | Client-side local player with input handling |
+| `PlayerRemote` | Client-side representation of other players |
+| `MobEntity` | NPCs and hostile mobs with AI states |
+| `HeadstoneEntity` | Death marker for item retrieval |
 
-### Systems
+### Systems (Shared)
 
-| Export | Purpose |
-|--------|---------|
-| `PersistenceSystem` | Database saves |
-| `ServerBot` | Bot management |
-| `ServerLoader` | Asset loading |
-| `ServerRuntime` | Game loop |
-| `ServerLiveKit` | Voice chat |
+Located in `src/systems/shared/`:
 
-### Data
+| Category | Systems |
+|----------|---------|
+| `character/` | Character stats, equipment, skills |
+| `combat/` | Combat mechanics, damage, death |
+| `death/` | Death handling, respawn |
+| `economy/` | Banks, shops, trading |
+| `entities/` | Entity lifecycle management |
+| `interaction/` | Player-world interactions |
+| `presentation/` | Visual rendering |
+| `world/` | World management |
 
-| Export | Purpose |
-|--------|---------|
-| `DataManager` | Manifest access |
-| `npcs` | NPC definitions |
-| `items` | Item definitions |
-| `worldAreas` | Zone data |
+### Data Manifests
+
+Game content is defined in TypeScript files in `src/data/`:
+
+| File | Purpose |
+|------|---------|
+| `DataManager.ts` | Runtime loader for manifests |
+| `npcs.ts` | NPC/mob definitions with drops, stats |
+| `items.ts` | Item definitions with stats, requirements |
+| `world-areas.ts` | Zone configuration |
+| `banks-stores.ts` | Shop inventories and bank locations |
+| `avatars.ts` | VRM avatar options |
+| `playerEmotes.ts` | Emote animation URLs |
+| `world-structure.ts` | World layout and spawn points |
+| `equipment-stats.json` | Equipment bonuses |
+| `equipment-requirements.json` | Level requirements |
+
+<Info>
+  NPC data is loaded from JSON manifests at runtime by DataManager.
+  Add new NPCs in `world/assets/manifests/npcs.json`.
+</Info>
 
 ## Entry Points
 
@@ -75,7 +121,12 @@ packages/shared/
 Exports for server-side usage:
 
 ```typescript
-import { Entity, DataManager, PersistenceSystem } from '@hyperscape/shared';
+import { 
+  Entity, 
+  DataManager, 
+  PlayerEntity,
+  MobEntity 
+} from '@hyperscape/shared';
 ```
 
 ### Client (index.client.ts)
@@ -83,28 +134,35 @@ import { Entity, DataManager, PersistenceSystem } from '@hyperscape/shared';
 Exports for client-side usage:
 
 ```typescript
-import { Entity, ClientRenderer, UIComponents } from '@hyperscape/shared/client';
+import { 
+  Entity, 
+  PlayerLocal,
+  PlayerRemote 
+} from '@hyperscape/shared/client';
 ```
 
 ## Dependencies
 
-| Package | Purpose |
-|---------|---------|
-| `three` | 3D rendering |
-| `@pixiv/three-vrm` | VRM avatar support |
-| `@hyperscape/physx-js-webidl` | Physics |
-| `react` | UI components |
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `three` | 0.180.0 | 3D rendering |
+| `@pixiv/three-vrm` | 3.4.3 | VRM avatar support |
+| `@hyperscape/physx-js-webidl` | workspace | Physics |
+| `react` | ^19.2.0 | UI components |
+| `styled-components` | ^6.1.19 | CSS-in-JS |
+| `fastify` | ^5.0.0 | HTTP server (server builds) |
+| `livekit-client` | ^2.9.9 | Voice chat |
 
 ## Building
 
 ```bash
 cd packages/shared
 bun run build    # Production build
-bun run dev      # Watch mode
+bun run dev      # Watch mode with auto-rebuild
 ```
 
 <Info>
-  Shared must be built before other packages that depend on it.
+  Shared must be built before other packages that depend on it. Turbo handles this automatically.
 </Info>
 
 ## Key Patterns
@@ -119,4 +177,9 @@ Game content defined in `src/data/`. See [Manifests](/concepts/manifests).
 
 ### Type Safety
 
-Strong TypeScript typing throughout—no `any` types allowed.
+Strong TypeScript typing throughout—**no `any` types allowed**. ESLint enforces this rule.
+
+### Dual Entry Points
+
+- `index.ts`: Server-side exports (includes Fastify, database utilities)
+- `index.client.ts`: Client-side exports (browser-compatible)
