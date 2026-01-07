@@ -1,0 +1,273 @@
+---
+title: "Inventory System"
+description: "Player inventory management, item stacking, and persistence"
+icon: "briefcase"
+---
+
+# Inventory System
+
+The inventory system manages player item storage with 28 slots (OSRS standard), stackable item support, drag-and-drop operations, and database persistence.
+
+<Info>
+Inventory code lives in `packages/shared/src/systems/shared/character/InventorySystem.ts`.
+</Info>
+
+## Core Constants
+
+```typescript
+// From InventorySystem.ts
+private readonly MAX_INVENTORY_SLOTS = 28;      // OSRS standard
+private readonly AUTO_SAVE_INTERVAL = 30000;    // 30 seconds auto-save
+```
+
+---
+
+## Inventory Structure
+
+Each player has a `PlayerInventory` containing:
+
+```typescript
+interface PlayerInventory {
+  items: InventoryItem[];      // Array of items (up to 28 slots)
+  coins: number;               // Coin pouch balance (separate from items)
+}
+
+interface InventoryItem {
+  id: string;                  // Unique instance ID
+  itemId: string;              // Reference to item definition
+  quantity: number;            // Stack quantity (1 for non-stackable)
+  slot: number;                // Slot index (0-27)
+  metadata: unknown | null;    // Custom item data
+}
+```
+
+---
+
+## Key Operations
+
+### Adding Items
+
+```typescript
+// InventorySystem.addItem() flow:
+// 1. Validate player exists and isn't in transaction
+// 2. For stackable items, merge with existing stack
+// 3. For non-stackable, find empty slot
+// 4. Emit INVENTORY_UPDATED event
+// 5. Schedule database persistence
+
+async addItem(playerId: string, itemId: string, quantity: number): Promise<boolean> {
+  const inventory = this.playerInventories.get(playerId);
+  if (!inventory) return false;
+  
+  // Check transaction lock (bank, store operations block pickups)
+  if (this.transactionLocks.has(playerId)) {
+    console.warn(`[Inventory] Player ${playerId} locked - rejecting addItem`);
+    return false;
+  }
+  
+  const item = getItem(itemId);
+  if (!item) return false;
+  
+  // Stackable: merge with existing
+  if (item.stackable) {
+    const existing = inventory.items.find(i => i.itemId === itemId);
+    if (existing) {
+      existing.quantity += quantity;
+      this.emitUpdate(playerId);
+      return true;
+    }
+  }
+  
+  // Find empty slot
+  const emptySlot = this.findEmptySlot(inventory);
+  if (emptySlot === -1) return false; // Inventory full
+  
+  inventory.items.push({
+    id: generateUniqueId(),
+    itemId,
+    quantity,
+    slot: emptySlot,
+    metadata: null,
+  });
+  
+  this.emitUpdate(playerId);
+  return true;
+}
+```
+
+### Dropping Items
+
+```typescript
+// Drop item from inventory to ground
+async dropItem(data: { playerId: string; slot: number; quantity: number }): Promise<void> {
+  const inventory = this.getInventory(data.playerId);
+  const item = inventory.items.find(i => i.slot === data.slot);
+  if (!item) return;
+  
+  const dropQuantity = Math.min(data.quantity, item.quantity);
+  const player = this.world.entities.get(data.playerId);
+  
+  // Spawn ground item at player position
+  const groundItemSystem = this.world.getSystem<GroundItemSystem>('ground-items');
+  await groundItemSystem.spawnGroundItem(
+    item.itemId,
+    dropQuantity,
+    player.position,
+    {
+      droppedBy: data.playerId,
+      despawnTime: 60000,  // 60 seconds
+      lootProtection: 0,   // No protection for dropped items
+    }
+  );
+  
+  // Remove from inventory
+  this.removeItem({
+    playerId: data.playerId,
+    itemId: item.itemId,
+    quantity: dropQuantity,
+  });
+}
+```
+
+### Pickup Items
+
+```typescript
+// Pickup ground item - with race condition protection
+async pickupItem(data: { playerId: string; entityId: string }): Promise<void> {
+  // Prevent double-pickup via locks
+  if (this.pickupLocks.has(data.entityId)) return;
+  this.pickupLocks.add(data.entityId);
+  
+  try {
+    const groundItemSystem = this.world.getSystem<GroundItemSystem>('ground-items');
+    const groundItem = groundItemSystem.getGroundItem(data.entityId);
+    
+    if (!groundItem) return;
+    
+    // Check loot protection
+    if (!groundItemSystem.canPickup(data.entityId, data.playerId, this.world.currentTick)) {
+      this.emitTypedEvent(EventType.UI_MESSAGE, {
+        playerId: data.playerId,
+        message: "You can't pick this up yet.",
+        type: "error",
+      });
+      return;
+    }
+    
+    // Try to add to inventory
+    const success = await this.addItem(data.playerId, groundItem.itemId, groundItem.quantity);
+    
+    if (success) {
+      groundItemSystem.removeGroundItem(data.entityId);
+    } else {
+      this.emitTypedEvent(EventType.UI_MESSAGE, {
+        playerId: data.playerId,
+        message: "Your inventory is full.",
+        type: "error",
+      });
+    }
+  } finally {
+    this.pickupLocks.delete(data.entityId);
+  }
+}
+```
+
+---
+
+## Transaction Locking
+
+For atomic operations like bank deposits, store purchases, and trades, the inventory system supports transaction locks:
+
+```typescript
+// Lock prevents concurrent modifications
+private transactionLocks = new Set<string>();
+
+lockInventory(playerId: string): void {
+  this.transactionLocks.add(playerId);
+}
+
+unlockInventory(playerId: string): void {
+  this.transactionLocks.delete(playerId);
+}
+
+// While locked:
+// - addItem() rejects new items
+// - Auto-save skips this player
+// - Only lock holder can modify
+```
+
+---
+
+## Database Persistence
+
+Inventories are persisted to the database via the `DatabaseSystem`:
+
+```typescript
+// Auto-save every 30 seconds
+private startAutoSave(): void {
+  this.saveInterval = setInterval(() => {
+    this.performAutoSave();
+  }, this.AUTO_SAVE_INTERVAL);
+}
+
+// Also saves on:
+// - Player disconnect
+// - Significant item changes
+// - Server shutdown
+
+async persistInventory(playerId: string): Promise<void> {
+  const inventory = this.playerInventories.get(playerId);
+  if (!inventory) return;
+  
+  const database = this.world.getSystem<DatabaseSystem>('database');
+  await database.saveInventory(playerId, {
+    items: inventory.items,
+    coins: inventory.coins,
+  });
+}
+```
+
+---
+
+## Inventory Events
+
+| Event | Data | Description |
+|-------|------|-------------|
+| `INVENTORY_UPDATED` | `playerId`, `items`, `coins` | Inventory changed |
+| `INVENTORY_ITEM_ADDED` | `playerId`, `item` | Item added |
+| `INVENTORY_ITEM_REMOVED` | `playerId`, `itemId`, `quantity` | Item removed |
+| `INVENTORY_MOVE` | `playerId`, `fromSlot`, `toSlot` | Item slot changed |
+| `ITEM_PICKUP` | `playerId`, `entityId`, `itemId` | Player picking up item |
+| `ITEM_DROP` | `playerId`, `slot`, `quantity` | Player dropping item |
+
+---
+
+## UI Integration
+
+The client displays the inventory via `InventoryPanel.tsx`:
+
+```typescript
+// Sidebar.tsx - subscribes to inventory updates
+useEffect(() => {
+  world.on(EventType.INVENTORY_UPDATED, (data) => {
+    setInventory(data.items);
+    setCoins(data.coins);
+  });
+}, [world]);
+```
+
+Features:
+- 28-slot grid layout
+- Drag-and-drop item movement
+- Right-click context menu (use, drop, examine)
+- Stack quantity display
+- Coin pouch separate display
+
+---
+
+## Related Documentation
+
+- [Equipment System](/wiki/game-systems/equipment)
+- [Bank System](/wiki/game-systems/bank)
+- [Ground Items & Loot](/wiki/game-systems/loot)
+- [Item Data Structure](/wiki/data/items)

@@ -1,0 +1,341 @@
+---
+title: "NPC Data Structure"
+description: "How NPCs and mobs are defined in Hyperscape"
+icon: "users"
+---
+
+# NPC Data Structure
+
+NPCs (Non-Player Characters) and mobs are defined in **JSON manifests** and loaded at runtime. This data-driven approach allows content to be modified without code changes.
+
+<Info>
+NPC data is managed in `packages/shared/src/data/npcs.ts` and loaded from `world/assets/manifests/npcs.json`.
+</Info>
+
+## Data Loading
+
+NPCs are **NOT hardcoded**. The `ALL_NPCS` map is populated at runtime:
+
+```typescript
+// From npcs.ts
+export const ALL_NPCS: Map<string, NPCData> = new Map();
+
+// Populated by DataManager from JSON
+DataManager.loadNPCs(); // Reads world/assets/manifests/npcs.json
+```
+
+---
+
+## NPC Data Schema
+
+Each NPC has the following structure:
+
+```typescript
+interface NPCData {
+  id: string;                    // Unique identifier (e.g., "goblin_warrior")
+  name: string;                  // Display name (e.g., "Goblin Warrior")
+  category: NPCCategory;         // "mob" | "boss" | "neutral" | "quest"
+  modelPath: string;             // Path to GLB model
+
+  stats: {
+    level: number;               // Combat level (1-126)
+    attack: number;              // Attack level
+    strength: number;            // Strength level
+    defense: number;             // Defense level
+    health: number;              // Max HP
+    ranged?: number;             // Ranged level (optional)
+  };
+
+  aggression: {
+    type: AggressionType;        // Aggro behavior
+    maxLevel?: number;           // For level_gated type
+  };
+
+  spawnBiomes: string[];         // Where NPC can spawn
+  respawnTime?: number;          // Respawn delay in seconds
+
+  drops: DropTable;              // Loot drops
+}
+```
+
+---
+
+## NPC Categories
+
+| Category | Description | Example |
+|----------|-------------|---------|
+| `mob` | Hostile enemy | Goblin, Bandit |
+| `boss` | Powerful enemy | Giant Spider, Dragon |
+| `neutral` | Non-combat NPC | Shopkeeper, Banker |
+| `quest` | Quest giver/target | Quest NPC, Guard |
+
+---
+
+## Aggression Types
+
+NPCs have different aggression behaviors:
+
+```typescript
+type AggressionType =
+  | "passive"           // Never attacks first
+  | "aggressive"        // Attacks players below double its level
+  | "always_aggressive" // Attacks all players
+  | "level_gated";      // Only attacks below specific level
+```
+
+### Aggro Rules
+
+| Type | Behavior |
+|------|----------|
+| `passive` | Never initiates combat |
+| `aggressive` | Attacks if player level < 2 × NPC level |
+| `always_aggressive` | Attacks all players regardless of level |
+| `level_gated` | Attacks if player level ≤ `maxLevel` threshold |
+
+---
+
+## Drop Tables
+
+Each NPC has a `DropTable` defining loot:
+
+```typescript
+interface DropTable {
+  defaultDrop: {
+    enabled: boolean;
+    itemId: string;
+    quantity: number;
+  };
+  always: Drop[];      // 100% drop rate
+  common: Drop[];      // High chance
+  uncommon: Drop[];    // Medium chance
+  rare: Drop[];        // Low chance
+  veryRare: Drop[];    // Very low chance
+}
+
+interface Drop {
+  itemId: string;
+  minQuantity: number;
+  maxQuantity: number;
+  chance: number;      // 0.0 to 1.0
+}
+```
+
+### Drop Calculation
+
+```typescript
+// From npcs.ts
+export function calculateNPCDrops(npcId: string): Array<{ itemId: string; quantity: number }> {
+  const npc = getNPCById(npcId);
+  if (!npc) return [];
+
+  const drops: Array<{ itemId: string; quantity: number }> = [];
+
+  // Default drop (always if enabled)
+  if (npc.drops.defaultDrop.enabled) {
+    drops.push({
+      itemId: npc.drops.defaultDrop.itemId,
+      quantity: npc.drops.defaultDrop.quantity,
+    });
+  }
+
+  // Roll for each tier
+  const processDrop = (drop: Drop) => {
+    if (Math.random() < drop.chance) {
+      const quantity = Math.floor(
+        Math.random() * (drop.maxQuantity - drop.minQuantity + 1) + drop.minQuantity
+      );
+      drops.push({ itemId: drop.itemId, quantity });
+    }
+  };
+
+  npc.drops.always.forEach(processDrop);
+  npc.drops.common.forEach(processDrop);
+  npc.drops.uncommon.forEach(processDrop);
+  npc.drops.rare.forEach(processDrop);
+  npc.drops.veryRare.forEach(processDrop);
+
+  return drops;
+}
+```
+
+---
+
+## Available 3D Models
+
+NPCs use rigged GLB models from `/assets/world/forge/`:
+
+| Model Path | Used For |
+|------------|----------|
+| `goblin/goblin_rigged.glb` | Goblins |
+| `thug/thug_rigged.glb` | Bandits, thugs |
+| `human/human_rigged.glb` | Guards, knights, shopkeepers |
+| `troll/troll_rigged.glb` | Hobgoblins |
+| `imp/imp_rigged.glb` | Dark warriors |
+
+---
+
+## Helper Functions
+
+### Get NPC by ID
+
+```typescript
+export function getNPCById(npcId: string): NPCData | null {
+  return ALL_NPCS.get(npcId) || null;
+}
+```
+
+### Get NPCs by Category
+
+```typescript
+export function getNPCsByCategory(category: NPCCategory): NPCData[] {
+  return Array.from(ALL_NPCS.values()).filter(
+    (npc) => npc.category === category
+  );
+}
+```
+
+### Get NPCs by Biome
+
+```typescript
+export function getNPCsByBiome(biome: string): NPCData[] {
+  return Array.from(ALL_NPCS.values()).filter((npc) =>
+    npc.spawnBiomes?.includes(biome)
+  );
+}
+```
+
+### Get NPCs by Level Range
+
+```typescript
+export function getNPCsByLevelRange(minLevel: number, maxLevel: number): NPCData[] {
+  return Array.from(ALL_NPCS.values()).filter(
+    (npc) => npc.stats.level >= minLevel && npc.stats.level <= maxLevel
+  );
+}
+```
+
+### Check if NPC Can Drop Item
+
+```typescript
+export function canNPCDropItem(npcId: string, itemId: string): boolean {
+  const npc = getNPCById(npcId);
+  if (!npc) return false;
+
+  // Check default drop
+  if (npc.drops.defaultDrop.enabled && npc.drops.defaultDrop.itemId === itemId) {
+    return true;
+  }
+
+  // Check all drop tiers
+  const allDrops = [
+    ...npc.drops.always,
+    ...npc.drops.common,
+    ...npc.drops.uncommon,
+    ...npc.drops.rare,
+    ...npc.drops.veryRare,
+  ];
+
+  return allDrops.some((drop) => drop.itemId === itemId);
+}
+```
+
+---
+
+## Combat Level Calculation
+
+NPC combat level is calculated from stats:
+
+```typescript
+// From npcs.ts
+export function calculateNPCCombatLevel(stats: NPCStats): number {
+  const base = 0.25 * (stats.defense + stats.health + 1);
+  const melee = 0.325 * (stats.attack + stats.strength);
+  const ranged = 0.325 * Math.floor((stats.ranged || 1) * 1.5);
+
+  return Math.floor(base + Math.max(melee, ranged));
+}
+```
+
+---
+
+## Spawn Constants
+
+Global spawn settings:
+
+```typescript
+export const NPC_SPAWN_CONSTANTS = {
+  DEFAULT_RESPAWN_TIME: 30,    // 30 seconds
+  BOSS_RESPAWN_TIME: 300,      // 5 minutes
+  MAX_NPCS_PER_ZONE: 50,
+  AGGRO_CHECK_INTERVAL: 600,   // Every tick (600ms)
+};
+```
+
+---
+
+## Example NPC Definition
+
+```json
+{
+  "id": "goblin_warrior",
+  "name": "Goblin Warrior",
+  "category": "mob",
+  "modelPath": "goblin/goblin_rigged.glb",
+  "stats": {
+    "level": 5,
+    "attack": 5,
+    "strength": 5,
+    "defense": 5,
+    "health": 20
+  },
+  "aggression": {
+    "type": "aggressive"
+  },
+  "spawnBiomes": ["forest", "plains"],
+  "respawnTime": 30,
+  "drops": {
+    "defaultDrop": {
+      "enabled": true,
+      "itemId": "coins",
+      "quantity": 10
+    },
+    "always": [],
+    "common": [
+      { "itemId": "bronze_dagger", "minQuantity": 1, "maxQuantity": 1, "chance": 0.25 }
+    ],
+    "uncommon": [
+      { "itemId": "iron_dagger", "minQuantity": 1, "maxQuantity": 1, "chance": 0.1 }
+    ],
+    "rare": [],
+    "veryRare": []
+  }
+}
+```
+
+---
+
+## Adding New NPCs
+
+<Steps>
+  <Step title="Add to JSON Manifest">
+    Add entry to `world/assets/manifests/npcs.json`
+  </Step>
+  <Step title="Choose or Create Model">
+    Use existing model or generate new one in 3D Asset Forge
+  </Step>
+  <Step title="Restart Server">
+    Server must restart to reload manifests
+  </Step>
+</Steps>
+
+<Warning>
+**DO NOT** add NPC data directly to `npcs.ts`. Keep all content in JSON manifests for data-driven design.
+</Warning>
+
+---
+
+## Related Documentation
+
+- [Item Data Structure](/wiki/data/items)
+- [Combat System](/wiki/game-systems/combat)
+- [World Areas](/wiki/data/world-areas)

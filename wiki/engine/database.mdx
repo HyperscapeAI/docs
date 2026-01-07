@@ -1,0 +1,385 @@
+---
+title: "Database Schema"
+description: "PostgreSQL persistence with Drizzle ORM"
+icon: "database"
+---
+
+# Database Schema
+
+Hyperscape uses **PostgreSQL** in production and **SQLite** for local development, with **Drizzle ORM** for type-safe database access.
+
+<Info>
+Database schema is defined in `packages/server/src/database/schema.ts`.
+</Info>
+
+## Overview
+
+| Table | Purpose | Repository |
+|-------|---------|------------|
+| `config` | System-wide key-value configuration | - |
+| `users` | User accounts (Privy/Farcaster auth) | UserRepository |
+| `characters` | Player character data | CharacterRepository |
+| `inventory` | Character inventory items | InventoryRepository |
+| `equipment` | Equipped items | EquipmentRepository |
+| `bank_storage` | Bank storage (480 slots) | BankRepository |
+| `bank_tabs` | Custom bank tab configuration | BankRepository |
+| `world_chunks` | Persistent world modifications | WorldRepository |
+| `player_sessions` | Login/logout tracking | SessionRepository |
+| `npc_kills` | Kill statistics | StatsRepository |
+| `death_locks` | Death state for reconnects | PlayerDeathSystem |
+
+---
+
+## Core Tables
+
+### Users
+
+```typescript
+// From schema.ts
+export const users = pgTable('users', {
+  id: text('id').primaryKey(),                    // UUID
+  privyUserId: text('privy_user_id').unique(),    // Privy auth ID
+  farcasterFid: text('farcaster_fid'),            // Farcaster ID
+  role: text('role').default('player'),           // player, admin, moderator
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
+// Indexes for fast lookup
+export const usersIndexes = {
+  privyUserIdIdx: index('privy_user_id_idx').on(users.privyUserId),
+  farcasterFidIdx: index('farcaster_fid_idx').on(users.farcasterFid),
+};
+```
+
+### Characters
+
+```typescript
+export const characters = pgTable('characters', {
+  id: text('id').primaryKey(),                    // UUID
+  accountId: text('account_id').notNull()         // References users.id
+    .references(() => users.id),
+  name: text('name').notNull(),                   // Character name
+
+  // Position (stored as floats for sub-tile precision)
+  positionX: real('position_x').notNull().default(0),
+  positionY: real('position_y').notNull().default(0),
+  positionZ: real('position_z').notNull().default(0),
+
+  // Combat stats
+  stats: jsonb('stats').$type<CharacterStats>(),
+
+  // Skill levels and XP (JSONB for flexibility)
+  skills: jsonb('skills').$type<Skills>(),
+
+  // Equipment slots (JSONB object)
+  equipmentSlots: jsonb('equipment_slots').$type<EquipmentSlots>(),
+
+  // Inventory (JSONB array of items)
+  inventorySlots: jsonb('inventory_slots').$type<InventorySlot[]>(),
+
+  // Combat state
+  combatState: text('combat_state').default('idle'), // idle, fighting, dead
+  lastCombatTick: bigint('last_combat_tick', { mode: 'number' }),
+
+  // Timestamps
+  lastLogin: bigint('last_login', { mode: 'number' }),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
+// Character stats type
+interface CharacterStats {
+  attack: { level: number; xp: number };
+  strength: { level: number; xp: number };
+  defense: { level: number; xp: number };
+  constitution: { level: number; xp: number };
+  ranged: { level: number; xp: number };
+  woodcutting: { level: number; xp: number };
+  fishing: { level: number; xp: number };
+  firemaking: { level: number; xp: number };
+  cooking: { level: number; xp: number };
+}
+```
+
+### Inventory
+
+```typescript
+export const inventory = pgTable('inventory', {
+  id: text('id').primaryKey(),
+  characterId: text('character_id').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  itemId: text('item_id').notNull(),              // Item definition ID
+  quantity: integer('quantity').notNull().default(1),
+  slot: integer('slot').notNull(),                // Inventory slot (0-27)
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+});
+
+// Unique constraint: one item per slot per character
+export const inventoryIndexes = {
+  characterSlotIdx: uniqueIndex('character_slot_idx')
+    .on(inventory.characterId, inventory.slot),
+};
+```
+
+### Equipment
+
+```typescript
+export const equipment = pgTable('equipment', {
+  id: text('id').primaryKey(),
+  characterId: text('character_id').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  itemId: text('item_id').notNull(),
+  slotType: text('slot_type').notNull(),          // weapon, shield, helmet, etc.
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+});
+
+// Equipment slot types
+type EquipmentSlotType =
+  | 'weapon'
+  | 'shield'
+  | 'helmet'
+  | 'body'
+  | 'legs'
+  | 'boots'
+  | 'gloves'
+  | 'cape'
+  | 'ring'
+  | 'amulet'
+  | 'ammo';
+```
+
+---
+
+## Bank System
+
+### Bank Storage
+
+```typescript
+export const bankStorage = pgTable('bank_storage', {
+  id: text('id').primaryKey(),
+  characterId: text('character_id').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  itemId: text('item_id').notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  slot: integer('slot').notNull(),                // Bank slot (0-479)
+  tabIndex: integer('tab_index').default(0),      // Bank tab (0-9)
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
+// 480 bank slots total (OSRS-style)
+export const BANK_CONSTANTS = {
+  MAX_SLOTS: 480,
+  MAX_TABS: 10,
+  SLOTS_PER_TAB: 48,
+};
+```
+
+### Bank Tabs
+
+```typescript
+export const bankTabs = pgTable('bank_tabs', {
+  id: text('id').primaryKey(),
+  characterId: text('character_id').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  tabIndex: integer('tab_index').notNull(),       // 0-9
+  name: text('name'),                             // Custom tab name
+  icon: text('icon'),                             // Icon item ID
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+});
+```
+
+---
+
+## World Persistence
+
+### World Chunks
+
+```typescript
+export const worldChunks = pgTable('world_chunks', {
+  id: text('id').primaryKey(),                    // "chunk_x_z" format
+  chunkX: integer('chunk_x').notNull(),
+  chunkZ: integer('chunk_z').notNull(),
+  data: jsonb('data').$type<ChunkModifications>(),
+  lastModified: bigint('last_modified', { mode: 'number' }).notNull(),
+});
+
+interface ChunkModifications {
+  harvestedResources: Array<{
+    resourceId: string;
+    harvestedAt: number;
+    respawnAt: number;
+  }>;
+  placedObjects: Array<{
+    type: string;
+    position: { x: number; y: number; z: number };
+    placedBy: string;
+    placedAt: number;
+  }>;
+}
+```
+
+---
+
+## Player Sessions
+
+```typescript
+export const playerSessions = pgTable('player_sessions', {
+  id: text('id').primaryKey(),
+  characterId: text('character_id').notNull()
+    .references(() => characters.id),
+  loginTime: bigint('login_time', { mode: 'number' }).notNull(),
+  logoutTime: bigint('logout_time', { mode: 'number' }),
+  duration: integer('duration'),                   // Seconds played
+  ipAddress: text('ip_address'),
+});
+```
+
+---
+
+## Statistics Tables
+
+### NPC Kills
+
+```typescript
+export const npcKills = pgTable('npc_kills', {
+  id: text('id').primaryKey(),
+  characterId: text('character_id').notNull()
+    .references(() => characters.id),
+  npcId: text('npc_id').notNull(),                // NPC definition ID
+  killCount: integer('kill_count').notNull().default(0),
+  lastKillAt: bigint('last_kill_at', { mode: 'number' }),
+});
+
+// Track kills per NPC type
+export const npcKillsIndexes = {
+  characterNpcIdx: uniqueIndex('character_npc_idx')
+    .on(npcKills.characterId, npcKills.npcId),
+};
+```
+
+---
+
+## Repository Pattern
+
+All database access goes through typed repositories:
+
+```typescript
+// From repositories/CharacterRepository.ts
+export class CharacterRepository {
+  constructor(private db: DrizzleDB) {}
+
+  async findById(id: string): Promise<Character | null> {
+    const result = await this.db
+      .select()
+      .from(characters)
+      .where(eq(characters.id, id))
+      .limit(1);
+    return result[0] || null;
+  }
+
+  async findByAccountId(accountId: string): Promise<Character[]> {
+    return this.db
+      .select()
+      .from(characters)
+      .where(eq(characters.accountId, accountId));
+  }
+
+  async create(data: NewCharacter): Promise<Character> {
+    const [character] = await this.db
+      .insert(characters)
+      .values({
+        ...data,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      .returning();
+    return character;
+  }
+
+  async updatePosition(id: string, position: Position3D): Promise<void> {
+    await this.db
+      .update(characters)
+      .set({
+        positionX: position.x,
+        positionY: position.y,
+        positionZ: position.z,
+        updatedAt: Date.now(),
+      })
+      .where(eq(characters.id, id));
+  }
+
+  async updateStats(id: string, stats: CharacterStats): Promise<void> {
+    await this.db
+      .update(characters)
+      .set({
+        stats,
+        updatedAt: Date.now(),
+      })
+      .where(eq(characters.id, id));
+  }
+}
+```
+
+---
+
+## Data Types
+
+### Timestamps
+
+All timestamps use `bigint` storing **Unix milliseconds** for precision:
+
+```typescript
+// Store
+const timestamp = Date.now(); // e.g., 1704067200000
+
+// Retrieve
+const date = new Date(timestamp);
+```
+
+### Positions
+
+Positions use `real` (float) for **sub-tile precision**:
+
+```typescript
+// Tile center is (x + 0.5, z + 0.5)
+positionX: 125.5,
+positionY: 10.0,
+positionZ: -42.5,
+```
+
+### IDs
+
+All IDs are `text` storing **UUIDs as strings**:
+
+```typescript
+import { uuid } from '@hyperscape/shared';
+
+const id = uuid(); // "550e8400-e29b-41d4-a716-446655440000"
+```
+
+---
+
+## Migrations
+
+Drizzle handles migrations automatically:
+
+```bash
+# Generate migration from schema changes
+bun run db:generate
+
+# Apply migrations
+bun run db:migrate
+
+# Push schema directly (dev only)
+bun run db:push
+```
+
+---
+
+## Related Documentation
+
+- [Server Architecture](/wiki/server/overview)
+- [Networking](/wiki/engine/networking)
+- [Character System](/wiki/game-systems/player)

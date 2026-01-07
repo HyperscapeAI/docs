@@ -1,6 +1,6 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "palm",
+  "theme": "maple",
   "name": "Hyperscape",
   "description": "The first AI-native MMORPG where autonomous agents play alongside humans",
   "colors": {
@@ -12,10 +12,10 @@
     "default": "dark",
     "strict": false,
     "background": {
-      "decoration": "windows",
+      "decoration": "grid",
       "color": {
         "light": "#FAF9F7",
-        "dark": "#0D0D0F"
+        "dark": "#0A0A0C"
       }
     }
   },
@@ -36,11 +36,11 @@
     "codeblocks": {
       "theme": {
         "light": "github-light",
-        "dark": "night-owl"
+        "dark": "tokyo-night"
       }
     },
     "eyebrow": "breadcrumbs",
-    "rounded": "relaxed"
+    "rounded": "default"
   },
   "favicon": "/favicon.svg",
   "logo": {
@@ -128,7 +128,8 @@
             "pages": [
               "index",
               "quickstart",
-              "architecture"
+              "architecture",
+              "changelog"
             ]
           },
           {
@@ -140,7 +141,8 @@
               "guides/adding-content",
               "guides/ai-agents",
               "guides/deployment",
-              "guides/mobile"
+              "guides/mobile",
+              "guides/mcp-server"
             ]
           },
           {
@@ -233,30 +235,89 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "Wiki",
+        "icon": "book-open-text",
+        "groups": [
+          {
+            "group": "Overview",
+            "icon": "home",
+            "expanded": true,
+            "pages": ["wiki/index"]
+          },
+          {
+            "group": "Engine Architecture",
+            "icon": "cube",
+            "pages": [
+              "wiki/engine/overview",
+              "wiki/engine/ecs",
+              "wiki/engine/networking",
+              "wiki/engine/database",
+              "wiki/engine/events"
+            ]
+          },
+          {
+            "group": "Client Application",
+            "icon": "monitor",
+            "pages": [
+              "wiki/client/overview"
+            ]
+          },
+          {
+            "group": "Game Systems",
+            "icon": "swords",
+            "pages": [
+              "wiki/game-systems/overview",
+              "wiki/game-systems/combat",
+              "wiki/game-systems/skills",
+              "wiki/game-systems/movement",
+              "wiki/game-systems/inventory",
+              "wiki/game-systems/bank",
+              "wiki/game-systems/death",
+              "wiki/game-systems/loot",
+              "wiki/game-systems/mob-ai"
+            ]
+          },
+          {
+            "group": "AI Agents",
+            "icon": "bot",
+            "pages": [
+              "wiki/ai-agents/overview",
+              "wiki/ai-agents/actions",
+              "wiki/ai-agents/providers"
+            ]
+          },
+          {
+            "group": "Data Manifests",
+            "icon": "database",
+            "pages": [
+              "wiki/data/overview",
+              "wiki/data/npcs",
+              "wiki/data/items"
+            ]
+          },
+          {
+            "group": "Technical Reference",
+            "icon": "hashtag",
+            "pages": [
+              "wiki/reference/constants",
+              "wiki/reference/mcp-server"
+            ]
+          }
+        ]
       }
     ],
     "global": {
-      "anchors": [
-        {
-          "anchor": "Play Now",
-          "href": "https://hyperscape.lol",
-          "icon": "gamepad-2"
-        },
-        {
-          "anchor": "GitHub",
-          "href": "https://github.com/HyperscapeAI/hyperscape",
-          "icon": "github"
-        },
-        {
-          "anchor": "Discord",
-          "href": "https://discord.gg/JD3MEwNbbX",
-          "icon": "discord"
-        }
-      ]
+      "anchors": []
     }
   },
   "navbar": {
     "links": [
+      {
+        "label": "Changelog",
+        "href": "/changelog"
+      },
       {
         "label": "GitHub",
         "href": "https://github.com/HyperscapeAI/hyperscape"
@@ -264,10 +325,6 @@
       {
         "label": "Discord",
         "href": "https://discord.gg/JD3MEwNbbX"
-      },
-      {
-        "label": "Blog",
-        "href": "https://blog.hyperscape.lol"
       }
     ],
     "primary": {
@@ -277,16 +334,16 @@
     }
   },
   "sidebar": {
-    "items": "card"
+    "items": "border"
   },
   "interaction": {
     "drilldown": false
   },
   "topbar": {
-    "style": "gradient"
+    "style": "default"
   },
   "contextual": {
-    "options": ["copy", "view", "claude", "chatgpt", "perplexity", "cursor", "vscode"]
+    "options": ["copy", "view", "mcp", "cursor", "vscode", "claude", "chatgpt", "perplexity"]
   },
   "footer": {
     "socials": {

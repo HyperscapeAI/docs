@@ -1,0 +1,345 @@
+---
+title: "Skills & Progression"
+description: "RuneScape-style skill system with XP curves and leveling"
+icon: "chart-line"
+---
+
+# Skills & Progression
+
+Hyperscape features a **skill-based progression system** where skills level independently through use. The XP formula and combat level calculation are authentic recreations of Old School RuneScape mechanics.
+
+<Info>
+Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/character/SkillsSystem.ts`.
+</Info>
+
+## Available Skills
+
+### Combat Skills
+
+| Skill | Description | Training Methods |
+|-------|-------------|------------------|
+| **Attack** | Melee accuracy | Combat (Accurate style) |
+| **Strength** | Melee max hit | Combat (Aggressive style) |
+| **Defense** | Damage reduction | Combat (Defensive style) |
+| **Constitution** | Maximum HP | All combat (always granted) |
+| **Ranged** | Ranged combat | Bow/crossbow attacks |
+
+### Gathering Skills
+
+| Skill | Description | Training Methods |
+|-------|-------------|------------------|
+| **Woodcutting** | Chop trees | Using hatchet on trees |
+| **Fishing** | Catch fish | Using fishing rod at spots |
+| **Mining** | Mine ore | Using pickaxe on rocks |
+
+### Artisan Skills
+
+| Skill | Description | Training Methods |
+|-------|-------------|------------------|
+| **Firemaking** | Light fires | Using tinderbox on logs |
+| **Cooking** | Cook food | Using raw food on fires |
+
+---
+
+## XP Formula
+
+The XP table uses the authentic RuneScape formula. Level 92 represents the halfway point to 99 in total XP.
+
+```typescript
+// From SkillsSystem.ts
+private generateXPTable(): void {
+  this.xpTable = [0, 0]; // Levels 0 and 1
+
+  for (let level = 2; level <= 99; level++) {
+    const xp = Math.floor(level - 1 + 300 * Math.pow(2, (level - 1) / 7)) / 4;
+    this.xpTable.push(Math.floor(this.xpTable[level - 1] + xp));
+  }
+}
+```
+
+### XP Requirements by Level
+
+| Level | Total XP | XP to Next |
+|-------|----------|------------|
+| 1 | 0 | 83 |
+| 10 | 1,154 | 229 |
+| 20 | 4,470 | 899 |
+| 30 | 13,363 | 2,673 |
+| 40 | 37,224 | 7,195 |
+| 50 | 101,333 | 18,389 |
+| 60 | 273,742 | 46,236 |
+| 70 | 737,627 | 115,590 |
+| 80 | 1,986,068 | 287,883 |
+| 90 | 5,346,332 | 716,427 |
+| 92 | 6,517,253 | ~50% of 99 XP |
+| 99 | 13,034,431 | MAX |
+
+<Warning>
+**XP Cap**: Maximum XP per skill is 200,000,000 (200M). This matches OSRS.
+</Warning>
+
+---
+
+## Level Calculations
+
+### Get Level from XP
+
+```typescript
+public getLevelForXP(xp: number): number {
+  for (let level = 99; level >= 1; level--) {
+    if (xp >= this.xpTable[level]) {
+      return level;
+    }
+  }
+  return 1;
+}
+```
+
+### XP to Next Level
+
+```typescript
+public getXPToNextLevel(skill: SkillData): number {
+  if (skill.level >= 99) return 0;
+
+  const nextLevelXP = this.getXPForLevel(skill.level + 1);
+  return nextLevelXP - skill.xp;
+}
+```
+
+### Progress Percentage
+
+```typescript
+public getXPProgress(skill: SkillData): number {
+  if (skill.level >= 99) return 100;
+
+  const currentLevelXP = this.getXPForLevel(skill.level);
+  const nextLevelXP = this.getXPForLevel(skill.level + 1);
+  const progressXP = skill.xp - currentLevelXP;
+  const requiredXP = nextLevelXP - currentLevelXP;
+
+  return (progressXP / requiredXP) * 100;
+}
+```
+
+---
+
+## Combat Level
+
+Combat level is calculated from combat skills using the OSRS formula.
+
+```typescript
+// From SkillsSystem.ts
+public getCombatLevel(stats: StatsComponent): number {
+  const defenseLevel = stats.defense?.level ?? 1;
+  const hitpointsLevel = stats.constitution?.level ?? 10;
+  const prayerLevel = stats.prayer?.level ?? 1;
+  const attackLevel = stats.attack?.level ?? 1;
+  const strengthLevel = stats.strength?.level ?? 1;
+  const rangedLevel = stats.ranged?.level ?? 1;
+  const magicLevel = stats.magic?.level ?? 1;
+
+  // Base = 0.25 × (Defense + Hitpoints + floor(Prayer / 2))
+  const base = 0.25 * (defenseLevel + hitpointsLevel + Math.floor(prayerLevel / 2));
+
+  // Melee = 0.325 × (Attack + Strength)
+  const melee = 0.325 * (attackLevel + strengthLevel);
+
+  // Ranged = 0.325 × floor(Ranged × 1.5)
+  const rangedCalc = 0.325 * Math.floor(rangedLevel * 1.5);
+
+  // Magic = 0.325 × floor(Magic × 1.5)
+  const magicCalc = 0.325 * Math.floor(magicLevel * 1.5);
+
+  // Combat Level = floor(Base + max(Melee, Ranged, Magic))
+  return Math.floor(base + Math.max(melee, rangedCalc, magicCalc));
+}
+```
+
+### Combat Level Examples
+
+| Stats | Combat Level |
+|-------|--------------|
+| All 1s | 3 |
+| 40 Atk/Str, 1 everything else | 32 |
+| 60 Atk/Str/Def, 60 HP | 66 |
+| 99 all combat | 126 |
+
+---
+
+## Total Level
+
+Total level is the sum of all skill levels.
+
+```typescript
+public getTotalLevel(stats: StatsComponent): number {
+  let total = 0;
+
+  const skills = [
+    "attack", "strength", "defense", "constitution", "ranged",
+    "woodcutting", "mining", "fishing", "firemaking", "cooking"
+  ];
+
+  for (const skill of skills) {
+    const skillData = stats[skill];
+    total += skillData?.level ?? 1;
+  }
+
+  return total;
+}
+```
+
+### Maximum Total Level
+
+With 10 skills at level 99: **990 total level**
+
+---
+
+## XP Sources
+
+### Combat XP
+
+| Action | XP Per Damage |
+|--------|---------------|
+| Main skill (style-dependent) | 4.0 |
+| Constitution (always) | 1.33 |
+| Controlled (per skill) | 1.33 |
+
+### Gathering XP
+
+| Action | Base XP |
+|--------|---------|
+| Chop normal tree | 25 |
+| Chop oak tree | 37.5 |
+| Chop willow tree | 67.5 |
+| Catch shrimp | 10 |
+| Catch trout | 50 |
+| Catch lobster | 90 |
+
+### Artisan XP
+
+| Action | Base XP |
+|--------|---------|
+| Light normal logs | 40 |
+| Light oak logs | 60 |
+| Cook shrimp | 30 |
+| Cook lobster | 120 |
+
+---
+
+## Level Requirements
+
+Skills gate access to equipment and activities.
+
+### Weapon Requirements
+
+| Weapon | Attack Level |
+|--------|--------------|
+| Bronze | 1 |
+| Iron | 1 |
+| Steel | 5 |
+| Mithril | 20 |
+| Adamant | 30 |
+| Rune | 40 |
+| Dragon | 60 |
+
+### Tool Requirements
+
+| Tool | Skill Level |
+|------|-------------|
+| Bronze Hatchet | 1 Woodcutting |
+| Steel Hatchet | 6 Woodcutting |
+| Mithril Hatchet | 21 Woodcutting |
+| Adamant Hatchet | 31 Woodcutting |
+| Rune Hatchet | 41 Woodcutting |
+
+### Resource Requirements
+
+| Resource | Skill Level |
+|----------|-------------|
+| Normal Tree | 1 Woodcutting |
+| Oak Tree | 15 Woodcutting |
+| Willow Tree | 30 Woodcutting |
+| Shrimp Spot | 1 Fishing |
+| Trout Spot | 20 Fishing |
+| Lobster Spot | 40 Fishing |
+
+---
+
+## Skill Events
+
+The system emits events for UI updates and logging:
+
+| Event | Data | Description |
+|-------|------|-------------|
+| `SKILLS_XP_GAINED` | `playerId`, `skill`, `amount` | XP added to skill |
+| `SKILLS_LEVEL_UP` | `entityId`, `skill`, `oldLevel`, `newLevel` | Level increased |
+| `SKILLS_UPDATED` | `playerId`, `skills` | Skills state changed |
+| `SKILLS_MILESTONE` | `entityId`, `skill`, `milestone` | Milestone reached |
+| `COMBAT_LEVEL_CHANGED` | `entityId`, `oldLevel`, `newLevel` | Combat level changed |
+| `TOTAL_LEVEL_CHANGED` | `entityId`, `oldLevel`, `newLevel` | Total level changed |
+
+---
+
+## Milestones
+
+Special milestones trigger events and messages:
+
+```typescript
+const commonMilestones = [
+  { level: 50, name: "Halfway", message: "Halfway to mastery!" },
+  { level: 92, name: "Half XP", message: "Halfway to 99 in XP!" },
+  { level: 99, name: "Mastery", message: "Skill mastered!" },
+];
+
+// Attack-specific milestones
+const attackMilestones = [
+  { level: 40, name: "Rune Weapons", message: "You can now wield rune weapons!" },
+  { level: 60, name: "Dragon Weapons", message: "You can now wield dragon weapons!" },
+];
+```
+
+---
+
+## API Reference
+
+### Grant XP
+
+```typescript
+// Grant XP via event system (recommended)
+skillsSystem.grantXP(entityId, "woodcutting", 25);
+
+// Direct internal grant (used by external handlers)
+skillsSystem.addXPInternal(entityId, skill, amount);
+```
+
+### Check Requirements
+
+```typescript
+// Check if entity meets skill requirements
+const canEquip = skillsSystem.meetsRequirements(entity, {
+  attack: 40,
+  defense: 40,
+});
+```
+
+### Set Level (Admin)
+
+```typescript
+// Directly set skill level (for admin commands)
+skillsSystem.setSkillLevel(entityId, "attack", 99);
+```
+
+### Reset Skill
+
+```typescript
+// Reset skill to level 1
+skillsSystem.resetSkill(entityId, "attack");
+```
+
+---
+
+## Related Documentation
+
+- [Combat System](/wiki/game-systems/combat)
+- [Resource Gathering](/wiki/game-systems/resources)
+- [Item Requirements](/wiki/data/items)

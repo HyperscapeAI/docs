@@ -1,0 +1,65 @@
+# ============================================================================
+# Webhook Trigger for Instant Changelog Updates
+# ============================================================================
+#
+# This workflow is triggered by a repository_dispatch event from the 
+# Hyperscape repo when a new release is published.
+#
+# To enable this:
+# 1. Add this workflow to the docs repo
+# 2. In Hyperscape repo, add a workflow that sends repository_dispatch:
+#
+#    - name: Trigger docs changelog update
+#      uses: peter-evans/repository-dispatch@v3
+#      with:
+#        token: ${{ secrets.DOCS_REPO_TOKEN }}
+#        repository: HyperscapeAI/docs
+#        event-type: release-published
+#        client-payload: '{"tag": "${{ github.event.release.tag_name }}"}'
+#
+# ============================================================================
+
+name: On Release Webhook
+
+on:
+  repository_dispatch:
+    types: [release-published]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Log trigger
+        run: |
+          echo "🚀 Release webhook received!"
+          echo "   Tag: ${{ github.event.client_payload.tag }}"
+
+      - name: Checkout docs repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Sync changelog
+        run: bun run scripts/sync-changelog.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit and push directly
+        run: |
+          if git diff --quiet changelog.mdx; then
+            echo "📝 No changes to commit"
+            exit 0
+          fi
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add changelog.mdx
+          git commit -m "docs: add changelog for ${{ github.event.client_payload.tag }}"
+          git push

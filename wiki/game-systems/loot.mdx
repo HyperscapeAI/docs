@@ -1,0 +1,363 @@
+---
+title: "Ground Items & Loot"
+description: "OSRS-style ground item piling, despawn timers, and loot protection"
+icon: "coins"
+---
+
+# Ground Items & Loot System
+
+The ground item system handles item drops from mobs, player deaths, and manual drops. It follows OSRS mechanics with tile-based piling, stackable merging, and tick-based despawn timers.
+
+<Info>
+Ground item code lives in `packages/shared/src/systems/shared/economy/GroundItemSystem.ts`.
+See also: [OSRS Wiki: Dropped items](https://oldschool.runescape.wiki/w/Dropped_items)
+</Info>
+
+## Core Features
+
+- **Tile-based piling** - Items stack on same tile (max 128 per tile)
+- **Stackable merging** - Same item types automatically combine
+- **Tick-based despawn** - All timers in game ticks (600ms)
+- **Loot protection** - Killer/dropper gets priority access
+- **O(1) tile lookups** - Spatial indexing for performance
+- **Server authority** - Client cannot spawn ground items
+
+---
+
+## Ground Item Constants
+
+```typescript
+// From CombatConstants.ts
+GROUND_ITEM_DESPAWN_TICKS: 200,      // 2 minutes (200 × 600ms)
+LOOT_PROTECTION_TICKS: 100,          // 1 minute private phase
+UNTRADEABLE_DESPAWN_TICKS: 300,      // 3 minutes for untradeable items
+
+// From GroundItemSystem.ts
+private readonly MAX_PILE_SIZE = 128;       // OSRS max items per tile
+private readonly MAX_GLOBAL_ITEMS = 65536;  // Server-wide limit
+```
+
+---
+
+## Ground Item Data Structure
+
+```typescript
+interface GroundItemData {
+  entityId: string;                    // Unique entity ID
+  itemId: string;                      // Item definition reference
+  quantity: number;                    // Stack quantity
+  position: { x: number; y: number; z: number };
+  despawnTick: number;                 // Tick when item despawns
+  droppedBy?: string;                  // Player who dropped/killed
+  lootProtectionTick?: number;         // Tick when protection ends
+  spawnedAt: number;                   // Timestamp for debugging
+}
+
+interface GroundItemPileData {
+  tileKey: string;                     // "x_z" format
+  tile: { x: number; z: number };
+  items: GroundItemData[];             // Items in pile (newest first)
+  topItemEntityId: string;             // Visible item on top
+}
+```
+
+---
+
+## Spawning Ground Items
+
+```typescript
+async spawnGroundItem(
+  itemId: string,
+  quantity: number,
+  position: { x: number; y: number; z: number },
+  options: GroundItemOptions,
+): Promise<string> {
+  // Server authority check
+  if (!this.world.isServer) {
+    console.error(`[GroundItemSystem] Client attempted ground item spawn - BLOCKED`);
+    return "";
+  }
+  
+  // Global limit check
+  if (this.groundItems.size >= this.MAX_GLOBAL_ITEMS) {
+    console.warn(`[GroundItemSystem] Global item limit reached, rejecting spawn`);
+    return "";
+  }
+  
+  const item = getItem(itemId);
+  if (!item) return "";
+  
+  const currentTick = this.world.currentTick;
+  
+  // OSRS: Untradeable items ALWAYS despawn in 3 min
+  const despawnTicks = item.tradeable === false
+    ? COMBAT_CONSTANTS.UNTRADEABLE_DESPAWN_TICKS
+    : msToTicks(options.despawnTime);
+  
+  // Snap to tile center
+  const tile = worldToTile(position.x, position.z);
+  const tileKey = this.getTileKey(tile);
+  const tileCenter = tileToWorld(tile);
+  
+  // Ground to terrain height
+  const groundedPosition = groundToTerrain(this.world, {
+    x: tileCenter.x,
+    y: position.y,
+    z: tileCenter.z,
+  }, 0.2, Infinity);
+  
+  // Check for existing pile
+  const existingPile = this.groundItemPiles.get(tileKey);
+  
+  // OSRS: If pile full, remove oldest item
+  if (existingPile && existingPile.items.length >= this.MAX_PILE_SIZE) {
+    const oldestItem = existingPile.items.pop();
+    if (oldestItem) {
+      this.groundItems.delete(oldestItem.entityId);
+      this.entityManager.destroyEntity(oldestItem.entityId);
+    }
+  }
+  
+  // OSRS: Merge stackable items
+  if (item.stackable && existingPile) {
+    const existingStack = existingPile.items.find(
+      i => i.itemId === itemId && 
+           (!i.lootProtectionTick || i.droppedBy === options.droppedBy)
+    );
+    
+    if (existingStack) {
+      existingStack.quantity += quantity;
+      existingStack.despawnTick = currentTick + despawnTicks;
+      // Update entity properties
+      const entity = this.world.entities.get(existingStack.entityId);
+      entity?.setProperty("quantity", existingStack.quantity);
+      return existingStack.entityId;
+    }
+  }
+  
+  // Create new item entity
+  const dropId = `ground_item_${this.nextItemId++}`;
+  const itemEntity = await this.entityManager.spawnEntity({
+    id: dropId,
+    name: item.name,
+    type: EntityType.ITEM,
+    position: groundedPosition,
+    itemId: item.id,
+    quantity: quantity,
+    stackable: item.stackable ?? false,
+    // ... other properties
+  });
+  
+  // Track ground item
+  const groundItemData: GroundItemData = {
+    entityId: dropId,
+    itemId,
+    quantity,
+    position: groundedPosition,
+    despawnTick: currentTick + despawnTicks,
+    droppedBy: options.droppedBy,
+    lootProtectionTick: options.lootProtection 
+      ? currentTick + msToTicks(options.lootProtection) 
+      : undefined,
+    spawnedAt: Date.now(),
+  };
+  
+  this.groundItems.set(dropId, groundItemData);
+  
+  // Manage pile visibility
+  if (existingPile) {
+    // Hide previous top item
+    this.setItemVisibility(existingPile.topItemEntityId, false);
+    existingPile.items.unshift(groundItemData);
+    existingPile.topItemEntityId = dropId;
+  } else {
+    // Create new pile
+    this.groundItemPiles.set(tileKey, {
+      tileKey,
+      tile,
+      items: [groundItemData],
+      topItemEntityId: dropId,
+    });
+  }
+  
+  return dropId;
+}
+```
+
+---
+
+## Loot Protection Phases
+
+Following OSRS mechanics, dropped items have visibility phases:
+
+### Private Phase (0-100 ticks / 0-60 seconds)
+
+- Only the dropper/killer can see the item
+- Only the dropper/killer can pick it up
+
+### Public Phase (100-200 ticks / 60-120 seconds)
+
+- Everyone can see the item
+- Anyone can pick it up
+
+```typescript
+canPickup(itemId: string, playerId: string, currentTick: number): boolean {
+  const itemData = this.groundItems.get(itemId);
+  
+  // Untracked items have no protection
+  if (!itemData) return true;
+  
+  // No protection set
+  if (!itemData.lootProtectionTick) return true;
+  
+  // Protection expired
+  if (currentTick >= itemData.lootProtectionTick) return true;
+  
+  // Only dropper/killer during protection
+  return itemData.droppedBy === playerId;
+}
+```
+
+---
+
+## Tick Processing
+
+Every game tick, expired items are removed:
+
+```typescript
+processTick(currentTick: number): void {
+  // Zero-allocation: reuse buffer
+  this._expiredItemsBuffer.length = 0;
+  
+  for (const [itemId, itemData] of this.groundItems) {
+    if (currentTick >= itemData.despawnTick) {
+      this._expiredItemsBuffer.push(itemId);
+    }
+  }
+  
+  // Process expired items
+  for (let i = 0; i < this._expiredItemsBuffer.length; i++) {
+    this.handleItemExpire(this._expiredItemsBuffer[i], currentTick);
+  }
+}
+
+private handleItemExpire(itemId: string, currentTick: number): void {
+  const itemData = this.groundItems.get(itemId);
+  if (!itemData) return;
+  
+  // Remove from world
+  this.removeGroundItem(itemId);
+  
+  // Emit despawn event
+  this.emitTypedEvent(EventType.ITEM_DESPAWNED, {
+    itemId: itemId,
+    itemType: itemData.itemId,
+  });
+}
+```
+
+---
+
+## Removing Ground Items
+
+When an item is picked up or despawns:
+
+```typescript
+removeGroundItem(itemId: string): boolean {
+  const itemData = this.groundItems.get(itemId);
+  
+  if (itemData) {
+    const tile = worldToTile(itemData.position.x, itemData.position.z);
+    const tileKey = this.getTileKey(tile);
+    const pile = this.groundItemPiles.get(tileKey);
+    
+    if (pile) {
+      // Remove from pile
+      const index = pile.items.findIndex(i => i.entityId === itemId);
+      if (index !== -1) pile.items.splice(index, 1);
+      
+      // If this was top item, show next
+      if (pile.topItemEntityId === itemId && pile.items.length > 0) {
+        const nextItem = pile.items[0];
+        pile.topItemEntityId = nextItem.entityId;
+        this.setItemVisibility(nextItem.entityId, true);
+      }
+      
+      // Clean up empty pile
+      if (pile.items.length === 0) {
+        this.groundItemPiles.delete(tileKey);
+      }
+    }
+    
+    this.groundItems.delete(itemId);
+  }
+  
+  // Destroy entity
+  return this.entityManager?.destroyEntity(itemId) ?? false;
+}
+```
+
+---
+
+## Loot Tables
+
+Mob drops are configured via loot tables in the NPC manifest:
+
+```typescript
+// From npcs.json
+{
+  "id": "goblin",
+  "drops": {
+    "always": [
+      { "itemId": "bones", "quantity": 1 }
+    ],
+    "common": [
+      { "itemId": "bronze_sword", "weight": 10 },
+      { "itemId": "bronze_shield", "weight": 10 },
+      { "itemId": "coins", "quantityRange": [1, 25], "weight": 30 }
+    ],
+    "rare": [
+      { "itemId": "goblin_mail", "weight": 1 }
+    ]
+  }
+}
+```
+
+The `LootTableService.ts` rolls drops based on weights:
+
+```typescript
+function rollDrops(npcId: string): InventoryItem[] {
+  const npc = getNPC(npcId);
+  const drops: InventoryItem[] = [];
+  
+  // Always drops
+  for (const drop of npc.drops.always) {
+    drops.push({ itemId: drop.itemId, quantity: drop.quantity });
+  }
+  
+  // Roll weighted drops
+  const roll = Math.random() * totalWeight;
+  // ... weighted selection logic
+  
+  return drops;
+}
+```
+
+---
+
+## Ground Item Events
+
+| Event | Data | Description |
+|-------|------|-------------|
+| `ITEM_DROPPED` | `entityId`, `itemId`, `position`, `droppedBy` | Item spawned on ground |
+| `ITEM_DESPAWNED` | `itemId`, `itemType` | Item expired and removed |
+| `ITEM_PICKUP` | `playerId`, `entityId`, `itemId` | Player picking up item |
+
+---
+
+## Related Documentation
+
+- [Inventory System](/wiki/game-systems/inventory)
+- [Death & Respawn](/wiki/game-systems/death)
+- [Combat System](/wiki/game-systems/combat)
+- [NPC Data Structure](/wiki/data/npcs)

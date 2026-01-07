@@ -1,0 +1,429 @@
+---
+title: "Agent Providers Reference"
+description: "Context providers for ElizaOS agent decision-making"
+icon: "database"
+---
+
+# Agent Providers Reference
+
+Providers supply **game context** to ElizaOS agents, enabling the LLM to make informed decisions. There are **7 providers** that run before each agent decision.
+
+<Info>
+Providers are defined in `packages/plugin-hyperscape/src/providers/`.
+</Info>
+
+## Provider Execution Order
+
+Providers run in a specific order to ensure dependencies are met:
+
+1. **goalProvider** - Current goal (runs first for goal-aware decisions)
+2. **gameStateProvider** - Health, position, combat status
+3. **inventoryProvider** - Items and equipment
+4. **nearbyEntitiesProvider** - Surrounding entities
+5. **skillsProvider** - Skill levels and XP
+6. **equipmentProvider** - Currently equipped items
+7. **availableActionsProvider** - Context-aware action list
+
+---
+
+## Goal Provider
+
+Provides the agent's current goal and progress.
+
+```typescript
+// From providers/goalProvider.ts
+export const goalProvider: Provider = {
+  name: "goal",
+  description: "Current goal and progress",
+
+  async get(runtime: IAgentRuntime, message: Memory): Promise<string> {
+    const service = runtime.getService("hyperscape") as HyperscapeService;
+    const goal = service.getCurrentGoal();
+
+    if (!goal) {
+      return "No current goal set. Consider setting a goal with SET_GOAL.";
+    }
+
+    return `
+Current Goal: ${goal.description}
+Priority: ${goal.priority}/10
+Progress: ${goal.progress}%
+Started: ${formatTime(goal.startedAt)}
+    `.trim();
+  },
+};
+```
+
+### Output Example
+
+```
+Current Goal: Reach level 10 Woodcutting
+Priority: 7/10
+Progress: 45%
+Started: 10 minutes ago
+```
+
+---
+
+## Game State Provider
+
+Provides core player status information.
+
+```typescript
+// From providers/gameState.ts
+export const gameStateProvider: Provider = {
+  name: "gameState",
+  description: "Player health, position, and combat status",
+
+  async get(runtime: IAgentRuntime): Promise<string> {
+    const service = runtime.getService("hyperscape") as HyperscapeService;
+    const state = service.getGameState();
+
+    return `
+## Player Status
+Health: ${state.health}/${state.maxHealth} (${Math.round(state.health/state.maxHealth*100)}%)
+Position: (${state.position.x.toFixed(1)}, ${state.position.y.toFixed(1)}, ${state.position.z.toFixed(1)})
+In Combat: ${state.inCombat ? "Yes" : "No"}
+Combat Target: ${state.combatTarget || "None"}
+Run Energy: ${state.runEnergy}%
+    `.trim();
+  },
+};
+```
+
+### Output Example
+
+```
+## Player Status
+Health: 45/100 (45%)
+Position: (125.5, 10.0, -42.3)
+In Combat: Yes
+Combat Target: goblin_warrior_1
+Run Energy: 78%
+```
+
+---
+
+## Inventory Provider
+
+Provides inventory contents and capacity.
+
+```typescript
+// From providers/inventory.ts
+export const inventoryProvider: Provider = {
+  name: "inventory",
+  description: "Items in inventory",
+
+  async get(runtime: IAgentRuntime): Promise<string> {
+    const service = runtime.getService("hyperscape") as HyperscapeService;
+    const inventory = service.getInventory();
+
+    const itemList = inventory.items
+      .map(item => `- ${item.name} x${item.quantity}`)
+      .join("\n");
+
+    return `
+## Inventory (${inventory.usedSlots}/${inventory.maxSlots} slots)
+Coins: ${inventory.coins.toLocaleString()}
+
+Items:
+${itemList || "Empty"}
+    `.trim();
+  },
+};
+```
+
+### Output Example
+
+```
+## Inventory (15/28 slots)
+Coins: 1,234
+
+Items:
+- Bronze Hatchet x1
+- Oak Logs x10
+- Raw Shrimp x5
+- Cooked Shrimp x3
+- Tinderbox x1
+```
+
+---
+
+## Nearby Entities Provider
+
+Provides information about surrounding entities.
+
+```typescript
+// From providers/nearbyEntities.ts
+export const nearbyEntitiesProvider: Provider = {
+  name: "nearbyEntities",
+  description: "Players, NPCs, and resources nearby",
+
+  async get(runtime: IAgentRuntime): Promise<string> {
+    const service = runtime.getService("hyperscape") as HyperscapeService;
+    const entities = service.getNearbyEntities();
+
+    const players = entities.players.map(p =>
+      `- ${p.name} (Level ${p.combatLevel}, ${p.distance.toFixed(1)}m away)`
+    ).join("\n");
+
+    const mobs = entities.mobs.map(m =>
+      `- ${m.name} (Level ${m.level}, HP: ${m.health}/${m.maxHealth}, ${m.distance.toFixed(1)}m away)`
+    ).join("\n");
+
+    const resources = entities.resources.map(r =>
+      `- ${r.type} (${r.distance.toFixed(1)}m away)`
+    ).join("\n");
+
+    return `
+## Nearby Players
+${players || "None"}
+
+## Nearby Mobs
+${mobs || "None"}
+
+## Nearby Resources
+${resources || "None"}
+    `.trim();
+  },
+};
+```
+
+### Output Example
+
+```
+## Nearby Players
+- PlayerOne (Level 45, 5.2m away)
+- PlayerTwo (Level 23, 12.8m away)
+
+## Nearby Mobs
+- Goblin Warrior (Level 5, HP: 15/20, 3.1m away)
+- Goblin (Level 2, HP: 10/10, 8.4m away)
+
+## Nearby Resources
+- Oak Tree (2.5m away)
+- Oak Tree (6.1m away)
+- Fishing Spot (15.3m away)
+```
+
+---
+
+## Skills Provider
+
+Provides skill levels and XP progress.
+
+```typescript
+// From providers/skills.ts
+export const skillsProvider: Provider = {
+  name: "skills",
+  description: "Skill levels and experience",
+
+  async get(runtime: IAgentRuntime): Promise<string> {
+    const service = runtime.getService("hyperscape") as HyperscapeService;
+    const skills = service.getSkills();
+
+    const skillList = Object.entries(skills)
+      .map(([name, data]) =>
+        `- ${capitalize(name)}: Level ${data.level} (${data.xp.toLocaleString()} XP)`
+      )
+      .join("\n");
+
+    return `
+## Skills
+Combat Level: ${skills.combatLevel}
+Total Level: ${skills.totalLevel}
+
+${skillList}
+    `.trim();
+  },
+};
+```
+
+### Output Example
+
+```
+## Skills
+Combat Level: 15
+Total Level: 85
+
+- Attack: Level 10 (1,154 XP)
+- Strength: Level 12 (1,623 XP)
+- Defense: Level 8 (737 XP)
+- Constitution: Level 15 (2,411 XP)
+- Ranged: Level 1 (0 XP)
+- Woodcutting: Level 25 (8,740 XP)
+- Fishing: Level 18 (3,258 XP)
+- Firemaking: Level 10 (1,154 XP)
+- Cooking: Level 6 (535 XP)
+```
+
+---
+
+## Equipment Provider
+
+Provides currently equipped items.
+
+```typescript
+// From providers/equipment.ts
+export const equipmentProvider: Provider = {
+  name: "equipment",
+  description: "Currently equipped items",
+
+  async get(runtime: IAgentRuntime): Promise<string> {
+    const service = runtime.getService("hyperscape") as HyperscapeService;
+    const equipment = service.getEquipment();
+
+    return `
+## Equipment
+Weapon: ${equipment.weapon?.name || "None"}
+Shield: ${equipment.shield?.name || "None"}
+Helmet: ${equipment.helmet?.name || "None"}
+Body: ${equipment.body?.name || "None"}
+Legs: ${equipment.legs?.name || "None"}
+Boots: ${equipment.boots?.name || "None"}
+Gloves: ${equipment.gloves?.name || "None"}
+Cape: ${equipment.cape?.name || "None"}
+Ring: ${equipment.ring?.name || "None"}
+Amulet: ${equipment.amulet?.name || "None"}
+
+## Combat Stats
+Attack Bonus: +${equipment.stats.attack}
+Strength Bonus: +${equipment.stats.strength}
+Defense Bonus: +${equipment.stats.defense}
+    `.trim();
+  },
+};
+```
+
+### Output Example
+
+```
+## Equipment
+Weapon: Iron Scimitar
+Shield: Wooden Shield
+Helmet: None
+Body: Leather Body
+Legs: Leather Chaps
+Boots: None
+Gloves: None
+Cape: None
+Ring: None
+Amulet: None
+
+## Combat Stats
+Attack Bonus: +10
+Strength Bonus: +7
+Defense Bonus: +15
+```
+
+---
+
+## Available Actions Provider
+
+Provides context-aware list of available actions.
+
+```typescript
+// From providers/availableActions.ts
+export const availableActionsProvider: Provider = {
+  name: "availableActions",
+  description: "Actions the agent can currently perform",
+
+  async get(runtime: IAgentRuntime): Promise<string> {
+    const service = runtime.getService("hyperscape") as HyperscapeService;
+    const state = service.getGameState();
+    const inventory = service.getInventory();
+    const entities = service.getNearbyEntities();
+
+    const actions: string[] = [];
+
+    // Always available
+    actions.push("MOVE_TO", "EXPLORE", "IDLE", "SET_GOAL");
+
+    // Combat actions
+    if (entities.mobs.length > 0) {
+      actions.push("ATTACK_ENTITY", "APPROACH_ENTITY");
+    }
+    if (state.inCombat) {
+      actions.push("FLEE", "CHANGE_COMBAT_STYLE");
+    }
+
+    // Skill actions based on tools and resources
+    if (hasItem(inventory, "hatchet") && entities.resources.some(r => r.type === "tree")) {
+      actions.push("CHOP_TREE");
+    }
+    if (hasItem(inventory, "fishing_rod") && entities.resources.some(r => r.type === "fishing_spot")) {
+      actions.push("CATCH_FISH");
+    }
+    if (hasItem(inventory, "tinderbox") && hasItem(inventory, "logs")) {
+      actions.push("LIGHT_FIRE");
+    }
+    if (hasItem(inventory, "raw_food") && entities.resources.some(r => r.type === "fire")) {
+      actions.push("COOK_FOOD");
+    }
+
+    // Inventory actions
+    if (inventory.items.length > 0) {
+      actions.push("EQUIP_ITEM", "USE_ITEM", "DROP_ITEM");
+    }
+
+    // Social
+    if (entities.players.length > 0) {
+      actions.push("CHAT_MESSAGE", "FOLLOW_ENTITY");
+    }
+
+    // Banking
+    if (isNearBank(state.position)) {
+      actions.push("BANK_DEPOSIT", "BANK_WITHDRAW");
+    }
+
+    return `
+## Available Actions
+${actions.join(", ")}
+
+Use these actions based on your current goal and situation.
+    `.trim();
+  },
+};
+```
+
+### Output Example
+
+```
+## Available Actions
+MOVE_TO, EXPLORE, IDLE, SET_GOAL, ATTACK_ENTITY, APPROACH_ENTITY, FLEE, CHANGE_COMBAT_STYLE, CHOP_TREE, EQUIP_ITEM, USE_ITEM, DROP_ITEM, CHAT_MESSAGE, FOLLOW_ENTITY
+
+Use these actions based on your current goal and situation.
+```
+
+---
+
+## Custom Providers
+
+You can create custom providers for additional context:
+
+```typescript
+import { Provider, IAgentRuntime, Memory } from "@elizaos/core";
+
+export const customProvider: Provider = {
+  name: "custom",
+  description: "Custom context for agents",
+
+  async get(runtime: IAgentRuntime, message: Memory): Promise<string> {
+    // Fetch custom data
+    const data = await fetchCustomData(runtime);
+
+    return `
+## Custom Context
+${formatCustomData(data)}
+    `.trim();
+  },
+};
+```
+
+---
+
+## Related Documentation
+
+- [Actions Reference](/wiki/ai-agents/actions)
+- [ElizaOS Integration](/wiki/ai-agents/elizaos)
+- [HyperscapeService](/wiki/ai-agents/service)

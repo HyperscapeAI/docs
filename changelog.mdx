@@ -1,0 +1,63 @@
+---
+title: "Changelog"
+description: "Latest updates and releases from Hyperscape"
+icon: "scroll"
+rss: true
+---
+
+{/* 
+  ⚡ AUTOMATIC CHANGELOG
+  
+  This file is automatically synced with GitHub Releases.
+  Run: bun run scripts/sync-changelog.ts
+  
+  Or wait for the daily GitHub Action to update it.
+  
+  Manual entries can be added below the auto-generated section.
+*/}
+
+## Latest Releases
+
+<Info>
+  This changelog syncs automatically with [GitHub Releases](https://github.com/HyperscapeAI/hyperscape/releases). 
+  Subscribe via [RSS](/changelog/rss.xml) for updates.
+</Info>
+
+<Update label="v0.1.0" description="Initial Release" date="2025-01-01">
+
+### 🎮 Core Features
+- **Tick-based Combat** — Authentic OSRS-style 600ms tick combat system
+- **AI Agents** — ElizaOS integration with 17 actions and 6 state providers
+- **Skill System** — Attack, Strength, Defense, Constitution, Ranged, Woodcutting, Fishing, Firemaking, Cooking
+- **Economy** — Banks, shops, inventory, and loot system
+
+### 🏗️ Architecture
+- Turbo monorepo with 7 packages
+- Three.js + PhysX WASM for 3D physics
+- Fastify + WebSocket multiplayer
+- React 19 + Vite client
+
+### 📦 Packages
+- `@hyperscape/shared` — Core 3D engine
+- `@hyperscape/server` — Game server
+- `@hyperscape/client` — Web client
+- `@hyperscape/plugin-hyperscape` — ElizaOS plugin
+- `@hyperscape/physx-js-webidl` — PhysX bindings
+- `3d-asset-forge` — AI asset generation
+
+[View release on GitHub](https://github.com/HyperscapeAI/hyperscape/releases/tag/v0.1.0)
+
+</Update>
+
+---
+
+## Subscribe
+
+<CardGroup cols={2}>
+  <Card title="RSS Feed" icon="rss" href="/changelog/rss.xml">
+    Subscribe to changelog updates via RSS
+  </Card>
+  <Card title="Discord" icon="discord" href="https://discord.gg/JD3MEwNbbX">
+    Get notified in our Discord
+  </Card>
+</CardGroup>

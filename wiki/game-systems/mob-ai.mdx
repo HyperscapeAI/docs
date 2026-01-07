@@ -1,0 +1,423 @@
+---
+title: "Mob AI & Behavior"
+description: "State machine AI for hostile mobs, aggression mechanics, and leashing"
+icon: "brain"
+---
+
+# Mob AI & NPC Behavior
+
+The mob AI system implements OSRS-accurate behavior using a state machine pattern. Mobs have distinct behavioral states and transition based on game events like player proximity, combat, and leash distance.
+
+<Info>
+AI code lives in:
+- `packages/shared/src/entities/managers/AIStateMachine.ts` - State machine
+- `packages/shared/src/systems/shared/combat/AggroSystem.ts` - Aggression detection
+- `packages/shared/src/entities/npc/MobEntity.ts` - Mob entity class
+</Info>
+
+## AI State Machine
+
+Mobs use a clean state machine with 5 core states:
+
+```
+IDLE → WANDER → CHASE → ATTACK → RETURN
+         ↑                    ↓
+         └────────────────────┘
+```
+
+```typescript
+enum MobAIState {
+  IDLE = "idle",      // Standing still, watching for players
+  WANDER = "wander",  // Patrol around spawn point
+  CHASE = "chase",    // Pursuing a target
+  ATTACK = "attack",  // In combat
+  RETURN = "return",  // Returning to spawn (leashed)
+}
+```
+
+---
+
+## State Behavior Details
+
+### IDLE State
+
+- Mob stands still watching for players
+- Random idle duration: 3-8 seconds
+- Checks for nearby players each frame
+- Transitions to WANDER after idle time expires (if movement type allows)
+- Transitions to CHASE if player detected within aggro range
+
+```typescript
+class IdleState implements AIState {
+  private readonly IDLE_MIN_DURATION = 3000;  // 3 seconds
+  private readonly IDLE_MAX_DURATION = 8000;  // 8 seconds
+
+  update(context: AIStateContext): MobAIState | null {
+    // Leash check first
+    if (context.getDistanceFromSpawn() > context.getLeashRange()) {
+      return MobAIState.RETURN;
+    }
+    
+    // Check for nearby players (instant aggro)
+    const nearbyPlayer = context.findNearbyPlayer();
+    if (nearbyPlayer) {
+      context.setTarget(nearbyPlayer.id);
+      return MobAIState.CHASE;
+    }
+    
+    // Transition to wander after idle time
+    if (elapsed >= this.idleDuration) {
+      if (context.getMovementType() !== "stationary") {
+        return MobAIState.WANDER;
+      }
+    }
+    
+    return null; // Stay in IDLE
+  }
+}
+```
+
+### WANDER State
+
+- Generate random target within wander radius
+- Move toward target tile-by-tile
+- Uses **tile-based distance checks** to prevent infinite loops
+- Transitions to CHASE if player detected
+- Transitions to IDLE when target reached
+
+```typescript
+class WanderState implements AIState {
+  update(context: AIStateContext): MobAIState | null {
+    // Aggro check (highest priority)
+    const nearbyPlayer = context.findNearbyPlayer();
+    if (nearbyPlayer) {
+      context.setTarget(nearbyPlayer.id);
+      return MobAIState.CHASE;
+    }
+    
+    // Generate wander target if needed
+    let target = context.getWanderTarget();
+    if (!target) {
+      target = context.generateWanderTarget();
+      context.setWanderTarget(target);
+    }
+    
+    // Check if at target (TILE-BASED)
+    const currentTile = worldToTile(position.x, position.z);
+    const targetTile = worldToTile(target.x, target.z);
+    
+    if (tilesEqual(currentTile, targetTile)) {
+      context.setWanderTarget(null);
+      return MobAIState.IDLE;
+    }
+    
+    // Move toward target
+    context.moveTowards(target, deltaTime);
+    return null;
+  }
+}
+```
+
+### CHASE State
+
+- Mob pursues its current target
+- Transitions to ATTACK when in melee range
+- Transitions to RETURN if target escapes or mob exceeds leash distance
+- Handles same-tile step-out (OSRS-accurate)
+
+```typescript
+class ChaseState implements AIState {
+  update(context: AIStateContext): MobAIState | null {
+    const targetId = context.getCurrentTarget();
+    const target = context.getPlayer(targetId);
+    
+    // Target lost - return home
+    if (!target) {
+      return MobAIState.RETURN;
+    }
+    
+    // LEASH CHECK (OSRS two-tier system)
+    const distanceFromSpawn = context.getDistanceFromSpawn();
+    if (distanceFromSpawn > context.getLeashRange()) {
+      context.exitCombat();
+      return MobAIState.RETURN;
+    }
+    
+    // Check if in melee range
+    const mobTile = worldToTile(position.x, position.z);
+    const targetTile = worldToTile(target.position.x, target.position.z);
+    
+    if (tilesWithinMeleeRange(mobTile, targetTile, context.getCombatRange())) {
+      return MobAIState.ATTACK;
+    }
+    
+    // Same tile handling (OSRS-accurate step-out)
+    if (tilesEqual(mobTile, targetTile)) {
+      context.tryStepOutCardinal();
+      return null;
+    }
+    
+    // Chase toward target
+    context.moveTowards(target.position, deltaTime);
+    return null;
+  }
+}
+```
+
+### ATTACK State
+
+- Mob performs attacks on tick intervals
+- Uses `canAttack(currentTick)` for OSRS-accurate timing
+- Transitions to CHASE if target moves out of range
+- Transitions to RETURN if target dies or escapes
+
+```typescript
+class AttackState implements AIState {
+  update(context: AIStateContext): MobAIState | null {
+    const targetId = context.getCurrentTarget();
+    const target = context.getPlayer(targetId);
+    
+    if (!target) {
+      return MobAIState.RETURN;
+    }
+    
+    // Leash check during combat
+    if (context.getDistanceFromSpawn() > context.getLeashRange()) {
+      context.exitCombat();
+      return MobAIState.RETURN;
+    }
+    
+    // Check if still in range
+    const mobTile = worldToTile(position.x, position.z);
+    const targetTile = worldToTile(target.position.x, target.position.z);
+    
+    if (!tilesWithinMeleeRange(mobTile, targetTile, context.getCombatRange())) {
+      return MobAIState.CHASE;
+    }
+    
+    // OSRS tick-based attack timing
+    const currentTick = context.getCurrentTick();
+    if (context.canAttack(currentTick)) {
+      context.performAttack(targetId, currentTick);
+    }
+    
+    return null;
+  }
+}
+```
+
+### RETURN State
+
+- Mob walks back to spawn point
+- Uses tile-based pathfinding
+- Clears combat state and target
+- Transitions to IDLE when at spawn
+
+```typescript
+class ReturnState implements AIState {
+  enter(context: AIStateContext): void {
+    context.setTarget(null);
+    context.exitCombat();
+  }
+  
+  update(context: AIStateContext): MobAIState | null {
+    const position = context.getPosition();
+    const spawn = context.getSpawnPoint();
+    
+    // TILE-BASED distance check
+    const currentTile = worldToTile(position.x, position.z);
+    const spawnTile = worldToTile(spawn.x, spawn.z);
+    
+    if (tilesEqual(currentTile, spawnTile)) {
+      return MobAIState.IDLE;
+    }
+    
+    context.moveTowards(spawn, deltaTime);
+    return null;
+  }
+}
+```
+
+---
+
+## Aggression System
+
+The `AggroSystem` handles mob aggression detection following OSRS rules.
+
+### Level-Based Aggression
+
+OSRS rule: Aggressive mobs only attack players whose combat level is **less than double the mob's level + 1**.
+
+```typescript
+function shouldMobIgnorePlayer(mobLevel: number, playerLevel: number): boolean {
+  // OSRS: Mob ignores player if player level >= 2 * mob level + 1
+  return playerLevel >= mobLevel * 2 + 1;
+}
+```
+
+Examples:
+- Level 2 Goblin → Ignores players level 5+
+- Level 14 Dark Wizard → Ignores players level 29+
+- Level 89 Abyssal Demon → Ignores players level 179+ (never ignores)
+
+### Tolerance Timer (10-Minute Immunity)
+
+In OSRS, players become immune to aggression after staying in a 21×21 tile region for 10 minutes:
+
+```typescript
+const TOLERANCE_TICKS = 1000;           // 10 minutes at 600ms/tick
+const TOLERANCE_REGION_SIZE = 21;       // OSRS region size
+
+interface ToleranceState {
+  regionId: string;                     // "x_z" region key
+  enteredTick: number;                  // When player entered
+  toleranceExpiredTick: number;         // When immunity starts
+}
+
+function checkTolerance(playerId: string, currentTick: number): boolean {
+  const tolerance = this.playerTolerance.get(playerId);
+  if (!tolerance) return false;
+  
+  return currentTick >= tolerance.toleranceExpiredTick;
+}
+```
+
+### Detection Ranges
+
+```typescript
+// From CombatConstants.ts
+AGGRO_RANGE: 8,                         // Detection range in tiles
+MELEE_RANGE: 2,                         // Attack range for melee
+RANGED_RANGE: 10,                       // Attack range for ranged
+```
+
+---
+
+## Leash System
+
+Mobs have a maximum chase distance from their spawn point:
+
+```typescript
+// Default leash range in tiles
+const DEFAULT_LEASH_RANGE = 10;         // OSRS two-tier range
+const DEFAULT_WANDER_RADIUS = 5;        // Patrol area size
+
+function getLeashRange(): number {
+  return this.config.leashRange ?? DEFAULT_LEASH_RANGE;
+}
+
+function getDistanceFromSpawn(): number {
+  const spawnTile = worldToTile(this.spawnPoint.x, this.spawnPoint.z);
+  const currentTile = worldToTile(this.position.x, this.position.z);
+  return tileChebyshevDistance(currentTile, spawnTile);
+}
+```
+
+When a mob exceeds its leash range:
+1. Combat state is cleared
+2. Target is cleared
+3. Mob transitions to RETURN state
+4. Health regenerates while returning (optional)
+
+---
+
+## Movement Types
+
+Mobs have configurable movement behaviors defined in their manifest:
+
+```typescript
+type MovementType = "stationary" | "wander" | "patrol";
+```
+
+| Type | Behavior |
+|------|----------|
+| `stationary` | Never moves from spawn, only rotates to face targets |
+| `wander` | Random movement within wander radius |
+| `patrol` | Walks between defined patrol points |
+
+---
+
+## Same-Tile Step-Out
+
+OSRS-accurate behavior when mob is on the same tile as its target:
+
+> "In RS, they pick a random cardinal direction and try to move the NPC
+> towards that by 1 tile, if it can. If not, the NPC does nothing that cycle."
+
+```typescript
+tryStepOutCardinal(): boolean {
+  const directions = ["north", "east", "south", "west"];
+  const randomDir = directions[Math.floor(Math.random() * 4)];
+  
+  const offsets: Record<string, TileCoord> = {
+    north: { x: 0, z: -1 },
+    east:  { x: 1, z: 0 },
+    south: { x: 0, z: 1 },
+    west:  { x: -1, z: 0 },
+  };
+  
+  const offset = offsets[randomDir];
+  const targetTile = { x: currentTile.x + offset.x, z: currentTile.z + offset.z };
+  
+  // Check if tile is walkable and unoccupied
+  if (this.isWalkable(targetTile) && !this.occupancy.isOccupied(targetTile)) {
+    this.moveTowards(tileToWorld(targetTile), deltaTime);
+    return true;
+  }
+  
+  return false; // Do nothing this tick
+}
+```
+
+---
+
+## Mob Entity Configuration
+
+```typescript
+interface MobEntityConfig extends CombatantConfig {
+  // Combat stats
+  attackPower: number;
+  attackSpeed: number;           // Ticks between attacks
+  defense: number;
+  attackRange: number;           // Tiles
+  attackType: AttackType;        // melee, ranged, magic
+  
+  // AI behavior
+  aggroRadius: number;           // Detection range in tiles
+  leashRange?: number;           // Max chase distance
+  wanderRadius?: number;         // Patrol area size
+  movementType: MovementType;
+  
+  // Spawn & respawn
+  spawnPoint: Position3D;
+  respawnTicks: number;          // Ticks until respawn
+  
+  // Loot
+  dropTableId?: string;          // Reference to loot table
+  
+  // Visual
+  modelUrl?: string;             // GLB model path
+  vrmUrl?: string;               // VRM avatar path
+}
+```
+
+---
+
+## AI Events
+
+| Event | Data | Description |
+|-------|------|-------------|
+| `MOB_NPC_SPAWNED` | `mobId`, `mobType`, `position` | New mob created |
+| `MOB_NPC_DESPAWN` | `mobId` | Mob removed from world |
+| `MOB_NPC_POSITION_UPDATED` | `mobId`, `position` | Mob moved |
+| `MOB_AI_STATE_CHANGED` | `mobId`, `oldState`, `newState` | AI state transition |
+| `COMBAT_STARTED` | `attackerId`, `targetId` | Combat initiated |
+
+---
+
+## Related Documentation
+
+- [Combat System](/wiki/game-systems/combat)
+- [NPC Data Structure](/wiki/data/npcs)
+- [Death & Respawn](/wiki/game-systems/death)
+- [Constants Reference](/wiki/reference/constants)

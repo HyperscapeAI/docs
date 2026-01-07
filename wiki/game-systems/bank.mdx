@@ -1,0 +1,309 @@
+---
+title: "Bank System"
+description: "Per-town bank storage with tabs and placeholders"
+icon: "landmark"
+---
+
+# Bank System
+
+The banking system provides persistent item storage separate from the player's inventory. Following OSRS/RS3 design, each town has its own bank and players can organize items into tabs.
+
+<Info>
+Banking code lives in `packages/shared/src/systems/shared/economy/BankingSystem.ts`.
+</Info>
+
+## Core Features
+
+- **Per-town banks** - Each starter town has its own bank
+- **Independent storage** - Banks don't share items across towns
+- **480 slot capacity** - Per bank (configurable via `BANKING_CONSTANTS.MAX_BANK_SLOTS`)
+- **Tab organization** - Organize items into custom tabs
+- **Placeholders** - RS3-style placeholder mode for remembered slots
+- **Distance check** - Must be within 3 meters of bank booth
+
+---
+
+## Bank Constants
+
+```typescript
+// From BankingConstants.ts
+export const BANKING_CONSTANTS = {
+  MAX_BANK_SLOTS: 480,        // Slots per bank
+  INTERACTION_RANGE: 3,       // Max distance to use bank (meters)
+  MAX_TABS: 9,                // Tab count (1 main + 8 custom)
+};
+
+// Starter town banks
+private readonly STARTER_TOWN_BANKS = [
+  { id: "bank_town_0", name: "Central Bank", position: { x: 0, y: 0, z: 5 } },
+  { id: "bank_town_1", name: "Eastern Bank", position: { x: 100, y: 0, z: 5 } },
+  { id: "bank_town_2", name: "Western Bank", position: { x: -100, y: 0, z: 5 } },
+  { id: "bank_town_3", name: "Northern Bank", position: { x: 0, y: 0, z: 105 } },
+  { id: "bank_town_4", name: "Southern Bank", position: { x: 0, y: 0, z: -95 } },
+];
+```
+
+---
+
+## Bank Data Structure
+
+```typescript
+interface BankData {
+  items: BankItem[];       // Items stored in bank
+  maxSlots: number;        // 480 per bank
+}
+
+interface BankItem {
+  id: string;              // Item definition ID
+  name: string;            // Item name
+  quantity: number;        // Stack quantity
+  stackable: boolean;      // Can items stack
+}
+
+// Player bank tracking
+private playerBanks = new Map<PlayerID, Map<BankID, BankData>>();
+private openBanks = new Map<PlayerID, BankID>(); // Currently open bank
+```
+
+---
+
+## Bank Operations
+
+### Opening a Bank
+
+```typescript
+private openBank(data: { playerId: string; bankId: string; playerPosition?: Position3D }): void {
+  const playerId = createPlayerID(data.playerId);
+  const bankId = createBankID(data.bankId);
+  
+  // Check if already open (prevent recursive calls)
+  if (this.openBanks.get(playerId) === bankId) return;
+  
+  // Distance check
+  const bankInfo = this.STARTER_TOWN_BANKS.find(b => b.id === data.bankId);
+  if (bankInfo && data.playerPosition) {
+    const distance = calculateDistance(data.playerPosition, bankInfo.position);
+    if (distance > 3) {
+      this.emitTypedEvent(EventType.UI_MESSAGE, {
+        playerId: data.playerId,
+        message: "You need to be closer to the bank to use it.",
+        type: "error",
+      });
+      return;
+    }
+  }
+  
+  // Track open bank
+  this.openBanks.set(playerId, bankId);
+  
+  // Send bank data to client
+  this.emitTypedEvent(EventType.UI_UPDATE, {
+    playerId: data.playerId,
+    component: "bank",
+    data: {
+      bankId: data.bankId,
+      bankName: bankInfo?.name || "Bank",
+      items: bank.items,
+      maxSlots: bank.maxSlots,
+      usedSlots: bank.items.length,
+      isOpen: true,
+    },
+  });
+}
+```
+
+### Depositing Items
+
+```typescript
+private depositItem(data: BankDepositEvent): void {
+  const playerId = createPlayerID(data.playerId);
+  const bankId = this.openBanks.get(playerId);
+  
+  if (!bankId) {
+    console.warn("[BankingSystem] No bank open for player:", playerId);
+    return;
+  }
+  
+  const bank = this.playerBanks.get(playerId)?.get(bankId);
+  if (!bank) return;
+  
+  // Check if inventory has the item
+  this.emitTypedEvent(EventType.INVENTORY_CHECK, {
+    playerId: data.playerId,
+    itemId: data.itemId,
+    quantity: data.quantity,
+    callback: (hasItem, itemInfo) => {
+      if (!hasItem || !itemInfo) {
+        this.emitMessage(data.playerId, "Item not found in inventory.", "error");
+        return;
+      }
+      
+      // Remove from inventory
+      this.emitTypedEvent(EventType.INVENTORY_ITEM_REMOVED, {
+        playerId: data.playerId,
+        itemId: data.itemId,
+        quantity: data.quantity,
+      });
+      
+      // Check for existing stack
+      const existingItem = bank.items.find(item => item.id === data.itemId);
+      if (existingItem) {
+        existingItem.quantity += data.quantity;
+      } else {
+        // Check bank capacity
+        if (bank.items.length >= bank.maxSlots) {
+          this.emitMessage(data.playerId, "Bank is full.", "error");
+          // Refund item
+          this.emitTypedEvent(EventType.INVENTORY_ITEM_ADDED, { ... });
+          return;
+        }
+        
+        bank.items.push({
+          id: data.itemId,
+          name: itemInfo.name,
+          quantity: data.quantity,
+          stackable: itemInfo.stackable,
+        });
+      }
+      
+      this.emitTypedEvent(EventType.BANK_DEPOSIT_SUCCESS, { ... });
+      this.updateBankInterface(data.playerId, bankId);
+    },
+  });
+}
+```
+
+### Withdrawing Items
+
+```typescript
+private withdrawItem(data: BankWithdrawEvent): void {
+  const playerId = createPlayerID(data.playerId);
+  const bankId = this.openBanks.get(playerId);
+  const bank = this.playerBanks.get(playerId)?.get(bankId);
+  
+  // Find item in bank
+  const bankItemIndex = bank.items.findIndex(item => item.id === data.itemId);
+  if (bankItemIndex === -1) {
+    this.emitMessage(data.playerId, "Item not found in bank.", "error");
+    return;
+  }
+  
+  const bankItem = bank.items[bankItemIndex];
+  if (bankItem.quantity < data.quantity) {
+    this.emitMessage(data.playerId, "Not enough of that item in bank.", "error");
+    return;
+  }
+  
+  // Remove from bank
+  bankItem.quantity -= data.quantity;
+  if (bankItem.quantity <= 0) {
+    bank.items.splice(bankItemIndex, 1);
+  }
+  
+  // Add to inventory
+  this.emitTypedEvent(EventType.INVENTORY_ITEM_ADDED, {
+    playerId: data.playerId,
+    item: {
+      id: generateUniqueId(),
+      itemId: bankItem.id,
+      quantity: data.quantity,
+      slot: -1, // Find empty slot
+      metadata: null,
+    },
+  });
+  
+  this.updateBankInterface(data.playerId, bankId);
+}
+```
+
+### Deposit All
+
+```typescript
+private depositAllItems(data: { playerId: string; bankId: string }): void {
+  const inventory = this.playerInventories.get(playerId);
+  const bank = this.playerBanks.get(playerId)?.get(bankId);
+  
+  let itemsDeposited = 0;
+  
+  for (const item of inventory.items) {
+    if (bank.items.length >= this.MAX_BANK_SLOTS) {
+      this.emitMessage(playerId, `Bank is full! Deposited ${itemsDeposited} items.`, "warning");
+      break;
+    }
+    
+    bank.items.push({
+      id: item.itemId,
+      name: "",
+      quantity: item.quantity,
+      stackable: true,
+    });
+    
+    this.emitTypedEvent(EventType.INVENTORY_ITEM_REMOVED, { ... });
+    itemsDeposited++;
+  }
+  
+  if (itemsDeposited > 0) {
+    this.emitMessage(playerId, `Deposited ${itemsDeposited} items into the bank.`, "success");
+  }
+}
+```
+
+---
+
+## Bank Events
+
+| Event | Data | Description |
+|-------|------|-------------|
+| `BANK_OPEN` | `playerId`, `bankId`, `playerPosition` | Player opened bank |
+| `BANK_CLOSE` | `playerId`, `bankId` | Player closed bank |
+| `BANK_DEPOSIT` | `playerId`, `itemId`, `quantity` | Depositing item |
+| `BANK_WITHDRAW` | `playerId`, `itemId`, `quantity` | Withdrawing item |
+| `BANK_DEPOSIT_ALL` | `playerId`, `bankId` | Deposit entire inventory |
+| `BANK_DEPOSIT_SUCCESS` | `playerId`, `itemId`, `quantity`, `bankId` | Deposit confirmed |
+
+---
+
+## Database Persistence
+
+Banks are persisted via `BankRepository`:
+
+```typescript
+// Database tables
+// - bank_storage: Stores bank items (playerId, bankId, items JSON)
+// - bank_tabs: Stores tab configuration
+
+// Loaded on player login, saved on bank close
+// Server handles persistence via network packets
+```
+
+---
+
+## Client UI
+
+The `BankPanel.tsx` component displays:
+- Grid view of all bank items
+- Tab navigation (9 tabs)
+- Search/filter functionality
+- Deposit all button
+- Withdraw-X functionality
+- Placeholder toggle
+
+```typescript
+// BankPanel state
+const [bankData, setBankData] = useState<{
+  visible: boolean;
+  items: Array<{ itemId: string; quantity: number; slot: number; tabIndex: number }>;
+  tabs: Array<{ tabIndex: number; iconItemId: string | null }>;
+  alwaysSetPlaceholder: boolean;
+  maxSlots: number;
+  bankId: string;
+} | null>(null);
+```
+
+---
+
+## Related Documentation
+
+- [Inventory System](/wiki/game-systems/inventory)
+- [Economy Overview](/wiki/game-systems/economy)
+- [Database Schema](/wiki/engine/database)

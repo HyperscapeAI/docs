@@ -1,0 +1,395 @@
+---
+title: "Entity Component System"
+description: "Deep dive into Hyperscape's ECS architecture"
+icon: "boxes-stacked"
+---
+
+# Entity Component System (ECS)
+
+Hyperscape uses a **component-based Entity Component System** for managing all game objects. This architecture separates data (Components) from logic (Systems), enabling modular, maintainable game development.
+
+<Info>
+The ECS implementation lives in `packages/shared/src/` and runs on both client and server for consistency.
+</Info>
+
+## Core Concepts
+
+### Entities
+
+Entities are the fundamental game objects. Each entity has:
+
+- **Unique ID** (`string`) - UUID for identification
+- **Type** - `player`, `mob`, `item`, `npc`, `resource`, `static`
+- **Three.js Node** - 3D representation in the scene
+- **Components Map** - Attached data containers
+- **Network State** - Synchronization flags
+
+```typescript
+// Entity types defined in types/entities.ts
+export enum EntityType {
+  PLAYER = "player",
+  MOB = "mob",
+  ITEM = "item",
+  NPC = "npc",
+  RESOURCE = "resource",
+  STATIC = "static",
+}
+```
+
+### Entity Hierarchy
+
+Entities follow an inheritance hierarchy for specialized behavior:
+
+```
+Entity (base class)
+├── InteractableEntity (can be interacted with)
+│   ├── ResourceEntity (trees, rocks, fishing spots)
+│   ├── ItemEntity (ground items)
+│   └── NPCEntity (dialogue, shops)
+├── CombatantEntity (can fight)
+│   ├── PlayerEntity (base player)
+│   │   ├── PlayerLocal (client-side local player)
+│   │   └── PlayerRemote (client-side remote players)
+│   └── MobEntity (enemies)
+└── HeadstoneEntity (player death markers)
+```
+
+### Entity Lifecycle
+
+1. **Constructor** - Creates entity with initial data/config
+2. **`spawn()`** - Called when entity is added to world
+3. **`update(delta)`** - Called every frame for visual updates
+4. **`fixedUpdate(delta)`** - Called at fixed timestep (30 FPS) for physics
+5. **`destroy()`** - Cleanup when entity is removed
+
+```typescript
+// Example: Creating an entity
+const entity = new Entity(world, {
+  id: "tree1",
+  type: "entity",
+  name: "Oak Tree",
+  position: { x: 10, y: 0, z: 5 },
+});
+await entity.spawn();
+```
+
+---
+
+## Components
+
+Components are **pure data containers** attached to entities. They store state but contain no logic.
+
+### Base Component Class
+
+```typescript
+// From components/Component.ts
+export abstract class Component {
+  public readonly type: string;
+  public readonly entity: Entity;
+  public data: Record<string, unknown>;
+
+  // Data access helpers
+  get<T>(key: string): T | undefined;
+  set<T>(key: string, value: T): void;
+  has(key: string): boolean;
+
+  // Optional lifecycle methods
+  init?(): void;
+  update?(delta: number): void;
+  fixedUpdate?(delta: number): void;
+  lateUpdate?(delta: number): void;
+  destroy?(): void;
+}
+```
+
+### Built-in Components
+
+| Component | Purpose | Key Data |
+|-----------|---------|----------|
+| `TransformComponent` | Position, rotation, scale | `position`, `rotation`, `scale` |
+| `HealthComponent` | HP management | `current`, `max`, `regenerationRate`, `isDead` |
+| `CombatComponent` | Combat state | `isInCombat`, `target`, `lastAttackTime`, `damage`, `range` |
+| `StatsComponent` | Skill levels & XP | `attack`, `strength`, `defense`, `constitution`, etc. |
+| `VisualComponent` | 3D model & UI | `mesh`, `nameSprite`, `healthSprite`, `isVisible` |
+| `InventoryComponent` | Item storage | `items[]`, `maxSlots` |
+| `EquipmentComponent` | Equipped items | `weapon`, `helmet`, `body`, `legs`, etc. |
+| `MovementComponent` | Pathfinding state | `path[]`, `currentTile`, `isRunning` |
+| `DataComponent` | Custom key-value | Any JSON-serializable data |
+
+### Adding Components to Entities
+
+```typescript
+// Add component with initial data
+entity.addComponent("combat", {
+  isInCombat: false,
+  target: null,
+  lastAttackTime: 0,
+  attackCooldown: 2400, // ms
+  damage: 1,
+  range: 2,
+});
+
+// Get component
+const combat = entity.getComponent("combat");
+combat.data.isInCombat = true;
+
+// Check if component exists
+if (entity.hasComponent("stats")) {
+  const stats = entity.getComponent("stats");
+}
+
+// Remove component
+entity.removeComponent("combat");
+```
+
+### Component Events
+
+When components are added/removed, events are emitted:
+
+```typescript
+// From Entity.ts
+this.world.emit(EventType.ENTITY_COMPONENT_ADDED, {
+  entityId: this.id,
+  componentType: type,
+  component,
+});
+
+this.world.emit(EventType.ENTITY_COMPONENT_REMOVED, {
+  entityId: this.id,
+  componentType: type,
+});
+```
+
+---
+
+## Systems
+
+Systems contain **game logic** that operates on entities with specific components. They run during the game loop.
+
+### System Organization
+
+Systems are organized by domain in `packages/shared/src/systems/shared/`:
+
+```
+systems/shared/
+├── infrastructure/    # Base classes, loaders, events, settings
+├── combat/           # CombatSystem, AggroSystem, DamageCalculator
+├── character/        # PlayerSystem, SkillsSystem, InventorySystem
+├── economy/          # BankingSystem, StoreSystem, LootSystem
+├── world/            # Environment, Terrain, Sky, Water, Vegetation
+├── entities/         # EntityManager, MobNPCSystem, ResourceSystem
+├── interaction/      # Crafting, Physics, Pathfinding
+├── movement/         # TileSystem, EntityOccupancyMap
+├── presentation/     # Rendering, VFX, Audio, Chat
+└── tick/             # Server tick management
+```
+
+### System Base Class
+
+All systems extend `SystemBase`:
+
+```typescript
+// From infrastructure/SystemBase.ts
+export abstract class SystemBase {
+  protected world: World;
+  readonly name: string;
+
+  constructor(world: World, config: SystemConfig) {
+    this.world = world;
+    this.name = config.name;
+  }
+
+  // Lifecycle methods
+  async init(): Promise<void>;
+  update(deltaTime: number): void;
+  fixedUpdate(deltaTime: number): void;
+  destroy(): void;
+
+  // Event helpers
+  protected subscribe<T>(event: string, handler: (data: T) => void): void;
+  protected emitTypedEvent<T>(event: string, data: T): void;
+}
+```
+
+### Example: Skills System
+
+```typescript
+// Simplified from character/SkillsSystem.ts
+export class SkillsSystem extends SystemBase {
+  private static readonly MAX_LEVEL = 99;
+  private static readonly MAX_XP = 200_000_000; // 200M XP cap
+
+  constructor(world: World) {
+    super(world, {
+      name: "skills",
+      dependencies: { optional: ["combat", "ui", "quest"] },
+    });
+  }
+
+  async init(): Promise<void> {
+    // Subscribe to skill events
+    this.subscribe(EventType.COMBAT_KILL, (data) => this.handleCombatKill(data));
+    this.subscribe(EventType.SKILLS_XP_GAINED, (data) => this.handleXPGain(data));
+  }
+
+  // Grant XP to a skill
+  public grantXP(entityId: string, skill: keyof Skills, amount: number): void {
+    // ... XP calculation and level-up logic
+  }
+
+  // RuneScape XP formula
+  public getLevelForXP(xp: number): number {
+    for (let level = 99; level >= 1; level--) {
+      if (xp >= this.xpTable[level]) return level;
+    }
+    return 1;
+  }
+}
+```
+
+---
+
+## World Class
+
+The `World` class is the **central container** for all game state. It manages systems, entities, and the game loop.
+
+### Core Properties
+
+```typescript
+// From core/World.ts
+export class World extends EventEmitter {
+  // Time management
+  maxDeltaTime = 1 / 30;      // Max frame delta (prevents spiral of death)
+  fixedDeltaTime = 1 / 30;    // Physics runs at 30 FPS
+  currentTick = 0;            // Server tick (600ms intervals)
+
+  // Core collections
+  systems: System[] = [];
+  systemsByName = new Map<string, System>();
+  entities: Map<string, Entity>;
+
+  // Three.js scene graph
+  rig: THREE.Object3D;        // Camera parent
+  camera: THREE.PerspectiveCamera;
+  stage: StageSystem;         // Scene management
+
+  // Networking
+  network: NetworkSystem;
+  networkRate = 1 / 8;        // 8Hz updates
+
+  // Environment
+  isServer: boolean;
+  isClient: boolean;
+}
+```
+
+### Game Loop
+
+```typescript
+// World.tick() - Called every frame
+tick(delta: number): void {
+  // Cap delta to prevent physics instability
+  const clampedDelta = Math.min(delta, this.maxDeltaTime);
+
+  // Accumulator for fixed-step physics
+  this.accumulator += clampedDelta;
+
+  // Fixed-step physics updates (30 FPS)
+  while (this.accumulator >= this.fixedDeltaTime) {
+    for (const system of this.systems) {
+      system.fixedUpdate(this.fixedDeltaTime);
+    }
+    this.accumulator -= this.fixedDeltaTime;
+  }
+
+  // Variable-rate updates (rendering, animation)
+  for (const system of this.systems) {
+    system.update(clampedDelta);
+  }
+
+  this.frame++;
+}
+```
+
+### System Registration
+
+```typescript
+// Register a system
+world.register(CombatSystem);
+world.register(SkillsSystem);
+
+// Get system by name
+const combat = world.getSystem("combat") as CombatSystem;
+
+// Initialize all systems (respects dependencies)
+await world.init();
+```
+
+---
+
+## Network Synchronization
+
+Entities automatically synchronize between server and clients.
+
+### Network Dirty Flag
+
+```typescript
+// Mark entity for network sync
+entity.markNetworkDirty();
+
+// EntityManager batches dirty entities and sends snapshots
+class EntityManager {
+  networkDirtyEntities: Set<string> = new Set();
+
+  broadcastDirtyEntities(): void {
+    for (const entityId of this.networkDirtyEntities) {
+      const entity = this.world.entities.get(entityId);
+      this.network.broadcast("entityModified", entity.serialize());
+    }
+    this.networkDirtyEntities.clear();
+  }
+}
+```
+
+### Serialization
+
+```typescript
+// From Entity.ts
+serialize(): EntityData {
+  return {
+    id: this.id,
+    name: this.name,
+    type: this.type,
+    position: [this.node.position.x, this.node.position.y, this.node.position.z],
+    quaternion: [this.node.quaternion.x, this.node.quaternion.y, this.node.quaternion.z, this.node.quaternion.w],
+    health: this.health,
+    // ... additional data
+  };
+}
+```
+
+---
+
+## Best Practices
+
+<Steps>
+  <Step title="Keep Components Data-Only">
+    Components should only store data. Put logic in Systems.
+  </Step>
+  <Step title="Use Type Guards">
+    Use helper functions like `isMobEntity()` for safe type narrowing.
+  </Step>
+  <Step title="Emit Events for Cross-System Communication">
+    Use the EventBus instead of direct system-to-system calls.
+  </Step>
+  <Step title="Mark Network Dirty When State Changes">
+    Call `entity.markNetworkDirty()` after modifying replicated state.
+  </Step>
+</Steps>
+
+## Related Documentation
+
+- [Entity Types Reference](/wiki/engine/entities)
+- [Component Reference](/wiki/engine/components)
+- [System Reference](/wiki/engine/systems)
+- [Event System](/wiki/engine/events)

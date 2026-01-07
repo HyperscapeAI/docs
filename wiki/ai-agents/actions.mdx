@@ -1,0 +1,533 @@
+---
+title: "Agent Actions Reference"
+description: "Complete reference for ElizaOS agent actions"
+icon: "play"
+---
+
+# Agent Actions Reference
+
+This page documents all **21 actions** available to ElizaOS agents in Hyperscape. Actions are the executable commands that agents use to interact with the game world.
+
+<Info>
+Actions are defined in `packages/plugin-hyperscape/src/actions/`.
+</Info>
+
+## Action Categories
+
+<CardGroup cols={3}>
+  <Card title="Movement" icon="person-walking">
+    6 actions for navigation
+  </Card>
+  <Card title="Combat" icon="swords">
+    3 actions for fighting
+  </Card>
+  <Card title="Skills" icon="hammer">
+    4 actions for gathering/crafting
+  </Card>
+  <Card title="Inventory" icon="box">
+    3 actions for item management
+  </Card>
+  <Card title="Social" icon="comments">
+    1 action for communication
+  </Card>
+  <Card title="Banking" icon="building-columns">
+    2 actions for storage
+  </Card>
+  <Card title="Goals" icon="bullseye">
+    2 actions for planning
+  </Card>
+</CardGroup>
+
+---
+
+## Movement Actions
+
+### `moveTo`
+
+Move to specific coordinates.
+
+```typescript
+// From actions/movement.ts
+export const moveToAction: Action = {
+  name: "MOVE_TO",
+  description: "Move to a specific position in the game world",
+  parameters: {
+    x: { type: "number", description: "X coordinate" },
+    z: { type: "number", description: "Z coordinate" },
+  },
+};
+```
+
+**Usage**: Navigate to resources, NPCs, or destinations.
+
+---
+
+### `followEntity`
+
+Follow another player or NPC.
+
+```typescript
+export const followEntityAction: Action = {
+  name: "FOLLOW_ENTITY",
+  description: "Follow a specific entity in the game",
+  parameters: {
+    entityId: { type: "string", description: "ID of entity to follow" },
+  },
+};
+```
+
+**Usage**: Follow players for social interaction or group activities.
+
+---
+
+### `stopMovement`
+
+Stop all movement.
+
+```typescript
+export const stopMovementAction: Action = {
+  name: "STOP_MOVEMENT",
+  description: "Stop moving immediately",
+  parameters: {},
+};
+```
+
+**Usage**: Halt when reaching destination or when threatened.
+
+---
+
+### `explore`
+
+Explore the surrounding area.
+
+```typescript
+// From actions/autonomous.ts
+export const exploreAction: Action = {
+  name: "EXPLORE",
+  description: "Explore the nearby area to discover resources and entities",
+  parameters: {
+    direction: { type: "string", optional: true, description: "Preferred direction" },
+  },
+};
+```
+
+**Usage**: Discover new areas, find resources.
+
+---
+
+### `approachEntity`
+
+Move closer to an entity for interaction.
+
+```typescript
+export const approachEntityAction: Action = {
+  name: "APPROACH_ENTITY",
+  description: "Move within interaction range of an entity",
+  parameters: {
+    entityId: { type: "string", description: "Target entity ID" },
+    range: { type: "number", optional: true, description: "Desired distance" },
+  },
+};
+```
+
+**Usage**: Get within combat or interaction range.
+
+---
+
+### `navigateTo`
+
+Navigate to a named location.
+
+```typescript
+// From actions/goals.ts
+export const navigateToAction: Action = {
+  name: "NAVIGATE_TO",
+  description: "Navigate to a named location or area",
+  parameters: {
+    location: { type: "string", description: "Name of destination (e.g., 'bank', 'forest')" },
+  },
+};
+```
+
+**Usage**: Navigate using location names instead of coordinates.
+
+---
+
+## Combat Actions
+
+### `attackEntity`
+
+Attack a target entity.
+
+```typescript
+// From actions/combat.ts
+export const attackEntityAction: Action = {
+  name: "ATTACK_ENTITY",
+  description: "Attack a hostile entity",
+  parameters: {
+    targetId: { type: "string", description: "Entity ID to attack" },
+  },
+};
+```
+
+**Usage**: Engage mobs or hostile players.
+
+---
+
+### `changeCombatStyle`
+
+Change combat style for XP distribution.
+
+```typescript
+export const changeCombatStyleAction: Action = {
+  name: "CHANGE_COMBAT_STYLE",
+  description: "Change combat style (accurate, aggressive, defensive, controlled)",
+  parameters: {
+    style: {
+      type: "string",
+      enum: ["accurate", "aggressive", "defensive", "controlled"],
+      description: "Combat style to use",
+    },
+  },
+};
+```
+
+**Usage**: Train specific combat skills.
+
+| Style | Trains | Bonus |
+|-------|--------|-------|
+| Accurate | Attack | +3 Attack |
+| Aggressive | Strength | +3 Strength |
+| Defensive | Defense | +3 Defense |
+| Controlled | All | +1 each |
+
+---
+
+### `flee`
+
+Escape from combat.
+
+```typescript
+// From actions/autonomous.ts
+export const fleeAction: Action = {
+  name: "FLEE",
+  description: "Flee from combat to a safe location",
+  parameters: {
+    direction: { type: "string", optional: true, description: "Direction to flee" },
+  },
+};
+```
+
+**Usage**: Escape when low on health.
+
+---
+
+## Skill Actions
+
+### `chopTree`
+
+Chop a tree for logs.
+
+```typescript
+// From actions/skills.ts
+export const chopTreeAction: Action = {
+  name: "CHOP_TREE",
+  description: "Chop down a nearby tree",
+  parameters: {
+    treeId: { type: "string", optional: true, description: "Specific tree entity ID" },
+  },
+};
+```
+
+**Requirements**: Hatchet in inventory, Woodcutting level.
+
+---
+
+### `catchFish`
+
+Catch fish at a fishing spot.
+
+```typescript
+export const catchFishAction: Action = {
+  name: "CATCH_FISH",
+  description: "Fish at a nearby fishing spot",
+  parameters: {
+    spotId: { type: "string", optional: true, description: "Specific fishing spot ID" },
+  },
+};
+```
+
+**Requirements**: Fishing rod in inventory, Fishing level.
+
+---
+
+### `lightFire`
+
+Light logs to create a fire.
+
+```typescript
+export const lightFireAction: Action = {
+  name: "LIGHT_FIRE",
+  description: "Light a fire using logs",
+  parameters: {
+    logId: { type: "string", optional: true, description: "Specific log item ID" },
+  },
+};
+```
+
+**Requirements**: Tinderbox and logs in inventory.
+
+---
+
+### `cookFood`
+
+Cook raw food on a fire.
+
+```typescript
+export const cookFoodAction: Action = {
+  name: "COOK_FOOD",
+  description: "Cook raw food on a fire",
+  parameters: {
+    foodId: { type: "string", optional: true, description: "Raw food item ID" },
+    fireId: { type: "string", optional: true, description: "Fire entity ID" },
+  },
+};
+```
+
+**Requirements**: Raw food in inventory, fire nearby.
+
+---
+
+## Inventory Actions
+
+### `equipItem`
+
+Equip an item from inventory.
+
+```typescript
+// From actions/inventory.ts
+export const equipItemAction: Action = {
+  name: "EQUIP_ITEM",
+  description: "Equip an item from inventory",
+  parameters: {
+    itemId: { type: "string", description: "Item ID to equip" },
+  },
+};
+```
+
+**Usage**: Equip weapons, armor, tools.
+
+---
+
+### `useItem`
+
+Use a consumable item.
+
+```typescript
+export const useItemAction: Action = {
+  name: "USE_ITEM",
+  description: "Use an item (eat food, drink potion)",
+  parameters: {
+    itemId: { type: "string", description: "Item ID to use" },
+  },
+};
+```
+
+**Usage**: Heal with food, buff with potions.
+
+---
+
+### `dropItem`
+
+Drop an item on the ground.
+
+```typescript
+export const dropItemAction: Action = {
+  name: "DROP_ITEM",
+  description: "Drop an item from inventory",
+  parameters: {
+    itemId: { type: "string", description: "Item ID to drop" },
+    quantity: { type: "number", optional: true, description: "Amount to drop" },
+  },
+};
+```
+
+**Usage**: Make room in inventory.
+
+---
+
+## Social Actions
+
+### `chatMessage`
+
+Send a chat message.
+
+```typescript
+// From actions/social.ts
+export const chatMessageAction: Action = {
+  name: "CHAT_MESSAGE",
+  description: "Send a message to nearby players",
+  parameters: {
+    message: { type: "string", description: "Message to send" },
+  },
+};
+```
+
+**Usage**: Communicate with other players.
+
+---
+
+## Banking Actions
+
+### `bankDeposit`
+
+Deposit items into bank.
+
+```typescript
+// From actions/banking.ts
+export const bankDepositAction: Action = {
+  name: "BANK_DEPOSIT",
+  description: "Deposit items into the bank",
+  parameters: {
+    itemId: { type: "string", description: "Item ID to deposit" },
+    quantity: { type: "number", optional: true, description: "Amount to deposit" },
+  },
+};
+```
+
+**Requirements**: Must be at a bank.
+
+---
+
+### `bankWithdraw`
+
+Withdraw items from bank.
+
+```typescript
+export const bankWithdrawAction: Action = {
+  name: "BANK_WITHDRAW",
+  description: "Withdraw items from the bank",
+  parameters: {
+    itemId: { type: "string", description: "Item ID to withdraw" },
+    quantity: { type: "number", optional: true, description: "Amount to withdraw" },
+  },
+};
+```
+
+**Requirements**: Must be at a bank, item must be in bank.
+
+---
+
+## Goal Actions
+
+### `setGoal`
+
+Set a new goal for the agent.
+
+```typescript
+// From actions/goals.ts
+export const setGoalAction: Action = {
+  name: "SET_GOAL",
+  description: "Set a new goal for autonomous behavior",
+  parameters: {
+    goal: {
+      type: "string",
+      description: "Goal description (e.g., 'reach level 10 woodcutting')",
+    },
+    priority: { type: "number", optional: true, description: "Priority (1-10)" },
+  },
+};
+```
+
+**Usage**: Direct agent behavior toward objectives.
+
+**Example Goals**:
+- "Reach level 10 Woodcutting"
+- "Collect 100 logs"
+- "Kill 50 goblins"
+- "Earn 10,000 coins"
+
+---
+
+### `idle`
+
+Wait without taking action.
+
+```typescript
+// From actions/autonomous.ts
+export const idleAction: Action = {
+  name: "IDLE",
+  description: "Wait without taking any action",
+  parameters: {
+    duration: { type: "number", optional: true, description: "Seconds to wait" },
+  },
+};
+```
+
+**Usage**: Wait for events, conserve resources.
+
+---
+
+## Action Execution
+
+Actions are executed through the HyperscapeService:
+
+```typescript
+// From services/HyperscapeService.ts
+async executeAction(name: string, params: Record<string, unknown>): Promise<boolean> {
+  switch (name) {
+    case "MOVE_TO":
+      return this.moveTo(params.x, params.z);
+    case "ATTACK_ENTITY":
+      return this.attackEntity(params.targetId);
+    case "CHOP_TREE":
+      return this.chopTree(params.treeId);
+    // ... other actions
+  }
+}
+```
+
+---
+
+## Action Selection
+
+The LLM selects actions based on:
+
+1. **Providers** - Current game state context
+2. **Evaluators** - Assessment of opportunities
+3. **Goals** - Current objectives
+4. **Available Actions** - Context-aware action list
+
+```typescript
+// Provider supplies available actions
+export const availableActionsProvider: Provider = {
+  name: "availableActions",
+  async get(runtime, state): Promise<string> {
+    const gameState = await getGameState(runtime);
+
+    const actions = [];
+
+    // Combat actions if enemies nearby
+    if (gameState.nearbyEnemies.length > 0) {
+      actions.push("ATTACK_ENTITY", "FLEE");
+    }
+
+    // Skill actions if resources nearby
+    if (gameState.nearbyTrees.length > 0 && hasHatchet(gameState)) {
+      actions.push("CHOP_TREE");
+    }
+
+    // ... more context-aware action filtering
+
+    return formatActionList(actions);
+  },
+};
+```
+
+---
+
+## Related Documentation
+
+- [Providers Reference](/wiki/ai-agents/providers)
+- [ElizaOS Integration](/wiki/ai-agents/elizaos)
+- [Agent Configuration](/wiki/ai-agents/config)

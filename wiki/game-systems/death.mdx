@@ -1,0 +1,269 @@
+---
+title: "Death & Respawn System"
+description: "Player death handling, gravestones, and item recovery"
+icon: "skull"
+---
+
+# Death & Respawn System
+
+The death system handles player deaths with zone-aware mechanics, gravestone spawning, and secure item recovery. It uses database persistence to prevent item duplication exploits.
+
+<Info>
+Death code lives in `packages/shared/src/systems/shared/death/` with:
+- `DeathStateManager.ts` - Death tracking and persistence
+- `SafeAreaDeathHandler.ts` - Safe zone death logic
+- `WildernessDeathHandler.ts` - PvP zone death logic
+- `ZoneDetectionSystem.ts` - Zone type detection
+</Info>
+
+## Death Zones
+
+```typescript
+type ZoneType = 
+  | "safe"       // Town, bank areas - items kept
+  | "dangerous"  // PvE wilderness - items drop on death
+  | "pvp";       // PvP zones - items dropped, lootable by killer
+```
+
+---
+
+## Death Lock System
+
+To prevent item duplication on server restart/crash, deaths are tracked with database persistence:
+
+```typescript
+interface DeathLock {
+  playerId: string;
+  gravestoneId?: string;           // If gravestone spawned
+  groundItemIds?: string[];        // If items on ground
+  position: { x: number; y: number; z: number };
+  timestamp: number;
+  zoneType: ZoneType;
+  itemCount: number;               // Total items dropped
+}
+```
+
+### Creating a Death Lock
+
+```typescript
+async createDeathLock(
+  playerId: string,
+  options: {
+    gravestoneId?: string;
+    groundItemIds?: string[];
+    position: { x: number; y: number; z: number };
+    zoneType: ZoneType;
+    itemCount: number;
+  },
+  tx?: TransactionContext,  // Optional DB transaction
+): Promise<void> {
+  // Server authority check
+  if (!this.world.isServer) {
+    console.error(`[DeathStateManager] Client attempted death lock creation - BLOCKED`);
+    return;
+  }
+  
+  const deathData: DeathLock = {
+    playerId,
+    gravestoneId: options.gravestoneId,
+    groundItemIds: options.groundItemIds,
+    position: options.position,
+    timestamp: Date.now(),
+    zoneType: options.zoneType,
+    itemCount: options.itemCount,
+  };
+  
+  // Store in memory cache
+  this.activeDeaths.set(playerId, deathData);
+  
+  // Persist to database (prevents duplication on restart)
+  if (this.databaseSystem) {
+    await this.databaseSystem.saveDeathLockAsync(deathData, tx);
+  }
+}
+```
+
+---
+
+## Death Flow
+
+### Safe Zone Death
+
+1. Player HP reaches 0
+2. Items kept in inventory (no drop)
+3. Player respawns at nearest safe point
+4. Short death animation plays
+
+### Dangerous Zone Death
+
+1. Player HP reaches 0
+2. **Gravestone spawns** at death location
+3. Player's items stored in gravestone (15 minute timer)
+4. Player respawns at starter town
+5. Player can return to reclaim items
+
+### PvP Zone Death
+
+1. Player killed by another player
+2. **Items drop directly to ground**
+3. Loot protection for killer (100 ticks)
+4. After protection, anyone can loot
+5. Items despawn after 200 ticks
+
+---
+
+## Gravestone System
+
+```typescript
+// Gravestone entity config
+const gravestone = new GravestoneEntity(this.world, {
+  position: deathPosition,
+  ownerId: playerId,
+  items: droppedItems,
+  expiresAt: Date.now() + 15 * 60 * 1000,  // 15 minutes
+});
+
+// From CombatConstants.ts
+GRAVESTONE_TICKS: 1500,          // 15 minutes in ticks (1500 × 0.6s)
+GRAVESTONE_WARNING_TICKS: 500,   // 5 minute warning
+```
+
+### Gravestone Expiration
+
+When gravestone expires:
+1. Items transition to ground items
+2. Ground items have additional despawn timer
+3. `onGravestoneExpired()` updates death lock
+
+```typescript
+async onGravestoneExpired(playerId: string, groundItemIds: string[]): Promise<void> {
+  const deathData = this.activeDeaths.get(playerId);
+  if (!deathData) return;
+  
+  // Update tracking: gravestone → ground items
+  deathData.gravestoneId = undefined;
+  deathData.groundItemIds = groundItemIds;
+  this.activeDeaths.set(playerId, deathData);
+  
+  // Update database
+  await this.databaseSystem.updateGroundItemsAsync(playerId, groundItemIds);
+}
+```
+
+---
+
+## Item Recovery
+
+### Looting from Gravestone
+
+```typescript
+// Player interacts with their gravestone
+async lootGravestone(playerId: string, gravestoneId: string): Promise<void> {
+  const gravestone = this.world.entities.get(gravestoneId);
+  
+  // Verify ownership
+  if (gravestone.ownerId !== playerId) {
+    this.emitMessage(playerId, "This isn't your gravestone.", "error");
+    return;
+  }
+  
+  // Transfer items to inventory
+  for (const item of gravestone.items) {
+    const success = await this.inventorySystem.addItem(
+      playerId,
+      item.itemId,
+      item.quantity
+    );
+    
+    if (!success) {
+      // Inventory full - leave remaining items
+      break;
+    }
+    
+    // Track item looted
+    await this.deathStateManager.onItemLooted(playerId, item.id);
+  }
+  
+  // Destroy gravestone if empty
+  if (gravestone.items.length === 0) {
+    this.entityManager.destroyEntity(gravestoneId);
+    await this.deathStateManager.clearDeathLock(playerId);
+  }
+}
+```
+
+### Clearing Death Lock
+
+```typescript
+async clearDeathLock(playerId: string): Promise<void> {
+  // Remove from memory
+  this.activeDeaths.delete(playerId);
+  
+  // Remove from database
+  if (this.databaseSystem) {
+    await this.databaseSystem.deleteDeathLockAsync(playerId);
+  }
+}
+```
+
+---
+
+## Reconnect Validation
+
+When a player reconnects, the system checks for active deaths:
+
+```typescript
+async hasActiveDeathLock(playerId: string): Promise<boolean> {
+  // Check memory cache first
+  if (this.activeDeaths.has(playerId)) return true;
+  
+  // Fallback to database (critical for crash recovery)
+  if (this.databaseSystem) {
+    const dbData = await this.databaseSystem.getDeathLockAsync(playerId);
+    if (dbData) {
+      // Restore to memory cache
+      this.activeDeaths.set(playerId, dbData);
+      return true;
+    }
+  }
+  
+  return false;
+}
+```
+
+This prevents:
+- Item duplication if server crashes mid-death
+- Double death processing on reconnect
+- Gravestone re-creation exploits
+
+---
+
+## Death Events
+
+| Event | Data | Description |
+|-------|------|-------------|
+| `ENTITY_DEATH` | `entityId`, `killerId`, `position` | Entity died |
+| `PLAYER_DEATH` | `playerId`, `killerId`, `position`, `zoneType` | Player death |
+| `PLAYER_RESPAWNED` | `playerId`, `spawnPosition` | Player respawned |
+| `GRAVESTONE_SPAWNED` | `gravestoneId`, `playerId`, `position` | Gravestone created |
+| `GRAVESTONE_EXPIRED` | `gravestoneId`, `playerId`, `groundItemIds` | Gravestone timed out |
+
+---
+
+## Death Constants
+
+```typescript
+// From CombatConstants.ts
+GRAVESTONE_TICKS: 1500,              // 15 minutes to reclaim
+GROUND_ITEM_DESPAWN_TICKS: 200,      // 2 minutes on ground
+LOOT_PROTECTION_TICKS: 100,          // 1 minute killer protection
+UNTRADEABLE_DESPAWN_TICKS: 300,      // 3 minutes for untradeable
+```
+
+---
+
+## Related Documentation
+
+- [Combat System](/wiki/game-systems/combat)
+- [Ground Items & Loot](/wiki/game-systems/loot)
+- [Database Schema](/wiki/engine/database)
