@@ -1,0 +1,355 @@
+---
+title: "Data Manifests Overview"
+description: "Manifest-driven content system for NPCs, items, and world areas"
+icon: "database"
+---
+
+{/* 
+  Source: packages/shared/src/data/
+  Verified against actual codebase
+*/}
+
+## Manifest-Driven Design
+
+Hyperscape uses a **manifest-driven architecture** where all game content (NPCs, items, world areas) is defined in external data files rather than hardcoded in logic. This separation enables:
+
+- **Easy content updates** — Edit JSON, restart server
+- **Community modding** — No code changes required
+- **AI generation** — Generate content with Asset Forge
+- **Clean separation** — Data vs logic isolation
+
+<Info>
+  All manifests are loaded from `world/assets/manifests/` at runtime by the `DataManager`.
+</Info>
+
+---
+
+## Data Architecture
+
+```
+packages/shared/src/data/
+├── DataManager.ts        # Loads all manifests at runtime
+├── npcs.ts               # NPC helper functions (Map populated at runtime)
+├── items.ts              # Item helper functions (Map populated at runtime)
+├── banks-stores.ts       # Bank and shop definitions
+├── world-areas.ts        # Zone and biome definitions
+├── world-structure.ts    # World structure configuration
+├── avatars.ts            # Avatar/character options
+├── skill-icons.ts        # Skill UI icons
+├── skill-unlocks.ts      # Skill unlock requirements
+├── playerEmotes.ts       # Player emote animations
+├── NoteGenerator.ts      # Bank note generation
+└── index.ts              # Exports
+```
+
+### Manifest Files Location
+
+```
+world/assets/manifests/
+├── npcs.json             # NPC and mob definitions
+├── items.json            # Item definitions
+└── ... (other manifests)
+```
+
+---
+
+## NPCs & Mobs
+
+NPCs are loaded from JSON at runtime into the `ALL_NPCS` Map:
+
+```typescript
+// From packages/shared/src/data/npcs.ts
+export const ALL_NPCS: Map<string, NPCData> = new Map();
+```
+
+### NPC Data Structure
+
+Each NPC has these properties (from `types/entities/npc-mob-types.ts`):
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Unique identifier |
+| `name` | `string` | Display name |
+| `category` | `"mob" \| "boss" \| "quest" \| "neutral"` | NPC type |
+| `stats` | `NPCStats` | Combat stats (attack, strength, defense, health, ranged, level) |
+| `drops` | `DropTable` | Loot table with rarity tiers |
+| `spawnBiomes` | `string[]` | Biomes where NPC spawns |
+| `modelPath` | `string` | Path to 3D model |
+| `behavior` | `"passive" \| "aggressive"` | Combat behavior |
+
+### Available 3D Models
+
+```
+/assets/world/forge/
+├── goblin/goblin_rigged.glb     → Goblins
+├── thug/thug_rigged.glb         → Bandits
+├── human/human_rigged.glb       → Guards, knights, warriors, rangers
+├── troll/troll_rigged.glb       → Hobgoblins
+└── imp/imp_rigged.glb           → Dark warriors
+```
+
+### NPC Helper Functions
+
+```typescript
+// Get NPC by ID
+getNPCById(npcId: string): NPCData | null
+
+// Get NPCs by category
+getNPCsByCategory(category: NPCCategory): NPCData[]
+
+// Get NPCs by biome
+getNPCsByBiome(biome: string): NPCData[]
+
+// Get NPCs by level range
+getNPCsByLevelRange(minLevel: number, maxLevel: number): NPCData[]
+
+// Get combat NPCs (mob, boss, quest)
+getCombatNPCs(): NPCData[]
+
+// Get service NPCs (neutral)
+getServiceNPCs(): NPCData[]
+
+// Calculate drops with RNG
+calculateNPCDrops(npcId: string): Array<{ itemId: string; quantity: number }>
+
+// Calculate combat level (OSRS formula)
+calculateNPCCombatLevel(npc: NPCData): number
+```
+
+### Spawn Constants
+
+```typescript
+// From packages/shared/src/data/npcs.ts
+export const NPC_SPAWN_CONSTANTS = {
+  GLOBAL_RESPAWN_TIME: 900000,    // 15 minutes per GDD
+  MAX_NPCS_PER_ZONE: 10,
+  SPAWN_RADIUS_CHECK: 5,          // Don't spawn if player within 5 meters
+  AGGRO_LEVEL_THRESHOLD: 5,       // Some NPCs ignore players above this
+} as const;
+```
+
+---
+
+## Items
+
+Items are loaded from JSON into the `ITEMS` Map:
+
+```typescript
+// From packages/shared/src/data/items.ts
+export const ITEMS: Map<string, Item> = new Map();
+```
+
+### Item Types
+
+| Type | Description |
+|------|-------------|
+| `"weapon"` | Swords, bows |
+| `"armor"` | Helmets, bodies, legs |
+| `"tool"` | Hatchet, fishing rod, tinderbox |
+| `"consumable"` | Food, potions |
+| `"resource"` | Logs, raw fish, cooked fish |
+| `"ammunition"` | Arrows |
+| `"currency"` | Coins |
+
+### Item Helper Functions
+
+```typescript
+// Get item by ID
+getItem(itemId: string): Item | null
+
+// Get items by type
+getItemsByType(type: ItemType): Item[]
+
+// Get all weapons
+getWeapons(): Item[]
+
+// Get all armor
+getArmor(): Item[]
+
+// Get all tools
+getTools(): Item[]
+
+// Get all consumables
+getConsumables(): Item[]
+
+// Get all resources
+getResources(): Item[]
+
+// Get items by skill requirement
+getItemsBySkill(skill: string): Item[]
+
+// Get items by level requirement
+getItemsByLevel(level: number): Item[]
+```
+
+### Shop Items
+
+```typescript
+// From packages/shared/src/data/items.ts
+export const SHOP_ITEMS = [
+  "bronze_hatchet",
+  "fishing_rod",
+  "tinderbox",
+  "arrows",
+];
+```
+
+### Bank Notes
+
+The system supports bank notes for stackable versions of items:
+
+```typescript
+// From packages/shared/src/data/items.ts
+export const NOTE_SUFFIX = "_note";
+
+// Check if item can be noted
+canBeNoted(itemId: string): boolean
+
+// Get noted variant
+getNotedItem(itemId: string): Item | null
+
+// Get base item from note
+getBaseItem(itemId: string): Item | null
+
+// Check if ID is a noted item
+isNotedItemId(itemId: string): boolean
+```
+
+---
+
+## Drop Tables
+
+NPCs have tiered drop tables:
+
+```typescript
+interface DropTable {
+  defaultDrop: {
+    enabled: boolean;
+    itemId: string;
+    quantity: number;
+  };
+  always: Drop[];      // 100% chance
+  common: Drop[];      // High chance
+  uncommon: Drop[];    // Medium chance
+  rare: Drop[];        // Low chance
+  veryRare: Drop[];    // Very low chance
+}
+
+interface Drop {
+  itemId: string;
+  minQuantity: number;
+  maxQuantity: number;
+  chance: number;      // 0.0 - 1.0
+}
+```
+
+### Drop Calculation
+
+```typescript
+// From packages/shared/src/data/npcs.ts
+export function calculateNPCDrops(npcId: string): Array<{ itemId: string; quantity: number }> {
+  const npc = getNPCById(npcId);
+  const drops: Array<{ itemId: string; quantity: number }> = [];
+
+  // Add default drop if enabled
+  if (npc.drops.defaultDrop.enabled) {
+    drops.push({
+      itemId: npc.drops.defaultDrop.itemId,
+      quantity: npc.drops.defaultDrop.quantity,
+    });
+  }
+
+  // Process all tiers with RNG
+  const processDrop = (drop: Drop) => {
+    if (Math.random() < drop.chance) {
+      const quantity = Math.floor(
+        Math.random() * (drop.maxQuantity - drop.minQuantity + 1) + drop.minQuantity
+      );
+      drops.push({ itemId: drop.itemId, quantity });
+    }
+  };
+
+  npc.drops.always.forEach(processDrop);
+  npc.drops.common.forEach(processDrop);
+  npc.drops.uncommon.forEach(processDrop);
+  npc.drops.rare.forEach(processDrop);
+  npc.drops.veryRare.forEach(processDrop);
+
+  return drops;
+}
+```
+
+---
+
+## World Areas
+
+World areas define zones, biomes, and spawn points:
+
+```
+packages/shared/src/data/
+├── world-areas.ts        # Zone definitions
+└── world-structure.ts    # World layout
+```
+
+### Zone Properties
+
+| Property | Description |
+|----------|-------------|
+| `id` | Unique zone identifier |
+| `name` | Display name |
+| `biome` | Biome type (forest, plains, etc.) |
+| `difficulty` | 0-3 difficulty level |
+| `mobs` | NPCs that spawn here |
+| `resources` | Trees, fishing spots, etc. |
+| `isSafe` | Whether it's a safe zone |
+
+---
+
+## Banks & Stores
+
+```typescript
+// From packages/shared/src/data/banks-stores.ts
+// Defines bank locations and shop inventories
+```
+
+Each starter town has:
+- **Bank** — Item storage facility
+- **General Store** — Basic equipment vendor
+
+---
+
+## Adding New Content
+
+<Steps>
+  <Step title="Add to manifest">
+    Edit `world/assets/manifests/npcs.json` or `items.json`
+  </Step>
+  <Step title="Generate 3D model (optional)">
+    Use Asset Forge to create a new model, or use existing models
+  </Step>
+  <Step title="Restart server">
+    The DataManager loads manifests on startup
+  </Step>
+  <Step title="Test in game">
+    Verify the new content appears correctly
+  </Step>
+</Steps>
+
+<Warning>
+  Do NOT add NPC or item data directly to TypeScript files. Keep all content in JSON manifests for clean separation.
+</Warning>
+
+---
+
+---
+
+## Detailed Documentation
+
+<CardGroup cols={2}>
+  <Card title="NPC Data Structure" icon="users" href="/wiki/data/npcs">
+    Complete NPC schema, aggro types, drop tables, spawn constants, and helper functions.
+  </Card>
+  <Card title="Item Data Structure" icon="box-open" href="/wiki/data/items">
+    Item types, stats, requirements, equipment slots, noted items, and shop items.
+  </Card>
+</CardGroup>

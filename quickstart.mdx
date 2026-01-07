@@ -85,7 +85,7 @@ Before you begin, ensure you have:
 To run the game with ElizaOS AI agents:
 
 ```bash
-bun run dev:elizaos
+bun run dev:ai
 ```
 
 This starts the game server plus the ElizaOS agent runtime. The AI agent will connect as a player and autonomously play the game.
@@ -119,8 +119,8 @@ This starts the game server plus the ElizaOS agent runtime. The AI agent will co
 bun start                 # Start game server (cd packages/server && bun run start)
 
 # Development  
-bun run dev               # All packages with hot reload (via dev-with-elizaos.mjs)
-bun run dev:elizaos       # With AI agents (START_ELIZAOS=true)
+bun run dev               # All packages with hot reload
+bun run dev:ai            # With AI agents
 bun run dev:client        # Client only
 bun run dev:server        # Server only
 bun run dev:turbo         # Turbo-based dev (excludes asset-forge)

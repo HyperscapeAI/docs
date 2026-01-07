@@ -1,0 +1,436 @@
+---
+title: "Item Data Structure"
+description: "How items, equipment, and consumables are defined"
+icon: "box-open"
+---
+
+# Item Data Structure
+
+Items are defined in **JSON manifests** and loaded at runtime. This includes weapons, armor, tools, consumables, and resources.
+
+<Info>
+Item data is managed in `packages/shared/src/data/items.ts` and loaded from `world/assets/manifests/items.json`.
+</Info>
+
+## Data Loading
+
+Items are **NOT hardcoded**. The `ITEMS` map is populated at runtime:
+
+```typescript
+// From items.ts
+export const ITEMS: Map<string, Item> = new Map();
+
+// Populated by DataManager from JSON
+DataManager.loadItems(); // Reads world/assets/manifests/items.json
+```
+
+---
+
+## Item Schema
+
+Each item has the following structure:
+
+```typescript
+interface Item {
+  id: string;                    // Unique identifier (e.g., "bronze_sword")
+  name: string;                  // Display name (e.g., "Bronze Sword")
+  type: ItemType;                // Category
+  rarity: ItemRarity;            // Common, Uncommon, Rare, etc.
+  modelPath?: string;            // Path to GLB model
+
+  // Inventory properties
+  stackable: boolean;            // Can stack in inventory
+  tradeable: boolean;            // Can be traded/sold
+  value: number;                 // Base value in coins
+
+  // Equipment properties (for weapons/armor)
+  requirements?: ItemRequirement;
+  stats?: ItemStats;
+  attackType?: AttackType;
+  weaponType?: WeaponType;
+  attackSpeed?: number;          // In milliseconds
+  range?: number;                // Attack range
+
+  // Noted item support
+  isNoted?: boolean;
+  baseItemId?: string;           // For noted items
+  notedItemId?: string;          // For base items
+}
+```
+
+---
+
+## Item Types
+
+```typescript
+type ItemType =
+  | "weapon"      // Swords, axes, bows
+  | "armor"       // Helmets, bodies, legs
+  | "tool"        // Hatchets, pickaxes, fishing rods
+  | "consumable"  // Food, potions
+  | "resource"    // Logs, ore, fish
+  | "currency"    // Coins
+  | "ammo"        // Arrows, bolts
+  | "misc";       // Other items
+```
+
+---
+
+## Item Rarity
+
+```typescript
+type ItemRarity =
+  | "common"
+  | "uncommon"
+  | "rare"
+  | "epic"
+  | "legendary";
+```
+
+---
+
+## Equipment Stats
+
+For weapons and armor:
+
+```typescript
+interface ItemStats {
+  attack?: number;       // Attack bonus
+  strength?: number;     // Strength bonus (max hit)
+  defense?: number;      // Defense bonus
+  ranged?: number;       // Ranged attack bonus
+  rangedStrength?: number; // Ranged damage bonus
+  prayer?: number;       // Prayer bonus
+}
+```
+
+---
+
+## Skill Requirements
+
+Items can require skill levels to use:
+
+```typescript
+interface ItemRequirement {
+  attack?: number;
+  strength?: number;
+  defense?: number;
+  ranged?: number;
+  woodcutting?: number;
+  mining?: number;
+  fishing?: number;
+}
+```
+
+---
+
+## Weapon Types
+
+```typescript
+type WeaponType =
+  | "sword"
+  | "scimitar"
+  | "longsword"
+  | "dagger"
+  | "axe"
+  | "mace"
+  | "warhammer"
+  | "2h"
+  | "bow"
+  | "crossbow"
+  | "staff";
+
+type AttackType = "melee" | "ranged" | "magic";
+```
+
+---
+
+## Attack Speed
+
+Weapons have different attack speeds:
+
+| Weapon Type | Speed (ms) | Speed (ticks) |
+|-------------|------------|---------------|
+| Dagger | 1800 | 3 |
+| Scimitar | 1800 | 3 |
+| Sword | 2400 | 4 |
+| Longsword | 2400 | 4 |
+| Battleaxe | 3000 | 5 |
+| 2H Sword | 3600 | 6 |
+| Shortbow | 1800 | 3 |
+| Longbow | 3000 | 5 |
+
+---
+
+## Helper Functions
+
+### Get Item by ID
+
+```typescript
+export function getItem(itemId: string): Item | null {
+  return ITEMS.get(itemId) || null;
+}
+```
+
+### Get Items by Type
+
+```typescript
+export function getItemsByType(type: ItemType): Item[] {
+  return Array.from(ITEMS.values()).filter((item) => item.type === type);
+}
+
+// Convenience functions
+export function getWeapons(): Item[] {
+  return getItemsByType("weapon");
+}
+
+export function getArmor(): Item[] {
+  return getItemsByType("armor");
+}
+
+export function getTools(): Item[] {
+  return getItemsByType("tool");
+}
+
+export function getConsumables(): Item[] {
+  return getItemsByType("consumable");
+}
+
+export function getResources(): Item[] {
+  return getItemsByType("resource");
+}
+```
+
+### Get Items by Skill Requirement
+
+```typescript
+export function getItemsBySkill(skill: string): Item[] {
+  return Array.from(ITEMS.values()).filter(
+    (item) => item.requirements && item.requirements[skill as keyof ItemRequirement]
+  );
+}
+```
+
+### Get Items by Level Requirement
+
+```typescript
+export function getItemsByLevel(level: number): Item[] {
+  return Array.from(ITEMS.values()).filter((item) => {
+    if (!item.requirements) return true;
+    return Object.values(item.requirements).every((req) =>
+      typeof req === "number" ? req <= level : true
+    );
+  });
+}
+```
+
+---
+
+## Shop Items
+
+Items available in general stores:
+
+```typescript
+export const SHOP_ITEMS = [
+  "bronze_hatchet",
+  "fishing_rod",
+  "tinderbox",
+  "arrows",
+];
+```
+
+---
+
+## Noted Items
+
+Items can have "noted" variants for efficient storage:
+
+```typescript
+// Check if item can be noted
+export function canBeNoted(itemId: string): boolean {
+  const item = ITEMS.get(itemId);
+  return item?.stackable === false && item?.notedItemId !== undefined;
+}
+
+// Get base item from noted item
+export function getBaseItem(itemId: string): Item | null {
+  const item = ITEMS.get(itemId);
+  if (!item) return null;
+
+  if (item.isNoted && item.baseItemId) {
+    return ITEMS.get(item.baseItemId) || null;
+  }
+  return item;
+}
+
+// Get noted variant of item
+export function getNotedItem(itemId: string): Item | null {
+  const item = ITEMS.get(itemId);
+  if (!item || item.isNoted) return null;
+
+  if (item.notedItemId) {
+    return ITEMS.get(item.notedItemId) || null;
+  }
+  return null;
+}
+
+// Check if item ID is a noted variant
+export function isNotedItemId(itemId: string): boolean {
+  return itemId.endsWith("_noted");
+}
+
+// Get base item ID from noted ID
+export function getBaseItemId(itemId: string): string {
+  if (isNotedItemId(itemId)) {
+    return itemId.replace(/_noted$/, "");
+  }
+  return itemId;
+}
+```
+
+---
+
+## Example Item Definitions
+
+### Weapon
+
+```json
+{
+  "id": "bronze_sword",
+  "name": "Bronze Sword",
+  "type": "weapon",
+  "rarity": "common",
+  "stackable": false,
+  "tradeable": true,
+  "value": 25,
+  "modelPath": "weapons/bronze_sword.glb",
+  "requirements": {
+    "attack": 1
+  },
+  "stats": {
+    "attack": 4,
+    "strength": 3
+  },
+  "attackType": "melee",
+  "weaponType": "sword",
+  "attackSpeed": 2400,
+  "range": 1
+}
+```
+
+### Armor
+
+```json
+{
+  "id": "bronze_platebody",
+  "name": "Bronze Platebody",
+  "type": "armor",
+  "rarity": "common",
+  "stackable": false,
+  "tradeable": true,
+  "value": 100,
+  "modelPath": "armor/bronze_platebody.glb",
+  "requirements": {
+    "defense": 1
+  },
+  "stats": {
+    "defense": 15
+  }
+}
+```
+
+### Tool
+
+```json
+{
+  "id": "bronze_hatchet",
+  "name": "Bronze Hatchet",
+  "type": "tool",
+  "rarity": "common",
+  "stackable": false,
+  "tradeable": true,
+  "value": 10,
+  "modelPath": "tools/bronze_hatchet.glb",
+  "requirements": {
+    "woodcutting": 1
+  }
+}
+```
+
+### Consumable
+
+```json
+{
+  "id": "cooked_shrimp",
+  "name": "Cooked Shrimp",
+  "type": "consumable",
+  "rarity": "common",
+  "stackable": false,
+  "tradeable": true,
+  "value": 5,
+  "heals": 3
+}
+```
+
+### Resource
+
+```json
+{
+  "id": "oak_logs",
+  "name": "Oak Logs",
+  "type": "resource",
+  "rarity": "common",
+  "stackable": false,
+  "tradeable": true,
+  "value": 15,
+  "notedItemId": "oak_logs_noted"
+}
+```
+
+---
+
+## Adding New Items
+
+<Steps>
+  <Step title="Add to JSON Manifest">
+    Add entry to `world/assets/manifests/items.json`
+  </Step>
+  <Step title="Create 3D Model (optional)">
+    Generate model in 3D Asset Forge if needed
+  </Step>
+  <Step title="Restart Server">
+    Server must restart to reload manifests
+  </Step>
+</Steps>
+
+<Warning>
+**DO NOT** add item data directly to `items.ts`. Keep all content in JSON manifests for data-driven design.
+</Warning>
+
+---
+
+## Equipment Slots
+
+Items equip to specific slots:
+
+| Slot | Item Types |
+|------|------------|
+| `weapon` | Swords, axes, bows, staffs |
+| `shield` | Shields, defenders |
+| `helmet` | Helmets, hats, hoods |
+| `body` | Platebodies, chainbodies, robes |
+| `legs` | Platelegs, chainlegs, skirts |
+| `boots` | Boots |
+| `gloves` | Gloves, bracers |
+| `cape` | Capes, cloaks |
+| `ring` | Rings |
+| `amulet` | Amulets, necklaces |
+| `ammo` | Arrows, bolts, runes |
+
+---
+
+## Related Documentation
+
+- [NPC Data Structure](/wiki/data/npcs)
+- [Combat System](/wiki/game-systems/combat)
+- [Skills & Requirements](/wiki/game-systems/skills)

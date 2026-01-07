@@ -1,0 +1,270 @@
+---
+title: "Constants Reference"
+description: "All game constants for combat, movement, and timing"
+icon: "hashtag"
+---
+
+# Constants Reference
+
+This page documents all game constants used throughout Hyperscape. These values are defined in `packages/shared/src/constants/`.
+
+## Combat Constants
+
+```typescript
+// From CombatConstants.ts
+export const COMBAT_CONSTANTS = {
+  // === TICK SYSTEM ===
+  TICK_DURATION_MS: 600,              // 0.6 seconds per tick (OSRS standard)
+
+  // === ATTACK RANGES (tiles) ===
+  MELEE_RANGE: 2,                     // General melee range
+  MELEE_RANGE_STANDARD: 1,            // Cardinal only (N/S/E/W)
+  MELEE_RANGE_HALBERD: 2,             // Can attack diagonally
+  RANGED_RANGE: 10,                   // Maximum ranged attack distance
+  PICKUP_RANGE: 2.5,                  // Item pickup range
+
+  // === ATTACK SPEEDS (ticks) ===
+  DEFAULT_ATTACK_SPEED_TICKS: 4,      // 2.4 seconds (standard sword)
+
+  // === COMBAT TIMING (ticks) ===
+  COMBAT_TIMEOUT_TICKS: 17,           // 10.2 seconds (OSRS-accurate)
+  LOGOUT_PREVENTION_TICKS: 16,
+  HEALTH_REGEN_COOLDOWN_TICKS: 17,
+  HEALTH_REGEN_INTERVAL_TICKS: 100,   // 60 seconds between HP regen
+  AFK_DISABLE_RETALIATE_TICKS: 2000,
+
+  // === DAMAGE FORMULAS (OSRS) ===
+  BASE_CONSTANT: 64,
+  EFFECTIVE_LEVEL_CONSTANT: 8,
+  DAMAGE_DIVISOR: 640,
+  MIN_DAMAGE: 0,
+  MAX_DAMAGE: 200,
+
+  // === XP RATES ===
+  XP: {
+    COMBAT_XP_PER_DAMAGE: 4,          // 4 XP per damage for main skill
+    HITPOINTS_XP_PER_DAMAGE: 1.33,    // 1.33 XP for Constitution
+    CONTROLLED_XP_PER_DAMAGE: 1.33,   // Split across all combat skills
+  },
+
+  // === DEATH MECHANICS (ticks) ===
+  DEATH: {
+    ANIMATION_TICKS: 8,               // 4.8 seconds death animation
+    COOLDOWN_TICKS: 17,               // 10.2 seconds respawn cooldown
+    RECONNECT_RESPAWN_DELAY_TICKS: 1,
+    STALE_LOCK_AGE_TICKS: 6000,
+    DEFAULT_RESPAWN_TOWN: "Central Haven",
+  },
+
+  // === LOOT TIMING (ticks) ===
+  RESPAWN_TICKS_RANDOMNESS: 8,
+  GRAVESTONE_TICKS: 1500,             // 15 minutes (items on ground)
+  GROUND_ITEM_DESPAWN_TICKS: 300,
+  LOOT_PROTECTION_TICKS: 100,
+  CORPSE_DESPAWN_TICKS: 200,
+
+  // === NPC DEFAULTS ===
+  DEFAULTS: {
+    NPC: {
+      ATTACK_SPEED_TICKS: 4,
+      AGGRO_RANGE: 4,
+      COMBAT_RANGE: 1,
+      LEASH_RANGE: 7,
+      RESPAWN_TICKS: 25,
+      WANDER_RADIUS: 5,
+    },
+    ITEM: {
+      ATTACK_SPEED: 4,
+      ATTACK_RANGE: 1,
+    },
+  },
+} as const;
+```
+
+---
+
+## Aggro Constants
+
+```typescript
+export const AGGRO_CONSTANTS = {
+  DEFAULT_BEHAVIOR: "passive",
+  AGGRO_UPDATE_INTERVAL_MS: 100,
+  ALWAYS_AGGRESSIVE_LEVEL: 999,       // Ignores level difference
+} as const;
+```
+
+---
+
+## Level Constants
+
+```typescript
+export const LEVEL_CONSTANTS = {
+  DEFAULT_COMBAT_LEVEL: 3,
+  MIN_COMBAT_LEVEL: 3,
+  MAX_LEVEL: 99,
+
+  // XP formula constants
+  XP_BASE: 50,
+  XP_GROWTH_FACTOR: 8,
+
+  // Combat level calculation weights (OSRS formula)
+  COMBAT_LEVEL_WEIGHTS: {
+    DEFENSE_WEIGHT: 0.25,
+    OFFENSE_WEIGHT: 0.325,
+    RANGED_MULTIPLIER: 1.5,
+  },
+} as const;
+```
+
+---
+
+## Player Constants
+
+```typescript
+export const PLAYER_CONSTANTS = {
+  DEFAULT_HEALTH: 100,
+  DEFAULT_MAX_HEALTH: 100,
+  DEFAULT_STAMINA: 100,
+  DEFAULT_MAX_STAMINA: 100,
+  BASE_MOVEMENT_SPEED: 1.0,
+  RUNNING_SPEED_MULTIPLIER: 1.5,
+  HEALTH_REGEN_RATE: 1,               // HP restored per regen tick
+  STAMINA_REGEN_RATE: 2.0,
+  STAMINA_DRAIN_RATE: 5.0,
+} as const;
+```
+
+---
+
+## Inventory Constants
+
+```typescript
+export const INVENTORY_CONSTANTS = {
+  MAX_INVENTORY_SLOTS: 28,
+  MAX_BANK_SLOTS: 480,
+  MAX_STACK_SIZE: 1000,
+  DEFAULT_ITEM_VALUE: 1,
+} as const;
+```
+
+---
+
+## Network Constants
+
+```typescript
+export const NETWORK_CONSTANTS = {
+  UPDATE_RATE: 20,                    // 20 Hz
+  INTERPOLATION_DELAY: 100,           // milliseconds
+  MAX_PACKET_SIZE: 1024,
+  POSITION_SYNC_THRESHOLD: 0.1,
+  ROTATION_SYNC_THRESHOLD: 0.1,
+} as const;
+```
+
+---
+
+## Gathering Constants
+
+```typescript
+export const GATHERING_CONSTANTS = {
+  WOODCUTTING_BASE_TIME: 3000,        // 3 seconds
+  FISHING_BASE_TIME: 4000,            // 4 seconds
+  GATHER_RANGE: 2.0,
+  RESOURCE_RESPAWN_TIME: 60000,       // 1 minute
+  SUCCESS_RATE_BASE: 0.8,
+  LEVEL_SUCCESS_BONUS: 0.01,          // 1% per level
+} as const;
+```
+
+---
+
+## XP Constants
+
+```typescript
+export const XP_CONSTANTS = {
+  BASE_XP_MULTIPLIER: 83,
+  MAX_LEVEL: 99,
+  XP_TABLE_LENGTH: 99,
+  DEFAULT_XP_GAIN: {
+    COMBAT: 10,
+    WOODCUTTING: 25,
+    FISHING: 20,
+    FIREMAKING: 40,
+    COOKING: 30,
+  },
+} as const;
+```
+
+---
+
+## Style Bonuses
+
+```typescript
+// Combat style bonuses (OSRS-accurate)
+export const ATTACK_STYLES = {
+  AGGRESSIVE: "aggressive",           // +3 STR XP per damage
+  CONTROLLED: "controlled",           // +1 ATK, +1 STR, +1 DEF XP per damage
+  DEFENSIVE: "defensive",             // +3 DEF XP per damage
+  ACCURATE: "accurate",               // +3 ATK XP per damage
+} as const;
+```
+
+---
+
+## Skills
+
+```typescript
+export const SKILLS = {
+  ATTACK: "attack",
+  STRENGTH: "strength",
+  DEFENSE: "defense",
+  CONSTITUTION: "constitution",
+  RANGE: "range",
+  WOODCUTTING: "woodcutting",
+  FISHING: "fishing",
+  FIREMAKING: "firemaking",
+  COOKING: "cooking",
+} as const;
+```
+
+---
+
+## Equipment Slots
+
+```typescript
+export const EQUIPMENT_SLOTS = {
+  WEAPON: "weapon",
+  SHIELD: "shield",
+  HELMET: "helmet",
+  BODY: "body",
+  LEGS: "legs",
+  ARROWS: "arrows",
+} as const;
+```
+
+---
+
+## XP Table Reference
+
+| Level | Total XP | XP to Next |
+|-------|----------|------------|
+| 1 | 0 | 83 |
+| 10 | 1,154 | 229 |
+| 20 | 4,470 | 899 |
+| 30 | 13,363 | 2,673 |
+| 40 | 37,224 | 7,195 |
+| 50 | 101,333 | 18,389 |
+| 60 | 273,742 | 46,236 |
+| 70 | 737,627 | 115,590 |
+| 80 | 1,986,068 | 287,883 |
+| 90 | 5,346,332 | 716,427 |
+| 92 | 6,517,253 | (~50% of 99) |
+| 99 | 13,034,431 | MAX |
+
+---
+
+## Related Documentation
+
+- [Combat System](/wiki/game-systems/combat)
+- [Skills System](/wiki/game-systems/skills)
+- [Movement System](/wiki/game-systems/movement)

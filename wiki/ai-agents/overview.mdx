@@ -1,0 +1,373 @@
+---
+title: "AI Agents Overview"
+description: "ElizaOS integration for autonomous AI gameplay"
+icon: "bot"
+---
+
+{/* 
+  Source: packages/plugin-hyperscape/src/
+  Verified against actual codebase
+*/}
+
+## Introduction
+
+Hyperscape integrates [ElizaOS](https://elizaos.ai) to enable AI agents that play the game autonomously. Unlike scripted NPCs, these agents use LLMs to make decisions, set goals, and interact with the world just like human players.
+
+<Info>
+  AI agents connect via the same WebSocket protocol as human players and have full access to all game mechanics.
+</Info>
+
+---
+
+## Plugin Architecture
+
+The `@hyperscape/plugin-hyperscape` package provides:
+
+```
+packages/plugin-hyperscape/src/
+├── actions/              # 21 game actions (movement, combat, skills, etc.)
+├── providers/            # 7 state providers (game state, inventory, etc.)
+├── evaluators/           # Decision-making evaluators
+├── services/             # HyperscapeService (WebSocket client)
+├── events/               # Event handlers for memory storage
+├── routes/               # HTTP API for agent management
+├── managers/             # State and behavior management
+├── templates/            # LLM prompt templates
+├── content-packs/        # Character templates
+├── config/               # Configuration
+├── types/                # TypeScript types
+└── index.ts              # Plugin entry point
+```
+
+---
+
+## Plugin Registration
+
+```typescript
+// From packages/plugin-hyperscape/src/index.ts
+export const hyperscapePlugin: Plugin = {
+  name: "@hyperscape/plugin-hyperscape",
+  description: "Connect ElizaOS AI agents to Hyperscape 3D multiplayer RPG worlds",
+
+  services: [HyperscapeService],
+
+  providers: [
+    goalProvider,            // Current goal and progress
+    gameStateProvider,       // Health, stamina, position, combat
+    inventoryProvider,       // Items, coins, free slots
+    nearbyEntitiesProvider,  // Players, NPCs, resources
+    skillsProvider,          // Skill levels and XP
+    equipmentProvider,       // Equipped items
+    availableActionsProvider, // Context-aware actions
+  ],
+
+  evaluators: [
+    goalEvaluator,           // Goal progress assessment
+    survivalEvaluator,       // Health and threat assessment
+    explorationEvaluator,    // Exploration opportunities
+    socialEvaluator,         // Social interactions
+    combatEvaluator,         // Combat opportunities
+  ],
+
+  actions: [
+    // 21 actions listed below
+  ],
+};
+```
+
+---
+
+## Available Actions
+
+The plugin provides **21 actions** across 8 categories:
+
+### Goal-Oriented Actions
+
+| Action | Description |
+|--------|-------------|
+| `setGoalAction` | Set a new goal when none exists |
+| `navigateToAction` | Navigate to goal location |
+
+### Autonomous Behavior
+
+| Action | Description |
+|--------|-------------|
+| `autonomousAttackAction` | Attack nearby mobs |
+| `exploreAction` | Move to explore new areas |
+| `fleeAction` | Run away from danger |
+| `idleAction` | Stand still and observe |
+| `approachEntityAction` | Move towards a specific entity |
+
+### Movement Actions
+
+| Action | File | Description |
+|--------|------|-------------|
+| `moveToAction` | `actions/movement.ts` | Navigate to coordinates |
+| `followEntityAction` | `actions/movement.ts` | Follow an entity |
+| `stopMovementAction` | `actions/movement.ts` | Stop moving |
+
+### Combat Actions
+
+| Action | File | Description |
+|--------|------|-------------|
+| `attackEntityAction` | `actions/combat.ts` | Attack a target |
+| `changeCombatStyleAction` | `actions/combat.ts` | Change attack style |
+
+### Skill Actions
+
+| Action | File | Description |
+|--------|------|-------------|
+| `chopTreeAction` | `actions/skills.ts` | Chop a tree (Woodcutting) |
+| `catchFishAction` | `actions/skills.ts` | Catch fish (Fishing) |
+| `lightFireAction` | `actions/skills.ts` | Light a fire (Firemaking) |
+| `cookFoodAction` | `actions/skills.ts` | Cook food (Cooking) |
+
+### Inventory Actions
+
+| Action | File | Description |
+|--------|------|-------------|
+| `equipItemAction` | `actions/inventory.ts` | Equip an item |
+| `useItemAction` | `actions/inventory.ts` | Use/consume an item |
+| `dropItemAction` | `actions/inventory.ts` | Drop an item |
+
+### Social Actions
+
+| Action | File | Description |
+|--------|------|-------------|
+| `chatMessageAction` | `actions/social.ts` | Send a chat message |
+
+### Banking Actions
+
+| Action | File | Description |
+|--------|------|-------------|
+| `bankDepositAction` | `actions/banking.ts` | Deposit items to bank |
+| `bankWithdrawAction` | `actions/banking.ts` | Withdraw items from bank |
+
+---
+
+## State Providers
+
+Providers supply game context to the agent's decision-making:
+
+### goalProvider
+
+Provides current goal and progress tracking.
+
+### gameStateProvider
+
+```typescript
+// Player health, stamina, position, combat status
+{
+  health: { current: 45, max: 99 },
+  stamina: { current: 80, max: 100 },
+  position: { x: 123.5, y: 0, z: 456.7 },
+  inCombat: false,
+  combatTarget: null,
+}
+```
+
+### inventoryProvider
+
+```typescript
+// Inventory items, coins, free slots
+{
+  items: [
+    { id: "bronze_sword", quantity: 1, slot: 0 },
+    { id: "coins", quantity: 500, slot: 1 },
+  ],
+  freeSlots: 26,
+  totalCoins: 500,
+}
+```
+
+### nearbyEntitiesProvider
+
+```typescript
+// Players, NPCs, resources in range
+{
+  players: [...],
+  mobs: [
+    { id: "goblin_1", name: "Goblin", distance: 5.2, health: 10 },
+  ],
+  resources: [
+    { id: "tree_1", type: "tree", distance: 3.1 },
+  ],
+  items: [...],
+}
+```
+
+### skillsProvider
+
+```typescript
+// Skill levels and XP
+{
+  attack: { level: 10, xp: 1154 },
+  strength: { level: 8, xp: 737 },
+  defense: { level: 5, xp: 388 },
+  constitution: { level: 12, xp: 1623 },
+  ranged: { level: 1, xp: 0 },
+  woodcutting: { level: 15, xp: 2411 },
+  fishing: { level: 10, xp: 1154 },
+  firemaking: { level: 5, xp: 388 },
+  cooking: { level: 8, xp: 737 },
+}
+```
+
+### equipmentProvider
+
+```typescript
+// Currently equipped items
+{
+  weapon: { id: "bronze_sword", name: "Bronze Sword" },
+  shield: null,
+  helmet: null,
+  body: null,
+  legs: null,
+  arrows: null,
+}
+```
+
+### availableActionsProvider
+
+```typescript
+// Context-aware actions the agent can perform now
+{
+  canAttack: ["goblin_1", "goblin_2"],
+  canChopTree: ["tree_5"],
+  canCatchFish: [],
+  canCook: false,
+  canBank: false,
+}
+```
+
+---
+
+## Evaluators
+
+Evaluators assess game state for autonomous decision-making:
+
+| Evaluator | Purpose |
+|-----------|---------|
+| `goalEvaluator` | Check goal progress, provide recommendations |
+| `survivalEvaluator` | Assess health, threats, survival needs |
+| `explorationEvaluator` | Identify exploration opportunities |
+| `socialEvaluator` | Identify social interaction opportunities |
+| `combatEvaluator` | Assess combat opportunities and threats |
+
+---
+
+## Configuration
+
+```typescript
+// From packages/plugin-hyperscape/src/index.ts
+const configSchema = z.object({
+  HYPERSCAPE_SERVER_URL: z
+    .string()
+    .url()
+    .optional()
+    .default("ws://localhost:5555/ws"),
+  HYPERSCAPE_AUTO_RECONNECT: z
+    .string()
+    .optional()
+    .default("true")
+    .transform((val) => val !== "false"),
+  HYPERSCAPE_AUTH_TOKEN: z
+    .string()
+    .optional(),
+  HYPERSCAPE_PRIVY_USER_ID: z
+    .string()
+    .optional(),
+});
+```
+
+### Environment Variables
+
+```bash
+# LLM Provider (at least one required)
+OPENAI_API_KEY=your-openai-key
+ANTHROPIC_API_KEY=your-anthropic-key
+OPENROUTER_API_KEY=your-openrouter-key
+
+# Hyperscape Connection
+HYPERSCAPE_SERVER_URL=ws://localhost:5555/ws
+HYPERSCAPE_AUTO_RECONNECT=true
+HYPERSCAPE_AUTH_TOKEN=optional-privy-token
+HYPERSCAPE_PRIVY_USER_ID=optional-privy-user-id
+```
+
+---
+
+## Running AI Agents
+
+```bash
+# Start game with AI agents
+bun run dev:elizaos
+```
+
+This starts:
+- Game server on port **5555**
+- Client on port **3333**
+- ElizaOS runtime on port **4001**
+
+---
+
+## Spectator Mode
+
+Watch AI agents play in real-time:
+
+1. Start with `bun run dev:elizaos`
+2. Open `http://localhost:3333`
+3. Select an agent to spectate
+4. Observe decision-making in action
+
+---
+
+## Agent Architecture Flow
+
+```mermaid
+flowchart LR
+    A[ElizaOS Runtime] --> B[plugin-hyperscape]
+    B --> C[Providers]
+    B --> D[Actions]
+    C --> E[Game State]
+    D --> F[WebSocket → Server]
+    E --> G[LLM Decision]
+    G --> D
+```
+
+---
+
+## Event Handlers
+
+Game events are stored as memories for agent learning:
+
+```typescript
+// From packages/plugin-hyperscape/src/index.ts
+events: {
+  RUN_STARTED: [
+    async (payload) => {
+      const runtime = payload.runtime;
+      const service = runtime.getService<HyperscapeService>("hyperscapeService");
+      if (service && !service.arePluginEventHandlersRegistered()) {
+        registerEventHandlers(runtime, service);
+        service.markPluginEventHandlersRegistered();
+      }
+    },
+  ],
+},
+```
+
+---
+
+---
+
+## Detailed Documentation
+
+<CardGroup cols={2}>
+  <Card title="Actions Reference" icon="play" href="/wiki/ai-agents/actions">
+    Complete reference for all 21 agent actions including movement, combat, skills, inventory, and goals.
+  </Card>
+  <Card title="Providers Reference" icon="database" href="/wiki/ai-agents/providers">
+    All 7 context providers that supply game state to the LLM for decision-making.
+  </Card>
+</CardGroup>

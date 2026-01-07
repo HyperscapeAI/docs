@@ -1,0 +1,449 @@
+---
+title: "Tile Movement System"
+description: "OSRS-accurate tile-based movement and pathfinding"
+icon: "route"
+---
+
+# Tile Movement System
+
+Hyperscape uses a **discrete tile-based movement system** inspired by RuneScape. The world is divided into tiles, and entities move one tile at a time in sync with server ticks.
+
+<Info>
+The tile system lives in `packages/shared/src/systems/shared/movement/TileSystem.ts`.
+</Info>
+
+## Core Constants
+
+```typescript
+// From TileSystem.ts
+export const TILE_SIZE = 1.0;           // 1 world unit = 1 tile
+export const TICK_DURATION_MS = 600;    // 0.6 seconds per server tick
+export const TILES_PER_TICK_WALK = 2;   // Walking: 2 tiles per tick (2x OSRS)
+export const TILES_PER_TICK_RUN = 4;    // Running: 4 tiles per tick (2x OSRS)
+export const MAX_PATH_LENGTH = 25;      // Maximum tiles in a path
+export const PATHFIND_RADIUS = 128;     // BFS search radius in tiles
+```
+
+<Note>
+Hyperscape uses **2x OSRS speed** for a snappier modern feel while keeping the tick-based system. OSRS uses 1 tile/tick walk, 2 tiles/tick run.
+</Note>
+
+---
+
+## Tile Coordinates
+
+Tiles use integer coordinates on the X-Z plane. Height (Y) comes from terrain.
+
+```typescript
+// Tile coordinate (always integers)
+export interface TileCoord {
+  x: number; // Integer tile X
+  z: number; // Integer tile Z
+}
+```
+
+### World ↔ Tile Conversion
+
+```typescript
+// Convert world coordinates to tile coordinates
+export function worldToTile(worldX: number, worldZ: number): TileCoord {
+  return {
+    x: Math.floor(worldX / TILE_SIZE),
+    z: Math.floor(worldZ / TILE_SIZE),
+  };
+}
+
+// Convert tile to world (tile center)
+export function tileToWorld(tile: TileCoord): { x: number; y: number; z: number } {
+  return {
+    x: (tile.x + 0.5) * TILE_SIZE,
+    y: 0, // Y set from terrain height
+    z: (tile.z + 0.5) * TILE_SIZE,
+  };
+}
+
+// Snap position to tile center
+export function snapToTileCenter(position: Position3D): Position3D {
+  return {
+    x: Math.floor(position.x / TILE_SIZE) * TILE_SIZE + 0.5 * TILE_SIZE,
+    y: position.y,
+    z: Math.floor(position.z / TILE_SIZE) * TILE_SIZE + 0.5 * TILE_SIZE,
+  };
+}
+```
+
+---
+
+## Movement State
+
+Each entity with movement has a `TileMovementState`:
+
+```typescript
+export interface TileMovementState {
+  currentTile: TileCoord;      // Current position
+  path: TileCoord[];           // Queue of tiles to walk through
+  pathIndex: number;           // Current position in path
+  isRunning: boolean;          // Walk (2 tiles/tick) vs Run (4 tiles/tick)
+  moveSeq: number;             // Incremented on each new path
+  previousTile: TileCoord | null; // Tile at START of current tick
+}
+```
+
+### Previous Tile (OSRS Follow Mechanic)
+
+```typescript
+// OSRS-ACCURATE: Following a player means walking to their PREVIOUS tile,
+// creating the characteristic 1-tick trailing effect.
+previousTile: TileCoord | null;
+```
+
+---
+
+## Distance Functions
+
+### Manhattan Distance
+
+Used for simple distance checks:
+
+```typescript
+export function tileManhattanDistance(a: TileCoord, b: TileCoord): number {
+  return Math.abs(a.x - b.x) + Math.abs(a.z - b.z);
+}
+```
+
+### Chebyshev Distance
+
+The actual "tile distance" for diagonal movement:
+
+```typescript
+export function tileChebyshevDistance(a: TileCoord, b: TileCoord): number {
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+}
+```
+
+---
+
+## Adjacency Functions
+
+### 8-Direction Adjacency
+
+```typescript
+// Check if tiles are adjacent (including diagonals)
+export function tilesAdjacent(a: TileCoord, b: TileCoord): boolean {
+  const dx = Math.abs(a.x - b.x);
+  const dz = Math.abs(a.z - b.z);
+  return dx <= 1 && dz <= 1 && (dx > 0 || dz > 0);
+}
+
+// Get all 8 adjacent tiles (RuneScape order: W, E, S, N, SW, SE, NW, NE)
+export function getAdjacentTiles(tile: TileCoord): TileCoord[] {
+  return [
+    { x: tile.x - 1, z: tile.z },     // West
+    { x: tile.x + 1, z: tile.z },     // East
+    { x: tile.x, z: tile.z - 1 },     // South
+    { x: tile.x, z: tile.z + 1 },     // North
+    { x: tile.x - 1, z: tile.z - 1 }, // Southwest
+    { x: tile.x + 1, z: tile.z - 1 }, // Southeast
+    { x: tile.x - 1, z: tile.z + 1 }, // Northwest
+    { x: tile.x + 1, z: tile.z + 1 }, // Northeast
+  ];
+}
+```
+
+### Cardinal-Only Adjacency
+
+```typescript
+// Check if tiles are cardinally adjacent (N/S/E/W only)
+export function tilesCardinallyAdjacent(a: TileCoord, b: TileCoord): boolean {
+  const dx = Math.abs(a.x - b.x);
+  const dz = Math.abs(a.z - b.z);
+  return (dx === 1 && dz === 0) || (dx === 0 && dz === 1);
+}
+
+// Get cardinal tiles only
+export const CARDINAL_DIRECTIONS = [
+  { x: 0, z: 1 },  // North
+  { x: 1, z: 0 },  // East
+  { x: 0, z: -1 }, // South
+  { x: -1, z: 0 }, // West
+];
+```
+
+---
+
+## Combat Positioning
+
+### Melee Range
+
+<Warning>
+**OSRS Accuracy**: Standard melee (range 1) requires **cardinal adjacency** only. You cannot attack diagonally without a halberd (range 2).
+</Warning>
+
+```typescript
+export function tilesWithinMeleeRange(
+  attacker: TileCoord,
+  target: TileCoord,
+  meleeRange: number,
+): boolean {
+  const dx = Math.abs(attacker.x - target.x);
+  const dz = Math.abs(attacker.z - target.z);
+
+  // Range 1: CARDINAL ONLY (standard melee)
+  if (meleeRange === 1) {
+    return (dx === 1 && dz === 0) || (dx === 0 && dz === 1);
+  }
+
+  // Range 2+: Allow diagonal (halberd, spear)
+  const chebyshevDistance = Math.max(dx, dz);
+  return chebyshevDistance <= meleeRange && chebyshevDistance > 0;
+}
+```
+
+### Best Combat Tile
+
+```typescript
+// Find the best tile to stand on for melee combat
+export function getBestMeleeTile(
+  target: TileCoord,
+  attacker: TileCoord,
+  meleeRange: number = 1,
+  isWalkable?: (tile: TileCoord) => boolean,
+): TileCoord | null {
+  // If already in range, stay put
+  if (tilesWithinMeleeRange(attacker, target, meleeRange)) {
+    return attacker;
+  }
+
+  // For range 1: CARDINAL ONLY
+  if (meleeRange === 1) {
+    const cardinalTiles = [
+      { x: target.x - 1, z: target.z }, // West
+      { x: target.x + 1, z: target.z }, // East
+      { x: target.x, z: target.z - 1 }, // South
+      { x: target.x, z: target.z + 1 }, // North
+    ];
+
+    // Find closest walkable tile
+    return cardinalTiles
+      .filter((tile) => !isWalkable || isWalkable(tile))
+      .sort((a, b) =>
+        tileChebyshevDistance(a, attacker) - tileChebyshevDistance(b, attacker)
+      )[0] ?? null;
+  }
+
+  // For range 2+: All tiles within Chebyshev distance
+  // ... implementation for halberd range
+}
+```
+
+---
+
+## NPC Step-Out
+
+When an NPC is on the same tile as its target, it must step out before attacking.
+
+```typescript
+// OSRS-accurate: Pick random cardinal direction for step-out
+export function getBestStepOutTile(
+  currentTile: TileCoord,
+  occupancy: IEntityOccupancy,
+  entityId: EntityID,
+  isWalkable: (tile: TileCoord) => boolean,
+  rng: { nextInt: (max: number) => number },
+): TileCoord | null {
+  // Shuffle cardinal directions (OSRS randomness)
+  const shuffledCardinals = shuffleArray([...CARDINAL_DIRECTIONS], rng);
+
+  for (const dir of shuffledCardinals) {
+    const tile = { x: currentTile.x + dir.x, z: currentTile.z + dir.z };
+
+    // Check terrain walkability
+    if (!isWalkable(tile)) continue;
+
+    // Check entity occupancy (exclude self)
+    if (occupancy.isBlocked(tile, entityId)) continue;
+
+    return tile;
+  }
+
+  return null; // All tiles blocked
+}
+```
+
+---
+
+## Resource Interaction
+
+### Multi-Tile Resources
+
+Large resources (like trees) span multiple tiles. Players can interact from any adjacent tile.
+
+```typescript
+// Get all adjacent tiles for a multi-tile resource
+export function getResourceAdjacentTiles(
+  anchorTile: TileCoord,  // SW corner
+  footprintX: number,     // Width in tiles
+  footprintZ: number,     // Depth in tiles
+): TileCoord[] {
+  const adjacent: TileCoord[] = [];
+
+  // North edge
+  for (let dx = 0; dx < footprintX; dx++) {
+    adjacent.push({ x: anchorTile.x + dx, z: anchorTile.z + footprintZ });
+  }
+
+  // South edge
+  for (let dx = 0; dx < footprintX; dx++) {
+    adjacent.push({ x: anchorTile.x + dx, z: anchorTile.z - 1 });
+  }
+
+  // East edge
+  for (let dz = 0; dz < footprintZ; dz++) {
+    adjacent.push({ x: anchorTile.x + footprintX, z: anchorTile.z + dz });
+  }
+
+  // West edge
+  for (let dz = 0; dz < footprintZ; dz++) {
+    adjacent.push({ x: anchorTile.x - 1, z: anchorTile.z + dz });
+  }
+
+  // Corner tiles
+  adjacent.push({ x: anchorTile.x - 1, z: anchorTile.z - 1 }); // SW
+  adjacent.push({ x: anchorTile.x + footprintX, z: anchorTile.z - 1 }); // SE
+  adjacent.push({ x: anchorTile.x - 1, z: anchorTile.z + footprintZ }); // NW
+  adjacent.push({ x: anchorTile.x + footprintX, z: anchorTile.z + footprintZ }); // NE
+
+  return adjacent;
+}
+```
+
+### Cardinal-Only Interaction
+
+For consistent face direction during resource gathering:
+
+```typescript
+// Cardinal directions only (no diagonals)
+export function getCardinalAdjacentTiles(
+  anchorTile: TileCoord,
+  footprintX: number,
+  footprintZ: number,
+): TileCoord[] {
+  const adjacent: TileCoord[] = [];
+
+  // Only N/S/E/W edges, no corners
+  // ... (north, south, east, west edges)
+
+  return adjacent;
+}
+
+// Determine face direction based on position
+export function getCardinalFaceDirection(
+  playerTile: TileCoord,
+  resourceAnchor: TileCoord,
+  footprintX: number,
+  footprintZ: number,
+): CardinalDirection | null {
+  // Player north of resource → face South
+  // Player east of resource → face West
+  // Player south of resource → face North
+  // Player west of resource → face East
+}
+```
+
+---
+
+## Entity Occupancy
+
+The `EntityOccupancyMap` tracks which tiles are occupied by entities.
+
+```typescript
+// From EntityOccupancyMap.ts
+export interface IEntityOccupancy {
+  // Check if tile is blocked (optionally excluding an entity)
+  isBlocked(tile: TileCoord, excludeEntityId?: EntityID): boolean;
+
+  // Get entity at tile
+  getEntityAt(tile: TileCoord): EntityID | null;
+
+  // Update entity position
+  moveEntity(entityId: EntityID, fromTile: TileCoord, toTile: TileCoord): void;
+
+  // Add/remove entities
+  addEntity(entityId: EntityID, tile: TileCoord): void;
+  removeEntity(entityId: EntityID): void;
+}
+```
+
+### Zero-Allocation Helpers
+
+For performance in hot paths, use pre-allocated buffers:
+
+```typescript
+// Zero-allocation tile conversion
+export function worldToTileInto(
+  worldX: number,
+  worldZ: number,
+  out: TileCoord,
+): void {
+  out.x = Math.floor(worldX / TILE_SIZE);
+  out.z = Math.floor(worldZ / TILE_SIZE);
+}
+
+// Pre-allocated buffer for melee tiles
+const _cardinalMeleeTiles: TileCoord[] = [
+  { x: 0, z: 0 },
+  { x: 0, z: 0 },
+  { x: 0, z: 0 },
+  { x: 0, z: 0 },
+];
+
+export function getCardinalMeleeTilesInto(
+  targetTile: TileCoord,
+  buffer: TileCoord[],
+): number {
+  buffer[0].x = targetTile.x;
+  buffer[0].z = targetTile.z - 1; // South
+  buffer[1].x = targetTile.x;
+  buffer[1].z = targetTile.z + 1; // North
+  buffer[2].x = targetTile.x - 1;
+  buffer[2].z = targetTile.z;     // West
+  buffer[3].x = targetTile.x + 1;
+  buffer[3].z = targetTile.z;     // East
+  return 4;
+}
+```
+
+---
+
+## Client Interpolation
+
+The client smoothly interpolates entity positions between server ticks.
+
+```typescript
+// From ClientNetwork.ts
+interface InterpolationState {
+  entityId: string;
+  snapshots: EntitySnapshot[];      // Buffer of last 3 positions
+  snapshotIndex: number;
+  currentPosition: THREE.Vector3;   // Interpolated position
+  currentRotation: THREE.Quaternion;
+  lastUpdate: number;
+}
+
+// Interpolate between snapshots for 60 FPS visuals
+function interpolateEntity(state: InterpolationState, alpha: number): void {
+  const prev = state.snapshots[state.snapshotIndex];
+  const next = state.snapshots[(state.snapshotIndex + 1) % 3];
+
+  state.currentPosition.lerpVectors(prev.position, next.position, alpha);
+  state.currentRotation.slerpQuaternions(prev.rotation, next.rotation, alpha);
+}
+```
+
+---
+
+## Related Documentation
+
+- [Combat System](/wiki/game-systems/combat) - Uses tile range for attacks
+- [NPC Behavior](/wiki/data/npcs) - NPC aggro and pathing
+- [Entity System](/wiki/engine/ecs) - Entity management

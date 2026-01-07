@@ -1,0 +1,373 @@
+---
+title: "Client Application"
+description: "React UI, 3D rendering, VRM avatars, and client architecture"
+icon: "monitor"
+---
+
+# Client Application
+
+The Hyperscape client is a React-based web application with Three.js WebGPU rendering. It provides a modern MMORPG experience with VRM avatars, responsive UI panels, and real-time multiplayer.
+
+<Info>
+Client code lives in `packages/client/src/`. The rendering systems are in `packages/shared/src/systems/client/`.
+</Info>
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       React Application                         │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │ Auth Flow   │  │  Screens    │  │    Game Panels          │  │
+│  │ PrivyAuth   │  │ - Login     │  │ - Inventory  - Skills   │  │
+│  │ Wallet Auth │  │ - CharSel   │  │ - Equipment  - Bank     │  │
+│  │             │  │ - GameClient│  │ - Combat     - Chat     │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+├─────────────────────────────────────────────────────────────────┤
+│                    Three.js WebGPU Renderer                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │ Scene Graph │  │  Cameras    │  │    Post-Processing      │  │
+│  │ Terrain     │  │ Third Person│  │ - Bloom                 │  │
+│  │ Entities    │  │ First Person│  │ - Tone Mapping          │  │
+│  │ VRM Avatars │  │ RTS Mode    │  │ - Color Grading         │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+├─────────────────────────────────────────────────────────────────┤
+│                      Client World                               │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │  Network    │  │    Input    │  │     Systems             │  │
+│  │  WebSocket  │  │  Keyboard   │  │ - Graphics  - Camera    │  │
+│  │  Reconnect  │  │  Mouse      │  │ - Audio     - Loader    │  │
+│  │             │  │  Touch      │  │ - Health    - XP Drops  │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Entry Point
+
+The client entry point is `packages/client/src/index.tsx`:
+
+```typescript
+// Main entry point for the Hyperscape browser client
+import { World, installThreeJSExtensions } from "@hyperscape/shared";
+import React from "react";
+import ReactDOM from "react-dom/client";
+
+// Screens
+import { LoginScreen } from "./screens/LoginScreen";
+import { CharacterSelectScreen } from "./screens/CharacterSelectScreen";
+import { GameClient } from "./screens/GameClient";
+
+// Authentication (Privy + Wallet)
+import { PrivyAuthProvider } from "./auth/PrivyAuthProvider";
+
+// Embedded mode support for spectator views
+import { EmbeddedGameClient } from "./components/EmbeddedGameClient";
+import { isEmbeddedMode } from "./types/embeddedConfig";
+```
+
+---
+
+## Authentication Flow
+
+Authentication uses [Privy](https://www.privy.io/) for wallet-based login:
+
+```
+Login Screen → Privy Modal → Wallet Signature → Character Select → Game
+```
+
+```typescript
+// auth/PrivyAuthProvider.tsx
+export function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <PrivyProvider
+      appId={PRIVY_APP_ID}
+      config={{
+        loginMethods: ["wallet", "email", "google"],
+        appearance: { theme: "dark" },
+      }}
+    >
+      {children}
+    </PrivyProvider>
+  );
+}
+```
+
+---
+
+## Screens
+
+### Login Screen
+- Wallet connection via Privy
+- Social login (email, Google)
+- Session persistence
+
+### Character Select Screen
+- List existing characters
+- Create new character
+- Character preview with VRM avatar
+
+### Game Client
+- Main game loop
+- World initialization
+- UI overlay rendering
+
+```typescript
+// screens/GameClient.tsx
+export function GameClient({ characterId }: { characterId: string }) {
+  const worldRef = useRef<World | null>(null);
+  
+  useEffect(() => {
+    const world = new World({
+      isServer: false,
+      systems: clientSystems,
+    });
+    
+    world.connect({ characterId });
+    worldRef.current = world;
+    
+    return () => world.destroy();
+  }, [characterId]);
+  
+  return <CoreUI world={worldRef.current} />;
+}
+```
+
+---
+
+## UI Components
+
+### Core UI (CoreUI.tsx)
+
+The main UI wrapper that renders HUD elements and game panels:
+
+```typescript
+export function CoreUI({ world }: { world: ClientWorld }) {
+  const [ready, setReady] = useState(false);
+  const [deathScreen, setDeathScreen] = useState(null);
+  
+  // Event handlers for loading, death, disconnect
+  useEffect(() => {
+    world.on(EventType.READY, () => setReady(true));
+    world.on(EventType.PLAYER_DIED, handleDeath);
+    world.on(EventType.DISCONNECTED, handleDisconnect);
+  }, [world]);
+  
+  if (!ready) return <LoadingScreen />;
+  
+  return (
+    <>
+      <Sidebar world={world} />
+      <StatusBars world={world} />
+      <Chat world={world} />
+      <ActionProgressBar world={world} />
+      <XPProgressOrb world={world} />
+      {deathScreen && <DeathScreen {...deathScreen} />}
+    </>
+  );
+}
+```
+
+### Game Panels
+
+Located in `packages/client/src/game/panels/`:
+
+| Panel | Description |
+|-------|-------------|
+| `InventoryPanel.tsx` | 28-slot inventory with drag & drop |
+| `EquipmentPanel.tsx` | Equipment slots with stat display |
+| `SkillsPanel.tsx` | All skills with XP progress bars |
+| `CombatPanel.tsx` | Combat style selection |
+| `BankPanel.tsx` | Bank interface with tabs |
+| `DialoguePanel.tsx` | NPC conversation UI |
+| `StorePanel.tsx` | Shop/trading interface |
+| `SettingsPanel.tsx` | Game settings |
+| `LootWindow.tsx` | Ground item pickup interface |
+
+### HUD Components
+
+Located in `packages/client/src/game/hud/`:
+
+- `StatusBars.tsx` - Health, prayer, run energy bars
+- `XPProgressOrb.tsx` - XP tracking orb with skill icons
+- `ActionProgressBar.tsx` - Skilling action progress
+- `EntityContextMenu.tsx` - Right-click context menus
+- `Minimap.tsx` - Top-down map view
+- `Nametags.ts` - Entity name/level labels
+
+---
+
+## 3D Graphics System
+
+### WebGPU Renderer
+
+The graphics system uses Three.js with WebGPU for high-performance rendering:
+
+```typescript
+// systems/client/ClientGraphics.ts
+export class ClientGraphics extends SystemBase {
+  private renderer: WebGPURenderer;
+  private postProcessing: PostProcessingComposer;
+  
+  async init() {
+    this.renderer = await createRenderer({
+      powerPreference: "high-performance",
+      antialias: true,
+    });
+    
+    // Configure shadows (Cascaded Shadow Maps)
+    configureShadowMaps(this.renderer, {
+      cascades: 3,
+      shadowMapSize: 2048,
+    });
+    
+    // Post-processing (TSL-based)
+    this.postProcessing = createPostProcessing(this.renderer, {
+      bloom: true,
+      toneMapping: true,
+      colorGrading: true,
+    });
+  }
+}
+```
+
+### Rendering Pipeline
+
+1. **Pre-render**: Update matrices, frustum culling
+2. **Shadow Pass**: Render cascaded shadow maps
+3. **Main Pass**: Render scene with deferred lighting
+4. **Post-Processing**: Bloom, tone mapping, effects (TSL-based)
+5. **UI Overlay**: Render 2D React UI on top
+
+### Camera System
+
+Supports multiple camera modes:
+
+```typescript
+// systems/client/ClientCameraSystem.ts
+export class ClientCameraSystem extends SystemBase {
+  private settings = {
+    minDistance: 2.0,        // Min zoom
+    maxDistance: 15.0,       // Max zoom
+    minPolarAngle: Math.PI * 0.35,  // Pitch limits
+    maxPolarAngle: Math.PI * 0.48,
+    rotateSpeed: 0.9,        // RS3-like feel
+    zoomSpeed: 1.2,
+    shoulderOffsetMax: 0.15, // Over-the-shoulder offset
+  };
+}
+```
+
+| Mode | Controls |
+|------|----------|
+| **Third Person** | Right-drag to rotate, scroll to zoom, click-to-move |
+| **First Person** | Pointer lock, WASD movement |
+| **Top-down/RTS** | Pan, zoom, click-to-move |
+
+---
+
+## VRM Avatar System
+
+Characters use VRM format avatars with humanoid bone mapping:
+
+```typescript
+// components/CharacterPreview.tsx
+import { VRM, VRMLoaderPlugin, VRMUtils } from "@pixiv/three-vrm";
+import { retargetAnimationToVRM } from "../utils/vrmAnimationRetarget";
+
+export const CharacterPreview: React.FC<{ vrmUrl: string }> = ({ vrmUrl }) => {
+  const vrmRef = useRef<VRM | null>(null);
+  const mixerRef = useRef<THREE.AnimationMixer | null>(null);
+  
+  useEffect(() => {
+    const loader = new GLTFLoader();
+    loader.register((parser) => new VRMLoaderPlugin(parser));
+    
+    loader.load(vrmUrl, async (gltf) => {
+      const vrm = gltf.userData.vrm as VRM;
+      VRMUtils.rotateVRM0(vrm);  // Fix rotation for VRM 0.x
+      
+      // Retarget animations to VRM bones
+      const mixer = new THREE.AnimationMixer(vrm.scene);
+      const idleClip = await loadAnimation("idle.glb");
+      const retargeted = retargetAnimationToVRM(idleClip, vrm);
+      mixer.clipAction(retargeted).play();
+      
+      vrmRef.current = vrm;
+      mixerRef.current = mixer;
+    });
+  }, [vrmUrl]);
+};
+```
+
+### VRM Bone Mapping
+
+```typescript
+type VRMHumanBoneName =
+  | "hips" | "spine" | "chest" | "upperChest" | "neck" | "head"
+  | "leftShoulder" | "leftUpperArm" | "leftLowerArm" | "leftHand"
+  | "rightShoulder" | "rightUpperArm" | "rightLowerArm" | "rightHand"
+  | "leftUpperLeg" | "leftLowerLeg" | "leftFoot" | "leftToes"
+  | "rightUpperLeg" | "rightLowerLeg" | "rightFoot" | "rightToes";
+```
+
+---
+
+## Client Systems
+
+Located in `packages/shared/src/systems/client/`:
+
+| System | Description |
+|--------|-------------|
+| `ClientGraphics.ts` | WebGPU rendering, shadows, post-processing |
+| `ClientCameraSystem.ts` | Camera controls and collision |
+| `ClientNetwork.ts` | WebSocket connection, reconnection |
+| `ClientInput.ts` | Keyboard, mouse, touch handling |
+| `ClientAudio.ts` | 3D positional audio, music |
+| `ClientLoader.ts` | Asset loading with progress |
+| `HealthBars.ts` | Floating health bars over entities |
+| `Nametags.ts` | Entity name labels |
+| `DamageSplatSystem.ts` | Floating damage numbers |
+| `XPDropSystem.ts` | XP gain notifications |
+| `EquipmentVisualSystem.ts` | Equipment rendering on avatars |
+| `TileInterpolator.ts` | Smooth tile-based movement |
+
+---
+
+## Embedded Mode
+
+For stream overlays and spectator views:
+
+```typescript
+// URL params for embedded mode
+?embedded=true
+&mode=spectator|free
+&agentId=AGENT_ID
+&followEntity=ENTITY_ID
+&quality=low|medium|high
+&hiddenUI=inventory,skills,chat
+```
+
+```typescript
+// components/EmbeddedGameClient.tsx
+export function EmbeddedGameClient() {
+  const config = window.__HYPERSCAPE_CONFIG__;
+  
+  return (
+    <World
+      mode={config.mode}
+      followEntity={config.followEntity}
+      hiddenUI={config.hiddenUI}
+    />
+  );
+}
+```
+
+---
+
+## Related Documentation
+
+- [Engine Architecture](/wiki/engine/overview)
+- [Networking](/wiki/engine/networking)
+- [Movement System](/wiki/game-systems/movement)

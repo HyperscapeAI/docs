@@ -1,0 +1,298 @@
+---
+title: "Game Systems Overview"
+description: "How Hyperscape game systems work"
+icon: "gears"
+---
+
+{/* 
+  Source: packages/shared/src/systems/shared/
+  Verified against actual codebase
+*/}
+
+## Systems Architecture
+
+Hyperscape game logic is implemented through **Systems** — classes that process entities and components each game tick. Systems are organized by domain and split between client, server, and shared execution contexts.
+
+```
+packages/shared/src/systems/
+├── client/           # Client-only systems (rendering, input)
+├── server/           # Server-only systems (auth, database)
+└── shared/           # Shared systems (combat, economy, skills)
+    ├── character/    # Character management
+    ├── combat/       # Combat mechanics (20+ files)
+    ├── death/        # Death and respawn
+    ├── economy/      # Banks, shops, inventory
+    ├── entities/     # Entity lifecycle
+    ├── infrastructure/
+    ├── interaction/  # Player interactions
+    ├── movement/     # Movement and tiles
+    ├── presentation/ # Visual effects
+    ├── tick/         # Game tick processing
+    └── world/        # World management
+```
+
+---
+
+## System Base Class
+
+All systems extend `SystemBase` which provides:
+
+- Dependency management (required/optional systems)
+- Lifecycle hooks (init, update, cleanup)
+- World reference for entity queries
+- Auto-cleanup on destroy
+
+```typescript
+// From packages/shared/src/systems/shared/SystemBase.ts
+export class CombatSystem extends SystemBase {
+  constructor(world: World) {
+    super(world, {
+      name: "combat",
+      dependencies: {
+        required: ["entity-manager"],
+        optional: ["mob-npc"],
+      },
+      autoCleanup: true,
+    });
+  }
+}
+```
+
+---
+
+## Core Game Systems
+
+### Combat System
+
+**Location:** `systems/shared/combat/`
+
+The combat system implements OSRS-style tick-based combat with 20+ supporting files:
+
+| File | Purpose |
+|------|---------|
+| `CombatSystem.ts` | Main combat orchestration (~2100 lines) |
+| `DamageCalculator.ts` | OSRS damage formulas |
+| `AggroSystem.ts` | Mob aggression behavior |
+| `CombatStateService.ts` | Combat state management |
+| `CombatAnimationManager.ts` | Attack animations |
+| `CombatRotationManager.ts` | Entity facing |
+| `CombatAntiCheat.ts` | Cheat detection |
+| `CombatRateLimiter.ts` | Attack rate limiting |
+| `PlayerDeathSystem.ts` | Player death handling |
+| `MobDeathSystem.ts` | Mob death and drops |
+| `RangeSystem.ts` | Ranged combat |
+| `PidManager.ts` | Player ID priority (OSRS PID) |
+
+<Tip>
+  Combat runs on a 600ms tick cycle, matching Old School RuneScape exactly.
+</Tip>
+
+### Economy Systems
+
+**Location:** `systems/shared/economy/`
+
+Handles all economic interactions:
+
+- **Banking** — Deposit, withdraw, note conversion
+- **Shops** — Buy/sell with general stores
+- **Inventory** — 28-slot management with stacking
+- **Loot** — Item drops and ground items
+
+### Movement System
+
+**Location:** `systems/shared/movement/`
+
+Implements tile-based movement:
+
+- **TileSystem.ts** — Grid-based coordinate system
+- **Pathfinding** — A* navigation around obstacles
+- **Click-to-move** — Orthographic camera targeting
+
+### Character Systems
+
+**Location:** `systems/shared/character/`
+
+Player character management:
+
+- **Stats tracking** — Levels, XP, combat level
+- **Equipment** — Gear slots and bonuses
+- **Skills** — 9 trainable skills
+
+---
+
+## Combat Constants
+
+The combat system uses OSRS-accurate constants:
+
+```typescript
+// From packages/shared/src/constants/CombatConstants.ts
+export const COMBAT_CONSTANTS = {
+  // Tick System
+  TICK_DURATION_MS: 600,
+  
+  // Ranges (tiles)
+  MELEE_RANGE: 2,
+  RANGED_RANGE: 10,
+  PICKUP_RANGE: 2.5,
+  
+  // Combat Timing (ticks)
+  DEFAULT_ATTACK_SPEED_TICKS: 4,      // 2.4 seconds
+  COMBAT_TIMEOUT_TICKS: 17,           // 10.2 seconds
+  HEALTH_REGEN_INTERVAL_TICKS: 100,   // 60 seconds
+  
+  // Damage Formulas (OSRS)
+  BASE_CONSTANT: 64,
+  EFFECTIVE_LEVEL_CONSTANT: 8,
+  DAMAGE_DIVISOR: 640,
+  MIN_DAMAGE: 0,
+  MAX_DAMAGE: 200,
+  
+  // XP Rates
+  XP: {
+    COMBAT_XP_PER_DAMAGE: 4,
+    HITPOINTS_XP_PER_DAMAGE: 1.33,
+    CONTROLLED_XP_PER_DAMAGE: 1.33,
+  },
+  
+  // Death
+  DEATH: {
+    ANIMATION_TICKS: 8,
+    COOLDOWN_TICKS: 17,
+    DEFAULT_RESPAWN_TOWN: "Central Haven",
+  },
+} as const;
+```
+
+### Level Constants
+
+```typescript
+// From packages/shared/src/constants/CombatConstants.ts
+export const LEVEL_CONSTANTS = {
+  DEFAULT_COMBAT_LEVEL: 3,
+  MIN_COMBAT_LEVEL: 3,
+  MAX_LEVEL: 99,
+  
+  XP_BASE: 50,
+  XP_GROWTH_FACTOR: 8,
+  
+  COMBAT_LEVEL_WEIGHTS: {
+    DEFENSE_WEIGHT: 0.25,
+    OFFENSE_WEIGHT: 0.325,
+    RANGED_MULTIPLIER: 1.5,
+  },
+} as const;
+```
+
+---
+
+## Skills System
+
+Hyperscape implements 9 skills from the GDD:
+
+### Combat Skills
+
+| Skill | Purpose |
+|-------|---------|
+| **Attack** | Melee accuracy and weapon requirements |
+| **Strength** | Melee damage |
+| **Defense** | Damage reduction and armor requirements |
+| **Constitution** | Health points (HP) |
+| **Ranged** | Ranged combat accuracy and damage |
+
+### Gathering Skills
+
+| Skill | Purpose |
+|-------|---------|
+| **Woodcutting** | Chop trees for logs |
+| **Fishing** | Catch fish at water spots |
+
+### Processing Skills
+
+| Skill | Purpose |
+|-------|---------|
+| **Firemaking** | Light fires from logs |
+| **Cooking** | Cook raw fish for healing |
+
+<Info>
+  Each skill has independent XP tracking and levels 1-99 following OSRS XP curves.
+</Info>
+
+---
+
+## Attack Styles
+
+Players choose how combat XP is distributed:
+
+| Style | XP Distribution |
+|-------|-----------------|
+| **Accurate** | Attack + Constitution |
+| **Aggressive** | Strength + Constitution |
+| **Defensive** | Defense + Constitution |
+| **Controlled** | Equal split across all |
+
+---
+
+## Mob Aggression
+
+```typescript
+// From packages/shared/src/constants/CombatConstants.ts
+export const AGGRO_CONSTANTS = {
+  DEFAULT_BEHAVIOR: "passive",
+  AGGRO_UPDATE_INTERVAL_MS: 100,
+  ALWAYS_AGGRESSIVE_LEVEL: 999,  // Ignores level difference
+} as const;
+```
+
+| Behavior | Description |
+|----------|-------------|
+| **Passive** | Never attacks first |
+| **Aggressive** | Attacks players in detection range |
+| **Level-gated** | Ignores high-level players |
+| **Always Aggressive** | Attacks regardless of level |
+
+---
+
+## Event System
+
+Systems communicate through typed events:
+
+```typescript
+// Event types from packages/shared/src/types/events/events.ts
+export enum EventType {
+  // Combat
+  COMBAT_START = "combat:start",
+  COMBAT_END = "combat:end",
+  DAMAGE_DEALT = "damage:dealt",
+  
+  // Inventory
+  INVENTORY_ADD = "inventory:add",
+  INVENTORY_REMOVE = "inventory:remove",
+  
+  // Skills
+  XP_GAINED = "xp:gained",
+  LEVEL_UP = "level:up",
+  
+  // ... many more
+}
+```
+
+---
+
+---
+
+## Detailed Documentation
+
+<CardGroup cols={2}>
+  <Card title="Combat System" icon="swords" href="/wiki/game-systems/combat">
+    OSRS-accurate damage formulas, attack styles, aggro system, and death mechanics.
+  </Card>
+  <Card title="Skills & Progression" icon="chart-line" href="/wiki/game-systems/skills">
+    RuneScape XP curves, leveling, combat level formula, and skill requirements.
+  </Card>
+  <Card title="Tile Movement" icon="route" href="/wiki/game-systems/movement">
+    Discrete tile-based movement, pathfinding, and OSRS melee range rules.
+  </Card>
+  <Card title="NPC Data" icon="users" href="/wiki/data/npcs">
+    How NPCs and mobs are defined with drop tables and aggro behaviors.
+  </Card>
+</CardGroup>
