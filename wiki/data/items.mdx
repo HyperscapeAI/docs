@@ -53,6 +53,7 @@ interface Item {
   type: ItemType;                // Category
   rarity: ItemRarity;            // Common, Uncommon, Rare, etc.
   modelPath?: string;            // Path to GLB model
+  tier?: string;                 // Metal tier (bronze, iron, steel, etc.)
 
   // Inventory properties
   stackable: boolean;            // Can stack in inventory
@@ -61,11 +62,25 @@ interface Item {
 
   // Equipment properties (for weapons/armor)
   requirements?: ItemRequirement;
-  stats?: ItemStats;
+  bonuses?: ItemStats;           // Renamed from stats
   attackType?: AttackType;
   weaponType?: WeaponType;
+  equipSlot?: EquipmentSlotName; // Where item equips
   attackSpeed?: number;          // In milliseconds
   range?: number;                // Attack range
+
+  // Tool properties (for gathering tools)
+  tool?: {
+    skill: "woodcutting" | "mining" | "fishing";
+    priority: number;            // Higher priority tools used first
+    rollTicks?: number;          // Ticks between gather attempts
+  };
+
+  // Processing properties (embedded recipe data)
+  cooking?: CookingRecipeData;
+  firemaking?: FiremakingRecipeData;
+  smelting?: SmeltingRecipeData;
+  smithing?: SmithingRecipeData;
 
   // Noted item support
   isNoted?: boolean;
@@ -73,6 +88,24 @@ interface Item {
   notedItemId?: string;          // For base items
 }
 ```
+
+### Tier-Based Requirements
+
+Items with a `tier` property automatically derive level requirements from `tier-requirements.json`:
+
+```json
+{
+  "id": "steel_sword",
+  "name": "Steel Sword",
+  "type": "weapon",
+  "tier": "steel",
+  "equipSlot": "weapon",
+  "attackType": "MELEE"
+  // requirements auto-derived: { attack: 5 }
+}
+```
+
+The `TierDataProvider` maps tiers to skill requirements, eliminating redundant requirement definitions.
 
 ---
 
