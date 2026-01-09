@@ -95,28 +95,94 @@ NPCs are defined with combat stats, drops, and spawn locations:
 
 ## Adding Items
 
-Items include equipment, resources, and consumables:
+Items include equipment, resources, and consumables. Add to the appropriate category file in `items/` directory.
 
-```typescript
+### Example: Adding a Weapon
+
+**File**: `packages/server/world/assets/manifests/items/weapons.json`
+
+```json
 {
-  id: "bronze_sword",
-  name: "Bronze Sword",
-  type: "weapon",
-  slot: "weapon",
-  requirements: { attack: 1 },
-  stats: { attackBonus: 4, strengthBonus: 3 },
-  tradeable: true,
-  stackable: false
+  "id": "mithril_longsword",
+  "name": "Mithril Longsword",
+  "type": "weapon",
+  "tier": "mithril",
+  "equipSlot": "weapon",
+  "attackType": "MELEE",
+  "weaponType": "longsword",
+  "stackable": false,
+  "tradeable": true,
+  "value": 1300,
+  "bonuses": {
+    "attack": 26,
+    "strength": 25
+  }
 }
 ```
 
+### Example: Adding a Tool
+
+**File**: `packages/server/world/assets/manifests/items/tools.json`
+
+```json
+{
+  "id": "adamant_pickaxe",
+  "name": "Adamant Pickaxe",
+  "type": "tool",
+  "tier": "adamant",
+  "equipSlot": "weapon",
+  "stackable": false,
+  "tradeable": true,
+  "value": 3200,
+  "tool": {
+    "skill": "mining",
+    "priority": 4,
+    "rollTicks": 3
+  }
+}
+```
+
+### Example: Adding a Resource
+
+**File**: `packages/server/world/assets/manifests/items/resources.json`
+
+```json
+{
+  "id": "mithril_ore",
+  "name": "Mithril Ore",
+  "type": "resource",
+  "stackable": false,
+  "tradeable": true,
+  "value": 150,
+  "notedItemId": "mithril_ore_noted"
+}
+```
+
+### Tier-Based Requirements
+
+Items with a `tier` property automatically derive level requirements from `tier-requirements.json`:
+
+```json
+{
+  "id": "steel_sword",
+  "tier": "steel",
+  "equipSlot": "weapon",
+  "attackType": "MELEE"
+  // requirements auto-derived: { attack: 5 }
+}
+```
+
+No need to manually specify `requirements` if using the tier system.
+
 ### Item Types
 
-- **weapon**: Swords, bows
-- **armor**: Helmets, bodies, legs
-- **tool**: Hatchets, fishing rods
+- **weapon**: Swords, bows, staffs
+- **armor**: Helmets, bodies, legs, shields
+- **tool**: Hatchets, pickaxes, fishing rods
 - **consumable**: Food, potions
-- **resource**: Logs, fish, ores
+- **resource**: Logs, fish, ores, bars
+- **currency**: Coins
+- **junk**: Burnt food, broken items
 
 ## Adding Shops
 
