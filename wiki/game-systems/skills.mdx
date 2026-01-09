@@ -353,8 +353,122 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
+## Smithing System
+
+Smithing is a two-stage artisan skill that allows players to create metal equipment.
+
+### Stage 1: Smelting (Furnace)
+
+Convert ores into metal bars at a furnace.
+
+**Requirements:**
+- Ores in inventory (copper, tin, iron, coal, etc.)
+- Access to a furnace
+
+**Process:**
+1. Click on a furnace
+2. Select the bar type to smelt
+3. Choose quantity (1, 5, 10, All, or custom X)
+4. Wait for smelting to complete (4 ticks per bar)
+
+**Smelting Recipes:**
+
+| Bar | Level | Ores Required | XP | Success Rate | Ticks |
+|-----|-------|---------------|-----|--------------|-------|
+| Bronze | 1 | 1 Copper + 1 Tin | 6.25 | 100% | 4 |
+| Iron | 15 | 1 Iron Ore | 12.5 | 50% | 4 |
+| Steel | 30 | 1 Iron Ore + 2 Coal | 17.5 | 100% | 4 |
+| Mithril | 50 | 1 Mithril Ore + 4 Coal | 30 | 100% | 4 |
+| Adamant | 70 | 1 Adamantite Ore + 6 Coal | 37.5 | 100% | 4 |
+| Rune | 85 | 1 Runite Ore + 8 Coal | 50 | 100% | 4 |
+
+<Warning>
+**Iron Ore Failure**: Iron ore has a 50% chance to fail when smelting, consuming the ore without producing a bar. This matches OSRS mechanics.
+</Warning>
+
+### Stage 2: Smithing (Anvil)
+
+Convert metal bars into equipment at an anvil.
+
+**Requirements:**
+- Hammer in inventory (not consumed)
+- Metal bars in inventory
+- Access to an anvil
+
+**Process:**
+1. Click on an anvil
+2. Select the item to smith
+3. Choose quantity (1, 5, 10, All, or custom X)
+4. Wait for smithing to complete (4 ticks per item)
+
+**Smithing Categories:**
+
+Items are organized by category in the smithing interface:
+
+- **Weapons**: Swords, scimitars, daggers, axes, maces
+- **Armor**: Helmets, platebodies, platelegs, shields
+- **Tools**: Pickaxes, hatchets
+- **Misc**: Nails, arrowtips, dart tips
+
+**Example Recipes:**
+
+| Item | Level | Bars | XP | Category |
+|------|-------|------|-----|----------|
+| Bronze Dagger | 1 | 1 Bronze | 12.5 | Weapons |
+| Bronze Sword | 4 | 1 Bronze | 12.5 | Weapons |
+| Bronze Platebody | 18 | 5 Bronze | 62.5 | Armor |
+| Iron Scimitar | 20 | 2 Iron | 50 | Weapons |
+| Steel Platelegs | 36 | 3 Steel | 75 | Armor |
+| Mithril Pickaxe | 54 | 2 Mithril | 100 | Tools |
+
+### Tick-Based Timing
+
+Both smelting and smithing use OSRS-accurate tick-based timing:
+
+- **1 tick = 600ms** (game tick duration)
+- **Smelting**: 4 ticks per bar (2.4 seconds)
+- **Smithing**: 4 ticks per item (2.4 seconds)
+
+Actions are queued and processed on tick boundaries, not immediately when requested.
+
+### Make X Memory
+
+The smithing interface remembers your last custom quantity:
+
+1. Select an item to smith
+2. Click "X" to enter custom quantity
+3. Enter amount (e.g., 50)
+4. Next time you click "X", it defaults to 50
+
+This matches OSRS's "Make X" memory feature and persists in browser localStorage.
+
+### ProcessingDataProvider
+
+Smelting and smithing recipes are managed by `ProcessingDataProvider`:
+
+```typescript
+import { processingDataProvider } from '@hyperscape/shared';
+
+// Get smelting data
+const smeltingData = processingDataProvider.getSmeltingData("bronze_bar");
+// Returns: { primaryOre, secondaryOre, coalRequired, levelRequired, xp, successRate, ticks }
+
+// Get smithing recipe
+const recipe = processingDataProvider.getSmithingRecipe("bronze_sword");
+// Returns: { itemId, name, barType, barsRequired, levelRequired, xp, category, ticks }
+
+// Get available bars from inventory
+const bars = processingDataProvider.getSmeltableBarsFromInventory(inventory, smithingLevel);
+
+// Get available recipes from inventory
+const recipes = processingDataProvider.getSmithableItemsWithAvailability(inventory, smithingLevel);
+```
+
+---
+
 ## Related Documentation
 
 - [Combat System](/wiki/game-systems/combat)
 - [Resource Gathering](/wiki/game-systems/resources)
 - [Item Requirements](/wiki/data/items)
+- [Manifest-Driven Design](/concepts/manifests)
