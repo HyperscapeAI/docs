@@ -175,17 +175,19 @@ Skill configuration is in `packages/shared/src/data/`:
 Skills start at level 1 with 0 XP, except Constitution which starts at level 10:
 
 ```typescript
-// From packages/shared/src/entities/player/PlayerEntity.ts (lines 111-123)
+// From packages/shared/src/entities/player/PlayerEntity.ts
 playerData.skills = {
   attack: { level: 1, xp: 0 },
   strength: { level: 1, xp: 0 },
   defense: { level: 1, xp: 0 },
   constitution: { level: 10, xp: 1154 },  // Starts at level 10
-  ranged: { level: 1, xp: 0 },
+  prayer: { level: 1, xp: 0 },
   woodcutting: { level: 1, xp: 0 },
+  mining: { level: 1, xp: 0 },
   fishing: { level: 1, xp: 0 },
   firemaking: { level: 1, xp: 0 },
   cooking: { level: 1, xp: 0 },
+  smithing: { level: 1, xp: 0 },
 };
 ```
 
