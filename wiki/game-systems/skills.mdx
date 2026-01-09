@@ -296,40 +296,80 @@ Processing recipes are defined in `manifests/recipes/` with OSRS-accurate XP val
 
 ## Level Requirements
 
-Skills gate access to equipment and activities.
+Skills gate access to equipment and activities. Requirements are now centralized in `tier-requirements.json` and `skill-unlocks.json`.
 
-### Weapon Requirements
+### Tier-Based Equipment Requirements
 
-| Weapon | Attack Level |
-|--------|--------------|
-| Bronze | 1 |
-| Iron | 1 |
+Equipment now uses a tier system that automatically looks up requirements:
+
+**Melee Weapons & Armor** (Attack/Defence):
+| Tier | Level |
+|------|-------|
+| Bronze/Iron | 1 |
 | Steel | 5 |
+| Black | 10 |
 | Mithril | 20 |
 | Adamant | 30 |
 | Rune | 40 |
 | Dragon | 60 |
 
-### Tool Requirements
+**Tools** (Woodcutting/Mining):
+| Tier | Attack | Woodcutting | Mining |
+|------|--------|-------------|--------|
+| Bronze/Iron | 1 | 1 | 1 |
+| Steel | 5 | 6 | 6 |
+| Mithril | 20 | 21 | 21 |
+| Adamant | 30 | 31 | 31 |
+| Rune | 40 | 41 | 41 |
+| Dragon | 60 | 61 | 61 |
 
-| Tool | Skill Level |
-|------|-------------|
-| Bronze Hatchet | 1 Woodcutting |
-| Steel Hatchet | 6 Woodcutting |
-| Mithril Hatchet | 21 Woodcutting |
-| Adamant Hatchet | 31 Woodcutting |
-| Rune Hatchet | 41 Woodcutting |
+### Gathering Resource Requirements
 
-### Resource Requirements
+Defined in `gathering/*.json`:
 
-| Resource | Skill Level |
-|----------|-------------|
-| Normal Tree | 1 Woodcutting |
-| Oak Tree | 15 Woodcutting |
-| Willow Tree | 30 Woodcutting |
-| Shrimp Spot | 1 Fishing |
-| Trout Spot | 20 Fishing |
-| Lobster Spot | 40 Fishing |
+**Woodcutting**:
+| Tree | Level |
+|------|-------|
+| Normal | 1 |
+| Oak | 15 |
+| Willow | 30 |
+| Teak | 35 |
+| Maple | 45 |
+| Mahogany | 50 |
+| Yew | 60 |
+| Magic | 75 |
+
+**Mining**:
+| Ore | Level |
+|-----|-------|
+| Copper/Tin | 1 |
+| Iron | 15 |
+| Coal | 30 |
+| Mithril | 55 |
+| Adamantite | 70 |
+| Runite | 85 |
+
+**Fishing**:
+| Fish | Level |
+|------|-------|
+| Shrimp | 1 |
+| Sardine | 5 |
+| Herring | 10 |
+| Trout | 20 |
+| Pike | 25 |
+| Salmon | 30 |
+| Lobster | 40 |
+| Swordfish | 50 |
+| Shark | 76 |
+
+### Processing Recipe Requirements
+
+Defined in `recipes/*.json`:
+
+**Smelting**: Levels 1-85 (Bronze to Rune bars)
+**Smithing**: Levels 1-91 (Bronze to Rune equipment)
+**Cooking**: Levels 1-80 (Shrimp to Shark)
+**Firemaking**: Levels 1-75 (Normal to Magic logs)
 
 ---
 
