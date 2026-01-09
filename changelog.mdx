@@ -23,6 +23,45 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="January 9, 2026" description="Manifest Refactor & Automation" date="2026-01-09">
+
+### 🔄 Manifest System Refactor (PR #3)
+
+Major reorganization of the manifest system for better scalability:
+
+**New Directory Structure:**
+- `items/` — Split by type (weapons, tools, resources, food, misc)
+- `gathering/` — Woodcutting, mining, fishing data
+- `recipes/` — Smelting, smithing, cooking, firemaking
+
+**New Centralized Files:**
+- `tier-requirements.json` — OSRS-accurate level requirements
+- `skill-unlocks.json` — Skill progression milestones
+
+**Benefits:**
+- Better organization and maintainability
+- Easier to find and edit specific content
+- Clearer separation of concerns
+- More scalable for future content additions
+
+### 🍄 New Vegetation (PR #4)
+
+Added mushroom vegetation to biomes:
+- Configurable density and clustering
+- Biome-specific spawn parameters
+- Reduced tree density in plains biome (8 → 5)
+
+### 🤖 GitHub Actions (PR #2)
+
+Automated workflows for code quality:
+- **Claude Code Review** — Automatic PR reviews
+- **Claude PR Assistant** — Responds to `@claude` mentions
+- **Documentation Updates** — Auto-updates docs on manifest changes
+
+[View commits](https://github.com/HyperscapeAI/hyperscape/commits/main)
+
+</Update>
+
 <Update label="v0.1.0" description="Initial Release" date="2025-01-01">
 
 ### 🎮 Core Features
