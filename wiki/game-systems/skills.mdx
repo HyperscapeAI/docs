@@ -446,8 +446,36 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
+## Skill Unlocks
+
+The `skill-unlocks.json` manifest documents what players unlock at each level. This is used for UI display and progression tracking.
+
+Example unlocks:
+- **Attack 40**: Rune weapons
+- **Attack 60**: Dragon weapons
+- **Woodcutting 15**: Oak trees
+- **Mining 30**: Coal
+- **Cooking 40**: Lobster
+- **Smithing 50**: Mithril bar
+
+<Info>
+See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
+</Info>
+
+## Manifest-Driven Design
+
+All skill-related data is now defined in JSON manifests:
+
+- **`tier-requirements.json`** - Equipment level requirements by tier
+- **`skill-unlocks.json`** - What unlocks at each level
+- **`gathering/*.json`** - Resource nodes, yields, and XP
+- **`recipes/*.json`** - Processing recipes and XP
+
+This allows easy content updates without code changes and enables community modding.
+
 ## Related Documentation
 
 - [Combat System](/wiki/game-systems/combat)
-- [Resource Gathering](/wiki/game-systems/resources)
-- [Item Requirements](/wiki/data/items)
+- [Data Manifests Overview](/wiki/data/overview)
+- [Item Data Structure](/wiki/data/items)
+- [NPC Data Structure](/wiki/data/npcs)
