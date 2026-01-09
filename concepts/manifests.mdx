@@ -229,17 +229,23 @@ const area = DataManager.getArea("mistwood_valley");
 
 ### Step 1: Edit Manifest
 
-Add your content to the appropriate manifest file in `packages/shared/src/data/`.
+Add your content to the appropriate manifest file in `world/assets/manifests/`:
 
-### Step 2: Build or Hot Reload
+- **NPCs**: `npcs.json`
+- **Weapons**: `items/weapons.json`
+- **Tools**: `items/tools.json`
+- **Resources**: `items/resources.json`
+- **Food**: `items/food.json`
+- **Gathering**: `gathering/woodcutting.json`, `gathering/mining.json`, `gathering/fishing.json`
+- **Recipes**: `recipes/smelting.json`, `recipes/smithing.json`, `recipes/cooking.json`
 
-In development mode, save the file—changes apply on next build. Run:
+### Step 2: Restart Server
+
+The DataManager loads manifests on startup:
 
 ```bash
-bun run build:shared
+bun run dev
 ```
-
-Or restart the dev server.
 
 ### Step 3: Verify
 
