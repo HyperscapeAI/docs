@@ -480,8 +480,15 @@ Tools can optionally include a `tool` object specifying the skill and priority:
 ## Adding New Items
 
 <Steps>
-  <Step title="Add to JSON Manifest">
-    Add entry to `world/assets/manifests/items.json`
+  <Step title="Choose the right manifest file">
+    - Weapons → `items/weapons.json`
+    - Tools → `items/tools.json`
+    - Resources (ores, logs, bars, raw fish) → `items/resources.json`
+    - Food → `items/food.json`
+    - Currency, junk → `items/misc.json`
+  </Step>
+  <Step title="Add entry with proper structure">
+    Follow the examples above. For tiered equipment, specify the `tier` field instead of hardcoding requirements.
   </Step>
   <Step title="Create 3D Model (optional)">
     Generate model in 3D Asset Forge if needed
@@ -494,6 +501,27 @@ Tools can optionally include a `tool` object specifying the skill and priority:
 <Warning>
 **DO NOT** add item data directly to `items.ts`. Keep all content in JSON manifests for data-driven design.
 </Warning>
+
+## Tool Priority System
+
+Tools now use a priority system to determine which tool to use when multiple are available:
+
+```json
+{
+  "tool": {
+    "skill": "woodcutting",
+    "priority": 1  // Higher = better tool
+  }
+}
+```
+
+For example:
+- Bronze hatchet: priority 1
+- Iron hatchet: priority 2
+- Steel hatchet: priority 3
+- Rune hatchet: priority 6
+
+The system automatically selects the highest priority tool the player has equipped or in inventory.
 
 ---
 
