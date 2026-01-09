@@ -422,6 +422,14 @@ All recipes use OSRS-accurate timing (4 ticks = 2.4s per action).
 
 ---
 
+## GitHub Integration
+
+The repository now includes Claude Code GitHub Actions for automated assistance:
+
+- **`.github/workflows/claude.yml`** - Responds to `@claude` mentions in issues and PRs
+- **`.github/workflows/claude-code-review.yml`** - Automated code review on pull requests
+- **`.github/workflows/update-docs.yml`** - Automatically updates documentation when manifests change
+
 ## Detailed Documentation
 
 <CardGroup cols={2}>
@@ -430,5 +438,11 @@ All recipes use OSRS-accurate timing (4 ticks = 2.4s per action).
   </Card>
   <Card title="Item Data Structure" icon="box-open" href="/wiki/data/items">
     Item types, stats, requirements, equipment slots, noted items, and shop items.
+  </Card>
+  <Card title="Gathering & Crafting" icon="hammer" href="/wiki/game-systems/skills">
+    Woodcutting, mining, fishing, smelting, smithing, cooking, and firemaking systems.
+  </Card>
+  <Card title="Tier Requirements" icon="shield" href="/wiki/data/items">
+    Centralized equipment and tool level requirements by tier.
   </Card>
 </CardGroup>
