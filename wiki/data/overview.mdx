@@ -46,9 +46,29 @@ packages/shared/src/data/
 
 ```
 world/assets/manifests/
-├── npcs.json             # NPC and mob definitions
-├── items.json            # Item definitions
-└── ... (other manifests)
+├── items/                    # Item definitions (split by type)
+│   ├── weapons.json          # Combat weapons
+│   ├── tools.json            # Skilling tools (hatchets, pickaxes, etc.)
+│   ├── resources.json        # Gathered materials (ores, logs, bars, raw fish)
+│   ├── food.json             # Cooked consumables
+│   └── misc.json             # Burnt food, currency, junk items
+├── gathering/                # Harvestable resource nodes
+│   ├── woodcutting.json      # Trees and log yields
+│   ├── mining.json           # Rocks and ore yields
+│   └── fishing.json          # Fishing spots and catch rates
+├── recipes/                  # Processing recipes
+│   ├── smelting.json         # Furnace: ores → bars
+│   ├── smithing.json         # Anvil: bars → equipment
+│   ├── cooking.json          # Fire/range: raw → cooked food
+│   └── firemaking.json       # Logs → fires (XP data)
+├── tier-requirements.json    # Centralized tier-based level requirements
+├── skill-unlocks.json        # Skill progression milestones
+├── npcs.json                 # All NPCs (mobs, neutral, bosses)
+├── stores.json               # Shop inventories
+├── world-areas.json          # World zones with spawns
+├── biomes.json               # Biome definitions
+├── vegetation.json           # Procedural vegetation assets
+└── music.json                # Music tracks
 ```
 
 ---
