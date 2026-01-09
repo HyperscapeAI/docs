@@ -6,22 +6,35 @@ icon: "box-open"
 
 # Item Data Structure
 
-Items are defined in **JSON manifests** and loaded at runtime. This includes weapons, armor, tools, consumables, and resources.
+Items are defined in **JSON manifests** and loaded at runtime. Items are now organized into separate files by type for better maintainability.
 
 <Info>
-Item data is managed in `packages/shared/src/data/items.ts` and loaded from `world/assets/manifests/items.json`.
+Item data is managed in `packages/shared/src/data/items.ts` and loaded from `world/assets/manifests/items/` directory.
 </Info>
 
 ## Data Loading
 
-Items are **NOT hardcoded**. The `ITEMS` map is populated at runtime:
+Items are **NOT hardcoded**. The `ITEMS` map is populated at runtime from multiple manifest files:
 
 ```typescript
 // From items.ts
 export const ITEMS: Map<string, Item> = new Map();
 
-// Populated by DataManager from JSON
-DataManager.loadItems(); // Reads world/assets/manifests/items.json
+// Populated by DataManager from JSON files
+DataManager.loadItems(); // Reads all files in world/assets/manifests/items/
+```
+
+## Manifest Organization
+
+Items are split into separate files by category:
+
+```
+manifests/items/
+├── weapons.json      # Combat weapons (swords, axes, etc.)
+├── tools.json        # Skilling tools (hatchets, pickaxes, fishing rods)
+├── resources.json    # Gathered materials (ores, logs, bars, raw fish)
+├── food.json         # Cooked consumables
+└── misc.json         # Currency, burnt food, junk items
 ```
 
 ---
