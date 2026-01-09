@@ -6,22 +6,59 @@ icon: "file-plus"
 
 ## Manifest-Driven Design
 
-Hyperscape uses JSON manifests for game content. Add new NPCs, items, stores, and world areas by editing TypeScript files in `packages/shared/src/data/`.
+Hyperscape uses JSON manifests for game content. Add new NPCs, items, stores, and world areas by editing JSON files in `packages/server/world/assets/manifests/`.
 
 <Info>
-  No code changes required—just edit the manifest files and reload.
+  No code changes required—just edit the JSON manifest files and restart the server.
 </Info>
 
 ## Content Files
 
+All manifests are in `packages/server/world/assets/manifests/`:
+
+### Core Manifests
+
 | File | Purpose |
 |------|---------|
-| `npcs.ts` | NPC and mob definitions |
-| `items.ts` | Item properties and stats |
-| `banks-stores.ts` | Shop inventories |
-| `world-areas.ts` | Zone configuration |
-| `skill-unlocks.ts` | Level requirements |
-| `avatars.ts` | Character models |
+| `npcs.json` | NPC and mob definitions |
+| `avatars.json` | Character models |
+| `banks-stores.json` | Shop inventories |
+| `world-areas.json` | Zone configuration |
+| `tier-requirements.json` | Tier-based level requirements |
+| `skill-unlocks.json` | Skill unlock descriptions |
+
+### Item Manifests (Directory)
+
+Items are organized by category in `items/` directory:
+
+| File | Purpose |
+|------|---------|
+| `items/weapons.json` | Swords, axes, bows, etc. |
+| `items/tools.json` | Hatchets, pickaxes, fishing rods, hammer |
+| `items/resources.json` | Ores, bars, logs, fish |
+| `items/food.json` | Cooked food, raw food, burnt food |
+| `items/misc.json` | Coins, junk items, quest items |
+
+### Recipe Manifests (Directory)
+
+Processing skill recipes in `recipes/` directory:
+
+| File | Purpose |
+|------|---------|
+| `recipes/cooking.json` | Raw → cooked food recipes |
+| `recipes/firemaking.json` | Log burning data |
+| `recipes/smelting.json` | Ore → bar recipes |
+| `recipes/smithing.json` | Bar → equipment recipes |
+
+### Gathering Manifests (Directory)
+
+Resource gathering data in `gathering/` directory:
+
+| File | Purpose |
+|------|---------|
+| `gathering/woodcutting.json` | Tree types and locations |
+| `gathering/mining.json` | Rock types and ore data |
+| `gathering/fishing.json` | Fishing spot types |
 
 ## Adding NPCs
 
