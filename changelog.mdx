@@ -23,6 +23,68 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Unreleased" description="Recent Updates" date="2026-01-09">
+
+### ✨ New Features
+
+**Smithing Skill** (PR #492)
+- Complete two-stage smithing system (smelting + smithing)
+- Smelting at furnaces: Convert ores into bars
+- Smithing at anvils: Convert bars into equipment
+- OSRS-accurate mechanics:
+  - 4-tick timing for both smelting and smithing
+  - Iron ore 50% failure rate
+  - Hammer requirement for anvil use
+  - Make X memory (remembers last custom quantity)
+- Full UI panels with category grouping
+- Database persistence (smithingLevel, smithingXp columns)
+- 6 bar types: Bronze, Iron, Steel, Mithril, Adamant, Rune
+- 50+ smithable items across weapons, armor, tools
+
+**Manifest Architecture Refactor**
+- Directory-based item loading (`items/` with 5 category files)
+- Recipe manifests (`recipes/` for cooking, firemaking, smelting, smithing)
+- Gathering manifests (`gathering/` for woodcutting, mining, fishing)
+- Tier-based requirements system (`TierDataProvider`)
+- Skill unlocks externalized to JSON (`skill-unlocks.json`)
+- Atomic loading with fallback to legacy single-file format
+
+### 🔧 Improvements
+
+**Processing Systems**
+- Tick-based timing for firemaking and cooking
+- Level requirement validation for all processing skills
+- Rate limiting on smelting/smithing network handlers
+- Type-safe player skill guards
+- Pre-allocated inventory count buffers (GC optimization)
+
+**Combat System**
+- Fixed duplicate damage splats (added super.init() call)
+- Improved event cleanup in DamageSplatSystem
+
+**Data Management**
+- ProcessingDataProvider now loads from recipe manifests
+- Tools derived from items.json (no more tools.json)
+- Duplicate item ID detection across category files
+
+### 🐛 Bug Fixes
+
+- Fixed cooking level requirement check
+- Fixed firemaking level validation
+- Corrected FIREMAKING_MOVE_REQUEST event payload shape
+- Fixed smithing level/XP persistence on player login
+- Removed verbose debug logging from multiple systems
+
+### 📚 Documentation
+
+- Added comprehensive smithing system documentation
+- Updated manifest structure documentation
+- Added ProcessingDataProvider API reference
+- Updated skill system documentation with smithing
+- Added code examples for smelting and smithing
+
+</Update>
+
 <Update label="v0.1.0" description="Initial Release" date="2025-01-01">
 
 ### 🎮 Core Features
