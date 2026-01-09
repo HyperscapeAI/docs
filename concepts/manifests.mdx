@@ -253,15 +253,15 @@ Check the game to ensure content appears correctly.
 
 ## Validation
 
-Manifests are TypeScript files, so you get:
+Manifests are JSON files validated at runtime by DataManager:
 
-- **Type checking**: Invalid fields caught at compile time
-- **Autocomplete**: IDE suggestions for valid properties
-- **Required fields**: Missing fields cause build errors
-- **References**: TypeScript catches invalid itemId/npcId references
+- **Schema validation**: Invalid fields logged as warnings
+- **Cross-references**: Missing itemId/npcId references caught
+- **Required fields**: Missing required fields cause errors
+- **Type safety**: TypeScript types ensure correct usage in code
 
 <Warning>
-  Invalid manifests will cause TypeScript compilation to fail with descriptive errors.
+  Invalid manifests will cause runtime errors with descriptive messages. Check server logs for validation warnings.
 </Warning>
 
 ## Best Practices
