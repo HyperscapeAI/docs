@@ -152,24 +152,43 @@ export const NPC_SPAWN_CONSTANTS = {
 
 ## Items
 
-Items are loaded from JSON into the `ITEMS` Map:
+Items are loaded from JSON into the `ITEMS` Map. Items are now organized into separate files by type for better organization:
 
 ```typescript
 // From packages/shared/src/data/items.ts
 export const ITEMS: Map<string, Item> = new Map();
 ```
 
-### Item Types
+### Item Types & Organization
 
-| Type | Description |
-|------|-------------|
-| `"weapon"` | Swords, bows |
-| `"armor"` | Helmets, bodies, legs |
-| `"tool"` | Hatchet, fishing rod, tinderbox |
-| `"consumable"` | Food, potions |
-| `"resource"` | Logs, raw fish, cooked fish |
-| `"ammunition"` | Arrows |
-| `"currency"` | Coins |
+| Type | Description | File |
+|------|-------------|------|
+| `"weapon"` | Combat weapons | `items/weapons.json` |
+| `"tool"` | Skilling tools | `items/tools.json` |
+| `"resource"` | Gathered materials (ores, logs, bars, raw fish) | `items/resources.json` |
+| `"consumable"` | Food that heals | `items/food.json` |
+| `"currency"` | Coins | `items/misc.json` |
+| `"junk"` | Burnt food, worthless items | `items/misc.json` |
+| `"misc"` | Everything else | `items/misc.json` |
+
+### Tier-Based Equipment
+
+Items now use a centralized tier system defined in `tier-requirements.json`. Equipment references their tier (e.g., "bronze", "steel", "rune") and the system looks up requirements automatically:
+
+```typescript
+// Item with tier reference
+{
+  "id": "bronze_sword",
+  "tier": "bronze",  // References tier-requirements.json
+  // ... other properties
+}
+```
+
+**Supported Tiers:**
+- **Melee**: bronze, iron, steel, black, mithril, adamant, rune, dragon
+- **Tools**: Same as melee (with different skill requirements)
+- **Ranged**: leather, studded, green_dhide, blue_dhide, red_dhide, black_dhide
+- **Magic**: wizard, mystic, infinity, ahrims
 
 ### Item Helper Functions
 
