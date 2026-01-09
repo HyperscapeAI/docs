@@ -441,8 +441,22 @@ export function getBaseItemId(itemId: string): string {
 ## Adding New Items
 
 <Steps>
+  <Step title="Choose Category">
+    Determine which category file your item belongs in:
+    - Weapons → `items/weapons.json`
+    - Tools → `items/tools.json`
+    - Resources → `items/resources.json`
+    - Food → `items/food.json`
+    - Misc → `items/misc.json`
+  </Step>
   <Step title="Add to JSON Manifest">
-    Add entry to `world/assets/manifests/items.json`
+    Add entry to the appropriate file in `packages/server/world/assets/manifests/items/`
+  </Step>
+  <Step title="Add Recipe (if applicable)">
+    If the item is craftable, add recipe to appropriate file in `recipes/`:
+    - Cooking → `recipes/cooking.json`
+    - Smelting → `recipes/smelting.json`
+    - Smithing → `recipes/smithing.json`
   </Step>
   <Step title="Create 3D Model (optional)">
     Generate model in 3D Asset Forge if needed
@@ -455,6 +469,41 @@ export function getBaseItemId(itemId: string): string {
 <Warning>
 **DO NOT** add item data directly to `items.ts`. Keep all content in JSON manifests for data-driven design.
 </Warning>
+
+### Example: Adding a New Smithing Recipe
+
+To add a new smithable item:
+
+1. **Add item to `items/weapons.json`**:
+```json
+{
+  "id": "mithril_longsword",
+  "name": "Mithril Longsword",
+  "type": "weapon",
+  "tier": "mithril",
+  "equipSlot": "weapon",
+  "attackType": "MELEE",
+  "weaponType": "longsword",
+  "stackable": false,
+  "tradeable": true,
+  "value": 1300
+}
+```
+
+2. **Add recipe to `recipes/smithing.json`**:
+```json
+{
+  "output": "mithril_longsword",
+  "bar": "mithril_bar",
+  "barsRequired": 2,
+  "level": 56,
+  "xp": 100,
+  "ticks": 4,
+  "category": "weapons"
+}
+```
+
+3. **Restart server** - The item and recipe will be available in-game.
 
 ---
 
