@@ -152,6 +152,33 @@ Set `DATABASE_URL` in environment:
 DATABASE_URL=postgresql://user:pass@host:5432/hyperscape
 ```
 
+## Migrations
+
+Migrations are stored in `packages/server/src/database/migrations/`:
+
+### Recent Migrations
+
+| Migration | Description |
+|-----------|-------------|
+| `0015_add_smithing_skill.sql` | Added smithingLevel and smithingXp columns |
+| `0014_add_mining_skill.sql` | Added miningLevel and miningXp columns |
+| `0013_add_auto_retaliate.sql` | Added autoRetaliate preference |
+| `0012_add_bank_placeholders.sql` | Added bank placeholder support |
+| `0011_add_bank_tabs.sql` | Added bank tab system |
+| `0010_add_player_deaths.sql` | Added death tracking |
+| `0009_add_inventory_slot_constraint.sql` | Added unique slot constraint |
+| `0008_add_bank_storage.sql` | Added bank storage system |
+
+### Migration Format
+
+```sql
+-- 0015_add_smithing_skill.sql
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "smithingLevel" integer DEFAULT 1;
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "smithingXp" integer DEFAULT 0;
+```
+
+Migrations use `IF NOT EXISTS` to be idempotent and safe to re-run.
+
 ## Schema Changes
 
 <Steps>
@@ -170,6 +197,10 @@ DATABASE_URL=postgresql://user:pass@host:5432/hyperscape
     ```bash
     bunx drizzle-kit migrate
     ```
+  </Step>
+  
+  <Step title="Verify">
+    Check that migration file was created in `src/database/migrations/`
   </Step>
 </Steps>
 
