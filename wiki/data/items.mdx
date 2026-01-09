@@ -348,98 +348,130 @@ export function getBaseItemId(itemId: string): string {
 
 ## Example Item Definitions
 
-### Weapon
+### Weapon (weapons.json)
 
 ```json
 {
   "id": "bronze_sword",
   "name": "Bronze Sword",
   "type": "weapon",
-  "rarity": "common",
-  "stackable": false,
-  "tradeable": true,
-  "value": 25,
-  "modelPath": "weapons/bronze_sword.glb",
-  "requirements": {
-    "attack": 1
-  },
-  "stats": {
-    "attack": 4,
-    "strength": 3
-  },
-  "attackType": "melee",
-  "weaponType": "sword",
-  "attackSpeed": 2400,
-  "range": 1
-}
-```
-
-### Armor
-
-```json
-{
-  "id": "bronze_platebody",
-  "name": "Bronze Platebody",
-  "type": "armor",
-  "rarity": "common",
-  "stackable": false,
-  "tradeable": true,
+  "tier": "bronze",
   "value": 100,
-  "modelPath": "armor/bronze_platebody.glb",
-  "requirements": {
-    "defense": 1
-  },
-  "stats": {
-    "defense": 15
+  "weight": 2,
+  "equipSlot": "weapon",
+  "weaponType": "SWORD",
+  "attackType": "MELEE",
+  "attackSpeed": 4,
+  "attackRange": 1,
+  "description": "A basic sword made of bronze",
+  "examine": "A basic sword made of bronze",
+  "tradeable": true,
+  "rarity": "common",
+  "modelPath": "asset://models/sword-bronze/sword-bronze.glb",
+  "equippedModelPath": "asset://models/sword-steel/sword-steel-aligned.glb",
+  "iconPath": "asset://models/sword-bronze/concept-art.png",
+  "bonuses": {
+    "attack": 4,
+    "strength": 3,
+    "defense": 0,
+    "ranged": 0
   }
 }
 ```
 
-### Tool
+### Tool (tools.json)
+
+Tools can optionally include a `tool` object specifying the skill and priority:
 
 ```json
 {
   "id": "bronze_hatchet",
   "name": "Bronze Hatchet",
   "type": "tool",
-  "rarity": "common",
-  "stackable": false,
+  "tier": "bronze",
+  "tool": {
+    "skill": "woodcutting",
+    "priority": 1
+  },
+  "value": 50,
+  "weight": 1,
+  "equipSlot": "weapon",
+  "weaponType": "AXE",
+  "attackType": "MELEE",
+  "attackSpeed": 5,
+  "attackRange": 1,
+  "description": "A basic hatchet for chopping trees",
+  "examine": "A basic hatchet for chopping trees",
   "tradeable": true,
-  "value": 10,
-  "modelPath": "tools/bronze_hatchet.glb",
-  "requirements": {
-    "woodcutting": 1
+  "rarity": "common",
+  "modelPath": "asset://models/hatchet-bronze/hatchet-bronze.glb",
+  "iconPath": "asset://models/hatchet-bronze/concept-art.png",
+  "bonuses": {
+    "attack": 4,
+    "strength": 3,
+    "defense": 0,
+    "ranged": 0
   }
 }
 ```
 
-### Consumable
+### Resource (resources.json)
 
 ```json
 {
-  "id": "cooked_shrimp",
-  "name": "Cooked Shrimp",
-  "type": "consumable",
-  "rarity": "common",
+  "id": "copper_ore",
+  "name": "Copper Ore",
+  "type": "resource",
   "stackable": false,
-  "tradeable": true,
+  "maxStackSize": 100,
   "value": 5,
-  "heals": 3
+  "weight": 2,
+  "description": "Copper ore that can be smelted into a bronze bar",
+  "examine": "Ore containing copper. Can be combined with tin to make bronze.",
+  "tradeable": true,
+  "rarity": "common",
+  "modelPath": null,
+  "iconPath": "asset://icons/ore-copper.png"
 }
 ```
 
-### Resource
+### Consumable (food.json)
 
 ```json
 {
-  "id": "oak_logs",
-  "name": "Oak Logs",
-  "type": "resource",
-  "rarity": "common",
+  "id": "shrimp",
+  "name": "Shrimp",
+  "type": "consumable",
   "stackable": false,
+  "value": 10,
+  "weight": 0.2,
+  "description": "Some nicely cooked shrimp",
+  "examine": "Some nicely cooked shrimp.",
   "tradeable": true,
-  "value": 15,
-  "notedItemId": "oak_logs_noted"
+  "rarity": "common",
+  "modelPath": null,
+  "iconPath": "asset://icons/shrimp.png",
+  "healAmount": 3
+}
+```
+
+### Currency (misc.json)
+
+```json
+{
+  "id": "coins",
+  "name": "Coins",
+  "type": "currency",
+  "stackable": true,
+  "maxStackSize": 2147483647,
+  "value": 1,
+  "weight": 0,
+  "description": "The universal currency of Hyperia",
+  "examine": "Gold coins used as currency throughout the realm",
+  "tradeable": true,
+  "rarity": "always",
+  "modelPath": null,
+  "iconPath": "asset://icons/coins.png"
 }
 ```
 
