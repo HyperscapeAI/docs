@@ -77,15 +77,58 @@ interface Item {
 
 ```typescript
 type ItemType =
-  | "weapon"      // Swords, axes, bows
-  | "armor"       // Helmets, bodies, legs
-  | "tool"        // Hatchets, pickaxes, fishing rods
-  | "consumable"  // Food, potions
-  | "resource"    // Logs, ore, fish
-  | "currency"    // Coins
-  | "ammo"        // Arrows, bolts
-  | "misc";       // Other items
+  | "weapon"      // Swords, axes, bows → weapons.json
+  | "armor"       // Helmets, bodies, legs → (future)
+  | "tool"        // Hatchets, pickaxes, fishing rods → tools.json
+  | "consumable"  // Food, potions → food.json
+  | "resource"    // Logs, ore, fish, bars → resources.json
+  | "currency"    // Coins → misc.json
+  | "junk"        // Burnt food → misc.json
+  | "misc";       // Other items → misc.json
 ```
+
+## Tier-Based Equipment System
+
+Items now use a **centralized tier system** defined in `tier-requirements.json`. Instead of hardcoding level requirements in each item, equipment references a tier:
+
+```json
+{
+  "id": "bronze_sword",
+  "name": "Bronze Sword",
+  "type": "weapon",
+  "tier": "bronze",  // References tier-requirements.json
+  // ... other properties
+}
+```
+
+The system automatically looks up requirements from `tier-requirements.json`:
+
+### Melee Tiers
+
+| Tier | Attack | Defence |
+|------|--------|---------|
+| bronze/iron | 1 | 1 |
+| steel | 5 | 5 |
+| black | 10 | 10 |
+| mithril | 20 | 20 |
+| adamant | 30 | 30 |
+| rune | 40 | 40 |
+| dragon | 60 | 60 |
+
+### Tool Tiers
+
+| Tier | Attack | Woodcutting | Mining |
+|------|--------|-------------|--------|
+| bronze/iron | 1 | 1 | 1 |
+| steel | 5 | 6 | 6 |
+| mithril | 20 | 21 | 21 |
+| adamant | 30 | 31 | 31 |
+| rune | 40 | 41 | 41 |
+| dragon | 60 | 61 | 61 |
+
+<Info>
+This centralized approach ensures OSRS-accurate requirements and makes it easy to add new tiers without modifying individual items.
+</Info>
 
 ---
 
