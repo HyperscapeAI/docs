@@ -342,7 +342,14 @@ Each starter town has:
 
 <Steps>
   <Step title="Add to manifest">
-    Edit `world/assets/manifests/npcs.json` or `items.json`
+    Edit the appropriate manifest in `world/assets/manifests/`:
+    - **NPCs**: `npcs.json`
+    - **Weapons**: `items/weapons.json`
+    - **Tools**: `items/tools.json`
+    - **Resources**: `items/resources.json`
+    - **Food**: `items/food.json`
+    - **Gathering**: `gathering/woodcutting.json`, `gathering/mining.json`, `gathering/fishing.json`
+    - **Recipes**: `recipes/smelting.json`, `recipes/smithing.json`, `recipes/cooking.json`
   </Step>
   <Step title="Generate 3D model (optional)">
     Use Asset Forge to create a new model, or use existing models
@@ -358,6 +365,22 @@ Each starter town has:
 <Warning>
   Do NOT add NPC or item data directly to TypeScript files. Keep all content in JSON manifests for clean separation.
 </Warning>
+
+## Recent Changes
+
+### Manifest Refactor (PR #3)
+
+The manifest system was recently refactored for better scalability and organization:
+
+- **Items split by type**: Weapons, tools, resources, food, and misc are now in separate files
+- **Gathering resources**: Woodcutting, mining, and fishing data moved to dedicated files
+- **Recipe system**: New recipes directory for smelting, smithing, cooking, and firemaking
+- **Centralized requirements**: `tier-requirements.json` provides OSRS-accurate level requirements
+- **Skill unlocks**: `skill-unlocks.json` documents progression milestones
+
+### New Vegetation (PR #4)
+
+Mushroom vegetation added to biomes with configurable density, clustering, and spawn parameters.
 
 ---
 
