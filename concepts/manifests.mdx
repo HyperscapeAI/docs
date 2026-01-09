@@ -223,19 +223,36 @@ The loading is **atomic** for directory-based manifests - all required files mus
 
 ## Adding Content
 
-### Step 1: Edit Manifest
+### Step 1: Edit JSON Manifest
 
-Add your content to the appropriate manifest file in `packages/shared/src/data/`.
+Add your content to the appropriate JSON file in `packages/server/world/assets/manifests/`.
 
-### Step 2: Build or Hot Reload
+For items, add to the correct category file in `items/` directory:
+- Weapons → `items/weapons.json`
+- Tools → `items/tools.json`
+- Resources → `items/resources.json`
+- Food → `items/food.json`
+- Misc → `items/misc.json`
 
-In development mode, save the file—changes apply on next build. Run:
+For recipes, add to the appropriate file in `recipes/` directory:
+- Cooking → `recipes/cooking.json`
+- Firemaking → `recipes/firemaking.json`
+- Smelting → `recipes/smelting.json`
+- Smithing → `recipes/smithing.json`
+
+### Step 2: Restart Server
+
+The server must restart to reload manifests:
 
 ```bash
-bun run build:shared
+# Stop server (Ctrl+C)
+# Restart
+bun run dev
 ```
 
-Or restart the dev server.
+<Info>
+  Manifest changes require a server restart. Hot reload does not apply to JSON data files.
+</Info>
 
 ### Step 3: Verify
 
