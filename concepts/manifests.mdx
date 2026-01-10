@@ -31,26 +31,16 @@ All manifests are in `world/assets/manifests/`:
 
 | File | Content |
 |------|---------|
-| `npcs.json` | Mobs and NPCs |
-| `items/weapons.json` | Combat weapons |
-| `items/tools.json` | Skilling tools (hatchets, pickaxes, fishing rods) |
-| `items/resources.json` | Gathered materials (ores, logs, bars, raw fish) |
-| `items/food.json` | Cooked consumables |
-| `items/misc.json` | Currency, burnt food, junk items |
-| `gathering/woodcutting.json` | Trees and log yields |
-| `gathering/mining.json` | Rocks and ore yields |
-| `gathering/fishing.json` | Fishing spots and catch rates |
-| `recipes/smelting.json` | Furnace: ores → bars |
-| `recipes/smithing.json` | Anvil: bars → equipment |
-| `recipes/cooking.json` | Fire/range: raw → cooked food |
-| `recipes/firemaking.json` | Logs → fires (XP data) |
-| `tier-requirements.json` | Centralized tier-based level requirements |
-| `skill-unlocks.json` | Skill progression milestones |
-| `stores.json` | Shop inventories |
-| `world-areas.json` | Zones and regions |
-| `biomes.json` | Biome definitions with vegetation layers |
-| `vegetation.json` | Procedural vegetation assets |
-| `music.json` | Music tracks |
+| `npcs.ts` | Mobs and NPCs |
+| `items.ts` | Equipment, resources, consumables |
+| `banks-stores.ts` | Shop inventories |
+| `world-areas.ts` | Zones and regions |
+| `world-structure.ts` | World layout |
+| `avatars.ts` | Character models |
+| `playerEmotes.ts` | Emote animations |
+| `equipment-requirements.json` | Level requirements for gear |
+| `equipment-stats.json` | Stat bonuses for equipment |
+| `stations.json` | Crafting stations (anvils, furnaces, ranges, banks) |
 
 ## Manifest Structure
 
@@ -207,11 +197,38 @@ Centralized tier-based level requirements (OSRS-accurate):
 }
 ```
 
-**recipes/smithing.json** - Anvil recipes (bars → equipment)
+### Stations (`stations.json`)
 
-**recipes/cooking.json** - Cooking recipes with burn mechanics
+Defines crafting stations and interactive objects in the world:
 
-**recipes/firemaking.json** - Log burning data
+```json
+{
+  "stations": [
+    {
+      "type": "anvil",
+      "name": "Anvil",
+      "model": "asset://models/anvil/anvil.glb",
+      "modelScale": 0.5,
+      "modelYOffset": 0.2,
+      "examine": "An anvil for smithing metal bars into weapons and tools."
+    },
+    {
+      "type": "furnace",
+      "name": "Furnace",
+      "model": "asset://models/furnace/furnace.glb",
+      "modelScale": 1.5,
+      "modelYOffset": 1.0,
+      "examine": "A furnace for smelting ores into metal bars."
+    }
+  ]
+}
+```
+
+Station types include:
+- **Anvil** — Smith bars into equipment
+- **Furnace** — Smelt ores into bars
+- **Range** — Cook food with reduced burn chance
+- **Bank** — Store items
 
 ## DataManager
 

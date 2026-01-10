@@ -20,45 +20,13 @@ All manifests are in `packages/server/world/assets/manifests/`:
 
 | File | Purpose |
 |------|---------|
-| `npcs.json` | NPC and mob definitions |
-| `avatars.json` | Character models |
-| `banks-stores.json` | Shop inventories |
-| `world-areas.json` | Zone configuration |
-| `tier-requirements.json` | Tier-based level requirements |
-| `skill-unlocks.json` | Skill unlock descriptions |
-
-### Item Manifests (Directory)
-
-Items are organized by category in `items/` directory:
-
-| File | Purpose |
-|------|---------|
-| `items/weapons.json` | Swords, axes, bows, etc. |
-| `items/tools.json` | Hatchets, pickaxes, fishing rods, hammer |
-| `items/resources.json` | Ores, bars, logs, fish |
-| `items/food.json` | Cooked food, raw food, burnt food |
-| `items/misc.json` | Coins, junk items, quest items |
-
-### Recipe Manifests (Directory)
-
-Processing skill recipes in `recipes/` directory:
-
-| File | Purpose |
-|------|---------|
-| `recipes/cooking.json` | Raw → cooked food recipes |
-| `recipes/firemaking.json` | Log burning data |
-| `recipes/smelting.json` | Ore → bar recipes |
-| `recipes/smithing.json` | Bar → equipment recipes |
-
-### Gathering Manifests (Directory)
-
-Resource gathering data in `gathering/` directory:
-
-| File | Purpose |
-|------|---------|
-| `gathering/woodcutting.json` | Tree types and locations |
-| `gathering/mining.json` | Rock types and ore data |
-| `gathering/fishing.json` | Fishing spot types |
+| `npcs.ts` | NPC and mob definitions |
+| `items.ts` | Item properties and stats |
+| `banks-stores.ts` | Shop inventories |
+| `world-areas.ts` | Zone configuration |
+| `skill-unlocks.ts` | Level requirements |
+| `avatars.ts` | Character models |
+| `stations.json` | Crafting stations (anvils, furnaces, ranges, banks) |
 
 ## Adding NPCs
 
@@ -199,6 +167,28 @@ Shops define available items and prices:
   ]
 }
 ```
+
+## Adding Stations
+
+Stations are interactive objects for crafting and processing:
+
+```json
+{
+  "type": "anvil",
+  "name": "Anvil",
+  "model": "asset://models/anvil/anvil.glb",
+  "modelScale": 0.5,
+  "modelYOffset": 0.2,
+  "examine": "An anvil for smithing metal bars into weapons and tools."
+}
+```
+
+### Station Types
+
+- **anvil**: Smith bars into equipment
+- **furnace**: Smelt ores into bars
+- **range**: Cook food with reduced burn chance
+- **bank**: Store items
 
 ## Adding World Areas
 
