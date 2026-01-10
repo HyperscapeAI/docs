@@ -27,173 +27,191 @@ Hyperscape uses manifest-driven design where game content is defined in TypeScri
 
 ## Manifest Files
 
-Manifests are stored in `packages/server/world/assets/manifests/` as JSON files and loaded at runtime by `DataManager`.
-
-### Core Manifests
+All manifests are in `world/assets/manifests/`:
 
 | File | Content |
 |------|---------|
 | `npcs.json` | Mobs and NPCs |
-| `avatars.json` | Character models |
-| `banks-stores.json` | Shop inventories |
+| `items/weapons.json` | Combat weapons |
+| `items/tools.json` | Skilling tools (hatchets, pickaxes, fishing rods) |
+| `items/resources.json` | Gathered materials (ores, logs, bars, raw fish) |
+| `items/food.json` | Cooked consumables |
+| `items/misc.json` | Currency, burnt food, junk items |
+| `gathering/woodcutting.json` | Trees and log yields |
+| `gathering/mining.json` | Rocks and ore yields |
+| `gathering/fishing.json` | Fishing spots and catch rates |
+| `recipes/smelting.json` | Furnace: ores → bars |
+| `recipes/smithing.json` | Anvil: bars → equipment |
+| `recipes/cooking.json` | Fire/range: raw → cooked food |
+| `recipes/firemaking.json` | Logs → fires (XP data) |
+| `tier-requirements.json` | Centralized tier-based level requirements |
+| `skill-unlocks.json` | Skill progression milestones |
+| `stores.json` | Shop inventories |
 | `world-areas.json` | Zones and regions |
-| `tier-requirements.json` | Tier-based level requirements |
-| `skill-unlocks.json` | Skill unlock descriptions |
-
-### Item Manifests (Directory-Based)
-
-Items are organized by category in `items/` directory:
-
-| File | Content |
-|------|---------|
-| `items/weapons.json` | Swords, axes, bows, etc. |
-| `items/tools.json` | Hatchets, pickaxes, fishing rods |
-| `items/resources.json` | Ores, bars, logs, fish |
-| `items/food.json` | Cooked food, raw food, burnt food |
-| `items/misc.json` | Coins, junk items, quest items |
-
-<Info>
-  The directory-based structure is **atomic** - all category files must exist or the system falls back to legacy `items.json`.
-</Info>
-
-### Recipe Manifests (Directory-Based)
-
-Processing skill recipes in `recipes/` directory:
-
-| File | Content |
-|------|---------|
-| `recipes/cooking.json` | Raw → cooked food recipes |
-| `recipes/firemaking.json` | Log burning data |
-| `recipes/smelting.json` | Ore → bar recipes |
-| `recipes/smithing.json` | Bar → equipment recipes |
-
-### Gathering Manifests (Directory-Based)
-
-Resource gathering data in `gathering/` directory:
-
-| File | Content |
-|------|---------|
-| `gathering/woodcutting.json` | Tree types and locations |
-| `gathering/mining.json` | Rock types and ore data |
-| `gathering/fishing.json` | Fishing spot types |
-
-### Legacy Manifests (Backwards Compatibility)
-
-| File | Content | Status |
-|------|---------|--------|
-| `items.json` | All items (single file) | Fallback if `items/` missing |
-| `resources.json` | All resources (single file) | Fallback if `gathering/` missing |
-| `tools.json` | Tool definitions | Deprecated - tools now in `items/tools.json` |
+| `biomes.json` | Biome definitions with vegetation layers |
+| `vegetation.json` | Procedural vegetation assets |
+| `music.json` | Music tracks |
 
 ## Manifest Structure
 
-### NPCs (`npcs.ts`)
+### NPCs (`npcs.json`)
 
 NPC data is loaded from JSON manifests at runtime by DataManager:
 
-```typescript
-// From packages/shared/src/data/npcs.ts (lines 1-21)
-/**
- * NPC Database
- *
- * ALL NPC data is loaded from JSON manifests at runtime by DataManager.
- * This keeps NPC definitions data-driven and separate from code.
- *
- * Available 3D model types (in /assets/world/forge/):
- * - goblin/goblin_rigged.glb     → Used for goblins
- * - thug/thug_rigged.glb         → Used for bandits
- * - human/human_rigged.glb       → Used for guards, knights, warriors
- * - troll/troll_rigged.glb       → Used for hobgoblins
- * - imp/imp_rigged.glb           → Used for dark warriors
- *
- * To add new NPCs:
- * 1. Add entry to world/assets/manifests/npcs.json
- * 2. Use one of the existing modelPath types above
- * 3. OR generate new model in 3D Asset Forge
- * 4. Restart server to reload manifests
- */
-
-// NPC Database - Populated at runtime from JSON manifests
-export const ALL_NPCS: Map<string, NPCData> = new Map();
+```json
+[
+  {
+    "id": "goblin",
+    "name": "Goblin",
+    "description": "A weak goblin creature",
+    "category": "mob",
+    "faction": "monster",
+    "stats": {
+      "level": 2,
+      "health": 5,
+      "attack": 1,
+      "strength": 1,
+      "defense": 1
+    },
+    "combat": {
+      "attackable": true,
+      "aggressive": true,
+      "retaliates": true,
+      "aggroRange": 4,
+      "combatRange": 1,
+      "attackSpeedTicks": 4,
+      "respawnTicks": 35
+    },
+    "drops": {
+      "defaultDrop": { "enabled": true, "itemId": "bones", "quantity": 1 },
+      "common": [{ "itemId": "coins", "minQuantity": 5, "maxQuantity": 15, "chance": 1.0, "rarity": "common" }]
+    },
+    "appearance": { "modelPath": "asset://models/goblin/goblin.vrm", "scale": 0.75 }
+  }
+]
 ```
 
 <Info>
   NPC definitions are in `world/assets/manifests/npcs.json`, not hardcoded in TypeScript.
 </Info>
 
-### Items (`items.ts`)
+### Items (`items/`)
 
-Items are loaded from JSON manifests similar to NPCs:
+Items are now organized by type in separate files:
 
-```typescript
-// From packages/shared/src/data/items.ts (lines 1-25)
-/**
- * Item Database
- *
- * Items are loaded from world/assets/manifests/items.json by DataManager.
- * This file provides the empty Map that gets populated at runtime.
- *
- * To add new items:
- * 1. Add entries to world/assets/manifests/items.json
- * 2. Generate 3D models in 3D Asset Forge (optional)
- * 3. Restart the server to reload manifests
- */
-
-// Item Database - Populated by DataManager
-export const ITEMS: Map<string, Item> = new Map();
-
-// Helper functions
-export function getItem(itemId: string): Item | null {
-  return ITEMS.get(itemId) || null;
-}
-
-export function getItemsByType(type: ItemType): Item[] {
-  return Array.from(ITEMS.values()).filter((item) => item.type === type);
-}
-
-// Shop items available for purchase
-export const SHOP_ITEMS = ["bronze_hatchet", "fishing_rod", "tinderbox", "arrows"];
-```
-
-### World Areas (`world-areas.ts`)
-
-```typescript
-export const worldAreas = {
-  mistwood_valley: {
-    id: "mistwood_valley",
-    name: "Mistwood Valley",
-    biome: "forest",
-    difficulty: 1,
-    bounds: { x1: 0, z1: 0, x2: 100, z2: 100 },
-    spawns: [
-      { npcId: "goblin", count: 5, positions: [...] }
-    ]
+**items/weapons.json** - Combat weapons with tier-based requirements:
+```json
+[
+  {
+    "id": "bronze_sword",
+    "name": "Bronze Sword",
+    "type": "weapon",
+    "tier": "bronze",
+    "equipSlot": "weapon",
+    "weaponType": "SWORD",
+    "attackType": "MELEE",
+    "attackSpeed": 4,
+    "attackRange": 1,
+    "bonuses": { "attack": 4, "strength": 3 }
   }
-};
+]
 ```
 
-### Equipment Requirements (`equipment-requirements.json`)
+**items/tools.json** - Skilling tools with priority system:
+```json
+[
+  {
+    "id": "bronze_hatchet",
+    "name": "Bronze Hatchet",
+    "type": "tool",
+    "tier": "bronze",
+    "tool": {
+      "skill": "woodcutting",
+      "priority": 1
+    }
+  }
+]
+```
+
+**items/resources.json** - Raw materials (ores, logs, bars, raw fish)
+
+**items/food.json** - Cooked consumables with `healAmount`
+
+**items/misc.json** - Currency, burnt food, junk items
+
+### Tier Requirements (`tier-requirements.json`)
+
+Centralized tier-based level requirements (OSRS-accurate):
 
 ```json
 {
-  "weapons": {
-    "bronze_sword": { "attack": 1, "strength": 0, "defense": 0, "ranged": 0 },
-    "steel_sword": { "attack": 10, "strength": 0, "defense": 0, "ranged": 0 },
-    "mithril_sword": { "attack": 20, "strength": 0, "defense": 0, "ranged": 0 }
+  "melee": {
+    "bronze": { "attack": 1, "defence": 1 },
+    "steel": { "attack": 5, "defence": 5 },
+    "mithril": { "attack": 20, "defence": 20 },
+    "rune": { "attack": 40, "defence": 40 }
+  },
+  "tools": {
+    "bronze": { "attack": 1, "woodcutting": 1, "mining": 1 },
+    "steel": { "attack": 5, "woodcutting": 6, "mining": 6 }
   }
 }
 ```
 
-### Equipment Stats (`equipment-stats.json`)
+### Gathering Resources (`gathering/`)
 
+**gathering/woodcutting.json** - Trees and log yields:
 ```json
 {
-  "weapons": {
-    "bronze_sword": { "attack": 4, "strength": 5, "defense": 0, "ranged": 0 },
-    "iron_sword": { "attack": 6, "strength": 7, "defense": 0, "ranged": 0 }
-  }
+  "trees": [
+    {
+      "id": "tree_normal",
+      "name": "Tree",
+      "type": "tree",
+      "harvestSkill": "woodcutting",
+      "toolRequired": "bronze_hatchet",
+      "levelRequired": 1,
+      "baseCycleTicks": 4,
+      "depleteChance": 0.125,
+      "respawnTicks": 80,
+      "harvestYield": [
+        { "itemId": "logs", "quantity": 1, "chance": 1.0, "xpAmount": 25 }
+      ]
+    }
+  ]
 }
 ```
+
+**gathering/mining.json** - Rocks and ore yields
+
+**gathering/fishing.json** - Fishing spots with OSRS-accurate catch rates
+
+### Recipes (`recipes/`)
+
+**recipes/smelting.json** - Furnace recipes (ores → bars):
+```json
+{
+  "recipes": [
+    {
+      "output": "bronze_bar",
+      "inputs": [
+        { "item": "copper_ore", "amount": 1 },
+        { "item": "tin_ore", "amount": 1 }
+      ],
+      "level": 1,
+      "xp": 6.2,
+      "ticks": 4,
+      "successRate": 1.0
+    }
+  ]
+}
+```
+
+**recipes/smithing.json** - Anvil recipes (bars → equipment)
+
+**recipes/cooking.json** - Cooking recipes with burn mechanics
+
+**recipes/firemaking.json** - Log burning data
 
 ## DataManager
 
@@ -227,32 +245,23 @@ The loading is **atomic** for directory-based manifests - all required files mus
 
 Add your content to the appropriate JSON file in `packages/server/world/assets/manifests/`.
 
-For items, add to the correct category file in `items/` directory:
-- Weapons → `items/weapons.json`
-- Tools → `items/tools.json`
-- Resources → `items/resources.json`
-- Food → `items/food.json`
-- Misc → `items/misc.json`
+Add your content to the appropriate manifest file in `world/assets/manifests/`:
 
-For recipes, add to the appropriate file in `recipes/` directory:
-- Cooking → `recipes/cooking.json`
-- Firemaking → `recipes/firemaking.json`
-- Smelting → `recipes/smelting.json`
-- Smithing → `recipes/smithing.json`
+- **NPCs**: `npcs.json`
+- **Weapons**: `items/weapons.json`
+- **Tools**: `items/tools.json`
+- **Resources**: `items/resources.json`
+- **Food**: `items/food.json`
+- **Gathering**: `gathering/woodcutting.json`, `gathering/mining.json`, `gathering/fishing.json`
+- **Recipes**: `recipes/smelting.json`, `recipes/smithing.json`, `recipes/cooking.json`
 
 ### Step 2: Restart Server
 
-The server must restart to reload manifests:
+The DataManager loads manifests on startup:
 
 ```bash
-# Stop server (Ctrl+C)
-# Restart
 bun run dev
 ```
-
-<Info>
-  Manifest changes require a server restart. Hot reload does not apply to JSON data files.
-</Info>
 
 ### Step 3: Verify
 
@@ -260,15 +269,15 @@ Check the game to ensure content appears correctly.
 
 ## Validation
 
-Manifests are TypeScript files, so you get:
+Manifests are JSON files validated at runtime by DataManager:
 
-- **Type checking**: Invalid fields caught at compile time
-- **Autocomplete**: IDE suggestions for valid properties
-- **Required fields**: Missing fields cause build errors
-- **References**: TypeScript catches invalid itemId/npcId references
+- **Schema validation**: Invalid fields logged as warnings
+- **Cross-references**: Missing itemId/npcId references caught
+- **Required fields**: Missing required fields cause errors
+- **Type safety**: TypeScript types ensure correct usage in code
 
 <Warning>
-  Invalid manifests will cause TypeScript compilation to fail with descriptive errors.
+  Invalid manifests will cause runtime errors with descriptive messages. Check server logs for validation warnings.
 </Warning>
 
 ## Best Practices
