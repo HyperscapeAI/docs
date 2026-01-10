@@ -23,6 +23,41 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label=\"January 2026 Updates\" description=\"Smithing, Mining, and Manifest Architecture\" date=\"2026-01-10\">
+
+### ⚒️ Smithing Skill System (PR #492)
+- **Smelting** — Convert ores into bars at furnaces (bronze, iron, steel, mithril, adamant, rune)
+- **Smithing** — Craft weapons, armor, and tools at anvils with OSRS-accurate recipes
+- **Manifest-Driven** — All recipes in `recipes/smelting.json` and `recipes/smithing.json`
+- **UI Panels** — OSRS-style interfaces with Make X memory and quantity selection
+- **Tick-Based Processing** — 4-tick (2.4s) smelting/smithing matching OSRS
+- **Database** — Added `smithingLevel` and `smithingXp` columns (migration 0015)
+
+### ⛏️ Mining Skill
+- **Mining System** — Mine ores from rocks with pickaxes
+- **Ore Types** — Copper, tin, iron, coal, mithril, adamantite, runite
+- **Database** — Added `miningLevel` and `miningXp` columns (migration 0014)
+
+### 🏗️ Architecture Improvements
+- **ProcessingDataProvider** — Runtime API for cooking, firemaking, smelting, smithing recipes
+- **TierDataProvider** — Tier-based level requirements (bronze→iron→steel→mithril→adamant→rune)
+- **StationDataProvider** — 3D model configuration for anvils, furnaces, ranges
+- **Items Directory** — Split into categories (`items/weapons.json`, `items/tools.json`, `items/resources.json`, `items/food.json`, `items/misc.json`)
+- **Recipe Manifests** — Separate JSON files per skill in `recipes/` directory
+- **Gathering Manifests** — Per-skill files in `gathering/` directory
+
+### 🐛 Bug Fixes
+- **Resource Spam Click** (PR #494) — Fixed duplicate harvesting exploit on spam click
+- **Duplicate Damage Splats** (PR #486) — Added proper event cleanup in DamageSplatSystem
+- **Level Validation** — Added level checks for firemaking and cooking to prevent low-level exploits
+
+### 🎨 Visual Improvements (PR #496)
+- **3D Station Models** — Anvils and furnaces use GLB models instead of placeholder boxes
+- **Manifest-Driven Models** — Model paths, scales, and offsets configured in `stations.json`
+- **Environment Shading** — Improved lighting and shadow rendering
+
+</Update>
+
 <Update label="v0.1.0" description="Initial Release" date="2025-01-01">
 
 ### 🎮 Core Features
