@@ -389,6 +389,28 @@ Recipes are defined in the `recipes/` directory:
 
 All recipes use OSRS-accurate timing (4 ticks = 2.4s per action).
 
+### Crafting Stations
+
+Stations are defined in `stations.json`:
+
+- **Anvil** - Used for smithing bars into equipment
+- **Furnace** - Used for smelting ores into bars
+- **Cooking Range** - Used for cooking food (reduces burn chance)
+- **Bank Booth** - Used for accessing bank storage
+
+Each station defines its 3D model, scale, position offset, and examine text.
+
+### Tool Metadata
+
+The `tools.json` manifest defines tool-specific properties:
+
+- **Skill** - Which skill the tool is used for
+- **Tier** - Tool tier (bronze, iron, steel, etc.)
+- **Priority** - Tool selection priority (higher = better)
+- **Roll Ticks** - For mining pickaxes, ticks between roll attempts
+
+This metadata is separate from item definitions to keep tool mechanics centralized.
+
 ## Skill Progression
 
 **`skill-unlocks.json`** documents what players unlock at each skill level. This is used for UI display and progression tracking. Covers all implemented skills: attack, strength, defence, constitution, prayer, woodcutting, mining, fishing, cooking, firemaking, and smithing.
