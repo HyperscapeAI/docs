@@ -459,6 +459,8 @@ The `tier: "bronze"` automatically gives this tool `attack: 1` and `woodcutting:
 
 ### Consumable (food.json)
 
+Consumables can include `inventoryActions` to define OSRS-style context menu actions:
+
 ```json
 {
   "id": "shrimp",
@@ -473,9 +475,14 @@ The `tier: "bronze"` automatically gives this tool `attack: 1` and `woodcutting:
   "rarity": "common",
   "modelPath": null,
   "iconPath": "asset://icons/shrimp.png",
-  "healAmount": 3
+  "healAmount": 3,
+  "inventoryActions": ["Eat", "Use", "Drop", "Examine"]
 }
 ```
+
+<Info>
+The first action in `inventoryActions` becomes the left-click default. If not specified, the system uses heuristic detection based on item properties (food → Eat, potions → Drink, etc.).
+</Info>
 
 ### Currency (misc.json)
 
