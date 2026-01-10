@@ -161,16 +161,26 @@ packages/shared/src/systems/shared/
 
 ### Manifest-Driven Content
 
-Game content is defined in TypeScript manifest files in `packages/shared/src/data/`:
+Game content is defined in JSON manifest files in `world/assets/manifests/`:
 
 | File | Purpose |
 |------|---------|
-| `npcs.ts` | NPC and mob definitions |
-| `items.ts` | Item properties and stats |
-| `world-areas.ts` | Zone configuration |
-| `banks-stores.ts` | Shop inventories |
-| `avatars.ts` | Avatar/character options |
-| `equipment-stats.json` | Equipment bonuses |
-| `equipment-requirements.json` | Level requirements |
+| `npcs.json` | NPC and mob definitions |
+| `items/weapons.json` | Combat weapons |
+| `items/tools.json` | Skilling tools |
+| `items/resources.json` | Gathered materials |
+| `items/food.json` | Cooked consumables |
+| `gathering/woodcutting.json` | Trees and log yields |
+| `gathering/mining.json` | Rocks and ore yields |
+| `gathering/fishing.json` | Fishing spots and catch rates |
+| `recipes/smelting.json` | Furnace recipes |
+| `recipes/smithing.json` | Anvil recipes |
+| `recipes/cooking.json` | Cooking recipes |
+| `tier-requirements.json` | Centralized level requirements |
+| `skill-unlocks.json` | Skill progression milestones |
+| `stores.json` | Shop inventories |
+| `world-areas.json` | Zone configuration |
+| `biomes.json` | Biome definitions |
+| `vegetation.json` | Procedural vegetation |
 
-Add new content by editing these files—no code changes required.
+Add new content by editing these JSON files—no code changes required.
