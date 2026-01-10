@@ -244,23 +244,43 @@ const area = DataManager.getArea("mistwood_valley");
 
 ## Adding Content
 
-### Step 1: Edit Manifest
+### Step 1: Choose the Right Manifest
 
-Add your content to the appropriate manifest file in `packages/shared/src/data/`.
+Determine which manifest file to edit based on content type:
 
-### Step 2: Build or Hot Reload
+- **Items**: `manifests/items/weapons.json`, `tools.json`, `resources.json`, `food.json`, or `misc.json`
+- **NPCs/Mobs**: `manifests/npcs.json`
+- **Gathering Resources**: `manifests/gathering/woodcutting.json`, `mining.json`, or `fishing.json`
+- **Processing Recipes**: `manifests/recipes/cooking.json`, `firemaking.json`, `smelting.json`, or `smithing.json`
+- **Stations**: `manifests/stations.json`
+- **World Areas**: `manifests/world-areas.json`
 
-In development mode, save the file—changes apply on next build. Run:
+### Step 2: Edit Manifest
 
-```bash
-bun run build:shared
+Add your content following the existing structure. Use tier-based requirements for equipment:
+
+```json
+{
+  "id": "mithril_sword",
+  "name": "Mithril Sword",
+  "type": "weapon",
+  "tier": "mithril",  // Automatically gets attack: 20 requirement
+  "weaponType": "SWORD",
+  "attackSpeed": 4
+}
 ```
 
-Or restart the dev server.
+### Step 3: Restart Server
 
-### Step 3: Verify
+Manifests are loaded at server startup. Restart to apply changes:
 
-Check the game to ensure content appears correctly.
+```bash
+bun run dev
+```
+
+### Step 4: Verify
+
+Check the game to ensure content appears correctly. Use the Skills panel to verify level requirements.
 
 ## Validation
 
