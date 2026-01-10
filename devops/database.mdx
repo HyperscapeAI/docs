@@ -23,12 +23,65 @@ packages/server/src/database/schema.ts
 
 | Table | Purpose |
 |-------|---------|
-| `players` | Player accounts and auth |
-| `characters` | Character data |
-| `inventory` | Item ownership |
-| `bank` | Banked items |
-| `skills` | XP and levels |
-| `world_state` | Persistent world data |
+| `users` | User accounts (Privy auth) |
+| `characters` | Character data (multi-character support) |
+| `players` | Active player sessions |
+| `inventory` | Player inventory items |
+| `bank` | Banked items with tab support |
+| `bank_tabs` | Bank tab configuration |
+| `equipment` | Equipped items |
+| `npc_kills` | Kill tracking |
+| `player_deaths` | Death history |
+| `world_chunks` | World state persistence |
+| `sessions` | Active game sessions |
+
+### Characters Table Schema
+
+The `characters` table stores all character data including skills:
+
+```sql
+CREATE TABLE characters (
+  id TEXT PRIMARY KEY,
+  userId TEXT NOT NULL,
+  name TEXT NOT NULL,
+  -- Position
+  x REAL DEFAULT 0,
+  y REAL DEFAULT 0,
+  z REAL DEFAULT 0,
+  -- Skills (levels)
+  attackLevel INTEGER DEFAULT 1,
+  strengthLevel INTEGER DEFAULT 1,
+  defenseLevel INTEGER DEFAULT 1,
+  constitutionLevel INTEGER DEFAULT 10,
+  prayerLevel INTEGER DEFAULT 1,
+  woodcuttingLevel INTEGER DEFAULT 1,
+  miningLevel INTEGER DEFAULT 1,
+  fishingLevel INTEGER DEFAULT 1,
+  firemakingLevel INTEGER DEFAULT 1,
+  cookingLevel INTEGER DEFAULT 1,
+  smithingLevel INTEGER DEFAULT 1,
+  -- Skills (XP)
+  attackXp INTEGER DEFAULT 0,
+  strengthXp INTEGER DEFAULT 0,
+  defenseXp INTEGER DEFAULT 0,
+  constitutionXp INTEGER DEFAULT 1154,
+  prayerXp INTEGER DEFAULT 0,
+  woodcuttingXp INTEGER DEFAULT 0,
+  miningXp INTEGER DEFAULT 0,
+  fishingXp INTEGER DEFAULT 0,
+  firemakingXp INTEGER DEFAULT 0,
+  cookingXp INTEGER DEFAULT 0,
+  smithingXp INTEGER DEFAULT 0,
+  -- Status
+  health INTEGER DEFAULT 100,
+  maxHealth INTEGER DEFAULT 100,
+  coins INTEGER DEFAULT 0,
+  autoRetaliate INTEGER DEFAULT 1,
+  -- Metadata
+  createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+);
+```
 
 ## Drizzle Commands
 
@@ -99,6 +152,33 @@ Set `DATABASE_URL` in environment:
 DATABASE_URL=postgresql://user:pass@host:5432/hyperscape
 ```
 
+## Migrations
+
+Migrations are stored in `packages/server/src/database/migrations/`:
+
+### Recent Migrations
+
+| Migration | Description |
+|-----------|-------------|
+| `0015_add_smithing_skill.sql` | Added smithingLevel and smithingXp columns |
+| `0014_add_mining_skill.sql` | Added miningLevel and miningXp columns |
+| `0013_add_auto_retaliate.sql` | Added autoRetaliate preference |
+| `0012_add_bank_placeholders.sql` | Added bank placeholder support |
+| `0011_add_bank_tabs.sql` | Added bank tab system |
+| `0010_add_player_deaths.sql` | Added death tracking |
+| `0009_add_inventory_slot_constraint.sql` | Added unique slot constraint |
+| `0008_add_bank_storage.sql` | Added bank storage system |
+
+### Migration Format
+
+```sql
+-- 0015_add_smithing_skill.sql
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "smithingLevel" integer DEFAULT 1;
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "smithingXp" integer DEFAULT 0;
+```
+
+Migrations use `IF NOT EXISTS` to be idempotent and safe to re-run.
+
 ## Schema Changes
 
 <Steps>
@@ -117,6 +197,10 @@ DATABASE_URL=postgresql://user:pass@host:5432/hyperscape
     ```bash
     bunx drizzle-kit migrate
     ```
+  </Step>
+  
+  <Step title="Verify">
+    Check that migration file was created in `src/database/migrations/`
   </Step>
 </Steps>
 

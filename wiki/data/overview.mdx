@@ -133,24 +133,43 @@ export const NPC_SPAWN_CONSTANTS = {
 
 ## Items
 
-Items are loaded from JSON into the `ITEMS` Map:
+Items are loaded from JSON into the `ITEMS` Map. Items are now organized into separate files by type for better organization:
 
 ```typescript
 // From packages/shared/src/data/items.ts
 export const ITEMS: Map<string, Item> = new Map();
 ```
 
-### Item Types
+### Item Types & Organization
 
-| Type | Description |
-|------|-------------|
-| `"weapon"` | Swords, bows |
-| `"armor"` | Helmets, bodies, legs |
-| `"tool"` | Hatchet, fishing rod, tinderbox |
-| `"consumable"` | Food, potions |
-| `"resource"` | Logs, raw fish, cooked fish |
-| `"ammunition"` | Arrows |
-| `"currency"` | Coins |
+| Type | Description | File |
+|------|-------------|------|
+| `"weapon"` | Combat weapons | `items/weapons.json` |
+| `"tool"` | Skilling tools | `items/tools.json` |
+| `"resource"` | Gathered materials (ores, logs, bars, raw fish) | `items/resources.json` |
+| `"consumable"` | Food that heals | `items/food.json` |
+| `"currency"` | Coins | `items/misc.json` |
+| `"junk"` | Burnt food, worthless items | `items/misc.json` |
+| `"misc"` | Everything else | `items/misc.json` |
+
+### Tier-Based Equipment
+
+Items now use a centralized tier system defined in `tier-requirements.json`. Equipment references their tier (e.g., "bronze", "steel", "rune") and the system looks up requirements automatically:
+
+```typescript
+// Item with tier reference
+{
+  "id": "bronze_sword",
+  "tier": "bronze",  // References tier-requirements.json
+  // ... other properties
+}
+```
+
+**Supported Tiers:**
+- **Melee**: bronze, iron, steel, black, mithril, adamant, rune, dragon
+- **Tools**: Same as melee (with different skill requirements)
+- **Ranged**: leather, studded, green_dhide, blue_dhide, red_dhide, black_dhide
+- **Magic**: wizard, mystic, infinity, ahrims
 
 ### Item Helper Functions
 
@@ -368,8 +387,14 @@ Both models follow World of Warcraft-style stylized fantasy aesthetics with medi
 ## Adding New Content
 
 <Steps>
-  <Step title="Add to manifest">
-    Edit `world/assets/manifests/npcs.json` or `items.json`
+  <Step title="Choose the right manifest">
+    - Items: Add to appropriate file in `items/` directory
+    - Gathering: Add to `gathering/woodcutting.json`, `mining.json`, or `fishing.json`
+    - Recipes: Add to appropriate file in `recipes/` directory
+    - NPCs: Add to `npcs.json`
+  </Step>
+  <Step title="Follow existing patterns">
+    Use the same structure as existing entries. For tiered equipment, specify the `tier` field.
   </Step>
   <Step title="Generate 3D model (optional)">
     Use Asset Forge to create a new model, or use existing models
@@ -383,12 +408,36 @@ Both models follow World of Warcraft-style stylized fantasy aesthetics with medi
 </Steps>
 
 <Warning>
-  Do NOT add NPC or item data directly to TypeScript files. Keep all content in JSON manifests for clean separation.
+  Do NOT add game data directly to TypeScript files. Keep all content in JSON manifests for clean separation and easy modding.
 </Warning>
 
+## Recent Changes
+
+### Manifest Refactor (PR #3)
+
+The manifest system was recently refactored for better scalability and organization:
+
+- **Items split by type**: Weapons, tools, resources, food, and misc are now in separate files
+- **Gathering resources**: Woodcutting, mining, and fishing data moved to dedicated files
+- **Recipe system**: New recipes directory for smelting, smithing, cooking, and firemaking
+- **Centralized requirements**: `tier-requirements.json` provides OSRS-accurate level requirements
+- **Skill unlocks**: `skill-unlocks.json` documents progression milestones
+
+### New Vegetation (PR #4)
+
+Mushroom vegetation added to biomes with configurable density, clustering, and spawn parameters.
+
 ---
 
 ---
+
+## GitHub Integration
+
+The repository now includes Claude Code GitHub Actions for automated assistance:
+
+- **`.github/workflows/claude.yml`** - Responds to `@claude` mentions in issues and PRs
+- **`.github/workflows/claude-code-review.yml`** - Automated code review on pull requests
+- **`.github/workflows/update-docs.yml`** - Automatically updates documentation when manifests change
 
 ## Detailed Documentation
 
@@ -398,5 +447,11 @@ Both models follow World of Warcraft-style stylized fantasy aesthetics with medi
   </Card>
   <Card title="Item Data Structure" icon="box-open" href="/wiki/data/items">
     Item types, stats, requirements, equipment slots, noted items, and shop items.
+  </Card>
+  <Card title="Gathering & Crafting" icon="hammer" href="/wiki/game-systems/skills">
+    Woodcutting, mining, fishing, smelting, smithing, cooking, and firemaking systems.
+  </Card>
+  <Card title="Tier Requirements" icon="shield" href="/wiki/data/items">
+    Centralized equipment and tool level requirements by tier.
   </Card>
 </CardGroup>

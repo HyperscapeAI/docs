@@ -6,23 +6,50 @@ icon: "box-open"
 
 # Item Data Structure
 
-Items are defined in **JSON manifests** and loaded at runtime. This includes weapons, armor, tools, consumables, and resources.
+Items are defined in **JSON manifests** and loaded at runtime. Items are now organized into separate files by type for better maintainability.
 
 <Info>
-Item data is managed in `packages/shared/src/data/items.ts` and loaded from `world/assets/manifests/items.json`.
+Item data is managed in `packages/shared/src/data/items.ts` and loaded from `world/assets/manifests/items/` directory.
 </Info>
 
 ## Data Loading
 
-Items are **NOT hardcoded**. The `ITEMS` map is populated at runtime:
+Items are **NOT hardcoded**. The `ITEMS` map is populated at runtime from multiple manifest files:
 
 ```typescript
 // From items.ts
 export const ITEMS: Map<string, Item> = new Map();
 
-// Populated by DataManager from JSON
-DataManager.loadItems(); // Reads world/assets/manifests/items.json
+// Populated by DataManager from JSON files
+DataManager.loadItems(); // Reads all files in world/assets/manifests/items/
 ```
+
+## Manifest Organization
+
+Items are split into separate files by category:
+
+```
+manifests/items/
+├── weapons.json      # Combat weapons (swords, axes, etc.)
+├── tools.json        # Skilling tools (hatchets, pickaxes, fishing rods)
+├── resources.json    # Gathered materials (ores, logs, bars, raw fish)
+├── food.json         # Cooked consumables
+└── misc.json         # Currency, burnt food, junk items
+```
+
+### Directory-Based Loading
+
+Items are organized by category in `packages/server/world/assets/manifests/items/`:
+
+- `weapons.json` - Swords, axes, bows, etc.
+- `tools.json` - Hatchets, pickaxes, fishing rods, hammer, tinderbox
+- `resources.json` - Ores, bars, logs, raw fish
+- `food.json` - Cooked food, raw food, burnt food
+- `misc.json` - Coins, junk items, quest items
+
+**Atomic Loading**: All 5 category files must exist or the system falls back to legacy `items.json`.
+
+**Duplicate Detection**: The loader validates that no item ID appears in multiple category files.
 
 ---
 
@@ -37,6 +64,7 @@ interface Item {
   type: ItemType;                // Category
   rarity: ItemRarity;            // Common, Uncommon, Rare, etc.
   modelPath?: string;            // Path to GLB model
+  tier?: string;                 // Metal tier (bronze, iron, steel, etc.)
 
   // Inventory properties
   stackable: boolean;            // Can stack in inventory
@@ -45,11 +73,25 @@ interface Item {
 
   // Equipment properties (for weapons/armor)
   requirements?: ItemRequirement;
-  stats?: ItemStats;
+  bonuses?: ItemStats;           // Renamed from stats
   attackType?: AttackType;
   weaponType?: WeaponType;
+  equipSlot?: EquipmentSlotName; // Where item equips
   attackSpeed?: number;          // In milliseconds
   range?: number;                // Attack range
+
+  // Tool properties (for gathering tools)
+  tool?: {
+    skill: "woodcutting" | "mining" | "fishing";
+    priority: number;            // Higher priority tools used first
+    rollTicks?: number;          // Ticks between gather attempts
+  };
+
+  // Processing properties (embedded recipe data)
+  cooking?: CookingRecipeData;
+  firemaking?: FiremakingRecipeData;
+  smelting?: SmeltingRecipeData;
+  smithing?: SmithingRecipeData;
 
   // Noted item support
   isNoted?: boolean;
@@ -58,21 +100,82 @@ interface Item {
 }
 ```
 
+### Tier-Based Requirements
+
+Items with a `tier` property automatically derive level requirements from `tier-requirements.json`:
+
+```json
+{
+  "id": "steel_sword",
+  "name": "Steel Sword",
+  "type": "weapon",
+  "tier": "steel",
+  "equipSlot": "weapon",
+  "attackType": "MELEE"
+  // requirements auto-derived: { attack: 5 }
+}
+```
+
+The `TierDataProvider` maps tiers to skill requirements, eliminating redundant requirement definitions.
+
 ---
 
 ## Item Types
 
 ```typescript
 type ItemType =
-  | "weapon"      // Swords, axes, bows
-  | "armor"       // Helmets, bodies, legs
-  | "tool"        // Hatchets, pickaxes, fishing rods
-  | "consumable"  // Food, potions
-  | "resource"    // Logs, ore, fish
-  | "currency"    // Coins
-  | "ammo"        // Arrows, bolts
-  | "misc";       // Other items
+  | "weapon"      // Swords, axes, bows → weapons.json
+  | "armor"       // Helmets, bodies, legs → (future)
+  | "tool"        // Hatchets, pickaxes, fishing rods → tools.json
+  | "consumable"  // Food, potions → food.json
+  | "resource"    // Logs, ore, fish, bars → resources.json
+  | "currency"    // Coins → misc.json
+  | "junk"        // Burnt food → misc.json
+  | "misc";       // Other items → misc.json
 ```
+
+## Tier-Based Equipment System
+
+Items now use a **centralized tier system** defined in `tier-requirements.json`. Instead of hardcoding level requirements in each item, equipment references a tier:
+
+```json
+{
+  "id": "bronze_sword",
+  "name": "Bronze Sword",
+  "type": "weapon",
+  "tier": "bronze",  // References tier-requirements.json
+  // ... other properties
+}
+```
+
+The system automatically looks up requirements from `tier-requirements.json`:
+
+### Melee Tiers
+
+| Tier | Attack | Defence |
+|------|--------|---------|
+| bronze/iron | 1 | 1 |
+| steel | 5 | 5 |
+| black | 10 | 10 |
+| mithril | 20 | 20 |
+| adamant | 30 | 30 |
+| rune | 40 | 40 |
+| dragon | 60 | 60 |
+
+### Tool Tiers
+
+| Tier | Attack | Woodcutting | Mining |
+|------|--------|-------------|--------|
+| bronze/iron | 1 | 1 | 1 |
+| steel | 5 | 6 | 6 |
+| mithril | 20 | 21 | 21 |
+| adamant | 30 | 31 | 31 |
+| rune | 40 | 41 | 41 |
+| dragon | 60 | 61 | 61 |
+
+<Info>
+This centralized approach ensures OSRS-accurate requirements and makes it easy to add new tiers without modifying individual items.
+</Info>
 
 ---
 
@@ -292,98 +395,130 @@ export function getBaseItemId(itemId: string): string {
 
 ## Example Item Definitions
 
-### Weapon
+### Weapon (weapons.json)
 
 ```json
 {
   "id": "bronze_sword",
   "name": "Bronze Sword",
   "type": "weapon",
-  "rarity": "common",
-  "stackable": false,
-  "tradeable": true,
-  "value": 25,
-  "modelPath": "weapons/bronze_sword.glb",
-  "requirements": {
-    "attack": 1
-  },
-  "stats": {
-    "attack": 4,
-    "strength": 3
-  },
-  "attackType": "melee",
-  "weaponType": "sword",
-  "attackSpeed": 2400,
-  "range": 1
-}
-```
-
-### Armor
-
-```json
-{
-  "id": "bronze_platebody",
-  "name": "Bronze Platebody",
-  "type": "armor",
-  "rarity": "common",
-  "stackable": false,
-  "tradeable": true,
+  "tier": "bronze",
   "value": 100,
-  "modelPath": "armor/bronze_platebody.glb",
-  "requirements": {
-    "defense": 1
-  },
-  "stats": {
-    "defense": 15
+  "weight": 2,
+  "equipSlot": "weapon",
+  "weaponType": "SWORD",
+  "attackType": "MELEE",
+  "attackSpeed": 4,
+  "attackRange": 1,
+  "description": "A basic sword made of bronze",
+  "examine": "A basic sword made of bronze",
+  "tradeable": true,
+  "rarity": "common",
+  "modelPath": "asset://models/sword-bronze/sword-bronze.glb",
+  "equippedModelPath": "asset://models/sword-steel/sword-steel-aligned.glb",
+  "iconPath": "asset://models/sword-bronze/concept-art.png",
+  "bonuses": {
+    "attack": 4,
+    "strength": 3,
+    "defense": 0,
+    "ranged": 0
   }
 }
 ```
 
-### Tool
+### Tool (tools.json)
+
+Tools can optionally include a `tool` object specifying the skill and priority:
 
 ```json
 {
   "id": "bronze_hatchet",
   "name": "Bronze Hatchet",
   "type": "tool",
-  "rarity": "common",
-  "stackable": false,
+  "tier": "bronze",
+  "tool": {
+    "skill": "woodcutting",
+    "priority": 1
+  },
+  "value": 50,
+  "weight": 1,
+  "equipSlot": "weapon",
+  "weaponType": "AXE",
+  "attackType": "MELEE",
+  "attackSpeed": 5,
+  "attackRange": 1,
+  "description": "A basic hatchet for chopping trees",
+  "examine": "A basic hatchet for chopping trees",
   "tradeable": true,
-  "value": 10,
-  "modelPath": "tools/bronze_hatchet.glb",
-  "requirements": {
-    "woodcutting": 1
+  "rarity": "common",
+  "modelPath": "asset://models/hatchet-bronze/hatchet-bronze.glb",
+  "iconPath": "asset://models/hatchet-bronze/concept-art.png",
+  "bonuses": {
+    "attack": 4,
+    "strength": 3,
+    "defense": 0,
+    "ranged": 0
   }
 }
 ```
 
-### Consumable
+### Resource (resources.json)
 
 ```json
 {
-  "id": "cooked_shrimp",
-  "name": "Cooked Shrimp",
-  "type": "consumable",
-  "rarity": "common",
+  "id": "copper_ore",
+  "name": "Copper Ore",
+  "type": "resource",
   "stackable": false,
-  "tradeable": true,
+  "maxStackSize": 100,
   "value": 5,
-  "heals": 3
+  "weight": 2,
+  "description": "Copper ore that can be smelted into a bronze bar",
+  "examine": "Ore containing copper. Can be combined with tin to make bronze.",
+  "tradeable": true,
+  "rarity": "common",
+  "modelPath": null,
+  "iconPath": "asset://icons/ore-copper.png"
 }
 ```
 
-### Resource
+### Consumable (food.json)
 
 ```json
 {
-  "id": "oak_logs",
-  "name": "Oak Logs",
-  "type": "resource",
-  "rarity": "common",
+  "id": "shrimp",
+  "name": "Shrimp",
+  "type": "consumable",
   "stackable": false,
+  "value": 10,
+  "weight": 0.2,
+  "description": "Some nicely cooked shrimp",
+  "examine": "Some nicely cooked shrimp.",
   "tradeable": true,
-  "value": 15,
-  "notedItemId": "oak_logs_noted"
+  "rarity": "common",
+  "modelPath": null,
+  "iconPath": "asset://icons/shrimp.png",
+  "healAmount": 3
+}
+```
+
+### Currency (misc.json)
+
+```json
+{
+  "id": "coins",
+  "name": "Coins",
+  "type": "currency",
+  "stackable": true,
+  "maxStackSize": 2147483647,
+  "value": 1,
+  "weight": 0,
+  "description": "The universal currency of Hyperia",
+  "examine": "Gold coins used as currency throughout the realm",
+  "tradeable": true,
+  "rarity": "always",
+  "modelPath": null,
+  "iconPath": "asset://icons/coins.png"
 }
 ```
 
@@ -392,8 +527,15 @@ export function getBaseItemId(itemId: string): string {
 ## Adding New Items
 
 <Steps>
-  <Step title="Add to JSON Manifest">
-    Add entry to `world/assets/manifests/items.json`
+  <Step title="Choose the right manifest file">
+    - Weapons → `items/weapons.json`
+    - Tools → `items/tools.json`
+    - Resources (ores, logs, bars, raw fish) → `items/resources.json`
+    - Food → `items/food.json`
+    - Currency, junk → `items/misc.json`
+  </Step>
+  <Step title="Add entry with proper structure">
+    Follow the examples above. For tiered equipment, specify the `tier` field instead of hardcoding requirements.
   </Step>
   <Step title="Create 3D Model (optional)">
     Generate model in 3D Asset Forge if needed
@@ -406,6 +548,27 @@ export function getBaseItemId(itemId: string): string {
 <Warning>
 **DO NOT** add item data directly to `items.ts`. Keep all content in JSON manifests for data-driven design.
 </Warning>
+
+## Tool Priority System
+
+Tools now use a priority system to determine which tool to use when multiple are available:
+
+```json
+{
+  "tool": {
+    "skill": "woodcutting",
+    "priority": 1  // Higher = better tool
+  }
+}
+```
+
+For example:
+- Bronze hatchet: priority 1
+- Iron hatchet: priority 2
+- Steel hatchet: priority 3
+- Rune hatchet: priority 6
+
+The system automatically selects the highest priority tool the player has equipped or in inventory.
 
 ---
 
