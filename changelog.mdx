@@ -23,38 +23,33 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label=\"January 2026 Updates\" description=\"Smithing, Mining, and Manifest Architecture\" date=\"2026-01-10\">
+<Update label="Latest" description="Smithing Skill & CI Improvements" date="2025-01-09">
 
-### ⚒️ Smithing Skill System (PR #492)
-- **Smelting** — Convert ores into bars at furnaces (bronze, iron, steel, mithril, adamant, rune)
-- **Smithing** — Craft weapons, armor, and tools at anvils with OSRS-accurate recipes
-- **Manifest-Driven** — All recipes in `recipes/smelting.json` and `recipes/smithing.json`
-- **UI Panels** — OSRS-style interfaces with Make X memory and quantity selection
-- **Tick-Based Processing** — 4-tick (2.4s) smelting/smithing matching OSRS
-- **Database** — Added `smithingLevel` and `smithingXp` columns (migration 0015)
+### ⚒️ Smithing Skill (PR #492)
+- **Full smithing implementation** — Smelt ores into bars at furnaces, smith bars into equipment at anvils
+- **OSRS-accurate mechanics** — Tick-based processing (4 ticks per action), iron smelting 50% success rate
+- **UI panels** — Dedicated smelting and smithing interfaces with quantity selection (1, 5, 10, All, X)
+- **Recipe system** — Manifest-driven recipes for bars and equipment across all metal tiers
+- **Level requirements** — Bronze (1), Iron (15), Steel (30), Mithril (50), Adamant (70), Rune (85)
+- **Database migration** — Added smithingLevel and smithingXp columns to character table
+- **Skill unlocks** — Integrated with skill progression system and level-up notifications
 
-### ⛏️ Mining Skill
-- **Mining System** — Mine ores from rocks with pickaxes
-- **Ore Types** — Copper, tin, iron, coal, mithril, adamantite, runite
-- **Database** — Added `miningLevel` and `miningXp` columns (migration 0014)
+### 🤖 Claude GitHub Actions (PR #493)
+- **Code review workflow** — Automated Claude code reviews on pull requests
+- **PR assistant** — @claude mentions in comments trigger AI assistance
+- **CI integration** — Claude can read CI results and provide context-aware help
 
 ### 🏗️ Architecture Improvements
-- **ProcessingDataProvider** — Runtime API for cooking, firemaking, smelting, smithing recipes
-- **TierDataProvider** — Tier-based level requirements (bronze→iron→steel→mithril→adamant→rune)
-- **StationDataProvider** — 3D model configuration for anvils, furnaces, ranges
-- **Items Directory** — Split into categories (`items/weapons.json`, `items/tools.json`, `items/resources.json`, `items/food.json`, `items/misc.json`)
-- **Recipe Manifests** — Separate JSON files per skill in `recipes/` directory
-- **Gathering Manifests** — Per-skill files in `gathering/` directory
+- **Manifest-driven data** — Items split into category files (weapons, tools, resources, food, misc)
+- **Tier-based requirements** — Centralized tier requirements system for equipment and tools
+- **Processing data provider** — Unified system for cooking, firemaking, smelting, and smithing recipes
+- **Rate limiting** — Added request throttling to smelting/smithing network handlers
 
 ### 🐛 Bug Fixes
-- **Resource Spam Click** (PR #494) — Fixed duplicate harvesting exploit on spam click
-- **Duplicate Damage Splats** (PR #486) — Added proper event cleanup in DamageSplatSystem
-- **Level Validation** — Added level checks for firemaking and cooking to prevent low-level exploits
-
-### 🎨 Visual Improvements (PR #496)
-- **3D Station Models** — Anvils and furnaces use GLB models instead of placeholder boxes
-- **Manifest-Driven Models** — Model paths, scales, and offsets configured in `stations.json`
-- **Environment Shading** — Improved lighting and shadow rendering
+- Fixed firemaking level requirement validation
+- Fixed cooking level requirement checks before starting actions
+- Corrected firemaking event payload shape
+- Updated test item counts to match current manifests
 
 </Update>
 

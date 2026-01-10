@@ -20,17 +20,18 @@ Hyperscape has **11 skills** total:
 | **Strength** | Melee damage |
 | **Defense** | Damage reduction, armor requirements |
 | **Constitution** | Health points |
-| **Ranged** | Ranged combat accuracy and damage |
+| **Prayer** | Protection prayers and combat buffs |
 
 ### Gathering Skills
 
 | Skill | Activity |
 |-------|----------|
 | **Woodcutting** | Chop trees for logs |
+| **Mining** | Mine rocks for ores |
 | **Fishing** | Catch fish at water spots |
 | **Mining** | Mine ore from rocks |
 
-### Processing Skills
+### Artisan Skills
 
 | Skill | Activity |
 |-------|----------|
@@ -87,7 +88,7 @@ Requirements:
 | Trout | 20 | 50 |
 | Lobster | 40 | 90 |
 
-## Processing Skills
+## Artisan Skills
 
 ### Firemaking
 
@@ -117,37 +118,35 @@ Use raw fish on a fire to cook.
 
 Smelt ores into bars at furnaces, then smith bars into equipment at anvils.
 
-**Smelting** (at furnace):
-| Bar | Level | Ores Required | XP |
-|-----|-------|---------------|-----|
-| Bronze | 1 | 1 Copper + 1 Tin | 6.25 |
-| Iron | 15 | 1 Iron (50% success) | 12.5 |
-| Steel | 30 | 1 Iron + 2 Coal | 17.5 |
-| Mithril | 50 | 1 Mithril + 4 Coal | 30 |
-| Adamant | 70 | 1 Adamantite + 6 Coal | 37.5 |
-| Rune | 85 | 1 Runite + 8 Coal | 50 |
+#### Smelting (at Furnace)
 
-**Smithing** (at anvil):
+| Bar | Level | Ores Required | XP | Success Rate |
+|-----|-------|---------------|-----|--------------|
+| Bronze | 1 | 1 Copper + 1 Tin | 6.25 | 100% |
+| Iron | 15 | 1 Iron Ore | 12.5 | 50% |
+| Steel | 30 | 1 Iron Ore + 2 Coal | 17.5 | 100% |
+| Mithril | 50 | 1 Mithril Ore + 4 Coal | 30 | 100% |
+| Adamant | 70 | 1 Adamantite Ore + 6 Coal | 37.5 | 100% |
+| Rune | 85 | 1 Runite Ore + 8 Coal | 50 | 100% |
+
+<Info>
+  Iron ore has a 50% failure rate when smelting, matching OSRS mechanics.
+</Info>
+
+#### Smithing (at Anvil)
+
+Requires a hammer in inventory. Examples:
+
 | Item | Level | Bars Required | XP |
 |------|-------|---------------|-----|
-| Bronze Dagger | 1 | 1 Bronze | 12.5 |
-| Bronze Sword | 4 | 1 Bronze | 12.5 |
+| Bronze Sword | 1 | 1 Bronze | 12.5 |
 | Iron Platebody | 33 | 5 Iron | 125 |
-| Rune Platebody | 99 | 5 Rune | 375 |
+| Steel Platelegs | 36 | 3 Steel | 75 |
+| Mithril Scimitar | 55 | 2 Mithril | 100 |
 
-### Mining
-
-Mine ore from rocks using pickaxes.
-
-| Ore | Level | XP |
-|-----|-------|-----|
-| Copper | 1 | 17.5 |
-| Tin | 1 | 17.5 |
-| Iron | 15 | 35 |
-| Coal | 30 | 50 |
-| Mithril | 55 | 80 |
-| Adamantite | 70 | 95 |
-| Runite | 85 | 125 |
+<Warning>
+  You must have a hammer in your inventory to smith items at an anvil.
+</Warning>
 
 ## Equipment Level Requirements
 
@@ -183,8 +182,9 @@ playerData.skills = {
   strength: { level: 1, xp: 0 },
   defense: { level: 1, xp: 0 },
   constitution: { level: 10, xp: 1154 },  // Starts at level 10
-  ranged: { level: 1, xp: 0 },
+  prayer: { level: 1, xp: 0 },
   woodcutting: { level: 1, xp: 0 },
+  mining: { level: 1, xp: 0 },
   fishing: { level: 1, xp: 0 },
   mining: { level: 1, xp: 0 },
   firemaking: { level: 1, xp: 0 },

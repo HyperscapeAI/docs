@@ -6,13 +6,17 @@ icon: "file-plus"
 
 ## Manifest-Driven Design
 
-Hyperscape uses JSON manifests for game content. Add new NPCs, items, stores, and world areas by editing TypeScript files in `packages/shared/src/data/`.
+Hyperscape uses JSON manifests for game content. Add new NPCs, items, stores, and world areas by editing JSON files in `packages/server/world/assets/manifests/`.
 
 <Info>
-  No code changes required—just edit the manifest files and reload.
+  No code changes required—just edit the JSON manifest files and restart the server.
 </Info>
 
 ## Content Files
+
+All manifests are in `packages/server/world/assets/manifests/`:
+
+### Core Manifests
 
 | File | Purpose |
 |------|---------|
@@ -22,6 +26,7 @@ Hyperscape uses JSON manifests for game content. Add new NPCs, items, stores, an
 | `world-areas.ts` | Zone configuration |
 | `skill-unlocks.ts` | Level requirements |
 | `avatars.ts` | Character models |
+| `stations.json` | Crafting stations (anvils, furnaces, ranges, banks) |
 
 ## Adding NPCs
 
@@ -58,28 +63,94 @@ NPCs are defined with combat stats, drops, and spawn locations:
 
 ## Adding Items
 
-Items include equipment, resources, and consumables:
+Items include equipment, resources, and consumables. Add to the appropriate category file in `items/` directory.
 
-```typescript
+### Example: Adding a Weapon
+
+**File**: `packages/server/world/assets/manifests/items/weapons.json`
+
+```json
 {
-  id: "bronze_sword",
-  name: "Bronze Sword",
-  type: "weapon",
-  slot: "weapon",
-  requirements: { attack: 1 },
-  stats: { attackBonus: 4, strengthBonus: 3 },
-  tradeable: true,
-  stackable: false
+  "id": "mithril_longsword",
+  "name": "Mithril Longsword",
+  "type": "weapon",
+  "tier": "mithril",
+  "equipSlot": "weapon",
+  "attackType": "MELEE",
+  "weaponType": "longsword",
+  "stackable": false,
+  "tradeable": true,
+  "value": 1300,
+  "bonuses": {
+    "attack": 26,
+    "strength": 25
+  }
 }
 ```
 
+### Example: Adding a Tool
+
+**File**: `packages/server/world/assets/manifests/items/tools.json`
+
+```json
+{
+  "id": "adamant_pickaxe",
+  "name": "Adamant Pickaxe",
+  "type": "tool",
+  "tier": "adamant",
+  "equipSlot": "weapon",
+  "stackable": false,
+  "tradeable": true,
+  "value": 3200,
+  "tool": {
+    "skill": "mining",
+    "priority": 4,
+    "rollTicks": 3
+  }
+}
+```
+
+### Example: Adding a Resource
+
+**File**: `packages/server/world/assets/manifests/items/resources.json`
+
+```json
+{
+  "id": "mithril_ore",
+  "name": "Mithril Ore",
+  "type": "resource",
+  "stackable": false,
+  "tradeable": true,
+  "value": 150,
+  "notedItemId": "mithril_ore_noted"
+}
+```
+
+### Tier-Based Requirements
+
+Items with a `tier` property automatically derive level requirements from `tier-requirements.json`:
+
+```json
+{
+  "id": "steel_sword",
+  "tier": "steel",
+  "equipSlot": "weapon",
+  "attackType": "MELEE"
+  // requirements auto-derived: { attack: 5 }
+}
+```
+
+No need to manually specify `requirements` if using the tier system.
+
 ### Item Types
 
-- **weapon**: Swords, bows
-- **armor**: Helmets, bodies, legs
-- **tool**: Hatchets, fishing rods
+- **weapon**: Swords, bows, staffs
+- **armor**: Helmets, bodies, legs, shields
+- **tool**: Hatchets, pickaxes, fishing rods
 - **consumable**: Food, potions
-- **resource**: Logs, fish, ores
+- **resource**: Logs, fish, ores, bars
+- **currency**: Coins
+- **junk**: Burnt food, broken items
 
 ## Adding Shops
 
@@ -96,6 +167,28 @@ Shops define available items and prices:
   ]
 }
 ```
+
+## Adding Stations
+
+Stations are interactive objects for crafting and processing:
+
+```json
+{
+  "type": "anvil",
+  "name": "Anvil",
+  "model": "asset://models/anvil/anvil.glb",
+  "modelScale": 0.5,
+  "modelYOffset": 0.2,
+  "examine": "An anvil for smithing metal bars into weapons and tools."
+}
+```
+
+### Station Types
+
+- **anvil**: Smith bars into equipment
+- **furnace**: Smelt ores into bars
+- **range**: Cook food with reduced burn chance
+- **bank**: Store items
 
 ## Adding World Areas
 
@@ -126,8 +219,135 @@ World areas define zones with biomes and mob spawns:
 - Northern Reaches (frozen tundra)
 - Blasted Lands (corrupted areas)
 
+## Adding Recipes
+
+### Smelting Recipe
+
+**File**: `packages/server/world/assets/manifests/recipes/smelting.json`
+
+```json
+{
+  "output": "mithril_bar",
+  "inputs": [
+    { "item": "mithril_ore", "amount": 1 },
+    { "item": "coal", "amount": 4 }
+  ],
+  "level": 50,
+  "xp": 30,
+  "ticks": 4,
+  "successRate": 1.0
+}
+```
+
+### Smithing Recipe
+
+**File**: `packages/server/world/assets/manifests/recipes/smithing.json`
+
+```json
+{
+  "output": "mithril_longsword",
+  "bar": "mithril_bar",
+  "barsRequired": 2,
+  "level": 56,
+  "xp": 100,
+  "ticks": 4,
+  "category": "weapons"
+}
+```
+
+### Cooking Recipe
+
+**File**: `packages/server/world/assets/manifests/recipes/cooking.json`
+
+```json
+{
+  "raw": "raw_shark",
+  "cooked": "shark",
+  "burnt": "burnt_shark",
+  "level": 80,
+  "xp": 210,
+  "ticks": 4,
+  "stopBurnLevel": {
+    "fire": 94,
+    "range": 89
+  }
+}
+```
+
+### Firemaking Recipe
+
+**File**: `packages/server/world/assets/manifests/recipes/firemaking.json`
+
+```json
+{
+  "log": "magic_logs",
+  "level": 75,
+  "xp": 303.8,
+  "ticks": 4
+}
+```
+
+---
+
 ## Testing Changes
 
-1. Edit manifest file
-2. Save (hot reload applies)
-3. Verify in game at localhost:3333
+<Steps>
+  <Step title="Edit Manifest">
+    Add your content to the appropriate JSON file in `packages/server/world/assets/manifests/`
+  </Step>
+  <Step title="Restart Server">
+    Stop the server (Ctrl+C) and restart with `bun run dev`
+  </Step>
+  <Step title="Verify In-Game">
+    Check that your content appears correctly at `http://localhost:3333`
+  </Step>
+</Steps>
+
+<Warning>
+**Server restart required**: Unlike code changes, manifest changes require a full server restart to reload.
+</Warning>
+
+---
+
+## Validation
+
+### Atomic Loading
+
+Directory-based manifests use **atomic loading**:
+
+- All required files must exist or system falls back to legacy format
+- For `items/`: All 5 category files must be present
+- For `recipes/`: Individual files are optional (falls back to embedded item data)
+- For `gathering/`: Individual files are optional (falls back to `resources.json`)
+
+### Duplicate Detection
+
+The loader validates that no item ID appears in multiple category files:
+
+```
+[DataManager] Duplicate item ID "bronze_sword" found in items/weapons.json
+```
+
+This prevents data conflicts and ensures each item has a single source of truth.
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use descriptive IDs">
+    Use `bronze_sword` not `sword1`. IDs should be self-documenting.
+  </Accordion>
+  <Accordion title="Follow naming conventions">
+    Use snake_case for IDs: `mithril_platebody`, `oak_logs`, `raw_shrimp`
+  </Accordion>
+  <Accordion title="Leverage tier system">
+    Use `tier` property instead of manually specifying requirements for standard equipment.
+  </Accordion>
+  <Accordion title="Keep recipes separate">
+    Don't embed recipe data in items.json - use dedicated recipe manifest files.
+  </Accordion>
+  <Accordion title="Test thoroughly">
+    Verify level requirements, XP values, and item interactions work as expected.
+  </Accordion>
+</AccordionGroup>

@@ -82,6 +82,25 @@ npm run lint        # Lint codebase
 npm run typecheck   # TypeScript type checking
 ```
 
+## GitHub Actions
+
+The repository includes automated workflows for code quality and documentation:
+
+### Claude Code Integration
+
+- **`.github/workflows/claude.yml`** - Responds to `@claude` mentions in issues and PRs for automated assistance
+- **`.github/workflows/claude-code-review.yml`** - Automated code review on pull requests
+- **`.github/workflows/update-docs.yml`** - Automatically updates documentation when manifest files change
+
+To use Claude Code:
+1. Comment `@claude` in any issue or PR
+2. Claude will analyze the context and provide assistance
+3. For code reviews, Claude automatically reviews new PRs
+
+<Info>
+Requires `CLAUDE_CODE_OAUTH_TOKEN` and `MINTLIFY_API_KEY` secrets to be configured in repository settings.
+</Info>
+
 ## Common Workflows
 
 ### Adding a New Feature
@@ -89,6 +108,12 @@ npm run typecheck   # TypeScript type checking
 1. Make changes in `packages/shared/src/`
 2. Hot reload applies automatically
 3. Test in browser at localhost:3333
+
+### Updating Game Content
+
+1. Edit manifest files in `world/assets/manifests/`
+2. Restart server to reload manifests
+3. Documentation updates automatically via GitHub Actions
 
 ### Debugging Server
 
