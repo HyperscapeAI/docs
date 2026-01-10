@@ -98,6 +98,28 @@ Shops define available items and prices:
 }
 ```
 
+## Adding Stations
+
+Stations are interactive objects for crafting and processing:
+
+```json
+{
+  "type": "anvil",
+  "name": "Anvil",
+  "model": "asset://models/anvil/anvil.glb",
+  "modelScale": 0.5,
+  "modelYOffset": 0.2,
+  "examine": "An anvil for smithing metal bars into weapons and tools."
+}
+```
+
+### Station Types
+
+- **anvil**: Smith bars into equipment
+- **furnace**: Smelt ores into bars
+- **range**: Cook food with reduced burn chance
+- **bank**: Store items
+
 ## Adding World Areas
 
 World areas define zones with biomes and mob spawns:
