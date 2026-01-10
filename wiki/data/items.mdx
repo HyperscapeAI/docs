@@ -399,7 +399,7 @@ export function getBaseItemId(itemId: string): string {
 
 ### Tool (tools.json)
 
-Tools can optionally include a `tool` object specifying the skill and priority:
+Tools include a `tool` object specifying the skill and priority. The tier system automatically derives level requirements:
 
 ```json
 {
@@ -432,6 +432,10 @@ Tools can optionally include a `tool` object specifying the skill and priority:
   }
 }
 ```
+
+<Info>
+The `tier: "bronze"` automatically gives this tool `attack: 1` and `woodcutting: 1` requirements from `tier-requirements.json`. Tools with `equipSlot: "weapon"` can be equipped and used for combat.
+</Info>
 
 ### Resource (resources.json)
 
