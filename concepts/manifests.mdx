@@ -284,16 +284,29 @@ Check the game to ensure content appears correctly. Use the Skills panel to veri
 
 ## Validation
 
-Manifests are TypeScript files, so you get:
+Manifests are JSON files validated at runtime by DataManager:
 
-- **Type checking**: Invalid fields caught at compile time
-- **Autocomplete**: IDE suggestions for valid properties
-- **Required fields**: Missing fields cause build errors
-- **References**: TypeScript catches invalid itemId/npcId references
+- **Schema validation**: Invalid fields logged as warnings
+- **Duplicate detection**: Duplicate item IDs across files cause errors
+- **Reference checking**: Invalid itemId/npcId references caught at runtime
+- **Atomic loading**: Items directory loads all files or falls back to legacy format
 
 <Warning>
-  Invalid manifests will cause TypeScript compilation to fail with descriptive errors.
+  Invalid JSON syntax will cause server startup to fail. Use a JSON validator before committing changes.
 </Warning>
+
+## Data Providers
+
+The manifest system uses specialized data providers for efficient lookups:
+
+| Provider | Purpose | Manifest Source |
+|----------|---------|-----------------|
+| `ProcessingDataProvider` | Cooking, firemaking, smelting, smithing recipes | `recipes/*.json` |
+| `TierDataProvider` | Equipment level requirements by tier | `tier-requirements.json` |
+| `StationDataProvider` | Station models and configurations | `stations.json` |
+| `DataManager` | Central loader for all manifests | All manifests |
+
+These providers build optimized lookup tables at startup for fast runtime queries.
 
 ## Best Practices
 
