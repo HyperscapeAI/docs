@@ -29,16 +29,20 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | Skill | Description | Training Methods |
 |-------|-------------|------------------|
 | **Woodcutting** | Chop trees | Using hatchet on trees |
-| **Fishing** | Catch fish | Using fishing rod at spots |
 | **Mining** | Mine ore | Using pickaxe on rocks |
+| **Fishing** | Catch fish | Using fishing rod at spots |
 
 ### Artisan Skills
 
 | Skill | Description | Training Methods |
 |-------|-------------|------------------|
 | **Firemaking** | Light fires | Using tinderbox on logs |
-| **Cooking** | Cook food | Using raw food on fires |
+| **Cooking** | Cook food | Using raw food on fires/ranges |
 | **Smithing** | Smelt bars and smith equipment | Smelting ores at furnaces, smithing bars at anvils |
+
+<Info>
+All artisan skills use tick-based timing (600ms per tick) matching OSRS mechanics. Smelting and smithing both take 4 ticks per action by default.
+</Info>
 
 ---
 
