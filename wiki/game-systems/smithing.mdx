@@ -1,0 +1,308 @@
+---
+title: "Smithing System"
+description: "Smelting ores and smithing equipment with OSRS-accurate mechanics"
+icon: "hammer"
+---
+
+# Smithing System
+
+The Smithing skill allows players to smelt ores into metal bars at furnaces and smith bars into equipment at anvils. The system uses OSRS-accurate mechanics including tick-based timing, success rates, and level requirements.
+
+<Info>
+Smithing is managed by `SmeltingSystem` and `SmithingSystem` in `packages/shared/src/systems/shared/interaction/`.
+</Info>
+
+## Overview
+
+Smithing has two main activities:
+
+1. **Smelting**: Convert ores into bars at furnaces
+2. **Smithing**: Convert bars into equipment at anvils (requires hammer)
+
+Both activities use tick-based timing (600ms per tick) and support "Make X" functionality for batch processing.
+
+---
+
+## Smelting
+
+### Requirements
+
+- Access to a furnace
+- Required ores in inventory
+- Sufficient Smithing level
+
+### Smelting Process
+
+1. Click on a furnace
+2. Select the bar type from the smelting interface
+3. Choose quantity (1, 5, 10, All, or custom X)
+4. Wait for smelting to complete (4 ticks per bar by default)
+
+### Smelting Recipes
+
+All smelting recipes are defined in `manifests/recipes/smelting.json`:
+
+| Bar | Level | Ores Required | XP | Success Rate | Ticks |
+|-----|-------|---------------|-----|--------------|-------|
+| Bronze | 1 | 1 Copper + 1 Tin | 6.2 | 100% | 4 |
+| Iron | 15 | 1 Iron | 12.5 | 50% | 4 |
+| Steel | 30 | 1 Iron + 2 Coal | 17.5 | 100% | 4 |
+| Mithril | 50 | 1 Mithril + 4 Coal | 30 | 100% | 4 |
+| Adamant | 70 | 1 Adamantite + 6 Coal | 37.5 | 100% | 4 |
+| Rune | 85 | 1 Runite + 8 Coal | 50 | 100% | 4 |
+
+<Warning>
+**Iron Ore**: Has a 50% success rate. Failed attempts consume the ore but grant no bar or XP. This matches OSRS mechanics.
+</Warning>
+
+### Smelting Interface
+
+The smelting interface shows:
+- Available bars based on inventory ores
+- Level requirements (greyed out if not met)
+- Ore requirements for each bar
+- Quantity selection buttons
+
+---
+
+## Smithing
+
+### Requirements
+
+- Access to an anvil
+- Hammer in inventory
+- Required bars in inventory
+- Sufficient Smithing level
+
+### Smithing Process
+
+1. Click on an anvil
+2. Select the item from the smithing interface
+3. Choose quantity (1, 5, 10, All, or custom X)
+4. Wait for smithing to complete (4 ticks per item by default)
+
+### Smithing Recipes
+
+All smithing recipes are defined in `manifests/recipes/smithing.json` and organized by category:
+
+#### Weapons
+
+| Item | Level | Bars | XP | Category |
+|------|-------|------|-----|----------|
+| Bronze dagger | 1 | 1 Bronze | 12.5 | weapons |
+| Bronze sword | 4 | 1 Bronze | 12.5 | weapons |
+| Bronze scimitar | 5 | 2 Bronze | 25 | weapons |
+| Bronze longsword | 6 | 2 Bronze | 25 | weapons |
+| Bronze 2h sword | 14 | 3 Bronze | 37.5 | weapons |
+| Iron sword | 19 | 1 Iron | 25 | weapons |
+| Steel sword | 34 | 1 Steel | 37.5 | weapons |
+| Mithril sword | 54 | 1 Mithril | 50 | weapons |
+| Adamant sword | 74 | 1 Adamant | 62.5 | weapons |
+| Rune sword | 89 | 1 Rune | 75 | weapons |
+
+#### Armor
+
+| Item | Level | Bars | XP | Category |
+|------|-------|------|-----|----------|
+| Bronze platebody | 18 | 5 Bronze | 62.5 | armor |
+| Bronze platelegs | 16 | 3 Bronze | 37.5 | armor |
+| Bronze full helm | 7 | 2 Bronze | 25 | armor |
+| Iron platebody | 33 | 5 Iron | 125 | armor |
+| Steel platebody | 48 | 5 Steel | 187.5 | armor |
+| Mithril platebody | 68 | 5 Mithril | 250 | armor |
+
+#### Tools
+
+| Item | Level | Bars | XP | Category |
+|------|-------|------|-----|----------|
+| Bronze hatchet | 1 | 1 Bronze | 12.5 | tools |
+| Bronze pickaxe | 1 | 1 Bronze | 12.5 | tools |
+| Iron hatchet | 16 | 1 Iron | 25 | tools |
+| Iron pickaxe | 16 | 1 Iron | 25 | tools |
+| Steel hatchet | 31 | 1 Steel | 37.5 | tools |
+| Steel pickaxe | 31 | 1 Steel | 37.5 | tools |
+
+### Smithing Interface
+
+The smithing interface shows:
+- Available recipes based on inventory bars
+- Grouped by category (weapons, armor, tools, misc)
+- Level requirements (greyed out if not met)
+- Bar requirements and XP for each item
+- Quantity selection buttons
+
+---
+
+## Make X Memory
+
+Both smelting and smithing remember the last custom quantity entered (localStorage):
+
+```typescript
+// Stored keys
+const SMELTING_LAST_X_KEY = "smelting_last_x";
+const SMITHING_LAST_X_KEY = "smithing_last_x";
+```
+
+When clicking "X" without entering a number, the system uses the last remembered value (default: 10).
+
+---
+
+## Tick-Based Timing
+
+Both smelting and smithing use OSRS-accurate tick-based timing:
+
+- **Default**: 4 ticks per action (2.4 seconds)
+- **Configurable**: Can be overridden per recipe in manifests
+- **Tick duration**: 600ms (OSRS standard)
+
+```typescript
+// From SmithingConstants.ts
+export const SMITHING_CONSTANTS = {
+  DEFAULT_SMELTING_TICKS: 4,
+  DEFAULT_SMITHING_TICKS: 4,
+  TICK_DURATION_MS: 600,
+};
+```
+
+---
+
+## Data Providers
+
+The smithing system uses specialized data providers for efficient lookups:
+
+### ProcessingDataProvider
+
+Manages all processing recipes (cooking, firemaking, smelting, smithing):
+
+```typescript
+import { processingDataProvider } from '@hyperscape/shared';
+
+// Get smelting data
+const smeltingData = processingDataProvider.getSmeltingData("bronze_bar");
+// Returns: { barItemId, primaryOre, secondaryOre, coalRequired, levelRequired, xp, successRate, ticks }
+
+// Get smithing recipe
+const recipe = processingDataProvider.getSmithingRecipe("bronze_sword");
+// Returns: { itemId, name, barType, barsRequired, levelRequired, xp, category, ticks }
+
+// Get available bars from inventory
+const bars = processingDataProvider.getSmeltableBarsFromInventory(inventory, smithingLevel);
+
+// Get available recipes from inventory
+const recipes = processingDataProvider.getSmithableItemsWithAvailability(inventory, smithingLevel);
+```
+
+### StationDataProvider
+
+Manages station configurations (anvils, furnaces, ranges, banks):
+
+```typescript
+import { stationDataProvider } from '@hyperscape/shared';
+
+// Get station data
+const anvilData = stationDataProvider.getStationData("anvil");
+// Returns: { type, name, model, modelScale, modelYOffset, examine }
+
+// Get model path
+const modelPath = stationDataProvider.getModelPath("furnace");
+// Returns: "asset://models/furnace/furnace.glb"
+```
+
+---
+
+## Events
+
+The smithing system emits events for UI updates and logging:
+
+| Event | Data | Description |
+|-------|------|-------------|
+| `SMELTING_INTERACT` | `playerId`, `furnaceId`, `position` | Player clicked furnace |
+| `SMELTING_INTERFACE_OPEN` | `playerId`, `furnaceId`, `availableBars` | Show smelting UI |
+| `PROCESSING_SMELTING_REQUEST` | `playerId`, `barItemId`, `furnaceId`, `quantity` | Player selected bar to smelt |
+| `SMITHING_INTERACT` | `playerId`, `anvilId`, `position` | Player clicked anvil |
+| `SMITHING_INTERFACE_OPEN` | `playerId`, `anvilId`, `availableRecipes` | Show smithing UI |
+| `PROCESSING_SMITHING_REQUEST` | `playerId`, `recipeId`, `anvilId`, `quantity` | Player selected item to smith |
+| `SKILLS_XP_GAINED` | `playerId`, `skill: "smithing"`, `amount` | XP granted |
+| `SKILLS_LEVEL_UP` | `entityId`, `skill: "smithing"`, `oldLevel`, `newLevel` | Level increased |
+
+---
+
+## Database Schema
+
+Smithing level and XP are persisted in the characters table:
+
+```sql
+ALTER TABLE "characters" ADD COLUMN "smithingLevel" integer DEFAULT 1;
+ALTER TABLE "characters" ADD COLUMN "smithingXp" integer DEFAULT 0;
+```
+
+---
+
+## Network Messages
+
+### Client → Server
+
+| Message | Payload | Description |
+|---------|---------|-------------|
+| `onSmeltingSourceInteract` | `furnaceId`, `position` | Player clicked furnace |
+| `onProcessingSmelting` | `barItemId`, `furnaceId`, `quantity` | Player selected bar to smelt |
+| `onSmithingSourceInteract` | `anvilId`, `position` | Player clicked anvil |
+| `onProcessingSmithing` | `recipeId`, `anvilId`, `quantity` | Player selected item to smith |
+
+### Server → Client
+
+| Message | Payload | Description |
+|---------|---------|-------------|
+| `smeltingInterfaceOpen` | `furnaceId`, `availableBars` | Show smelting UI |
+| `smithingInterfaceOpen` | `anvilId`, `availableRecipes` | Show smithing UI |
+
+---
+
+## Adding New Recipes
+
+### Smelting Recipe
+
+Add to `manifests/recipes/smelting.json`:
+
+```json
+{
+  "output": "steel_bar",
+  "inputs": [
+    { "item": "iron_ore", "amount": 1 },
+    { "item": "coal", "amount": 2 }
+  ],
+  "level": 30,
+  "xp": 17.5,
+  "ticks": 4,
+  "successRate": 1.0
+}
+```
+
+### Smithing Recipe
+
+Add to `manifests/recipes/smithing.json`:
+
+```json
+{
+  "output": "bronze_sword",
+  "bar": "bronze_bar",
+  "barsRequired": 1,
+  "level": 4,
+  "xp": 12.5,
+  "ticks": 4,
+  "category": "weapons"
+}
+```
+
+<Info>
+Restart the server after editing manifests to reload the data.
+</Info>
+
+---
+
+## Related Documentation
+
+- [Skills & Progression](/wiki/game-systems/skills)
+- [Item Data Structure](/wiki/data/items)
+- [Manifest-Driven Design](/concepts/manifests)
+- [Processing System](/wiki/game-systems/overview)
