@@ -533,7 +533,7 @@ The first action in `inventoryActions` becomes the left-click default. If not sp
 
 ## Tool Priority System
 
-Tools now use a priority system to determine which tool to use when multiple are available:
+Tools use a priority system to determine which tool to use when multiple are available:
 
 ```json
 {
@@ -551,6 +551,46 @@ For example:
 - Rune hatchet: priority 6
 
 The system automatically selects the highest priority tool the player has equipped or in inventory.
+
+## Inventory Actions System
+
+Items can define explicit context menu actions using the `inventoryActions` array:
+
+```json
+{
+  "id": "bronze_sword",
+  "inventoryActions": ["Wield", "Use", "Drop", "Examine"]
+}
+```
+
+### Common Action Patterns
+
+| Item Type | Actions |
+|-----------|---------|
+| Food | `["Eat", "Use", "Drop", "Examine"]` |
+| Potions | `["Drink", "Use", "Drop", "Examine"]` |
+| Weapons | `["Wield", "Use", "Drop", "Examine"]` |
+| Armor | `["Wear", "Use", "Drop", "Examine"]` |
+| Bones | `["Bury", "Use", "Drop", "Examine"]` |
+| Generic | `["Use", "Drop", "Examine"]` |
+
+### Action Handlers
+
+The following actions have built-in handlers:
+
+- **Eat**: Consumes food, restores HP
+- **Drink**: Consumes potion, applies effects
+- **Wield**: Equips weapons/shields
+- **Wear**: Equips armor
+- **Bury**: Buries bones for Prayer XP
+- **Use**: Enters targeting mode for item-on-item/item-on-object interactions
+- **Drop**: Drops item on ground
+- **Examine**: Shows examine text
+- **Cancel**: Closes context menu (always added automatically)
+
+<Info>
+If `inventoryActions` is not specified, the system uses heuristic detection based on item properties. Manifest-defined actions take priority over heuristics.
+</Info>
 
 ---
 
