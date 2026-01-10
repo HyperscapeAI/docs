@@ -46,9 +46,29 @@ packages/shared/src/data/
 
 ```
 world/assets/manifests/
-├── npcs.json             # NPC and mob definitions
-├── items.json            # Item definitions
-└── ... (other manifests)
+├── items/                    # Item definitions (split by type)
+│   ├── weapons.json          # Combat weapons
+│   ├── tools.json            # Skilling tools (hatchets, pickaxes, etc.)
+│   ├── resources.json        # Gathered materials (ores, logs, bars, raw fish)
+│   ├── food.json             # Cooked consumables
+│   └── misc.json             # Burnt food, currency, junk items
+├── gathering/                # Harvestable resource nodes
+│   ├── woodcutting.json      # Trees and log yields
+│   ├── mining.json           # Rocks and ore yields
+│   └── fishing.json          # Fishing spots and catch rates
+├── recipes/                  # Processing recipes
+│   ├── smelting.json         # Furnace: ores → bars
+│   ├── smithing.json         # Anvil: bars → equipment
+│   ├── cooking.json          # Fire/range: raw → cooked food
+│   └── firemaking.json       # Logs → fires (XP data)
+├── tier-requirements.json    # Centralized tier-based level requirements
+├── skill-unlocks.json        # Skill progression milestones
+├── npcs.json                 # All NPCs (mobs, neutral, bosses)
+├── stores.json               # Shop inventories
+├── world-areas.json          # World zones with spawns
+├── biomes.json               # Biome definitions
+├── vegetation.json           # Procedural vegetation assets
+└── music.json                # Music tracks
 ```
 
 ---
@@ -132,24 +152,43 @@ export const NPC_SPAWN_CONSTANTS = {
 
 ## Items
 
-Items are loaded from JSON into the `ITEMS` Map:
+Items are loaded from JSON into the `ITEMS` Map. Items are now organized into separate files by type for better organization:
 
 ```typescript
 // From packages/shared/src/data/items.ts
 export const ITEMS: Map<string, Item> = new Map();
 ```
 
-### Item Types
+### Item Types & Organization
 
-| Type | Description |
-|------|-------------|
-| `"weapon"` | Swords, bows |
-| `"armor"` | Helmets, bodies, legs |
-| `"tool"` | Hatchet, fishing rod, tinderbox |
-| `"consumable"` | Food, potions |
-| `"resource"` | Logs, raw fish, cooked fish |
-| `"ammunition"` | Arrows |
-| `"currency"` | Coins |
+| Type | Description | File |
+|------|-------------|------|
+| `"weapon"` | Combat weapons | `items/weapons.json` |
+| `"tool"` | Skilling tools | `items/tools.json` |
+| `"resource"` | Gathered materials (ores, logs, bars, raw fish) | `items/resources.json` |
+| `"consumable"` | Food that heals | `items/food.json` |
+| `"currency"` | Coins | `items/misc.json` |
+| `"junk"` | Burnt food, worthless items | `items/misc.json` |
+| `"misc"` | Everything else | `items/misc.json` |
+
+### Tier-Based Equipment
+
+Items now use a centralized tier system defined in `tier-requirements.json`. Equipment references their tier (e.g., "bronze", "steel", "rune") and the system looks up requirements automatically:
+
+```typescript
+// Item with tier reference
+{
+  "id": "bronze_sword",
+  "tier": "bronze",  // References tier-requirements.json
+  // ... other properties
+}
+```
+
+**Supported Tiers:**
+- **Melee**: bronze, iron, steel, black, mithril, adamant, rune, dragon
+- **Tools**: Same as melee (with different skill requirements)
+- **Ranged**: leather, studded, green_dhide, blue_dhide, red_dhide, black_dhide
+- **Magic**: wizard, mystic, infinity, ahrims
 
 ### Item Helper Functions
 
@@ -318,11 +357,51 @@ Each starter town has:
 
 ---
 
+## Gathering Resources & Recipes
+
+The game now has a comprehensive gathering and crafting system:
+
+### Gathering Resources
+
+Harvestable nodes are defined in the `gathering/` directory:
+
+- **`gathering/woodcutting.json`** - Trees (normal, oak, willow, teak, maple, mahogany, yew, magic)
+- **`gathering/mining.json`** - Ore rocks (copper, tin, iron, coal, mithril, adamant, runite)
+- **`gathering/fishing.json`** - Fishing spots with OSRS-accurate catch rates
+
+Each resource defines:
+- Level requirements
+- Tool requirements
+- Harvest yields and XP
+- Respawn timing (in OSRS ticks: 1 tick = 600ms)
+- Success rates and depletion chances
+
+### Processing Recipes
+
+Recipes are defined in the `recipes/` directory:
+
+- **`recipes/smelting.json`** - Furnace recipes (ores → bars)
+- **`recipes/smithing.json`** - Anvil recipes (bars → equipment)
+- **`recipes/cooking.json`** - Cooking recipes with burn mechanics
+- **`recipes/firemaking.json`** - Log burning data
+
+All recipes use OSRS-accurate timing (4 ticks = 2.4s per action).
+
+## Skill Progression
+
+**`skill-unlocks.json`** documents what players unlock at each skill level. This is used for UI display and progression tracking. Covers all implemented skills: attack, strength, defence, constitution, prayer, woodcutting, mining, fishing, cooking, firemaking, and smithing.
+
 ## Adding New Content
 
 <Steps>
-  <Step title="Add to manifest">
-    Edit `world/assets/manifests/npcs.json` or `items.json`
+  <Step title="Choose the right manifest">
+    - Items: Add to appropriate file in `items/` directory
+    - Gathering: Add to `gathering/woodcutting.json`, `mining.json`, or `fishing.json`
+    - Recipes: Add to appropriate file in `recipes/` directory
+    - NPCs: Add to `npcs.json`
+  </Step>
+  <Step title="Follow existing patterns">
+    Use the same structure as existing entries. For tiered equipment, specify the `tier` field.
   </Step>
   <Step title="Generate 3D model (optional)">
     Use Asset Forge to create a new model, or use existing models
@@ -336,12 +415,20 @@ Each starter town has:
 </Steps>
 
 <Warning>
-  Do NOT add NPC or item data directly to TypeScript files. Keep all content in JSON manifests for clean separation.
+  Do NOT add game data directly to TypeScript files. Keep all content in JSON manifests for clean separation and easy modding.
 </Warning>
 
 ---
 
 ---
+
+## GitHub Integration
+
+The repository now includes Claude Code GitHub Actions for automated assistance:
+
+- **`.github/workflows/claude.yml`** - Responds to `@claude` mentions in issues and PRs
+- **`.github/workflows/claude-code-review.yml`** - Automated code review on pull requests
+- **`.github/workflows/update-docs.yml`** - Automatically updates documentation when manifests change
 
 ## Detailed Documentation
 
@@ -351,5 +438,11 @@ Each starter town has:
   </Card>
   <Card title="Item Data Structure" icon="box-open" href="/wiki/data/items">
     Item types, stats, requirements, equipment slots, noted items, and shop items.
+  </Card>
+  <Card title="Gathering & Crafting" icon="hammer" href="/wiki/game-systems/skills">
+    Woodcutting, mining, fishing, smelting, smithing, cooking, and firemaking systems.
+  </Card>
+  <Card title="Tier Requirements" icon="shield" href="/wiki/data/items">
+    Centralized equipment and tool level requirements by tier.
   </Card>
 </CardGroup>
