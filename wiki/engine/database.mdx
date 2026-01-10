@@ -372,18 +372,31 @@ const id = uuid(); // "550e8400-e29b-41d4-a716-446655440000"
 
 ## Migrations
 
-Drizzle handles migrations automatically:
+Drizzle handles migrations automatically. Run from `packages/server/`:
 
 ```bash
 # Generate migration from schema changes
-bun run db:generate
+bunx drizzle-kit generate
 
 # Apply migrations
-bun run db:migrate
+bunx drizzle-kit migrate
 
 # Push schema directly (dev only)
-bun run db:push
+bunx drizzle-kit push
 ```
+
+### Recent Migrations
+
+| Migration | Description |
+|-----------|-------------|
+| `0015_add_smithing_skill.sql` | Added `smithingLevel` and `smithingXp` columns |
+| `0014_add_mining_skill.sql` | Added `miningLevel` and `miningXp` columns |
+| `0013_add_auto_retaliate.sql` | Added auto-retaliate preference |
+| `0012_add_bank_placeholders.sql` | Added bank placeholder system |
+| `0011_add_bank_tabs.sql` | Added custom bank tabs |
+| `0010_add_player_deaths.sql` | Added death tracking |
+
+Migrations are located in `packages/server/src/database/migrations/`.
 
 ---
 
