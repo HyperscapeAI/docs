@@ -415,6 +415,79 @@ This metadata is separate from item definitions to keep tool mechanics centraliz
 
 **`skill-unlocks.json`** documents what players unlock at each skill level. This is used for UI display and progression tracking. Covers all implemented skills: attack, strength, defence, constitution, prayer, woodcutting, mining, fishing, cooking, firemaking, and smithing.
 
+---
+
+## Crafting Stations
+
+Stations are defined in `stations.json` and represent interactive objects in the world used for processing skills:
+
+```typescript
+interface Station {
+  type: string;           // "anvil" | "furnace" | "range" | "bank"
+  name: string;           // Display name
+  model: string | null;   // Path to 3D model
+  modelScale: number;     // Model scale multiplier
+  modelYOffset: number;   // Vertical position offset
+  examine: string;        // Examine text
+}
+```
+
+### Available Stations
+
+| Station | Purpose | Model |
+|---------|---------|-------|
+| **Anvil** | Smithing bars into equipment | `models/anvil/anvil.glb` |
+| **Furnace** | Smelting ores into bars | `models/furnace/furnace.glb` |
+| **Cooking Range** | Cooking food (reduced burn chance) | TBD |
+| **Bank Booth** | Accessing bank storage | TBD |
+
+Stations are placed in world areas and interact with the corresponding recipe manifests (`recipes/smithing.json`, `recipes/smelting.json`, etc.).
+
+---
+
+## Tool Metadata
+
+The `tools.json` manifest defines tool-specific properties separate from item definitions:
+
+```typescript
+interface ToolMetadata {
+  itemId: string;         // References items/tools.json
+  skill: string;          // "woodcutting" | "mining" | "fishing"
+  tier: string;           // Tool tier
+  levelRequired: number;  // Minimum skill level
+  priority: number;       // Tool selection priority (higher = better)
+  rollTicks?: number;     // Mining only: ticks between roll attempts
+}
+```
+
+### Tool Priority System
+
+When multiple tools are available, the system selects the highest priority tool:
+
+**Woodcutting Hatchets**:
+| Tool | Priority |
+|------|----------|
+| Crystal | 1 (best) |
+| Dragon | 2 |
+| Rune | 3 |
+| Adamant | 4 |
+| Mithril | 5 |
+| Steel | 6 |
+| Iron | 7 |
+| Bronze | 8 (worst) |
+
+**Mining Pickaxes** (also includes `rollTicks` for mining speed):
+| Tool | Priority | Roll Ticks |
+|------|----------|------------|
+| Crystal | 1 | 3 |
+| Dragon | 2 | 3 |
+| Rune | 3 | 3 |
+| Adamant | 4 | 4 |
+| Mithril | 5 | 5 |
+| Steel | 6 | 6 |
+| Iron | 7 | 7 |
+| Bronze | 8 | 8 |
+
 ## Adding New Content
 
 <Steps>
