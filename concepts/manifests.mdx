@@ -240,16 +240,90 @@ Defines world stations with 3D models:
 }
 ```
 
-## DataManager
+## Data Providers
 
-The `DataManager` class in `packages/shared/src/data/DataManager.ts` loads and provides access to all manifests:
+### DataManager
+
+The `DataManager` class in `packages/shared/src/data/DataManager.ts` loads all manifests from JSON files and populates runtime data structures:
 
 ```typescript
-import { DataManager } from '@hyperscape/shared';
+import { dataManager } from '@hyperscape/shared';
 
-const npc = DataManager.getNPC("goblin");
-const item = DataManager.getItem("bronze_sword");
-const area = DataManager.getArea("mistwood_valley");
+// Initialize (loads all manifests)
+await dataManager.initialize();
+
+// Access loaded data via global Maps
+import { ITEMS, ALL_NPCS } from '@hyperscape/shared';
+const item = ITEMS.get("bronze_sword");
+const npc = ALL_NPCS.get("goblin");
+```
+
+### ProcessingDataProvider
+
+Provides runtime access to cooking, firemaking, smelting, and smithing recipes:
+
+```typescript
+import { processingDataProvider } from '@hyperscape/shared';
+
+// Smelting
+const smeltingData = processingDataProvider.getSmeltingData('bronze_bar');
+const canSmelt = processingDataProvider.isSmeltableBar('iron_bar');
+const availableBars = processingDataProvider.getSmeltableBarsFromInventory(inventory, level);
+
+// Smithing
+const recipe = processingDataProvider.getSmithingRecipe('bronze_sword');
+const recipes = processingDataProvider.getSmithingRecipesForBar('bronze_bar');
+const available = processingDataProvider.getSmithableItemsWithAvailability(inventory, level);
+
+// Cooking
+const cookingData = processingDataProvider.getCookingData('raw_shrimp');
+const isCookable = processingDataProvider.isCookable('raw_trout');
+
+// Firemaking
+const firemakingData = processingDataProvider.getFiremakingData('logs');
+const isBurnable = processingDataProvider.isBurnableLog('oak_logs');
+```
+
+### TierDataProvider
+
+Provides tier-based level requirements for equipment and tools:
+
+```typescript
+import { TierDataProvider } from '@hyperscape/shared';
+
+// Get requirements for a tiered item
+const requirements = TierDataProvider.getRequirements({
+  id: 'steel_sword',
+  type: 'weapon',
+  tier: 'steel',
+  equipSlot: 'weapon',
+  attackType: 'MELEE'
+});
+// Returns: { attack: 5 }
+
+// Get tier data directly
+const tierData = TierDataProvider.getTierData('melee', 'rune');
+// Returns: { attack: 40, defence: 40 }
+```
+
+### StationDataProvider
+
+Provides configuration for world stations (anvils, furnaces, ranges):
+
+```typescript
+import { stationDataProvider } from '@hyperscape/shared';
+
+// Get station configuration
+const anvilData = stationDataProvider.getStationData('anvil');
+// Returns: { type, name, model, modelScale, modelYOffset, examine }
+
+// Get model path for 3D rendering
+const modelPath = stationDataProvider.getModelPath('furnace');
+// Returns: "asset://models/furnace/furnace.glb"
+
+// Get examine text
+const examineText = stationDataProvider.getExamineText('anvil');
+// Returns: "An anvil for smithing metal bars into weapons and tools."
 ```
 
 ## Adding Content
