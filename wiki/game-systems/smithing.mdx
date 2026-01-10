@@ -1,12 +1,12 @@
 ---
 title: "Smithing System"
-description: "OSRS-accurate smelting and smithing mechanics"
+description: "Smelting ores and smithing equipment"
 icon: "hammer"
 ---
 
 # Smithing System
 
-Smithing is a two-stage artisan skill that allows players to create metal equipment from ores. The system follows Old School RuneScape mechanics with tick-based timing and authentic formulas.
+The Smithing skill allows players to smelt ores into metal bars at furnaces and smith bars into weapons, armor, and tools at anvils. This is a two-stage artisan skill following OSRS mechanics.
 
 <Info>
 Smithing is managed by `SmeltingSystem` and `SmithingSystem` in `packages/shared/src/systems/shared/interaction/`.
@@ -709,7 +709,7 @@ private buildInventoryCounts(inventory): Map<string, number> {
 
 ## Related Documentation
 
-- [Skills & Progression](/wiki/game-systems/skills)
-- [ProcessingDataProvider API](/api-reference/processing-data-provider)
-- [Manifest-Driven Design](/concepts/manifests)
-- [Item Data Structure](/wiki/data/items)
+- [Skills & Progression](/wiki/game-systems/skills) - General skill system
+- [Mining](/wiki/game-systems/mining) - Gathering ores
+- [Manifests](/concepts/manifests) - Data-driven content system
+- [Database Schema](/wiki/engine/database) - Persistence layer

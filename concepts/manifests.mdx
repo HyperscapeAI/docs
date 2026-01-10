@@ -232,7 +232,98 @@ Station types include:
 
 ## DataManager
 
-The `DataManager` class in `packages/shared/src/data/DataManager.ts` loads and provides access to all manifests:
+Smithing, cooking, and other processing skills use recipe manifests:
+
+**Smelting Recipe** (`recipes/smelting.json`):
+```json
+{
+  "recipes": [
+    {
+      "output": "bronze_bar",
+      "inputs": [
+        { "item": "copper_ore", "amount": 1 },
+        { "item": "tin_ore", "amount": 1 }
+      ],
+      "level": 1,
+      "xp": 6.25,
+      "ticks": 4,
+      "successRate": 1.0
+    }
+  ]
+}
+```
+
+**Smithing Recipe** (`recipes/smithing.json`):
+```json
+{
+  "recipes": [
+    {
+      "output": "bronze_sword",
+      "bar": "bronze_bar",
+      "barsRequired": 1,
+      "level": 4,
+      "xp": 12.5,
+      "ticks": 4,
+      "category": "weapons"
+    }
+  ]
+}
+```
+
+### Tier Requirements (`tier-requirements.json`)
+
+Defines level requirements by equipment tier:
+
+```json
+{
+  "melee": {
+    "bronze": { "attack": 1, "defence": 1 },
+    "iron": { "attack": 1, "defence": 1 },
+    "steel": { "attack": 5, "defence": 5 },
+    "mithril": { "attack": 20, "defence": 20 },
+    "adamant": { "attack": 30, "defence": 30 },
+    "rune": { "attack": 40, "defence": 40 }
+  },
+  "tools": {
+    "bronze": { "attack": 1, "woodcutting": 1, "mining": 1 },
+    "steel": { "attack": 5, "woodcutting": 6, "mining": 6 },
+    "mithril": { "attack": 20, "woodcutting": 21, "mining": 21 }
+  }
+}
+```
+
+### Station Configuration (`stations.json`)
+
+Defines world stations with 3D models:
+
+```json
+{
+  "stations": [
+    {
+      "type": "anvil",
+      "name": "Anvil",
+      "model": "asset://models/anvil/anvil.glb",
+      "modelScale": 0.5,
+      "modelYOffset": 0.4,
+      "examine": "An anvil for smithing metal bars into weapons and tools."
+    },
+    {
+      "type": "furnace",
+      "name": "Furnace",
+      "model": "asset://models/furnace/furnace.glb",
+      "modelScale": 1.5,
+      "modelYOffset": 1.0,
+      "examine": "A furnace for smelting ores into metal bars."
+    }
+  ]
+}
+```
+
+## Data Providers
+
+### DataManager
+
+The `DataManager` class in `packages/shared/src/data/DataManager.ts` loads all manifests from JSON files and populates runtime data structures:
 
 ```typescript
 import { dataManager } from '@hyperscape/shared';
@@ -282,11 +373,22 @@ bun run dev
 
 ### Step 3: Verify
 
-Check the game to ensure content appears correctly.
+Check the game to ensure content appears correctly. The smithing interface should show your new recipe.
 
 ## Validation
 
-Manifests are JSON files validated at runtime by DataManager:
+### JSON Manifest Validation
+
+JSON manifests are validated at runtime by DataManager:
+
+- **Schema validation**: Required fields checked on load
+- **Duplicate detection**: Duplicate item IDs cause errors
+- **Atomic loading**: All required files must exist (e.g., all 5 item category files)
+- **Fallback support**: Falls back to legacy single-file format if directory loading fails
+
+### TypeScript Data File Validation
+
+TypeScript data files get compile-time validation:
 
 - **Schema validation**: Invalid fields logged as warnings
 - **Cross-references**: Missing itemId/npcId references caught
@@ -301,6 +403,24 @@ Manifests are JSON files validated at runtime by DataManager:
 
 1. **Use descriptive IDs**: `bronze_sword` not `sword1`
 2. **Follow naming conventions**: snake_case for IDs
-3. **Document unusual values**: Add comments for non-obvious choices
+3. **Organize by category**: Use the directory structure (items/, recipes/, gathering/)
 4. **Test after changes**: Verify in-game before committing
 5. **Keep data flat**: Avoid deep nesting in manifest structures
+6. **Use tier system**: Leverage TierDataProvider for equipment requirements instead of hardcoding
+7. **Validate JSON**: Use a JSON validator before committing to catch syntax errors
+
+## Manifest Loading Order
+
+DataManager loads manifests in this order:
+
+1. **Tier requirements** (`tier-requirements.json`) - Needed for item normalization
+2. **Items** (`items/` directory or `items.json` fallback)
+3. **NPCs** (`npcs.json`)
+4. **Gathering resources** (`gathering/*.json`)
+5. **Recipe manifests** (`recipes/*.json`)
+6. **Skill unlocks** (`skill-unlocks.json`)
+7. **Stations** (`stations.json`)
+8. **World areas** (`world-areas.json`)
+9. **Stores** (`stores.json`)
+
+This order ensures dependencies are loaded before dependent data (e.g., tier requirements before items).

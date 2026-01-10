@@ -1,0 +1,483 @@
+---
+title: "Data Providers"
+description: "Runtime data access for manifests and recipes"
+icon: "database"
+---
+
+# Data Providers
+
+Data providers offer runtime access to game content loaded from JSON manifests. They provide type-safe APIs for querying items, recipes, requirements, and station configurations.
+
+## ProcessingDataProvider
+
+Provides access to cooking, firemaking, smelting, and smithing recipes.
+
+### Import
+
+```typescript
+import { processingDataProvider } from '@hyperscape/shared';
+```
+
+### Initialization
+
+The provider is automatically initialized by `DataManager` after loading recipe manifests. You can manually rebuild if needed:
+
+```typescript
+// Force rebuild (e.g., after hot-reloading manifests)
+processingDataProvider.rebuild();
+
+// Check if initialized
+const isReady = processingDataProvider.isReady();
+```
+
+---
+
+## Smelting API
+
+### Check if Bar is Smeltable
+
+```typescript
+const canSmelt = processingDataProvider.isSmeltableBar('bronze_bar');
+// Returns: true
+```
+
+### Get Smelting Data
+
+```typescript
+const data = processingDataProvider.getSmeltingData('bronze_bar');
+// Returns: {
+//   barItemId: 'bronze_bar',
+//   primaryOre: 'copper_ore',
+//   secondaryOre: 'tin_ore',
+//   coalRequired: 0,
+//   levelRequired: 1,
+//   xp: 6.25,
+//   successRate: 1.0,
+//   ticks: 4
+// }
+```
+
+### Get Smeltable Bars from Inventory
+
+```typescript
+const inventory = [
+  { itemId: 'copper_ore', quantity: 10 },
+  { itemId: 'tin_ore', quantity: 10 },
+  { itemId: 'iron_ore', quantity: 5 },
+  { itemId: 'coal', quantity: 20 }
+];
+
+const smithingLevel = 30;
+const availableBars = processingDataProvider.getSmeltableBarsFromInventory(
+  inventory,
+  smithingLevel
+);
+// Returns: [bronzeBarData, ironBarData, steelBarData]
+```
+
+### Get All Smeltable Bar IDs
+
+```typescript
+const barIds = processingDataProvider.getSmeltableBarIds();
+// Returns: Set(['bronze_bar', 'iron_bar', 'steel_bar', ...])
+```
+
+### Get Smelting Level/XP
+
+```typescript
+const level = processingDataProvider.getSmeltingLevel('steel_bar');
+// Returns: 30
+
+const xp = processingDataProvider.getSmeltingXP('steel_bar');
+// Returns: 17.5
+
+const ticks = processingDataProvider.getSmeltingTicks('steel_bar');
+// Returns: 4
+```
+
+---
+
+## Smithing API
+
+### Check if Item is Smithable
+
+```typescript
+const canSmith = processingDataProvider.isSmithableItem('bronze_sword');
+// Returns: true
+```
+
+### Get Smithing Recipe
+
+```typescript
+const recipe = processingDataProvider.getSmithingRecipe('bronze_sword');
+// Returns: {
+//   itemId: 'bronze_sword',
+//   name: 'Bronze Sword',
+//   barType: 'bronze_bar',
+//   barsRequired: 1,
+//   levelRequired: 4,
+//   xp: 12.5,
+//   category: 'weapons',
+//   ticks: 4
+// }
+```
+
+### Get Recipes for Bar Type
+
+```typescript
+const recipes = processingDataProvider.getSmithingRecipesForBar('bronze_bar');
+// Returns: [bronzeDaggerRecipe, bronzeSwordRecipe, bronzePlateBodyRecipe, ...]
+```
+
+### Get Smithable Items with Availability
+
+Shows ALL recipes for bar types the player has, with flags for UI display:
+
+```typescript
+const inventory = [
+  { itemId: 'bronze_bar', quantity: 10 },
+  { itemId: 'iron_bar', quantity: 3 }
+];
+
+const smithingLevel = 20;
+const available = processingDataProvider.getSmithableItemsWithAvailability(
+  inventory,
+  smithingLevel
+);
+// Returns: [
+//   { ...bronzeDaggerRecipe, meetsLevel: true, hasBars: true },
+//   { ...ironPlateBodyRecipe, meetsLevel: false, hasBars: false },
+//   ...
+// ]
+```
+
+<Info>
+Use `getSmithableItemsWithAvailability()` for UI display to show greyed-out items the player can't make yet.
+</Info>
+
+### Get All Smithing Recipes
+
+```typescript
+const allRecipes = processingDataProvider.getAllSmithingRecipes();
+// Returns: Array of all smithing recipes
+```
+
+### Get Smithing Level/XP
+
+```typescript
+const level = processingDataProvider.getSmithingLevel('rune_platebody');
+// Returns: 99
+
+const xp = processingDataProvider.getSmithingXP('rune_platebody');
+// Returns: 375
+
+const ticks = processingDataProvider.getSmithingTicks('rune_platebody');
+// Returns: 4
+```
+
+---
+
+## Cooking API
+
+### Check if Item is Cookable
+
+```typescript
+const canCook = processingDataProvider.isCookable('raw_shrimp');
+// Returns: true
+```
+
+### Get Cooking Data
+
+```typescript
+const data = processingDataProvider.getCookingData('raw_shrimp');
+// Returns: {
+//   rawItemId: 'raw_shrimp',
+//   cookedItemId: 'shrimp',
+//   burntItemId: 'burnt_shrimp',
+//   levelRequired: 1,
+//   xp: 30,
+//   stopBurnLevel: { fire: 34, range: 34 }
+// }
+```
+
+### Get Cooked/Burnt Item IDs
+
+```typescript
+const cookedId = processingDataProvider.getCookedItemId('raw_shrimp');
+// Returns: 'shrimp'
+
+const burntId = processingDataProvider.getBurntItemId('raw_shrimp');
+// Returns: 'burnt_shrimp'
+```
+
+### Get Stop Burn Level
+
+```typescript
+const stopBurnFire = processingDataProvider.getStopBurnLevel('raw_shrimp', 'fire');
+// Returns: 34
+
+const stopBurnRange = processingDataProvider.getStopBurnLevel('raw_shrimp', 'range');
+// Returns: 34
+```
+
+---
+
+## Firemaking API
+
+### Check if Log is Burnable
+
+```typescript
+const canBurn = processingDataProvider.isBurnableLog('oak_logs');
+// Returns: true
+```
+
+### Get Firemaking Data
+
+```typescript
+const data = processingDataProvider.getFiremakingData('oak_logs');
+// Returns: {
+//   logId: 'oak_logs',
+//   levelRequired: 15,
+//   xp: 60
+// }
+```
+
+### Get All Burnable Log IDs
+
+```typescript
+const logIds = processingDataProvider.getBurnableLogIds();
+// Returns: Set(['logs', 'oak_logs', 'willow_logs', ...])
+```
+
+---
+
+## TierDataProvider
+
+Provides tier-based level requirements for equipment and tools.
+
+### Import
+
+```typescript
+import { TierDataProvider } from '@hyperscape/shared';
+```
+
+### Get Requirements for Item
+
+```typescript
+const requirements = TierDataProvider.getRequirements({
+  id: 'steel_sword',
+  type: 'weapon',
+  tier: 'steel',
+  equipSlot: 'weapon',
+  attackType: 'MELEE'
+});
+// Returns: { attack: 5 }
+```
+
+### Get Tier Data
+
+```typescript
+const meleeTier = TierDataProvider.getTierData('melee', 'rune');
+// Returns: { attack: 40, defence: 40 }
+
+const toolTier = TierDataProvider.getTierData('tools', 'steel');
+// Returns: { attack: 5, woodcutting: 6, mining: 6 }
+```
+
+### Get Available Tiers
+
+```typescript
+const tiers = TierDataProvider.getAvailableTiers('melee');
+// Returns: ['bronze', 'iron', 'steel', 'mithril', 'adamant', 'rune', 'dragon']
+```
+
+### Check if Loaded
+
+```typescript
+const isLoaded = TierDataProvider.isLoaded();
+// Returns: true if tier-requirements.json was loaded
+```
+
+---
+
+## StationDataProvider
+
+Provides configuration for world stations (anvils, furnaces, ranges, banks).
+
+### Import
+
+```typescript
+import { stationDataProvider } from '@hyperscape/shared';
+```
+
+### Get Station Data
+
+```typescript
+const anvilData = stationDataProvider.getStationData('anvil');
+// Returns: {
+//   type: 'anvil',
+//   name: 'Anvil',
+//   model: 'asset://models/anvil/anvil.glb',
+//   modelScale: 0.5,
+//   modelYOffset: 0.4,
+//   examine: 'An anvil for smithing metal bars into weapons and tools.'
+// }
+```
+
+### Get Model Path
+
+```typescript
+const modelPath = stationDataProvider.getModelPath('furnace');
+// Returns: 'asset://models/furnace/furnace.glb'
+```
+
+### Get Model Scale and Offset
+
+```typescript
+const scale = stationDataProvider.getModelScale('anvil');
+// Returns: 0.5
+
+const yOffset = stationDataProvider.getModelYOffset('furnace');
+// Returns: 1.0
+```
+
+### Get Examine Text
+
+```typescript
+const examineText = stationDataProvider.getExamineText('range');
+// Returns: 'A range for cooking food.'
+```
+
+### Check if Station Exists
+
+```typescript
+const hasStation = stationDataProvider.hasStation('anvil');
+// Returns: true
+```
+
+### Get All Station Types
+
+```typescript
+const types = stationDataProvider.getAllStationTypes();
+// Returns: ['anvil', 'furnace', 'range', 'bank']
+```
+
+---
+
+## Type Definitions
+
+### SmeltingItemData
+
+```typescript
+interface SmeltingItemData {
+  barItemId: string;
+  primaryOre: string;
+  secondaryOre: string | null;
+  coalRequired: number;
+  levelRequired: number;
+  xp: number;
+  successRate: number;
+  ticks: number;
+}
+```
+
+### SmithingRecipeData
+
+```typescript
+interface SmithingRecipeData {
+  itemId: string;
+  name: string;
+  barType: string;
+  barsRequired: number;
+  levelRequired: number;
+  xp: number;
+  category: SmithingCategory;
+  ticks: number;
+}
+
+type SmithingCategory = 'weapons' | 'armor' | 'tools' | 'misc';
+```
+
+### SmithingRecipeWithAvailability
+
+```typescript
+interface SmithingRecipeWithAvailability extends SmithingRecipeData {
+  meetsLevel: boolean;  // Player has sufficient level
+  hasBars: boolean;     // Player has enough bars
+}
+```
+
+### CookingItemData
+
+```typescript
+interface CookingItemData {
+  rawItemId: string;
+  cookedItemId: string;
+  burntItemId: string;
+  levelRequired: number;
+  xp: number;
+  stopBurnLevel: {
+    fire: number;
+    range: number;
+  };
+}
+```
+
+### FiremakingItemData
+
+```typescript
+interface FiremakingItemData {
+  logId: string;
+  levelRequired: number;
+  xp: number;
+}
+```
+
+### StationData
+
+```typescript
+interface StationData {
+  type: string;
+  name: string;
+  model: string | null;
+  modelScale: number;
+  modelYOffset: number;
+  examine: string;
+}
+```
+
+---
+
+## Performance Considerations
+
+### Pre-allocated Buffers
+
+ProcessingDataProvider uses pre-allocated buffers to avoid allocations in hot paths:
+
+```typescript
+// Internal buffer reused for inventory counting
+private readonly inventoryCountBuffer = new Map<string, number>();
+```
+
+This optimization reduces garbage collection pressure when checking smithable/smeltable items.
+
+### Lazy Initialization
+
+All providers use lazy initialization - they build lookup tables on first access:
+
+```typescript
+private ensureInitialized(): void {
+  if (!this.isInitialized) {
+    this.initialize();
+  }
+}
+```
+
+---
+
+## Related Documentation
+
+- [Manifests](/concepts/manifests) - Manifest file structure
+- [Smithing System](/wiki/game-systems/smithing) - Smithing gameplay
+- [Skills](/wiki/game-systems/skills) - Skill system overview
+- [Database Schema](/wiki/engine/database) - Persistence layer
