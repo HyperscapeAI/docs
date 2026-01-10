@@ -488,6 +488,67 @@ When multiple tools are available, the system selects the highest priority tool:
 | Iron | 7 | 7 |
 | Bronze | 8 | 8 |
 
+---
+
+## Vegetation & Biomes
+
+### Vegetation Assets
+
+The `vegetation.json` manifest defines procedural vegetation assets for world generation:
+
+```typescript
+interface VegetationAsset {
+  id: string;                       // Unique asset ID
+  model: string;                    // Path to GLB model
+  category: string;                 // Asset category
+  baseScale: number;                // Base scale multiplier
+  scaleVariation: [number, number]; // [min, max] scale variation
+  randomRotation: boolean;          // Randomize Y-axis rotation
+  weight: number;                   // Spawn probability weight
+  maxSlope: number;                 // Maximum terrain slope (0-1)
+  minSlope?: number;                // Minimum terrain slope
+  alignToNormal: boolean;           // Align to terrain normal
+  yOffset: number;                  // Vertical position offset
+}
+```
+
+**Vegetation Categories**:
+- `tree` - Large trees
+- `bush` - Small bushes and shrubs
+- `fern` - Ground ferns
+- `flower` - Decorative flowers
+- `grass` - Grass patches
+- `rock` - Decorative rocks
+- `fallen_tree` - Fallen logs
+- `mushroom` - Giant mushrooms (added in recent update)
+
+### Biome Vegetation Layers
+
+Biomes in `biomes.json` define procedural vegetation layers that reference vegetation assets:
+
+```typescript
+interface VegetationLayer {
+  category: string;           // Matches vegetation.json categories
+  density: number;            // Spawn density
+  assets: string[];           // Asset IDs (empty = all in category)
+  minSpacing: number;         // Minimum distance between instances
+  clustering: boolean;        // Group assets together
+  clusterSize?: number;       // Size of clusters
+  noiseScale: number;         // Perlin noise scale
+  noiseThreshold: number;     // Noise threshold for spawning
+  avoidWater: boolean;        // Don't spawn in water
+  minHeight?: number;         // Minimum terrain height
+  maxHeight?: number;         // Maximum terrain height
+}
+```
+
+**Recent Updates**:
+- Mushroom vegetation added to all biomes with varying densities (2-30)
+- Tree density reduced in plains biome (8 → 5)
+- Mushroom clustering varies by biome (cluster size 3-8)
+
+---
+
 ## Adding New Content
 
 <Steps>
