@@ -66,19 +66,37 @@ export const characters = pgTable('characters', {
   positionY: real('position_y').notNull().default(0),
   positionZ: real('position_z').notNull().default(0),
 
-  // Combat stats
-  stats: jsonb('stats').$type<CharacterStats>(),
+  // Skill levels (individual columns for efficient queries)
+  attackLevel: integer('attackLevel').default(1),
+  strengthLevel: integer('strengthLevel').default(1),
+  defenseLevel: integer('defenseLevel').default(1),
+  constitutionLevel: integer('constitutionLevel').default(10),
+  rangedLevel: integer('rangedLevel').default(1),
+  prayerLevel: integer('prayerLevel').default(1),
+  woodcuttingLevel: integer('woodcuttingLevel').default(1),
+  miningLevel: integer('miningLevel').default(1),
+  fishingLevel: integer('fishingLevel').default(1),
+  firemakingLevel: integer('firemakingLevel').default(1),
+  cookingLevel: integer('cookingLevel').default(1),
+  smithingLevel: integer('smithingLevel').default(1),
 
-  // Skill levels and XP (JSONB for flexibility)
-  skills: jsonb('skills').$type<Skills>(),
-
-  // Equipment slots (JSONB object)
-  equipmentSlots: jsonb('equipment_slots').$type<EquipmentSlots>(),
-
-  // Inventory (JSONB array of items)
-  inventorySlots: jsonb('inventory_slots').$type<InventorySlot[]>(),
+  // Skill XP (individual columns)
+  attackXp: integer('attackXp').default(0),
+  strengthXp: integer('strengthXp').default(0),
+  defenseXp: integer('defenseXp').default(0),
+  constitutionXp: integer('constitutionXp').default(1154),
+  rangedXp: integer('rangedXp').default(0),
+  prayerXp: integer('prayerXp').default(0),
+  woodcuttingXp: integer('woodcuttingXp').default(0),
+  miningXp: integer('miningXp').default(0),
+  fishingXp: integer('fishingXp').default(0),
+  firemakingXp: integer('firemakingXp').default(0),
+  cookingXp: integer('cookingXp').default(0),
+  smithingXp: integer('smithingXp').default(0),
 
   // Combat state
+  health: integer('health').default(100),
+  maxHealth: integer('maxHealth').default(100),
   combatState: text('combat_state').default('idle'), // idle, fighting, dead
   lastCombatTick: bigint('last_combat_tick', { mode: 'number' }),
 
@@ -87,20 +105,11 @@ export const characters = pgTable('characters', {
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
   updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
 });
-
-// Character stats type
-interface CharacterStats {
-  attack: { level: number; xp: number };
-  strength: { level: number; xp: number };
-  defense: { level: number; xp: number };
-  constitution: { level: number; xp: number };
-  ranged: { level: number; xp: number };
-  woodcutting: { level: number; xp: number };
-  fishing: { level: number; xp: number };
-  firemaking: { level: number; xp: number };
-  cooking: { level: number; xp: number };
-}
 ```
+
+<Info>
+Skills are stored as individual columns (e.g., `smithingLevel`, `smithingXp`) rather than JSONB for efficient querying and indexing.
+</Info>
 
 ### Inventory
 
