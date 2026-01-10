@@ -328,23 +328,42 @@ const examineText = stationDataProvider.getExamineText('anvil');
 
 ## Adding Content
 
-### Step 1: Edit Manifest
+### Step 1: Edit JSON Manifest
 
-Add your content to the appropriate manifest file in `packages/shared/src/data/`.
+Add your content to the appropriate JSON manifest file in `packages/server/world/assets/manifests/`.
 
-### Step 2: Build or Hot Reload
+**Example: Adding a new smithing recipe**
 
-In development mode, save the file—changes apply on next build. Run:
+Edit `packages/server/world/assets/manifests/recipes/smithing.json`:
 
-```bash
-bun run build:shared
+```json
+{
+  "recipes": [
+    {
+      "output": "mithril_platebody",
+      "bar": "mithril_bar",
+      "barsRequired": 5,
+      "level": 68,
+      "xp": 250,
+      "ticks": 4,
+      "category": "armor"
+    }
+  ]
+}
 ```
 
-Or restart the dev server.
+### Step 2: Restart Server
+
+JSON manifests are loaded at server startup. Restart to apply changes:
+
+```bash
+# Stop server (Ctrl+C)
+bun run dev
+```
 
 ### Step 3: Verify
 
-Check the game to ensure content appears correctly.
+Check the game to ensure content appears correctly. The smithing interface should show your new recipe.
 
 ## Validation
 
