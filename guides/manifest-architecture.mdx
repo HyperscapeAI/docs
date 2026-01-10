@@ -1,0 +1,486 @@
+---
+title: "Manifest-Driven Architecture"
+description: "Understanding the data-driven content system"
+icon: "folder-tree"
+---
+
+# Manifest-Driven Architecture
+
+Hyperscape uses a **manifest-driven architecture** where game content is defined in JSON files rather than hardcoded in TypeScript. This enables rapid content iteration and modding without touching game logic.
+
+## Architecture Overview
+
+```mermaid
+flowchart LR
+    A[JSON Manifests] --> B[DataManager]
+    B --> C[Data Providers]
+    C --> D[Game Systems]
+    D --> E[Entities]
+```
+
+### Key Components
+
+| Component | Responsibility |
+|-----------|----------------|
+| **JSON Manifests** | Define content (items, recipes, NPCs) |
+| **DataManager** | Load and validate manifests |
+| **Data Providers** | Runtime access to loaded data |
+| **Game Systems** | Use data providers for logic |
+| **Entities** | Runtime instances of content |
+
+---
+
+## Manifest Organization
+
+### Directory Structure
+
+```
+packages/server/world/assets/manifests/
+├── items/                      # Item definitions by category
+│   ├── weapons.json
+│   ├── tools.json
+│   ├── resources.json
+│   ├── food.json
+│   └── misc.json
+├── recipes/                    # Processing recipes
+│   ├── cooking.json
+│   ├── firemaking.json
+│   ├── smelting.json
+│   └── smithing.json
+├── gathering/                  # Resource gathering
+│   ├── woodcutting.json
+│   ├── mining.json
+│   └── fishing.json
+├── npcs.json                   # NPC and mob definitions
+├── tier-requirements.json      # Tier-based level requirements
+├── skill-unlocks.json          # Skill milestone unlocks
+├── stations.json               # World station configuration
+├── world-areas.json            # Zone definitions
+└── stores.json                 # Shop inventories
+```
+
+---
+
+## Loading Process
+
+### 1. Atomic Directory Loading
+
+DataManager uses **atomic loading** for multi-file manifests:
+
+```typescript
+// From DataManager.ts
+const REQUIRED_ITEM_FILES = [
+  'weapons',
+  'tools',
+  'resources',
+  'food',
+  'misc',
+] as const;
+
+// Validates ALL files exist before loading ANY
+// Falls back to single items.json if any file is missing
+```
+
+This prevents partial loads that could cause inconsistent game state.
+
+### 2. Load Order
+
+Manifests load in dependency order:
+
+1. **Tier requirements** - Needed for item normalization
+2. **Items** - Core item definitions
+3. **NPCs** - Mob and NPC definitions
+4. **Gathering resources** - Trees, rocks, fishing spots
+5. **Recipe manifests** - Cooking, firemaking, smelting, smithing
+6. **Skill unlocks** - Milestone unlocks by level
+7. **Stations** - Anvil, furnace, range configuration
+8. **World areas** - Zone definitions
+9. **Stores** - Shop inventories
+
+### 3. Validation
+
+Each manifest is validated on load:
+
+- **Required fields**: Missing fields cause load failure
+- **Duplicate IDs**: Duplicate item/NPC IDs are rejected
+- **Type checking**: JSON structure validated against TypeScript interfaces
+- **Reference integrity**: Item/NPC references validated
+
+---
+
+## Data Providers
+
+### ProcessingDataProvider
+
+Provides runtime access to processing recipes:
+
+```typescript
+import { processingDataProvider } from '@hyperscape/shared';
+
+// Smelting
+const smeltingData = processingDataProvider.getSmeltingData('bronze_bar');
+
+// Smithing
+const recipe = processingDataProvider.getSmithingRecipe('bronze_sword');
+
+// Cooking
+const cookingData = processingDataProvider.getCookingData('raw_shrimp');
+
+// Firemaking
+const firemakingData = processingDataProvider.getFiremakingData('logs');
+```
+
+See [Data Providers API](/api-reference/data-providers) for full documentation.
+
+### TierDataProvider
+
+Provides tier-based level requirements:
+
+```typescript
+import { TierDataProvider } from '@hyperscape/shared';
+
+const requirements = TierDataProvider.getRequirements({
+  id: 'steel_sword',
+  type: 'weapon',
+  tier: 'steel',
+  equipSlot: 'weapon',
+  attackType: 'MELEE'
+});
+// Returns: { attack: 5 }
+```
+
+### StationDataProvider
+
+Provides world station configuration:
+
+```typescript
+import { stationDataProvider } from '@hyperscape/shared';
+
+const anvilData = stationDataProvider.getStationData('anvil');
+// Returns: { model, modelScale, modelYOffset, examine }
+```
+
+---
+
+## Adding New Content
+
+### Example: Adding a New Smithing Recipe
+
+**Step 1**: Edit `packages/server/world/assets/manifests/recipes/smithing.json`
+
+```json
+{
+  "recipes": [
+    {
+      "output": "mithril_platebody",
+      "bar": "mithril_bar",
+      "barsRequired": 5,
+      "level": 68,
+      "xp": 250,
+      "ticks": 4,
+      "category": "armor"
+    }
+  ]
+}
+```
+
+**Step 2**: Add the item definition to `manifests/items/armor.json`
+
+```json
+{
+  "id": "mithril_platebody",
+  "name": "Mithril Platebody",
+  "type": "armor",
+  "tier": "mithril",
+  "equipSlot": "body",
+  "stackable": false,
+  "tradeable": true,
+  "weight": 10,
+  "value": 5200,
+  "bonuses": {
+    "attack": 0,
+    "strength": 0,
+    "defense": 64,
+    "ranged": -30,
+    "magic": -42
+  }
+}
+```
+
+**Step 3**: Restart the server
+
+```bash
+# Stop server (Ctrl+C)
+bun run dev
+```
+
+The new recipe will appear in the smithing interface for players with level 68+ Smithing and mithril bars.
+
+---
+
+## Manifest Schemas
+
+### Smelting Recipe
+
+```typescript
+interface SmeltingRecipeManifest {
+  output: string;                           // Bar item ID
+  inputs: Array<{                           // Required ores
+    item: string;
+    amount: number;
+  }>;
+  level: number;                            // Smithing level required
+  xp: number;                               // XP per bar
+  ticks: number;                            // Time in game ticks (600ms each)
+  successRate: number;                      // 0-1 (1.0 = 100%)
+}
+```
+
+### Smithing Recipe
+
+```typescript
+interface SmithingRecipeManifest {
+  output: string;                           // Item ID to create
+  bar: string;                              // Bar type required
+  barsRequired: number;                     // Number of bars
+  level: number;                            // Smithing level required
+  xp: number;                               // XP per item
+  ticks: number;                            // Time in game ticks
+  category: string;                         // UI grouping (weapons, armor, tools, misc)
+}
+```
+
+### Station Configuration
+
+```typescript
+interface StationManifestEntry {
+  type: string;                             // Station type (anvil, furnace, range, bank)
+  name: string;                             // Display name
+  model: string | null;                     // 3D model path (asset:// URL) or null
+  modelScale: number;                       // Model scale factor
+  modelYOffset: number;                     // Y offset to sit on ground
+  examine: string;                          // Examine text
+}
+```
+
+### Tier Requirements
+
+```typescript
+interface TierRequirementsManifest {
+  melee: Record<string, {                   // Melee equipment tiers
+    attack: number;
+    defence: number;
+  }>;
+  tools: Record<string, {                   // Tool tiers
+    attack: number;
+    woodcutting: number;
+    mining: number;
+  }>;
+  ranged: Record<string, {                  // Ranged equipment tiers
+    ranged: number;
+    defence: number;
+  }>;
+  magic: Record<string, {                   // Magic equipment tiers
+    magic: number;
+    defence?: number;
+  }>;
+}
+```
+
+---
+
+## Benefits of Manifest-Driven Design
+
+### 1. Separation of Concerns
+
+- **Content creators** edit JSON files
+- **Developers** build systems that consume manifests
+- **Designers** balance without code changes
+
+### 2. Hot Reloading
+
+In development, manifest changes can be applied without full rebuilds:
+
+```typescript
+// Rebuild data providers after manifest change
+processingDataProvider.rebuild();
+```
+
+### 3. Modding Support
+
+Community members can create content packs by providing custom manifest files.
+
+### 4. Type Safety
+
+TypeScript interfaces ensure manifests match expected structure:
+
+```typescript
+// Compile-time validation
+const manifest: SmithingManifest = JSON.parse(data);
+```
+
+### 5. Testability
+
+Manifests can be mocked for testing:
+
+```typescript
+// Test with custom manifest
+const testManifest: SmithingManifest = {
+  recipes: [
+    { output: 'test_item', bar: 'test_bar', ... }
+  ]
+};
+processingDataProvider.loadSmithingRecipes(testManifest);
+```
+
+---
+
+## Migration from Hardcoded Data
+
+The smithing system demonstrates the migration from hardcoded data to manifests:
+
+### Before (Hardcoded)
+
+```typescript
+// ❌ Old approach - hardcoded in TypeScript
+const SMITHING_RECIPES = {
+  bronze_sword: {
+    barType: 'bronze_bar',
+    barsRequired: 1,
+    levelRequired: 4,
+    xp: 12.5,
+  },
+  // ... 50+ more recipes hardcoded
+};
+```
+
+### After (Manifest-Driven)
+
+```json
+// ✅ New approach - data in JSON manifest
+{
+  "recipes": [
+    {
+      "output": "bronze_sword",
+      "bar": "bronze_bar",
+      "barsRequired": 1,
+      "level": 4,
+      "xp": 12.5,
+      "ticks": 4,
+      "category": "weapons"
+    }
+  ]
+}
+```
+
+```typescript
+// Runtime access via provider
+const recipe = processingDataProvider.getSmithingRecipe('bronze_sword');
+```
+
+---
+
+## Best Practices
+
+### 1. Use Providers, Not Direct Access
+
+```typescript
+// ❌ Don't access ITEMS map directly for recipe data
+const item = ITEMS.get('bronze_bar');
+const xp = item.smelting?.xp;
+
+// ✅ Use data provider
+const xp = processingDataProvider.getSmeltingXP('bronze_bar');
+```
+
+### 2. Validate at Load Time
+
+```typescript
+// Manifests are validated when loaded by DataManager
+// Runtime code can assume data is valid
+const recipe = processingDataProvider.getSmithingRecipe(itemId);
+if (!recipe) {
+  // Item doesn't have a smithing recipe - this is expected
+  return;
+}
+```
+
+### 3. Cache Provider References
+
+```typescript
+// ✅ Cache provider reference in system
+class SmithingSystem {
+  private provider = processingDataProvider;
+
+  processSmithing(itemId: string) {
+    const recipe = this.provider.getSmithingRecipe(itemId);
+    // ...
+  }
+}
+```
+
+### 4. Use Type Guards
+
+```typescript
+import { hasSkills, getSmithingLevelSafe } from '@hyperscape/shared';
+
+// Type-safe skill access
+if (hasSkills(entity)) {
+  const level = entity.skills?.smithing?.level ?? 1;
+}
+
+// Or use safe getter
+const level = getSmithingLevelSafe(entity, 1);
+```
+
+---
+
+## Performance Optimizations
+
+### Pre-allocated Buffers
+
+Data providers use pre-allocated buffers to avoid allocations in hot paths:
+
+```typescript
+// Reused across multiple calls
+private readonly inventoryCountBuffer = new Map<string, number>();
+
+private buildInventoryCounts(inventory: Item[]): Map<string, number> {
+  this.inventoryCountBuffer.clear();
+  // Reuse buffer instead of creating new Map
+  return this.inventoryCountBuffer;
+}
+```
+
+### Lazy Initialization
+
+Providers initialize on first access:
+
+```typescript
+private ensureInitialized(): void {
+  if (!this.isInitialized) {
+    this.initialize();
+  }
+}
+```
+
+### Indexed Lookups
+
+Data is indexed by multiple keys for O(1) access:
+
+```typescript
+// Smithing recipes indexed by:
+// 1. Output item ID (main map)
+// 2. Bar type (for UI filtering)
+private smithingRecipeMap = new Map<string, SmithingRecipeData>();
+private smithingRecipesByBar = new Map<string, SmithingRecipeData[]>();
+```
+
+---
+
+## Related Documentation
+
+- [Manifests](/concepts/manifests) - Manifest file structure
+- [Data Providers API](/api-reference/data-providers) - API reference
+- [Adding Content](/guides/adding-content) - Content creation guide
+- [Smithing System](/wiki/game-systems/smithing) - Smithing gameplay
