@@ -78,20 +78,31 @@ export const ALL_NPCS: Map<string, NPCData> = new Map();
   NPC definitions are in `world/assets/manifests/npcs.json`, not hardcoded in TypeScript.
 </Info>
 
-### Items (`items.ts`)
+### Items Directory
 
-Items are loaded from JSON manifests similar to NPCs:
+Items are now organized into separate JSON files by category for better maintainability:
+
+```
+manifests/items/
+├── weapons.json      # Combat weapons (swords, axes, bows)
+├── tools.json        # Skilling tools (hatchets, pickaxes, fishing rods)
+├── resources.json    # Gathered materials (ores, logs, bars, raw fish)
+├── food.json         # Cooked consumables
+└── misc.json         # Currency, burnt food, junk items
+```
+
+All item files are loaded atomically by DataManager - if any required file is missing, the system falls back to the legacy `items.json` format.
 
 ```typescript
-// From packages/shared/src/data/items.ts (lines 1-25)
+// From packages/shared/src/data/items.ts
 /**
  * Item Database
  *
- * Items are loaded from world/assets/manifests/items.json by DataManager.
+ * Items are loaded from world/assets/manifests/items/ directory by DataManager.
  * This file provides the empty Map that gets populated at runtime.
  *
  * To add new items:
- * 1. Add entries to world/assets/manifests/items.json
+ * 1. Add entries to appropriate file in world/assets/manifests/items/
  * 2. Generate 3D models in 3D Asset Forge (optional)
  * 3. Restart the server to reload manifests
  */
@@ -107,10 +118,63 @@ export function getItem(itemId: string): Item | null {
 export function getItemsByType(type: ItemType): Item[] {
   return Array.from(ITEMS.values()).filter((item) => item.type === type);
 }
-
-// Shop items available for purchase
-export const SHOP_ITEMS = ["bronze_hatchet", "fishing_rod", "tinderbox", "arrows"];
 ```
+
+### Gathering Resources
+
+Resource gathering data is split by skill for better organization:
+
+```
+manifests/gathering/
+├── woodcutting.json  # Trees, logs, XP values, level requirements
+├── mining.json       # Ore rocks, ores, XP values, level requirements
+└── fishing.json      # Fishing spots, fish, XP values, level requirements
+```
+
+Each manifest defines the resources, their requirements, XP rewards, and drop tables.
+
+### Processing Recipes
+
+Processing recipes are organized by skill:
+
+```
+manifests/recipes/
+├── cooking.json      # Raw → cooked food recipes
+├── firemaking.json   # Log burning recipes
+├── smelting.json     # Ore → bar recipes (at furnaces)
+└── smithing.json     # Bar → equipment recipes (at anvils)
+```
+
+These manifests define inputs, outputs, level requirements, XP rewards, and tick-based timing.
+
+### Station Configurations
+
+World stations (anvils, furnaces, ranges, banks) are configured in `stations.json`:
+
+```json
+{
+  "stations": [
+    {
+      "type": "anvil",
+      "name": "Anvil",
+      "model": "asset://models/anvil/anvil.glb",
+      "modelScale": 0.5,
+      "modelYOffset": 0.4,
+      "examine": "An anvil for smithing metal bars into weapons and tools."
+    },
+    {
+      "type": "furnace",
+      "name": "Furnace",
+      "model": "asset://models/furnace/furnace.glb",
+      "modelScale": 1.5,
+      "modelYOffset": 1.0,
+      "examine": "A furnace for smelting ores into metal bars."
+    }
+  ]
+}
+```
+
+This allows 3D models and configurations to be updated without code changes.
 
 ### World Areas (`world-areas.ts`)
 
