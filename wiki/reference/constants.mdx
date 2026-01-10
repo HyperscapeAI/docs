@@ -221,9 +221,63 @@ export const SKILLS = {
   CONSTITUTION: "constitution",
   RANGE: "range",
   WOODCUTTING: "woodcutting",
+  MINING: "mining",
   FISHING: "fishing",
   FIREMAKING: "firemaking",
   COOKING: "cooking",
+  SMITHING: "smithing",
+} as const;
+```
+
+---
+
+## Smithing Constants
+
+```typescript
+// From SmithingConstants.ts
+export const SMITHING_CONSTANTS = {
+  // Item IDs
+  HAMMER_ITEM_ID: "hammer",
+  COAL_ITEM_ID: "coal",
+
+  // Tick-based timing (OSRS-accurate)
+  DEFAULT_SMELTING_TICKS: 4,          // 2.4 seconds per bar
+  DEFAULT_SMITHING_TICKS: 4,          // 2.4 seconds per item
+  TICK_DURATION_MS: 600,
+
+  // Input validation limits
+  MAX_QUANTITY: 10000,
+  MIN_QUANTITY: 1,
+  MAX_ITEM_ID_LENGTH: 64,
+
+  // Messages
+  MESSAGES: {
+    ALREADY_SMELTING: "You are already smelting.",
+    NO_ORES: "You don't have the ores to smelt anything.",
+    LEVEL_TOO_LOW_SMELT: "You need level {level} Smithing to smelt that.",
+    SMELT_SUCCESS: "You smelt a {item}.",
+    IRON_SMELT_FAIL: "The ore is too impure and you fail to smelt it.",
+    
+    ALREADY_SMITHING: "You are already smithing.",
+    NO_HAMMER: "You need a hammer to work the metal on this anvil.",
+    NO_BARS: "You don't have the bars to smith anything.",
+    LEVEL_TOO_LOW_SMITH: "You need level {level} Smithing to make that.",
+    SMITH_SUCCESS: "You hammer the {metal} and make a {item}.",
+  },
+} as const;
+```
+
+---
+
+## Context Menu Colors
+
+```typescript
+// From GameConstants.ts
+export const CONTEXT_MENU_COLORS = {
+  ITEM: "#ff9040",      // Orange - for items (OSRS-accurate)
+  NPC: "#ffff00",       // Yellow - for NPCs and mobs
+  OBJECT: "#00ffff",    // Cyan - for scenery/objects
+  PLAYER: "#ffffff",    // White - for players
 } as const;
 ```
 
