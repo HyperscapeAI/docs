@@ -27,7 +27,7 @@ Hyperscape uses manifest-driven design where game content is defined in TypeScri
 
 ## Manifest Files
 
-All manifests are in `packages/shared/src/data/`:
+All manifests are in `world/assets/manifests/`:
 
 | File | Content |
 |------|---------|
@@ -44,34 +44,41 @@ All manifests are in `packages/shared/src/data/`:
 
 ## Manifest Structure
 
-### NPCs (`npcs.ts`)
+### NPCs (`npcs.json`)
 
 NPC data is loaded from JSON manifests at runtime by DataManager:
 
-```typescript
-// From packages/shared/src/data/npcs.ts (lines 1-21)
-/**
- * NPC Database
- *
- * ALL NPC data is loaded from JSON manifests at runtime by DataManager.
- * This keeps NPC definitions data-driven and separate from code.
- *
- * Available 3D model types (in /assets/world/forge/):
- * - goblin/goblin_rigged.glb     → Used for goblins
- * - thug/thug_rigged.glb         → Used for bandits
- * - human/human_rigged.glb       → Used for guards, knights, warriors
- * - troll/troll_rigged.glb       → Used for hobgoblins
- * - imp/imp_rigged.glb           → Used for dark warriors
- *
- * To add new NPCs:
- * 1. Add entry to world/assets/manifests/npcs.json
- * 2. Use one of the existing modelPath types above
- * 3. OR generate new model in 3D Asset Forge
- * 4. Restart server to reload manifests
- */
-
-// NPC Database - Populated at runtime from JSON manifests
-export const ALL_NPCS: Map<string, NPCData> = new Map();
+```json
+[
+  {
+    "id": "goblin",
+    "name": "Goblin",
+    "description": "A weak goblin creature",
+    "category": "mob",
+    "faction": "monster",
+    "stats": {
+      "level": 2,
+      "health": 5,
+      "attack": 1,
+      "strength": 1,
+      "defense": 1
+    },
+    "combat": {
+      "attackable": true,
+      "aggressive": true,
+      "retaliates": true,
+      "aggroRange": 4,
+      "combatRange": 1,
+      "attackSpeedTicks": 4,
+      "respawnTicks": 35
+    },
+    "drops": {
+      "defaultDrop": { "enabled": true, "itemId": "bones", "quantity": 1 },
+      "common": [{ "itemId": "coins", "minQuantity": 5, "maxQuantity": 15, "chance": 1.0, "rarity": "common" }]
+    },
+    "appearance": { "modelPath": "asset://models/goblin/goblin.vrm", "scale": 0.75 }
+  }
+]
 ```
 
 <Info>
@@ -114,9 +121,29 @@ export const ITEMS: Map<string, Item> = new Map();
 export function getItem(itemId: string): Item | null {
   return ITEMS.get(itemId) || null;
 }
+```
 
-export function getItemsByType(type: ItemType): Item[] {
-  return Array.from(ITEMS.values()).filter((item) => item.type === type);
+### Gathering Resources (`gathering/`)
+
+**gathering/woodcutting.json** - Trees and log yields:
+```json
+{
+  "trees": [
+    {
+      "id": "tree_normal",
+      "name": "Tree",
+      "type": "tree",
+      "harvestSkill": "woodcutting",
+      "toolRequired": "bronze_hatchet",
+      "levelRequired": 1,
+      "baseCycleTicks": 4,
+      "depleteChance": 0.125,
+      "respawnTicks": 80,
+      "harvestYield": [
+        { "itemId": "logs", "quantity": 1, "chance": 1.0, "xpAmount": 25 }
+      ]
+    }
+  ]
 }
 ```
 
@@ -176,26 +203,82 @@ World stations (anvils, furnaces, ranges, banks) are configured in `stations.jso
 
 This allows 3D models and configurations to be updated without code changes.
 
-### World Areas (`world-areas.ts`)
+### Stations (`stations.json`)
 
-```typescript
-export const worldAreas = {
-  mistwood_valley: {
-    id: "mistwood_valley",
-    name: "Mistwood Valley",
-    biome: "forest",
-    difficulty: 1,
-    bounds: { x1: 0, z1: 0, x2: 100, z2: 100 },
-    spawns: [
-      { npcId: "goblin", count: 5, positions: [...] }
-    ]
-  }
-};
+Defines crafting stations and interactive objects in the world:
+
+```json
+{
+  "stations": [
+    {
+      "type": "anvil",
+      "name": "Anvil",
+      "model": "asset://models/anvil/anvil.glb",
+      "modelScale": 0.5,
+      "modelYOffset": 0.2,
+      "examine": "An anvil for smithing metal bars into weapons and tools."
+    },
+    {
+      "type": "furnace",
+      "name": "Furnace",
+      "model": "asset://models/furnace/furnace.glb",
+      "modelScale": 1.5,
+      "modelYOffset": 1.0,
+      "examine": "A furnace for smelting ores into metal bars."
+    }
+  ]
+}
+```
+
+Station types include:
+- **Anvil** — Smith bars into equipment
+- **Furnace** — Smelt ores into bars
+- **Range** — Cook food with reduced burn chance
+- **Bank** — Store items
+
+## DataManager
+
+Smithing, cooking, and other processing skills use recipe manifests:
+
+**Smelting Recipe** (`recipes/smelting.json`):
+```json
+{
+  "recipes": [
+    {
+      "output": "bronze_bar",
+      "inputs": [
+        { "item": "copper_ore", "amount": 1 },
+        { "item": "tin_ore", "amount": 1 }
+      ],
+      "level": 1,
+      "xp": 6.25,
+      "ticks": 4,
+      "successRate": 1.0
+    }
+  ]
+}
+```
+
+**Smithing Recipe** (`recipes/smithing.json`):
+```json
+{
+  "recipes": [
+    {
+      "output": "bronze_sword",
+      "bar": "bronze_bar",
+      "barsRequired": 1,
+      "level": 4,
+      "xp": 12.5,
+      "ticks": 4,
+      "category": "weapons"
+    }
+  ]
+}
 ```
 
 ### Tier Requirements (`tier-requirements.json`)
 
-Equipment now uses a centralized tier system instead of per-item requirements:
+Defines level requirements by equipment tier:
 
 ```json
 {
@@ -205,42 +288,70 @@ Equipment now uses a centralized tier system instead of per-item requirements:
     "steel": { "attack": 5, "defence": 5 },
     "mithril": { "attack": 20, "defence": 20 },
     "adamant": { "attack": 30, "defence": 30 },
-    "rune": { "attack": 40, "defence": 40 },
-    "dragon": { "attack": 60, "defence": 60 }
+    "rune": { "attack": 40, "defence": 40 }
   },
   "tools": {
     "bronze": { "attack": 1, "woodcutting": 1, "mining": 1 },
     "steel": { "attack": 5, "woodcutting": 6, "mining": 6 },
-    "mithril": { "attack": 20, "woodcutting": 21, "mining": 21 },
-    "rune": { "attack": 40, "woodcutting": 41, "mining": 41 },
-    "dragon": { "attack": 60, "woodcutting": 61, "mining": 61 }
+    "mithril": { "attack": 20, "woodcutting": 21, "mining": 21 }
   }
 }
 ```
 
-Items reference their tier, and the system automatically looks up requirements:
+### Station Configuration (`stations.json`)
+
+Defines world stations with 3D models:
 
 ```json
 {
-  "id": "bronze_sword",
-  "tier": "bronze",
-  "type": "weapon"
+  "stations": [
+    {
+      "type": "anvil",
+      "name": "Anvil",
+      "model": "asset://models/anvil/anvil.glb",
+      "modelScale": 0.5,
+      "modelYOffset": 0.4,
+      "examine": "An anvil for smithing metal bars into weapons and tools."
+    },
+    {
+      "type": "furnace",
+      "name": "Furnace",
+      "model": "asset://models/furnace/furnace.glb",
+      "modelScale": 1.5,
+      "modelYOffset": 1.0,
+      "examine": "A furnace for smelting ores into metal bars."
+    }
+  ]
 }
 ```
 
-This ensures OSRS-accurate requirements and makes adding new tiers trivial.
+## Data Providers
 
-## DataManager
+### DataManager
 
-The `DataManager` class in `packages/shared/src/data/DataManager.ts` loads and provides access to all manifests:
+The `DataManager` class in `packages/shared/src/data/DataManager.ts` loads all manifests from JSON files and populates runtime data structures:
 
 ```typescript
-import { DataManager } from '@hyperscape/shared';
+import { dataManager } from '@hyperscape/shared';
 
-const npc = DataManager.getNPC("goblin");
-const item = DataManager.getItem("bronze_sword");
-const area = DataManager.getArea("mistwood_valley");
+// Initialize (loads all manifests)
+await dataManager.initialize();
+
+// Access loaded data via global maps
+import { ITEMS, ALL_NPCS } from '@hyperscape/shared';
+
+const item = ITEMS.get("bronze_sword");
+const npc = ALL_NPCS.get("goblin");
 ```
+
+### Manifest Loading
+
+DataManager supports two loading modes:
+
+1. **Filesystem** (server-side): Loads from `packages/server/world/assets/manifests/`
+2. **CDN** (client-side): Fetches from `http://localhost:8080/assets/manifests/`
+
+The loading is **atomic** for directory-based manifests - all required files must exist or it falls back to legacy single-file format.
 
 ## Adding Content
 
@@ -312,6 +423,24 @@ These providers build optimized lookup tables at startup for fast runtime querie
 
 1. **Use descriptive IDs**: `bronze_sword` not `sword1`
 2. **Follow naming conventions**: snake_case for IDs
-3. **Document unusual values**: Add comments for non-obvious choices
+3. **Organize by category**: Use the directory structure (items/, recipes/, gathering/)
 4. **Test after changes**: Verify in-game before committing
 5. **Keep data flat**: Avoid deep nesting in manifest structures
+6. **Use tier system**: Leverage TierDataProvider for equipment requirements instead of hardcoding
+7. **Validate JSON**: Use a JSON validator before committing to catch syntax errors
+
+## Manifest Loading Order
+
+DataManager loads manifests in this order:
+
+1. **Tier requirements** (`tier-requirements.json`) - Needed for item normalization
+2. **Items** (`items/` directory or `items.json` fallback)
+3. **NPCs** (`npcs.json`)
+4. **Gathering resources** (`gathering/*.json`)
+5. **Recipe manifests** (`recipes/*.json`)
+6. **Skill unlocks** (`skill-unlocks.json`)
+7. **Stations** (`stations.json`)
+8. **World areas** (`world-areas.json`)
+9. **Stores** (`stores.json`)
+
+This order ensures dependencies are loaded before dependent data (e.g., tier requirements before items).

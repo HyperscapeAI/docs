@@ -1,0 +1,782 @@
+---
+title: "ProcessingDataProvider"
+description: "Runtime data provider for cooking, firemaking, smelting, and smithing"
+icon: "database"
+---
+
+# ProcessingDataProvider
+
+Runtime data provider for processing skills (cooking, firemaking, smelting, smithing). Builds lookup tables from recipe manifest files loaded by DataManager.
+
+**Location**: `packages/shared/src/data/ProcessingDataProvider.ts`
+
+---
+
+## Overview
+
+ProcessingDataProvider is a singleton that:
+
+1. Loads recipe manifests from `recipes/` directory
+2. Builds efficient lookup tables for runtime queries
+3. Provides methods to check requirements and availability
+4. Falls back to embedded item data if manifests missing
+
+---
+
+## Initialization
+
+```typescript
+import { processingDataProvider } from '@hyperscape/shared';
+
+// Initialize (called automatically by DataManager)
+processingDataProvider.initialize();
+
+// Check if initialized
+const summary = processingDataProvider.getSummary();
+console.log(summary.isInitialized); // true
+```
+
+---
+
+## Cooking Methods
+
+### isCookableItem
+
+Check if an item can be cooked.
+
+```typescript
+isCookableItem(itemId: string): boolean
+```
+
+**Example:**
+```typescript
+const canCook = processingDataProvider.isCookableItem("raw_shrimp");
+// Returns: true
+```
+
+### getCookingData
+
+Get cooking data for a raw food item.
+
+```typescript
+getCookingData(rawItemId: string): CookingItemData | null
+```
+
+**Returns:**
+```typescript
+interface CookingItemData {
+  rawItemId: string;
+  cookedItemId: string;
+  burntItemId: string;
+  levelRequired: number;
+  xp: number;
+  stopBurnLevel: {
+    fire: number;
+    range: number;
+  };
+}
+```
+
+**Example:**
+```typescript
+const data = processingDataProvider.getCookingData("raw_shrimp");
+// Returns: { rawItemId: "raw_shrimp", cookedItemId: "shrimp", burntItemId: "burnt_shrimp", ... }
+```
+
+### getCookableItemIds
+
+Get all cookable item IDs.
+
+```typescript
+getCookableItemIds(): Set<string>
+```
+
+### getCookingLevel
+
+Get cooking level requirement for an item.
+
+```typescript
+getCookingLevel(rawItemId: string): number
+```
+
+### getCookingXP
+
+Get cooking XP for an item.
+
+```typescript
+getCookingXP(rawItemId: string): number
+```
+
+---
+
+## Firemaking Methods
+
+### isBurneableLog
+
+Check if an item can be burned.
+
+```typescript
+isBurneableLog(itemId: string): boolean
+```
+
+### getFiremakingData
+
+Get firemaking data for a log.
+
+```typescript
+getFiremakingData(logId: string): FiremakingItemData | null
+```
+
+**Returns:**
+```typescript
+interface FiremakingItemData {
+  logId: string;
+  levelRequired: number;
+  xp: number;
+}
+```
+
+### getBurneableLogIds
+
+Get all burneable log IDs.
+
+```typescript
+getBurneableLogIds(): Set<string>
+```
+
+### getFiremakingLevel
+
+Get firemaking level requirement for a log.
+
+```typescript
+getFiremakingLevel(logId: string): number
+```
+
+### getFiremakingXP
+
+Get firemaking XP for a log.
+
+```typescript
+getFiremakingXP(logId: string): number
+```
+
+---
+
+## Smelting Methods
+
+### isSmeltableBar
+
+Check if an item is a smeltable bar.
+
+```typescript
+isSmeltableBar(itemId: string): boolean
+```
+
+**Example:**
+```typescript
+const canSmelt = processingDataProvider.isSmeltableBar("bronze_bar");
+// Returns: true
+```
+
+### getSmeltingData
+
+Get smelting data for a bar.
+
+```typescript
+getSmeltingData(barItemId: string): SmeltingItemData | null
+```
+
+**Returns:**
+```typescript
+interface SmeltingItemData {
+  barItemId: string;
+  primaryOre: string;
+  secondaryOre: string | null;
+  coalRequired: number;
+  levelRequired: number;
+  xp: number;
+  successRate: number;
+  ticks: number;
+}
+```
+
+**Example:**
+```typescript
+const data = processingDataProvider.getSmeltingData("bronze_bar");
+// Returns: { 
+//   barItemId: "bronze_bar",
+//   primaryOre: "copper_ore",
+//   secondaryOre: "tin_ore",
+//   coalRequired: 0,
+//   levelRequired: 1,
+//   xp: 6.25,
+//   successRate: 1.0,
+//   ticks: 4
+// }
+```
+
+### getSmeltableBarsFromInventory
+
+Get all bars that can be smelted from inventory.
+
+```typescript
+getSmeltableBarsFromInventory(
+  inventory: Array<{ itemId: string; quantity?: number }>,
+  smithingLevel: number
+): SmeltingItemData[]
+```
+
+**Example:**
+```typescript
+const inventory = [
+  { itemId: "copper_ore", quantity: 5 },
+  { itemId: "tin_ore", quantity: 5 },
+  { itemId: "iron_ore", quantity: 3 },
+  { itemId: "coal", quantity: 10 }
+];
+
+const bars = processingDataProvider.getSmeltableBarsFromInventory(inventory, 30);
+// Returns: [bronze_bar, iron_bar, steel_bar] (player has level 30)
+```
+
+### isSmeltableOre
+
+Check if an item is an ore that can be used for smelting.
+
+```typescript
+isSmeltableOre(itemId: string): boolean
+```
+
+### getSmeltableOreIds
+
+Get all ore IDs that can be used for smelting.
+
+```typescript
+getSmeltableOreIds(): Set<string>
+```
+
+### getSmeltableBarIds
+
+Get all smeltable bar IDs.
+
+```typescript
+getSmeltableBarIds(): Set<string>
+```
+
+### getSmeltingLevel
+
+Get smelting level requirement for a bar.
+
+```typescript
+getSmeltingLevel(barItemId: string): number
+```
+
+### getSmeltingXP
+
+Get smelting XP for a bar.
+
+```typescript
+getSmeltingXP(barItemId: string): number
+```
+
+### getSmeltingTicks
+
+Get smelting ticks for a bar (time in game ticks).
+
+```typescript
+getSmeltingTicks(barItemId: string): number
+```
+
+---
+
+## Smithing Methods
+
+### isSmithableItem
+
+Check if an item can be smithed.
+
+```typescript
+isSmithableItem(itemId: string): boolean
+```
+
+**Example:**
+```typescript
+const canSmith = processingDataProvider.isSmithableItem("bronze_sword");
+// Returns: true
+```
+
+### getSmithingRecipe
+
+Get smithing recipe data for an output item.
+
+```typescript
+getSmithingRecipe(itemId: string): SmithingRecipeData | null
+```
+
+**Returns:**
+```typescript
+interface SmithingRecipeData {
+  itemId: string;
+  name: string;
+  barType: string;
+  barsRequired: number;
+  levelRequired: number;
+  xp: number;
+  category: SmithingCategory;
+  ticks: number;
+}
+
+type SmithingCategory = "weapons" | "armor" | "tools" | "misc";
+```
+
+**Example:**
+```typescript
+const recipe = processingDataProvider.getSmithingRecipe("bronze_sword");
+// Returns: {
+//   itemId: "bronze_sword",
+//   name: "Bronze Sword",
+//   barType: "bronze_bar",
+//   barsRequired: 1,
+//   levelRequired: 4,
+//   xp: 12.5,
+//   category: "weapons",
+//   ticks: 4
+// }
+```
+
+### getSmithableItemsFromInventory
+
+Get all items that can be smithed from inventory (deprecated - use `getSmithableItemsWithAvailability` instead).
+
+```typescript
+getSmithableItemsFromInventory(
+  inventory: Array<{ itemId: string; quantity?: number }>,
+  smithingLevel: number
+): SmithingRecipeData[]
+```
+
+### getSmithableItemsWithAvailability
+
+Get all smithable items with availability info for UI display.
+
+```typescript
+getSmithableItemsWithAvailability(
+  inventory: Array<{ itemId: string; quantity?: number }>,
+  smithingLevel: number
+): SmithingRecipeWithAvailability[]
+```
+
+**Returns:**
+```typescript
+interface SmithingRecipeWithAvailability extends SmithingRecipeData {
+  meetsLevel: boolean;  // Player has sufficient level
+  hasBars: boolean;     // Player has enough bars
+}
+```
+
+**Example:**
+```typescript
+const inventory = [
+  { itemId: "bronze_bar", quantity: 10 }
+];
+
+const recipes = processingDataProvider.getSmithableItemsWithAvailability(inventory, 1);
+// Returns all bronze recipes with meetsLevel/hasBars flags
+// Items with meetsLevel=false should be greyed out in UI
+```
+
+<Info>
+This method returns **ALL** recipes for bar types the player has, including items they can't make yet. Use the `meetsLevel` and `hasBars` flags to grey out unavailable items in the UI.
+</Info>
+
+### getSmithingRecipesForBar
+
+Get all recipes for a specific bar type.
+
+```typescript
+getSmithingRecipesForBar(barType: string): SmithingRecipeData[]
+```
+
+**Example:**
+```typescript
+const bronzeRecipes = processingDataProvider.getSmithingRecipesForBar("bronze_bar");
+// Returns: [bronze_dagger, bronze_sword, bronze_scimitar, bronze_platebody, ...]
+```
+
+### getSmithingRecipesByCategory
+
+Get recipes grouped by category for a specific bar type.
+
+```typescript
+getSmithingRecipesByCategory(barType: string): Map<SmithingCategory, SmithingRecipeData[]>
+```
+
+**Example:**
+```typescript
+const grouped = processingDataProvider.getSmithingRecipesByCategory("bronze_bar");
+// Returns: Map {
+//   "weapons" => [bronze_dagger, bronze_sword, bronze_scimitar, ...],
+//   "armor" => [bronze_full_helm, bronze_platebody, bronze_platelegs, ...],
+//   "tools" => [bronze_pickaxe, bronze_hatchet]
+// }
+```
+
+### getAllSmithingRecipes
+
+Get all smithing recipes.
+
+```typescript
+getAllSmithingRecipes(): SmithingRecipeData[]
+```
+
+### getAvailableSmithingRecipes
+
+Get all recipes the player can make with their smithing level.
+
+```typescript
+getAvailableSmithingRecipes(smithingLevel: number): SmithingRecipeData[]
+```
+
+### getSmithableItemIds
+
+Get all smithable item IDs.
+
+```typescript
+getSmithableItemIds(): Set<string>
+```
+
+### getSmithingLevel
+
+Get smithing level requirement for an item.
+
+```typescript
+getSmithingLevel(itemId: string): number
+```
+
+### getSmithingXP
+
+Get smithing XP for an item.
+
+```typescript
+getSmithingXP(itemId: string): number
+```
+
+### getSmithingTicks
+
+Get smithing ticks for an item (time in game ticks).
+
+```typescript
+getSmithingTicks(itemId: string): number
+```
+
+---
+
+## Utility Methods
+
+### getSummary
+
+Get summary of loaded data.
+
+```typescript
+getSummary(): {
+  cookableItems: number;
+  burnableLogs: number;
+  smeltableBars: number;
+  smithingRecipes: number;
+  isInitialized: boolean;
+}
+```
+
+**Example:**
+```typescript
+const summary = processingDataProvider.getSummary();
+console.log(`Loaded ${summary.smithingRecipes} smithing recipes`);
+```
+
+### rebuild
+
+Rebuild all lookup tables (for testing or after manifest reload).
+
+```typescript
+rebuild(): void
+```
+
+---
+
+## Performance Optimizations
+
+### Pre-Allocated Buffers
+
+ProcessingDataProvider uses pre-allocated buffers to reduce GC pressure:
+
+```typescript
+// Pre-allocated Map for inventory counting
+private readonly inventoryCountBuffer = new Map<string, number>();
+
+// Reused across getSmeltableBarsFromInventory and getSmithableItemsFromInventory
+private buildInventoryCounts(inventory): Map<string, number> {
+  this.inventoryCountBuffer.clear();
+  // ... populate buffer
+  return this.inventoryCountBuffer;
+}
+```
+
+This avoids creating new Map instances on every inventory query.
+
+---
+
+## Manifest Loading
+
+ProcessingDataProvider loads recipes from JSON manifests:
+
+### Loading Order
+
+1. DataManager loads recipe manifests from `recipes/` directory
+2. DataManager calls `processingDataProvider.loadCookingRecipes(manifest)`
+3. DataManager calls `processingDataProvider.loadSmeltingRecipes(manifest)`
+4. DataManager calls `processingDataProvider.loadSmithingRecipes(manifest)`
+5. DataManager calls `processingDataProvider.rebuild()`
+
+### Fallback Behavior
+
+If recipe manifests are missing, ProcessingDataProvider falls back to embedded item data:
+
+```typescript
+// Try manifest first
+if (this.cookingManifest) {
+  this.buildCookingDataFromManifest();
+} else {
+  // Fallback: scan ITEMS for items with cooking property
+  this.buildCookingDataFromItems();
+}
+```
+
+This ensures backwards compatibility with older manifest formats.
+
+---
+
+## Type Definitions
+
+### CookingItemData
+
+```typescript
+interface CookingItemData {
+  rawItemId: string;
+  cookedItemId: string;
+  burntItemId: string;
+  levelRequired: number;
+  xp: number;
+  stopBurnLevel: {
+    fire: number;
+    range: number;
+  };
+}
+```
+
+### FiremakingItemData
+
+```typescript
+interface FiremakingItemData {
+  logId: string;
+  levelRequired: number;
+  xp: number;
+}
+```
+
+### SmeltingItemData
+
+```typescript
+interface SmeltingItemData {
+  barItemId: string;
+  primaryOre: string;
+  secondaryOre: string | null;
+  coalRequired: number;
+  levelRequired: number;
+  xp: number;
+  successRate: number;
+  ticks: number;
+}
+```
+
+### SmithingRecipeData
+
+```typescript
+interface SmithingRecipeData {
+  itemId: string;
+  name: string;
+  barType: string;
+  barsRequired: number;
+  levelRequired: number;
+  xp: number;
+  category: SmithingCategory;
+  ticks: number;
+}
+
+type SmithingCategory = "weapons" | "armor" | "tools" | "misc";
+```
+
+### SmithingRecipeWithAvailability
+
+```typescript
+interface SmithingRecipeWithAvailability extends SmithingRecipeData {
+  meetsLevel: boolean;  // Player has sufficient level
+  hasBars: boolean;     // Player has enough bars
+}
+```
+
+---
+
+## Manifest Structures
+
+### CookingManifest
+
+```typescript
+interface CookingManifest {
+  recipes: Array<{
+    raw: string;
+    cooked: string;
+    burnt: string;
+    level: number;
+    xp: number;
+    ticks: number;
+    stopBurnLevel: { fire: number; range: number };
+  }>;
+}
+```
+
+### FiremakingManifest
+
+```typescript
+interface FiremakingManifest {
+  recipes: Array<{
+    log: string;
+    level: number;
+    xp: number;
+    ticks: number;
+  }>;
+}
+```
+
+### SmeltingManifest
+
+```typescript
+interface SmeltingManifest {
+  recipes: Array<{
+    output: string;
+    inputs: Array<{ item: string; amount: number }>;
+    level: number;
+    xp: number;
+    ticks: number;
+    successRate: number;
+  }>;
+}
+```
+
+### SmithingManifest
+
+```typescript
+interface SmithingManifest {
+  recipes: Array<{
+    output: string;
+    bar: string;
+    barsRequired: number;
+    level: number;
+    xp: number;
+    ticks: number;
+    category: string;
+  }>;
+}
+```
+
+---
+
+## Usage Examples
+
+### Check if Player Can Smelt
+
+```typescript
+const inventory = world.getInventory(playerId);
+const smithingLevel = player.skills.smithing.level;
+
+const availableBars = processingDataProvider.getSmeltableBarsFromInventory(
+  inventory,
+  smithingLevel
+);
+
+if (availableBars.length > 0) {
+  console.log(`Player can smelt ${availableBars.length} bar types`);
+}
+```
+
+### Get Smithing UI Data
+
+```typescript
+const inventory = world.getInventory(playerId);
+const smithingLevel = player.skills.smithing.level;
+
+const recipes = processingDataProvider.getSmithableItemsWithAvailability(
+  inventory,
+  smithingLevel
+);
+
+// Group by category for UI
+const byCategory = new Map();
+for (const recipe of recipes) {
+  if (!byCategory.has(recipe.category)) {
+    byCategory.set(recipe.category, []);
+  }
+  byCategory.get(recipe.category).push(recipe);
+}
+
+// Render UI with greyed-out items
+for (const [category, items] of byCategory) {
+  console.log(`Category: ${category}`);
+  for (const item of items) {
+    const available = item.meetsLevel && item.hasBars;
+    console.log(`  ${item.name} - ${available ? "Available" : "Locked"}`);
+  }
+}
+```
+
+### Validate Smelting Request
+
+```typescript
+const barItemId = "steel_bar";
+const smeltingData = processingDataProvider.getSmeltingData(barItemId);
+
+if (!smeltingData) {
+  console.error("Invalid bar type");
+  return;
+}
+
+if (player.skills.smithing.level < smeltingData.levelRequired) {
+  console.error(`Need level ${smeltingData.levelRequired} Smithing`);
+  return;
+}
+
+// Check materials
+const hasIron = inventory.some(i => i.itemId === "iron_ore");
+const hasCoal = inventory.filter(i => i.itemId === "coal").length >= 2;
+
+if (!hasIron || !hasCoal) {
+  console.error("Missing materials");
+  return;
+}
+
+// Start smelting
+world.emit(EventType.PROCESSING_SMELTING_REQUEST, {
+  playerId,
+  barItemId,
+  furnaceId,
+  quantity: 10
+});
+```
+
+---
+
+## Related Documentation
+
+- [Smithing System](/wiki/game-systems/smithing)
+- [Skills & Progression](/wiki/game-systems/skills)
+- [Manifest-Driven Design](/concepts/manifests)
+- [DataManager](/api-reference/data-manager)
