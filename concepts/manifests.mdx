@@ -367,7 +367,18 @@ Check the game to ensure content appears correctly. The smithing interface shoul
 
 ## Validation
 
-Manifests are TypeScript files, so you get:
+### JSON Manifest Validation
+
+JSON manifests are validated at runtime by DataManager:
+
+- **Schema validation**: Required fields checked on load
+- **Duplicate detection**: Duplicate item IDs cause errors
+- **Atomic loading**: All required files must exist (e.g., all 5 item category files)
+- **Fallback support**: Falls back to legacy single-file format if directory loading fails
+
+### TypeScript Data File Validation
+
+TypeScript data files get compile-time validation:
 
 - **Type checking**: Invalid fields caught at compile time
 - **Autocomplete**: IDE suggestions for valid properties
@@ -375,7 +386,7 @@ Manifests are TypeScript files, so you get:
 - **References**: TypeScript catches invalid itemId/npcId references
 
 <Warning>
-  Invalid manifests will cause TypeScript compilation to fail with descriptive errors.
+  Invalid JSON manifests will cause server startup to fail with descriptive errors. Check server logs for details.
 </Warning>
 
 ## Best Practices
