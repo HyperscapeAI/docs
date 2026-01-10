@@ -207,67 +207,187 @@ With 10 skills at level 99: **990 total level**
 
 ### Gathering XP
 
-| Action | Base XP |
-|--------|---------|
-| Chop normal tree | 25 |
-| Chop oak tree | 37.5 |
-| Chop willow tree | 67.5 |
-| Catch shrimp | 10 |
-| Catch trout | 50 |
-| Catch lobster | 90 |
+Gathering resources is now defined in `manifests/gathering/` with OSRS-accurate XP values:
+
+**Woodcutting** (`gathering/woodcutting.json`):
+| Tree | Level | XP |
+|------|-------|-----|
+| Normal | 1 | 25 |
+| Oak | 15 | 37.5 |
+| Willow | 30 | 67.5 |
+| Teak | 35 | 85 |
+| Maple | 45 | 100 |
+| Mahogany | 50 | 125 |
+| Yew | 60 | 175 |
+| Magic | 75 | 250 |
+
+**Mining** (`gathering/mining.json`):
+| Ore | Level | XP |
+|-----|-------|-----|
+| Copper/Tin | 1 | 17.5 |
+| Iron | 15 | 35 |
+| Coal | 30 | 50 |
+| Mithril | 55 | 80 |
+| Adamantite | 70 | 95 |
+| Runite | 85 | 125 |
+
+**Fishing** (`gathering/fishing.json`):
+| Fish | Level | XP |
+|------|-------|-----|
+| Shrimp | 1 | 10 |
+| Sardine | 5 | 20 |
+| Herring | 10 | 30 |
+| Trout | 20 | 50 |
+| Pike | 25 | 60 |
+| Salmon | 30 | 70 |
+| Lobster | 40 | 90 |
+| Swordfish | 50 | 100 |
+| Shark | 76 | 110 |
 
 ### Artisan XP
 
-| Action | Base XP |
-|--------|---------|
-| Light normal logs | 40 |
-| Light oak logs | 60 |
-| Cook shrimp | 30 |
-| Cook lobster | 120 |
-| Smelt bronze bar | 6.25 |
-| Smelt iron bar | 12.5 |
-| Smelt steel bar | 17.5 |
-| Smith bronze sword | 12.5 |
-| Smith iron platebody | 125 |
+Processing recipes are defined in `manifests/recipes/` with OSRS-accurate XP values:
+
+**Smelting** (`recipes/smelting.json`):
+| Bar | Level | XP |
+|-----|-------|-----|
+| Bronze | 1 | 6.2 |
+| Iron | 15 | 12.5 |
+| Steel | 30 | 17.5 |
+| Mithril | 50 | 30 |
+| Adamant | 70 | 37.5 |
+| Rune | 85 | 50 |
+
+**Smithing** (`recipes/smithing.json`):
+| Item | Level | XP |
+|------|-------|-----|
+| Bronze sword | 4 | 12.5 |
+| Iron sword | 19 | 25 |
+| Steel sword | 34 | 37.5 |
+| Mithril sword | 54 | 50 |
+| Adamant sword | 74 | 62.5 |
+| Rune sword | 89 | 75 |
+
+**Cooking** (`recipes/cooking.json`):
+| Food | Level | XP |
+|------|-------|-----|
+| Shrimp | 1 | 30 |
+| Sardine | 1 | 40 |
+| Herring | 5 | 50 |
+| Trout | 15 | 70 |
+| Pike | 20 | 80 |
+| Salmon | 25 | 90 |
+| Lobster | 40 | 120 |
+| Swordfish | 45 | 140 |
+| Shark | 80 | 210 |
+
+**Firemaking** (`recipes/firemaking.json`):
+| Logs | Level | XP |
+|------|-------|-----|
+| Normal | 1 | 40 |
+| Oak | 15 | 60 |
+| Willow | 30 | 90 |
+| Teak | 35 | 105 |
+| Maple | 45 | 135 |
+| Mahogany | 50 | 157.5 |
+| Yew | 60 | 202.5 |
+| Magic | 75 | 303.8 |
 
 ---
 
 ## Level Requirements
 
-Skills gate access to equipment and activities.
+Skills gate access to equipment and activities. Requirements are now centralized in `tier-requirements.json` and `skill-unlocks.json`.
 
-### Weapon Requirements
+### Tier-Based Equipment Requirements
 
-| Weapon | Attack Level |
-|--------|--------------|
-| Bronze | 1 |
-| Iron | 1 |
+Equipment now uses a tier system that automatically looks up requirements:
+
+**Melee Weapons & Armor** (Attack/Defence):
+| Tier | Level |
+|------|-------|
+| Bronze/Iron | 1 |
 | Steel | 5 |
+| Black | 10 |
 | Mithril | 20 |
 | Adamant | 30 |
 | Rune | 40 |
 | Dragon | 60 |
 
-### Tool Requirements
+**Tools** (Woodcutting/Mining):
+| Tier | Attack | Woodcutting | Mining |
+|------|--------|-------------|--------|
+| Bronze/Iron | 1 | 1 | 1 |
+| Steel | 5 | 6 | 6 |
+| Mithril | 20 | 21 | 21 |
+| Adamant | 30 | 31 | 31 |
+| Rune | 40 | 41 | 41 |
+| Dragon | 60 | 61 | 61 |
 
-| Tool | Skill Level |
-|------|-------------|
-| Bronze Hatchet | 1 Woodcutting |
-| Steel Hatchet | 6 Woodcutting |
-| Mithril Hatchet | 21 Woodcutting |
-| Adamant Hatchet | 31 Woodcutting |
-| Rune Hatchet | 41 Woodcutting |
+### Gathering Resource Requirements
 
-### Resource Requirements
+Defined in `gathering/*.json`:
 
-| Resource | Skill Level |
-|----------|-------------|
-| Normal Tree | 1 Woodcutting |
-| Oak Tree | 15 Woodcutting |
-| Willow Tree | 30 Woodcutting |
-| Shrimp Spot | 1 Fishing |
-| Trout Spot | 20 Fishing |
-| Lobster Spot | 40 Fishing |
+**Woodcutting**:
+| Tree | Level |
+|------|-------|
+| Normal | 1 |
+| Oak | 15 |
+| Willow | 30 |
+| Teak | 35 |
+| Maple | 45 |
+| Mahogany | 50 |
+| Yew | 60 |
+| Magic | 75 |
+
+**Mining**:
+| Ore | Level |
+|-----|-------|
+| Copper/Tin | 1 |
+| Iron | 15 |
+| Coal | 30 |
+| Mithril | 55 |
+| Adamantite | 70 |
+| Runite | 85 |
+
+**Fishing**:
+| Fish | Level |
+|------|-------|
+| Shrimp | 1 |
+| Sardine | 5 |
+| Herring | 10 |
+| Trout | 20 |
+| Pike | 25 |
+| Salmon | 30 |
+| Lobster | 40 |
+| Swordfish | 50 |
+| Shark | 76 |
+
+### Processing Recipe Requirements
+
+Defined in `recipes/*.json`:
+
+**Smelting**: Levels 1-85 (Bronze to Rune bars)
+**Smithing**: Levels 1-91 (Bronze to Rune equipment)
+**Cooking**: Levels 1-80 (Shrimp to Shark)
+**Firemaking**: Levels 1-75 (Normal to Magic logs)
+
+### Smithing Requirements
+
+| Item | Smithing Level | Bars Required |
+|------|----------------|---------------|
+| Bronze Bar | 1 | 1 copper ore + 1 tin ore |
+| Iron Bar | 15 | 1 iron ore (50% success) |
+| Steel Bar | 30 | 1 iron ore + 2 coal |
+| Mithril Bar | 50 | 1 mithril ore + 4 coal |
+| Adamant Bar | 70 | 1 adamantite ore + 6 coal |
+| Rune Bar | 85 | 1 runite ore + 8 coal |
+| Bronze Equipment | 1 | 1-5 bronze bars |
+| Iron Equipment | 15 | 1-5 iron bars |
+| Steel Equipment | 30 | 2-5 steel bars |
+| Mithril Equipment | 50 | 2-5 mithril bars |
+| Adamant Equipment | 70 | 3-5 adamant bars |
+| Rune Equipment | 85 | 3-5 rune bars |
 
 ---
 
@@ -344,8 +464,36 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
+## Skill Unlocks
+
+The `skill-unlocks.json` manifest documents what players unlock at each level. This is used for UI display and progression tracking.
+
+Example unlocks:
+- **Attack 40**: Rune weapons
+- **Attack 60**: Dragon weapons
+- **Woodcutting 15**: Oak trees
+- **Mining 30**: Coal
+- **Cooking 40**: Lobster
+- **Smithing 50**: Mithril bar
+
+<Info>
+See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
+</Info>
+
+## Manifest-Driven Design
+
+All skill-related data is now defined in JSON manifests:
+
+- **`tier-requirements.json`** - Equipment level requirements by tier
+- **`skill-unlocks.json`** - What unlocks at each level
+- **`gathering/*.json`** - Resource nodes, yields, and XP
+- **`recipes/*.json`** - Processing recipes and XP
+
+This allows easy content updates without code changes and enables community modding.
+
 ## Related Documentation
 
 - [Combat System](/wiki/game-systems/combat)
-- [Resource Gathering](/wiki/game-systems/resources)
-- [Item Requirements](/wiki/data/items)
+- [Data Manifests Overview](/wiki/data/overview)
+- [Item Data Structure](/wiki/data/items)
+- [NPC Data Structure](/wiki/data/npcs)

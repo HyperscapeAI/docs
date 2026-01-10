@@ -23,42 +23,33 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="January 9, 2026" description="Manifest Refactor & Automation" date="2026-01-09">
+<Update label="Latest" description="Smithing Skill & CI Improvements" date="2025-01-09">
 
-### 🔄 Manifest System Refactor (PR #3)
+### ⚒️ Smithing Skill (PR #492)
+- **Full smithing implementation** — Smelt ores into bars at furnaces, smith bars into equipment at anvils
+- **OSRS-accurate mechanics** — Tick-based processing (4 ticks per action), iron smelting 50% success rate
+- **UI panels** — Dedicated smelting and smithing interfaces with quantity selection (1, 5, 10, All, X)
+- **Recipe system** — Manifest-driven recipes for bars and equipment across all metal tiers
+- **Level requirements** — Bronze (1), Iron (15), Steel (30), Mithril (50), Adamant (70), Rune (85)
+- **Database migration** — Added smithingLevel and smithingXp columns to character table
+- **Skill unlocks** — Integrated with skill progression system and level-up notifications
 
-Major reorganization of the manifest system for better scalability:
+### 🤖 Claude GitHub Actions (PR #493)
+- **Code review workflow** — Automated Claude code reviews on pull requests
+- **PR assistant** — @claude mentions in comments trigger AI assistance
+- **CI integration** — Claude can read CI results and provide context-aware help
 
-**New Directory Structure:**
-- `items/` — Split by type (weapons, tools, resources, food, misc)
-- `gathering/` — Woodcutting, mining, fishing data
-- `recipes/` — Smelting, smithing, cooking, firemaking
+### 🏗️ Architecture Improvements
+- **Manifest-driven data** — Items split into category files (weapons, tools, resources, food, misc)
+- **Tier-based requirements** — Centralized tier requirements system for equipment and tools
+- **Processing data provider** — Unified system for cooking, firemaking, smelting, and smithing recipes
+- **Rate limiting** — Added request throttling to smelting/smithing network handlers
 
-**New Centralized Files:**
-- `tier-requirements.json` — OSRS-accurate level requirements
-- `skill-unlocks.json` — Skill progression milestones
-
-**Benefits:**
-- Better organization and maintainability
-- Easier to find and edit specific content
-- Clearer separation of concerns
-- More scalable for future content additions
-
-### 🍄 New Vegetation (PR #4)
-
-Added mushroom vegetation to biomes:
-- Configurable density and clustering
-- Biome-specific spawn parameters
-- Reduced tree density in plains biome (8 → 5)
-
-### 🤖 GitHub Actions (PR #2)
-
-Automated workflows for code quality:
-- **Claude Code Review** — Automatic PR reviews
-- **Claude PR Assistant** — Responds to `@claude` mentions
-- **Documentation Updates** — Auto-updates docs on manifest changes
-
-[View commits](https://github.com/HyperscapeAI/hyperscape/commits/main)
+### 🐛 Bug Fixes
+- Fixed firemaking level requirement validation
+- Fixed cooking level requirement checks before starting actions
+- Corrected firemaking event payload shape
+- Updated test item counts to match current manifests
 
 </Update>
 
