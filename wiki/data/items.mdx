@@ -48,6 +48,7 @@ interface Item {
   id: string;                    // Unique identifier (e.g., "bronze_sword")
   name: string;                  // Display name (e.g., "Bronze Sword")
   type: ItemType;                // Category
+  tier?: string;                 // Equipment tier (bronze, steel, mithril, etc.)
   rarity: ItemRarity;            // Common, Uncommon, Rare, etc.
   modelPath?: string;            // Path to GLB model
 
@@ -57,17 +58,34 @@ interface Item {
   value: number;                 // Base value in coins
 
   // Equipment properties (for weapons/armor)
-  requirements?: ItemRequirement;
+  requirements?: ItemRequirement; // Explicit requirements (overrides tier)
   stats?: ItemStats;
   attackType?: AttackType;
   weaponType?: WeaponType;
   attackSpeed?: number;          // In milliseconds
   range?: number;                // Attack range
+  equipSlot?: string;            // Equipment slot (weapon, shield, head, body, etc.)
+
+  // Tool properties (for gathering tools)
+  tool?: {
+    skill: "woodcutting" | "mining" | "fishing";
+    priority: number;            // Higher = better tool
+    rollTicks?: number;          // Mining: ticks between roll attempts
+  };
+
+  // OSRS-accurate inventory actions
+  inventoryActions?: string[];   // Context menu actions (e.g., ["Eat", "Use", "Drop"])
 
   // Noted item support
   isNoted?: boolean;
   baseItemId?: string;           // For noted items
   notedItemId?: string;          // For base items
+
+  // Processing properties
+  cooking?: CookingData;         // For raw food items
+  firemaking?: FiremakingData;   // For logs
+  smelting?: SmeltingData;       // For bars
+  smithing?: SmithingData;       // For smithable items
 }
 ```
 
