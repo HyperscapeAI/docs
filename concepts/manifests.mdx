@@ -193,28 +193,42 @@ export const worldAreas = {
 };
 ```
 
-### Equipment Requirements (`equipment-requirements.json`)
+### Tier Requirements (`tier-requirements.json`)
+
+Equipment now uses a centralized tier system instead of per-item requirements:
 
 ```json
 {
-  "weapons": {
-    "bronze_sword": { "attack": 1, "strength": 0, "defense": 0, "ranged": 0 },
-    "steel_sword": { "attack": 10, "strength": 0, "defense": 0, "ranged": 0 },
-    "mithril_sword": { "attack": 20, "strength": 0, "defense": 0, "ranged": 0 }
+  "melee": {
+    "bronze": { "attack": 1, "defence": 1 },
+    "iron": { "attack": 1, "defence": 1 },
+    "steel": { "attack": 5, "defence": 5 },
+    "mithril": { "attack": 20, "defence": 20 },
+    "adamant": { "attack": 30, "defence": 30 },
+    "rune": { "attack": 40, "defence": 40 },
+    "dragon": { "attack": 60, "defence": 60 }
+  },
+  "tools": {
+    "bronze": { "attack": 1, "woodcutting": 1, "mining": 1 },
+    "steel": { "attack": 5, "woodcutting": 6, "mining": 6 },
+    "mithril": { "attack": 20, "woodcutting": 21, "mining": 21 },
+    "rune": { "attack": 40, "woodcutting": 41, "mining": 41 },
+    "dragon": { "attack": 60, "woodcutting": 61, "mining": 61 }
   }
 }
 ```
 
-### Equipment Stats (`equipment-stats.json`)
+Items reference their tier, and the system automatically looks up requirements:
 
 ```json
 {
-  "weapons": {
-    "bronze_sword": { "attack": 4, "strength": 5, "defense": 0, "ranged": 0 },
-    "iron_sword": { "attack": 6, "strength": 7, "defense": 0, "ranged": 0 }
-  }
+  "id": "bronze_sword",
+  "tier": "bronze",
+  "type": "weapon"
 }
 ```
+
+This ensures OSRS-accurate requirements and makes adding new tiers trivial.
 
 ## DataManager
 
