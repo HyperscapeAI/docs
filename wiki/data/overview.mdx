@@ -80,13 +80,27 @@ Each NPC has these properties (from `types/entities/npc-mob-types.ts`):
 
 ### Available 3D Models
 
+**NPCs**:
 ```
-/assets/world/forge/
+/assets/models/
 ├── goblin/goblin_rigged.glb     → Goblins
 ├── thug/thug_rigged.glb         → Bandits
 ├── human/human_rigged.glb       → Guards, knights, warriors, rangers
 ├── troll/troll_rigged.glb       → Hobgoblins
 └── imp/imp_rigged.glb           → Dark warriors
+```
+
+**Stations**:
+```
+/assets/models/
+├── anvil/anvil.glb              → Smithing station
+├── furnace/furnace.glb          → Smelting station
+```
+
+**Vegetation**:
+```
+/assets/trees/
+└── mushroom.glb                 → Giant mushroom (new)
 ```
 
 ### NPC Helper Functions
@@ -380,7 +394,163 @@ models/
     └── metadata.json       # Model metadata
 ```
 
-Both models follow World of Warcraft-style stylized fantasy aesthetics with medium-poly counts and hand-painted textures.
+### Crafting Stations
+
+Stations are defined in `stations.json`:
+
+- **Anvil** - Used for smithing bars into equipment
+- **Furnace** - Used for smelting ores into bars
+- **Cooking Range** - Used for cooking food (reduces burn chance)
+- **Bank Booth** - Used for accessing bank storage
+
+Each station defines its 3D model, scale, position offset, and examine text.
+
+### Tool Metadata
+
+The `tools.json` manifest defines tool-specific properties:
+
+- **Skill** - Which skill the tool is used for
+- **Tier** - Tool tier (bronze, iron, steel, etc.)
+- **Priority** - Tool selection priority (higher = better)
+- **Roll Ticks** - For mining pickaxes, ticks between roll attempts
+
+This metadata is separate from item definitions to keep tool mechanics centralized.
+
+## Skill Progression
+
+---
+
+---
+
+## Crafting Stations
+
+Stations are defined in `stations.json` and represent interactive objects in the world used for processing skills:
+
+```typescript
+interface Station {
+  type: string;           // "anvil" | "furnace" | "range" | "bank"
+  name: string;           // Display name
+  model: string | null;   // Path to 3D model
+  modelScale: number;     // Model scale multiplier
+  modelYOffset: number;   // Vertical position offset
+  examine: string;        // Examine text
+}
+```
+
+### Available Stations
+
+| Station | Purpose | Model |
+|---------|---------|-------|
+| **Anvil** | Smithing bars into equipment | `models/anvil/anvil.glb` |
+| **Furnace** | Smelting ores into bars | `models/furnace/furnace.glb` |
+| **Cooking Range** | Cooking food (reduced burn chance) | TBD |
+| **Bank Booth** | Accessing bank storage | TBD |
+
+Stations are placed in world areas and interact with the corresponding recipe manifests (`recipes/smithing.json`, `recipes/smelting.json`, etc.).
+
+---
+
+## Tool Metadata
+
+The `tools.json` manifest defines tool-specific properties separate from item definitions:
+
+```typescript
+interface ToolMetadata {
+  itemId: string;         // References items/tools.json
+  skill: string;          // "woodcutting" | "mining" | "fishing"
+  tier: string;           // Tool tier
+  levelRequired: number;  // Minimum skill level
+  priority: number;       // Tool selection priority (higher = better)
+  rollTicks?: number;     // Mining only: ticks between roll attempts
+}
+```
+
+### Tool Priority System
+
+When multiple tools are available, the system selects the highest priority tool:
+
+**Woodcutting Hatchets**:
+| Tool | Priority |
+|------|----------|
+| Crystal | 1 (best) |
+| Dragon | 2 |
+| Rune | 3 |
+| Adamant | 4 |
+| Mithril | 5 |
+| Steel | 6 |
+| Iron | 7 |
+| Bronze | 8 (worst) |
+
+**Mining Pickaxes** (also includes `rollTicks` for mining speed):
+| Tool | Priority | Roll Ticks |
+|------|----------|------------|
+| Crystal | 1 | 3 |
+| Dragon | 2 | 3 |
+| Rune | 3 | 3 |
+| Adamant | 4 | 4 |
+| Mithril | 5 | 5 |
+| Steel | 6 | 6 |
+| Iron | 7 | 7 |
+| Bronze | 8 | 8 |
+
+---
+
+## Vegetation & Biomes
+
+### Vegetation Assets
+
+The `vegetation.json` manifest defines procedural vegetation assets for world generation:
+
+```typescript
+interface VegetationAsset {
+  id: string;                       // Unique asset ID
+  model: string;                    // Path to GLB model
+  category: string;                 // Asset category
+  baseScale: number;                // Base scale multiplier
+  scaleVariation: [number, number]; // [min, max] scale variation
+  randomRotation: boolean;          // Randomize Y-axis rotation
+  weight: number;                   // Spawn probability weight
+  maxSlope: number;                 // Maximum terrain slope (0-1)
+  minSlope?: number;                // Minimum terrain slope
+  alignToNormal: boolean;           // Align to terrain normal
+  yOffset: number;                  // Vertical position offset
+}
+```
+
+**Vegetation Categories**:
+- `tree` - Large trees
+- `bush` - Small bushes and shrubs
+- `fern` - Ground ferns
+- `flower` - Decorative flowers
+- `grass` - Grass patches
+- `rock` - Decorative rocks
+- `fallen_tree` - Fallen logs
+- `mushroom` - Giant mushrooms (added in recent update)
+
+### Biome Vegetation Layers
+
+Biomes in `biomes.json` define procedural vegetation layers that reference vegetation assets:
+
+```typescript
+interface VegetationLayer {
+  category: string;           // Matches vegetation.json categories
+  density: number;            // Spawn density
+  assets: string[];           // Asset IDs (empty = all in category)
+  minSpacing: number;         // Minimum distance between instances
+  clustering: boolean;        // Group assets together
+  clusterSize?: number;       // Size of clusters
+  noiseScale: number;         // Perlin noise scale
+  noiseThreshold: number;     // Noise threshold for spawning
+  avoidWater: boolean;        // Don't spawn in water
+  minHeight?: number;         // Minimum terrain height
+  maxHeight?: number;         // Maximum terrain height
+}
+```
+
+**Recent Updates**:
+- Mushroom vegetation added to all biomes with varying densities (2-30)
+- Tree density reduced in plains biome (8 → 5)
+- Mushroom clustering varies by biome (cluster size 3-8)
 
 ---
 
