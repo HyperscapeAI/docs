@@ -10,7 +10,7 @@ Hyperscape features a RuneScape-inspired skill system with leveling, XP gain, an
 
 ## Available Skills
 
-Hyperscape has **9 skills** total:
+Hyperscape has **11 skills** total:
 
 ### Combat Skills
 
@@ -20,25 +20,24 @@ Hyperscape has **9 skills** total:
 | **Strength** | Melee damage |
 | **Defense** | Damage reduction, armor requirements |
 | **Constitution** | Health points |
-| **Ranged** | Ranged combat accuracy and damage |
+| **Prayer** | Protection prayers and combat buffs |
 
 ### Gathering Skills
 
 | Skill | Activity |
 |-------|----------|
 | **Woodcutting** | Chop trees for logs |
+| **Mining** | Mine rocks for ores |
 | **Fishing** | Catch fish at water spots |
+| **Mining** | Mine ore from rocks |
 
-### Processing Skills
+### Artisan Skills
 
 | Skill | Activity |
 |-------|----------|
 | **Firemaking** | Create fires from logs |
 | **Cooking** | Prepare food from raw fish |
-
-<Info>
-  Mining is partially implemented in the resource system but not yet as a trainable player skill.
-</Info>
+| **Smithing** | Smelt ores into bars and smith equipment |
 
 ## XP and Leveling
 
@@ -89,7 +88,7 @@ Requirements:
 | Trout | 20 | 50 |
 | Lobster | 40 | 90 |
 
-## Processing Skills
+## Artisan Skills
 
 ### Firemaking
 
@@ -113,6 +112,40 @@ Use raw fish on a fire to cook.
 
 <Warning>
   Cooking can fail at low levels, burning the food.
+</Warning>
+
+### Smithing
+
+Smelt ores into bars at furnaces, then smith bars into equipment at anvils.
+
+#### Smelting (at Furnace)
+
+| Bar | Level | Ores Required | XP | Success Rate |
+|-----|-------|---------------|-----|--------------|
+| Bronze | 1 | 1 Copper + 1 Tin | 6.25 | 100% |
+| Iron | 15 | 1 Iron Ore | 12.5 | 50% |
+| Steel | 30 | 1 Iron Ore + 2 Coal | 17.5 | 100% |
+| Mithril | 50 | 1 Mithril Ore + 4 Coal | 30 | 100% |
+| Adamant | 70 | 1 Adamantite Ore + 6 Coal | 37.5 | 100% |
+| Rune | 85 | 1 Runite Ore + 8 Coal | 50 | 100% |
+
+<Info>
+  Iron ore has a 50% failure rate when smelting, matching OSRS mechanics.
+</Info>
+
+#### Smithing (at Anvil)
+
+Requires a hammer in inventory. Examples:
+
+| Item | Level | Bars Required | XP |
+|------|-------|---------------|-----|
+| Bronze Sword | 1 | 1 Bronze | 12.5 |
+| Iron Platebody | 33 | 5 Iron | 125 |
+| Steel Platelegs | 36 | 3 Steel | 75 |
+| Mithril Scimitar | 55 | 2 Mithril | 100 |
+
+<Warning>
+  You must have a hammer in your inventory to smith items at an anvil.
 </Warning>
 
 ## Equipment Level Requirements
@@ -143,17 +176,20 @@ Skill configuration is in `packages/shared/src/data/`:
 Skills start at level 1 with 0 XP, except Constitution which starts at level 10:
 
 ```typescript
-// From packages/shared/src/entities/player/PlayerEntity.ts (lines 111-123)
+// From packages/shared/src/entities/player/PlayerEntity.ts
 playerData.skills = {
   attack: { level: 1, xp: 0 },
   strength: { level: 1, xp: 0 },
   defense: { level: 1, xp: 0 },
   constitution: { level: 10, xp: 1154 },  // Starts at level 10
-  ranged: { level: 1, xp: 0 },
+  prayer: { level: 1, xp: 0 },
   woodcutting: { level: 1, xp: 0 },
+  mining: { level: 1, xp: 0 },
   fishing: { level: 1, xp: 0 },
+  mining: { level: 1, xp: 0 },
   firemaking: { level: 1, xp: 0 },
   cooking: { level: 1, xp: 0 },
+  smithing: { level: 1, xp: 0 },
 };
 ```
 

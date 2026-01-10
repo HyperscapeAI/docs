@@ -46,31 +46,10 @@ packages/shared/src/data/
 
 ```
 world/assets/manifests/
-├── items/                    # Item definitions (split by type)
-│   ├── weapons.json          # Combat weapons
-│   ├── tools.json            # Skilling tools (hatchets, pickaxes, etc.)
-│   ├── resources.json        # Gathered materials (ores, logs, bars, raw fish)
-│   ├── food.json             # Cooked consumables
-│   └── misc.json             # Burnt food, currency, junk items
-├── gathering/                # Harvestable resource nodes
-│   ├── woodcutting.json      # Trees and log yields
-│   ├── mining.json           # Rocks and ore yields
-│   └── fishing.json          # Fishing spots and catch rates
-├── recipes/                  # Processing recipes
-│   ├── smelting.json         # Furnace: ores → bars
-│   ├── smithing.json         # Anvil: bars → equipment
-│   ├── cooking.json          # Fire/range: raw → cooked food
-│   └── firemaking.json       # Logs → fires (XP data)
-├── tier-requirements.json    # Centralized tier-based level requirements
-├── skill-unlocks.json        # Skill progression milestones
-├── tools.json                # Tool metadata (skill, tier, priority, rollTicks)
-├── stations.json             # Crafting stations (anvil, furnace, range, bank)
-├── npcs.json                 # All NPCs (mobs, neutral, bosses)
-├── stores.json               # Shop inventories
-├── world-areas.json          # World zones with spawns
-├── biomes.json               # Biome definitions
-├── vegetation.json           # Procedural vegetation assets
-└── music.json                # Music tracks
+├── npcs.json             # NPC and mob definitions
+├── items.json            # Item definitions
+├── stations.json         # Crafting stations (anvils, furnaces, ranges, banks)
+└── ... (other manifests)
 ```
 
 ---
@@ -373,35 +352,47 @@ Each starter town has:
 
 ---
 
-## Gathering Resources & Recipes
+## Stations
 
-The game now has a comprehensive gathering and crafting system:
+Crafting stations are interactive objects that enable processing skills like smithing, smelting, and cooking:
 
-### Gathering Resources
+```typescript
+interface StationData {
+  type: string;           // "anvil" | "furnace" | "range" | "bank"
+  name: string;           // Display name
+  model: string;          // Path to 3D model
+  modelScale: number;     // Scale multiplier
+  modelYOffset: number;   // Vertical offset
+  examine: string;        // Examine text
+}
+```
 
-Harvestable nodes are defined in the `gathering/` directory:
+### Available Stations
 
-- **`gathering/woodcutting.json`** - Trees (normal, oak, willow, teak, maple, mahogany, yew, magic)
-- **`gathering/mining.json`** - Ore rocks (copper, tin, iron, coal, mithril, adamant, runite)
-- **`gathering/fishing.json`** - Fishing spots with OSRS-accurate catch rates
+| Station | Purpose | Model |
+|---------|---------|-------|
+| **Anvil** | Smith bars into equipment | `asset://models/anvil/anvil.glb` |
+| **Furnace** | Smelt ores into bars | `asset://models/furnace/furnace.glb` |
+| **Range** | Cook food with reduced burn chance | TBD |
+| **Bank** | Store items | TBD |
 
-Each resource defines:
-- Level requirements
-- Tool requirements
-- Harvest yields and XP
-- Respawn timing (in OSRS ticks: 1 tick = 600ms)
-- Success rates and depletion chances
+### Station Models
 
-### Processing Recipes
+New 3D models added to the assets repository:
 
-Recipes are defined in the `recipes/` directory:
-
-- **`recipes/smelting.json`** - Furnace recipes (ores → bars)
-- **`recipes/smithing.json`** - Anvil recipes (bars → equipment)
-- **`recipes/cooking.json`** - Cooking recipes with burn mechanics
-- **`recipes/firemaking.json`** - Log burning data
-
-All recipes use OSRS-accurate timing (4 ticks = 2.4s per action).
+```
+models/
+├── anvil/
+│   ├── anvil.glb           # Optimized model
+│   ├── anvil_raw.glb       # Raw model
+│   ├── concept-art.png     # Concept art
+│   └── metadata.json       # Model metadata
+└── furnace/
+    ├── furnace.glb         # Optimized model
+    ├── furnace_raw.glb     # Raw model
+    ├── concept-art.png     # Concept art
+    └── metadata.json       # Model metadata
+```
 
 ### Crafting Stations
 
@@ -427,7 +418,7 @@ This metadata is separate from item definitions to keep tool mechanics centraliz
 
 ## Skill Progression
 
-**`skill-unlocks.json`** documents what players unlock at each skill level. This is used for UI display and progression tracking. Covers all implemented skills: attack, strength, defence, constitution, prayer, woodcutting, mining, fishing, cooking, firemaking, and smithing.
+---
 
 ---
 
@@ -589,6 +580,22 @@ interface VegetationLayer {
 <Warning>
   Do NOT add game data directly to TypeScript files. Keep all content in JSON manifests for clean separation and easy modding.
 </Warning>
+
+## Recent Changes
+
+### Manifest Refactor (PR #3)
+
+The manifest system was recently refactored for better scalability and organization:
+
+- **Items split by type**: Weapons, tools, resources, food, and misc are now in separate files
+- **Gathering resources**: Woodcutting, mining, and fishing data moved to dedicated files
+- **Recipe system**: New recipes directory for smelting, smithing, cooking, and firemaking
+- **Centralized requirements**: `tier-requirements.json` provides OSRS-accurate level requirements
+- **Skill unlocks**: `skill-unlocks.json` documents progression milestones
+
+### New Vegetation (PR #4)
+
+Mushroom vegetation added to biomes with configurable density, clustering, and spawn parameters.
 
 ---
 

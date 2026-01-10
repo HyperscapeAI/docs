@@ -37,8 +37,12 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | Skill | Description | Training Methods |
 |-------|-------------|------------------|
 | **Firemaking** | Light fires | Using tinderbox on logs |
-| **Cooking** | Cook food | Using raw food on fires |
+| **Cooking** | Cook food | Using raw food on fires/ranges |
 | **Smithing** | Smelt bars and smith equipment | Smelting ores at furnaces, smithing bars at anvils |
+
+<Info>
+Smithing is a two-step process: first smelt ores into bars at a furnace, then smith bars into equipment at an anvil.
+</Info>
 
 ---
 
@@ -371,6 +375,23 @@ Defined in `recipes/*.json`:
 **Smithing**: Levels 1-91 (Bronze to Rune equipment)
 **Cooking**: Levels 1-80 (Shrimp to Shark)
 **Firemaking**: Levels 1-75 (Normal to Magic logs)
+
+### Smithing Requirements
+
+| Item | Smithing Level | Bars Required |
+|------|----------------|---------------|
+| Bronze Bar | 1 | 1 copper ore + 1 tin ore |
+| Iron Bar | 15 | 1 iron ore (50% success) |
+| Steel Bar | 30 | 1 iron ore + 2 coal |
+| Mithril Bar | 50 | 1 mithril ore + 4 coal |
+| Adamant Bar | 70 | 1 adamantite ore + 6 coal |
+| Rune Bar | 85 | 1 runite ore + 8 coal |
+| Bronze Equipment | 1 | 1-5 bronze bars |
+| Iron Equipment | 15 | 1-5 iron bars |
+| Steel Equipment | 30 | 2-5 steel bars |
+| Mithril Equipment | 50 | 2-5 mithril bars |
+| Adamant Equipment | 70 | 3-5 adamant bars |
+| Rune Equipment | 85 | 3-5 rune bars |
 
 ---
 
