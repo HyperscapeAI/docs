@@ -23,33 +23,69 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Latest" description="Smithing Skill & CI Improvements" date="2025-01-09">
+<Update label="Recent Updates" description="January 2026" date="2026-01-10">
 
-### ⚒️ Smithing Skill (PR #492)
-- **Full smithing implementation** — Smelt ores into bars at furnaces, smith bars into equipment at anvils
-- **OSRS-accurate mechanics** — Tick-based processing (4 ticks per action), iron smelting 50% success rate
-- **UI panels** — Dedicated smelting and smithing interfaces with quantity selection (1, 5, 10, All, X)
-- **Recipe system** — Manifest-driven recipes for bars and equipment across all metal tiers
-- **Level requirements** — Bronze (1), Iron (15), Steel (30), Mithril (50), Adamant (70), Rune (85)
-- **Database migration** — Added smithingLevel and smithingXp columns to character table
-- **Skill unlocks** — Integrated with skill progression system and level-up notifications
+### ⚒️ Smithing Skill System
 
-### 🤖 Claude GitHub Actions (PR #493)
-- **Code review workflow** — Automated Claude code reviews on pull requests
-- **PR assistant** — @claude mentions in comments trigger AI assistance
-- **CI integration** — Claude can read CI results and provide context-aware help
+Complete implementation of the Smithing skill with OSRS-accurate mechanics:
 
-### 🏗️ Architecture Improvements
-- **Manifest-driven data** — Items split into category files (weapons, tools, resources, food, misc)
-- **Tier-based requirements** — Centralized tier requirements system for equipment and tools
-- **Processing data provider** — Unified system for cooking, firemaking, smelting, and smithing recipes
-- **Rate limiting** — Added request throttling to smelting/smithing network handlers
+- **Smelting**: Convert ores into bars at furnaces
+  - 6 bar types: Bronze, Iron, Steel, Mithril, Adamant, Rune
+  - Iron ore has 50% success rate (OSRS-accurate)
+  - Coal requirements for higher-tier bars
+  - Tick-based timing (4 ticks per bar)
+- **Smithing**: Convert bars into equipment at anvils
+  - 40+ smithable items across weapons, armor, and tools
+  - Requires hammer in inventory
+  - Organized by category in UI
+  - "Make X" functionality with quantity memory
+- **Database**: New `smithingLevel` and `smithingXp` columns
+- **Manifests**: New `recipes/smelting.json` and `recipes/smithing.json`
+
+### 🎨 OSRS-Style Context Menus
+
+Authentic context menu system with colored entity names:
+
+- **Color Coding**: Orange for items (#ff9040), yellow for NPCs (#ffff00), cyan for objects (#00ffff)
+- **Inventory Actions**: Manifest-driven actions with heuristic fallback
+  - Items can define `inventoryActions` array
+  - First action becomes left-click default
+  - Supported: Eat, Drink, Wield, Wear, Bury, Use, Drop, Examine
+- **Centralized Dispatching**: `InventoryActionDispatcher` eliminates code duplication
+- **Item Helpers**: Type detection utilities (`isFood`, `isPotion`, `isBone`, `usesWield`, `usesWear`)
+- **Cancel Option**: Always shown last (OSRS standard)
+
+### 🏗️ Manifest Architecture Improvements
+
+- **Items Directory**: Items split into 5 category files (weapons, tools, resources, food, misc)
+- **Gathering Manifests**: Separate files for woodcutting, mining, fishing
+- **Recipe Manifests**: Dedicated files for cooking, firemaking, smelting, smithing
+- **Station Manifests**: 3D models and configs for anvils, furnaces, ranges
+- **Tier System**: Centralized `tier-requirements.json` for equipment levels
+- **Skill Unlocks**: `skill-unlocks.json` defines what unlocks at each level
+- **Atomic Loading**: All category files must exist or system falls back to legacy format
+
+### 🔧 Data Providers
+
+New specialized providers for efficient data access:
+
+- **ProcessingDataProvider**: Cooking, firemaking, smelting, smithing recipes
+- **TierDataProvider**: Equipment level requirements by tier
+- **StationDataProvider**: Station models and configurations
+- **Pre-allocated Buffers**: Memory optimization for inventory counting
 
 ### 🐛 Bug Fixes
-- Fixed firemaking level requirement validation
-- Fixed cooking level requirement checks before starting actions
-- Corrected firemaking event payload shape
-- Updated test item counts to match current manifests
+
+- **Resource Spam Fix**: Prevent duplicate harvesting on spam-click (#494)
+- **Equipment System**: Tools with `equipSlot: "weapon"` can now be equipped (hatchets, pickaxes)
+- **Firemaking**: Level requirement validation added
+- **Cooking**: Level requirement check before starting action
+
+### 📊 Testing
+
+- **843 new test lines**: Comprehensive coverage for inventory actions and item helpers
+- **Unit Tests**: InventoryActionDispatcher (333 lines), item-helpers (510 lines)
+- **Integration Tests**: ProcessingDataProvider, skill unlocks, data integrity
 
 </Update>
 

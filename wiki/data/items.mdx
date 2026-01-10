@@ -62,6 +62,7 @@ interface Item {
   id: string;                    // Unique identifier (e.g., "bronze_sword")
   name: string;                  // Display name (e.g., "Bronze Sword")
   type: ItemType;                // Category
+  tier?: string;                 // Equipment tier (bronze, steel, mithril, etc.)
   rarity: ItemRarity;            // Common, Uncommon, Rare, etc.
   modelPath?: string;            // Path to GLB model
   tier?: string;                 // Metal tier (bronze, iron, steel, etc.)
@@ -79,6 +80,17 @@ interface Item {
   equipSlot?: EquipmentSlotName; // Where item equips
   attackSpeed?: number;          // In milliseconds
   range?: number;                // Attack range
+  equipSlot?: string;            // Equipment slot (weapon, shield, head, body, etc.)
+
+  // Tool properties (for gathering tools)
+  tool?: {
+    skill: "woodcutting" | "mining" | "fishing";
+    priority: number;            // Higher = better tool
+    rollTicks?: number;          // Mining: ticks between roll attempts
+  };
+
+  // OSRS-accurate inventory actions
+  inventoryActions?: string[];   // Context menu actions (e.g., ["Eat", "Use", "Drop"])
 
   // Tool properties (for gathering tools)
   tool?: {
@@ -97,6 +109,12 @@ interface Item {
   isNoted?: boolean;
   baseItemId?: string;           // For noted items
   notedItemId?: string;          // For base items
+
+  // Processing properties
+  cooking?: CookingData;         // For raw food items
+  firemaking?: FiremakingData;   // For logs
+  smelting?: SmeltingData;       // For bars
+  smithing?: SmithingData;       // For smithable items
 }
 ```
 
@@ -428,7 +446,7 @@ export function getBaseItemId(itemId: string): string {
 
 ### Tool (tools.json)
 
-Tools can optionally include a `tool` object specifying the skill and priority:
+Tools include a `tool` object specifying the skill and priority. The tier system automatically derives level requirements:
 
 ```json
 {
@@ -462,6 +480,10 @@ Tools can optionally include a `tool` object specifying the skill and priority:
 }
 ```
 
+<Info>
+The `tier: "bronze"` automatically gives this tool `attack: 1` and `woodcutting: 1` requirements from `tier-requirements.json`. Tools with `equipSlot: "weapon"` can be equipped and used for combat.
+</Info>
+
 ### Resource (resources.json)
 
 ```json
@@ -484,6 +506,8 @@ Tools can optionally include a `tool` object specifying the skill and priority:
 
 ### Consumable (food.json)
 
+Consumables can include `inventoryActions` to define OSRS-style context menu actions:
+
 ```json
 {
   "id": "shrimp",
@@ -498,9 +522,14 @@ Tools can optionally include a `tool` object specifying the skill and priority:
   "rarity": "common",
   "modelPath": null,
   "iconPath": "asset://icons/shrimp.png",
-  "healAmount": 3
+  "healAmount": 3,
+  "inventoryActions": ["Eat", "Use", "Drop", "Examine"]
 }
 ```
+
+<Info>
+The first action in `inventoryActions` becomes the left-click default. If not specified, the system uses heuristic detection based on item properties (food → Eat, potions → Drink, etc.).
+</Info>
 
 ### Currency (misc.json)
 
@@ -551,7 +580,7 @@ Tools can optionally include a `tool` object specifying the skill and priority:
 
 ## Tool Priority System
 
-Tools now use a priority system to determine which tool to use when multiple are available:
+Tools use a priority system to determine which tool to use when multiple are available:
 
 ```json
 {
@@ -569,6 +598,46 @@ For example:
 - Rune hatchet: priority 6
 
 The system automatically selects the highest priority tool the player has equipped or in inventory.
+
+## Inventory Actions System
+
+Items can define explicit context menu actions using the `inventoryActions` array:
+
+```json
+{
+  "id": "bronze_sword",
+  "inventoryActions": ["Wield", "Use", "Drop", "Examine"]
+}
+```
+
+### Common Action Patterns
+
+| Item Type | Actions |
+|-----------|---------|
+| Food | `["Eat", "Use", "Drop", "Examine"]` |
+| Potions | `["Drink", "Use", "Drop", "Examine"]` |
+| Weapons | `["Wield", "Use", "Drop", "Examine"]` |
+| Armor | `["Wear", "Use", "Drop", "Examine"]` |
+| Bones | `["Bury", "Use", "Drop", "Examine"]` |
+| Generic | `["Use", "Drop", "Examine"]` |
+
+### Action Handlers
+
+The following actions have built-in handlers:
+
+- **Eat**: Consumes food, restores HP
+- **Drink**: Consumes potion, applies effects
+- **Wield**: Equips weapons/shields
+- **Wear**: Equips armor
+- **Bury**: Buries bones for Prayer XP
+- **Use**: Enters targeting mode for item-on-item/item-on-object interactions
+- **Drop**: Drops item on ground
+- **Examine**: Shows examine text
+- **Cancel**: Closes context menu (always added automatically)
+
+<Info>
+If `inventoryActions` is not specified, the system uses heuristic detection based on item properties. Manifest-defined actions take priority over heuristics.
+</Info>
 
 ---
 

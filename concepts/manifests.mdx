@@ -31,16 +31,16 @@ All manifests are in `world/assets/manifests/`:
 
 | File | Content |
 |------|---------|
-| `npcs.ts` | Mobs and NPCs |
-| `items.ts` | Equipment, resources, consumables |
-| `banks-stores.ts` | Shop inventories |
-| `world-areas.ts` | Zones and regions |
-| `world-structure.ts` | World layout |
-| `avatars.ts` | Character models |
-| `playerEmotes.ts` | Emote animations |
-| `equipment-requirements.json` | Level requirements for gear |
-| `equipment-stats.json` | Stat bonuses for equipment |
-| `stations.json` | Crafting stations (anvils, furnaces, ranges, banks) |
+| `npcs.json` | Mobs and NPCs |
+| `items/` | Equipment, resources, consumables (split by category) |
+| `banks-stores.json` | Shop inventories |
+| `world-areas.json` | Zones and regions |
+| `avatars.json` | Character models |
+| `tier-requirements.json` | Equipment level requirements by tier |
+| `skill-unlocks.json` | What unlocks at each skill level |
+| `gathering/` | Resource gathering data (woodcutting, mining, fishing) |
+| `recipes/` | Processing recipes (cooking, firemaking, smelting, smithing) |
+| `stations.json` | World station configurations (anvils, furnaces, ranges) |
 
 ## Manifest Structure
 
@@ -85,66 +85,41 @@ NPC data is loaded from JSON manifests at runtime by DataManager:
   NPC definitions are in `world/assets/manifests/npcs.json`, not hardcoded in TypeScript.
 </Info>
 
-### Items (`items/`)
+### Items Directory
 
-Items are now organized by type in separate files:
+Items are now organized into separate JSON files by category for better maintainability:
 
-**items/weapons.json** - Combat weapons with tier-based requirements:
-```json
-[
-  {
-    "id": "bronze_sword",
-    "name": "Bronze Sword",
-    "type": "weapon",
-    "tier": "bronze",
-    "equipSlot": "weapon",
-    "weaponType": "SWORD",
-    "attackType": "MELEE",
-    "attackSpeed": 4,
-    "attackRange": 1,
-    "bonuses": { "attack": 4, "strength": 3 }
-  }
-]
+```
+manifests/items/
+├── weapons.json      # Combat weapons (swords, axes, bows)
+├── tools.json        # Skilling tools (hatchets, pickaxes, fishing rods)
+├── resources.json    # Gathered materials (ores, logs, bars, raw fish)
+├── food.json         # Cooked consumables
+└── misc.json         # Currency, burnt food, junk items
 ```
 
-**items/tools.json** - Skilling tools with priority system:
-```json
-[
-  {
-    "id": "bronze_hatchet",
-    "name": "Bronze Hatchet",
-    "type": "tool",
-    "tier": "bronze",
-    "tool": {
-      "skill": "woodcutting",
-      "priority": 1
-    }
-  }
-]
-```
+All item files are loaded atomically by DataManager - if any required file is missing, the system falls back to the legacy `items.json` format.
 
-**items/resources.json** - Raw materials (ores, logs, bars, raw fish)
+```typescript
+// From packages/shared/src/data/items.ts
+/**
+ * Item Database
+ *
+ * Items are loaded from world/assets/manifests/items/ directory by DataManager.
+ * This file provides the empty Map that gets populated at runtime.
+ *
+ * To add new items:
+ * 1. Add entries to appropriate file in world/assets/manifests/items/
+ * 2. Generate 3D models in 3D Asset Forge (optional)
+ * 3. Restart the server to reload manifests
+ */
 
-**items/food.json** - Cooked consumables with `healAmount`
+// Item Database - Populated by DataManager
+export const ITEMS: Map<string, Item> = new Map();
 
-**items/misc.json** - Currency, burnt food, junk items
-
-### Tier Requirements (`tier-requirements.json`)
-
-Centralized tier-based level requirements (OSRS-accurate):
-
-```json
-{
-  "melee": {
-    "bronze": { "attack": 1, "defence": 1 },
-    "steel": { "attack": 5, "defence": 5 },
-    "mithril": { "attack": 20, "defence": 20 },
-    "rune": { "attack": 40, "defence": 40 }
-  },
-  "tools": {
-    "bronze": { "attack": 1, "woodcutting": 1, "mining": 1 },
-    "steel": { "attack": 5, "woodcutting": 6, "mining": 6 }
-  }
+// Helper functions
+export function getItem(itemId: string): Item | null {
+  return ITEMS.get(itemId) || null;
 }
 ```
 
@@ -172,30 +147,61 @@ Centralized tier-based level requirements (OSRS-accurate):
 }
 ```
 
-**gathering/mining.json** - Rocks and ore yields
+### Gathering Resources
 
-**gathering/fishing.json** - Fishing spots with OSRS-accurate catch rates
+Resource gathering data is split by skill for better organization:
 
-### Recipes (`recipes/`)
+```
+manifests/gathering/
+├── woodcutting.json  # Trees, logs, XP values, level requirements
+├── mining.json       # Ore rocks, ores, XP values, level requirements
+└── fishing.json      # Fishing spots, fish, XP values, level requirements
+```
 
-**recipes/smelting.json** - Furnace recipes (ores → bars):
+Each manifest defines the resources, their requirements, XP rewards, and drop tables.
+
+### Processing Recipes
+
+Processing recipes are organized by skill:
+
+```
+manifests/recipes/
+├── cooking.json      # Raw → cooked food recipes
+├── firemaking.json   # Log burning recipes
+├── smelting.json     # Ore → bar recipes (at furnaces)
+└── smithing.json     # Bar → equipment recipes (at anvils)
+```
+
+These manifests define inputs, outputs, level requirements, XP rewards, and tick-based timing.
+
+### Station Configurations
+
+World stations (anvils, furnaces, ranges, banks) are configured in `stations.json`:
+
 ```json
 {
-  "recipes": [
+  "stations": [
     {
-      "output": "bronze_bar",
-      "inputs": [
-        { "item": "copper_ore", "amount": 1 },
-        { "item": "tin_ore", "amount": 1 }
-      ],
-      "level": 1,
-      "xp": 6.2,
-      "ticks": 4,
-      "successRate": 1.0
+      "type": "anvil",
+      "name": "Anvil",
+      "model": "asset://models/anvil/anvil.glb",
+      "modelScale": 0.5,
+      "modelYOffset": 0.4,
+      "examine": "An anvil for smithing metal bars into weapons and tools."
+    },
+    {
+      "type": "furnace",
+      "name": "Furnace",
+      "model": "asset://models/furnace/furnace.glb",
+      "modelScale": 1.5,
+      "modelYOffset": 1.0,
+      "examine": "A furnace for smelting ores into metal bars."
     }
   ]
 }
 ```
+
+This allows 3D models and configurations to be updated without code changes.
 
 ### Stations (`stations.json`)
 
@@ -349,55 +355,69 @@ The loading is **atomic** for directory-based manifests - all required files mus
 
 ## Adding Content
 
-### Step 1: Edit JSON Manifest
+### Step 1: Choose the Right Manifest
 
-Add your content to the appropriate JSON file in `packages/server/world/assets/manifests/`.
+Determine which manifest file to edit based on content type:
 
-Add your content to the appropriate manifest file in `world/assets/manifests/`:
+- **Items**: `manifests/items/weapons.json`, `tools.json`, `resources.json`, `food.json`, or `misc.json`
+- **NPCs/Mobs**: `manifests/npcs.json`
+- **Gathering Resources**: `manifests/gathering/woodcutting.json`, `mining.json`, or `fishing.json`
+- **Processing Recipes**: `manifests/recipes/cooking.json`, `firemaking.json`, `smelting.json`, or `smithing.json`
+- **Stations**: `manifests/stations.json`
+- **World Areas**: `manifests/world-areas.json`
 
-- **NPCs**: `npcs.json`
-- **Weapons**: `items/weapons.json`
-- **Tools**: `items/tools.json`
-- **Resources**: `items/resources.json`
-- **Food**: `items/food.json`
-- **Gathering**: `gathering/woodcutting.json`, `gathering/mining.json`, `gathering/fishing.json`
-- **Recipes**: `recipes/smelting.json`, `recipes/smithing.json`, `recipes/cooking.json`
+### Step 2: Edit Manifest
 
-### Step 2: Restart Server
+Add your content following the existing structure. Use tier-based requirements for equipment:
 
-The DataManager loads manifests on startup:
+```json
+{
+  "id": "mithril_sword",
+  "name": "Mithril Sword",
+  "type": "weapon",
+  "tier": "mithril",  // Automatically gets attack: 20 requirement
+  "weaponType": "SWORD",
+  "attackSpeed": 4
+}
+```
+
+### Step 3: Restart Server
+
+Manifests are loaded at server startup. Restart to apply changes:
 
 ```bash
 bun run dev
 ```
 
-### Step 3: Verify
+### Step 4: Verify
 
-Check the game to ensure content appears correctly. The smithing interface should show your new recipe.
+Check the game to ensure content appears correctly. Use the Skills panel to verify level requirements.
 
 ## Validation
 
-### JSON Manifest Validation
-
-JSON manifests are validated at runtime by DataManager:
-
-- **Schema validation**: Required fields checked on load
-- **Duplicate detection**: Duplicate item IDs cause errors
-- **Atomic loading**: All required files must exist (e.g., all 5 item category files)
-- **Fallback support**: Falls back to legacy single-file format if directory loading fails
-
-### TypeScript Data File Validation
-
-TypeScript data files get compile-time validation:
+Manifests are JSON files validated at runtime by DataManager:
 
 - **Schema validation**: Invalid fields logged as warnings
-- **Cross-references**: Missing itemId/npcId references caught
-- **Required fields**: Missing required fields cause errors
-- **Type safety**: TypeScript types ensure correct usage in code
+- **Duplicate detection**: Duplicate item IDs across files cause errors
+- **Reference checking**: Invalid itemId/npcId references caught at runtime
+- **Atomic loading**: Items directory loads all files or falls back to legacy format
 
 <Warning>
-  Invalid manifests will cause runtime errors with descriptive messages. Check server logs for validation warnings.
+  Invalid JSON syntax will cause server startup to fail. Use a JSON validator before committing changes.
 </Warning>
+
+## Data Providers
+
+The manifest system uses specialized data providers for efficient lookups:
+
+| Provider | Purpose | Manifest Source |
+|----------|---------|-----------------|
+| `ProcessingDataProvider` | Cooking, firemaking, smelting, smithing recipes | `recipes/*.json` |
+| `TierDataProvider` | Equipment level requirements by tier | `tier-requirements.json` |
+| `StationDataProvider` | Station models and configurations | `stations.json` |
+| `DataManager` | Central loader for all manifests | All manifests |
+
+These providers build optimized lookup tables at startup for fast runtime queries.
 
 ## Best Practices
 
