@@ -218,16 +218,32 @@ Centralized tier-based level requirements (OSRS-accurate):
 The `DataManager` class in `packages/shared/src/data/DataManager.ts` loads and provides access to all manifests:
 
 ```typescript
-import { DataManager } from '@hyperscape/shared';
+import { dataManager } from '@hyperscape/shared';
 
-const npc = DataManager.getNPC("goblin");
-const item = DataManager.getItem("bronze_sword");
-const area = DataManager.getArea("mistwood_valley");
+// Initialize (loads all manifests)
+await dataManager.initialize();
+
+// Access loaded data via global maps
+import { ITEMS, ALL_NPCS } from '@hyperscape/shared';
+
+const item = ITEMS.get("bronze_sword");
+const npc = ALL_NPCS.get("goblin");
 ```
+
+### Manifest Loading
+
+DataManager supports two loading modes:
+
+1. **Filesystem** (server-side): Loads from `packages/server/world/assets/manifests/`
+2. **CDN** (client-side): Fetches from `http://localhost:8080/assets/manifests/`
+
+The loading is **atomic** for directory-based manifests - all required files must exist or it falls back to legacy single-file format.
 
 ## Adding Content
 
-### Step 1: Edit Manifest
+### Step 1: Edit JSON Manifest
+
+Add your content to the appropriate JSON file in `packages/server/world/assets/manifests/`.
 
 Add your content to the appropriate manifest file in `world/assets/manifests/`:
 
