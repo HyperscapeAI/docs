@@ -319,6 +319,52 @@ Each starter town has:
 
 ---
 
+## Stations
+
+Crafting stations are interactive objects that enable processing skills like smithing, smelting, and cooking:
+
+```typescript
+interface StationData {
+  type: string;           // "anvil" | "furnace" | "range" | "bank"
+  name: string;           // Display name
+  model: string;          // Path to 3D model
+  modelScale: number;     // Scale multiplier
+  modelYOffset: number;   // Vertical offset
+  examine: string;        // Examine text
+}
+```
+
+### Available Stations
+
+| Station | Purpose | Model |
+|---------|---------|-------|
+| **Anvil** | Smith bars into equipment | `asset://models/anvil/anvil.glb` |
+| **Furnace** | Smelt ores into bars | `asset://models/furnace/furnace.glb` |
+| **Range** | Cook food with reduced burn chance | TBD |
+| **Bank** | Store items | TBD |
+
+### Station Models
+
+New 3D models added to the assets repository:
+
+```
+models/
+├── anvil/
+│   ├── anvil.glb           # Optimized model
+│   ├── anvil_raw.glb       # Raw model
+│   ├── concept-art.png     # Concept art
+│   └── metadata.json       # Model metadata
+└── furnace/
+    ├── furnace.glb         # Optimized model
+    ├── furnace_raw.glb     # Raw model
+    ├── concept-art.png     # Concept art
+    └── metadata.json       # Model metadata
+```
+
+Both models follow World of Warcraft-style stylized fantasy aesthetics with medium-poly counts and hand-painted textures.
+
+---
+
 ## Adding New Content
 
 <Steps>
