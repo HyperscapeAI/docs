@@ -253,24 +253,54 @@ Gathering resources is now defined in `manifests/gathering/` with OSRS-accurate 
 Processing recipes are defined in `manifests/recipes/` with OSRS-accurate XP values:
 
 **Smelting** (`recipes/smelting.json`):
-| Bar | Level | XP |
-|-----|-------|-----|
-| Bronze | 1 | 6.2 |
-| Iron | 15 | 12.5 |
-| Steel | 30 | 17.5 |
-| Mithril | 50 | 30 |
-| Adamant | 70 | 37.5 |
-| Rune | 85 | 50 |
+| Bar | Level | Ores Required | XP | Success Rate |
+|-----|-------|---------------|-----|--------------|
+| Bronze | 1 | 1 Copper + 1 Tin | 6.2 | 100% |
+| Iron | 15 | 1 Iron | 12.5 | 50% |
+| Steel | 30 | 1 Iron + 2 Coal | 17.5 | 100% |
+| Mithril | 50 | 1 Mithril + 4 Coal | 30 | 100% |
+| Adamant | 70 | 1 Adamantite + 6 Coal | 37.5 | 100% |
+| Rune | 85 | 1 Runite + 8 Coal | 50 | 100% |
+
+<Info>
+Iron ore has a 50% success rate when smelting - failed attempts consume the ore but grant no bar or XP.
+</Info>
 
 **Smithing** (`recipes/smithing.json`):
-| Item | Level | XP |
-|------|-------|-----|
-| Bronze sword | 4 | 12.5 |
-| Iron sword | 19 | 25 |
-| Steel sword | 34 | 37.5 |
-| Mithril sword | 54 | 50 |
-| Adamant sword | 74 | 62.5 |
-| Rune sword | 89 | 75 |
+
+Smithing requires a hammer in inventory and access to an anvil. Recipes are organized by category:
+
+*Weapons*:
+| Item | Level | Bars | XP |
+|------|-------|------|-----|
+| Bronze dagger | 1 | 1 | 12.5 |
+| Bronze sword | 4 | 1 | 12.5 |
+| Bronze scimitar | 5 | 2 | 25 |
+| Iron sword | 19 | 1 | 25 |
+| Steel sword | 34 | 1 | 37.5 |
+| Mithril sword | 54 | 1 | 50 |
+| Adamant sword | 74 | 1 | 62.5 |
+| Rune sword | 89 | 1 | 75 |
+
+*Armor*:
+| Item | Level | Bars | XP |
+|------|-------|------|-----|
+| Bronze platebody | 18 | 5 | 62.5 |
+| Iron platebody | 33 | 5 | 125 |
+| Steel platebody | 48 | 5 | 187.5 |
+| Mithril platebody | 68 | 5 | 250 |
+
+*Tools*:
+| Item | Level | Bars | XP |
+|------|-------|------|-----|
+| Bronze hatchet | 1 | 1 | 12.5 |
+| Bronze pickaxe | 1 | 1 | 12.5 |
+| Iron hatchet | 16 | 1 | 25 |
+| Steel hatchet | 31 | 1 | 37.5 |
+
+<Info>
+Smithing recipes support "Make X" functionality - players can smith multiple items in one session. The system remembers the last custom quantity entered.
+</Info>
 
 **Cooking** (`recipes/cooking.json`):
 | Food | Level | XP |
