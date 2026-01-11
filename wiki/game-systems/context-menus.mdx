@@ -1,337 +1,372 @@
 ---
-title: "Context Menu System"
-description: "OSRS-style context menus with colored entity names and action handling"
-icon: "mouse-pointer-click"
+title: "Context Menus"
+description: "OSRS-style right-click menus with colored entity names and manifest-driven actions"
+icon: "list"
 ---
 
 # Context Menu System
 
-Hyperscape features OSRS-accurate context menus with colored entity names, proper action ordering, and centralized action dispatching.
+Hyperscape features OSRS-accurate right-click context menus for inventory items, world entities, NPCs, and players with colored entity names and manifest-driven action ordering.
 
 <Info>
-Context menus are managed by `ContextMenuController` and interaction handlers in `packages/shared/src/systems/client/interaction/`.
+Context menu code lives in `packages/client/src/game/systems/InventoryActionDispatcher.ts` and `packages/shared/src/utils/item-helpers.ts`.
 </Info>
 
 ## Overview
 
-Right-clicking on entities (players, NPCs, items, objects) shows a context menu with available actions. The system uses OSRS-accurate:
+Context menus provide:
 
-- **Color coding**: Orange for items, yellow for NPCs, cyan for objects
-- **Action ordering**: Primary actions first, examine last, cancel always last
-- **Manifest-driven actions**: Items can define custom actions in their manifest
-
----
-
-## Color Coding
-
-Context menu entity names use OSRS-accurate colors:
-
-```typescript
-// From GameConstants.ts
-export const CONTEXT_MENU_COLORS = {
-  ITEM: "#ff9040",      // Orange - for items
-  NPC: "#ffff00",       // Yellow - for NPCs and mobs
-  OBJECT: "#00ffff",    // Cyan - for scenery/objects
-  PLAYER: "#ffffff",    // White - for players
-};
-```
-
-### Examples
-
-- **Items**: "Take <span style="color: #ff9040">Bones</span>"
-- **NPCs**: "Talk-to <span style="color: #ffff00">Banker</span>"
-- **Objects**: "Chop down <span style="color: #00ffff">Oak</span>"
-- **Mobs**: "Attack <span style="color: #ffff00">Goblin</span> (Level: 5)"
+- **Manifest-driven actions** - Actions defined in item/entity manifests
+- **OSRS-accurate ordering** - Primary action first, then secondary actions
+- **Colored entity names** - Yellow NPCs, cyan scenery, orange items
+- **Cancel option** - Always last in the menu
+- **Left-click primary action** - First action in the list
 
 ---
 
 ## Inventory Context Menus
 
-Inventory items show actions based on their `inventoryActions` manifest field or heuristic detection:
+### Item Actions
+
+Right-click items in your inventory to see available actions:
+
+```typescript
+// Example: Bronze sword
+inventoryActions: ["Wield", "Drop", "Examine"]
+
+// Example: Cooked shrimp
+inventoryActions: ["Eat", "Drop", "Examine"]
+
+// Example: Tinderbox
+inventoryActions: ["Use", "Drop", "Examine"]
+```
+
+### Action Ordering
+
+Actions are ordered by **priority** (lower = higher priority):
+
+```typescript
+// From item-helpers.ts
+export const ACTION_PRIORITY = {
+  eat: 1,      // Food primary action
+  drink: 1,    // Potion primary action
+  wield: 1,    // Weapon/shield primary action
+  wear: 1,     // Armor primary action
+  bury: 1,     // Bones primary action
+  use: 2,      // Generic use action
+  drop: 9,     // Always near bottom
+  examine: 10, // Always last (before Cancel)
+  cancel: 11,  // Always absolute last
+};
+```
 
 ### Manifest-Driven Actions
 
-Items can define explicit actions:
+Items define their actions in `items.json`:
 
 ```json
 {
-  "id": "shrimp",
-  "inventoryActions": ["Eat", "Use", "Drop", "Examine"]
+  "id": "bronze_sword",
+  "name": "Bronze sword",
+  "type": "weapon",
+  "equipSlot": "weapon",
+  "inventoryActions": ["Wield", "Drop", "Examine"],
+  "examine": "A basic bronze sword."
 }
 ```
 
-The first action becomes the left-click default.
-
-### Heuristic Detection
-
-If `inventoryActions` is not specified, the system detects actions based on item properties:
-
-| Item Type | Detection | Actions |
-|-----------|-----------|---------|
-| Food | `type: "consumable"` + `healAmount > 0` | Eat, Use, Drop, Examine |
-| Potions | `type: "consumable"` + `id.includes("potion")` | Drink, Use, Drop, Examine |
-| Weapons | `equipSlot: "weapon"` or `equipSlot: "2h"` | Wield, Use, Drop, Examine |
-| Armor | `equipable: true` + not weapon/shield | Wear, Use, Drop, Examine |
-| Shields | `equipSlot: "shield"` | Wield, Use, Drop, Examine |
-| Bones | `id === "bones"` or `id.endsWith("_bones")` | Bury, Use, Drop, Examine |
-| Noted Items | `isNoted: true` or `id.endsWith("_noted")` | Use, Drop, Examine |
-
-### Action Handlers
-
-The `InventoryActionDispatcher` provides centralized handling for all inventory actions:
+The system validates actions against `HANDLED_INVENTORY_ACTIONS`:
 
 ```typescript
-// From packages/client/src/game/systems/InventoryActionDispatcher.ts
-export function dispatchInventoryAction(
-  action: string,
-  ctx: InventoryActionContext
-): ActionResult {
-  // Handles: eat, drink, bury, wield, wear, drop, examine, use, cancel
-}
+export const HANDLED_INVENTORY_ACTIONS = new Set<string>([
+  "eat",
+  "drink",
+  "bury",
+  "wield",
+  "wear",
+  "drop",
+  "examine",
+  "use",
+]);
 ```
-
-Supported actions:
-
-- **eat**: Emits `ITEM_ACTION_SELECTED` event for consumption
-- **drink**: Emits `ITEM_ACTION_SELECTED` event for potion effects
-- **bury**: Sends `buryBones` network message
-- **wield**: Sends `equipItem` network message (weapons/shields)
-- **wear**: Sends `equipItem` network message (armor)
-- **drop**: Calls `world.network.dropItem()`
-- **examine**: Shows examine text in chat and toast
-- **use**: Enters targeting mode for item-on-item/item-on-object interactions
-- **cancel**: No-op, menu already closed
 
 ---
 
 ## Entity Context Menus
 
-Different entity types have different context menu formats:
+### Colored Entity Names
 
-### Items (Ground)
-
-Format: "Take <span style="color: #ff9040">ItemName</span>"
+Entity names are colored by type (OSRS-accurate):
 
 ```typescript
-// From ItemInteractionHandler.ts
-{
-  id: "pickup_item123",
-  label: "Take Bones",
-  styledLabel: [
-    { text: "Take " },
-    { text: "Bones", color: CONTEXT_MENU_COLORS.ITEM }
-  ],
-  enabled: true,
-  priority: 1
-}
+// From CONTEXT_MENU_COLORS constants
+export const CONTEXT_MENU_COLORS = {
+  NPC: "#ffff00",      // Yellow - NPCs (shopkeepers, quest givers)
+  SCENERY: "#00ffff",  // Cyan - Interactive objects (trees, rocks, anvils)
+  ITEM: "#ff9040",     // Orange - Ground items
+  PLAYER: "#ffffff",   // White - Other players
+  MOB: "#ff0000",      // Red - Hostile mobs (goblins, etc.)
+};
 ```
 
-### NPCs
+### Entity Actions
 
-Format: "Talk-to <span style="color: #ffff00">NPCName</span>"
+Entities define actions in their manifests:
 
-```typescript
-// From NPCInteractionHandler.ts
-{
-  id: "talk",
-  label: "Talk-to Banker",
-  styledLabel: [
-    { text: "Talk-to " },
-    { text: "Banker", color: CONTEXT_MENU_COLORS.NPC }
-  ],
-  enabled: true,
-  priority: 1
-}
-```
-
-Bankers also show:
-- "Bank <span style="color: #ffff00">Banker</span>"
-- "Collect <span style="color: #ffff00">Banker</span>" (for Grand Exchange)
-
-### Mobs
-
-Format: "Attack <span style="color: #ffff00">MobName</span> (Level: X)"
-
-```typescript
-// From MobInteractionHandler.ts
-{
-  id: "attack",
-  label: "Attack Goblin (Level: 5)",
-  styledLabel: [
-    { text: "Attack " },
-    { text: "Goblin", color: CONTEXT_MENU_COLORS.NPC },
-    { text: " (Level: " },
-    { text: "5", color: levelColor },  // Color based on player vs mob level
-    { text: ")" }
-  ],
-  enabled: true,
-  priority: 1
-}
-```
-
-### Resources
-
-Format: "Chop down <span style="color: #00ffff">TreeName</span>"
-
-Trees strip the "Tree" suffix (Oak Tree → Oak), rocks use lowercase plural (Copper Rock → Copper rocks):
-
-```typescript
-// From ResourceInteractionHandler.ts
-{
-  id: "chop",
-  label: "Chop down Oak",
-  styledLabel: [
-    { text: "Chop down " },
-    { text: "Oak", color: CONTEXT_MENU_COLORS.OBJECT }
-  ],
-  enabled: true,
-  priority: 1
-}
-```
-
-Mining: "Mine <span style="color: #00ffff">Copper rocks</span>"
-
-### Stations
-
-Format: "Smith <span style="color: #00ffff">Anvil</span>"
-
-```typescript
-// From SmithingSourceInteractionHandler.ts
-{
-  id: "smith",
-  label: "Smith Anvil",
-  styledLabel: [
-    { text: "Smith " },
-    { text: "Anvil", color: CONTEXT_MENU_COLORS.OBJECT }
-  ],
-  enabled: true,
-  priority: 1
-}
-```
-
----
-
-## Action Priority
-
-Actions are sorted by priority (lower = higher in menu):
-
-| Priority | Action Type |
-|----------|-------------|
-| 1 | Primary action (Attack, Take, Chop, etc.) |
-| 2-10 | Secondary actions (Bank, Trade, etc.) |
-| 50 | Walk here |
-| 100+ | Examine |
-| Last | Cancel (always) |
-
----
-
-## Targeting Mode
-
-The "Use" action enters targeting mode for item-on-item or item-on-object interactions:
-
-1. Right-click item → Select "Use"
-2. Cursor changes to crosshair
-3. Click valid target (highlighted in gold)
-4. Action executes (e.g., tinderbox on logs → firemaking)
-
-Invalid targets show: "Nothing interesting happens."
-
----
-
-## Implementation Details
-
-### Interaction Handlers
-
-Each entity type has a dedicated handler:
-
-| Handler | Entity Types | File |
-|---------|--------------|------|
-| `ItemInteractionHandler` | Ground items | `handlers/ItemInteractionHandler.ts` |
-| `NPCInteractionHandler` | NPCs (bankers, shopkeepers) | `handlers/NPCInteractionHandler.ts` |
-| `MobInteractionHandler` | Hostile mobs | `handlers/MobInteractionHandler.ts` |
-| `PlayerInteractionHandler` | Other players | `handlers/PlayerInteractionHandler.ts` |
-| `ResourceInteractionHandler` | Trees, rocks, fishing spots | `handlers/ResourceInteractionHandler.ts` |
-| `BankInteractionHandler` | Bank booths/chests | `handlers/BankInteractionHandler.ts` |
-| `CookingSourceInteractionHandler` | Fires, ranges | `handlers/CookingSourceInteractionHandler.ts` |
-| `SmeltingSourceInteractionHandler` | Furnaces | `handlers/SmeltingSourceInteractionHandler.ts` |
-| `SmithingSourceInteractionHandler` | Anvils | `handlers/SmithingSourceInteractionHandler.ts` |
-| `CorpseInteractionHandler` | Gravestones, corpses | `handlers/CorpseInteractionHandler.ts` |
-
-### InteractionRouter
-
-The `InteractionRouter` dispatches raycast targets to the appropriate handler:
-
-```typescript
-// From InteractionRouter.ts
-export class InteractionRouter {
-  private handlers = new Map<string, BaseInteractionHandler>();
-
-  handleLeftClick(target: RaycastTarget): void {
-    const handler = this.getHandlerForTarget(target);
-    handler?.handleLeftClick(target);
-  }
-
-  handleRightClick(target: RaycastTarget): ContextMenuAction[] {
-    const handler = this.getHandlerForTarget(target);
-    return handler?.getContextMenuActions(target) || [];
-  }
-}
-```
-
----
-
-## Item Helpers
-
-The system provides type detection helpers for inventory actions:
-
-```typescript
-// From packages/shared/src/utils/item-helpers.ts
-import { isFood, isPotion, isBone, usesWield, usesWear, getPrimaryAction } from '@hyperscape/shared';
-
-// Detect item types
-const canEat = isFood(item);           // true for food items
-const canDrink = isPotion(item);       // true for potions
-const canBury = isBone(item);          // true for bones
-const shouldWield = usesWield(item);   // true for weapons/shields
-const shouldWear = usesWear(item);     // true for armor
-
-// Get primary action (for left-click)
-const action = getPrimaryAction(item, isNoted);
-// Returns: "eat" | "drink" | "bury" | "wield" | "wear" | "use"
-```
-
----
-
-## Adding Custom Actions
-
-To add a new inventory action:
-
-1. **Define in manifest**:
 ```json
 {
-  "id": "prayer_book",
-  "inventoryActions": ["Read", "Use", "Drop", "Examine"]
+  "id": "goblin",
+  "name": "Goblin",
+  "type": "mob",
+  "entityActions": ["Attack", "Examine"],
+  "examine": "An ugly green creature."
 }
 ```
 
-2. **Add handler to InventoryActionDispatcher**:
+### Context Menu Example
+
+Right-clicking a goblin shows:
+
+```
+Goblin (level 2)
+  Attack
+  Examine
+  Cancel
+```
+
+The name "Goblin" is colored **red** (#ff0000) because it's a mob.
+
+---
+
+## InventoryActionDispatcher
+
+The `InventoryActionDispatcher` is the **single source of truth** for handling inventory actions. Both context menu selections and left-click primary actions route through this dispatcher.
+
+### Dispatcher Flow
+
 ```typescript
-case "read":
-  world.emit(EventType.ITEM_ACTION_SELECTED, {
-    playerId: localPlayer.id,
-    actionId: "read",
-    itemId,
-    slot,
-  });
+export function dispatchInventoryAction(
+  action: string,
+  ctx: InventoryActionContext,
+): ActionResult {
+  const { world, itemId, slot, quantity = 1 } = ctx;
+
+  switch (action) {
+    case "eat":
+    case "drink":
+      // Server-authoritative consumption
+      world.network?.send("useItem", { itemId, slot });
+      return { success: true };
+
+    case "wield":
+    case "wear":
+      world.network?.send("equipItem", {
+        playerId: localPlayer.id,
+        itemId,
+        inventorySlot: slot,
+      });
+      return { success: true };
+
+    case "drop":
+      world.network?.send("dropItem", { itemId, slot, quantity });
+      return { success: true };
+
+    case "examine":
+      const examineText = itemData?.examine || `It's a ${itemId}.`;
+      world.emit(EventType.UI_TOAST, { message: examineText, type: "info" });
+      return { success: true };
+
+    case "use":
+      // Enter targeting mode for "Use X on Y" interactions
+      world.emit(EventType.ITEM_ACTION_SELECTED, {
+        playerId: localPlayer.id,
+        actionId: "use",
+        itemId,
+        slot,
+      });
+      return { success: true };
+
+    case "cancel":
+      // Intentional no-op - menu already closed
+      return { success: true };
+
+    default:
+      console.warn(`Unhandled action: "${action}" for item "${itemId}"`);
+      return { success: false, message: `Unhandled action: ${action}` };
+  }
+}
+```
+
+---
+
+## Primary Action Detection
+
+### Manifest-First Approach
+
+The system uses a **manifest-first** approach with heuristic fallback:
+
+```typescript
+/**
+ * Get primary action using manifest-first approach.
+ * OSRS-accurate: reads from inventoryActions if available.
+ */
+export function getPrimaryAction(
+  item: Item | null,
+  isNoted: boolean,
+): PrimaryActionType {
+  if (isNoted) return "use";
+
+  // Try manifest first
+  const manifestAction = getPrimaryActionFromManifest(item);
+  if (manifestAction) return manifestAction;
+
+  // Fallback to heuristic detection
+  if (isFood(item)) return "eat";
+  if (isPotion(item)) return "drink";
+  if (isBone(item)) return "bury";
+  if (usesWield(item)) return "wield";
+  if (usesWear(item)) return "wear";
+
+  return "use";
+}
+```
+
+### Item Type Detection
+
+Helper functions determine item types:
+
+```typescript
+/** Food items - have healAmount and are consumable */
+export function isFood(item: Item | null): boolean {
+  if (!item) return false;
+  return (
+    item.type === "consumable" &&
+    typeof item.healAmount === "number" &&
+    item.healAmount > 0 &&
+    !item.id.includes("potion")
+  );
+}
+
+/** Weapons - equipSlot is weapon or 2h */
+export function isWeapon(item: Item | null): boolean {
+  if (!item) return false;
+  return (
+    item.equipSlot === "weapon" ||
+    item.equipSlot === "2h" ||
+    item.is2h === true ||
+    item.weaponType != null
+  );
+}
+
+/** Equipment that uses "Wield" (weapons + shields) */
+export function usesWield(item: Item | null): boolean {
+  return isWeapon(item) || isShield(item);
+}
+
+/** Equipment that uses "Wear" (armor: head, body, legs, etc.) */
+export function usesWear(item: Item | null): boolean {
+  if (!item) return false;
+  if (!item.equipable && !item.equipSlot) return false;
+  return !usesWield(item);
+}
+```
+
+---
+
+## Cancel Option
+
+All context menus include a **Cancel** option at the bottom (OSRS-accurate):
+
+```typescript
+// From InventoryPanel.tsx
+const actions = [
+  ...itemActions,
+  { id: "cancel", label: "Cancel", color: "#ffffff" }
+];
+```
+
+The Cancel action is a **silent no-op** - it just closes the menu:
+
+```typescript
+// From InventoryActionDispatcher.ts
+case "cancel":
+  // Intentional no-op - menu already closed by EntityContextMenu
   return { success: true };
 ```
 
-3. **Handle event in appropriate system**:
+---
+
+## Context Menu Colors
+
+### Color Constants
+
 ```typescript
-world.on(EventType.ITEM_ACTION_SELECTED, (payload) => {
-  if (payload.actionId === "read") {
-    // Handle reading prayer book
-  }
+// From packages/shared/src/constants/interaction.ts
+export const CONTEXT_MENU_COLORS = {
+  NPC: "#ffff00",      // Yellow
+  SCENERY: "#00ffff",  // Cyan
+  ITEM: "#ff9040",     // Orange
+  PLAYER: "#ffffff",   // White
+  MOB: "#ff0000",      // Red
+} as const;
+```
+
+### Usage Example
+
+```typescript
+// EntityContextMenu.tsx
+const entityColor = CONTEXT_MENU_COLORS[entityType] || "#ffffff";
+
+<div style={{ color: entityColor }}>
+  {entityName} {level && `(level ${level})`}
+</div>
+```
+
+---
+
+## Testing
+
+Context menus have unit test coverage:
+
+```typescript
+// From item-helpers.test.ts
+describe("item-helpers", () => {
+  it("detects food items correctly", () => {
+    const shrimp = { id: "cooked_shrimp", type: "consumable", healAmount: 3 };
+    expect(isFood(shrimp)).toBe(true);
+    
+    const potion = { id: "strength_potion", type: "consumable", healAmount: 0 };
+    expect(isFood(potion)).toBe(false);
+  });
+
+  it("determines primary action from manifest", () => {
+    const sword = { inventoryActions: ["Wield", "Drop", "Examine"] };
+    expect(getPrimaryActionFromManifest(sword)).toBe("wield");
+    
+    const food = { inventoryActions: ["Eat", "Drop", "Examine"] };
+    expect(getPrimaryActionFromManifest(food)).toBe("eat");
+  });
+});
+```
+
+Integration tests verify the full dispatcher flow:
+
+```typescript
+// From InventoryActionDispatcher.test.ts
+it("dispatches eat action to server", () => {
+  const mockSend = vi.fn();
+  const world = { network: { send: mockSend } };
+  
+  dispatchInventoryAction("eat", {
+    world,
+    itemId: "cooked_shrimp",
+    slot: 5,
+  });
+  
+  expect(mockSend).toHaveBeenCalledWith("useItem", {
+    itemId: "cooked_shrimp",
+    slot: 5,
+  });
 });
 ```
 
@@ -339,7 +374,7 @@ world.on(EventType.ITEM_ACTION_SELECTED, (payload) => {
 
 ## Related Documentation
 
-- [Inventory System](/wiki/game-systems/inventory)
-- [Item Data Structure](/wiki/data/items)
-- [Manifest-Driven Design](/concepts/manifests)
-- [Skills & Progression](/wiki/game-systems/skills)
+- [Inventory System](/wiki/game-systems/inventory) - Item storage
+- [Item Manifests](/concepts/manifests) - Defining item actions
+- [Eating System](/wiki/game-systems/eating) - Food consumption
+- [Equipment System](/wiki/game-systems/equipment) - Wield/Wear actions
