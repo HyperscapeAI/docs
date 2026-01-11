@@ -476,6 +476,64 @@ Defined in `recipes/*.json`:
 
 ---
 
+## Anti-Exploit Protections
+
+### Resource Spam Click Prevention
+
+The gathering system prevents duplicate harvesting when players spam-click resources:
+
+```typescript
+// From ResourceSystem.ts
+const existingSession = this.activeGathering.get(playerId);
+if (existingSession) {
+  // If already gathering this EXACT resource, silently ignore (prevents duplicate rewards)
+  if (existingSession.resourceId === resource.id) {
+    return;
+  }
+  // If switching to a DIFFERENT resource, cancel the old session first
+  this.cancelGatheringForPlayer(playerId, "switch_resource");
+}
+```
+
+**Protection Features**:
+- Duplicate gather requests for the same resource are silently ignored
+- Prevents timer resets and duplicate drops
+- Allows switching to different resources (cancels old session first)
+- Guard clause executes after resource resolution for accurate comparison
+
+<Info>
+This fix prevents the spam-click exploit where players could reset gathering timers by rapidly clicking the same resource.
+</Info>
+
+### Noted Items Tool Validation
+
+Noted items (bank notes) cannot be used as skilling tools:
+
+```typescript
+// From ToolUtils.ts
+export function itemMatchesToolCategory(
+  itemId: string,
+  category: string,
+): boolean {
+  // Noted items are bank notes - cannot be used as tools
+  if (isNotedItemId(itemId)) {
+    return false;
+  }
+  // ... rest of validation
+}
+```
+
+**Affected Tools**:
+- Pickaxes (mining)
+- Hatchets/axes (woodcutting)
+- Fishing rods, nets, harpoons (fishing)
+
+<Warning>
+Noted items must be un-noted at a bank before they can be equipped or used for skilling.
+</Warning>
+
+---
+
 ## Skill Events
 
 The system emits events for UI updates and logging:
