@@ -17,8 +17,9 @@ Banking code lives in `packages/shared/src/systems/shared/economy/BankingSystem.
 - **Per-town banks** - Each starter town has its own bank
 - **Independent storage** - Banks don't share items across towns
 - **480 slot capacity** - Per bank (configurable via `BANKING_CONSTANTS.MAX_BANK_SLOTS`)
-- **Tab organization** - Organize items into custom tabs
+- **Tab organization** - Organize items into custom tabs (9 tabs: 1 main + 8 custom)
 - **Placeholders** - RS3-style placeholder mode for remembered slots
+- **Two-phase slot updates** - Prevents database constraint violations during bulk operations
 - **Distance check** - Must be within 3 meters of bank booth
 
 ---
