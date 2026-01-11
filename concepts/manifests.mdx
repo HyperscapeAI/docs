@@ -419,6 +419,33 @@ The manifest system uses specialized data providers for efficient lookups:
 
 These providers build optimized lookup tables at startup for fast runtime queries.
 
+### StationDataProvider Usage
+
+Access station configurations at runtime:
+
+```typescript
+import { stationDataProvider } from '@hyperscape/shared';
+
+// Get full station data
+const anvilData = stationDataProvider.getStationData("anvil");
+// Returns: { type, name, model, modelScale, modelYOffset, examine }
+
+// Get specific properties
+const modelPath = stationDataProvider.getModelPath("furnace");
+const scale = stationDataProvider.getModelScale("anvil");
+const yOffset = stationDataProvider.getModelYOffset("furnace");
+
+// Station entities use this for model loading
+// AnvilEntity and FurnaceEntity automatically load models from manifest
+// Falls back to placeholder geometry if model loading fails
+```
+
+**Station Model Loading**:
+- Models loaded via `ModelCache` with transform baking
+- `modelYOffset` raises model so base sits on ground
+- Graceful fallback to blue box placeholder if model fails
+- Shadows and raycasting layers configured automatically
+
 ## Best Practices
 
 1. **Use descriptive IDs**: `bronze_sword` not `sword1`
