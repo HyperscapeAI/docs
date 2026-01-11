@@ -23,7 +23,76 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Recent Updates" description="January 2026" date="2026-01-10">
+<Update label="Recent Updates" description="January 11, 2026" date="2026-01-11">
+
+### 🍖 Food Consumption & Healing System
+
+Complete OSRS-accurate food consumption with tick-based timing and combat integration:
+
+- **Eating Mechanics**: 3-tick (1.8s) eat delay between foods
+  - Server-authoritative `useItem` network packet
+  - `EatDelayManager` tracks per-player cooldowns
+  - Rate limiting prevents spam eating (anti-bot/macro)
+  - Food consumed only after all validation passes
+- **Combat Integration**: Attack delay when eating mid-combat
+  - OSRS rule: Only adds delay if weapon already on cooldown
+  - 3-tick delay added to existing attack cooldown
+  - No delay if weapon is ready to attack
+- **Health System**: Event-driven health updates
+  - `PLAYER_HEALTH_UPDATED` events eliminate race conditions
+  - Server-authoritative health values
+  - Health bars update only via events (no polling)
+- **Security**: OWASP input validation, item mismatch detection, bounds checking
+- **Testing**: 30 unit tests (433 lines) covering eat delay and combat integration
+
+### ⛏️ Mining System Improvements
+
+OSRS-accurate mining mechanics with correct depletion and success rates:
+
+- **100% Rock Depletion**: Rocks always deplete after yielding one ore (OSRS-accurate)
+  - Previous: 12.5% chance-based depletion
+  - Now: Guaranteed depletion (matches OSRS wiki)
+  - Mining gloves support documented (not yet implemented)
+- **Accurate Success Rates**: Updated to match OSRS wiki formulas
+  - Copper/Tin: 39.5% at L1, 100% at L62
+  - Iron: 52% at L15, 100% at L63
+  - Coal: 16.4% at L30, 39.5% at L99
+  - Mithril: 11.7% at L55, 19.9% at L99
+  - Adamantite: 7.4% at L70, 10.2% at L99
+  - Runite: 6.64% at L85, 7.42% at L97+ (confirmed by Mod Ash)
+- **Pickaxe Bonuses**: Dragon/Crystal pickaxe speed bonuses
+  - Server-side random roll for deterministic shared code
+  - Dragon: 1/6 chance for 2-tick roll (avg 2.83 ticks)
+  - Crystal: 1/4 chance for 2-tick roll (avg 2.75 ticks)
+- **Model Rendering**: Transform baking fixes "squished" resources
+  - Bakes all GLTF transforms into geometry
+  - Handles non-uniform scales, matrix transforms, and shear
+  - Quaternion normalization fix (uses `config.rotation.w` instead of hardcoded 1)
+
+### 🔧 Bug Fixes & Improvements
+
+- **Noted Items Validation**: Noted items (bank notes) cannot be used as skilling tools (#508)
+  - Added `isNotedItemId()` check in `ToolUtils.itemMatchesToolCategory()`
+  - Comprehensive test coverage (235 lines)
+- **Bank System**: Two-phase slot update prevents unique constraint violations (#502)
+  - Phase 1: Offset slots to 1000+ range
+  - Phase 2: Renumber sequentially to 0-N
+  - Eliminates PostgreSQL UPDATE order race conditions
+- **Resource Harvesting**: Prevent duplicate sessions on spam-click (#494)
+  - Guard clause after resource resolution
+  - Silently ignores duplicate requests for same resource
+  - Cancels old session when switching resources
+- **Station 3D Models**: Manifest-driven models for anvils and furnaces (#496)
+  - `StationDataProvider` loads from `stations.json`
+  - Configurable model paths, scales, and Y offsets
+  - Graceful fallback to placeholder geometry
+- **Debug Panel**: F5 keybind to toggle FPS debug panel (#505)
+  - Matches Minecraft's debug screen keybind
+  - Backslash key still works as alternative
+
+</Update>
+
+<Update label="Recent Updates" description="January 10, 2026" date="2026-01-10">
 
 ### ⚒️ Smithing Skill System
 
