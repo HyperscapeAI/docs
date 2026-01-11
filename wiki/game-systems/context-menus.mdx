@@ -92,7 +92,7 @@ export function dispatchInventoryAction(
 
 Supported actions:
 
-- **eat**: Emits `ITEM_ACTION_SELECTED` event for consumption
+- **eat**: Sends `useItem` network message → server validates eat delay → consumes food → heals HP
 - **drink**: Emits `ITEM_ACTION_SELECTED` event for potion effects
 - **bury**: Sends `buryBones` network message
 - **wield**: Sends `equipItem` network message (weapons/shields)
@@ -101,6 +101,10 @@ Supported actions:
 - **examine**: Shows examine text in chat and toast
 - **use**: Enters targeting mode for item-on-item/item-on-object interactions
 - **cancel**: No-op, menu already closed
+
+<Info>
+**Food Consumption**: The eat action is server-authoritative with 3-tick (1.8s) eat delay and combat attack delay integration. See [Inventory System](/wiki/game-systems/inventory#item-consumption) for details.
+</Info>
 
 ---
 
