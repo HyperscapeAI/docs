@@ -364,6 +364,83 @@ handleCombatKill(data: CombatKillData): void {
 
 ---
 
+## Food Consumption During Combat
+
+Eating food during combat follows OSRS-accurate mechanics with attack delay integration.
+
+### Eat Delay System
+
+```typescript
+// From EatDelayManager.ts
+export class EatDelayManager {
+  private lastEatTick = new Map<string, number>();
+
+  canEat(playerId: string, currentTick: number): boolean {
+    const lastTick = this.lastEatTick.get(playerId) ?? 0;
+    return currentTick - lastTick >= COMBAT_CONSTANTS.EAT_DELAY_TICKS;
+  }
+
+  recordEat(playerId: string, currentTick: number): void {
+    this.lastEatTick.set(playerId, currentTick);
+  }
+}
+```
+
+### Attack Delay When Eating
+
+OSRS rule: Food only adds to **existing** attack delay. If weapon is ready, eating does NOT add delay.
+
+```typescript
+// From PlayerSystem.ts
+private applyEatAttackDelay(playerId: string, currentTick: number): void {
+  const combatSystem = this.world.getSystem("combat") as CombatSystem | null;
+  if (!combatSystem) return;
+
+  // Check if player is on attack cooldown
+  const isOnCooldown = combatSystem.isPlayerOnAttackCooldown?.(
+    playerId,
+    currentTick,
+  );
+
+  if (isOnCooldown) {
+    // Add eat delay to attack cooldown
+    combatSystem.addAttackDelay?.(
+      playerId,
+      COMBAT_CONSTANTS.EAT_ATTACK_DELAY_TICKS,
+    );
+  }
+  // If not on cooldown, do nothing (OSRS-accurate behavior)
+}
+```
+
+### Eating Flow
+
+1. **Client**: Player clicks "Eat" on food item
+2. **Network**: `useItem` packet sent to server
+3. **Server Validation**:
+   - Check eat delay cooldown (3 ticks)
+   - Validate item exists at claimed slot
+   - Validate item ID matches slot contents
+   - Check rate limiting (3 requests/sec)
+4. **Consumption**: Remove item from inventory
+5. **Healing**: Apply heal amount (capped at 99 HP)
+6. **Attack Delay**: Add 3 ticks to attack cooldown if in combat
+7. **Message**: "You eat the shrimp." (shown even at full health)
+
+### Security Features
+
+- **Server-Authoritative**: All validation happens server-side
+- **Rate Limiting**: Separate consume rate limiter (3/sec)
+- **Input Validation**: Slot bounds, item ID mismatch detection
+- **Exploit Prevention**: Heal amount capped at `MAX_HEAL_AMOUNT` (99)
+- **Eat Delay Enforcement**: Server tracks cooldowns, rejects spam
+
+<Warning>
+Food is consumed even at full health (OSRS-accurate). The eat delay and attack delay still apply.
+</Warning>
+
+---
+
 ## Combat Events
 
 The combat system emits events for UI and logging:
