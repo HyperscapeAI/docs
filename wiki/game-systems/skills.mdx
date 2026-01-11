@@ -321,17 +321,50 @@ Smithing recipes support "Make X" functionality - players can smith multiple ite
 </Info>
 
 **Cooking** (`recipes/cooking.json`):
-| Food | Level | XP |
-|------|-------|-----|
-| Shrimp | 1 | 30 |
-| Sardine | 1 | 40 |
-| Herring | 5 | 50 |
-| Trout | 15 | 70 |
-| Pike | 20 | 80 |
-| Salmon | 25 | 90 |
-| Lobster | 40 | 120 |
-| Swordfish | 45 | 140 |
-| Shark | 80 | 210 |
+| Food | Level | XP | Heals |
+|------|-------|-----|-------|
+| Shrimp | 1 | 30 | 3 HP |
+| Sardine | 1 | 40 | 4 HP |
+| Herring | 5 | 50 | 5 HP |
+| Trout | 15 | 70 | 7 HP |
+| Pike | 20 | 80 | 8 HP |
+| Salmon | 25 | 90 | 9 HP |
+| Lobster | 40 | 120 | 12 HP |
+| Swordfish | 45 | 140 | 14 HP |
+| Shark | 80 | 210 | 20 HP |
+
+### Food Consumption Mechanics
+
+Food consumption follows OSRS-accurate timing and combat integration:
+
+**Eating Delay**:
+- 3-tick (1.8s) cooldown between eating foods
+- Managed by `EatDelayManager` (per-player tracking)
+- Food consumed only after validation passes
+- Message shown even at full health: "You eat the shrimp."
+
+**Combat Integration**:
+- Eating during combat adds 3-tick delay to attack cooldown
+- OSRS rule: Only adds delay if weapon is **already on cooldown**
+- If weapon is ready to attack, eating does NOT add delay
+- Prevents eating from being used to delay attacks strategically
+
+**Server-Authoritative Flow**:
+```
+Client → useItem packet → Server validates → INVENTORY_USE event →
+InventorySystem validates item exists → ITEM_USED → PlayerSystem validates eat delay →
+Consume item + heal + attack delay
+```
+
+**Security Features**:
+- Rate limiting (3 requests/sec)
+- Input validation (slot bounds, item ID mismatch detection)
+- Heal amount capped at 99 HP (prevents manifest exploits)
+- Server-side eat delay enforcement
+
+<Info>
+Food is consumed even at full health (OSRS-accurate). The eat delay and attack delay still apply.
+</Info>
 
 **Firemaking** (`recipes/firemaking.json`):
 | Logs | Level | XP |
