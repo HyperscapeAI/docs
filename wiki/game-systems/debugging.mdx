@@ -1,0 +1,267 @@
+---
+title: "Debugging & Performance"
+description: "Debug tools, performance monitoring, and FPS panel"
+icon: "bug"
+---
+
+# Debugging & Performance Tools
+
+Hyperscape includes built-in debugging tools for monitoring performance, inspecting game state, and troubleshooting issues.
+
+## FPS Debug Panel
+
+### Toggle with F5
+
+Press **F5** to toggle the FPS debug panel on/off:
+
+```typescript
+// From ClientInput.ts
+if (event.key === "F5") {
+  event.preventDefault();
+  
+  // Toggle debug panel visibility
+  const debugPanel = document.getElementById("fps-debug-panel");
+  if (debugPanel) {
+    debugPanel.style.display = 
+      debugPanel.style.display === "none" ? "block" : "none";
+  }
+}
+```
+
+### Panel Contents
+
+The debug panel shows:
+
+- **FPS** - Frames per second (target: 60 FPS)
+- **Frame Time** - Milliseconds per frame (target: <16.67ms)
+- **Memory Usage** - Heap size and allocation rate
+- **Entity Count** - Active entities in the world
+- **Network Stats** - Ping, packet loss, bandwidth
+
+### Performance Targets
+
+| Metric | Target | Warning | Critical |
+|--------|--------|---------|----------|
+| FPS | 60 | <45 | <30 |
+| Frame Time | <16.67ms | >22ms | >33ms |
+| Memory | <500MB | >800MB | >1GB |
+| Entities | <1000 | >2000 | >5000 |
+| Ping | <50ms | >100ms | >200ms |
+
+---
+
+## Console Logging
+
+### Debug Flags
+
+Enable detailed logging for specific systems:
+
+```typescript
+// From gathering/debug.ts
+export const DEBUG_GATHERING = false; // Set to true for verbose gathering logs
+
+// From CombatSystem.ts
+const DEBUG_COMBAT = false; // Set to true for combat debugging
+```
+
+### Gathering Debug Output
+
+When `DEBUG_GATHERING = true`:
+
+```
+[Gathering DEBUG] ═══════════════════════════════════════════════════════
+[Gathering DEBUG] Session started for player_123
+[Gathering DEBUG] Resource: tree_oak (woodcutting)
+[Gathering DEBUG] Tool: rune_hatchet (tier: rune)
+[Gathering DEBUG] Mechanics: fixed-roll-variable-success
+[Gathering DEBUG] Cycle: 4 ticks (2.4s)
+[Gathering DEBUG] Success Rate: 45.3% (low=20, high=100, level=50)
+[Gathering DEBUG] ═══════════════════════════════════════════════════════
+[Gathering DEBUG] Roll #1: 23.4% vs 45.3% → SUCCESS (woodcutting | tree_oak | rune)
+[Gathering DEBUG] Roll #2: 67.8% vs 45.3% → FAIL (woodcutting | tree_oak | rune)
+```
+
+### Combat Debug Output
+
+When `DEBUG_COMBAT = true`:
+
+```
+[Combat] Attack request: player_123 → goblin_456
+[Combat] Range check: 2.3m (max 1.0m for melee)
+[Combat] Accuracy roll: 0.234 vs 0.456 → HIT
+[Combat] Damage roll: 1-8 → 5 damage
+[Combat] Applied 5 damage to goblin_456 (15/20 HP remaining)
+```
+
+---
+
+## Network Debugging
+
+### WebSocket Inspector
+
+Use browser DevTools to inspect WebSocket traffic:
+
+1. Open DevTools (F12)
+2. Go to **Network** tab
+3. Filter by **WS** (WebSockets)
+4. Click the WebSocket connection
+5. View **Messages** tab
+
+### Common Messages
+
+| Message Type | Direction | Purpose |
+|--------------|-----------|---------|
+| `playerJoined` | Server → Client | Player connected |
+| `entityModified` | Server → Client | Entity state changed |
+| `useItem` | Client → Server | Player eating/using item |
+| `equipItem` | Client → Server | Player equipping item |
+| `attackEntity` | Client → Server | Combat request |
+| `gatherResource` | Client → Server | Mining/woodcutting/fishing |
+
+---
+
+## Performance Profiling
+
+### Chrome DevTools
+
+1. Open DevTools (F12)
+2. Go to **Performance** tab
+3. Click **Record**
+4. Perform actions in-game
+5. Stop recording
+6. Analyze flame graph
+
+### Key Areas to Profile
+
+- **Rendering** - Three.js draw calls
+- **Physics** - PhysX simulation
+- **Networking** - WebSocket message processing
+- **ECS Systems** - Entity updates
+
+### Common Bottlenecks
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Low FPS | Too many entities | Reduce render distance |
+| High frame time | Complex shaders | Disable post-processing |
+| Memory leak | Entity cleanup | Check entity destruction |
+| Network lag | Packet spam | Implement rate limiting |
+
+---
+
+## Entity Inspection
+
+### World Entity Query
+
+Access the world object in console:
+
+```javascript
+// Get world instance
+const world = window.__HYPERSCAPE_WORLD__;
+
+// Query entities
+const players = world.getEntitiesByType("Player");
+const mobs = world.getEntitiesByType("Mob");
+const resources = world.getEntitiesByType("Resource");
+
+// Inspect specific entity
+const player = world.getPlayer("player_123");
+console.log(player.position, player.health, player.skills);
+```
+
+### System Inspection
+
+```javascript
+// Get system instances
+const combatSystem = world.getSystem("combat");
+const inventorySystem = world.getSystem("inventory");
+const resourceSystem = world.getSystem("resource");
+
+// Inspect system state
+console.log(combatSystem.getActiveCombats());
+console.log(inventorySystem.getInventory("player_123"));
+console.log(resourceSystem.getAllResources());
+```
+
+---
+
+## Error Logging
+
+### Client Errors
+
+Client errors are logged to console and can be reported:
+
+```typescript
+// From error-reporting.ts
+export function reportError(error: Error, context?: Record<string, unknown>): void {
+  console.error("[Hyperscape Error]", error, context);
+  
+  // Send to error tracking service (if configured)
+  if (window.SENTRY_DSN) {
+    Sentry.captureException(error, { extra: context });
+  }
+}
+```
+
+### Server Errors
+
+Server errors are logged with structured data:
+
+```typescript
+// From Logger.ts
+Logger.error("ResourceSystem", "Failed to spawn resource", {
+  resourceId: "tree_oak_50_100",
+  error: err.message,
+  stack: err.stack,
+});
+```
+
+---
+
+## Testing Tools
+
+### Visual Testing Framework
+
+Hyperscape uses **real gameplay testing** with Playwright:
+
+```typescript
+// From visual-test-framework.ts
+export async function setupVisualTest() {
+  // Start real server
+  const server = await startHyperscapeServer();
+  
+  // Launch browser
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  
+  // Load game
+  await page.goto("http://localhost:5555");
+  
+  // Wait for world to load
+  await page.waitForFunction(() => window.__HYPERSCAPE_WORLD__);
+  
+  return { server, browser, page };
+}
+```
+
+### Screenshot Assertions
+
+```typescript
+// Take screenshot and compare
+await page.screenshot({ path: "test-output/mining-success.png" });
+
+// Query Three.js scene
+const cubeCount = await page.evaluate(() => {
+  const world = window.__HYPERSCAPE_WORLD__;
+  return world.scene.children.filter(c => c.type === "Mesh").length;
+});
+```
+
+---
+
+## Related Documentation
+
+- [Development Guide](/guides/development) - Setting up dev environment
+- [Testing Strategy](/guides/testing) - Writing tests
+- [Performance Optimization](/guides/performance) - Improving FPS
+- [Troubleshooting](/devops/troubleshooting) - Common issues
