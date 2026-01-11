@@ -1,0 +1,449 @@
+---
+title: "Food Consumption API"
+description: "Server-authoritative food consumption with eat delay and combat integration"
+icon: "utensils"
+---
+
+# Food Consumption API
+
+The food consumption system provides OSRS-accurate eating mechanics with 3-tick eat delay and combat attack delay integration.
+
+## EatDelayManager
+
+Manages per-player eating cooldowns.
+
+**Location**: `packages/shared/src/systems/shared/character/EatDelayManager.ts`
+
+### Methods
+
+#### canEat()
+
+Check if player can eat (not on cooldown).
+
+```typescript
+canEat(playerId: string, currentTick: number): boolean
+```
+
+**Parameters:**
+- `playerId` - Player to check
+- `currentTick` - Current game tick
+
+**Returns**: `true` if player can eat, `false` if still on cooldown
+
+**Example:**
+```typescript
+const eatDelayManager = new EatDelayManager();
+const canEat = eatDelayManager.canEat("player-123", 1000);
+
+if (!canEat) {
+  // Show "You are already eating." message
+  return;
+}
+```
+
+#### recordEat()
+
+Record that player just ate.
+
+```typescript
+recordEat(playerId: string, currentTick: number): void
+```
+
+**Parameters:**
+- `playerId` - Player who ate
+- `currentTick` - Current game tick
+
+**Example:**
+```typescript
+eatDelayManager.recordEat("player-123", 1000);
+// Player cannot eat again until tick 1003
+```
+
+#### getRemainingCooldown()
+
+Get remaining cooldown ticks.
+
+```typescript
+getRemainingCooldown(playerId: string, currentTick: number): number
+```
+
+**Parameters:**
+- `playerId` - Player to check
+- `currentTick` - Current game tick
+
+**Returns**: `0` if ready to eat, otherwise ticks remaining
+
+**Example:**
+```typescript
+const remaining = eatDelayManager.getRemainingCooldown("player-123", 1001);
+// Returns: 2 (can eat at tick 1003)
+```
+
+#### clearPlayer()
+
+Clear player's eat cooldown (on death, disconnect).
+
+```typescript
+clearPlayer(playerId: string): void
+```
+
+**Example:**
+```typescript
+// On player death or disconnect
+eatDelayManager.clearPlayer("player-123");
+```
+
+#### clear()
+
+Clear all state (for testing or server reset).
+
+```typescript
+clear(): void
+```
+
+#### getTrackedCount()
+
+Get the number of tracked players (for debugging/monitoring).
+
+```typescript
+getTrackedCount(): number
+```
+
+---
+
+## CombatSystem Extensions
+
+The `CombatSystem` provides methods for eat delay integration.
+
+**Location**: `packages/shared/src/systems/shared/combat/CombatSystem.ts`
+
+### Methods
+
+#### isPlayerOnAttackCooldown()
+
+Check if player is on attack cooldown.
+
+```typescript
+isPlayerOnAttackCooldown(playerId: string, currentTick: number): boolean
+```
+
+**Parameters:**
+- `playerId` - Player to check
+- `currentTick` - Current game tick
+
+**Returns**: `true` if player has pending attack cooldown
+
+**Example:**
+```typescript
+const combatSystem = world.getSystem('combat') as CombatSystem;
+const isOnCooldown = combatSystem.isPlayerOnAttackCooldown("player-123", 1000);
+
+if (isOnCooldown) {
+  // Add eat delay to attack cooldown
+}
+```
+
+#### addAttackDelay()
+
+Add delay ticks to player's next attack.
+
+```typescript
+addAttackDelay(playerId: string, delayTicks: number): void
+```
+
+**Parameters:**
+- `playerId` - Player to modify
+- `delayTicks` - Ticks to add to attack cooldown
+
+**Example:**
+```typescript
+// Add 3-tick eat delay to attack cooldown
+combatSystem.addAttackDelay("player-123", COMBAT_CONSTANTS.EAT_ATTACK_DELAY_TICKS);
+```
+
+<Info>
+**OSRS-Accurate**: Only called when player is ALREADY on cooldown. If weapon is ready, eating does not add delay.
+</Info>
+
+---
+
+## PlayerSystem Extensions
+
+The `PlayerSystem` handles food consumption.
+
+**Location**: `packages/shared/src/systems/shared/character/PlayerSystem.ts`
+
+### Event Handlers
+
+#### handleItemUsed()
+
+Handles food consumption with OSRS-accurate timing.
+
+**Triggered by**: `ITEM_USED` event (emitted by `InventorySystem`)
+
+**Validation:**
+- Player ID validation (string type check)
+- Eat delay check (3-tick cooldown)
+- Heal amount bounds checking (`Math.min(..., MAX_HEAL_AMOUNT)`)
+- Item type check (consumable/food only)
+
+**Flow:**
+1. Validate player ID
+2. Check eat delay (reject if on cooldown)
+3. Record eat action
+4. Consume food (emit `INVENTORY_REMOVE_ITEM`)
+5. Apply healing (emit `PLAYER_HEALTH_UPDATED` if health changed)
+6. Show OSRS-style message
+7. Apply attack delay if in combat
+
+**Example:**
+```typescript
+// Emitted by InventorySystem after validation
+world.emit(EventType.ITEM_USED, {
+  playerId: "player-123",
+  itemId: "shrimp",
+  slot: 5,
+  itemData: { id: "shrimp", name: "Shrimp", type: "consumable" }
+});
+
+// PlayerSystem handles:
+// - Eat delay check
+// - Food consumption
+// - Healing
+// - Attack delay
+```
+
+---
+
+## Network Protocol
+
+### useItem Packet
+
+Client sends `useItem` packet to consume food.
+
+**Packet**: `useItem`
+
+**Payload:**
+```typescript
+{
+  itemId: string;  // Item to consume
+  slot: number;    // Inventory slot (0-27)
+}
+```
+
+**Server Handler**: `handleUseItem()` in `packages/server/src/systems/ServerNetwork/handlers/inventory.ts`
+
+**Validation:**
+- Rate limiting (3/sec via `getConsumeRateLimiter()`)
+- Payload structure validation
+- Item ID validation (`isValidItemId()`)
+- Slot bounds checking (`isValidInventorySlot()`)
+
+**Example:**
+```typescript
+// Client-side (InventoryActionDispatcher)
+world.network.send("useItem", { itemId: "shrimp", slot: 5 });
+
+// Server validates and emits INVENTORY_USE event
+// InventorySystem validates item exists at slot
+// Emits ITEM_USED event
+// PlayerSystem handles consumption
+```
+
+---
+
+## Constants
+
+### Combat Constants
+
+```typescript
+// From packages/shared/src/constants/CombatConstants.ts
+export const COMBAT_CONSTANTS = {
+  EAT_DELAY_TICKS: 3,              // 1.8 seconds between foods
+  EAT_ATTACK_DELAY_TICKS: 3,       // Added to attack cooldown when eating mid-combat
+  MAX_HEAL_AMOUNT: 99,             // Security cap on healing
+};
+```
+
+### Rate Limiting
+
+```typescript
+// From packages/server/src/systems/ServerNetwork/services/SlidingWindowRateLimiter.ts
+getConsumeRateLimiter(): RateLimiter  // 3 requests/second
+```
+
+Separate from `getEquipRateLimiter()` to allow OSRS-style PvP gear+eat combos.
+
+---
+
+## Events
+
+### INVENTORY_USE
+
+Emitted by server handler when player uses an item.
+
+**Payload:**
+```typescript
+{
+  playerId: string;
+  itemId: string;
+  slot: number;
+}
+```
+
+**Subscribers**: `InventorySystem`
+
+### ITEM_USED
+
+Emitted by `InventorySystem` after validating item exists at slot.
+
+**Payload:**
+```typescript
+{
+  playerId: string;
+  itemId: string;
+  slot: number;
+  itemData: {
+    id: string;
+    name: string;
+    type: string;
+    weight: number;
+  };
+}
+```
+
+**Subscribers**: `PlayerSystem`
+
+### PLAYER_HEALTH_UPDATED
+
+Emitted when player health changes (healing or damage).
+
+**Payload:**
+```typescript
+{
+  playerId: string;
+  health: number;
+  maxHealth: number;
+  amount?: number;    // Optional: amount healed/damaged
+  source?: string;    // Optional: "food", "combat", etc.
+}
+```
+
+**Subscribers**: Client UI (`StatusBars.tsx`)
+
+---
+
+## Security Features
+
+### Input Validation
+
+All inputs validated server-side:
+
+```typescript
+// Player ID validation
+if (!data.playerId || typeof data.playerId !== "string") {
+  Logger.systemError("PlayerSystem", "Invalid playerId");
+  return;
+}
+
+// Heal amount bounds checking
+const healAmount = Math.min(
+  Math.max(0, Math.floor(itemData.healAmount)),
+  COMBAT_CONSTANTS.MAX_HEAL_AMOUNT
+);
+
+// Slot validation
+if (data.slot < 0 || data.slot >= MAX_INVENTORY_SLOTS) {
+  Logger.systemError("InventorySystem", "Invalid slot");
+  return;
+}
+
+// Item mismatch detection
+if (item.item.id !== data.itemId) {
+  Logger.systemError("InventorySystem", "Item ID mismatch - potential exploit");
+  return;
+}
+```
+
+### Rate Limiting
+
+```typescript
+// Separate rate limiter for consumables (3/sec)
+if (!getConsumeRateLimiter().check(playerEntity.id)) {
+  return;  // Silently reject
+}
+```
+
+### Consume-After-Check
+
+Food is only removed AFTER all validation passes:
+
+```typescript
+// 1. Check eat delay
+if (!eatDelayManager.canEat(playerId, currentTick)) {
+  return;  // Food NOT consumed
+}
+
+// 2. Record eat action
+eatDelayManager.recordEat(playerId, currentTick);
+
+// 3. Consume food (only after checks pass)
+this.emitTypedEvent(EventType.INVENTORY_REMOVE_ITEM, { ... });
+
+// 4. Apply healing
+this.healPlayer(playerId, healAmount);
+```
+
+---
+
+## Testing
+
+### Unit Tests
+
+**EatDelayManager** (`__tests__/EatDelayManager.test.ts`):
+- 197 lines, 16 test cases
+- Boundary conditions (tick 3 exact boundary)
+- Multi-player isolation
+- Cleanup edge cases
+- OSRS timing accuracy
+
+**CombatSystem eat delay** (`__tests__/CombatSystem.eatDelay.test.ts`):
+- 236 lines, integration tests
+- Mid-combat eating scenario
+- Weapon-ready eating scenario
+- State consistency (both `nextAttackTicks` and `CombatData` updated)
+
+### Test Examples
+
+```typescript
+// Test eat delay cooldown
+it("returns false within 3 ticks of last eat", () => {
+  eatDelayManager.recordEat("player-1", 100);
+  
+  expect(eatDelayManager.canEat("player-1", 100)).toBe(false);
+  expect(eatDelayManager.canEat("player-1", 101)).toBe(false);
+  expect(eatDelayManager.canEat("player-1", 102)).toBe(false);
+  expect(eatDelayManager.canEat("player-1", 103)).toBe(true);
+});
+
+// Test attack delay integration
+it("delays next attack when eating while on cooldown", () => {
+  combatSystem.setNextAttackTick("player-1", 100);
+  
+  const isOnCooldown = combatSystem.isPlayerOnAttackCooldown("player-1", 98);
+  expect(isOnCooldown).toBe(true);
+  
+  combatSystem.addAttackDelay("player-1", COMBAT_CONSTANTS.EAT_ATTACK_DELAY_TICKS);
+  
+  expect(combatSystem.nextAttackTicks.get("player-1")).toBe(103);
+});
+```
+
+---
+
+## Related Documentation
+
+- [Inventory System](/wiki/game-systems/inventory)
+- [Combat System](/wiki/game-systems/combat)
+- [Item Data Structure](/wiki/data/items)
+- [Event System](/wiki/engine/events)
