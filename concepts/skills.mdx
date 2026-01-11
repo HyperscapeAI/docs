@@ -84,16 +84,37 @@ Requirements:
 - Pickaxe in inventory or equipped
 - Click ore rock to mine
 
-Success rate improves with level and pickaxe tier.
+**OSRS-Accurate Mechanics:**
+- Pickaxe tier affects **roll frequency** (not success rate)
+- Success rate is **level-only** (pickaxe doesn't affect it)
+- Rocks have **100% depletion** on successful mine (1/8 chance)
+- Dragon/Crystal pickaxes have **bonus speed rolls**
 
-| Ore | Level | XP |
-|-----|-------|-----|
-| Copper/Tin | 1 | 17.5 |
-| Iron | 15 | 35 |
-| Coal | 30 | 50 |
-| Mithril | 55 | 80 |
-| Adamantite | 70 | 95 |
-| Runite | 85 | 125 |
+| Ore | Level | XP | Depletion |
+|-----|-------|-----|-----------|
+| Copper/Tin | 1 | 17.5 | 1/8 chance |
+| Iron | 15 | 35 | 1/8 chance |
+| Coal | 30 | 50 | 1/8 chance |
+| Mithril | 55 | 80 | 1/8 chance |
+| Adamantite | 70 | 95 | 1/8 chance |
+| Runite | 85 | 125 | 1/8 chance |
+
+**Pickaxe Tiers:**
+
+| Pickaxe | Level | Roll Ticks | Bonus Speed |
+|---------|-------|------------|-------------|
+| Bronze | 1 | 8 ticks | None |
+| Iron | 1 | 7 ticks | None |
+| Steel | 6 | 6 ticks | None |
+| Mithril | 21 | 5 ticks | None |
+| Adamant | 31 | 4 ticks | None |
+| Rune | 41 | 3 ticks | None |
+| Dragon | 61 | 3 ticks | 1/6 chance for 2 ticks |
+| Crystal | 71 | 3 ticks | 1/4 chance for 2 ticks |
+
+<Info>
+  Dragon and Crystal pickaxes have a chance to mine faster: Dragon has a 1/6 chance for 2-tick rolls (avg 2.83 ticks), Crystal has a 1/4 chance (avg 2.75 ticks).
+</Info>
 
 ### Fishing
 
