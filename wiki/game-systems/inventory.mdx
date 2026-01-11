@@ -259,9 +259,99 @@ useEffect(() => {
 Features:
 - 28-slot grid layout
 - Drag-and-drop item movement
-- Right-click context menu (use, drop, examine)
+- **OSRS-style right-click context menus** with manifest-driven actions
+- **Left-click primary actions** (Eat, Wield, Use, etc.)
 - Stack quantity display
 - Coin pouch separate display
+- **Cancel option** at bottom of all context menus
+
+---
+
+## Context Menus
+
+### Manifest-Driven Actions
+
+Items define their actions in `items.json`:
+
+```json
+{
+  "id": "cooked_shrimp",
+  "name": "Cooked shrimp",
+  "type": "consumable",
+  "healAmount": 3,
+  "inventoryActions": ["Eat", "Drop", "Examine"]
+}
+```
+
+### Action Ordering
+
+Actions are ordered by priority (first action is left-click default):
+
+```typescript
+// From item-helpers.ts
+export const ACTION_PRIORITY = {
+  eat: 1,      // Food primary action
+  drink: 1,    // Potion primary action
+  wield: 1,    // Weapon/shield primary action
+  wear: 1,     // Armor primary action
+  bury: 1,     // Bones primary action
+  use: 2,      // Generic use action
+  drop: 9,     // Always near bottom
+  examine: 10, // Always last (before Cancel)
+  cancel: 11,  // Always absolute last
+};
+```
+
+### InventoryActionDispatcher
+
+The `InventoryActionDispatcher` is the **single source of truth** for handling inventory actions:
+
+```typescript
+export function dispatchInventoryAction(
+  action: string,
+  ctx: InventoryActionContext,
+): ActionResult {
+  switch (action) {
+    case "eat":
+    case "drink":
+      // Server-authoritative consumption
+      world.network?.send("useItem", { itemId, slot });
+      return { success: true };
+
+    case "wield":
+    case "wear":
+      world.network?.send("equipItem", {
+        playerId: localPlayer.id,
+        itemId,
+        inventorySlot: slot,
+      });
+      return { success: true };
+
+    case "drop":
+      world.network?.send("dropItem", { itemId, slot, quantity });
+      return { success: true };
+
+    case "examine":
+      const examineText = itemData?.examine || `It's a ${itemId}.`;
+      world.emit(EventType.UI_TOAST, { message: examineText, type: "info" });
+      return { success: true };
+
+    case "use":
+      // Enter targeting mode for "Use X on Y" interactions
+      world.emit(EventType.ITEM_ACTION_SELECTED, {
+        playerId: localPlayer.id,
+        actionId: "use",
+        itemId,
+        slot,
+      });
+      return { success: true };
+
+    case "cancel":
+      // Intentional no-op - menu already closed
+      return { success: true };
+  }
+}
+```
 
 ---
 
