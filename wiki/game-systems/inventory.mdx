@@ -229,6 +229,54 @@ async persistInventory(playerId: string): Promise<void> {
 
 ---
 
+## Item Usage (Eating, Drinking, etc.)
+
+The inventory system supports server-authoritative item usage for consumables:
+
+```typescript
+// Client sends useItem packet
+world.network.send("useItem", { itemId, slot });
+
+// Server flow:
+// 1. handleUseItem() validates request (rate limiting, slot bounds, item ID)
+// 2. Emits INVENTORY_USE event
+// 3. InventorySystem.useItem() validates item exists at slot
+// 4. Emits ITEM_USED event
+// 5. PlayerSystem.handleItemUsed() processes consumption (eat delay, healing, etc.)
+```
+
+### Security Features
+
+- **Rate Limiting**: Separate consume rate limiter (3 requests/sec)
+- **Input Validation**: Slot bounds checking, item ID mismatch detection
+- **Server Authority**: All validation happens server-side
+- **Consume-After-Check**: Item removed only after all validation passes
+
+### Noted Items
+
+Noted items (bank notes) have special handling:
+
+```typescript
+// Noted items cannot be used as skilling tools
+// From ToolUtils.ts
+export function itemMatchesToolCategory(
+  itemId: string,
+  category: string,
+): boolean {
+  // Noted items are bank notes - cannot be used as tools
+  if (isNotedItemId(itemId)) {
+    return false;
+  }
+  // ... rest of validation
+}
+```
+
+<Warning>
+Noted items (ending in `_noted`) cannot be equipped or used as tools. They must be un-noted at a bank first.
+</Warning>
+
+---
+
 ## Inventory Events
 
 | Event | Data | Description |
@@ -237,6 +285,8 @@ async persistInventory(playerId: string): Promise<void> {
 | `INVENTORY_ITEM_ADDED` | `playerId`, `item` | Item added |
 | `INVENTORY_ITEM_REMOVED` | `playerId`, `itemId`, `quantity` | Item removed |
 | `INVENTORY_MOVE` | `playerId`, `fromSlot`, `toSlot` | Item slot changed |
+| `INVENTORY_USE` | `playerId`, `itemId`, `slot` | Player using item (eating, drinking) |
+| `ITEM_USED` | `playerId`, `itemId`, `slot`, `itemData` | Item consumed |
 | `ITEM_PICKUP` | `playerId`, `entityId`, `itemId` | Player picking up item |
 | `ITEM_DROP` | `playerId`, `slot`, `quantity` | Player dropping item |
 
