@@ -84,16 +84,24 @@ Requirements:
 - Pickaxe in inventory or equipped
 - Click ore rock to mine
 
-Success rate improves with level and pickaxe tier.
+Success rate improves with Mining level. Pickaxe tier affects roll frequency (speed), not success chance.
 
-| Ore | Level | XP |
-|-----|-------|-----|
-| Copper/Tin | 1 | 17.5 |
-| Iron | 15 | 35 |
-| Coal | 30 | 50 |
-| Mithril | 55 | 80 |
-| Adamantite | 70 | 95 |
-| Runite | 85 | 125 |
+| Ore | Level | XP | Success Rate (at level) |
+|-----|-------|-----|------------------------|
+| Copper/Tin | 1 | 17.5 | 39.5% (L1) → 100% (L62) |
+| Iron | 15 | 35 | 52% (L15) → 100% (L63) |
+| Coal | 30 | 50 | 16.4% (L30) → 39.5% (L99) |
+| Mithril | 55 | 80 | 11.7% (L55) → 19.9% (L99) |
+| Adamantite | 70 | 95 | 7.4% (L70) → 10.2% (L99) |
+| Runite | 85 | 125 | 6.64% (L85) → 7.42% (L97+) |
+
+<Warning>
+Mining rocks **always deplete** after yielding one ore (OSRS-accurate). There is no random chance - depletion is guaranteed at 100%.
+</Warning>
+
+**Pickaxe Speed Bonuses**:
+- Dragon pickaxe: 1/6 chance for 2-tick roll (avg 2.83 ticks)
+- Crystal pickaxe: 1/4 chance for 2-tick roll (avg 2.75 ticks)
 
 ### Fishing
 
