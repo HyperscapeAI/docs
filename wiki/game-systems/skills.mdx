@@ -388,6 +388,47 @@ Defined in `gathering/*.json`:
 | Adamantite | 70 |
 | Runite | 85 |
 
+### Mining Success Rates (OSRS-Accurate)
+
+Mining success rates depend **only on Mining level**, not pickaxe tier. Pickaxe tier affects roll frequency (speed) only.
+
+The formula uses linear interpolation between low and high values:
+```
+P(Level) = (1 + floor(low × (99 - L) / 98 + high × (L - 1) / 98 + 0.5)) / 256
+```
+
+| Ore | Success at Min Level | Success at L99 | Notes |
+|-----|---------------------|----------------|-------|
+| Copper/Tin | ~39.5% (L1) | 100% (L62+) | Beginner-friendly |
+| Iron | ~52% (L15) | 100% (L63+) | Fast training |
+| Coal | ~16.4% (L30) | ~39.5% (L99) | Slow but valuable |
+| Mithril | ~11.7% (L55) | ~19.9% (L99) | Very slow |
+| Adamantite | ~7.4% (L70) | ~10.2% (L99) | Rare |
+| Runite | ~6.64% (L85) | ~7.42% (L97+) | Extremely rare |
+
+<Warning>
+**Rock Depletion**: Mining rocks ALWAYS deplete after yielding one ore (100% chance). This matches OSRS behavior. The only exception would be Mining gloves (not currently implemented).
+</Warning>
+
+### Pickaxe Speed Bonuses
+
+Pickaxe tier determines roll frequency (ticks between attempts):
+
+| Pickaxe | Roll Ticks | Speed | Special Bonus |
+|---------|------------|-------|---------------|
+| Bronze | 8 | Slowest | None |
+| Iron | 7 | Slow | None |
+| Steel | 6 | Medium | None |
+| Mithril | 5 | Fast | None |
+| Adamant | 4 | Faster | None |
+| Rune | 3 | Very fast | None |
+| Dragon | 3 | Very fast | 1/6 chance for 2-tick roll (avg 2.83) |
+| Crystal | 3 | Very fast | 1/4 chance for 2-tick roll (avg 2.75) |
+
+<Info>
+**Dragon/Crystal Pickaxe Bonus**: These pickaxes have a chance to trigger a faster roll. The server rolls this randomly and applies it deterministically to prevent client/server desyncs.
+</Info>
+
 **Fishing**:
 | Fish | Level |
 |------|-------|
