@@ -1,0 +1,116 @@
+---
+title: "Keyboard Controls"
+description: "Complete keyboard shortcuts and keybinds reference"
+icon: "keyboard"
+---
+
+# Keyboard Controls
+
+Hyperscape supports keyboard shortcuts for common actions and debug tools.
+
+## Debug Controls
+
+| Key | Action | Description |
+|-----|--------|-------------|
+| **F5** | Toggle FPS Panel | Show/hide performance debug panel with FPS, frame time, memory usage |
+
+<Info>
+The F5 keybind was added in PR #505 to provide quick access to performance monitoring without opening DevTools.
+</Info>
+
+---
+
+## Movement Controls
+
+| Key | Action | Description |
+|-----|--------|-------------|
+| **Click** | Move | Click terrain to walk to location |
+| **Shift + Click** | Run | Hold shift while clicking to run (consumes stamina) |
+| **WASD** | Camera Pan | Pan camera view (if enabled) |
+
+---
+
+## Combat Controls
+
+| Key | Action | Description |
+|-----|--------|-------------|
+| **Click Enemy** | Attack | Initiate combat with target |
+| **Esc** | Stop Combat | Cancel auto-attack |
+
+---
+
+## Inventory Controls
+
+| Key | Action | Description |
+|-----|--------|-------------|
+| **Left-Click Item** | Primary Action | Perform default action (Eat, Wield, Use, etc.) |
+| **Right-Click Item** | Context Menu | Show all available actions |
+| **Drag Item** | Move/Equip | Drag to move or equip items |
+
+---
+
+## UI Controls
+
+| Key | Action | Description |
+|-----|--------|-------------|
+| **Tab** | Toggle Chat | Focus/unfocus chat input |
+| **Enter** | Send Chat | Send chat message |
+| **Esc** | Close Panel | Close active UI panel |
+| **I** | Toggle Inventory | Show/hide inventory panel |
+| **E** | Toggle Equipment | Show/hide equipment panel |
+| **B** | Toggle Bank | Show/hide bank panel (when near bank) |
+
+---
+
+## Debug Panel (F5)
+
+When the FPS debug panel is visible, it shows:
+
+- **FPS** - Frames per second (target: 60)
+- **Frame Time** - Milliseconds per frame (target: <16.67ms)
+- **Memory** - Heap size and allocation rate
+- **Entities** - Active entity count
+- **Network** - Ping, packet loss, bandwidth
+
+### Performance Targets
+
+| Metric | Good | Warning | Critical |
+|--------|------|---------|----------|
+| FPS | 60+ | 45-59 | <45 |
+| Frame Time | <16.67ms | 16.67-22ms | >22ms |
+| Memory | <500MB | 500-800MB | >800MB |
+| Entities | <1000 | 1000-2000 | >2000 |
+| Ping | <50ms | 50-100ms | >100ms |
+
+---
+
+## Customization
+
+Keybinds are defined in `ClientInput.ts`:
+
+```typescript
+// From packages/shared/src/systems/client/ClientInput.ts
+private handleKeyDown(event: KeyboardEvent): void {
+  // F5 - Toggle debug panel
+  if (event.key === "F5") {
+    event.preventDefault();
+    const debugPanel = document.getElementById("fps-debug-panel");
+    if (debugPanel) {
+      debugPanel.style.display = 
+        debugPanel.style.display === "none" ? "block" : "none";
+    }
+  }
+  
+  // Add more keybinds here
+}
+```
+
+To add custom keybinds, edit `ClientInput.ts` and add cases to `handleKeyDown()`.
+
+---
+
+## Related Documentation
+
+- [Debugging Tools](/wiki/game-systems/debugging) - Performance monitoring
+- [Client Input System](/wiki/engine/input) - Input handling architecture
+- [UI Components](/wiki/client/overview) - UI system overview
