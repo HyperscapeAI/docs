@@ -285,6 +285,88 @@ Weapons have different attack speeds:
 
 ## Helper Functions
 
+### Item Type Detection
+
+The `item-helpers.ts` module provides utilities for detecting item types:
+
+```typescript
+// From item-helpers.ts
+export function isFood(item: Item | null): boolean {
+  if (!item) return false;
+  return (
+    item.type === "consumable" &&
+    typeof item.healAmount === "number" &&
+    item.healAmount > 0 &&
+    !item.id.includes("potion")
+  );
+}
+
+export function isPotion(item: Item | null): boolean {
+  if (!item) return false;
+  return item.type === "consumable" && item.id.includes("potion");
+}
+
+export function isBone(item: Item | null): boolean {
+  if (!item) return false;
+  return item.id === "bones" || item.id.endsWith("_bones");
+}
+
+export function isWeapon(item: Item | null): boolean {
+  if (!item) return false;
+  return (
+    item.equipSlot === "weapon" ||
+    item.equipSlot === "2h" ||
+    item.is2h === true ||
+    item.weaponType != null
+  );
+}
+
+export function isShield(item: Item | null): boolean {
+  if (!item) return false;
+  return item.equipSlot === "shield";
+}
+
+export function usesWield(item: Item | null): boolean {
+  return isWeapon(item) || isShield(item);
+}
+
+export function usesWear(item: Item | null): boolean {
+  if (!item) return false;
+  if (!item.equipable && !item.equipSlot) return false;
+  return !usesWield(item);
+}
+
+export function isNotedItem(item: Item | null): boolean {
+  if (!item) return false;
+  return item.isNoted === true || item.id.endsWith("_noted");
+}
+```
+
+### Primary Action Detection
+
+```typescript
+// Get primary action for left-click
+export function getPrimaryAction(
+  item: Item | null,
+  isNoted: boolean,
+): PrimaryActionType {
+  if (isNoted) return "use";
+
+  // Check manifest first
+  const manifestAction = getPrimaryActionFromManifest(item);
+  if (manifestAction) return manifestAction;
+
+  // Fallback to heuristic detection
+  if (isFood(item)) return "eat";
+  if (isPotion(item)) return "drink";
+  if (isBone(item)) return "bury";
+  if (usesWield(item)) return "wield";
+  if (usesWear(item)) return "wear";
+
+  return "use";
+}
+```
+
 ### Get Item by ID
 
 ```typescript
