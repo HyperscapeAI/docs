@@ -226,14 +226,32 @@ Gathering resources is now defined in `manifests/gathering/` with OSRS-accurate 
 | Magic | 75 | 250 |
 
 **Mining** (`gathering/mining.json`):
-| Ore | Level | XP |
-|-----|-------|-----|
-| Copper/Tin | 1 | 17.5 |
-| Iron | 15 | 35 |
-| Coal | 30 | 50 |
-| Mithril | 55 | 80 |
-| Adamantite | 70 | 95 |
-| Runite | 85 | 125 |
+| Ore | Level | XP | Success Rate (L1 → L99) |
+|-----|-------|-----|-------------------------|
+| Copper/Tin | 1 | 17.5 | 39.5% → 100% (at L62) |
+| Iron | 15 | 35 | 52% (at L15) → 100% (at L63) |
+| Coal | 30 | 50 | 16.4% (at L30) → 39.5% (at L99) |
+| Mithril | 55 | 80 | 11.7% (at L55) → 19.9% (at L99) |
+| Adamantite | 70 | 95 | 7.4% (at L70) → 10.2% (at L99) |
+| Runite | 85 | 125 | 6.64% (at L85) → 7.42% (at L97+) |
+
+<Info>
+Mining rocks **always deplete** after yielding one ore (OSRS-accurate). Success rate depends only on Mining level, not pickaxe tier. Pickaxe tier affects roll frequency (speed), not success chance.
+</Info>
+
+### Pickaxe Speed Bonuses
+
+Dragon and Crystal pickaxes have a chance for bonus speed:
+
+| Pickaxe | Base Speed | Bonus Chance | Bonus Speed | Average Speed |
+|---------|------------|--------------|-------------|---------------|
+| Bronze-Rune | 3-8 ticks | - | - | 3-8 ticks |
+| Dragon | 3 ticks | 1/6 (16.7%) | 2 ticks | 2.83 ticks |
+| Crystal | 3 ticks | 1/4 (25%) | 2 ticks | 2.75 ticks |
+
+<Info>
+The bonus speed roll is server-authoritative to prevent client/server desyncs.
+</Info>
 
 **Fishing** (`gathering/fishing.json`):
 | Fish | Level | XP |
