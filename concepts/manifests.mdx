@@ -176,6 +176,40 @@ If `inventoryActions` is not specified, the system falls back to type-based dete
 }
 ```
 
+**gathering/mining.json** - Ore rocks with OSRS-accurate success rates:
+```json
+{
+  "rocks": [
+    {
+      "id": "rock_copper",
+      "name": "Copper rocks",
+      "type": "mining_rock",
+      "harvestSkill": "mining",
+      "toolRequired": "bronze_pickaxe",
+      "levelRequired": 1,
+      "baseCycleTicks": 8,
+      "depleteChance": 1.0,
+      "respawnTicks": 200,
+      "depletedModelPath": "asset://models/rocks/copper-rock-depleted.glb",
+      "depletedModelScale": 0.8,
+      "harvestYield": [
+        { 
+          "itemId": "copper_ore", 
+          "quantity": 1, 
+          "chance": 1.0, 
+          "xpAmount": 17.5,
+          "successRate": { "low": 100, "high": 256 }
+        }
+      ]
+    }
+  ]
+}
+```
+
+<Info>
+**Mining Depletion**: Rocks always deplete after one ore (`depleteChance: 1.0`). The `depletedModelPath` and `depletedModelScale` define the visual appearance of depleted rocks.
+</Info>
+
 ### Gathering Resources
 
 Resource gathering data is split by skill for better organization:
