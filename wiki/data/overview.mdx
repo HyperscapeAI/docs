@@ -456,12 +456,12 @@ interface Station {
 
 ### Available Stations
 
-| Station | Purpose | Model |
-|---------|---------|-------|
-| **Anvil** | Smithing bars into equipment | `models/anvil/anvil.glb` |
-| **Furnace** | Smelting ores into bars | `models/furnace/furnace.glb` |
-| **Cooking Range** | Cooking food (reduced burn chance) | TBD |
-| **Bank Booth** | Accessing bank storage | TBD |
+| Station | Purpose | Model | Scale | Y Offset |
+|---------|---------|-------|-------|----------|
+| **Anvil** | Smithing bars into equipment | `models/anvil/anvil.glb` | 0.5 | 0.2 |
+| **Furnace** | Smelting ores into bars | `models/furnace/furnace.glb` | 1.5 | 1.0 |
+| **Cooking Range** | Cooking food (reduced burn chance) | TBD | 1.0 | 0 |
+| **Bank Booth** | Accessing bank storage | TBD | 1.0 | 0 |
 
 Stations are placed in world areas and interact with the corresponding recipe manifests (`recipes/smithing.json`, `recipes/smelting.json`, etc.).
 
