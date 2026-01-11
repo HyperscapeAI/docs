@@ -303,8 +303,53 @@ const [bankData, setBankData] = useState<{
 
 ---
 
+---
+
+## Placeholder System
+
+### Two-Phase Slot Updates
+
+The bank system uses a **two-phase update** to prevent unique constraint violations when releasing all placeholders:
+
+```typescript
+// From bank/placeholders.ts
+export async function releaseAllPlaceholders(
+  playerId: string,
+  bankId: string,
+  repository: BankRepository,
+): Promise<void> {
+  // PHASE 1: Set all placeholders to temporary slot -1
+  await repository.updatePlaceholdersToTempSlot(playerId, bankId);
+  
+  // PHASE 2: Delete all items with slot -1
+  await repository.deleteTempSlotItems(playerId, bankId);
+}
+```
+
+This prevents the error:
+```
+duplicate key value violates unique constraint "bank_storage_player_id_bank_id_slot_unique"
+```
+
+### Placeholder Toggle
+
+Players can toggle placeholder mode:
+
+```typescript
+// When enabled, withdrawing last item leaves a placeholder
+if (alwaysSetPlaceholder && bankItem.quantity === withdrawQuantity) {
+  // Replace with placeholder instead of deleting
+  bankItem.itemId = BANKING_CONSTANTS.PLACEHOLDER_ITEM_ID;
+  bankItem.quantity = 0;
+  bankItem.isPlaceholder = true;
+}
+```
+
+---
+
 ## Related Documentation
 
 - [Inventory System](/wiki/game-systems/inventory)
 - [Economy Overview](/wiki/game-systems/economy)
 - [Database Schema](/wiki/engine/database)
+- [Bank Repository](/api-reference/repositories#bankrepository)
