@@ -23,7 +23,63 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Recent Updates" description="January 2026" date="2026-01-10">
+<Update label="Recent Updates" description="January 2026" date="2026-01-11">
+
+### 🪨 Mining Resources Expansion
+
+New mining rocks added to the assets repository with complete 3D models:
+
+- **Mithril Rock**: High-tier ore requiring level 55 Mining
+  - Model: `models/mithril-rock/mithril-rock.glb`
+  - Yields: Mithril Ore (80 XP)
+  - Respawn: 200 ticks (2 minutes)
+- **Runite Rock**: Highest-tier ore requiring level 85 Mining
+  - Models: `models/runite-rock/runite-rock.glb` (active) and `runite-rock-depleted.glb`
+  - Yields: Runite Ore (125 XP)
+  - Respawn: 1200 ticks (12 minutes)
+- **Copper Rock**: Updated with depleted model
+  - Models: `models/copper-rock/copper-rock.glb` and `copper-rock-depleted.glb`
+
+All rocks include proper depletion mechanics and OSRS-accurate respawn timers.
+
+### 🔨 Crafting Stations
+
+New 3D models and station configurations added:
+
+- **Anvil Station**
+  - Model: `models/anvil/anvil.glb` (optimized) and `anvil_raw.glb`
+  - Scale: 0.5x with 0.2 Y-offset
+  - Used for smithing bars into equipment
+  - Includes concept art and metadata
+- **Furnace Station**
+  - Model: `models/furnace/furnace.glb` (optimized) and `furnace_raw.glb`
+  - Scale: 1.5x with 1.0 Y-offset
+  - Used for smelting ores into bars
+  - Includes concept art and metadata
+
+Station configurations now centralized in `manifests/stations.json` for easy updates without code changes.
+
+### 📁 Manifest Organization
+
+Improved manifest structure for better scalability:
+
+- **Gathering Resources**: Split into dedicated files
+  - `manifests/gathering/mining.json` - All mining rocks and ore yields
+  - `manifests/gathering/woodcutting.json` - Trees and log yields
+  - `manifests/gathering/fishing.json` - Fishing spots and catch rates
+- **Items by Category**: Organized into type-specific files
+  - `manifests/items/weapons.json` - Combat weapons
+  - `manifests/items/tools.json` - Skilling tools
+  - `manifests/items/resources.json` - Ores, logs, bars, raw fish
+  - `manifests/items/food.json` - Cooked consumables
+  - `manifests/items/misc.json` - Currency, burnt food, junk
+- **Processing Recipes**: Skill-based organization
+  - `manifests/recipes/smelting.json` - Ore to bar recipes
+  - `manifests/recipes/smithing.json` - Bar to equipment recipes
+  - `manifests/recipes/cooking.json` - Raw to cooked food
+  - `manifests/recipes/firemaking.json` - Log burning data
+
+This refactor makes content easier to find, edit, and maintain.
 
 ### ⚒️ Smithing Skill System
 
