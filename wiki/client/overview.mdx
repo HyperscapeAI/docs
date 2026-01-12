@@ -240,6 +240,62 @@ export class ClientGraphics extends SystemBase {
 4. **Post-Processing**: Bloom, tone mapping, effects (TSL-based)
 5. **UI Overlay**: Render 2D React UI on top
 
+### Model Loading & Transform Baking
+
+The `ModelCache` system handles GLTF model loading with transform baking to prevent rendering issues:
+
+```typescript
+// From ModelCache.ts
+private bakeTransformsToGeometry(scene: THREE.Object3D): void {
+  // Ensure all matrices are up to date
+  scene.updateMatrixWorld(true);
+
+  // Apply transforms to each mesh's geometry
+  scene.traverse((child) => {
+    if (child instanceof THREE.Mesh && child.geometry) {
+      // Clone geometry to avoid modifying shared geometry
+      child.geometry = child.geometry.clone();
+
+      // Apply world matrix to geometry (Three.js built-in method)
+      child.geometry.applyMatrix4(child.matrixWorld);
+
+      // Reset transform to identity
+      child.position.set(0, 0, 0);
+      child.rotation.set(0, 0, 0);
+      child.scale.set(1, 1, 1);
+      child.updateMatrix();
+    }
+  });
+}
+```
+
+**Why Transform Baking?**
+
+GLTF files can have transforms stored in various ways:
+- Position/rotation/scale properties
+- Baked into matrices
+- Non-decomposable transforms (shear)
+
+Baking all transforms into vertex positions guarantees correct rendering regardless of how the GLTF was exported from Blender or other 3D tools.
+
+**Quaternion Normalization**:
+
+Entity rotations use quaternions with all four components (x, y, z, w):
+
+```typescript
+// From Entity.ts
+quaternion: config.rotation
+  ? [
+      config.rotation.x,
+      config.rotation.y,
+      config.rotation.z,
+      config.rotation.w,  // Uses actual w value, not hardcoded 1
+    ]
+  : undefined,
+```
+
+This prevents "squished" or incorrectly rotated models that can occur when quaternion components are not properly normalized.
+
 ### Camera System
 
 Supports multiple camera modes:

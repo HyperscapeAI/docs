@@ -252,6 +252,57 @@ private depositAllItems(data: { playerId: string; bankId: string }): void {
 
 ---
 
+## Placeholder System
+
+Banks support RS3-style placeholders that remember item positions:
+
+### Release All Placeholders
+
+The "Release All Placeholders" operation uses a **two-phase slot update** to prevent unique constraint violations:
+
+```typescript
+// From placeholders.ts
+for (const tabIndex of affectedTabs) {
+  // Phase 1: Add large offset to move all slots far from target range
+  await tx.execute(
+    sql`UPDATE bank_storage
+        SET slot = slot + ${SLOT_OFFSET_TEMP}
+        WHERE "playerId" = ${ctx.playerId} AND "tabIndex" = ${tabIndex}`,
+  );
+
+  // Phase 2: Renumber slots sequentially using ROW_NUMBER
+  // Source slots are now ≥1000, target slots are 0-N, no overlap possible
+  await tx.execute(
+    sql`UPDATE bank_storage
+        SET slot = subq.new_slot
+        FROM (
+          SELECT id, ROW_NUMBER() OVER (ORDER BY slot) - 1 as new_slot
+          FROM bank_storage
+          WHERE "playerId" = ${ctx.playerId} AND "tabIndex" = ${tabIndex}
+        ) as subq
+        WHERE bank_storage.id = subq.id`,
+  );
+}
+```
+
+**Why Two-Phase?**
+
+PostgreSQL doesn't guarantee UPDATE execution order. Direct renumbering could cause collisions:
+- Row A updates from slot 10→6
+- Row B updates from slot 6→3
+- If Row A executes first, both rows temporarily occupy slot 6 → **unique constraint violation**
+
+The two-phase approach eliminates this by ensuring source and target slot ranges never overlap:
+- Phase 1: All slots move to 1000+ range
+- Phase 2: All slots renumber to 0-N range
+- No collision possible since 1000+ and 0-N don't overlap
+
+<Info>
+The same two-phase pattern is used in `compactBankSlots()` for consistent slot renumbering.
+</Info>
+
+---
+
 ## Bank Events
 
 | Event | Data | Description |

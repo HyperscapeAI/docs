@@ -226,14 +226,32 @@ Gathering resources is now defined in `manifests/gathering/` with OSRS-accurate 
 | Magic | 75 | 250 |
 
 **Mining** (`gathering/mining.json`):
-| Ore | Level | XP |
-|-----|-------|-----|
-| Copper/Tin | 1 | 17.5 |
-| Iron | 15 | 35 |
-| Coal | 30 | 50 |
-| Mithril | 55 | 80 |
-| Adamantite | 70 | 95 |
-| Runite | 85 | 125 |
+| Ore | Level | XP | Success Rate (L1 → L99) |
+|-----|-------|-----|-------------------------|
+| Copper/Tin | 1 | 17.5 | 39.5% → 100% (at L62) |
+| Iron | 15 | 35 | 52% (at L15) → 100% (at L63) |
+| Coal | 30 | 50 | 16.4% (at L30) → 39.5% (at L99) |
+| Mithril | 55 | 80 | 11.7% (at L55) → 19.9% (at L99) |
+| Adamantite | 70 | 95 | 7.4% (at L70) → 10.2% (at L99) |
+| Runite | 85 | 125 | 6.64% (at L85) → 7.42% (at L97+) |
+
+<Info>
+Mining rocks **always deplete** after yielding one ore (OSRS-accurate). Success rate depends only on Mining level, not pickaxe tier. Pickaxe tier affects roll frequency (speed), not success chance.
+</Info>
+
+### Pickaxe Speed Bonuses
+
+Dragon and Crystal pickaxes have a chance for bonus speed:
+
+| Pickaxe | Base Speed | Bonus Chance | Bonus Speed | Average Speed |
+|---------|------------|--------------|-------------|---------------|
+| Bronze-Rune | 3-8 ticks | - | - | 3-8 ticks |
+| Dragon | 3 ticks | 1/6 (16.7%) | 2 ticks | 2.83 ticks |
+| Crystal | 3 ticks | 1/4 (25%) | 2 ticks | 2.75 ticks |
+
+<Info>
+The bonus speed roll is server-authoritative to prevent client/server desyncs.
+</Info>
 
 <Info>
 **Mining Mechanics**: Rocks always deplete after yielding one ore (100% depletion chance). Success rates are OSRS-accurate and depend only on Mining level, not pickaxe tier. Pickaxe tier affects roll frequency (speed) only.
@@ -319,8 +337,37 @@ Smithing recipes support "Make X" functionality - players can smith multiple ite
 | Swordfish | 45 | 140 | 14 HP |
 | Shark | 80 | 210 | 20 HP |
 
+### Food Consumption Mechanics
+
+Food consumption follows OSRS-accurate timing and combat integration:
+
+**Eating Delay**:
+- 3-tick (1.8s) cooldown between eating foods
+- Managed by `EatDelayManager` (per-player tracking)
+- Food consumed only after validation passes
+- Message shown even at full health: "You eat the shrimp."
+
+**Combat Integration**:
+- Eating during combat adds 3-tick delay to attack cooldown
+- OSRS rule: Only adds delay if weapon is **already on cooldown**
+- If weapon is ready to attack, eating does NOT add delay
+- Prevents eating from being used to delay attacks strategically
+
+**Server-Authoritative Flow**:
+```
+Client → useItem packet → Server validates → INVENTORY_USE event →
+InventorySystem validates item exists → ITEM_USED → PlayerSystem validates eat delay →
+Consume item + heal + attack delay
+```
+
+**Security Features**:
+- Rate limiting (3 requests/sec)
+- Input validation (slot bounds, item ID mismatch detection)
+- Heal amount capped at 99 HP (prevents manifest exploits)
+- Server-side eat delay enforcement
+
 <Info>
-Cooked food can be eaten to restore health. Right-click food in your inventory and select "Eat". Eating has a 3-tick (1.8s) cooldown and delays your next attack by 3 ticks.
+Food is consumed even at full health (OSRS-accurate). The eat delay and attack delay still apply.
 </Info>
 
 **Firemaking** (`recipes/firemaking.json`):
@@ -471,6 +518,64 @@ Defined in `recipes/*.json`:
 | Mithril Equipment | 50 | 2-5 mithril bars |
 | Adamant Equipment | 70 | 3-5 adamant bars |
 | Rune Equipment | 85 | 3-5 rune bars |
+
+---
+
+## Anti-Exploit Protections
+
+### Resource Spam Click Prevention
+
+The gathering system prevents duplicate harvesting when players spam-click resources:
+
+```typescript
+// From ResourceSystem.ts
+const existingSession = this.activeGathering.get(playerId);
+if (existingSession) {
+  // If already gathering this EXACT resource, silently ignore (prevents duplicate rewards)
+  if (existingSession.resourceId === resource.id) {
+    return;
+  }
+  // If switching to a DIFFERENT resource, cancel the old session first
+  this.cancelGatheringForPlayer(playerId, "switch_resource");
+}
+```
+
+**Protection Features**:
+- Duplicate gather requests for the same resource are silently ignored
+- Prevents timer resets and duplicate drops
+- Allows switching to different resources (cancels old session first)
+- Guard clause executes after resource resolution for accurate comparison
+
+<Info>
+This fix prevents the spam-click exploit where players could reset gathering timers by rapidly clicking the same resource.
+</Info>
+
+### Noted Items Tool Validation
+
+Noted items (bank notes) cannot be used as skilling tools:
+
+```typescript
+// From ToolUtils.ts
+export function itemMatchesToolCategory(
+  itemId: string,
+  category: string,
+): boolean {
+  // Noted items are bank notes - cannot be used as tools
+  if (isNotedItemId(itemId)) {
+    return false;
+  }
+  // ... rest of validation
+}
+```
+
+**Affected Tools**:
+- Pickaxes (mining)
+- Hatchets/axes (woodcutting)
+- Fishing rods, nets, harpoons (fishing)
+
+<Warning>
+Noted items must be un-noted at a bank before they can be equipped or used for skilling.
+</Warning>
 
 ---
 
