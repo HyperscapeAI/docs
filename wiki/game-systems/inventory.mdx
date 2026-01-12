@@ -319,15 +319,33 @@ useEffect(() => {
 Features:
 - 28-slot grid layout
 - Drag-and-drop item movement
-- Right-click context menu (use, drop, examine)
+- Right-click context menu (eat, drink, wield, wear, bury, use, drop, examine)
+- Left-click primary action (manifest-driven or heuristic)
 - Stack quantity display
 - Coin pouch separate display
+- Targeting mode for item-on-item interactions
+
+### Primary Actions
+
+Left-clicking an item executes its primary action:
+
+```typescript
+// From InventoryActionDispatcher.ts
+const action = getPrimaryAction(itemData, isNoted);
+// Returns: "eat" | "drink" | "bury" | "wield" | "wear" | "use"
+```
+
+Actions are determined by:
+1. **Manifest first**: `inventoryActions[0]` if defined
+2. **Heuristic fallback**: Based on item properties (type, healAmount, equipSlot)
 
 ---
 
 ## Related Documentation
 
+- [Context Menu System](/wiki/game-systems/context-menus)
 - [Equipment System](/wiki/game-systems/equipment)
 - [Bank System](/wiki/game-systems/bank)
 - [Ground Items & Loot](/wiki/game-systems/loot)
 - [Item Data Structure](/wiki/data/items)
+- [Combat System](/wiki/game-systems/combat) (for eat delay mechanics)
