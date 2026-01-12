@@ -229,6 +229,64 @@ async persistInventory(playerId: string): Promise<void> {
 
 ---
 
+## Item Consumption
+
+### Food and Healing
+
+Players can consume food items to restore health with OSRS-accurate mechanics:
+
+```typescript
+// From PlayerSystem.ts - handleItemUsed()
+// Food consumption flow:
+// 1. Client sends useItem packet
+// 2. Server validates eat delay (3 ticks = 1.8s cooldown)
+// 3. Server consumes item and applies healing
+// 4. Server emits PLAYER_HEALTH_UPDATED event
+```
+
+#### Eat Delay System
+
+Food consumption uses a 3-tick (1.8 second) cooldown between eating:
+
+```typescript
+// From EatDelayManager.ts
+export class EatDelayManager {
+  canEat(playerId: string, currentTick: number): boolean;
+  recordEat(playerId: string, currentTick: number): void;
+  getRemainingCooldown(playerId: string, currentTick: number): number;
+}
+```
+
+**OSRS-Accurate Behavior:**
+- 3-tick delay between foods (1.8 seconds)
+- Food consumed even at full health
+- Attack delay added when eating during combat (only if already on cooldown)
+- Message format: "You eat the shrimp." (lowercase, no heal amount shown)
+
+#### Security Features
+
+The eating system includes comprehensive validation:
+
+- **Rate limiting**: 3 requests/second via `getConsumeRateLimiter()`
+- **Server-authoritative**: All validation happens server-side
+- **Input validation**: Slot bounds checking, item ID mismatch detection
+- **Exploit prevention**: `MAX_HEAL_AMOUNT: 99` caps healing from modified manifests
+- **Consume-after-check**: Food only removed after all validation passes
+
+```typescript
+// From inventory.ts - handleUseItem()
+export function handleUseItem(socket: ServerSocket, data: unknown, world: World): void {
+  // 1. Rate limit check
+  // 2. Validate payload structure
+  // 3. Validate itemId and slot
+  // 4. Emit INVENTORY_USE event
+  // 5. InventorySystem validates item exists at slot
+  // 6. PlayerSystem validates eat delay and applies healing
+}
+```
+
+---
+
 ## Inventory Events
 
 | Event | Data | Description |
@@ -237,6 +295,8 @@ async persistInventory(playerId: string): Promise<void> {
 | `INVENTORY_ITEM_ADDED` | `playerId`, `item` | Item added |
 | `INVENTORY_ITEM_REMOVED` | `playerId`, `itemId`, `quantity` | Item removed |
 | `INVENTORY_MOVE` | `playerId`, `fromSlot`, `toSlot` | Item slot changed |
+| `INVENTORY_USE` | `playerId`, `itemId`, `slot` | Item use requested |
+| `ITEM_USED` | `playerId`, `itemId`, `slot`, `itemData` | Item consumed |
 | `ITEM_PICKUP` | `playerId`, `entityId`, `itemId` | Player picking up item |
 | `ITEM_DROP` | `playerId`, `slot`, `quantity` | Player dropping item |
 
