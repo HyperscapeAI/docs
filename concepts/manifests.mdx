@@ -123,6 +123,35 @@ export function getItem(itemId: string): Item | null {
 }
 ```
 
+### Inventory Actions
+
+Items can define explicit `inventoryActions` for OSRS-accurate context menus:
+
+```json
+{
+  "id": "shrimp",
+  "name": "Shrimp",
+  "type": "consumable",
+  "healAmount": 3,
+  "inventoryActions": ["Eat", "Use", "Drop", "Examine"]
+}
+```
+
+The first action becomes the left-click default. Supported actions:
+
+| Action | Use Case | Example Items |
+|--------|----------|---------------|
+| **Eat** | Food items | Shrimp, Lobster, Shark |
+| **Drink** | Potions | Strength potion, Attack potion |
+| **Wield** | Weapons, shields | Bronze sword, Wooden shield |
+| **Wear** | Armor | Bronze platebody, Leather body |
+| **Bury** | Bones | Bones, Big bones, Dragon bones |
+| **Use** | Tools, misc | Tinderbox, Hammer, Logs |
+| **Drop** | Any item | (always available) |
+| **Examine** | Any item | (always available) |
+
+If `inventoryActions` is not specified, the system falls back to type-based detection using `item-helpers.ts`.
+
 ### Gathering Resources (`gathering/`)
 
 **gathering/woodcutting.json** - Trees and log yields:
@@ -146,6 +175,40 @@ export function getItem(itemId: string): Item | null {
   ]
 }
 ```
+
+**gathering/mining.json** - Ore rocks with OSRS-accurate success rates:
+```json
+{
+  "rocks": [
+    {
+      "id": "rock_copper",
+      "name": "Copper rocks",
+      "type": "mining_rock",
+      "harvestSkill": "mining",
+      "toolRequired": "bronze_pickaxe",
+      "levelRequired": 1,
+      "baseCycleTicks": 8,
+      "depleteChance": 1.0,
+      "respawnTicks": 200,
+      "depletedModelPath": "asset://models/rocks/copper-rock-depleted.glb",
+      "depletedModelScale": 0.8,
+      "harvestYield": [
+        { 
+          "itemId": "copper_ore", 
+          "quantity": 1, 
+          "chance": 1.0, 
+          "xpAmount": 17.5,
+          "successRate": { "low": 100, "high": 256 }
+        }
+      ]
+    }
+  ]
+}
+```
+
+<Info>
+**Mining Depletion**: Rocks always deplete after one ore (`depleteChance: 1.0`). The `depletedModelPath` and `depletedModelScale` define the visual appearance of depleted rocks.
+</Info>
 
 ### Gathering Resources
 
@@ -187,7 +250,7 @@ World stations (anvils, furnaces, ranges, banks) are configured in `stations.jso
       "model": "asset://models/anvil/anvil.glb",
       "modelScale": 0.5,
       "modelYOffset": 0.4,
-      "examine": "An anvil for smithing metal bars into weapons and tools."
+      "examine": "An anvil. Used to make things out of metal."
     },
     {
       "type": "furnace",
@@ -195,13 +258,13 @@ World stations (anvils, furnaces, ranges, banks) are configured in `stations.jso
       "model": "asset://models/furnace/furnace.glb",
       "modelScale": 1.5,
       "modelYOffset": 1.0,
-      "examine": "A furnace for smelting ores into metal bars."
+      "examine": "A very hot furnace."
     }
   ]
 }
 ```
 
-This allows 3D models and configurations to be updated without code changes.
+This allows 3D models and configurations to be updated without code changes. The `modelScale` and `modelYOffset` properties control the visual appearance of stations in the world.
 
 ### Stations (`stations.json`)
 

@@ -1,0 +1,304 @@
+---
+title: "Mining System API"
+description: "OSRS-accurate mining mechanics with success rates and pickaxe bonuses"
+icon: "pickaxe"
+---
+
+# Mining System API
+
+The mining system implements OSRS-accurate mechanics including level-dependent success rates, pickaxe speed bonuses, and 100% rock depletion.
+
+## Success Rate Calculation
+
+**Location**: `packages/shared/src/systems/shared/entities/gathering/SuccessRateCalculator.ts`
+
+### computeSuccessRate()
+
+Calculate mining success rate based on player level.
+
+```typescript
+computeSuccessRate(
+  skill: string,
+  level: number,
+  successRateData: { low: number; high: number } | null
+): number
+```
+
+**Parameters:**
+- `skill` - The gathering skill ("mining", "woodcutting", "fishing")
+- `level` - Player's skill level (1-99)
+- `successRateData` - Success rate bounds from manifest (or null for 100% success)
+
+**Returns**: Success probability (0.0 to 1.0)
+
+**Formula**:
+```
+P(Level) = (1 + floor(low × (99 - L) / 98 + high × (L - 1) / 98 + 0.5)) / 256
+```
+
+**Example:**
+```typescript
+// Copper ore at level 1
+const successRate = computeSuccessRate("mining", 1, { low: 100, high: 256 });
+// Returns: ~0.395 (39.5%)
+
+// Copper ore at level 62
+const successRate = computeSuccessRate("mining", 62, { low: 100, high: 256 });
+// Returns: 1.0 (100%)
+```
+
+### computeCycleTicks()
+
+Compute gathering cycle in ticks (OSRS-accurate, skill-specific).
+
+```typescript
+computeCycleTicks(
+  skill: string,
+  baseCycleTicks: number,
+  toolData: GatheringToolData | null,
+  bonusRollTriggered: boolean = false
+): number
+```
+
+**Parameters:**
+- `skill` - The gathering skill ("mining", "woodcutting", "fishing")
+- `baseCycleTicks` - Base cycle ticks from resource manifest
+- `toolData` - Tool data from tools.json manifest (may have rollTicks for mining)
+- `bonusRollTriggered` - Whether dragon/crystal pickaxe bonus speed triggered (caller rolls this server-side)
+
+**Returns**: Number of ticks between gathering attempts
+
+<Info>
+**Deterministic Function**: This function contains NO randomness. For dragon/crystal pickaxe bonus speed, the caller must roll and pass `bonusRollTriggered`.
+</Info>
+
+**Example:**
+```typescript
+// Bronze pickaxe (8 ticks)
+const ticks = computeCycleTicks("mining", 8, { rollTicks: 8 }, false);
+// Returns: 8
+
+// Dragon pickaxe with bonus triggered (2 ticks instead of 3)
+const ticks = computeCycleTicks("mining", 3, { 
+  rollTicks: 3, 
+  bonusRollTicks: 2,
+  bonusTickChance: 0.167 
+}, true);
+// Returns: 2
+```
+
+---
+
+## Mining Constants
+
+**Location**: `packages/shared/src/constants/GatheringConstants.ts`
+
+### Success Rates
+
+```typescript
+MINING_SUCCESS_RATES: {
+  ore_copper: { low: 100, high: 256 },    // 39.5% at L1, 100% at L62
+  ore_tin: { low: 100, high: 256 },       // Same as copper
+  ore_iron: { low: 133, high: 256 },      // 52% at L15, 100% at L63
+  ore_coal: { low: 42, high: 101 },       // 16.4% at L30, 39.5% at L99
+  ore_mithril: { low: 30, high: 51 },     // 11.7% at L55, 19.9% at L99
+  ore_adamant: { low: 19, high: 26 },     // 7.4% at L70, 10.2% at L99
+  ore_runite: { low: 17, high: 19 },      // 6.64% at L85, 7.42% at L97+
+}
+```
+
+### Depletion
+
+```typescript
+MINING_DEPLETE_CHANCE: 1.0  // OSRS: Always depletes after one ore
+```
+
+<Warning>
+**100% Depletion**: Mining rocks ALWAYS deplete after yielding one ore. This matches OSRS behavior. The only exception would be Mining gloves (not currently implemented).
+</Warning>
+
+---
+
+## Pickaxe Tool Data
+
+**Location**: `packages/shared/src/data/DataManager.ts`
+
+### GatheringToolData Interface
+
+```typescript
+interface GatheringToolData {
+  itemId: string;
+  levelRequired: number;
+  rollTicks?: number;           // For mining: ticks between roll attempts
+  bonusTickChance?: number;     // Dragon/Crystal: chance for bonus speed roll
+  bonusRollTicks?: number;      // Dragon/Crystal: tick count when bonus triggers
+  priority: number;             // Lower = better (1 = best)
+}
+```
+
+### Pickaxe Speeds
+
+| Pickaxe | Roll Ticks | Bonus Chance | Bonus Ticks | Average Speed |
+|---------|------------|--------------|-------------|---------------|
+| Bronze | 8 | - | - | 8 ticks |
+| Iron | 7 | - | - | 7 ticks |
+| Steel | 6 | - | - | 6 ticks |
+| Mithril | 5 | - | - | 5 ticks |
+| Adamant | 4 | - | - | 4 ticks |
+| Rune | 3 | - | - | 3 ticks |
+| Dragon | 3 | 1/6 (0.167) | 2 | 2.83 ticks |
+| Crystal | 3 | 1/4 (0.25) | 2 | 2.75 ticks |
+
+**Example Tool Data:**
+```json
+{
+  "itemId": "dragon_pickaxe",
+  "levelRequired": 61,
+  "rollTicks": 3,
+  "bonusTickChance": 0.167,
+  "bonusRollTicks": 2,
+  "priority": 1
+}
+```
+
+---
+
+## Server-Side Implementation
+
+**Location**: `packages/shared/src/systems/shared/entities/ResourceSystem.ts`
+
+### computeCycleTicks() (Server Wrapper)
+
+Server-side wrapper that rolls for dragon/crystal pickaxe bonus speed:
+
+```typescript
+private computeCycleTicks(
+  skill: string,
+  tuned: { levelRequired: number; baseCycleTicks: number },
+  toolData: GatheringToolData | null
+): number {
+  // Roll for dragon/crystal pickaxe bonus speed server-side
+  const bonusRollTriggered =
+    toolData?.bonusTickChance !== undefined &&
+    Math.random() < toolData.bonusTickChance;
+
+  return computeCycleTicksUtil(
+    skill,
+    tuned.baseCycleTicks,
+    toolData,
+    bonusRollTriggered
+  );
+}
+```
+
+<Info>
+**Server Authority**: The random roll happens ONLY on the server. The computed cycle time is sent to the client via the gathering session state, ensuring perfect sync.
+</Info>
+
+---
+
+## Model Loading
+
+**Location**: `packages/shared/src/utils/rendering/ModelCache.ts`
+
+### normalizeScales()
+
+Normalize non-uniform scales in GLTF model hierarchy.
+
+```typescript
+private normalizeScales(scene: THREE.Object3D): void
+```
+
+**Purpose**: Some 3D modeling tools export models with non-uniform scales baked into internal nodes (e.g., scale (2, 0.5, 1)). This causes models to appear "squished" or "stretched".
+
+**Behavior**:
+- Traverses all nodes in the scene
+- Resets non-uniform scales to (1, 1, 1)
+- Preserves uniform scales (intentional sizing)
+- Called ONCE when model is first loaded, before caching
+
+**Example:**
+```typescript
+// Detect non-uniform scale
+const isNonUniform =
+  Math.abs(s.x - s.y) > 0.001 ||
+  Math.abs(s.y - s.z) > 0.001 ||
+  Math.abs(s.x - s.z) > 0.001;
+
+if (isNonUniform) {
+  node.scale.set(1, 1, 1);
+  node.updateMatrix();
+}
+```
+
+---
+
+## Resource Entity
+
+**Location**: `packages/shared/src/entities/world/ResourceEntity.ts`
+
+### Depleted Models
+
+Resources can define depleted models in their manifest:
+
+```json
+{
+  "id": "rock_copper",
+  "depletedModelPath": "asset://models/rocks/copper-rock-depleted.glb",
+  "depletedModelScale": 0.8
+}
+```
+
+**Behavior**:
+- When resource depletes, swaps to depleted model
+- When resource respawns, swaps back to full model
+- Works for all resource types (trees, rocks, fishing spots)
+
+**Methods:**
+```typescript
+private async swapToStump(): Promise<void>
+private async swapToFullModel(): Promise<void>
+```
+
+---
+
+## Testing
+
+### Success Rate Tests
+
+```typescript
+// Test OSRS-accurate success rates
+it("copper ore has ~39.5% success at level 1", () => {
+  const rate = computeSuccessRate("mining", 1, { low: 100, high: 256 });
+  expect(rate).toBeCloseTo(0.395, 2);
+});
+
+it("copper ore has 100% success at level 62", () => {
+  const rate = computeSuccessRate("mining", 62, { low: 100, high: 256 });
+  expect(rate).toBe(1.0);
+});
+```
+
+### Pickaxe Bonus Tests
+
+```typescript
+// Test dragon pickaxe bonus speed
+it("dragon pickaxe uses 2 ticks when bonus triggers", () => {
+  const ticks = computeCycleTicks("mining", 3, {
+    rollTicks: 3,
+    bonusRollTicks: 2,
+    bonusTickChance: 0.167
+  }, true);  // bonusRollTriggered = true
+  
+  expect(ticks).toBe(2);
+});
+```
+
+---
+
+## Related Documentation
+
+- [Skills & Progression](/wiki/game-systems/skills)
+- [Gathering Constants](/wiki/reference/constants)
+- [Manifest-Driven Design](/concepts/manifests)
+- [Resource System](/wiki/game-systems/resources)

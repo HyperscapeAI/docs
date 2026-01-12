@@ -92,7 +92,7 @@ export function dispatchInventoryAction(
 
 Supported actions:
 
-- **eat**: Emits `ITEM_ACTION_SELECTED` event for consumption
+- **eat**: Sends `useItem` network message → server validates eat delay → consumes food → heals HP
 - **drink**: Emits `ITEM_ACTION_SELECTED` event for potion effects
 - **bury**: Sends `buryBones` network message
 - **wield**: Sends `equipItem` network message (weapons/shields)
@@ -101,6 +101,10 @@ Supported actions:
 - **examine**: Shows examine text in chat and toast
 - **use**: Enters targeting mode for item-on-item/item-on-object interactions
 - **cancel**: No-op, menu already closed
+
+<Info>
+**Food Consumption**: The eat action is server-authoritative with 3-tick (1.8s) eat delay and combat attack delay integration. See [Inventory System](/wiki/game-systems/inventory#item-consumption) for details.
+</Info>
 
 ---
 
@@ -286,19 +290,50 @@ The system provides type detection helpers for inventory actions:
 
 ```typescript
 // From packages/shared/src/utils/item-helpers.ts
-import { isFood, isPotion, isBone, usesWield, usesWear, getPrimaryAction } from '@hyperscape/shared';
+import { 
+  isFood, 
+  isPotion, 
+  isBone, 
+  usesWield, 
+  usesWear, 
+  isNotedItem,
+  getPrimaryAction,
+  getPrimaryActionFromManifest,
+  HANDLED_INVENTORY_ACTIONS
+} from '@hyperscape/shared';
 
 // Detect item types
-const canEat = isFood(item);           // true for food items
-const canDrink = isPotion(item);       // true for potions
-const canBury = isBone(item);          // true for bones
+const canEat = isFood(item);           // true for food items (healAmount > 0, not potion)
+const canDrink = isPotion(item);       // true for potions (id contains "potion")
+const canBury = isBone(item);          // true for bones (id is "bones" or ends with "_bones")
 const shouldWield = usesWield(item);   // true for weapons/shields
-const shouldWear = usesWear(item);     // true for armor
+const shouldWear = usesWear(item);     // true for armor (not weapons/shields)
+const isNoted = isNotedItem(item);     // true for bank notes (isNoted flag or "_noted" suffix)
 
-// Get primary action (for left-click)
+// Get primary action (manifest-first with heuristic fallback)
 const action = getPrimaryAction(item, isNoted);
 // Returns: "eat" | "drink" | "bury" | "wield" | "wear" | "use"
+
+// Get action from manifest only (returns null if not defined)
+const manifestAction = getPrimaryActionFromManifest(item);
+
+// Check if action has a handler
+const isHandled = HANDLED_INVENTORY_ACTIONS.has(action);
 ```
+
+### Detection Logic
+
+The `getPrimaryAction` function uses a manifest-first approach:
+
+1. **Noted items**: Always return "use" (cannot eat/equip notes)
+2. **Manifest actions**: Check `item.inventoryActions[0]` if defined
+3. **Heuristic fallback**: Detect based on item properties
+   - Food: `type === "consumable"` + `healAmount > 0` + not potion
+   - Potions: `type === "consumable"` + `id.includes("potion")`
+   - Bones: `id === "bones"` or `id.endsWith("_bones")`
+   - Weapons/Shields: `usesWield()` checks `equipSlot` and `weaponType`
+   - Armor: `usesWear()` checks `equipable` and `equipSlot`
+4. **Final fallback**: Return "use"
 
 ---
 
