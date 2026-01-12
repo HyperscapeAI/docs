@@ -1,15 +1,15 @@
 ---
 title: "Inventory System"
-description: "Player inventory management, item stacking, and persistence"
+description: "Player inventory management, item stacking, context menus, and persistence"
 icon: "briefcase"
 ---
 
 # Inventory System
 
-The inventory system manages player item storage with 28 slots (OSRS standard), stackable item support, drag-and-drop operations, and database persistence.
+The inventory system manages player item storage with 28 slots (OSRS standard), stackable item support, drag-and-drop operations, OSRS-style context menus, and database persistence.
 
 <Info>
-Inventory code lives in `packages/shared/src/systems/shared/character/InventorySystem.ts`.
+Inventory code lives in `packages/shared/src/systems/shared/character/InventorySystem.ts` and `packages/client/src/game/systems/InventoryActionDispatcher.ts`.
 </Info>
 
 ## Core Constants
@@ -240,49 +240,123 @@ Players can consume food items to restore health with OSRS-accurate mechanics:
 // Food consumption flow:
 // 1. Client sends useItem packet
 // 2. Server validates eat delay (3 ticks = 1.8s cooldown)
-// 3. Server consumes item and applies healing
-// 4. Server emits PLAYER_HEALTH_UPDATED event
+// 3. Server validates item exists at slot
+// 4. Server consumes food and applies healing
+// 5. Server adds attack delay if in combat
+
+// Eat delay constants (from CombatConstants.ts)
+const EAT_DELAY_TICKS = 3;              // 1.8 seconds between foods
+const EAT_ATTACK_DELAY_TICKS = 3;       // Added to attack cooldown when eating mid-combat
+const MAX_HEAL_AMOUNT = 99;             // Security cap on healing
 ```
 
-#### Eat Delay System
+<Info>
+**OSRS-Accurate Behavior**: Food is consumed even at full health, and the eat delay applies regardless. Attack delay is only added if the player is already on attack cooldown.
+</Info>
 
-Food consumption uses a 3-tick (1.8 second) cooldown between eating:
+### Eat Delay Manager
+
+The `EatDelayManager` tracks per-player eating cooldowns:
 
 ```typescript
-// From EatDelayManager.ts
-export class EatDelayManager {
+// From packages/shared/src/systems/shared/character/EatDelayManager.ts
+class EatDelayManager {
   canEat(playerId: string, currentTick: number): boolean;
   recordEat(playerId: string, currentTick: number): void;
   getRemainingCooldown(playerId: string, currentTick: number): number;
+  clearPlayer(playerId: string): void;
+}
+
+// Usage in PlayerSystem
+if (!this.eatDelayManager.canEat(playerId, currentTick)) {
+  // Show "You are already eating." message
+  return;
+}
+
+this.eatDelayManager.recordEat(playerId, currentTick);
+// Consume food and heal...
+```
+
+### Combat Integration
+
+When eating during combat, attack delay is added to prevent instant attacks:
+
+```typescript
+// From PlayerSystem.ts - applyEatAttackDelay()
+const isOnCooldown = combatSystem.isPlayerOnAttackCooldown(playerId, currentTick);
+
+if (isOnCooldown) {
+  // OSRS Rule: Only add delay if weapon is already on cooldown
+  combatSystem.addAttackDelay(playerId, EAT_ATTACK_DELAY_TICKS);
+}
+// If weapon is ready, eating does NOT add delay
+```
+
+---
+
+## Context Menus
+
+Inventory items support OSRS-style context menus with manifest-driven actions.
+
+### Manifest-Driven Actions
+
+Items can define explicit `inventoryActions` in their manifest:
+
+```json
+{
+  "id": "shrimp",
+  "name": "Shrimp",
+  "type": "consumable",
+  "healAmount": 3,
+  "inventoryActions": ["Eat", "Use", "Drop", "Examine"]
 }
 ```
 
-**OSRS-Accurate Behavior:**
-- 3-tick delay between foods (1.8 seconds)
-- Food consumed even at full health
-- Attack delay added when eating during combat (only if already on cooldown)
-- Message format: "You eat the shrimp." (lowercase, no heal amount shown)
+The first action becomes the left-click default. If not specified, the system falls back to type-based detection.
 
-#### Security Features
+### Action Types
 
-The eating system includes comprehensive validation:
+| Action | Trigger | Description |
+|--------|---------|-------------|
+| **Eat** | Food items | Consumes food, heals HP, applies eat delay |
+| **Drink** | Potions | Consumes potion, applies effects |
+| **Wield** | Weapons, shields | Equips to weapon/shield slot |
+| **Wear** | Armor | Equips to armor slot |
+| **Bury** | Bones | Buries bones for Prayer XP |
+| **Use** | Tools, misc | Enters targeting mode |
+| **Drop** | Any item | Drops to ground |
+| **Examine** | Any item | Shows examine text |
 
-- **Rate limiting**: 3 requests/second via `getConsumeRateLimiter()`
-- **Server-authoritative**: All validation happens server-side
-- **Input validation**: Slot bounds checking, item ID mismatch detection
-- **Exploit prevention**: `MAX_HEAL_AMOUNT: 99` caps healing from modified manifests
-- **Consume-after-check**: Food only removed after all validation passes
+### Item Helpers
+
+The `item-helpers.ts` module provides type detection utilities:
 
 ```typescript
-// From inventory.ts - handleUseItem()
-export function handleUseItem(socket: ServerSocket, data: unknown, world: World): void {
-  // 1. Rate limit check
-  // 2. Validate payload structure
-  // 3. Validate itemId and slot
-  // 4. Emit INVENTORY_USE event
-  // 5. InventorySystem validates item exists at slot
-  // 6. PlayerSystem validates eat delay and applies healing
-}
+import { isFood, isPotion, isBone, usesWield, usesWear, getPrimaryAction } from '@hyperscape/shared';
+
+// Type detection
+isFood(item);        // Has healAmount, not a potion
+isPotion(item);      // Contains "potion" in ID
+isBone(item);        // ID is "bones" or ends with "_bones"
+usesWield(item);     // Weapons and shields
+usesWear(item);      // Armor (head, body, legs, etc.)
+
+// Get primary action (manifest-first with heuristic fallback)
+const action = getPrimaryAction(item, isNoted);
+// Returns: "eat" | "drink" | "bury" | "wield" | "wear" | "use"
+```
+
+### Context Menu Colors
+
+Context menus use OSRS-accurate color coding:
+
+```typescript
+import { CONTEXT_MENU_COLORS } from '@hyperscape/shared';
+
+CONTEXT_MENU_COLORS.ITEM;    // #ff9040 (orange) - Item names
+CONTEXT_MENU_COLORS.NPC;     // #ffff00 (yellow) - NPC/mob names
+CONTEXT_MENU_COLORS.OBJECT;  // #00ffff (cyan) - Scenery/objects
+CONTEXT_MENU_COLORS.PLAYER;  // #ffffff (white) - Player names
 ```
 
 ---
@@ -295,8 +369,8 @@ export function handleUseItem(socket: ServerSocket, data: unknown, world: World)
 | `INVENTORY_ITEM_ADDED` | `playerId`, `item` | Item added |
 | `INVENTORY_ITEM_REMOVED` | `playerId`, `itemId`, `quantity` | Item removed |
 | `INVENTORY_MOVE` | `playerId`, `fromSlot`, `toSlot` | Item slot changed |
-| `INVENTORY_USE` | `playerId`, `itemId`, `slot` | Item use requested |
-| `ITEM_USED` | `playerId`, `itemId`, `slot`, `itemData` | Item consumed |
+| `INVENTORY_USE` | `playerId`, `itemId`, `slot` | Item used (food, potions) |
+| `ITEM_USED` | `playerId`, `itemId`, `slot`, `itemData` | Item consumed (after validation) |
 | `ITEM_PICKUP` | `playerId`, `entityId`, `itemId` | Player picking up item |
 | `ITEM_DROP` | `playerId`, `slot`, `quantity` | Player dropping item |
 
@@ -319,25 +393,99 @@ useEffect(() => {
 Features:
 - 28-slot grid layout
 - Drag-and-drop item movement
-- Right-click context menu (eat, drink, wield, wear, bury, use, drop, examine)
-- Left-click primary action (manifest-driven or heuristic)
+- **OSRS-style right-click context menus** with manifest-driven actions
+- **Left-click primary actions** (Eat, Wield, Use, etc.)
 - Stack quantity display
 - Coin pouch separate display
-- Targeting mode for item-on-item interactions
+- **Cancel option** at bottom of all context menus
 
-### Primary Actions
+---
 
-Left-clicking an item executes its primary action:
+## Context Menus
 
-```typescript
-// From InventoryActionDispatcher.ts
-const action = getPrimaryAction(itemData, isNoted);
-// Returns: "eat" | "drink" | "bury" | "wield" | "wear" | "use"
+### Manifest-Driven Actions
+
+Items define their actions in `items.json`:
+
+```json
+{
+  "id": "cooked_shrimp",
+  "name": "Cooked shrimp",
+  "type": "consumable",
+  "healAmount": 3,
+  "inventoryActions": ["Eat", "Drop", "Examine"]
+}
 ```
 
-Actions are determined by:
-1. **Manifest first**: `inventoryActions[0]` if defined
-2. **Heuristic fallback**: Based on item properties (type, healAmount, equipSlot)
+### Action Ordering
+
+Actions are ordered by priority (first action is left-click default):
+
+```typescript
+// From item-helpers.ts
+export const ACTION_PRIORITY = {
+  eat: 1,      // Food primary action
+  drink: 1,    // Potion primary action
+  wield: 1,    // Weapon/shield primary action
+  wear: 1,     // Armor primary action
+  bury: 1,     // Bones primary action
+  use: 2,      // Generic use action
+  drop: 9,     // Always near bottom
+  examine: 10, // Always last (before Cancel)
+  cancel: 11,  // Always absolute last
+};
+```
+
+### InventoryActionDispatcher
+
+The `InventoryActionDispatcher` is the **single source of truth** for handling inventory actions:
+
+```typescript
+export function dispatchInventoryAction(
+  action: string,
+  ctx: InventoryActionContext,
+): ActionResult {
+  switch (action) {
+    case "eat":
+    case "drink":
+      // Server-authoritative consumption
+      world.network?.send("useItem", { itemId, slot });
+      return { success: true };
+
+    case "wield":
+    case "wear":
+      world.network?.send("equipItem", {
+        playerId: localPlayer.id,
+        itemId,
+        inventorySlot: slot,
+      });
+      return { success: true };
+
+    case "drop":
+      world.network?.send("dropItem", { itemId, slot, quantity });
+      return { success: true };
+
+    case "examine":
+      const examineText = itemData?.examine || `It's a ${itemId}.`;
+      world.emit(EventType.UI_TOAST, { message: examineText, type: "info" });
+      return { success: true };
+
+    case "use":
+      // Enter targeting mode for "Use X on Y" interactions
+      world.emit(EventType.ITEM_ACTION_SELECTED, {
+        playerId: localPlayer.id,
+        actionId: "use",
+        itemId,
+        slot,
+      });
+      return { success: true };
+
+    case "cancel":
+      // Intentional no-op - menu already closed
+      return { success: true };
+  }
+}
+```
 
 ---
 

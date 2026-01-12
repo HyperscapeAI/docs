@@ -85,39 +85,36 @@ Requirements:
 - Click ore rock to mine
 
 **OSRS-Accurate Mechanics:**
-- Success rate improves with Mining level (not pickaxe tier)
-- Pickaxe tier affects roll frequency (ticks between attempts)
-- Rocks **always deplete** after yielding one ore (100% depletion)
-- Dragon pickaxe: 1/6 chance for 2-tick roll (vs normal 3 ticks)
-- Crystal pickaxe: 1/4 chance for 2-tick roll (vs normal 3 ticks)
+- Pickaxe tier affects **roll frequency** (not success rate)
+- Success rate is **level-only** (pickaxe doesn't affect it)
+- Rocks have **100% depletion** on successful mine (1/8 chance)
+- Dragon/Crystal pickaxes have **bonus speed rolls**
 
-#### Success Rates
+| Ore | Level | XP | Depletion |
+|-----|-------|-----|-----------|
+| Copper/Tin | 1 | 17.5 | 1/8 chance |
+| Iron | 15 | 35 | 1/8 chance |
+| Coal | 30 | 50 | 1/8 chance |
+| Mithril | 55 | 80 | 1/8 chance |
+| Adamantite | 70 | 95 | 1/8 chance |
+| Runite | 85 | 125 | 1/8 chance |
 
-Success rates use OSRS formula: `P(Level) = (1 + floor(low × (99 - L) / 98 + high × (L - 1) / 98 + 0.5)) / 256`
+**Pickaxe Tiers:**
 
-| Ore | Level | XP | Success at Min Level | Success at 99 |
-|-----|-------|-----|---------------------|---------------|
-| Copper/Tin | 1 | 17.5 | ~39.5% | 100% |
-| Iron | 15 | 35 | ~52% | 100% |
-| Coal | 30 | 50 | ~16.4% | ~39.5% |
-| Mithril | 55 | 80 | ~11.7% | ~19.9% |
-| Adamantite | 70 | 95 | ~7.4% | ~10.2% |
-| Runite | 85 | 125 | ~6.64% | ~7.42% |
+| Pickaxe | Level | Roll Ticks | Bonus Speed |
+|---------|-------|------------|-------------|
+| Bronze | 1 | 8 ticks | None |
+| Iron | 1 | 7 ticks | None |
+| Steel | 6 | 6 ticks | None |
+| Mithril | 21 | 5 ticks | None |
+| Adamant | 31 | 4 ticks | None |
+| Rune | 41 | 3 ticks | None |
+| Dragon | 61 | 3 ticks | 1/6 chance for 2 ticks |
+| Crystal | 71 | 3 ticks | 1/4 chance for 2 ticks |
 
-#### Pickaxe Roll Speeds
-
-Pickaxe tier determines ticks between roll attempts:
-
-| Pickaxe | Roll Ticks | Avg Speed (with bonuses) |
-|---------|------------|--------------------------|
-| Bronze | 8 | 8 ticks |
-| Iron | 7 | 7 ticks |
-| Steel | 6 | 6 ticks |
-| Mithril | 5 | 5 ticks |
-| Adamant | 4 | 4 ticks |
-| Rune | 3 | 3 ticks |
-| Dragon | 3 | 2.83 ticks (1/6 chance for 2) |
-| Crystal | 3 | 2.75 ticks (1/4 chance for 2) |
+<Info>
+  Dragon and Crystal pickaxes have a chance to mine faster: Dragon has a 1/6 chance for 2-tick rolls (avg 2.83 ticks), Crystal has a 1/4 chance (avg 2.75 ticks).
+</Info>
 
 ### Fishing
 
@@ -184,18 +181,43 @@ Smelt ores into bars at furnaces, then smith bars into equipment at anvils.
 
 #### Smithing (at Anvil)
 
-Requires a hammer in inventory. Examples:
+Click an anvil to open the smithing interface. **Requires a hammer in your inventory** (not consumed). Select the item to smith and quantity.
 
-| Item | Level | Bars Required | XP |
-|------|-------|---------------|-----|
-| Bronze Sword | 1 | 1 Bronze | 12.5 |
-| Iron Platebody | 33 | 5 Iron | 125 |
-| Steel Platelegs | 36 | 3 Steel | 75 |
-| Mithril Scimitar | 55 | 2 Mithril | 100 |
+**Weapons:**
+
+| Item | Level | Bars Required | XP | Ticks |
+|------|-------|---------------|-----|-------|
+| Bronze Sword | 4 | 1 Bronze | 12.5 | 4 |
+| Bronze Scimitar | 5 | 2 Bronze | 25 | 4 |
+| Iron Sword | 19 | 1 Iron | 25 | 4 |
+| Steel Sword | 34 | 1 Steel | 37.5 | 4 |
+| Mithril Sword | 54 | 1 Mithril | 50 | 4 |
+
+**Armor:**
+
+| Item | Level | Bars Required | XP | Ticks |
+|------|-------|---------------|-----|-------|
+| Bronze Platebody | 18 | 5 Bronze | 62.5 | 4 |
+| Iron Platebody | 33 | 5 Iron | 125 | 4 |
+| Steel Platebody | 48 | 5 Steel | 187.5 | 4 |
+| Mithril Platebody | 68 | 5 Mithril | 250 | 4 |
+
+**Tools:**
+
+| Item | Level | Bars Required | XP | Ticks |
+|------|-------|---------------|-----|-------|
+| Bronze Hatchet | 1 | 1 Bronze | 12.5 | 4 |
+| Bronze Pickaxe | 1 | 1 Bronze | 12.5 | 4 |
+| Iron Hatchet | 16 | 1 Iron | 25 | 4 |
+| Steel Hatchet | 31 | 1 Steel | 37.5 | 4 |
 
 <Warning>
-  You must have a hammer in your inventory to smith items at an anvil.
+  You must have a hammer in your inventory to smith items at an anvil. The hammer is not consumed.
 </Warning>
+
+<Info>
+  Smithing supports "Make X" functionality - you can smith multiple items in one session. The system auto-smiths until you run out of bars or reach the target quantity.
+</Info>
 
 ## Equipment Level Requirements
 

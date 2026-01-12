@@ -42,6 +42,11 @@ export const COMBAT_CONSTANTS = {
     CONTROLLED_XP_PER_DAMAGE: 1.33,   // Split across all combat skills
   },
 
+  // Food consumption (OSRS-accurate)
+  EAT_DELAY_TICKS: 3,                 // 1.8 seconds between foods
+  EAT_ATTACK_DELAY_TICKS: 3,          // Added to attack cooldown when eating mid-combat
+  MAX_HEAL_AMOUNT: 99,                // Security cap on healing
+
   // Combat timeout
   COMBAT_TIMEOUT_TICKS: 16,           // 9.6 seconds out of combat
 
@@ -429,6 +434,61 @@ handleCombatKill(data: CombatKillData): void {
 
 ---
 
+## Food & Combat Interaction
+
+### Eating During Combat
+
+When a player eats food while in combat, OSRS-accurate timing rules apply:
+
+```typescript
+// From PlayerSystem.ts
+// OSRS Rule: Foods only add to EXISTING attack delay
+// If weapon is ready to attack, eating does NOT add delay
+
+const isOnCooldown = combatSystem.isPlayerOnAttackCooldown(playerId, currentTick);
+
+if (isOnCooldown) {
+  // Add 3 ticks to attack cooldown
+  combatSystem.addAttackDelay(playerId, COMBAT_CONSTANTS.EAT_ATTACK_DELAY_TICKS);
+}
+// If weapon is ready (cooldown expired), eating does NOT add delay
+```
+
+### Eat Delay Mechanics
+
+Players cannot eat again until the eat delay expires:
+
+```typescript
+// 3-tick (1.8 second) cooldown between foods
+const canEat = eatDelayManager.canEat(playerId, currentTick);
+
+if (!canEat) {
+  // Show "You are already eating." message
+  return;
+}
+
+// Record eat action
+eatDelayManager.recordEat(playerId, currentTick);
+```
+
+<Info>
+**OSRS-Accurate**: Food is consumed even at full health. The eat delay and attack delay apply regardless of current HP.
+</Info>
+
+### Attack Delay API
+
+The `CombatSystem` provides methods for eat delay integration:
+
+```typescript
+// Check if player is on attack cooldown
+isPlayerOnAttackCooldown(playerId: string, currentTick: number): boolean;
+
+// Add delay ticks to player's next attack
+addAttackDelay(playerId: string, delayTicks: number): void;
+```
+
+---
+
 ## Combat Events
 
 The combat system emits events for UI and logging:
@@ -441,7 +501,7 @@ The combat system emits events for UI and logging:
 | `COMBAT_ENDED` | `entityId` | Entity left combat |
 | `ENTITY_DAMAGED` | `entityId`, `damage`, `sourceId`, `remainingHealth` | Damage taken |
 | `ENTITY_DEATH` | `entityId`, `killerId`, `position` | Entity died |
-| `PLAYER_HEALTH_UPDATED` | `playerId`, `health`, `maxHealth` | Health changed (server-authoritative) |
+| `PLAYER_HEALTH_UPDATED` | `playerId`, `health`, `maxHealth` | Health changed (healing, damage) |
 
 ---
 

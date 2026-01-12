@@ -1,48 +1,58 @@
 ---
 title: "Smithing System"
-description: "Smelting ores and smithing equipment"
+description: "OSRS-accurate smelting and smithing with anvils, furnaces, and manifest-driven recipes"
 icon: "hammer"
 ---
 
 # Smithing System
 
-The Smithing skill allows players to smelt ores into metal bars at furnaces and smith bars into weapons, armor, and tools at anvils. This is a two-stage artisan skill following OSRS mechanics.
+The smithing system implements OSRS-accurate smelting and smithing mechanics with manifest-driven recipes, tick-based timing, and auto-smithing support.
 
 <Info>
-Smithing is managed by `SmeltingSystem` and `SmithingSystem` in `packages/shared/src/systems/shared/interaction/`.
+Smithing code lives in `packages/shared/src/systems/shared/interaction/SmithingSystem.ts` and uses recipes from `ProcessingDataProvider`.
 </Info>
-
----
 
 ## Overview
 
-Smithing consists of two distinct activities:
+Smithing is a **two-step process**:
 
-1. **Smelting** - Convert ores into metal bars at a furnace
-2. **Smithing** - Convert metal bars into equipment at an anvil
+1. **Smelting** - Combine ores at a furnace to create bars
+2. **Smithing** - Use bars at an anvil to create equipment
 
-Both activities grant Smithing XP and follow OSRS-accurate mechanics.
+Both steps:
+- Use **tick-based timing** (4 ticks = 2.4 seconds per action)
+- Support **"Make X"** functionality (auto-craft multiple items)
+- Are **100% success rate** (except iron ore smelting)
+- Grant **Smithing XP** per item created
 
 ---
 
-## Stage 1: Smelting
-
-### Requirements
-
-- Ores in inventory (copper, tin, iron, coal, mithril, adamantite, runite)
-- Access to a furnace (permanent world object)
+## Smelting (Furnaces)
 
 ### How to Smelt
 
-1. Click on a furnace
-2. Select the bar type from the interface
-3. Choose quantity:
-   - **1** - Smelt 1 bar
-   - **5** - Smelt 5 bars
-   - **10** - Smelt 10 bars
-   - **All** - Smelt 28 bars (full inventory)
-   - **X** - Enter custom amount
-4. Wait for smelting to complete
+1. Have ores in your inventory
+2. Click a furnace
+3. Select bar type from the interface
+4. Choose quantity (1, 5, 10, X, All)
+5. System auto-smelts until out of materials
+
+### Smelting Requirements
+
+```typescript
+// From ProcessingDataProvider.ts
+interface SmeltingRecipe {
+  barItemId: string;        // Output bar ID (e.g., "bronze_bar")
+  barName: string;          // Display name
+  oreRequirements: {        // Input ores
+    [oreId: string]: number;
+  };
+  levelRequired: number;    // Smithing level needed
+  xp: number;               // XP per bar
+  successRate: number;      // 1.0 = 100%, 0.5 = 50%
+  ticks: number;            // Ticks per smelt (default 4)
+}
+```
 
 ### Smelting Recipes
 
@@ -56,660 +66,522 @@ Both activities grant Smithing XP and follow OSRS-accurate mechanics.
 | Rune | 85 | 1 Runite Ore + 8 Coal | 50 | 100% | 4 |
 
 <Warning>
-**Iron Ore Failure**: Iron ore has a 50% chance to fail when smelting, consuming the ore without producing a bar. This matches OSRS mechanics and makes iron bars less efficient than other metals.
+  Iron ore has a **50% failure rate** when smelting. Failed attempts consume the ore but grant no bar or XP. This matches OSRS mechanics.
 </Warning>
 
-### Smelting Timing
+### Iron Smelting Failure
 
-- **4 ticks per bar** (2.4 seconds)
-- Actions are queued and processed on tick boundaries
-- Multiple bars are smelted sequentially
+```typescript
+// From SmeltingSystem.ts
+if (recipe.successRate < 1.0) {
+  const roll = Math.random();
+  if (roll >= recipe.successRate) {
+    // Failed smelt - consume ore, no bar, no XP
+    this.emitTypedEvent(EventType.UI_MESSAGE, {
+      playerId,
+      message: SMITHING_CONSTANTS.MESSAGES.IRON_SMELT_FAIL,
+      type: "error",
+    });
+    
+    // Still consume the ore
+    this.consumeOres(playerId, recipe.oreRequirements);
+    
+    // Schedule next smelt
+    this.scheduleNextSmelt(playerId);
+    return;
+  }
+}
+```
 
 ---
 
-## Stage 2: Smithing
-
-### Requirements
-
-- **Hammer** in inventory (not consumed)
-- Metal bars in inventory
-- Access to an anvil (permanent world object)
+## Smithing (Anvils)
 
 ### How to Smith
 
-1. Click on an anvil
-2. Select the item to smith from the interface
-3. Choose quantity (1, 5, 10, All, or X)
-4. Wait for smithing to complete
+1. Have bars in your inventory
+2. **Have a hammer in your inventory** (required, not consumed)
+3. Click an anvil
+4. Select item from the interface
+5. Choose quantity (1, 5, 10, X, All)
+6. System auto-smiths until out of bars
 
-### Smithing Categories
-
-Items are organized by category in the smithing interface:
-
-- **Weapons** - Swords, scimitars, daggers, axes, maces, warhammers
-- **Armor** - Helmets, platebodies, platelegs, shields, boots, gauntlets
-- **Tools** - Pickaxes, hatchets
-- **Misc** - Nails, arrowtips, dart tips, knives
-
-### Example Smithing Recipes
-
-#### Bronze Items (Level 1+)
-
-| Item | Level | Bars | XP | Category |
-|------|-------|------|-----|----------|
-| Bronze Dagger | 1 | 1 | 12.5 | Weapons |
-| Bronze Sword | 4 | 1 | 12.5 | Weapons |
-| Bronze Scimitar | 5 | 2 | 25 | Weapons |
-| Bronze Full Helm | 7 | 2 | 25 | Armor |
-| Bronze Platebody | 18 | 5 | 62.5 | Armor |
-| Bronze Platelegs | 16 | 3 | 37.5 | Armor |
-
-#### Iron Items (Level 15+)
-
-| Item | Level | Bars | XP | Category |
-|------|-------|------|-----|----------|
-| Iron Dagger | 15 | 1 | 25 | Weapons |
-| Iron Sword | 19 | 1 | 25 | Weapons |
-| Iron Scimitar | 20 | 2 | 50 | Weapons |
-| Iron Platebody | 33 | 5 | 125 | Armor |
-
-#### Steel Items (Level 30+)
-
-| Item | Level | Bars | XP | Category |
-|------|-------|------|-----|----------|
-| Steel Sword | 34 | 1 | 37.5 | Weapons |
-| Steel Platebody | 48 | 5 | 187.5 | Armor |
-| Steel Platelegs | 36 | 3 | 112.5 | Armor |
-
-#### Mithril Items (Level 50+)
-
-| Item | Level | Bars | XP | Category |
-|------|-------|------|-----|----------|
-| Mithril Scimitar | 55 | 2 | 100 | Weapons |
-| Mithril Platebody | 68 | 5 | 250 | Armor |
-| Mithril Pickaxe | 54 | 2 | 100 | Tools |
-
-### Smithing Timing
-
-- **4 ticks per item** (2.4 seconds)
-- Actions are queued and processed on tick boundaries
-- Multiple items are smithed sequentially
-
----
-
-## Make X Memory
-
-The smithing interface remembers your last custom quantity:
-
-1. Select an item to smith
-2. Click **X** to enter custom quantity
-3. Enter amount (e.g., 50)
-4. Next time you click **X**, it defaults to 50
-
-This feature:
-- Persists in browser localStorage
-- Works separately for smelting and smithing
-- Matches OSRS's "Make X" memory behavior
-
----
-
-## World Objects
-
-### FurnaceEntity
-
-Permanent smelting stations found in the world.
-
-**Location**: `packages/shared/src/entities/world/FurnaceEntity.ts`
-
-**Properties:**
-- Interaction range: 2 tiles
-- Interaction type: `SMELTING`
-- Visual: Blue box proxy (1.2 × 1.4 × 1.2)
-
-**Context Menu:**
-- **Smelt** - Opens smelting interface
-- **Examine** - "A furnace for smelting ores into metal bars."
-
-### AnvilEntity
-
-Permanent smithing stations found in the world.
-
-**Location**: `packages/shared/src/entities/world/AnvilEntity.ts`
-
-**Properties:**
-- Interaction range: 2 tiles
-- Interaction type: `SMITHING`
-- Visual: Blue box proxy (1.0 × 0.8 × 0.6)
-
-**Context Menu:**
-- **Smith** - Opens smithing interface
-- **Examine** - "An anvil for smithing metal bars into weapons and tools."
-
----
-
-## System Architecture
-
-### SmeltingSystem
-
-**Location**: `packages/shared/src/systems/shared/interaction/SmeltingSystem.ts`
-
-**Responsibilities:**
-- Handle furnace interactions
-- Validate ore availability and level requirements
-- Process smelting actions on tick boundaries
-- Apply success/failure rates (iron ore)
-- Grant Smithing XP
-- Manage active smelting sessions
-
-**Key Methods:**
-```typescript
-// Check if player is currently smelting
-isPlayerSmelting(playerId: string): boolean
-
-// Internal: Handle furnace click
-private handleFurnaceInteract(data: { playerId, furnaceId }): void
-
-// Internal: Start smelting session
-private startSmelting(data: { playerId, barItemId, furnaceId, quantity }): void
-
-// Internal: Complete single smelt action
-private completeSmelt(playerId: string): void
-```
-
-### SmithingSystem
-
-**Location**: `packages/shared/src/systems/shared/interaction/SmithingSystem.ts`
-
-**Responsibilities:**
-- Handle anvil interactions
-- Validate hammer and bar availability
-- Process smithing actions on tick boundaries
-- Grant Smithing XP
-- Manage active smithing sessions
-
-**Key Methods:**
-```typescript
-// Check if player is currently smithing
-isPlayerSmithing(playerId: string): boolean
-
-// Internal: Handle anvil click
-private handleAnvilInteract(data: { playerId, anvilId }): void
-
-// Internal: Start smithing session
-private startSmithing(data: { playerId, recipeId, anvilId, quantity }): void
-
-// Internal: Complete single smith action
-private completeSmith(playerId: string): void
-```
-
----
-
-## ProcessingDataProvider
-
-Smelting and smithing recipes are managed by `ProcessingDataProvider`.
-
-**Location**: `packages/shared/src/data/ProcessingDataProvider.ts`
-
-### Smelting Methods
+### Smithing Requirements
 
 ```typescript
-// Check if item is a smeltable bar
-isSmeltableBar(itemId: string): boolean
-
-// Get smelting data for a bar
-getSmeltingData(barItemId: string): SmeltingItemData | null
-
-// Get all smeltable bar IDs
-getSmeltableBarIds(): Set<string>
-
-// Get bars player can smelt from inventory
-getSmeltableBarsFromInventory(
-  inventory: Array<{ itemId: string; quantity?: number }>,
-  smithingLevel: number
-): SmeltingItemData[]
-
-// Get smelting level requirement
-getSmeltingLevel(barItemId: string): number
-
-// Get smelting XP
-getSmeltingXP(barItemId: string): number
-
-// Get smelting ticks
-getSmeltingTicks(barItemId: string): number
-```
-
-### Smithing Methods
-
-```typescript
-// Check if item is smithable
-isSmithableItem(itemId: string): boolean
-
-// Get smithing recipe
-getSmithingRecipe(itemId: string): SmithingRecipeData | null
-
-// Get all smithable item IDs
-getSmithableItemIds(): Set<string>
-
-// Get recipes for a specific bar type
-getSmithingRecipesForBar(barType: string): SmithingRecipeData[]
-
-// Get all recipes player can make (with availability flags)
-getSmithableItemsWithAvailability(
-  inventory: Array<{ itemId: string; quantity?: number }>,
-  smithingLevel: number
-): SmithingRecipeWithAvailability[]
-
-// Get smithing level requirement
-getSmithingLevel(itemId: string): number
-
-// Get smithing XP
-getSmithingXP(itemId: string): number
-
-// Get smithing ticks
-getSmithingTicks(itemId: string): number
-```
-
----
-
-## Events
-
-### Smelting Events
-
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `SMELTING_INTERACT` | `{ playerId, furnaceId, position }` | Player clicked furnace |
-| `SMELTING_INTERFACE_OPEN` | `{ playerId, furnaceId, availableBars }` | Show smelting UI |
-| `PROCESSING_SMELTING_REQUEST` | `{ playerId, barItemId, furnaceId, quantity }` | Player selected bar to smelt |
-| `SMELTING_START` | `{ playerId, barItemId, furnaceId }` | Smelting session started |
-| `SMELTING_SUCCESS` | `{ playerId, barItemId, xpGained }` | Bar smelted successfully |
-| `SMELTING_FAILURE` | `{ playerId, barItemId }` | Smelting failed (iron ore) |
-| `SMELTING_COMPLETE` | `{ playerId, barItemId, totalSmelted, totalFailed, totalXp }` | Session finished |
-
-### Smithing Events
-
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `SMITHING_INTERACT` | `{ playerId, anvilId, position }` | Player clicked anvil |
-| `SMITHING_INTERFACE_OPEN` | `{ playerId, anvilId, availableRecipes }` | Show smithing UI |
-| `PROCESSING_SMITHING_REQUEST` | `{ playerId, recipeId, anvilId, quantity }` | Player selected item to smith |
-| `SMITHING_START` | `{ playerId, recipeId, anvilId }` | Smithing session started |
-| `SMITHING_COMPLETE` | `{ playerId, recipeId, totalSmithed, totalXp }` | Session finished |
-
----
-
-## Database Schema
-
-Smithing skill data is persisted in the `characters` table:
-
-```sql
-ALTER TABLE "characters" ADD COLUMN "smithingLevel" integer DEFAULT 1;
-ALTER TABLE "characters" ADD COLUMN "smithingXp" integer DEFAULT 0;
-```
-
-**Migration**: `0015_add_smithing_skill.sql`
-
----
-
-## Client UI
-
-### SmeltingPanel
-
-**Location**: `packages/client/src/game/panels/SmeltingPanel.tsx`
-
-**Features:**
-- Shows available bars based on inventory ores
-- Displays level requirements and ore requirements
-- Quantity selection (1, 5, 10, All, X)
-- Make X memory (remembers last custom quantity)
-
-### SmithingPanel
-
-**Location**: `packages/client/src/game/panels/SmithingPanel.tsx`
-
-**Features:**
-- Shows available recipes grouped by category
-- Displays level requirements, bar requirements, XP
-- Greys out items player can't make (insufficient level or bars)
-- Quantity selection (1, 5, 10, All, X)
-- Make X memory (remembers last custom quantity)
-
----
-
-## Manifest Structure
-
-### Smelting Recipes
-
-**File**: `packages/server/world/assets/manifests/recipes/smelting.json`
-
-```json
-{
-  "recipes": [
-    {
-      "output": "bronze_bar",
-      "inputs": [
-        { "item": "copper_ore", "amount": 1 },
-        { "item": "tin_ore", "amount": 1 }
-      ],
-      "level": 1,
-      "xp": 6.25,
-      "ticks": 4,
-      "successRate": 1.0
-    },
-    {
-      "output": "iron_bar",
-      "inputs": [
-        { "item": "iron_ore", "amount": 1 }
-      ],
-      "level": 15,
-      "xp": 12.5,
-      "ticks": 4,
-      "successRate": 0.5
-    }
-  ]
+interface SmithingRecipe {
+  itemId: string;           // Output item ID (e.g., "bronze_sword")
+  name: string;             // Display name
+  barType: string;          // Input bar ID (e.g., "bronze_bar")
+  barsRequired: number;     // Bars consumed per item
+  levelRequired: number;    // Smithing level needed
+  xp: number;               // XP per item
+  category: string;         // UI category (sword, hatchet, pickaxe, etc.)
+  ticks: number;            // Ticks per smith (default 4)
 }
 ```
 
 ### Smithing Recipes
 
-**File**: `packages/server/world/assets/manifests/recipes/smithing.json`
+**Weapons:**
+
+| Item | Level | Bars | XP | Category |
+|------|-------|------|-----|----------|
+| Bronze Dagger | 1 | 1 Bronze | 12.5 | dagger |
+| Bronze Sword | 4 | 1 Bronze | 12.5 | sword |
+| Bronze Scimitar | 5 | 2 Bronze | 25 | scimitar |
+| Iron Sword | 19 | 1 Iron | 25 | sword |
+| Steel Sword | 34 | 1 Steel | 37.5 | sword |
+| Mithril Sword | 54 | 1 Mithril | 50 | sword |
+| Adamant Sword | 74 | 1 Adamant | 62.5 | sword |
+| Rune Sword | 89 | 1 Rune | 75 | sword |
+
+**Armor:**
+
+| Item | Level | Bars | XP | Category |
+|------|-------|------|-----|----------|
+| Bronze Platebody | 18 | 5 Bronze | 62.5 | platebody |
+| Iron Platebody | 33 | 5 Iron | 125 | platebody |
+| Steel Platebody | 48 | 5 Steel | 187.5 | platebody |
+| Mithril Platebody | 68 | 5 Mithril | 250 | platebody |
+
+**Tools:**
+
+| Item | Level | Bars | XP | Category |
+|------|-------|------|-----|----------|
+| Bronze Hatchet | 1 | 1 Bronze | 12.5 | hatchet |
+| Bronze Pickaxe | 1 | 1 Bronze | 12.5 | pickaxe |
+| Iron Hatchet | 16 | 1 Iron | 25 | hatchet |
+| Iron Pickaxe | 16 | 1 Iron | 25 | pickaxe |
+| Steel Hatchet | 31 | 1 Steel | 37.5 | hatchet |
+| Steel Pickaxe | 31 | 1 Steel | 37.5 | pickaxe |
+
+---
+
+## Tick-Based Timing
+
+Both smelting and smithing use **4-tick actions** (2.4 seconds):
+
+```typescript
+// From SmithingConstants.ts
+export const SMITHING_CONSTANTS = {
+  DEFAULT_SMELTING_TICKS: 4,  // 4 ticks = 2.4s
+  DEFAULT_SMITHING_TICKS: 4,  // 4 ticks = 2.4s
+  TICK_DURATION_MS: 600,      // 600ms per tick
+};
+```
+
+### Session Processing
+
+```typescript
+// From SmithingSystem.ts
+update(_dt: number): void {
+  const currentTick = this.world.currentTick ?? 0;
+
+  // Only process once per tick
+  if (currentTick === this.lastProcessedTick) return;
+  this.lastProcessedTick = currentTick;
+
+  // Process all active sessions
+  for (const [playerId, session] of this.activeSessions) {
+    if (currentTick >= session.completionTick) {
+      this.completeSmith(playerId);
+    }
+  }
+}
+```
+
+---
+
+## Auto-Smithing
+
+The system supports **auto-smithing** - once started, it continues until:
+
+- Target quantity reached
+- Out of bars
+- Player moves
+- Player disconnects
+
+```typescript
+/**
+ * Schedule the next smith action for a session.
+ * Called after each successful smith to queue the next one.
+ */
+private scheduleNextSmith(playerId: string): void {
+  const session = this.activeSessions.get(playerId);
+  if (!session) return;
+
+  // Check if we've reached the target quantity
+  if (session.smithed >= session.quantity) {
+    this.completeSmithing(playerId);
+    return;
+  }
+
+  // Check materials (bars)
+  if (!this.hasRequiredBars(playerId, recipe.barType, recipe.barsRequired)) {
+    this.emitTypedEvent(EventType.UI_MESSAGE, {
+      playerId,
+      message: "You have run out of bars.",
+      type: "info",
+    });
+    this.completeSmithing(playerId);
+    return;
+  }
+
+  // Set completion tick for next smith action
+  const currentTick = this.world.currentTick ?? 0;
+  session.completionTick = currentTick + recipe.ticks;
+}
+```
+
+---
+
+## Hammer Requirement
+
+Smithing at anvils **requires a hammer** in your inventory:
+
+```typescript
+/**
+ * Check if player has a hammer in inventory
+ */
+private hasHammer(playerId: string): boolean {
+  const inventory = this.world.getInventory?.(playerId);
+  if (!inventory || !Array.isArray(inventory)) return false;
+
+  return inventory.some(
+    (item) => isLooseInventoryItem(item) && item.itemId === HAMMER_ITEM_ID
+  );
+}
+```
+
+The hammer is **not consumed** - it's a permanent tool.
+
+---
+
+## Manifest Integration
+
+### Smelting Recipes
+
+Defined in `items.json` with `smeltingRecipe` property:
 
 ```json
 {
-  "recipes": [
-    {
-      "output": "bronze_sword",
-      "bar": "bronze_bar",
-      "barsRequired": 1,
-      "level": 4,
-      "xp": 12.5,
-      "ticks": 4,
-      "category": "weapons"
+  "id": "bronze_bar",
+  "name": "Bronze bar",
+  "type": "resource",
+  "smeltingRecipe": {
+    "oreRequirements": {
+      "copper_ore": 1,
+      "tin_ore": 1
     },
-    {
-      "output": "iron_platebody",
-      "bar": "iron_bar",
-      "barsRequired": 5,
-      "level": 33,
-      "xp": 125,
-      "ticks": 4,
-      "category": "armor"
-    }
-  ]
+    "levelRequired": 1,
+    "xp": 6.25,
+    "successRate": 1.0,
+    "ticks": 4
+  }
+}
+```
+
+### Smithing Recipes
+
+Defined in `items.json` with `smithingRecipe` property:
+
+```json
+{
+  "id": "bronze_sword",
+  "name": "Bronze sword",
+  "type": "weapon",
+  "smithingRecipe": {
+    "barType": "bronze_bar",
+    "barsRequired": 1,
+    "levelRequired": 4,
+    "xp": 12.5,
+    "category": "sword",
+    "ticks": 4
+  }
 }
 ```
 
 ---
 
-## Constants
+## Station 3D Models
 
-Smithing constants are centralized in `SmithingConstants.ts`:
+Anvils and furnaces now use **manifest-driven 3D models**:
 
-**Location**: `packages/shared/src/constants/SmithingConstants.ts`
+```json
+{
+  "id": "anvil",
+  "name": "Anvil",
+  "type": "station",
+  "modelPath": "/assets/models/stations/anvil.glb",
+  "scale": 1.0,
+  "interactionType": "smithing"
+}
+```
+
+This allows easy customization of station appearances without code changes.
+
+---
+
+## Events
+
+| Event | Data | Description |
+|-------|------|-------------|
+| `SMITHING_INTERACT` | `playerId`, `anvilId` | Player clicked anvil |
+| `SMITHING_INTERFACE_OPEN` | `playerId`, `anvilId`, `availableRecipes` | Show smithing UI |
+| `PROCESSING_SMITHING_REQUEST` | `playerId`, `recipeId`, `anvilId`, `quantity` | Start smithing |
+| `SMITHING_START` | `playerId`, `recipeId`, `anvilId` | Smithing session started |
+| `SMITHING_COMPLETE` | `playerId`, `recipeId`, `totalSmithed`, `totalXp` | Session finished |
+| `INVENTORY_ITEM_REMOVED` | `playerId`, `itemId`, `quantity` | Bars consumed |
+| `INVENTORY_ITEM_ADDED` | `playerId`, `item` | Smithed item added |
+| `SKILLS_XP_GAINED` | `playerId`, `skill`, `amount` | XP granted |
+
+---
+
+## API Reference
+
+### SmithingSystem
 
 ```typescript
+class SmithingSystem extends SystemBase {
+  /**
+   * Check if player is currently smithing
+   */
+  isPlayerSmithing(playerId: string): boolean;
+
+  /**
+   * Update method - processes tick-based smithing sessions
+   * Called each frame, but only processes once per game tick
+   */
+  update(_dt: number): void;
+}
+```
+
+### ProcessingDataProvider
+
+```typescript
+class ProcessingDataProvider {
+  /**
+   * Get smithing recipe by output item ID
+   */
+  getSmithingRecipe(itemId: string): SmithingRecipe | null;
+
+  /**
+   * Get all smithable items with availability info
+   * Checks player's bars and level
+   */
+  getSmithableItemsWithAvailability(
+    inventory: Array<{ itemId: string; quantity: number }>,
+    smithingLevel: number
+  ): Array<SmithingRecipe & { meetsLevel: boolean; hasBars: boolean }>;
+
+  /**
+   * Get smelting recipe by bar item ID
+   */
+  getSmeltingRecipe(barItemId: string): SmeltingRecipe | null;
+}
+```
+
+---
+
+## Configuration
+
+### Constants
+
+```typescript
+// From SmithingConstants.ts
 export const SMITHING_CONSTANTS = {
-  // Item IDs
   HAMMER_ITEM_ID: "hammer",
   COAL_ITEM_ID: "coal",
-
-  // Tick-based timing defaults
   DEFAULT_SMELTING_TICKS: 4,
   DEFAULT_SMITHING_TICKS: 4,
-
-  // Tick duration (600ms per tick)
   TICK_DURATION_MS: 600,
-
-  // Input validation limits
   MAX_QUANTITY: 10000,
   MIN_QUANTITY: 1,
-  MAX_ITEM_ID_LENGTH: 64,
-
-  // Messages
-  MESSAGES: {
-    ALREADY_SMELTING: "You are already smelting.",
-    NO_HAMMER: "You need a hammer to work the metal on this anvil.",
-    LEVEL_TOO_LOW_SMELT: "You need level {level} Smithing to smelt that.",
-    SMELT_SUCCESS: "You smelt a {item}.",
-    IRON_SMELT_FAIL: "The ore is too impure and you fail to smelt it.",
-    // ... more messages
-  },
-} as const;
+};
 ```
 
-### Helper Functions
+### Messages
+
+All user-facing messages are centralized:
 
 ```typescript
-// Format messages with placeholders
-formatMessage(message: string, values: Record<string, string | number>): string
-
-// Sanitize item IDs for logging
-sanitizeForLogging(input: string): string
-
-// Validate and clamp quantity
-clampQuantity(quantity: unknown): number
-
-// Validate item ID
-isValidItemId(id: unknown): id is string
-
-// Convert ticks to milliseconds
-ticksToMs(ticks: number): number
-
-// Type guards for player skills
-hasSkills(entity: unknown): entity is EntityWithSkills
-getSmithingLevelSafe(entity: unknown, defaultLevel?: number): number
+MESSAGES: {
+  ALREADY_SMITHING: "You are already smithing.",
+  NO_HAMMER: "You need a hammer to work the metal on this anvil.",
+  NO_BARS: "You don't have the bars to smith anything.",
+  LEVEL_TOO_LOW_SMITH: "You need level {level} Smithing to make that.",
+  SMITHING_START: "You begin smithing {item}s.",
+  OUT_OF_BARS: "You have run out of bars.",
+  SMITH_SUCCESS: "You hammer the {metal} and make a {item}.",
+}
 ```
 
 ---
 
-## Network Protocol
+## Security Features
 
-### Client → Server
+### Input Validation
 
-**Furnace Interaction:**
+All inputs are validated server-side:
+
 ```typescript
-socket.send("onSmeltingSourceInteract", {
-  furnaceId: string,
-  position: [number, number, number]
-});
+/**
+ * Validate and clamp quantity to safe bounds
+ */
+export function clampQuantity(quantity: unknown): number {
+  if (typeof quantity !== "number" || !Number.isFinite(quantity)) {
+    return SMITHING_CONSTANTS.MIN_QUANTITY;
+  }
+  return Math.floor(
+    Math.max(
+      SMITHING_CONSTANTS.MIN_QUANTITY,
+      Math.min(quantity, SMITHING_CONSTANTS.MAX_QUANTITY),
+    ),
+  );
+}
+
+/**
+ * Validate a string ID (barItemId, furnaceId, recipeId, anvilId)
+ */
+export function isValidItemId(id: unknown): id is string {
+  return (
+    typeof id === "string" &&
+    id.length > 0 &&
+    id.length <= SMITHING_CONSTANTS.MAX_ITEM_ID_LENGTH
+  );
+}
 ```
 
-**Smelting Request:**
-```typescript
-socket.send("onProcessingSmelting", {
-  barItemId: string,
-  furnaceId: string,
-  quantity: number
-});
-```
+### Server-Authoritative
 
-**Anvil Interaction:**
-```typescript
-socket.send("onSmithingSourceInteract", {
-  anvilId: string,
-  position: [number, number, number]
-});
-```
+All smithing logic runs server-side:
 
-**Smithing Request:**
-```typescript
-socket.send("onProcessingSmithing", {
-  recipeId: string,
-  anvilId: string,
-  quantity: number
-});
-```
-
-### Server → Client
-
-**Smelting Interface:**
-```typescript
-socket.receive("smeltingInterfaceOpen", {
-  furnaceId: string,
-  availableBars: Array<{
-    barItemId: string,
-    levelRequired: number,
-    primaryOre: string,
-    secondaryOre: string | null,
-    coalRequired: number
-  }>
-});
-```
-
-**Smithing Interface:**
-```typescript
-socket.receive("smithingInterfaceOpen", {
-  anvilId: string,
-  availableRecipes: Array<{
-    itemId: string,
-    name: string,
-    barType: string,
-    barsRequired: number,
-    levelRequired: number,
-    xp: number,
-    category: string
-  }>
-});
-```
+1. **Recipe validation** - Server checks recipe exists
+2. **Level checks** - Server validates smithing level
+3. **Material checks** - Server verifies bars in inventory
+4. **Hammer check** - Server confirms hammer present
+5. **Consumption** - Server removes bars and adds items
 
 ---
 
-## Rate Limiting
+## Type Safety
 
-Both smelting and smithing requests are rate-limited to prevent spam:
-
-**Location**: `packages/server/src/systems/ServerNetwork/index.ts`
+The smithing system uses **strong typing** with type guards:
 
 ```typescript
-// Rate limiting check before processing
-if (!this.canProcessRequest(player.id)) {
-  return; // Silently reject spam requests
+/**
+ * Loose inventory item type - matches items from inventory lookups
+ */
+export interface LooseInventoryItem {
+  itemId: string;
+  quantity?: number;
+  slot?: number;
+  metadata?: Record<string, unknown> | null;
 }
-```
 
-**Limits:**
-- 1 request per 100ms per player
-- Prevents request flooding
-- Applies to both smelting and smithing
+/**
+ * Type guard to validate an object is a valid inventory item
+ */
+export function isLooseInventoryItem(
+  item: unknown,
+): item is LooseInventoryItem {
+  if (typeof item !== "object" || item === null) return false;
+  if (!("itemId" in item)) return false;
+  if (typeof (item as LooseInventoryItem).itemId !== "string") return false;
 
----
+  const qty = (item as LooseInventoryItem).quantity;
+  if (qty !== undefined && typeof qty !== "number") return false;
 
-## Input Validation
-
-All smithing inputs are validated server-side:
-
-### Type Validation
-
-```typescript
-// Validate string types
-if (typeof payload.barItemId !== "string" || 
-    typeof payload.furnaceId !== "string") {
-  return; // Reject invalid types
+  return true;
 }
-```
 
-### Length Validation
-
-```typescript
-// Prevent memory abuse
-if (payload.barItemId.length > 64 || 
-    payload.furnaceId.length > 64) {
-  return; // Reject oversized strings
+/**
+ * Get quantity from an inventory item, defaulting to 1 if not present
+ */
+export function getItemQuantity(item: LooseInventoryItem): number {
+  return item.quantity ?? 1;
 }
-```
-
-### Quantity Validation
-
-```typescript
-// Clamp to safe bounds
-const quantity = typeof payload.quantity === "number" && 
-                 Number.isFinite(payload.quantity)
-  ? Math.floor(Math.max(1, Math.min(payload.quantity, 10000)))
-  : 1;
 ```
 
 ---
 
 ## Testing
 
-### Unit Tests
-
-**Smelting Tests**: `packages/shared/src/data/__tests__/ProcessingDataProvider.test.ts`
+Smithing has comprehensive test coverage:
 
 ```typescript
-describe("getSmeltableBarsFromInventory", () => {
-  it("returns bronze bar when copper and tin present", () => {
-    const inventory = [
-      { itemId: "copper_ore", quantity: 1 },
-      { itemId: "tin_ore", quantity: 1 },
-    ];
-    const result = provider.getSmeltableBarsFromInventory(inventory, 1);
-    expect(result.some(b => b.barItemId === "bronze_bar")).toBe(true);
+// From SmithingSystem.test.ts
+describe("SmithingSystem", () => {
+  it("requires hammer in inventory", async () => {
+    const { world, player, anvil } = await setupSmithingTest();
+    
+    // Try to smith without hammer
+    world.emit(EventType.SMITHING_INTERACT, {
+      playerId: player.id,
+      anvilId: anvil.id,
+    });
+    
+    // Should show error message
+    expect(lastMessage).toContain("need a hammer");
   });
 
-  it("respects coal requirements for steel", () => {
-    const withCoal = [
-      { itemId: "iron_ore", quantity: 1 },
-      { itemId: "coal", quantity: 2 },
-    ];
-    const result = provider.getSmeltableBarsFromInventory(withCoal, 30);
-    expect(result.some(b => b.barItemId === "steel_bar")).toBe(true);
+  it("auto-smiths multiple items", async () => {
+    const { world, player } = await setupSmithingTest();
+    
+    // Give player 10 bronze bars and a hammer
+    giveItem(player.id, "bronze_bar", 10);
+    giveItem(player.id, "hammer", 1);
+    
+    // Start smithing 5 swords
+    world.emit(EventType.PROCESSING_SMITHING_REQUEST, {
+      playerId: player.id,
+      recipeId: "bronze_sword",
+      anvilId: "anvil_1",
+      quantity: 5,
+    });
+    
+    // Process ticks until complete
+    for (let i = 0; i < 25; i++) {
+      world.tick();
+    }
+    
+    // Should have 5 swords, 5 bars remaining
+    expect(countItem(player.id, "bronze_sword")).toBe(5);
+    expect(countItem(player.id, "bronze_bar")).toBe(5);
+  });
+
+  it("stops when out of bars", async () => {
+    const { world, player } = await setupSmithingTest();
+    
+    // Give player 3 bars (can only make 3 swords)
+    giveItem(player.id, "bronze_bar", 3);
+    giveItem(player.id, "hammer", 1);
+    
+    // Try to smith 10 swords
+    world.emit(EventType.PROCESSING_SMITHING_REQUEST, {
+      playerId: player.id,
+      recipeId: "bronze_sword",
+      quantity: 10,
+    });
+    
+    // Process until complete
+    for (let i = 0; i < 50; i++) {
+      world.tick();
+    }
+    
+    // Should only have 3 swords (ran out of bars)
+    expect(countItem(player.id, "bronze_sword")).toBe(3);
+    expect(lastMessage).toContain("run out of bars");
   });
 });
 ```
-
-**Smithing Tests**: Same file, different describe blocks
-
-```typescript
-describe("getSmithableItemsFromInventory", () => {
-  it("filters by smithing level", () => {
-    const inventory = [{ itemId: "bronze_bar", quantity: 10 }];
-    const level1 = provider.getSmithableItemsFromInventory(inventory, 1);
-    const level99 = provider.getSmithableItemsFromInventory(inventory, 99);
-    expect(level99.length).toBeGreaterThanOrEqual(level1.length);
-  });
-
-  it("respects bar quantity requirements", () => {
-    const oneBar = [{ itemId: "bronze_bar", quantity: 1 }];
-    const fiveBars = [{ itemId: "bronze_bar", quantity: 5 }];
-    const withOne = provider.getSmithableItemsFromInventory(oneBar, 99);
-    const withFive = provider.getSmithableItemsFromInventory(fiveBars, 99);
-    // More bars enable more recipes (platebodies need 5 bars)
-    expect(withFive.length).toBeGreaterThanOrEqual(withOne.length);
-  });
-});
-```
-
----
-
-## Performance Optimizations
-
-### Pre-Allocated Buffers
-
-ProcessingDataProvider uses pre-allocated buffers to avoid GC pressure:
-
-```typescript
-// Pre-allocated Map for inventory counting
-private readonly inventoryCountBuffer = new Map<string, number>();
-
-// Reused across multiple calls
-private buildInventoryCounts(inventory): Map<string, number> {
-  this.inventoryCountBuffer.clear();
-  // ... populate buffer
-  return this.inventoryCountBuffer;
-}
-```
-
-### Memory Management
-
-- Player skills cached in `Map<string, Record<string, SkillData>>`
-- Cache cleared on player disconnect
-- Prevents memory leaks from orphaned player data
 
 ---
 
 ## Related Documentation
 
-- [Skills & Progression](/wiki/game-systems/skills) - General skill system
-- [Mining](/wiki/game-systems/mining) - Gathering ores
-- [Manifests](/concepts/manifests) - Data-driven content system
-- [Database Schema](/wiki/engine/database) - Persistence layer
+- [Mining System](/wiki/game-systems/mining) - Gathering ores
+- [Skills System](/concepts/skills) - XP and leveling
+- [Item Manifests](/concepts/manifests) - Defining recipes
+- [Processing Systems](/wiki/game-systems/processing) - General processing mechanics
