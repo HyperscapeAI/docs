@@ -68,13 +68,18 @@ If `inventoryActions` is not specified, the system detects actions based on item
 
 | Item Type | Detection | Actions |
 |-----------|-----------|---------|
-| Food | `type: "consumable"` + `healAmount > 0` | Eat, Use, Drop, Examine |
+| Food | `type: "consumable"` + `healAmount > 0` + not potion | Eat, Use, Drop, Examine |
 | Potions | `type: "consumable"` + `id.includes("potion")` | Drink, Use, Drop, Examine |
-| Weapons | `equipSlot: "weapon"` or `equipSlot: "2h"` | Wield, Use, Drop, Examine |
+| Weapons | `equipSlot: "weapon"` or `equipSlot: "2h"` or `weaponType` defined | Wield, Use, Drop, Examine |
 | Armor | `equipable: true` + not weapon/shield | Wear, Use, Drop, Examine |
 | Shields | `equipSlot: "shield"` | Wield, Use, Drop, Examine |
 | Bones | `id === "bones"` or `id.endsWith("_bones")` | Bury, Use, Drop, Examine |
 | Noted Items | `isNoted: true` or `id.endsWith("_noted")` | Use, Drop, Examine |
+| Tools with equipSlot | `type: "tool"` + `equipSlot: "weapon"` | Wield, Use, Drop, Examine |
+
+<Info>
+Tools like hatchets and pickaxes can be equipped as weapons. The system checks `equipSlot` first before falling back to type-based detection.
+</Info>
 
 ### Action Handlers
 
