@@ -123,6 +123,65 @@ export function getItem(itemId: string): Item | null {
 }
 ```
 
+### Tools (tools.json)
+
+Tools include a `tool` object specifying skill, priority, and optional bonus mechanics:
+
+```json
+{
+  "id": "dragon_pickaxe",
+  "name": "Dragon Pickaxe",
+  "type": "tool",
+  "tier": "dragon",
+  "tool": {
+    "skill": "mining",
+    "priority": 2,
+    "rollTicks": 3,
+    "bonusTickChance": 0.167,
+    "bonusRollTicks": 2
+  },
+  "equipSlot": "weapon",
+  "weaponType": "PICKAXE",
+  "attackType": "MELEE",
+  "value": 50000,
+  "weight": 2.2,
+  "description": "A powerful pickaxe with a chance for bonus mining speed",
+  "examine": "A pickaxe with a dragon metal head.",
+  "tradeable": true,
+  "rarity": "rare",
+  "modelPath": "asset://models/pickaxe-dragon/pickaxe-dragon.glb"
+}
+```
+
+#### Tool Properties
+
+```typescript
+interface GatheringToolData {
+  skill: "woodcutting" | "mining" | "fishing";
+  priority: number;              // Lower = better (1 = best)
+  levelRequired: number;         // Minimum skill level
+  rollTicks?: number;            // Mining: ticks between roll attempts
+  bonusTickChance?: number;      // Mining: chance for bonus speed roll
+  bonusRollTicks?: number;       // Mining: tick count when bonus triggers
+}
+```
+
+**Mining Pickaxe Bonus Speed:**
+
+Dragon and crystal pickaxes have a chance to mine faster:
+
+| Pickaxe | Roll Ticks | Bonus Chance | Bonus Ticks | Avg Speed |
+|---------|------------|--------------|-------------|-----------|
+| Bronze | 8 | - | - | 8 ticks |
+| Rune | 3 | - | - | 3 ticks |
+| Dragon | 3 | 1/6 (0.167) | 2 | 2.83 ticks |
+| Crystal | 3 | 1/4 (0.25) | 2 | 2.75 ticks |
+
+The bonus roll is determined **server-side** to maintain determinism and prevent client/server desyncs.
+
+<Info>
+Tools with `equipSlot: "weapon"` can be equipped and used for combat. The tier system automatically derives level requirements from `tier-requirements.json`.
+</Info>
 ### Inventory Actions
 
 Items can define explicit `inventoryActions` for OSRS-accurate context menus:

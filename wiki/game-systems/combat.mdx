@@ -49,7 +49,77 @@ export const COMBAT_CONSTANTS = {
 
   // Combat timeout
   COMBAT_TIMEOUT_TICKS: 16,           // 9.6 seconds out of combat
+
+  // Food consumption (OSRS-accurate)
+  EAT_DELAY_TICKS: 3,                 // 1.8s cooldown between eating
+  EAT_ATTACK_DELAY_TICKS: 3,          // Attack delay when eating during combat
+  MAX_HEAL_AMOUNT: 99,                // Maximum heal per food item
 };
+```
+
+---
+
+## Food Consumption & Combat
+
+### Eat Delay Mechanics
+
+Food consumption integrates with the combat system using OSRS-accurate timing:
+
+```typescript
+// From EatDelayManager.ts
+export class EatDelayManager {
+  canEat(playerId: string, currentTick: number): boolean;
+  recordEat(playerId: string, currentTick: number): void;
+  getRemainingCooldown(playerId: string, currentTick: number): number;
+}
+```
+
+**OSRS Rules:**
+- **3-tick delay** between eating (1.8 seconds)
+- Food consumed **even at full health**
+- Attack delay **only added if already on cooldown**
+- If weapon is ready to attack, eating does NOT add delay
+
+### Attack Delay Integration
+
+When eating during combat, the system checks if the player is on attack cooldown:
+
+```typescript
+// From CombatSystem.ts
+public isPlayerOnAttackCooldown(playerId: string, currentTick: number): boolean {
+  const nextAllowedTick = this.nextAttackTicks.get(playerId) ?? 0;
+  return currentTick < nextAllowedTick;
+}
+
+public addAttackDelay(playerId: string, delayTicks: number): void {
+  const currentNext = this.nextAttackTicks.get(playerId);
+  if (currentNext !== undefined) {
+    // Add delay to existing cooldown
+    this.nextAttackTicks.set(playerId, currentNext + delayTicks);
+  }
+  // If no cooldown, do nothing (OSRS-accurate)
+}
+```
+
+**Example Scenario:**
+1. Player attacks with longsword (4-tick weapon)
+2. Attack lands at tick 100, next attack at tick 104
+3. Player eats at tick 102 (while on cooldown)
+4. Eat delay adds 3 ticks: next attack now at tick 107
+5. If player eats at tick 104+ (weapon ready), no delay added
+
+### Healing Formula
+
+Healing is capped and validated server-side:
+
+```typescript
+// From PlayerSystem.ts
+const healAmount = Math.min(
+  Math.max(0, Math.floor(itemData.healAmount)),
+  COMBAT_CONSTANTS.MAX_HEAL_AMOUNT  // 99 max
+);
+
+this.healPlayer(playerId, healAmount);
 ```
 
 ---
@@ -437,6 +507,7 @@ The combat system emits events for UI and logging:
 
 ## Related Documentation
 
+- [Inventory System](/wiki/game-systems/inventory) (for food consumption)
 - [Tile Movement System](/wiki/game-systems/movement)
 - [Skills & Progression](/wiki/game-systems/skills)
 - [NPC Data Structure](/wiki/data/npcs)

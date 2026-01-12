@@ -75,7 +75,30 @@ Items define their actions in `items.json`:
 }
 ```
 
-The system validates actions against `HANDLED_INVENTORY_ACTIONS`:
+The first action becomes the left-click default.
+
+### Heuristic Detection
+
+If `inventoryActions` is not specified, the system detects actions based on item properties:
+
+| Item Type | Detection | Actions |
+|-----------|-----------|---------|
+| Food | `type: "consumable"` + `healAmount > 0` + not potion | Eat, Use, Drop, Examine |
+| Potions | `type: "consumable"` + `id.includes("potion")` | Drink, Use, Drop, Examine |
+| Weapons | `equipSlot: "weapon"` or `equipSlot: "2h"` or `weaponType` defined | Wield, Use, Drop, Examine |
+| Armor | `equipable: true` + not weapon/shield | Wear, Use, Drop, Examine |
+| Shields | `equipSlot: "shield"` | Wield, Use, Drop, Examine |
+| Bones | `id === "bones"` or `id.endsWith("_bones")` | Bury, Use, Drop, Examine |
+| Noted Items | `isNoted: true` or `id.endsWith("_noted")` | Use, Drop, Examine |
+| Tools with equipSlot | `type: "tool"` + `equipSlot: "weapon"` | Wield, Use, Drop, Examine |
+
+<Info>
+Tools like hatchets and pickaxes can be equipped as weapons. The system checks `equipSlot` first before falling back to type-based detection.
+</Info>
+
+### Action Handlers
+
+The `InventoryActionDispatcher` provides centralized handling for all inventory actions:
 
 ```typescript
 export const HANDLED_INVENTORY_ACTIONS = new Set<string>([
@@ -92,8 +115,8 @@ export const HANDLED_INVENTORY_ACTIONS = new Set<string>([
 
 Supported actions:
 
-- **eat**: Sends `useItem` network message → server validates eat delay → consumes food → heals HP
-- **drink**: Emits `ITEM_ACTION_SELECTED` event for potion effects
+- **eat**: Sends `useItem` network packet → server validates eat delay → consumes food → heals player
+- **drink**: Sends `useItem` network packet → server validates → applies potion effects
 - **bury**: Sends `buryBones` network message
 - **wield**: Sends `equipItem` network message (weapons/shields)
 - **wear**: Sends `equipItem` network message (armor)

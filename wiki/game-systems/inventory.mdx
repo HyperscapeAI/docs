@@ -231,9 +231,9 @@ async persistInventory(playerId: string): Promise<void> {
 
 ## Item Consumption
 
-### Food & Healing
+### Food and Healing
 
-Food items can be consumed to restore health with OSRS-accurate timing mechanics.
+Players can consume food items to restore health with OSRS-accurate mechanics:
 
 ```typescript
 // From PlayerSystem.ts - handleItemUsed()
@@ -491,7 +491,9 @@ export function dispatchInventoryAction(
 
 ## Related Documentation
 
+- [Context Menu System](/wiki/game-systems/context-menus)
 - [Equipment System](/wiki/game-systems/equipment)
 - [Bank System](/wiki/game-systems/bank)
 - [Ground Items & Loot](/wiki/game-systems/loot)
 - [Item Data Structure](/wiki/data/items)
+- [Combat System](/wiki/game-systems/combat) (for eat delay mechanics)

@@ -703,7 +703,7 @@ The system automatically selects the highest priority tool the player has equipp
 
 ## Inventory Actions System
 
-Items can define explicit context menu actions using the `inventoryActions` array:
+Items can define explicit context menu actions using the `inventoryActions` array. This is the **OSRS-accurate approach** where actions are stored per-item in the manifest.
 
 ```json
 {
@@ -711,6 +711,12 @@ Items can define explicit context menu actions using the `inventoryActions` arra
   "inventoryActions": ["Wield", "Use", "Drop", "Examine"]
 }
 ```
+
+**Key Features:**
+- First action becomes the **left-click default**
+- Actions appear in context menu in the order specified
+- "Cancel" is always added automatically as the last option
+- Manifest-defined actions take priority over heuristic detection
 
 ### Common Action Patterns
 
@@ -725,20 +731,52 @@ Items can define explicit context menu actions using the `inventoryActions` arra
 
 ### Action Handlers
 
-The following actions have built-in handlers:
+The following actions have built-in handlers in `InventoryActionDispatcher`:
 
-- **Eat**: Consumes food, restores HP
-- **Drink**: Consumes potion, applies effects
-- **Wield**: Equips weapons/shields
-- **Wear**: Equips armor
-- **Bury**: Buries bones for Prayer XP
+- **Eat**: Sends `useItem` packet → server validates eat delay (3 ticks) → consumes food → heals player
+- **Drink**: Sends `useItem` packet → server validates → applies potion effects
+- **Wield**: Sends `equipItem` network message (weapons/shields)
+- **Wear**: Sends `equipItem` network message (armor)
+- **Bury**: Sends `buryBones` network message
 - **Use**: Enters targeting mode for item-on-item/item-on-object interactions
-- **Drop**: Drops item on ground
-- **Examine**: Shows examine text
+- **Drop**: Calls `world.network.dropItem()`
+- **Examine**: Shows examine text in chat and toast
 - **Cancel**: Closes context menu (always added automatically)
 
+### Heuristic Fallback
+
+If `inventoryActions` is not specified, the system uses type detection helpers from `item-helpers.ts`:
+
+```typescript
+// From packages/shared/src/utils/item-helpers.ts
+export function getPrimaryAction(item: Item | null, isNoted: boolean): PrimaryActionType {
+  if (isNoted) return "use";
+  
+  const manifestAction = getPrimaryActionFromManifest(item);
+  if (manifestAction) return manifestAction;
+  
+  // Fallback to heuristic detection
+  if (isFood(item)) return "eat";
+  if (isPotion(item)) return "drink";
+  if (isBone(item)) return "bury";
+  if (usesWield(item)) return "wield";
+  if (usesWear(item)) return "wear";
+  
+  return "use";
+}
+```
+
+**Detection Rules:**
+- **Food**: `type: "consumable"` + `healAmount > 0` + not potion
+- **Potions**: `type: "consumable"` + `id.includes("potion")`
+- **Weapons**: `equipSlot: "weapon"` or `equipSlot: "2h"` or `weaponType` defined
+- **Shields**: `equipSlot: "shield"`
+- **Armor**: `equipable: true` + not weapon/shield
+- **Bones**: `id === "bones"` or `id.endsWith("_bones")`
+- **Noted Items**: Always use "use" action (cannot eat/equip noted items)
+
 <Info>
-If `inventoryActions` is not specified, the system uses heuristic detection based on item properties. Manifest-defined actions take priority over heuristics.
+Manifest-defined `inventoryActions` take priority over heuristic detection. This allows custom actions for special items.
 </Info>
 
 ---
