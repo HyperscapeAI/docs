@@ -1,0 +1,302 @@
+---
+title: "Mining System"
+description: "OSRS-accurate mining with pickaxe tiers, success rates, and rock depletion"
+icon: "pickaxe"
+---
+
+# Mining System
+
+The mining system implements OSRS-accurate mechanics with pickaxe tier bonuses, level-based success rates, and proper rock depletion.
+
+<Info>
+Mining code lives in `packages/shared/src/systems/shared/entities/ResourceSystem.ts` and `packages/shared/src/systems/shared/entities/gathering/`.
+</Info>
+
+## Overview
+
+Mining follows Old School RuneScape mechanics:
+
+- **Pickaxe tier affects roll frequency** (not success rate)
+- **Success rate is level-only** (pickaxe doesn't affect it)
+- **100% rock depletion** on successful mine (1/8 chance)
+- **Dragon/Crystal pickaxe bonus speed** (chance for faster rolls)
+- **Tick-based timing** (600ms ticks)
+
+---
+
+## How to Mine
+
+### Requirements
+
+1. **Pickaxe** in inventory or equipped
+2. **Mining level** matching the ore requirement
+3. **Cardinal adjacency** to the rock (N/E/S/W, not diagonal)
+
+### Mining Flow
+
+1. Click an ore rock
+2. System validates level and tool
+3. Player faces the rock and starts mining animation
+4. Every N ticks (based on pickaxe tier), roll for success
+5. On success: receive ore, grant XP, 1/8 chance to deplete rock
+6. Rock respawns after configured ticks
+
+---
+
+## OSRS-Accurate Mechanics
+
+### Variable Roll, Fixed Success
+
+Mining uses **"variable-roll-fixed-success"** mechanics:
+
+```typescript
+// From GATHERING_CONSTANTS.ts
+SKILL_MECHANICS: {
+  mining: {
+    type: "variable-roll-fixed-success",
+    baseRollTicks: 8, // Bronze pickaxe baseline
+    description: "Tool tier determines roll frequency, success rate is level-only"
+  }
+}
+```
+
+This means:
+- **Roll frequency** varies by pickaxe tier (8 ticks for bronze → 3 for rune)
+- **Success rate** is determined by level only (pickaxe doesn't affect it)
+
+### Pickaxe Tiers
+
+Pickaxes are defined in `tools.json` manifest:
+
+```json
+{
+  "itemId": "rune_pickaxe",
+  "skill": "mining",
+  "tier": "rune",
+  "priority": 6,
+  "levelRequired": 41,
+  "rollTicks": 3,
+  "bonusTickChance": null,
+  "bonusRollTicks": null
+}
+```
+
+**Tier Table:**
+
+| Pickaxe | Mining Level | Roll Ticks | Avg Time per Roll |
+|---------|--------------|------------|-------------------|
+| Bronze | 1 | 8 | 4.8s |
+| Iron | 1 | 7 | 4.2s |
+| Steel | 6 | 6 | 3.6s |
+| Mithril | 21 | 5 | 3.0s |
+| Adamant | 31 | 4 | 2.4s |
+| Rune | 41 | 3 | 1.8s |
+| Dragon | 61 | 3 (2 on bonus) | 1.7s avg |
+| Crystal | 71 | 3 (2 on bonus) | 1.65s avg |
+
+### Dragon/Crystal Pickaxe Bonus
+
+Dragon and Crystal pickaxes have a **chance for bonus speed**:
+
+```json
+{
+  "itemId": "dragon_pickaxe",
+  "rollTicks": 3,
+  "bonusTickChance": 0.167,  // 1/6 chance
+  "bonusRollTicks": 2         // 2 ticks instead of 3
+}
+```
+
+**Bonus Speed:**
+- **Dragon**: 1/6 chance (16.7%) for 2-tick roll → avg 2.83 ticks
+- **Crystal**: 1/4 chance (25%) for 2-tick roll → avg 2.75 ticks
+
+The bonus roll is **server-side deterministic** - rolled once per mining attempt.
+
+---
+
+## Success Rate Formula
+
+Mining uses OSRS's LERP interpolation formula:
+
+```typescript
+/**
+ * OSRS Formula: P(Level) = (1 + floor(low × (99 - L) / 98 + high × (L - 1) / 98 + 0.5)) / 256
+ *
+ * For mining, low/high values are ore-specific (pickaxe doesn't affect success)
+ */
+export function computeSuccessRate(
+  skillLevel: number,
+  skill: string,
+  resourceVariant: string,
+  toolTier: string | null,
+): number {
+  const { low, high } = getSuccessRateValues(skill, resourceVariant, toolTier);
+  return lerpSuccessRate(low, high, skillLevel);
+}
+```
+
+### Success Rate Tables
+
+Success rates are defined in `GATHERING_CONSTANTS.MINING_SUCCESS_RATES`:
+
+```typescript
+MINING_SUCCESS_RATES: {
+  ore_copper: { low: 40, high: 110 },
+  ore_tin: { low: 40, high: 110 },
+  ore_iron: { low: 20, high: 90 },
+  ore_coal: { low: 30, high: 100 },
+  ore_mithril: { low: 20, high: 90 },
+  ore_adamantite: { low: 15, high: 85 },
+  ore_runite: { low: 10, high: 80 },
+}
+```
+
+**Example Success Rates:**
+
+| Ore | Level 1 | Level 50 | Level 99 |
+|-----|---------|----------|----------|
+| Copper/Tin | 16.0% | 29.3% | 43.4% |
+| Iron | 8.2% | 21.5% | 35.5% |
+| Coal | 12.1% | 25.4% | 39.5% |
+| Runite | 4.3% | 17.6% | 31.6% |
+
+---
+
+## Rock Depletion
+
+### 100% Depletion on Success
+
+When you successfully mine ore, the rock has a **1/8 chance to deplete**:
+
+```typescript
+// From ResourceSystem.ts
+if (resource.type === "ore" || resource.skillRequired === "mining") {
+  const roll = Math.random();
+  shouldDeplete = roll < GATHERING_CONSTANTS.MINING_DEPLETE_CHANCE; // 0.125 = 1/8
+}
+```
+
+### Respawn Timing
+
+Rocks respawn after a configured number of ticks (from manifest):
+
+```json
+{
+  "id": "ore_iron",
+  "respawnTicks": 10,  // 10 ticks = 6 seconds
+  "depleteChance": 0.125
+}
+```
+
+**Common Respawn Times:**
+
+| Ore | Respawn Ticks | Respawn Time |
+|-----|---------------|--------------|
+| Copper/Tin | 5 | 3.0s |
+| Iron | 10 | 6.0s |
+| Coal | 50 | 30.0s |
+| Mithril | 200 | 120.0s (2 min) |
+| Adamantite | 400 | 240.0s (4 min) |
+| Runite | 1000 | 600.0s (10 min) |
+
+---
+
+## Model Scaling Fix
+
+Recent fix ensures rocks display at correct scale:
+
+```typescript
+// From ResourceEntity.ts - uses config.rotation.w instead of hardcoded 1
+const quaternion = new Quaternion(
+  config.rotation.x,
+  config.rotation.y,
+  config.rotation.z,
+  config.rotation.w  // ✅ Now uses config value (was hardcoded to 1)
+);
+```
+
+This fixes "squished resources" bug where rocks appeared flattened due to incorrect quaternion normalization.
+
+---
+
+## Server-Authoritative Position
+
+Mining uses **server-authoritative position** for all validation:
+
+```typescript
+// From ResourceSystem.ts
+private startGathering(data: {
+  playerId: string;
+  resourceId: string;
+  playerPosition: { x: number; y: number; z: number };
+}): void {
+  // Get server-side player position (ignore client payload)
+  const player = this.world.getPlayer?.(data.playerId);
+  const serverPosition = player?.position || data.playerPosition;
+
+  // Validate cardinal adjacency using server position
+  const playerTile = worldToTile(serverPosition.x, serverPosition.z);
+  const resourceTile = worldToTile(resource.position.x, resource.position.z);
+  
+  if (!isCardinallyAdjacentToResource(playerTile, resourceTile, 1, 1)) {
+    // Reject - player not adjacent
+    return;
+  }
+  
+  // ...
+}
+```
+
+---
+
+## Testing
+
+Mining has comprehensive test coverage:
+
+```typescript
+// From ResourceSystem.test.ts
+describe("Mining", () => {
+  it("uses pickaxe tier for roll frequency", async () => {
+    const { world, player } = await setupMiningTest();
+    
+    // Give player rune pickaxe (3-tick rolls)
+    giveItem(player.id, "rune_pickaxe");
+    
+    // Start mining
+    world.emit(EventType.RESOURCE_GATHER, {
+      playerId: player.id,
+      resourceId: "ore_iron_50_100",
+    });
+    
+    const session = resourceSystem.getSession(player.id);
+    expect(session.cycleTickInterval).toBe(3); // Rune = 3 ticks
+  });
+
+  it("depletes rock on 1/8 chance", async () => {
+    const { world, player, rock } = await setupMiningTest();
+    
+    let depleted = false;
+    world.on(EventType.RESOURCE_DEPLETED, () => {
+      depleted = true;
+    });
+    
+    // Mine until depletion (should happen within ~8 successes on average)
+    for (let i = 0; i < 100; i++) {
+      world.tick();
+      if (depleted) break;
+    }
+    
+    expect(depleted).toBe(true);
+  });
+});
+```
+
+---
+
+## Related Documentation
+
+- [Resource Gathering](/wiki/game-systems/gathering) - General gathering mechanics
+- [Skills System](/concepts/skills) - XP and leveling
+- [Smithing](/wiki/game-systems/smithing) - Using mined ores
+- [Item Manifests](/concepts/manifests) - Defining ores and pickaxes

@@ -1,0 +1,635 @@
+---
+title: "Game Systems API"
+description: "API reference for core game systems"
+icon: "code"
+---
+
+# Game Systems API Reference
+
+This page documents the public APIs for Hyperscape's core game systems.
+
+## EatDelayManager
+
+Manages eating cooldowns per player with OSRS-accurate 3-tick delays.
+
+**Location:** `packages/shared/src/systems/shared/character/EatDelayManager.ts`
+
+### Methods
+
+#### `canEat(playerId: string, currentTick: number): boolean`
+
+Check if player can eat (not on cooldown).
+
+**Parameters:**
+- `playerId` - Player to check
+- `currentTick` - Current game tick
+
+**Returns:** `true` if player can eat, `false` if still on cooldown
+
+**Example:**
+```typescript
+const eatManager = new EatDelayManager();
+const canEat = eatManager.canEat("player_123", 150);
+if (!canEat) {
+  console.log("Player is on eat cooldown");
+}
+```
+
+#### `recordEat(playerId: string, currentTick: number): void`
+
+Record that player just ate.
+
+**Parameters:**
+- `playerId` - Player who ate
+- `currentTick` - Current game tick
+
+**Example:**
+```typescript
+eatManager.recordEat("player_123", 150);
+```
+
+#### `getRemainingCooldown(playerId: string, currentTick: number): number`
+
+Get remaining cooldown ticks.
+
+**Parameters:**
+- `playerId` - Player to check
+- `currentTick` - Current game tick
+
+**Returns:** `0` if ready to eat, otherwise ticks remaining
+
+**Example:**
+```typescript
+const remaining = eatManager.getRemainingCooldown("player_123", 151);
+console.log(`${remaining} ticks until can eat again`); // "2 ticks until can eat again"
+```
+
+#### `clearPlayer(playerId: string): void`
+
+Clear player's eat cooldown (on death, disconnect).
+
+**Parameters:**
+- `playerId` - Player to clear
+
+#### `clear(): void`
+
+Clear all state (for testing or server reset).
+
+#### `getTrackedCount(): number`
+
+Get the number of tracked players (for debugging/monitoring).
+
+**Returns:** Number of players with active eat cooldowns
+
+---
+
+## InventoryActionDispatcher
+
+Centralized inventory action dispatching for context menus and left-click actions.
+
+**Location:** `packages/client/src/game/systems/InventoryActionDispatcher.ts`
+
+### Types
+
+```typescript
+export interface InventoryActionContext {
+  world: ClientWorld;
+  itemId: string;
+  slot: number;
+  quantity?: number;
+}
+
+export interface ActionResult {
+  success: boolean;
+  message?: string;
+}
+```
+
+### Functions
+
+#### `dispatchInventoryAction(action: string, ctx: InventoryActionContext): ActionResult`
+
+Dispatch an inventory action to the appropriate handler.
+
+**Parameters:**
+- `action` - The action ID (e.g., "eat", "wield", "drop")
+- `ctx` - Context containing world, itemId, slot, and optional quantity
+
+**Returns:** `ActionResult` indicating success/failure
+
+**Supported Actions:**
+- `eat` - Consume food item
+- `drink` - Consume potion
+- `bury` - Bury bones for Prayer XP
+- `wield` - Equip weapon or shield
+- `wear` - Equip armor
+- `drop` - Drop item on ground
+- `examine` - Show item description
+- `use` - Enter targeting mode for "Use X on Y"
+- `cancel` - Close menu (no-op)
+
+**Example:**
+```typescript
+import { dispatchInventoryAction } from "./InventoryActionDispatcher";
+
+const result = dispatchInventoryAction("eat", {
+  world: clientWorld,
+  itemId: "cooked_shrimp",
+  slot: 5,
+});
+
+if (result.success) {
+  console.log("Eating food...");
+} else {
+  console.error("Failed to eat:", result.message);
+}
+```
+
+---
+
+## Item Helpers
+
+Utility functions for item type detection and primary action determination.
+
+**Location:** `packages/shared/src/utils/item-helpers.ts`
+
+### Type Detection
+
+#### `isFood(item: Item | null): boolean`
+
+Check if item is food (consumable with healAmount, excludes potions).
+
+**Example:**
+```typescript
+import { isFood } from "@hyperscape/shared";
+
+const shrimp = { id: "cooked_shrimp", type: "consumable", healAmount: 3 };
+console.log(isFood(shrimp)); // true
+
+const potion = { id: "strength_potion", type: "consumable", healAmount: 0 };
+console.log(isFood(potion)); // false
+```
+
+#### `isPotion(item: Item | null): boolean`
+
+Check if item is a potion (consumable with "potion" in ID).
+
+#### `isBone(item: Item | null): boolean`
+
+Check if item is bones (can be buried for Prayer XP).
+
+#### `isWeapon(item: Item | null): boolean`
+
+Check if item is a weapon (equipSlot is weapon or 2h).
+
+#### `isShield(item: Item | null): boolean`
+
+Check if item is a shield (equipSlot is shield).
+
+#### `usesWield(item: Item | null): boolean`
+
+Check if item uses "Wield" action (weapons + shields).
+
+#### `usesWear(item: Item | null): boolean`
+
+Check if item uses "Wear" action (all other equipment).
+
+#### `isNotedItem(item: Item | null): boolean`
+
+Check if item is a bank note (cannot be eaten/equipped).
+
+### Primary Action Detection
+
+#### `getPrimaryAction(item: Item | null, isNoted: boolean): PrimaryActionType`
+
+Get primary action using manifest-first approach with heuristic fallback.
+
+**Returns:** One of: `"eat"`, `"drink"`, `"bury"`, `"wield"`, `"wear"`, `"use"`
+
+**Example:**
+```typescript
+import { getPrimaryAction } from "@hyperscape/shared";
+
+const food = { inventoryActions: ["Eat", "Drop", "Examine"] };
+const action = getPrimaryAction(food, false);
+console.log(action); // "eat"
+```
+
+#### `getPrimaryActionFromManifest(item: Item | null): PrimaryActionType | null`
+
+Get primary action from manifest's inventoryActions (first action in array).
+
+**Returns:** Primary action or `null` if no actions defined
+
+---
+
+## SmithingSystem
+
+Handles smelting and smithing with tick-based timing and auto-crafting.
+
+**Location:** `packages/shared/src/systems/shared/interaction/SmithingSystem.ts`
+
+### Methods
+
+#### `isPlayerSmithing(playerId: string): boolean`
+
+Check if player is currently smithing.
+
+**Parameters:**
+- `playerId` - Player to check
+
+**Returns:** `true` if player has an active smithing session
+
+**Example:**
+```typescript
+const smithingSystem = world.getSystem("smithing") as SmithingSystem;
+if (smithingSystem.isPlayerSmithing("player_123")) {
+  console.log("Player is busy smithing");
+}
+```
+
+### Events
+
+#### `SMITHING_INTERACT`
+
+Player clicked an anvil.
+
+**Data:**
+```typescript
+{
+  playerId: string;
+  anvilId: string;
+}
+```
+
+#### `SMITHING_INTERFACE_OPEN`
+
+Show smithing UI with available recipes.
+
+**Data:**
+```typescript
+{
+  playerId: string;
+  anvilId: string;
+  availableRecipes: Array<{
+    itemId: string;
+    name: string;
+    barType: string;
+    barsRequired: number;
+    levelRequired: number;
+    xp: number;
+    category: string;
+    meetsLevel: boolean;  // Player has required level
+    hasBars: boolean;     // Player has required bars
+  }>;
+}
+```
+
+#### `PROCESSING_SMITHING_REQUEST`
+
+Start smithing a specific item.
+
+**Data:**
+```typescript
+{
+  playerId: string;
+  recipeId: string;
+  anvilId: string;
+  quantity: number;
+}
+```
+
+#### `SMITHING_START`
+
+Smithing session started.
+
+**Data:**
+```typescript
+{
+  playerId: string;
+  recipeId: string;
+  anvilId: string;
+}
+```
+
+#### `SMITHING_COMPLETE`
+
+Smithing session finished.
+
+**Data:**
+```typescript
+{
+  playerId: string;
+  recipeId: string;
+  totalSmithed: number;
+  totalXp: number;
+}
+```
+
+---
+
+## ResourceSystem
+
+Manages resource gathering for all skills (woodcutting, mining, fishing).
+
+**Location:** `packages/shared/src/systems/shared/entities/ResourceSystem.ts`
+
+### Methods
+
+#### `processGatheringTick(tickNumber: number): void`
+
+Process all active gathering sessions on each server tick (600ms).
+
+**Parameters:**
+- `tickNumber` - Current server tick number
+
+**Called by:** `TickSystem` at `RESOURCES` priority
+
+**Handles:**
+1. Resource respawn checks (tick-based)
+2. Proximity validation (server-authoritative position)
+3. Inventory capacity checks
+4. Success/failure rolls using cached success rate
+5. Drop rolling from manifest harvestYield
+6. XP awards and inventory updates
+7. Resource depletion with tick-based respawn scheduling
+
+#### `getAllResources(): Resource[]`
+
+Get all resources for testing/debugging.
+
+**Returns:** Array of all resources in the world
+
+#### `getResourcesByType(type: string): Resource[]`
+
+Get resources by type.
+
+**Parameters:**
+- `type` - Resource type ("tree", "ore", "fishing_spot")
+
+**Returns:** Array of resources matching the type
+
+#### `getResource(resourceId: string): Resource | undefined`
+
+Get resource by ID.
+
+**Parameters:**
+- `resourceId` - Resource entity ID
+
+**Returns:** Resource data or `undefined` if not found
+
+### Events
+
+#### `RESOURCE_GATHER`
+
+Player attempts to gather from a resource.
+
+**Data:**
+```typescript
+{
+  playerId: string;
+  resourceId: string;
+  playerPosition?: { x: number; y: number; z: number };
+}
+```
+
+#### `RESOURCE_GATHERING_STARTED`
+
+Gathering session started.
+
+**Data:**
+```typescript
+{
+  playerId: string;
+  resourceId: string;
+  skill: string;
+  cycleTicks: number;
+  tickDurationMs: number;
+}
+```
+
+#### `RESOURCE_GATHERING_STOPPED`
+
+Gathering session ended.
+
+**Data:**
+```typescript
+{
+  playerId: string;
+  resourceId: string;
+}
+```
+
+#### `RESOURCE_DEPLETED`
+
+Resource exhausted and needs respawn.
+
+**Data:**
+```typescript
+{
+  resourceId: string;
+  position: { x: number; y: number; z: number };
+}
+```
+
+#### `RESOURCE_RESPAWNED`
+
+Resource respawned and is available again.
+
+**Data:**
+```typescript
+{
+  resourceId: string;
+  position: { x: number; y: number; z: number };
+}
+```
+
+---
+
+## Gathering Utilities
+
+### SuccessRateCalculator
+
+OSRS-accurate success rate and cycle calculations.
+
+**Location:** `packages/shared/src/systems/shared/entities/gathering/SuccessRateCalculator.ts`
+
+#### `computeSuccessRate(skillLevel: number, skill: string, resourceVariant: string, toolTier: string | null): number`
+
+Compute success rate using OSRS's LERP interpolation formula.
+
+**Formula:**
+```
+P(Level) = (1 + floor(low × (99 - L) / 98 + high × (L - 1) / 98 + 0.5)) / 256
+```
+
+**Parameters:**
+- `skillLevel` - Player's current skill level (1-99)
+- `skill` - The gathering skill ("woodcutting", "mining", "fishing")
+- `resourceVariant` - Resource type key (e.g., "tree_oak", "ore_iron")
+- `toolTier` - Tool tier for woodcutting (e.g., "rune"), ignored for other skills
+
+**Returns:** Success probability (0-1)
+
+**Example:**
+```typescript
+import { computeSuccessRate } from "@hyperscape/shared";
+
+const successRate = computeSuccessRate(50, "woodcutting", "tree_oak", "rune");
+console.log(`${(successRate * 100).toFixed(1)}% success rate`); // "45.3% success rate"
+```
+
+#### `computeCycleTicks(skill: string, baseCycleTicks: number, toolData: GatheringToolData | null, bonusRollTriggered: boolean): number`
+
+Compute gathering cycle in ticks (OSRS-accurate, skill-specific).
+
+**Parameters:**
+- `skill` - The gathering skill
+- `baseCycleTicks` - Base cycle ticks from resource manifest
+- `toolData` - Tool data from tools.json manifest
+- `bonusRollTriggered` - Whether dragon/crystal pickaxe bonus speed triggered
+
+**Returns:** Number of ticks between gathering attempts
+
+**Example:**
+```typescript
+import { computeCycleTicks } from "@hyperscape/shared";
+
+const toolData = {
+  itemId: "rune_pickaxe",
+  rollTicks: 3,
+  bonusTickChance: null,
+  bonusRollTicks: null,
+};
+
+const ticks = computeCycleTicks("mining", 8, toolData, false);
+console.log(`${ticks} ticks per roll`); // "3 ticks per roll"
+```
+
+#### `ticksToMs(ticks: number): number`
+
+Convert ticks to milliseconds for client progress bar.
+
+**Parameters:**
+- `ticks` - Number of game ticks
+
+**Returns:** Duration in milliseconds (ticks × 600)
+
+---
+
+## SmithingConstants
+
+Centralized constants for smelting and smithing systems.
+
+**Location:** `packages/shared/src/constants/SmithingConstants.ts`
+
+### Constants
+
+```typescript
+export const SMITHING_CONSTANTS = {
+  HAMMER_ITEM_ID: "hammer",
+  COAL_ITEM_ID: "coal",
+  DEFAULT_SMELTING_TICKS: 4,
+  DEFAULT_SMITHING_TICKS: 4,
+  TICK_DURATION_MS: 600,
+  MAX_QUANTITY: 10000,
+  MIN_QUANTITY: 1,
+  MAX_ITEM_ID_LENGTH: 64,
+};
+```
+
+### Helper Functions
+
+#### `formatMessage(message: string, values: Record<string, string | number>): string`
+
+Format messages with placeholders.
+
+**Example:**
+```typescript
+import { formatMessage, SMITHING_CONSTANTS } from "@hyperscape/shared";
+
+const msg = formatMessage(SMITHING_CONSTANTS.MESSAGES.LEVEL_TOO_LOW_SMITH, {
+  level: 50,
+});
+console.log(msg); // "You need level 50 Smithing to make that."
+```
+
+#### `clampQuantity(quantity: unknown): number`
+
+Validate and clamp quantity to safe bounds (1-10000).
+
+**Example:**
+```typescript
+import { clampQuantity } from "@hyperscape/shared";
+
+console.log(clampQuantity(5));      // 5
+console.log(clampQuantity(-10));    // 1
+console.log(clampQuantity(99999));  // 10000
+console.log(clampQuantity("abc"));  // 1
+```
+
+#### `isValidItemId(id: unknown): id is string`
+
+Validate a string ID (barItemId, furnaceId, recipeId, anvilId).
+
+**Returns:** Type guard - `true` if valid string ID
+
+#### `isLooseInventoryItem(item: unknown): item is LooseInventoryItem`
+
+Type guard to validate an object is a valid inventory item.
+
+**Example:**
+```typescript
+import { isLooseInventoryItem, getItemQuantity } from "@hyperscape/shared";
+
+const item = { itemId: "bronze_bar", quantity: 5 };
+if (isLooseInventoryItem(item)) {
+  const qty = getItemQuantity(item); // 5
+}
+```
+
+#### `getSmithingLevelSafe(entity: unknown, defaultLevel: number): number`
+
+Get smithing level from an entity safely.
+
+**Parameters:**
+- `entity` - The entity to get smithing level from
+- `defaultLevel` - Default level to return if not found (default: 1)
+
+**Returns:** The entity's smithing level
+
+---
+
+## Context Menu Colors
+
+OSRS-accurate entity name colors for context menus.
+
+**Location:** `packages/shared/src/constants/interaction.ts`
+
+### Constants
+
+```typescript
+export const CONTEXT_MENU_COLORS = {
+  NPC: "#ffff00",      // Yellow - NPCs (shopkeepers, quest givers)
+  SCENERY: "#00ffff",  // Cyan - Interactive objects (trees, rocks, anvils)
+  ITEM: "#ff9040",     // Orange - Ground items
+  PLAYER: "#ffffff",   // White - Other players
+  MOB: "#ff0000",      // Red - Hostile mobs (goblins, etc.)
+} as const;
+```
+
+**Example:**
+```typescript
+import { CONTEXT_MENU_COLORS } from "@hyperscape/shared";
+
+const entityColor = CONTEXT_MENU_COLORS.MOB; // "#ff0000"
+```
+
+---
+
+## Related Documentation
+
+- [ECS Architecture](/concepts/ecs) - Entity Component System
+- [Event System](/wiki/engine/events) - Event-driven architecture
+- [Game Systems Overview](/wiki/game-systems/overview) - All game systems
+- [Type Definitions](/api-reference/types) - TypeScript types

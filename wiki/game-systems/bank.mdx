@@ -17,8 +17,9 @@ Banking code lives in `packages/shared/src/systems/shared/economy/BankingSystem.
 - **Per-town banks** - Each starter town has its own bank
 - **Independent storage** - Banks don't share items across towns
 - **480 slot capacity** - Per bank (configurable via `BANKING_CONSTANTS.MAX_BANK_SLOTS`)
-- **Tab organization** - Organize items into custom tabs
+- **Tab organization** - Organize items into custom tabs (9 tabs: 1 main + 8 custom)
 - **Placeholders** - RS3-style placeholder mode for remembered slots
+- **Two-phase slot updates** - Prevents database constraint violations during bulk operations
 - **Distance check** - Must be within 3 meters of bank booth
 
 ---
@@ -31,6 +32,7 @@ export const BANKING_CONSTANTS = {
   MAX_BANK_SLOTS: 480,        // Slots per bank
   INTERACTION_RANGE: 3,       // Max distance to use bank (meters)
   MAX_TABS: 9,                // Tab count (1 main + 8 custom)
+  PLACEHOLDER_ITEM_ID: "placeholder", // Special item ID for placeholders
 };
 
 // Starter town banks
@@ -314,17 +316,71 @@ The same two-phase pattern is used in `compactBankSlots()` for consistent slot r
 
 ---
 
+## Placeholder System
+
+Placeholders remember item positions when items are withdrawn, maintaining bank organization.
+
+### Placeholder Operations
+
+```typescript
+// Toggle placeholder mode (from BankPanel UI)
+world.network.send("bankTogglePlaceholder", {
+  playerId: player.id,
+  enabled: true,  // Always set placeholders when withdrawing
+});
+
+// Release all placeholders (clear remembered positions)
+world.network.send("bankReleaseAllPlaceholders", {
+  playerId: player.id,
+});
+```
+
+### Two-Phase Slot Update
+
+When releasing all placeholders, the system uses a two-phase approach to prevent database unique constraint violations:
+
+```typescript
+// From packages/server/src/systems/ServerNetwork/handlers/bank/placeholders.ts
+
+// Phase 1: Add large offset to move all slots far from target range
+await tx.execute(
+  sql`UPDATE bank_storage
+      SET slot = slot + ${SLOT_OFFSET_TEMP}
+      WHERE "playerId" = ${playerId} AND "tabIndex" = ${tabIndex}`
+);
+
+// Phase 2: Renumber slots sequentially using ROW_NUMBER
+// Source slots are now ≥1000, target slots are 0-N, no overlap possible
+await tx.execute(
+  sql`UPDATE bank_storage
+      SET slot = subq.new_slot
+      FROM (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY slot) - 1 as new_slot
+        FROM bank_storage
+        WHERE "playerId" = ${playerId} AND "tabIndex" = ${tabIndex}
+      ) as subq
+      WHERE bank_storage.id = subq.id`
+);
+```
+
+<Info>
+**Why Two-Phase?** PostgreSQL doesn't guarantee UPDATE execution order. Direct renumbering could cause temporary slot collisions (e.g., row A updates slot 10→6 before row B updates slot 6→3). The two-phase approach eliminates this by ensuring source and target ranges never overlap.
+</Info>
+
+---
+
 ## Database Persistence
 
 Banks are persisted via `BankRepository`:
 
 ```typescript
 // Database tables
-// - bank_storage: Stores bank items (playerId, bankId, items JSON)
-// - bank_tabs: Stores tab configuration
+// - bank_storage: Stores bank items (playerId, bankId, itemId, quantity, slot, tabIndex)
+//   - Unique constraint: (playerId, tabIndex, slot)
+// - bank_tabs: Stores tab configuration (playerId, tabIndex, iconItemId)
 
-// Loaded on player login, saved on bank close
-// Server handles persistence via network packets
+// Loaded on player login, saved on bank operations
+// Server handles persistence via network packets with transaction safety
 ```
 
 ---
@@ -353,8 +409,53 @@ const [bankData, setBankData] = useState<{
 
 ---
 
+---
+
+## Placeholder System
+
+### Two-Phase Slot Updates
+
+The bank system uses a **two-phase update** to prevent unique constraint violations when releasing all placeholders:
+
+```typescript
+// From bank/placeholders.ts
+export async function releaseAllPlaceholders(
+  playerId: string,
+  bankId: string,
+  repository: BankRepository,
+): Promise<void> {
+  // PHASE 1: Set all placeholders to temporary slot -1
+  await repository.updatePlaceholdersToTempSlot(playerId, bankId);
+  
+  // PHASE 2: Delete all items with slot -1
+  await repository.deleteTempSlotItems(playerId, bankId);
+}
+```
+
+This prevents the error:
+```
+duplicate key value violates unique constraint "bank_storage_player_id_bank_id_slot_unique"
+```
+
+### Placeholder Toggle
+
+Players can toggle placeholder mode:
+
+```typescript
+// When enabled, withdrawing last item leaves a placeholder
+if (alwaysSetPlaceholder && bankItem.quantity === withdrawQuantity) {
+  // Replace with placeholder instead of deleting
+  bankItem.itemId = BANKING_CONSTANTS.PLACEHOLDER_ITEM_ID;
+  bankItem.quantity = 0;
+  bankItem.isPlaceholder = true;
+}
+```
+
+---
+
 ## Related Documentation
 
 - [Inventory System](/wiki/game-systems/inventory)
 - [Economy Overview](/wiki/game-systems/economy)
 - [Database Schema](/wiki/engine/database)
+- [Bank Repository](/api-reference/repositories#bankrepository)

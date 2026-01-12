@@ -1,0 +1,448 @@
+---
+title: "Context Menu API"
+description: "OSRS-style context menus with colored entity names and action dispatching"
+icon: "mouse-pointer-click"
+---
+
+# Context Menu API
+
+The context menu system provides OSRS-accurate right-click menus with colored entity names, manifest-driven actions, and centralized dispatching.
+
+## InventoryActionDispatcher
+
+Centralized inventory action dispatching.
+
+**Location**: `packages/client/src/game/systems/InventoryActionDispatcher.ts`
+
+### dispatchInventoryAction()
+
+Dispatch an inventory action to the appropriate handler.
+
+```typescript
+dispatchInventoryAction(
+  action: string,
+  ctx: InventoryActionContext
+): ActionResult
+```
+
+**Parameters:**
+- `action` - The action ID (e.g., "eat", "wield", "drop")
+- `ctx` - Context containing world, itemId, slot, and optional quantity
+
+**Returns**: `ActionResult` indicating success/failure
+
+**Example:**
+```typescript
+import { dispatchInventoryAction } from '../systems/InventoryActionDispatcher';
+
+// Eat food
+const result = dispatchInventoryAction("eat", {
+  world,
+  itemId: "shrimp",
+  slot: 5,
+});
+
+// Wield weapon
+const result = dispatchInventoryAction("wield", {
+  world,
+  itemId: "bronze_sword",
+  slot: 10,
+});
+
+// Drop item
+const result = dispatchInventoryAction("drop", {
+  world,
+  itemId: "logs",
+  slot: 3,
+  quantity: 10,
+});
+```
+
+### Supported Actions
+
+| Action | Handler | Description |
+|--------|---------|-------------|
+| `eat` | `useItem` network message | Consumes food, heals HP |
+| `drink` | `ITEM_ACTION_SELECTED` event | Consumes potion, applies effects |
+| `bury` | `buryBones` network message | Buries bones for Prayer XP |
+| `wield` | `equipItem` network message | Equips weapons/shields |
+| `wear` | `equipItem` network message | Equips armor |
+| `drop` | `dropItem` network message | Drops item on ground |
+| `examine` | `UI_TOAST` + chat message | Shows examine text |
+| `use` | `ITEM_ACTION_SELECTED` event | Enters targeting mode |
+| `cancel` | No-op | Closes menu |
+
+---
+
+## Item Helpers
+
+Type detection utilities for inventory actions.
+
+**Location**: `packages/shared/src/utils/item-helpers.ts`
+
+### Type Detection Functions
+
+#### isFood()
+
+Check if item is food (can be eaten).
+
+```typescript
+isFood(item: Item | null): boolean
+```
+
+**Detection**: `type === "consumable"` + `healAmount > 0` + not a potion
+
+**Example:**
+```typescript
+import { isFood } from '@hyperscape/shared';
+
+const item = getItem("shrimp");
+if (isFood(item)) {
+  // Show "Eat" action
+}
+```
+
+#### isPotion()
+
+Check if item is a potion (can be drunk).
+
+```typescript
+isPotion(item: Item | null): boolean
+```
+
+**Detection**: `type === "consumable"` + `id.includes("potion")`
+
+#### isBone()
+
+Check if item is bones (can be buried).
+
+```typescript
+isBone(item: Item | null): boolean
+```
+
+**Detection**: `id === "bones"` or `id.endsWith("_bones")`
+
+#### isWeapon()
+
+Check if item is a weapon.
+
+```typescript
+isWeapon(item: Item | null): boolean
+```
+
+**Detection**: `equipSlot === "weapon"` or `equipSlot === "2h"` or `is2h === true` or `weaponType != null`
+
+#### isShield()
+
+Check if item is a shield.
+
+```typescript
+isShield(item: Item | null): boolean
+```
+
+**Detection**: `equipSlot === "shield"`
+
+#### usesWield()
+
+Check if item uses "Wield" action (weapons + shields).
+
+```typescript
+usesWield(item: Item | null): boolean
+```
+
+**Returns**: `isWeapon(item) || isShield(item)`
+
+#### usesWear()
+
+Check if item uses "Wear" action (armor, not weapons/shields).
+
+```typescript
+usesWear(item: Item | null): boolean
+```
+
+**Detection**: `equipable === true` and not a weapon/shield
+
+#### isNotedItem()
+
+Check if item is a bank note.
+
+```typescript
+isNotedItem(item: Item | null): boolean
+```
+
+**Detection**: `isNoted === true` or `id.endsWith("_noted")`
+
+---
+
+### Primary Action Detection
+
+#### getPrimaryAction()
+
+Get primary action using manifest-first approach with heuristic fallback.
+
+```typescript
+getPrimaryAction(
+  item: Item | null,
+  isNoted: boolean
+): PrimaryActionType
+```
+
+**Parameters:**
+- `item` - Item to check
+- `isNoted` - Whether item is a bank note
+
+**Returns**: `"eat" | "drink" | "bury" | "wield" | "wear" | "use"`
+
+**Logic:**
+1. If noted → return "use"
+2. Check `item.inventoryActions[0]` if defined
+3. Heuristic fallback based on item properties
+4. Final fallback → "use"
+
+**Example:**
+```typescript
+import { getPrimaryAction, isNotedItem } from '@hyperscape/shared';
+
+const item = getItem("shrimp");
+const isNoted = isNotedItem(item);
+const action = getPrimaryAction(item, isNoted);
+// Returns: "eat"
+
+// On left-click
+dispatchInventoryAction(action, { world, itemId: item.id, slot });
+```
+
+#### getPrimaryActionFromManifest()
+
+Get primary action from manifest's `inventoryActions` only.
+
+```typescript
+getPrimaryActionFromManifest(item: Item | null): PrimaryActionType | null
+```
+
+**Returns**: First action from `inventoryActions` array, or `null` if not defined
+
+**Example:**
+```typescript
+const item = getItem("bronze_sword");
+// item.inventoryActions = ["Wield", "Use", "Drop", "Examine"]
+
+const action = getPrimaryActionFromManifest(item);
+// Returns: "wield"
+```
+
+---
+
+## Context Menu Colors
+
+**Location**: `packages/shared/src/constants/GameConstants.ts`
+
+### CONTEXT_MENU_COLORS
+
+OSRS-accurate color constants for context menu entity names.
+
+```typescript
+export const CONTEXT_MENU_COLORS = {
+  ITEM: "#ff9040",      // Orange - for items
+  NPC: "#ffff00",       // Yellow - for NPCs and mobs
+  OBJECT: "#00ffff",    // Cyan - for scenery/objects
+  PLAYER: "#ffffff",    // White - for players
+};
+```
+
+**Usage:**
+```typescript
+import { CONTEXT_MENU_COLORS } from '@hyperscape/shared';
+
+// Styled label for context menu
+const styledLabel = [
+  { text: "Take " },
+  { text: "Bones", color: CONTEXT_MENU_COLORS.ITEM }
+];
+```
+
+---
+
+## Context Menu Action Structure
+
+### ContextMenuAction Interface
+
+```typescript
+interface ContextMenuAction {
+  id: string;                    // Unique action ID
+  label: string;                 // Plain text label
+  styledLabel?: LabelSegment[];  // Colored segments
+  enabled: boolean;              // Can be executed
+  priority: number;              // Sort order (lower = higher)
+  handler?: () => void;          // Action callback
+}
+
+interface LabelSegment {
+  text: string;
+  color?: string;  // Hex color code
+}
+```
+
+**Example:**
+```typescript
+const action: ContextMenuAction = {
+  id: "attack",
+  label: "Attack Goblin (Level: 5)",
+  styledLabel: [
+    { text: "Attack " },
+    { text: "Goblin", color: CONTEXT_MENU_COLORS.NPC },
+    { text: " (Level: " },
+    { text: "5", color: "#ff0000" },  // Red for dangerous
+    { text: ")" }
+  ],
+  enabled: true,
+  priority: 1,
+  handler: () => attackMob(target)
+};
+```
+
+---
+
+## Interaction Handlers
+
+Base class for all interaction handlers.
+
+**Location**: `packages/shared/src/systems/client/interaction/handlers/BaseInteractionHandler.ts`
+
+### BaseInteractionHandler
+
+All handlers extend this base class:
+
+```typescript
+abstract class BaseInteractionHandler {
+  abstract handleLeftClick(target: RaycastTarget): void;
+  abstract getContextMenuActions(target: RaycastTarget): ContextMenuAction[];
+  
+  // Helper methods
+  protected createWalkHereAction(target: RaycastTarget): ContextMenuAction;
+  protected showExamineMessage(text: string): void;
+  protected queueInteraction(params: InteractionParams): void;
+}
+```
+
+### Handler Registry
+
+| Handler | Entity Types | Primary Action |
+|---------|--------------|----------------|
+| `ItemInteractionHandler` | Ground items | Take |
+| `NPCInteractionHandler` | NPCs (bankers, shopkeepers) | Talk-to |
+| `MobInteractionHandler` | Hostile mobs | Attack |
+| `PlayerInteractionHandler` | Other players | Trade |
+| `ResourceInteractionHandler` | Trees, rocks, fishing spots | Chop/Mine/Fish |
+| `BankInteractionHandler` | Bank booths/chests | Bank |
+| `CookingSourceInteractionHandler` | Fires, ranges | Cook |
+| `SmeltingSourceInteractionHandler` | Furnaces | Smelt |
+| `SmithingSourceInteractionHandler` | Anvils | Smith |
+| `CorpseInteractionHandler` | Gravestones, corpses | Loot |
+
+---
+
+## Manifest Integration
+
+### Item Manifest
+
+Items can define explicit `inventoryActions`:
+
+```json
+{
+  "id": "shrimp",
+  "name": "Shrimp",
+  "type": "consumable",
+  "healAmount": 3,
+  "inventoryActions": ["Eat", "Use", "Drop", "Examine"]
+}
+```
+
+**Rules:**
+- First action becomes left-click default
+- Actions are case-insensitive when dispatched
+- If not specified, system uses heuristic detection
+- Noted items always use ["Use", "Drop", "Examine"]
+
+### Supported Manifest Actions
+
+```typescript
+export const HANDLED_INVENTORY_ACTIONS = new Set<string>([
+  "eat",
+  "drink",
+  "bury",
+  "wield",
+  "wear",
+  "drop",
+  "examine",
+  "use",
+]);
+```
+
+---
+
+## Testing
+
+### InventoryActionDispatcher Tests
+
+**File**: `packages/client/src/game/systems/__tests__/InventoryActionDispatcher.test.ts`
+
+**Coverage**: 333 lines, 100% of all actions
+
+**Example:**
+```typescript
+it("emits ITEM_ACTION_SELECTED event for eat action", () => {
+  const result = dispatchInventoryAction("eat", {
+    world: mockWorld,
+    itemId: "shrimp",
+    slot: 0,
+  });
+
+  expect(result.success).toBe(true);
+  expect(mockWorld.emit).toHaveBeenCalledWith(
+    EventType.ITEM_ACTION_SELECTED,
+    {
+      playerId: "player1",
+      actionId: "eat",
+      itemId: "shrimp",
+      slot: 0,
+    }
+  );
+});
+```
+
+### Item Helpers Tests
+
+**File**: `packages/shared/src/utils/__tests__/item-helpers.test.ts`
+
+**Coverage**: 510 lines, all edge cases
+
+**Example:**
+```typescript
+it("returns eat for food without manifest", () => {
+  const food = createItem({
+    id: "shrimp",
+    type: "consumable",
+    healAmount: 10,
+  });
+  
+  expect(getPrimaryAction(food, false)).toBe("eat");
+});
+
+it("uses manifest action when available", () => {
+  const item = createItem({
+    inventoryActions: ["Wield", "Use", "Drop"],
+  });
+  
+  expect(getPrimaryAction(item, false)).toBe("wield");
+});
+```
+
+---
+
+## Related Documentation
+
+- [Context Menu System](/wiki/game-systems/context-menus)
+- [Inventory System](/wiki/game-systems/inventory)
+- [Item Data Structure](/wiki/data/items)
+- [Manifest-Driven Design](/concepts/manifests)

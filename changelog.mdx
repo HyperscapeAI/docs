@@ -23,76 +23,63 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Recent Updates" description="January 11, 2026" date="2026-01-11">
+<Update label="Recent Updates" description="January 2026" date="2026-01-11">
 
-### 🍖 Food Consumption & Healing System
+### 🪨 Mining Resources Expansion
 
-Complete OSRS-accurate food consumption with tick-based timing and combat integration:
+New mining rocks added to the assets repository with complete 3D models:
 
-- **Eating Mechanics**: 3-tick (1.8s) eat delay between foods
-  - Server-authoritative `useItem` network packet
-  - `EatDelayManager` tracks per-player cooldowns
-  - Rate limiting prevents spam eating (anti-bot/macro)
-  - Food consumed only after all validation passes
-- **Combat Integration**: Attack delay when eating mid-combat
-  - OSRS rule: Only adds delay if weapon already on cooldown
-  - 3-tick delay added to existing attack cooldown
-  - No delay if weapon is ready to attack
-- **Health System**: Event-driven health updates
-  - `PLAYER_HEALTH_UPDATED` events eliminate race conditions
-  - Server-authoritative health values
-  - Health bars update only via events (no polling)
-- **Security**: OWASP input validation, item mismatch detection, bounds checking
-- **Testing**: 30 unit tests (433 lines) covering eat delay and combat integration
+- **Mithril Rock**: High-tier ore requiring level 55 Mining
+  - Model: `models/mithril-rock/mithril-rock.glb`
+  - Yields: Mithril Ore (80 XP)
+  - Respawn: 200 ticks (2 minutes)
+- **Runite Rock**: Highest-tier ore requiring level 85 Mining
+  - Models: `models/runite-rock/runite-rock.glb` (active) and `runite-rock-depleted.glb`
+  - Yields: Runite Ore (125 XP)
+  - Respawn: 1200 ticks (12 minutes)
+- **Copper Rock**: Updated with depleted model
+  - Models: `models/copper-rock/copper-rock.glb` and `copper-rock-depleted.glb`
 
-### ⛏️ Mining System Improvements
+All rocks include proper depletion mechanics and OSRS-accurate respawn timers.
 
-OSRS-accurate mining mechanics with correct depletion and success rates:
+### 🔨 Crafting Stations
 
-- **100% Rock Depletion**: Rocks always deplete after yielding one ore (OSRS-accurate)
-  - Previous: 12.5% chance-based depletion
-  - Now: Guaranteed depletion (matches OSRS wiki)
-  - Mining gloves support documented (not yet implemented)
-- **Accurate Success Rates**: Updated to match OSRS wiki formulas
-  - Copper/Tin: 39.5% at L1, 100% at L62
-  - Iron: 52% at L15, 100% at L63
-  - Coal: 16.4% at L30, 39.5% at L99
-  - Mithril: 11.7% at L55, 19.9% at L99
-  - Adamantite: 7.4% at L70, 10.2% at L99
-  - Runite: 6.64% at L85, 7.42% at L97+ (confirmed by Mod Ash)
-- **Pickaxe Bonuses**: Dragon/Crystal pickaxe speed bonuses
-  - Server-side random roll for deterministic shared code
-  - Dragon: 1/6 chance for 2-tick roll (avg 2.83 ticks)
-  - Crystal: 1/4 chance for 2-tick roll (avg 2.75 ticks)
-- **Model Rendering**: Transform baking fixes "squished" resources
-  - Bakes all GLTF transforms into geometry
-  - Handles non-uniform scales, matrix transforms, and shear
-  - Quaternion normalization fix (uses `config.rotation.w` instead of hardcoded 1)
+New 3D models and station configurations added:
 
-### 🔧 Bug Fixes & Improvements
+- **Anvil Station**
+  - Model: `models/anvil/anvil.glb` (optimized) and `anvil_raw.glb`
+  - Scale: 0.5x with 0.2 Y-offset
+  - Used for smithing bars into equipment
+  - Includes concept art and metadata
+- **Furnace Station**
+  - Model: `models/furnace/furnace.glb` (optimized) and `furnace_raw.glb`
+  - Scale: 1.5x with 1.0 Y-offset
+  - Used for smelting ores into bars
+  - Includes concept art and metadata
 
-- **Noted Items Validation**: Noted items (bank notes) cannot be used as skilling tools (#508)
-  - Added `isNotedItemId()` check in `ToolUtils.itemMatchesToolCategory()`
-  - Comprehensive test coverage (235 lines)
-- **Bank System**: Two-phase slot update prevents unique constraint violations (#502)
-  - Phase 1: Offset slots to 1000+ range
-  - Phase 2: Renumber sequentially to 0-N
-  - Eliminates PostgreSQL UPDATE order race conditions
-- **Resource Harvesting**: Prevent duplicate sessions on spam-click (#494)
-  - Guard clause after resource resolution
-  - Silently ignores duplicate requests for same resource
-  - Cancels old session when switching resources
-- **Station 3D Models**: Manifest-driven models for anvils and furnaces (#496)
-  - `StationDataProvider` loads from `stations.json`
-  - Configurable model paths, scales, and Y offsets
-  - Graceful fallback to placeholder geometry
-- **Debug Panel**: F5 keybind to toggle FPS debug panel (#505)
-  - Matches Minecraft's debug screen keybind
-  - Backslash key still works as alternative
+Station configurations now centralized in `manifests/stations.json` for easy updates without code changes.
 
-</Update>
+### 📁 Manifest Organization
 
-<Update label="Recent Updates" description="January 10, 2026" date="2026-01-10">
+Improved manifest structure for better scalability:
+
+- **Gathering Resources**: Split into dedicated files
+  - `manifests/gathering/mining.json` - All mining rocks and ore yields
+  - `manifests/gathering/woodcutting.json` - Trees and log yields
+  - `manifests/gathering/fishing.json` - Fishing spots and catch rates
+- **Items by Category**: Organized into type-specific files
+  - `manifests/items/weapons.json` - Combat weapons
+  - `manifests/items/tools.json` - Skilling tools
+  - `manifests/items/resources.json` - Ores, logs, bars, raw fish
+  - `manifests/items/food.json` - Cooked consumables
+  - `manifests/items/misc.json` - Currency, burnt food, junk
+- **Processing Recipes**: Skill-based organization
+  - `manifests/recipes/smelting.json` - Ore to bar recipes
+  - `manifests/recipes/smithing.json` - Bar to equipment recipes
+  - `manifests/recipes/cooking.json` - Raw to cooked food
+  - `manifests/recipes/firemaking.json` - Log burning data
+
+This refactor makes content easier to find, edit, and maintain.
 
 ### ⚒️ Smithing Skill System
 
@@ -128,11 +115,21 @@ Authentic context menu system with colored entity names:
 
 - **Items Directory**: Items split into 5 category files (weapons, tools, resources, food, misc)
 - **Gathering Manifests**: Separate files for woodcutting, mining, fishing
+  - Complete fishing spot definitions with OSRS-accurate catch rates
+  - Mining rocks with 3D model paths and depleted states
 - **Recipe Manifests**: Dedicated files for cooking, firemaking, smelting, smithing
 - **Station Manifests**: 3D models and configs for anvils, furnaces, ranges
+  - Anvil model with scale 0.5 and yOffset 0.2
+  - Furnace model with scale 1.5 and yOffset 1.0
 - **Tier System**: Centralized `tier-requirements.json` for equipment levels
 - **Skill Unlocks**: `skill-unlocks.json` defines what unlocks at each level
 - **Atomic Loading**: All category files must exist or system falls back to legacy format
+
+### 🎣 New 3D Models
+
+- **Fishing Tools**: Base and standard fishing rod models with metadata
+- **Mining Rocks**: Copper, mithril, and runite ore rocks with depleted variants
+- **Stations**: Anvil and furnace models for crafting
 
 ### 🔧 Data Providers
 

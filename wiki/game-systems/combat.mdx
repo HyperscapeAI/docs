@@ -43,9 +43,9 @@ export const COMBAT_CONSTANTS = {
   },
 
   // Food consumption (OSRS-accurate)
-  EAT_DELAY_TICKS: 3,                 // 1.8s cooldown between eating
-  EAT_ATTACK_DELAY_TICKS: 3,          // 1.8s added to attack cooldown when eating
-  MAX_HEAL_AMOUNT: 99,                // Maximum heal per food item
+  EAT_DELAY_TICKS: 3,                 // 1.8 seconds between foods
+  EAT_ATTACK_DELAY_TICKS: 3,          // Added to attack cooldown when eating mid-combat
+  MAX_HEAL_AMOUNT: 99,                // Security cap on healing
 
   // Combat timeout
   COMBAT_TIMEOUT_TICKS: 16,           // 9.6 seconds out of combat
@@ -364,80 +364,58 @@ handleCombatKill(data: CombatKillData): void {
 
 ---
 
-## Food Consumption During Combat
+## Food & Combat Interaction
 
-Eating food during combat follows OSRS-accurate mechanics with attack delay integration.
+### Eating During Combat
 
-### Eat Delay System
-
-```typescript
-// From EatDelayManager.ts
-export class EatDelayManager {
-  private lastEatTick = new Map<string, number>();
-
-  canEat(playerId: string, currentTick: number): boolean {
-    const lastTick = this.lastEatTick.get(playerId) ?? 0;
-    return currentTick - lastTick >= COMBAT_CONSTANTS.EAT_DELAY_TICKS;
-  }
-
-  recordEat(playerId: string, currentTick: number): void {
-    this.lastEatTick.set(playerId, currentTick);
-  }
-}
-```
-
-### Attack Delay When Eating
-
-OSRS rule: Food only adds to **existing** attack delay. If weapon is ready, eating does NOT add delay.
+When a player eats food while in combat, OSRS-accurate timing rules apply:
 
 ```typescript
 // From PlayerSystem.ts
-private applyEatAttackDelay(playerId: string, currentTick: number): void {
-  const combatSystem = this.world.getSystem("combat") as CombatSystem | null;
-  if (!combatSystem) return;
+// OSRS Rule: Foods only add to EXISTING attack delay
+// If weapon is ready to attack, eating does NOT add delay
 
-  // Check if player is on attack cooldown
-  const isOnCooldown = combatSystem.isPlayerOnAttackCooldown?.(
-    playerId,
-    currentTick,
-  );
+const isOnCooldown = combatSystem.isPlayerOnAttackCooldown(playerId, currentTick);
 
-  if (isOnCooldown) {
-    // Add eat delay to attack cooldown
-    combatSystem.addAttackDelay?.(
-      playerId,
-      COMBAT_CONSTANTS.EAT_ATTACK_DELAY_TICKS,
-    );
-  }
-  // If not on cooldown, do nothing (OSRS-accurate behavior)
+if (isOnCooldown) {
+  // Add 3 ticks to attack cooldown
+  combatSystem.addAttackDelay(playerId, COMBAT_CONSTANTS.EAT_ATTACK_DELAY_TICKS);
 }
+// If weapon is ready (cooldown expired), eating does NOT add delay
 ```
 
-### Eating Flow
+### Eat Delay Mechanics
 
-1. **Client**: Player clicks "Eat" on food item
-2. **Network**: `useItem` packet sent to server
-3. **Server Validation**:
-   - Check eat delay cooldown (3 ticks)
-   - Validate item exists at claimed slot
-   - Validate item ID matches slot contents
-   - Check rate limiting (3 requests/sec)
-4. **Consumption**: Remove item from inventory
-5. **Healing**: Apply heal amount (capped at 99 HP)
-6. **Attack Delay**: Add 3 ticks to attack cooldown if in combat
-7. **Message**: "You eat the shrimp." (shown even at full health)
+Players cannot eat again until the eat delay expires:
 
-### Security Features
+```typescript
+// 3-tick (1.8 second) cooldown between foods
+const canEat = eatDelayManager.canEat(playerId, currentTick);
 
-- **Server-Authoritative**: All validation happens server-side
-- **Rate Limiting**: Separate consume rate limiter (3/sec)
-- **Input Validation**: Slot bounds, item ID mismatch detection
-- **Exploit Prevention**: Heal amount capped at `MAX_HEAL_AMOUNT` (99)
-- **Eat Delay Enforcement**: Server tracks cooldowns, rejects spam
+if (!canEat) {
+  // Show "You are already eating." message
+  return;
+}
 
-<Warning>
-Food is consumed even at full health (OSRS-accurate). The eat delay and attack delay still apply.
-</Warning>
+// Record eat action
+eatDelayManager.recordEat(playerId, currentTick);
+```
+
+<Info>
+**OSRS-Accurate**: Food is consumed even at full health. The eat delay and attack delay apply regardless of current HP.
+</Info>
+
+### Attack Delay API
+
+The `CombatSystem` provides methods for eat delay integration:
+
+```typescript
+// Check if player is on attack cooldown
+isPlayerOnAttackCooldown(playerId: string, currentTick: number): boolean;
+
+// Add delay ticks to player's next attack
+addAttackDelay(playerId: string, delayTicks: number): void;
+```
 
 ---
 
@@ -453,6 +431,7 @@ The combat system emits events for UI and logging:
 | `COMBAT_ENDED` | `entityId` | Entity left combat |
 | `ENTITY_DAMAGED` | `entityId`, `damage`, `sourceId`, `remainingHealth` | Damage taken |
 | `ENTITY_DEATH` | `entityId`, `killerId`, `position` | Entity died |
+| `PLAYER_HEALTH_UPDATED` | `playerId`, `health`, `maxHealth` | Health changed (healing, damage) |
 
 ---
 
