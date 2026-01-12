@@ -441,11 +441,13 @@ The combat system emits events for UI and logging:
 | `COMBAT_ENDED` | `entityId` | Entity left combat |
 | `ENTITY_DAMAGED` | `entityId`, `damage`, `sourceId`, `remainingHealth` | Damage taken |
 | `ENTITY_DEATH` | `entityId`, `killerId`, `position` | Entity died |
+| `PLAYER_HEALTH_UPDATED` | `playerId`, `health`, `maxHealth` | Health changed (server-authoritative) |
 
 ---
 
 ## Related Documentation
 
+- [Inventory System](/wiki/game-systems/inventory) (for food consumption)
 - [Tile Movement System](/wiki/game-systems/movement)
 - [Skills & Progression](/wiki/game-systems/skills)
 - [NPC Data Structure](/wiki/data/npcs)
