@@ -348,7 +348,7 @@ const action = getPrimaryAction(item, isNoted);
 
 ### Context Menu Colors
 
-Context menus use OSRS-accurate color coding:
+Context menus use OSRS-accurate color coding with centralized constants:
 
 ```typescript
 import { CONTEXT_MENU_COLORS } from '@hyperscape/shared';
@@ -358,6 +358,25 @@ CONTEXT_MENU_COLORS.NPC;     // #ffff00 (yellow) - NPC/mob names
 CONTEXT_MENU_COLORS.OBJECT;  // #00ffff (cyan) - Scenery/objects
 CONTEXT_MENU_COLORS.PLAYER;  // #ffffff (white) - Player names
 ```
+
+**Example Usage:**
+```typescript
+// Context menu with styled labels
+{
+  id: "eat",
+  label: "Eat Shrimp",
+  styledLabel: [
+    { text: "Eat " },
+    { text: "Shrimp", color: CONTEXT_MENU_COLORS.ITEM }
+  ],
+  enabled: true,
+  priority: 1,
+}
+```
+
+<Info>
+All interaction handlers (NPCInteractionHandler, MobInteractionHandler, ItemInteractionHandler, etc.) now use these centralized constants instead of hardcoded values.
+</Info>
 
 ---
 
