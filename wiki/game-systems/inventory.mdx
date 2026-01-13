@@ -329,22 +329,49 @@ The first action becomes the left-click default. If not specified, the system fa
 
 ### Item Helpers
 
-The `item-helpers.ts` module provides type detection utilities:
+The `item-helpers.ts` module provides type detection utilities for OSRS-accurate inventory actions:
 
 ```typescript
-import { isFood, isPotion, isBone, usesWield, usesWear, getPrimaryAction } from '@hyperscape/shared';
+import { 
+  isFood, 
+  isPotion, 
+  isBone, 
+  isWeapon,
+  isShield,
+  usesWield, 
+  usesWear, 
+  isNotedItem,
+  getPrimaryAction,
+  getPrimaryActionFromManifest,
+  HANDLED_INVENTORY_ACTIONS
+} from '@hyperscape/shared';
 
 // Type detection
 isFood(item);        // Has healAmount, not a potion
 isPotion(item);      // Contains "potion" in ID
 isBone(item);        // ID is "bones" or ends with "_bones"
-usesWield(item);     // Weapons and shields
-usesWear(item);      // Armor (head, body, legs, etc.)
+isWeapon(item);      // equipSlot is "weapon" or "2h", or has weaponType
+isShield(item);      // equipSlot is "shield"
+usesWield(item);     // Weapons and shields (uses "Wield" action)
+usesWear(item);      // Armor (head, body, legs, etc.) (uses "Wear" action)
+isNotedItem(item);   // Bank note (isNoted flag or "_noted" suffix)
 
 // Get primary action (manifest-first with heuristic fallback)
 const action = getPrimaryAction(item, isNoted);
 // Returns: "eat" | "drink" | "bury" | "wield" | "wear" | "use"
+
+// Get action from manifest only (no fallback)
+const manifestAction = getPrimaryActionFromManifest(item);
+// Returns: PrimaryActionType | null
+
+// Check if action is handled
+HANDLED_INVENTORY_ACTIONS.has("eat");  // true
+// Set contains: eat, drink, bury, wield, wear, drop, examine, use
 ```
+
+<Info>
+**Testing**: The item-helpers module has 510 lines of comprehensive unit tests covering all type detection functions and edge cases.
+</Info>
 
 ### Context Menu Colors
 
