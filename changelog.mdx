@@ -95,14 +95,15 @@ Continued improvements to OSRS-style context menus:
 - **UI Border Conflicts**: Fixed border shorthand conflicts in `SettingsPanel` and `CombatPanel` (#510)
 - **Noted Tools**: Noted items now correctly rejected as valid tools for skilling (#508)
 - **Quaternion Normalization**: Fixed squished resources by using `config.rotation.w` instead of hardcoded 1 (#507)
-- **Bank Placeholders**: Fixed unique constraint violation on "release all placeholders" (#502)
-- **Resource Spam**: Prevent duplicate harvesting on spam-click (#494)
+- **Auto-Retaliate Guards**: Added server guards to prevent client-side rotation conflicts (#511)
+- **Bank Placeholders**: Fixed unique constraint violation on "release all placeholders" using two-phase slot update (#502)
 
 ### 🎮 UX Improvements
 
 - **F5 Debug Toggle**: Added F5 keybind to toggle FPS debug panel (matches Minecraft) (#505)
 - **Invalid Target Feedback**: "Nothing interesting happens." message when using item on invalid target
 - **Cancel Option**: OSRS-style Cancel option always shown last in context menus
+- **Debug Panel**: F5 or backslash key now toggles FPS/performance stats
 
 </Update>
 
