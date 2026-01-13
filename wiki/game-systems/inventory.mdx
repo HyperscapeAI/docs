@@ -329,26 +329,53 @@ The first action becomes the left-click default. If not specified, the system fa
 
 ### Item Helpers
 
-The `item-helpers.ts` module provides type detection utilities:
+The `item-helpers.ts` module provides type detection utilities for OSRS-accurate inventory actions:
 
 ```typescript
-import { isFood, isPotion, isBone, usesWield, usesWear, getPrimaryAction } from '@hyperscape/shared';
+import { 
+  isFood, 
+  isPotion, 
+  isBone, 
+  isWeapon,
+  isShield,
+  usesWield, 
+  usesWear, 
+  isNotedItem,
+  getPrimaryAction,
+  getPrimaryActionFromManifest,
+  HANDLED_INVENTORY_ACTIONS
+} from '@hyperscape/shared';
 
 // Type detection
 isFood(item);        // Has healAmount, not a potion
 isPotion(item);      // Contains "potion" in ID
 isBone(item);        // ID is "bones" or ends with "_bones"
-usesWield(item);     // Weapons and shields
-usesWear(item);      // Armor (head, body, legs, etc.)
+isWeapon(item);      // equipSlot is "weapon" or "2h", or has weaponType
+isShield(item);      // equipSlot is "shield"
+usesWield(item);     // Weapons and shields (uses "Wield" action)
+usesWear(item);      // Armor (head, body, legs, etc.) (uses "Wear" action)
+isNotedItem(item);   // Bank note (isNoted flag or "_noted" suffix)
 
 // Get primary action (manifest-first with heuristic fallback)
 const action = getPrimaryAction(item, isNoted);
 // Returns: "eat" | "drink" | "bury" | "wield" | "wear" | "use"
+
+// Get action from manifest only (no fallback)
+const manifestAction = getPrimaryActionFromManifest(item);
+// Returns: PrimaryActionType | null
+
+// Check if action is handled
+HANDLED_INVENTORY_ACTIONS.has("eat");  // true
+// Set contains: eat, drink, bury, wield, wear, drop, examine, use
 ```
+
+<Info>
+**Testing**: The item-helpers module has 510 lines of comprehensive unit tests covering all type detection functions and edge cases.
+</Info>
 
 ### Context Menu Colors
 
-Context menus use OSRS-accurate color coding:
+Context menus use OSRS-accurate color coding with centralized constants:
 
 ```typescript
 import { CONTEXT_MENU_COLORS } from '@hyperscape/shared';
@@ -358,6 +385,25 @@ CONTEXT_MENU_COLORS.NPC;     // #ffff00 (yellow) - NPC/mob names
 CONTEXT_MENU_COLORS.OBJECT;  // #00ffff (cyan) - Scenery/objects
 CONTEXT_MENU_COLORS.PLAYER;  // #ffffff (white) - Player names
 ```
+
+**Example Usage:**
+```typescript
+// Context menu with styled labels
+{
+  id: "eat",
+  label: "Eat Shrimp",
+  styledLabel: [
+    { text: "Eat " },
+    { text: "Shrimp", color: CONTEXT_MENU_COLORS.ITEM }
+  ],
+  enabled: true,
+  priority: 1,
+}
+```
+
+<Info>
+All interaction handlers (NPCInteractionHandler, MobInteractionHandler, ItemInteractionHandler, etc.) now use these centralized constants instead of hardcoded values.
+</Info>
 
 ---
 
@@ -393,11 +439,14 @@ useEffect(() => {
 Features:
 - 28-slot grid layout
 - Drag-and-drop item movement
-- **OSRS-style right-click context menus** with manifest-driven actions
-- **Left-click primary actions** (Eat, Wield, Use, etc.)
-- Stack quantity display
+- **OSRS-style right-click context menus** with manifest-driven actions and colored labels
+- **Left-click primary actions** (Eat, Wield, Use, etc.) using `getPrimaryAction()`
+- **Shift-click to drop** (OSRS-style instant drop)
+- **Invalid target feedback**: "Nothing interesting happens." when using item on invalid target
+- Stack quantity display with OSRS-style formatting
 - Coin pouch separate display
-- **Cancel option** at bottom of all context menus
+- **Cancel option** always shown last in context menus
+- **Performance optimizations**: `useMemo` and `useCallback` for render efficiency
 
 ---
 
@@ -438,18 +487,30 @@ export const ACTION_PRIORITY = {
 
 ### InventoryActionDispatcher
 
-The `InventoryActionDispatcher` is the **single source of truth** for handling inventory actions:
+The `InventoryActionDispatcher` is the **single source of truth** for handling inventory actions. It eliminates duplication between context menu selections and left-click primary actions:
 
 ```typescript
+// From packages/client/src/game/systems/InventoryActionDispatcher.ts
 export function dispatchInventoryAction(
   action: string,
   ctx: InventoryActionContext,
 ): ActionResult {
+  const { world, itemId, slot, quantity = 1 } = ctx;
+  const localPlayer = world.getPlayer();
+
+  if (!localPlayer) {
+    return { success: false, message: "No local player" };
+  }
+
   switch (action) {
     case "eat":
     case "drink":
-      // Server-authoritative consumption
+      // Server-authoritative consumption via useItem packet
       world.network?.send("useItem", { itemId, slot });
+      return { success: true };
+
+    case "bury":
+      world.network?.send("buryBones", { itemId, slot });
       return { success: true };
 
     case "wield":
@@ -468,6 +529,14 @@ export function dispatchInventoryAction(
     case "examine":
       const examineText = itemData?.examine || `It's a ${itemId}.`;
       world.emit(EventType.UI_TOAST, { message: examineText, type: "info" });
+      // Also add to chat (OSRS-style game message)
+      world.chat?.add({
+        id: uuid(),
+        from: "",
+        body: examineText,
+        createdAt: new Date().toISOString(),
+        timestamp: Date.now(),
+      });
       return { success: true };
 
     case "use":
@@ -481,11 +550,20 @@ export function dispatchInventoryAction(
       return { success: true };
 
     case "cancel":
-      // Intentional no-op - menu already closed
+      // Intentional no-op - menu already closed by EntityContextMenu
       return { success: true };
+
+    default:
+      // Warn for unhandled actions (helps catch manifest typos)
+      console.warn(`Unhandled action: "${action}" for item "${itemId}"`);
+      return { success: false, message: `Unhandled action: ${action}` };
   }
 }
 ```
+
+<Info>
+**Testing**: The dispatcher has 333 lines of comprehensive unit tests covering all action types, error handling, and edge cases.
+</Info>
 
 ---
 

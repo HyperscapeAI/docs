@@ -21,6 +21,11 @@ Banking code lives in `packages/shared/src/systems/shared/economy/BankingSystem.
 - **Placeholders** - RS3-style placeholder mode for remembered slots
 - **Two-phase slot updates** - Prevents database constraint violations during bulk operations
 - **Distance check** - Must be within 3 meters of bank booth
+- **Combat interruption** - Bank automatically closes when player is attacked (OSRS-accurate)
+
+<Warning>
+**Combat Closes Bank**: Being attacked automatically closes the bank interface (OSRS-accurate). Even splash attacks (0 damage) will interrupt banking. This is server-authoritative - the server sends a `bankClose` packet with `reason: "combat"`.
+</Warning>
 
 ---
 

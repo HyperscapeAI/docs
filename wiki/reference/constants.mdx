@@ -33,6 +33,11 @@ export const COMBAT_CONSTANTS = {
   HEALTH_REGEN_INTERVAL_TICKS: 100,   // 60 seconds between HP regen
   AFK_DISABLE_RETALIATE_TICKS: 2000,
 
+  // === FOOD CONSUMPTION (OSRS-accurate) ===
+  EAT_DELAY_TICKS: 3,                 // 1.8s cooldown between eating foods
+  EAT_ATTACK_DELAY_TICKS: 3,          // Added to attack cooldown when eating mid-combat
+  MAX_HEAL_AMOUNT: 99,                // Security cap on healing (prevents manifest exploits)
+
   // === DAMAGE FORMULAS (OSRS) ===
   BASE_CONSTANT: 64,
   EFFECTIVE_LEVEL_CONSTANT: 8,
@@ -280,6 +285,30 @@ export const CONTEXT_MENU_COLORS = {
   PLAYER: "#ffffff",    // White - for players
 } as const;
 ```
+
+<Info>
+All context menu handlers now use these centralized constants instead of hardcoded values. This ensures consistency across all interaction types.
+</Info>
+
+---
+
+## Raycast Proxy Constants
+
+```typescript
+// From interaction/constants.ts
+export const RAYCAST_PROXY = {
+  BASE_RADIUS: 0.4,         // Base radius for humanoid proxies (meters)
+  BASE_HEIGHT: 1.2,         // Base height for humanoid proxies (meters)
+  Y_OFFSET: 0.8,            // Y-offset to center proxy on entity body (meters)
+  TALL_HEIGHT: 1.6,         // Height for taller mob proxies (meters)
+  CAP_SEGMENTS: 4,          // Capsule geometry segments (radial)
+  HEIGHT_SEGMENTS: 8,       // Capsule geometry segments (height)
+} as const;
+```
+
+<Info>
+**Performance**: VRM SkinnedMesh raycast is extremely slow (~700-1800ms) because THREE.js must transform every vertex by bone weights. Invisible capsule proxies provide instant click detection.
+</Info>
 
 ---
 

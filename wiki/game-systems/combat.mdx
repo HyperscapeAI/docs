@@ -59,6 +59,36 @@ export const COMBAT_CONSTANTS = {
 
 ---
 
+## Session Interruption
+
+### Combat Closes Bank/Store/Dialogue
+
+When a player is attacked, all interaction sessions are automatically closed (OSRS-accurate behavior):
+
+```typescript
+// From InteractionSessionManager.ts
+// OSRS-accurate: Being attacked (even a splash/miss) interrupts banking
+world.on(EventType.COMBAT_DAMAGE_DEALT, (event) => {
+  if (event.targetType === "player" && this.sessions.has(event.targetId)) {
+    this.closeSession(event.targetId, "combat");
+  }
+});
+```
+
+**Session Close Reasons:**
+- `user_action` — Player explicitly closed UI
+- `distance` — Player moved too far from target
+- `disconnect` — Player disconnected
+- `new_session` — Replaced by new session
+- `target_gone` — Target entity no longer exists
+- `combat` — Player was attacked (OSRS-style)
+
+<Info>
+**OSRS-Accurate**: Even a splash attack (0 damage) closes the bank/store/dialogue. Being in combat matters, not just taking damage.
+</Info>
+
+---
+
 ## Food Consumption & Combat
 
 ### Eat Delay Mechanics

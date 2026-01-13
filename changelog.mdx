@@ -23,7 +23,29 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Recent Updates" description="January 2026" date="2026-01-12">
+<Update label="Recent Updates" description="January 2026" date="2026-01-13">
+
+### 🛡️ Combat Session Management
+
+OSRS-accurate behavior where being attacked closes bank/store/dialogue interfaces:
+
+- **Session Interruption**: Bank, store, and dialogue UIs automatically close when player is attacked
+- **OSRS-Accurate**: Even splash attacks (0 damage) interrupt banking - being in combat matters
+- **Server-Authoritative**: Server sends close packets with `reason: "combat"`
+- **Defensive Guards**: Malformed events handled gracefully (missing targetId/targetType)
+- **Session Close Reasons**: Added `"combat"` to `SessionCloseReason` type
+- **Testing**: 342 lines of comprehensive unit tests covering all session types and edge cases
+
+### ⚡ Performance Optimizations
+
+Raycast proxy optimization for fast entity click detection:
+
+- **Raycast Proxy**: Invisible capsule meshes for instant click detection on NPCs and mobs
+- **Performance Gain**: Avoids expensive VRM SkinnedMesh raycast (~700-1800ms per click)
+- **Implementation**: Proxy added directly to THREE.Scene, bypasses Node system
+- **VRM Optimization**: Disabled raycast on all VRM/GLB meshes (`child.raycast = () => {}`)
+- **Constants**: Centralized `RAYCAST_PROXY` constants (radius, height, segments, Y-offset)
+- **Memory Management**: Proper cleanup in `destroy()` methods
 
 ### 🍖 Food Consumption & Healing System
 
@@ -73,14 +95,15 @@ Continued improvements to OSRS-style context menus:
 - **UI Border Conflicts**: Fixed border shorthand conflicts in `SettingsPanel` and `CombatPanel` (#510)
 - **Noted Tools**: Noted items now correctly rejected as valid tools for skilling (#508)
 - **Quaternion Normalization**: Fixed squished resources by using `config.rotation.w` instead of hardcoded 1 (#507)
-- **Bank Placeholders**: Fixed unique constraint violation on "release all placeholders" (#502)
-- **Resource Spam**: Prevent duplicate harvesting on spam-click (#494)
+- **Auto-Retaliate Guards**: Added server guards to prevent client-side rotation conflicts (#511)
+- **Bank Placeholders**: Fixed unique constraint violation on "release all placeholders" using two-phase slot update (#502)
 
 ### 🎮 UX Improvements
 
 - **F5 Debug Toggle**: Added F5 keybind to toggle FPS debug panel (matches Minecraft) (#505)
 - **Invalid Target Feedback**: "Nothing interesting happens." message when using item on invalid target
 - **Cancel Option**: OSRS-style Cancel option always shown last in context menus
+- **Debug Panel**: F5 or backslash key now toggles FPS/performance stats
 
 </Update>
 
