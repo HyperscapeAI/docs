@@ -438,18 +438,30 @@ export const ACTION_PRIORITY = {
 
 ### InventoryActionDispatcher
 
-The `InventoryActionDispatcher` is the **single source of truth** for handling inventory actions:
+The `InventoryActionDispatcher` is the **single source of truth** for handling inventory actions. It eliminates duplication between context menu selections and left-click primary actions:
 
 ```typescript
+// From packages/client/src/game/systems/InventoryActionDispatcher.ts
 export function dispatchInventoryAction(
   action: string,
   ctx: InventoryActionContext,
 ): ActionResult {
+  const { world, itemId, slot, quantity = 1 } = ctx;
+  const localPlayer = world.getPlayer();
+
+  if (!localPlayer) {
+    return { success: false, message: "No local player" };
+  }
+
   switch (action) {
     case "eat":
     case "drink":
-      // Server-authoritative consumption
+      // Server-authoritative consumption via useItem packet
       world.network?.send("useItem", { itemId, slot });
+      return { success: true };
+
+    case "bury":
+      world.network?.send("buryBones", { itemId, slot });
       return { success: true };
 
     case "wield":
@@ -468,6 +480,14 @@ export function dispatchInventoryAction(
     case "examine":
       const examineText = itemData?.examine || `It's a ${itemId}.`;
       world.emit(EventType.UI_TOAST, { message: examineText, type: "info" });
+      // Also add to chat (OSRS-style game message)
+      world.chat?.add({
+        id: uuid(),
+        from: "",
+        body: examineText,
+        createdAt: new Date().toISOString(),
+        timestamp: Date.now(),
+      });
       return { success: true };
 
     case "use":
@@ -481,11 +501,20 @@ export function dispatchInventoryAction(
       return { success: true };
 
     case "cancel":
-      // Intentional no-op - menu already closed
+      // Intentional no-op - menu already closed by EntityContextMenu
       return { success: true };
+
+    default:
+      // Warn for unhandled actions (helps catch manifest typos)
+      console.warn(`Unhandled action: "${action}" for item "${itemId}"`);
+      return { success: false, message: `Unhandled action: ${action}` };
   }
 }
 ```
+
+<Info>
+**Testing**: The dispatcher has 333 lines of comprehensive unit tests covering all action types, error handling, and edge cases.
+</Info>
 
 ---
 
