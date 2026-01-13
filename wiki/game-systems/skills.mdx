@@ -254,7 +254,34 @@ The bonus speed roll is server-authoritative to prevent client/server desyncs.
 </Info>
 
 <Info>
-**Mining Mechanics**: Rocks always deplete after yielding one ore (100% depletion chance). Success rates are OSRS-accurate and depend only on Mining level, not pickaxe tier. Pickaxe tier affects roll frequency (speed) only.
+**Mining Mechanics**: Rocks always deplete after yielding one ore (100% depletion chance). Success rates are OSRS-accurate and depend only on Mining level, not pickaxe tier. Pickaxe tier affects roll frequency (speed) only. The bonus speed roll for Dragon/Crystal pickaxes is server-authoritative to prevent client/server desyncs.
+</Info>
+
+### Model Scale Normalization
+
+Mining rocks (and all resources) now have normalized model scales to prevent "squished" or "stretched" appearance:
+
+```typescript
+// From ModelCache.ts - normalizeScales()
+// Detects and resets non-uniform scales in GLTF models
+// Some 3D modeling tools export models with non-uniform scales on internal nodes
+// (e.g., scale (2, 0.5, 1)) which causes distortion
+scene.traverse((node) => {
+  const s = node.scale;
+  const isNonUniform = 
+    Math.abs(s.x - s.y) > 0.001 ||
+    Math.abs(s.y - s.z) > 0.001 ||
+    Math.abs(s.x - s.z) > 0.001;
+
+  if (isNonUniform) {
+    node.scale.set(1, 1, 1);  // Reset to identity
+    node.updateMatrix();
+  }
+});
+```
+
+<Info>
+This normalization runs once when a model is first loaded, before caching. All clones will have correct proportions.
 </Info>
 
 **Fishing** (`gathering/fishing.json`):
