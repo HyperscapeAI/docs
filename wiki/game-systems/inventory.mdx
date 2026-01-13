@@ -439,11 +439,14 @@ useEffect(() => {
 Features:
 - 28-slot grid layout
 - Drag-and-drop item movement
-- **OSRS-style right-click context menus** with manifest-driven actions
-- **Left-click primary actions** (Eat, Wield, Use, etc.)
-- Stack quantity display
+- **OSRS-style right-click context menus** with manifest-driven actions and colored labels
+- **Left-click primary actions** (Eat, Wield, Use, etc.) using `getPrimaryAction()`
+- **Shift-click to drop** (OSRS-style instant drop)
+- **Invalid target feedback**: "Nothing interesting happens." when using item on invalid target
+- Stack quantity display with OSRS-style formatting
 - Coin pouch separate display
-- **Cancel option** at bottom of all context menus
+- **Cancel option** always shown last in context menus
+- **Performance optimizations**: `useMemo` and `useCallback` for render efficiency
 
 ---
 
