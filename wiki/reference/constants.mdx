@@ -33,6 +33,11 @@ export const COMBAT_CONSTANTS = {
   HEALTH_REGEN_INTERVAL_TICKS: 100,   // 60 seconds between HP regen
   AFK_DISABLE_RETALIATE_TICKS: 2000,
 
+  // === FOOD CONSUMPTION (OSRS-accurate) ===
+  EAT_DELAY_TICKS: 3,                 // 1.8s cooldown between eating foods
+  EAT_ATTACK_DELAY_TICKS: 3,          // Added to attack cooldown when eating mid-combat
+  MAX_HEAL_AMOUNT: 99,                // Security cap on healing (prevents manifest exploits)
+
   // === DAMAGE FORMULAS (OSRS) ===
   BASE_CONSTANT: 64,
   EFFECTIVE_LEVEL_CONSTANT: 8,
