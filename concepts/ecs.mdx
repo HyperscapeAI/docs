@@ -79,6 +79,13 @@ Tree = Entity + Position + Resource + Harvestable
 
 Systems process entities in batches, enabling efficient updates for many game objects.
 
+**Recent Optimizations:**
+- **Raycast Proxy**: Invisible capsule meshes for instant entity click detection (~700-1800ms improvement over VRM SkinnedMesh raycast)
+- **Event-Driven Health**: Client health bars use events instead of polling (eliminates race conditions)
+- **React Optimizations**: `useMemo` and `useCallback` in InventoryPanel for render efficiency
+- **Map-Based Tracking**: O(1) lookups for eat delay and attack cooldown management
+- **Model Normalization**: Scale normalization runs once at load time, before caching
+
 ### Flexibility
 
 Add new features by creating new components and systems without modifying existing code.
