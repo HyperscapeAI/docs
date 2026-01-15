@@ -23,7 +23,35 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Recent Updates" description="January 2026" date="2026-01-13">
+<Update label="Asset System Updates" description="January 2026" date="2026-01-15">
+
+### 📦 Asset System Enhancements
+
+New manifest additions and improvements to the asset pipeline:
+
+- **Model Bounds Manifest**: New `model-bounds.json` with pre-calculated bounding boxes for all 3D models
+  - Contains bounds (min/max coordinates), dimensions (x/y/z), and tile footprints
+  - Used for spatial calculations, collision detection, and placement validation
+  - Auto-generated from actual model geometry
+  - Covers 50+ models including tools, weapons, armor, resources, NPCs, and stations
+- **Fishing Content**: Complete fishing system with tools and spots
+  - New models: `fishing-rod-base` and `fishing-rod-standard`
+  - 7 fishing spots with OSRS-accurate catch rates (net, bait, fly, cage, harpoon, monkfish, shark)
+  - Catch rate formulas with `catchLow` and `catchHigh` values for level-based success
+  - Secondary requirements (bait, feathers) for certain fishing methods
+- **Mining Expansion**: Additional ore rocks with depleted states
+  - Copper rock with depleted model variant
+  - Mithril rock model added
+  - Runite rock with depleted variant
+  - All rocks include proper model paths and scale values
+- **Crafting Stations**: 3D models for smithing and smelting
+  - Anvil model (`anvil.glb`) with scale 0.5 and yOffset 0.2
+  - Furnace model (`furnace.glb`) with scale 1.5 and yOffset 1.0
+  - Station manifest updated with proper model paths and positioning
+
+</Update>
+
+<Update label="Combat & Food System" description="January 2026" date="2026-01-13">
 
 ### 🛡️ Combat Session Management
 
