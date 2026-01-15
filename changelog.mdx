@@ -23,6 +23,79 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Collision System & Bank Fixes" description="January 2026" date="2026-01-15">
+
+### 🎯 Static Tile Collision System
+
+Production-quality OSRS-accurate collision system for static objects and entities:
+
+- **CollisionMatrix**: Zone-based collision storage with bitmask flags
+  - 8×8 tile zones with `Int32Array` for optimal memory (~4MB for 1000×1000 world)
+  - OSRS-accurate flags: `BLOCKED`, `WATER`, `STEEP_SLOPE`, `OCCUPIED_PLAYER`, `OCCUPIED_NPC`
+  - Directional wall support for future dungeons (8 wall flags)
+  - Zero-allocation hot paths for pathfinding performance
+- **Automatic Footprint Detection**: Build-time model bounds extraction
+  - New `extract-model-bounds.ts` script parses GLB files
+  - Generates `model-bounds.json` with bounding boxes and dimensions
+  - Footprints auto-calculated: `(model dimensions × scale) / tile size`
+  - Turbo caching for incremental builds
+- **Multi-Tile Entities**: Stations and resources support multi-tile footprints
+  - Furnaces, anvils, banks register all occupied tiles
+  - Center-based footprint registration for consistent interaction
+  - `tilesWithinRangeOfFootprint()` enables interaction from any adjacent tile
+- **Pathfinding Integration**: Mobs and players respect static collision
+  - Trees, rocks, and stations block movement (safespotting enabled)
+  - Depleted resources remain solid (OSRS-accurate stumps)
+  - Collision checked before terrain walkability
+- **Testing**: 1,118 lines of comprehensive unit tests
+  - `CollisionMatrix.test.ts` (532 lines): Zone storage, flags, blocking
+  - `CollisionFlags.test.ts` (343 lines): Bitmask operations, wall directions
+  - `TileSystem.test.ts` (+243 lines): Multi-tile footprint interaction
+
+### 🏦 Bank System Improvements
+
+Critical fixes for stackable item handling and race condition prevention:
+
+- **Stackable Item Withdrawal**: Fixed bank withdrawal for stackable base items
+  - Arrows, fishing bait, runes now stack properly (not 1 per slot)
+  - Removed 28-item withdrawal limit for stackable items
+  - Three-way logic: noted items, stackable base items, non-stackable items
+  - Merges with existing stacks in inventory
+- **Race Condition Prevention**: Store buy/sell wrapped with `executeInventoryTransaction`
+  - Queue + Lock + Flush + Transaction + Reload pattern
+  - Prevents concurrent transaction conflicts
+  - Zero data loss (flush before transaction)
+  - Optimistic UI support (queue instead of reject)
+- **Transaction Safety**: All inventory-modifying operations use inventory lock
+  - Bank deposit/withdraw
+  - Store buy/sell
+  - Proper cleanup in finally blocks
+
+### 🎭 Visual & Animation Fixes
+
+OSRS-accurate visual presentation:
+
+- **Nametag Removal**: Removed overhead nametags for OSRS accuracy
+  - Names now shown in right-click context menu only
+  - Deleted `Nametags` system and `Nametag` node (797 lines removed)
+  - Health bars remain (separate system)
+  - Updated all entity classes and documentation
+- **Combat Animation Priority**: Fixed mob combat animations being overridden
+  - Priority system prevents idle/walk from overriding attack/death animations
+  - `isPriorityEmote()` and `isCombatEmote()` helper functions
+  - Death animation uses `DEATH_ANIMATION_DURATION_MS` constant (7 ticks)
+  - Server-side rotation guards for auto-retaliate
+- **UI Border Fixes**: Replaced border shorthand with explicit properties to prevent rerender conflicts
+
+### 🐛 Bug Fixes
+
+- **Noted Tools**: Noted items correctly rejected as valid tools for skilling (#508)
+- **Resource Rotation**: Fixed squished resources by using `config.rotation.w` instead of hardcoded 1 (#507)
+- **Auto-Retaliate**: Added server guards to prevent client-side rotation conflicts (#511)
+- **Settings Panel**: Fixed border style conflicts causing visual glitches (#510)
+
+</Update>
+
 <Update label="Asset System Updates" description="January 2026" date="2026-01-15">
 
 ### 📦 Asset System Enhancements
