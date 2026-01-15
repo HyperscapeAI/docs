@@ -26,12 +26,33 @@ bun run dev:shared    # Shared package with watch mode
 bun run dev:turbo     # Turbo-based dev (excludes asset-forge)
 bun run dev:reset     # Clean + rebuild + dev (nuclear option)
 
+# Server build tasks
+cd packages/server
+bun run extract-bounds  # Generate model-bounds.json from GLB files
+bun run build           # Build server (runs extract-bounds automatically)
+
 # Asset Forge (in packages/asset-forge/)
 cd packages/asset-forge
 bun run dev           # Frontend (Vite) + Backend (Elysia) concurrently
 bun run dev:frontend  # Vite only
 bun run dev:backend   # Elysia API only
 ```
+
+### Build Pipeline
+
+The server package includes automated tasks for collision footprint extraction:
+
+```bash
+# Extract model bounds (auto-runs during build)
+bun run extract-bounds
+```
+
+This scans `world/assets/models/**/*.glb` and generates `world/assets/manifests/model-bounds.json` with bounding box data for automatic collision footprint calculation.
+
+**Turbo Caching:**
+- Only re-runs when GLB files or script changes
+- Outputs cached between builds
+- Configured in `packages/server/turbo.json`
 
 ## Port Allocation
 
