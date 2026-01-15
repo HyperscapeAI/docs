@@ -59,6 +59,55 @@ export const COMBAT_CONSTANTS = {
 
 ---
 
+## Combat Animations
+
+### Animation Priority System
+
+Combat animations use a priority system to prevent idle/walk animations from overriding attack animations:
+
+```typescript
+// From CombatAnimationManager.ts
+// Priority emotes (death, combat) cannot be overridden by idle/walk
+const isPriorityEmote = (emote: string): boolean => {
+  return emote === 'death' || isCombatEmote(emote);
+};
+
+const isCombatEmote = (emote: string): boolean => {
+  return emote.startsWith('attack_') || emote.startsWith('block_');
+};
+
+// Prevent idle/walk from overriding combat animations
+if (isPriorityEmote(currentEmote) && !isPriorityEmote(newEmote)) {
+  return; // Don't override priority animation
+}
+```
+
+**Animation Timing:**
+- Death animation: 7 ticks (4.2 seconds) using `DEATH_ANIMATION_DURATION_MS` constant
+- Attack animations: Weapon-specific duration
+- Idle/walk: Can be interrupted by any action
+
+<Info>
+**OSRS-Accurate**: Mobs continue their attack animation even while moving, preventing visual glitches where idle/walk animations would override combat animations mid-attack.
+</Info>
+
+### Server-Side Animation Guards
+
+Auto-retaliate handlers include server-side guards to prevent client-side rotation conflicts:
+
+```typescript
+// From CombatSystem.ts
+// Server-side guard: Only rotate if on server
+if (this.world.isServer) {
+  // Rotate attacker to face target
+  this.rotateToFaceTarget(attacker, target);
+}
+```
+
+This prevents client-side prediction from conflicting with server-authoritative rotation during auto-retaliate.
+
+---
+
 ## Session Interruption
 
 ### Combat Closes Bank/Store/Dialogue
