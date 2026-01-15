@@ -1,0 +1,641 @@
+---
+title: "Collision System"
+description: "OSRS-accurate tile-based collision with zone storage"
+icon: "grid"
+---
+
+# Collision System
+
+Hyperscape implements an OSRS-accurate **tile-based collision system** using bitmask flags and zone-based storage. The system handles static objects (trees, rocks, stations), dynamic entities (players, mobs), and terrain features with optimal memory usage and performance.
+
+<Info>
+Collision code lives in `packages/shared/src/systems/shared/movement/CollisionMatrix.ts` and `CollisionFlags.ts`.
+</Info>
+
+---
+
+## Architecture
+
+### Zone-Based Storage
+
+The collision system divides the world into **8×8 tile zones** for efficient memory usage:
+
+```typescript
+// From CollisionMatrix.ts
+export const ZONE_SIZE = 8;  // 8×8 tiles per zone
+
+// Each zone = Int32Array[64] = 256 bytes
+// 1000×1000 tile world = 125×125 zones = ~4MB total
+```
+
+**Benefits:**
+- **Lazy allocation**: Zones created only when objects spawn
+- **Cache efficiency**: 8×8 fits in CPU cache lines
+- **Memory efficient**: ~4MB for 1000×1000 world
+- **Fast lookups**: O(1) zone lookup + O(1) tile index
+
+### Bitmask Flags
+
+Each tile stores collision flags as an `int32` bitmask:
+
+```typescript
+// From CollisionFlags.ts
+export const CollisionFlag = {
+  // Static objects
+  BLOCKED: 0x00200000,        // Trees, rocks, furnaces, anvils
+  WATER: 0x00800000,          // Water tiles (impassable)
+  STEEP_SLOPE: 0x01000000,    // Steep terrain
+  BLOCK_LOS: 0x00400000,      // Blocks line of sight (ranged combat)
+  DECORATION: 0x00040000,     // Decorative (doesn't block)
+  
+  // Entity occupancy
+  OCCUPIED_PLAYER: 0x00000100,  // Tile occupied by player
+  OCCUPIED_NPC: 0x00000200,     // Tile occupied by NPC/mob
+  
+  // Directional walls (for dungeons/buildings)
+  WALL_NORTH: 0x00000002,
+  WALL_EAST: 0x00000008,
+  WALL_SOUTH: 0x00000020,
+  WALL_WEST: 0x00000080,
+  WALL_NORTH_WEST: 0x00000001,
+  WALL_NORTH_EAST: 0x00000004,
+  WALL_SOUTH_EAST: 0x00000010,
+  WALL_SOUTH_WEST: 0x00000040,
+};
+```
+
+### Combined Masks
+
+For common queries, use pre-defined masks:
+
+```typescript
+export const CollisionMask = {
+  // Any static blocking
+  BLOCKS_WALK: CollisionFlag.BLOCKED | CollisionFlag.WATER | CollisionFlag.STEEP_SLOPE,
+  
+  // Any entity occupying tile
+  OCCUPIED: CollisionFlag.OCCUPIED_PLAYER | CollisionFlag.OCCUPIED_NPC,
+  
+  // Full blocking (static + entities)
+  BLOCKS_MOVEMENT: BLOCKS_WALK | OCCUPIED,
+  
+  // Blocks ranged attacks
+  BLOCKS_RANGED: CollisionFlag.BLOCK_LOS | CollisionFlag.BLOCKED,
+  
+  // All wall flags
+  WALLS: WALL_NORTH | WALL_EAST | WALL_SOUTH | WALL_WEST | /* diagonals */,
+};
+```
+
+---
+
+## API Reference
+
+### Basic Operations
+
+```typescript
+// Get collision flags for a tile
+const flags = world.collision.getFlags(tileX, tileZ);
+
+// Check if tile has specific flags
+if (world.collision.hasFlags(tileX, tileZ, CollisionMask.BLOCKS_WALK)) {
+  // Tile is blocked by static object
+}
+
+// Check if tile is walkable (no blocking flags)
+if (world.collision.isWalkable(tileX, tileZ)) {
+  // Tile is clear
+}
+
+// Add collision flags (bitwise OR)
+world.collision.addFlags(tileX, tileZ, CollisionFlag.BLOCKED);
+
+// Remove collision flags (bitwise AND NOT)
+world.collision.removeFlags(tileX, tileZ, CollisionFlag.BLOCKED);
+
+// Set flags (replaces existing)
+world.collision.setFlags(tileX, tileZ, CollisionFlag.WATER);
+```
+
+### Movement Blocking
+
+```typescript
+// Check if movement from one tile to another is blocked
+const blocked = world.collision.isBlocked(fromX, fromZ, toX, toZ);
+
+// This checks:
+// - Destination tile for full blocking (BLOCKED, WATER, OCCUPIED)
+// - Directional walls (if implemented)
+// - Diagonal movement (checks adjacent cardinal tiles)
+```
+
+### Pathfinding Integration
+
+```typescript
+// From BFSPathfinder.ts
+const pathfinder = new BFSPathfinder({
+  getEntityId: () => entityId,
+  getEntityOccupancy: () => world.entityOccupancy,
+  isWalkable: (tile) => {
+    // Check CollisionMatrix for static objects
+    if (world.collision.hasFlags(tile.x, tile.z, CollisionMask.BLOCKS_WALK)) {
+      return false;
+    }
+    
+    // Check terrain walkability
+    const terrain = world.getSystem("terrain");
+    return terrain?.isTileWalkable(tile) ?? true;
+  },
+});
+```
+
+---
+
+## Multi-Tile Entities
+
+Large objects (furnaces, banks, trees) can occupy multiple tiles with automatic footprint detection.
+
+### Footprint Registration
+
+```typescript
+// From FurnaceEntity.ts
+// Footprint is CENTERED on entity position
+const centerTile = worldToTile(config.position.x, config.position.z);
+const footprint = stationDataProvider.getFootprint("furnace"); // { width: 2, depth: 2 }
+const size = resolveFootprint(footprint);
+
+// Calculate offset to center the footprint
+const offsetX = Math.floor(size.x / 2);
+const offsetZ = Math.floor(size.z / 2);
+
+// Register all occupied tiles
+for (let dx = 0; dx < size.x; dx++) {
+  for (let dz = 0; dz < size.z; dz++) {
+    const tile = {
+      x: centerTile.x + dx - offsetX,
+      z: centerTile.z + dz - offsetZ,
+    };
+    world.collision.addFlags(tile.x, tile.z, CollisionFlag.BLOCKED);
+  }
+}
+```
+
+**Example:** A 2×2 furnace at position (10.5, 10.5):
+- Center tile: (10, 10)
+- Offset: floor(2/2) = 1
+- Occupied tiles: (9,9), (10,9), (9,10), (10,10)
+
+### Interaction Range
+
+Players can interact with multi-tile objects from any adjacent tile:
+
+```typescript
+// From TileSystem.ts
+export function tilesWithinRangeOfFootprint(
+  playerTile: TileCoord,
+  centerTile: TileCoord,
+  footprintWidth: number,
+  footprintDepth: number,
+  rangeTiles: number,
+): boolean {
+  // Check if player is within range of ANY occupied tile
+  // Enables OSRS-style interaction from any side of a 2×2 furnace
+}
+```
+
+---
+
+## Automatic Footprint Detection
+
+Station footprints are automatically calculated from model geometry at build time.
+
+### Build Pipeline
+
+```bash
+# Extract model bounds from GLB files
+bun run extract-bounds
+
+# Generates: packages/server/world/assets/manifests/model-bounds.json
+```
+
+**How it works:**
+1. `extract-model-bounds.ts` parses GLB files and reads glTF position accessor min/max values
+2. Calculates bounding box dimensions in model space
+3. Writes to `model-bounds.json` manifest
+4. `StationDataProvider` loads manifest and computes footprints: `(rawDimensions × modelScale) / TILE_SIZE`
+
+### Model Bounds Manifest
+
+```json
+{
+  "generatedAt": "2026-01-15T09:52:25Z",
+  "tileSize": 1.0,
+  "models": [
+    {
+      "id": "furnace",
+      "assetPath": "asset://models/furnace/furnace.glb",
+      "bounds": {
+        "min": { "x": -0.755, "y": 0, "z": -0.725 },
+        "max": { "x": 0.755, "y": 1.8, "z": 0.725 }
+      },
+      "dimensions": { "x": 1.51, "y": 1.8, "z": 1.45 },
+      "footprint": { "width": 2, "depth": 1 }
+    }
+  ]
+}
+```
+
+### Adding New Stations
+
+To add a new station with automatic collision:
+
+1. Add model to `packages/server/world/assets/models/`
+2. Add entry to `manifests/stations.json`:
+   ```json
+   {
+     "type": "new_station",
+     "name": "New Station",
+     "model": "asset://models/new_station/new_station.glb",
+     "modelScale": 1.5,
+     "modelYOffset": 0.5,
+     "examine": "A new station for processing."
+   }
+   ```
+3. Run `bun run build` (auto-generates `model-bounds.json`)
+4. Footprint calculated automatically: `(model dimensions × 1.5) / 1.0 tile`
+
+<Info>
+**No manual footprint config needed!** The system auto-detects from model geometry. Override with explicit `footprint` field only if needed.
+</Info>
+
+---
+
+## Resource Collision
+
+Resources (trees, rocks, fishing spots) register collision on spawn:
+
+```typescript
+// From ResourceEntity.ts
+// Register collision for this resource (server-side only)
+if (this.world.isServer && config.resourceType !== "fishing_spot") {
+  const centerTile = worldToTile(this.position.x, this.position.z);
+  const footprint = this.config.footprint || "standard"; // 1×1 default
+  const size = FOOTPRINT_SIZES[footprint];
+  
+  // Calculate offset to center the footprint
+  const offsetX = Math.floor(size.x / 2);
+  const offsetZ = Math.floor(size.z / 2);
+  
+  // Register all occupied tiles
+  for (let dx = 0; dx < size.x; dx++) {
+    for (let dz = 0; dz < size.z; dz++) {
+      const tile = {
+        x: centerTile.x + dx - offsetX,
+        z: centerTile.z + dz - offsetZ,
+      };
+      world.collision.addFlags(tile.x, tile.z, CollisionFlag.BLOCKED);
+    }
+  }
+}
+```
+
+**OSRS-Accurate:** Depleted resources (tree stumps) remain solid. Collision persists even when resource is depleted, only removed when entity is destroyed.
+
+---
+
+## Entity Occupancy Integration
+
+The `EntityOccupancyMap` delegates to `CollisionMatrix` for unified storage:
+
+```typescript
+// From EntityOccupancyMap.ts
+// When entity occupies tiles, flags are added to CollisionMatrix
+export class EntityOccupancyMap implements IEntityOccupancy {
+  private _collisionMatrix: ICollisionMatrix | null = null;
+  
+  setCollisionMatrix(matrix: ICollisionMatrix): void {
+    this._collisionMatrix = matrix;
+  }
+  
+  occupy(entityId: EntityID, tiles: TileCoord[], entityType: OccupantType): void {
+    const collisionFlag = entityType === "player"
+      ? CollisionFlag.OCCUPIED_PLAYER
+      : CollisionFlag.OCCUPIED_NPC;
+    
+    for (const tile of tiles) {
+      // Track in occupancy map
+      this._occupiedTiles.set(tileKey(tile), { entityId, entityType });
+      
+      // Add to CollisionMatrix
+      if (this._collisionMatrix) {
+        this._collisionMatrix.addFlags(tile.x, tile.z, collisionFlag);
+      }
+    }
+  }
+}
+```
+
+**Delta-Based Moves:** When entities move, only changed tiles are updated (not all tiles):
+
+```typescript
+// For a 3×3 boss moving 1 tile: 6 unchanged, 3 removed, 3 added
+// Old tiles: Remove flags from tiles not in new position
+// New tiles: Add flags to tiles not in old position
+```
+
+---
+
+## Network Synchronization
+
+Collision data can be synced to clients for prediction:
+
+```typescript
+// Get zones within radius
+const zones = world.collision.getZonesInRadius(
+  playerTileX,
+  playerTileZ,
+  radiusTiles
+);
+
+// Serialize zone for network
+const base64Data = world.collision.serializeZone(zoneX, zoneZ);
+
+// Deserialize on client
+world.collision.deserializeZone(zoneX, zoneZ, base64Data);
+```
+
+**Zone Packet Format:**
+```typescript
+interface ZoneCollisionPacket {
+  zones: Array<{
+    zoneX: number;
+    zoneZ: number;
+    data: string;  // Base64 encoded Int32Array[64]
+  }>;
+}
+```
+
+---
+
+## Performance Characteristics
+
+### Memory Usage
+
+| World Size | Zones | Memory |
+|------------|-------|--------|
+| 100×100 tiles | 13×13 = 169 zones | ~43 KB |
+| 500×500 tiles | 63×63 = 3,969 zones | ~1 MB |
+| 1000×1000 tiles | 125×125 = 15,625 zones | ~4 MB |
+
+### Hot Path Performance
+
+```typescript
+// Zero-allocation queries (pre-allocated buffers)
+const flags = world.collision.getFlags(x, z);        // O(1) Map lookup + array index
+const walkable = world.collision.isWalkable(x, z);   // O(1) bitwise AND
+const blocked = world.collision.isBlocked(x1, z1, x2, z2); // O(1) with diagonal checks
+```
+
+**Pathfinding:** BFS pathfinder checks collision for every tile expansion. Zero-allocation queries are critical for performance.
+
+---
+
+## Safespotting
+
+The collision system enables OSRS-style safespotting:
+
+```typescript
+// Player behind tree, mob cannot path around
+// Tree at (10, 10) blocks tile
+world.collision.addFlags(10, 10, CollisionFlag.BLOCKED);
+
+// Mob pathfinding
+const path = pathfinder.findPath(mobTile, playerTile);
+// Returns null - no valid path (tree blocks)
+
+// Mob cannot reach player (safespot)
+```
+
+<Warning>
+**OSRS Mechanic**: Mobs cannot path through static objects. Players can use trees, rocks, and other obstacles to create safespots where melee mobs cannot reach them.
+</Warning>
+
+---
+
+## Directional Walls
+
+The system supports directional walls for future dungeon/building interiors:
+
+```typescript
+// Block entry from north
+world.collision.addFlags(tileX, tileZ, CollisionFlag.WALL_NORTH);
+
+// Movement check
+const blocked = world.collision.isBlocked(
+  tileX, tileZ + 1,  // From north
+  tileX, tileZ       // To tile with wall
+);
+// Returns true - wall blocks entry from north
+```
+
+**Wall Mechanics:**
+- Walls block entry FROM specific directions
+- Diagonal movement checks both cardinal tiles
+- Opposite wall flags prevent exit in blocked direction
+
+---
+
+## Code Examples
+
+### Registering Static Collision
+
+```typescript
+// Station entity (furnace, anvil, bank)
+class FurnaceEntity extends InteractableEntity {
+  private collisionTiles: TileCoord[] = [];
+  
+  constructor(world: World, config: FurnaceEntityConfig) {
+    super(world, config);
+    
+    // Get footprint from manifest (auto-calculated from model)
+    const footprint = stationDataProvider.getFootprint("furnace");
+    const size = resolveFootprint(footprint);
+    
+    // Register collision (server-side only)
+    if (this.world.isServer) {
+      const centerTile = worldToTile(config.position.x, config.position.z);
+      const offsetX = Math.floor(size.x / 2);
+      const offsetZ = Math.floor(size.z / 2);
+      
+      for (let dx = 0; dx < size.x; dx++) {
+        for (let dz = 0; dz < size.z; dz++) {
+          const tile = {
+            x: centerTile.x + dx - offsetX,
+            z: centerTile.z + dz - offsetZ,
+          };
+          this.collisionTiles.push(tile);
+          this.world.collision.addFlags(tile.x, tile.z, CollisionFlag.BLOCKED);
+        }
+      }
+    }
+  }
+  
+  destroy(): void {
+    // Unregister collision
+    if (this.world.isServer) {
+      for (const tile of this.collisionTiles) {
+        this.world.collision.removeFlags(tile.x, tile.z, CollisionFlag.BLOCKED);
+      }
+    }
+    super.destroy();
+  }
+}
+```
+
+### Checking Collision in Pathfinding
+
+```typescript
+// From MobEntity.ts
+const pathfinder = new BFSPathfinder({
+  getEntityId: () => this.id,
+  getEntityOccupancy: () => this.world.entityOccupancy,
+  isWalkable: (tile) => {
+    // Check CollisionMatrix for static objects
+    if (world.collision.hasFlags(tile.x, tile.z, CollisionMask.BLOCKS_WALK)) {
+      return false;
+    }
+    
+    // Check terrain walkability
+    const terrain = world.getSystem("terrain");
+    if (terrain) {
+      return terrain.isTileWalkable(tile);
+    }
+    
+    return true;
+  },
+});
+
+const path = pathfinder.findPath(startTile, goalTile);
+```
+
+### Multi-Tile Interaction
+
+```typescript
+// From InteractionRouter.ts
+// Check if player is in range of ANY tile in a multi-tile footprint
+const playerTile = worldToTile(playerPos.x, playerPos.z);
+const targetTile = worldToTile(targetPos.x, targetPos.z);
+
+if (target.footprint) {
+  // Multi-tile entity (furnace, bank, large tree)
+  inRange = tilesWithinRangeOfFootprint(
+    playerTile,
+    targetTile,
+    target.footprint.width,
+    target.footprint.depth,
+    interactionRange
+  );
+} else {
+  // Single-tile entity
+  inRange = tilesWithinRange(playerTile, targetTile, interactionRange);
+}
+```
+
+---
+
+## Build Integration
+
+### Turbo Caching
+
+The `extract-bounds` task runs automatically during build with Turbo caching:
+
+```json
+// From packages/server/turbo.json
+{
+  "tasks": {
+    "extract-bounds": {
+      "inputs": [
+        "world/assets/models/**/*.glb",
+        "scripts/extract-model-bounds.ts"
+      ],
+      "outputs": ["world/assets/manifests/model-bounds.json"],
+      "cache": true
+    },
+    "build": {
+      "dependsOn": ["^build", "extract-bounds"]
+    }
+  }
+}
+```
+
+**Benefits:**
+- Bounds only regenerated when GLB files change
+- Cached across builds for fast iteration
+- Automatic during `bun run build`
+
+### Manual Extraction
+
+```bash
+# Extract bounds for all models
+cd packages/server
+bun run extract-bounds
+
+# Output: world/assets/manifests/model-bounds.json
+```
+
+---
+
+## Testing
+
+### Unit Tests
+
+```typescript
+// From CollisionMatrix.test.ts
+describe("CollisionMatrix", () => {
+  it("handles negative coordinates", () => {
+    matrix.setFlags(-5, -10, CollisionFlag.BLOCKED);
+    expect(matrix.getFlags(-5, -10)).toBe(CollisionFlag.BLOCKED);
+  });
+  
+  it("blocks diagonal when adjacent tile is blocked", () => {
+    matrix.setFlags(6, 5, CollisionFlag.BLOCKED);
+    expect(matrix.isBlocked(5, 5, 6, 6)).toBe(true); // NE blocked
+  });
+  
+  it("supports multi-tile footprints", () => {
+    const tiles = [
+      { x: 10, z: 10 }, { x: 11, z: 10 },
+      { x: 10, z: 11 }, { x: 11, z: 11 },
+    ];
+    tiles.forEach(t => matrix.addFlags(t.x, t.z, CollisionFlag.BLOCKED));
+    tiles.forEach(t => expect(matrix.isWalkable(t.x, t.z)).toBe(false));
+  });
+});
+```
+
+### Integration Tests
+
+```typescript
+// Verify resource spawns block tiles
+test("resource spawns register collision", async () => {
+  const tree = new ResourceEntity(world, {
+    resourceType: "tree",
+    position: { x: 10, y: 0, z: 10 },
+    footprint: "standard", // 1×1
+  });
+  
+  const tile = worldToTile(10, 10);
+  expect(world.collision.hasFlags(tile.x, tile.z, CollisionFlag.BLOCKED)).toBe(true);
+  
+  tree.destroy();
+  expect(world.collision.hasFlags(tile.x, tile.z, CollisionFlag.BLOCKED)).toBe(false);
+});
+```
+
+---
+
+## Related Documentation
+
+- [Tile Movement System](/wiki/game-systems/movement) - Pathfinding and tile coordinates
+- [Entity System](/concepts/entities) - Entity lifecycle and components
+- [Manifests](/concepts/manifests) - Data-driven configuration
