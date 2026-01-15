@@ -352,9 +352,157 @@ export function getCardinalFaceDirection(
 
 ---
 
+## Collision System
+
+Hyperscape uses a unified **CollisionMatrix** system for OSRS-accurate tile-based collision. This handles static objects (trees, rocks, stations), entities (players, mobs), and terrain features.
+
+### CollisionMatrix Architecture
+
+The collision system uses **zone-based storage** with bitmask flags for optimal performance:
+
+```typescript
+// From CollisionMatrix.ts
+export interface ICollisionMatrix {
+  // Get collision flags for a tile
+  getFlags(tileX: number, tileZ: number): number;
+  
+  // Add/remove flags (bitwise operations)
+  addFlags(tileX: number, tileZ: number, flags: number): void;
+  removeFlags(tileX: number, tileZ: number, flags: number): void;
+  
+  // Check if tile has specific flags
+  hasFlags(tileX: number, tileZ: number, flags: number): boolean;
+  
+  // Check if tile is walkable
+  isWalkable(tileX: number, tileZ: number): boolean;
+  
+  // Check if movement between tiles is blocked
+  isBlocked(fromX: number, fromZ: number, toX: number, toZ: number): boolean;
+}
+```
+
+**Zone-Based Storage:**
+- World divided into 8×8 tile zones
+- Each zone = `Int32Array[64]` = 256 bytes
+- Lazy allocation (zones created only when needed)
+- Memory: ~4MB for 1000×1000 tile world
+
+### Collision Flags
+
+OSRS-accurate bitmask flags for different collision types:
+
+```typescript
+// From CollisionFlags.ts
+export const CollisionFlag = {
+  // Static objects
+  BLOCKED: 0x00200000,        // Trees, rocks, furnaces, anvils
+  WATER: 0x00800000,          // Water tiles (impassable)
+  STEEP_SLOPE: 0x01000000,    // Steep terrain
+  BLOCK_LOS: 0x00400000,      // Blocks line of sight (ranged combat)
+  
+  // Entity occupancy
+  OCCUPIED_PLAYER: 0x00000100,  // Tile occupied by player
+  OCCUPIED_NPC: 0x00000200,     // Tile occupied by NPC/mob
+  
+  // Directional walls (for dungeons/buildings)
+  WALL_NORTH: 0x00000002,
+  WALL_EAST: 0x00000008,
+  WALL_SOUTH: 0x00000020,
+  WALL_WEST: 0x00000080,
+  // ... diagonal walls
+};
+
+// Combined masks for common queries
+export const CollisionMask = {
+  BLOCKS_WALK: CollisionFlag.BLOCKED | CollisionFlag.WATER | CollisionFlag.STEEP_SLOPE,
+  OCCUPIED: CollisionFlag.OCCUPIED_PLAYER | CollisionFlag.OCCUPIED_NPC,
+  BLOCKS_MOVEMENT: BLOCKS_WALK | OCCUPIED,
+};
+```
+
+### Using the Collision System
+
+```typescript
+// Check if tile is walkable
+if (world.collision.isWalkable(tileX, tileZ)) {
+  // Tile is clear
+}
+
+// Check for specific blocking
+if (world.collision.hasFlags(tileX, tileZ, CollisionMask.BLOCKS_WALK)) {
+  // Static object blocking (tree, rock, station)
+}
+
+// Register static collision (resources, stations)
+world.collision.addFlags(tileX, tileZ, CollisionFlag.BLOCKED);
+
+// Remove collision when object destroyed
+world.collision.removeFlags(tileX, tileZ, CollisionFlag.BLOCKED);
+```
+
+### Multi-Tile Footprints
+
+Large objects (furnaces, banks, trees) can occupy multiple tiles:
+
+```typescript
+// From tilesWithinRangeOfFootprint in TileSystem.ts
+// Check if player is within range of ANY tile in a multi-tile footprint
+export function tilesWithinRangeOfFootprint(
+  playerTile: TileCoord,
+  centerTile: TileCoord,
+  footprintWidth: number,
+  footprintDepth: number,
+  rangeTiles: number,
+): boolean {
+  // Footprint is CENTERED on centerTile
+  const offsetX = Math.floor(footprintWidth / 2);
+  const offsetZ = Math.floor(footprintDepth / 2);
+  
+  // Check each occupied tile
+  for (let dx = 0; dx < footprintWidth; dx++) {
+    for (let dz = 0; dz < footprintDepth; dz++) {
+      const occupiedTile = {
+        x: centerTile.x + dx - offsetX,
+        z: centerTile.z + dz - offsetZ,
+      };
+      
+      const distance = Math.max(
+        Math.abs(playerTile.x - occupiedTile.x),
+        Math.abs(playerTile.z - occupiedTile.z)
+      );
+      
+      if (distance <= rangeTiles && distance > 0) {
+        return true; // In range of this tile
+      }
+    }
+  }
+  
+  return false;
+}
+```
+
+**Example:** A 2×2 furnace centered at (10, 10) occupies tiles (9,9), (10,9), (9,10), (10,10). Players can interact from any adjacent tile.
+
+### Automatic Footprint Detection
+
+Station footprints are automatically calculated from model bounds at build time:
+
+```typescript
+// Build step: extract-model-bounds.ts scans GLB files
+// Runtime: StationDataProvider computes footprint = (rawDimensions * modelScale)
+
+// From StationDataProvider.ts
+const footprint = stationDataProvider.getFootprint("furnace");
+// Returns: { width: 2, depth: 2 } (auto-calculated from model)
+```
+
+<Info>
+**Build Integration**: Run `bun run extract-bounds` to regenerate `model-bounds.json` after adding new models. This happens automatically during `bun run build` via Turbo caching.
+</Info>
+
 ## Entity Occupancy
 
-The `EntityOccupancyMap` tracks which tiles are occupied by entities.
+The `EntityOccupancyMap` delegates to `CollisionMatrix` for unified collision storage:
 
 ```typescript
 // From EntityOccupancyMap.ts
@@ -365,7 +513,7 @@ export interface IEntityOccupancy {
   // Get entity at tile
   getEntityAt(tile: TileCoord): EntityID | null;
 
-  // Update entity position
+  // Update entity position (atomic multi-tile moves)
   moveEntity(entityId: EntityID, fromTile: TileCoord, toTile: TileCoord): void;
 
   // Add/remove entities
@@ -373,6 +521,8 @@ export interface IEntityOccupancy {
   removeEntity(entityId: EntityID): void;
 }
 ```
+
+**Integration:** When entities occupy tiles, `EntityOccupancyMap` automatically updates `CollisionMatrix` with `OCCUPIED_PLAYER` or `OCCUPIED_NPC` flags.
 
 ### Zero-Allocation Helpers
 
