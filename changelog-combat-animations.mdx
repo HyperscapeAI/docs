@@ -1,0 +1,222 @@
+---
+title: "Combat Animation Fixes"
+description: "Fixed mob combat animation override issues"
+date: "2026-01-13"
+---
+
+# Combat Animation Fixes (January 13, 2026)
+
+## 🎭 Mob Combat Animation System
+
+Fixed critical issue where idle/walk emotes were overriding combat animations for mobs.
+
+### Problem
+
+Mobs would play idle or walk animations during combat instead of attack animations, breaking visual feedback for combat state.
+
+### Solution
+
+Implemented priority-based emote system with combat animation protection:
+
+```typescript
+// From AnimationSystem.ts
+private isPriorityEmote(emote: string): boolean {
+  return emote === 'death' || emote.startsWith('attack_');
+}
+
+private isCombatEmote(emote: string): boolean {
+  return emote.startsWith('attack_') || emote === 'block';
+}
+```
+
+**Priority Rules:**
+1. Death animations always take priority
+2. Combat animations (attack_*) override idle/walk
+3. Idle/walk only play when not in combat
+4. Priority emotes cannot be interrupted
+
+### Changes
+
+**Files Modified:**
+- `AnimationSystem.ts` - Added priority emote checks
+- `CombatAnimationManager.ts` - Extracted helper methods
+- `MobEntity.ts` - Removed unreachable VRM code
+
+**Performance:**
+- Moved `emoteMap` to instance constant (avoid hot path allocation)
+- Used `TICK_DURATION_MS` constant instead of hardcoded 600
+- Added `DEATH_ANIMATION_DURATION_MS` constant (7 ticks = 4200ms)
+
+### Testing
+
+No test files added (visual verification required).
+
+---
+
+## 🏦 Bank/Store Close on Combat
+
+OSRS-accurate behavior where being attacked closes bank/store/dialogue interfaces.
+
+### Implementation
+
+- **Session Interruption**: Bank, store, and dialogue UIs close when player is attacked
+- **OSRS-Accurate**: Even splash attacks (0 damage) interrupt banking
+- **Server-Authoritative**: Server sends close packets with `reason: "combat"`
+- **Defensive Guards**: Malformed events handled gracefully
+- **Session Close Reasons**: Added `"combat"` to `SessionCloseReason` type
+
+### Files Modified
+
+- `InteractionSessionManager.ts` - Added combat session handler
+- `CombatSystem.ts` - Emit session close on attack
+- `types/` - Added `SessionCloseReason` type
+
+---
+
+## ⚡ Raycast Performance Optimization
+
+Added raycast proxy optimization for fast entity click detection.
+
+### Problem
+
+VRM SkinnedMesh raycasting was extremely slow (~700-1800ms per click).
+
+### Solution
+
+Invisible capsule proxy meshes for instant click detection:
+
+```typescript
+// Raycast proxy constants
+export const RAYCAST_PROXY = {
+  RADIUS: 0.3,
+  HEIGHT: 1.8,
+  SEGMENTS: 8,
+  Y_OFFSET: 0.9,
+} as const;
+```
+
+**Implementation:**
+- Proxy added directly to THREE.Scene (bypasses Node system)
+- Disabled raycast on all VRM/GLB meshes
+- Proper cleanup in `destroy()` methods
+- Applied to both NPCEntity and MobEntity
+
+### Performance Impact
+
+- **Before**: 700-1800ms per click (VRM mesh raycast)
+- **After**: <1ms per click (capsule proxy raycast)
+- **Improvement**: ~1000x faster click detection
+
+---
+
+## 🐛 UI Border Style Conflicts
+
+Fixed border shorthand conflicts causing rerender issues in Settings and Combat panels.
+
+### Problem
+
+Border shorthand properties (`border: "1px solid #333"`) conflicted with React's style reconciliation, causing unnecessary rerenders.
+
+### Solution
+
+Replace border shorthand with explicit properties:
+
+```typescript
+// Before
+style={{ border: "1px solid #333" }}
+
+// After
+style={{ 
+  borderWidth: "1px",
+  borderStyle: "solid",
+  borderColor: "#333"
+}}
+```
+
+**Files Fixed:**
+- `SettingsPanel.tsx`
+- `CombatPanel.tsx`
+
+---
+
+## 🔧 Noted Tools Validation
+
+Fixed bug where noted items could be used as valid tools for skilling.
+
+### Problem
+
+Noted pickaxes/hatchets were accepted as valid tools, allowing impossible skilling actions.
+
+### Solution
+
+Added noted item check in tool validation:
+
+```typescript
+// Reject noted items as valid tools
+if (item.noted) {
+  return false;
+}
+```
+
+**Files Modified:**
+- `ToolUtils.ts` - Added noted item validation
+
+---
+
+## 🎯 Auto-Retaliate Server Guards
+
+Added server-side guards to prevent client-side rotation conflicts during auto-retaliate.
+
+### Problem
+
+Client-side rotation during auto-retaliate could conflict with server-authoritative rotation, causing visual glitches.
+
+### Solution
+
+Added server-side checks before applying auto-retaliate rotation:
+
+```typescript
+// Only apply rotation on server
+if (this.world.isServer) {
+  entity.setRotation(targetRotation);
+}
+```
+
+**Files Modified:**
+- `CombatSystem.ts` - Auto-retaliate handlers
+
+---
+
+## 🎮 F5 Debug Panel Toggle
+
+Added F5 keybind to toggle FPS debug panel (matches Minecraft UX).
+
+### Implementation
+
+```typescript
+// F5 or backslash toggles debug panel
+if (event.key === 'F5' || event.key === '\\') {
+  this.toggleDebugPanel();
+}
+```
+
+**Files Modified:**
+- `ClientInput.ts` - Added F5 keybind
+- `DevStats.ts` - Toggle functionality
+
+---
+
+## 📊 Summary
+
+**Total Changes:**
+- 12 commits merged
+- 3,691 additions, 57 deletions
+- 35 files changed
+- 1,118 lines of tests added
+
+**Key Improvements:**
+- OSRS-accurate collision system
+- Combat animation fixes
+- Performance optimizations (raycast proxy)
+- UI polish (border conflicts, F5 toggle)
+- Bug fixes (noted tools, auto-retaliate)

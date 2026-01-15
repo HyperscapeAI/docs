@@ -273,6 +273,7 @@
               "wiki/game-systems/combat",
               "wiki/game-systems/skills",
               "wiki/game-systems/movement",
+              "wiki/game-systems/collision",
               "wiki/game-systems/inventory",
               "wiki/game-systems/bank",
               "wiki/game-systems/death",

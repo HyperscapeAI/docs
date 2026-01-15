@@ -89,8 +89,46 @@ Located in `src/systems/shared/`:
 | `economy/` | Banks, shops, trading |
 | `entities/` | Entity lifecycle management |
 | `interaction/` | Player-world interactions |
+| `movement/` | Tile-based movement, collision, pathfinding |
 | `presentation/` | Visual rendering |
 | `world/` | World management |
+
+### Collision System
+
+The movement system includes a unified collision matrix for OSRS-accurate tile blocking:
+
+```typescript
+// From packages/shared/src/systems/shared/movement/
+export { CollisionMatrix } from './CollisionMatrix';
+export { CollisionFlag, CollisionMask } from './CollisionFlags';
+export { EntityOccupancyMap } from './EntityOccupancyMap';
+export { TileSystem } from './TileSystem';
+```
+
+**Key Exports:**
+
+| Export | Purpose |
+|--------|---------|
+| `CollisionMatrix` | Zone-based collision storage (8×8 tile zones) |
+| `CollisionFlag` | Bitmask flags (BLOCKED, WATER, OCCUPIED, walls) |
+| `CollisionMask` | Combined masks (BLOCKS_WALK, BLOCKS_MOVEMENT) |
+| `EntityOccupancyMap` | Entity tracking facade over CollisionMatrix |
+| `tilesWithinRangeOfFootprint` | Multi-tile interaction range checks |
+
+**Usage:**
+```typescript
+import { CollisionMatrix, CollisionMask } from '@hyperscape/shared';
+
+const collision = new CollisionMatrix();
+
+// Check if tile is walkable
+if (!collision.hasFlags(x, z, CollisionMask.BLOCKS_WALK)) {
+  // Safe to move
+}
+
+// Add blocking for a tree
+collision.addFlags(x, z, CollisionFlag.BLOCKED);
+```
 
 ### Data Manifests
 

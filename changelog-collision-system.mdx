@@ -1,0 +1,176 @@
+---
+title: "Collision System Update"
+description: "OSRS-accurate tile collision with zone-based storage"
+date: "2026-01-15"
+---
+
+# Collision System Update (January 15, 2026)
+
+## 🎯 Static Tile Collision System
+
+Production-quality OSRS-accurate collision system for static objects and entities.
+
+### CollisionMatrix
+
+Zone-based collision storage with optimal memory and performance:
+
+- **Architecture**: 8×8 tile zones using `Int32Array[64]` (256 bytes per zone)
+- **Memory**: 1000×1000 world = 15,625 zones = ~4MB
+- **Performance**: O(1) lookups, zero allocations, bitwise operations
+- **Storage**: Lazy zone allocation (zones created on first write)
+- **Network**: Base64 zone serialization for client sync
+
+### Collision Flags
+
+OSRS-accurate bitmask flags:
+
+```typescript
+// Static objects
+BLOCKED: 0x00200000        // Trees, rocks, stations
+WATER: 0x00800000          // Water tiles
+STEEP_SLOPE: 0x01000000    // Impassable terrain
+
+// Entity occupancy
+OCCUPIED_PLAYER: 0x00000100
+OCCUPIED_NPC: 0x00000200
+
+// Directional walls (future dungeons)
+WALL_NORTH, WALL_EAST, WALL_SOUTH, WALL_WEST
+WALL_NORTH_WEST, WALL_NORTH_EAST, WALL_SOUTH_EAST, WALL_SOUTH_WEST
+
+// Combined masks
+BLOCKS_WALK = BLOCKED | WATER | STEEP_SLOPE
+BLOCKS_MOVEMENT = BLOCKS_WALK | OCCUPIED
+```
+
+### Multi-Tile Footprints
+
+Stations and resources can occupy multiple tiles:
+
+- **Center-based registration**: Footprint centered on entity position
+- **OSRS-style interaction**: Can interact from any adjacent tile
+- **Auto-calculated**: Footprint = model bounds × modelScale (rounded to tiles)
+- **Example**: 2×2 furnace at (10,10) occupies (9,9), (10,9), (9,10), (10,10)
+
+### Build Automation
+
+New `extract-model-bounds.ts` script:
+
+1. Scans `world/assets/models/**/*.glb` files
+2. Parses glTF position accessor min/max values
+3. Calculates bounding boxes and footprints
+4. Generates `model-bounds.json` manifest
+
+**Turbo Integration:**
+- Configured in `packages/server/turbo.json`
+- Cached based on GLB file changes
+- Runs automatically during build
+- Command: `bun run extract-bounds`
+
+### Pathfinding Integration
+
+BFS pathfinder now checks CollisionMatrix:
+
+- Static objects block pathfinding (trees, rocks, stations)
+- Entities can path through other entities
+- Collision checked at movement execution time
+- Enables safespotting mechanics (OSRS-accurate)
+
+### Testing
+
+1,118 lines of comprehensive unit tests:
+
+- **CollisionMatrix.test.ts** (532 lines)
+  - Zone allocation and storage
+  - Flag operations (add, remove, query)
+  - Negative coordinate handling
+  - Directional wall blocking
+  - Diagonal movement clipping
+  - Network serialization
+- **CollisionFlags.test.ts** (343 lines)
+  - Bitmask uniqueness validation
+  - Wall direction calculations
+  - Opposite wall mappings
+  - Mask combinations
+- **TileSystem.test.ts** (+243 lines)
+  - Multi-tile footprint calculations
+  - Center-based registration
+  - Interaction range checks
+
+### Files Added
+
+- `packages/shared/src/systems/shared/movement/CollisionMatrix.ts` (441 lines)
+- `packages/shared/src/systems/shared/movement/CollisionFlags.ts` (212 lines)
+- `packages/server/scripts/extract-model-bounds.ts` (363 lines)
+- `packages/server/turbo.json` (24 lines)
+- Test files (1,118 lines total)
+
+### Files Modified
+
+**Entity Classes:**
+- AnvilEntity, BankEntity, FurnaceEntity, RangeEntity - Added collision registration
+- ResourceEntity - Center-based footprint registration
+- InteractableEntity - Multi-tile interaction support
+- MobEntity - Collision checks in spawn and pathfinding
+
+**Movement Systems:**
+- TileMovementManager - Integrated CollisionMatrix checks
+- MobTileMovementManager - Collision-aware pathfinding
+- EntityOccupancyMap - Delegates to CollisionMatrix
+
+**Data Providers:**
+- StationDataProvider - Auto-calculate footprints from model bounds
+- DataManager - Load model-bounds.json manifest
+
+**Core:**
+- World.ts - Added `collision: ICollisionMatrix` property
+
+### Breaking Changes
+
+None - this is a new system that integrates with existing code.
+
+### Migration Guide
+
+No migration needed. The collision system is automatically enabled for all entities.
+
+**For custom entities:**
+```typescript
+// Register collision in constructor
+if (this.world.isServer) {
+  const tile = worldToTile(position.x, position.z);
+  this.world.collision.addFlags(tile.x, tile.z, CollisionFlag.BLOCKED);
+}
+
+// Unregister in destroy()
+if (this.world.isServer) {
+  this.world.collision.removeFlags(tile.x, tile.z, CollisionFlag.BLOCKED);
+}
+```
+
+### Performance Impact
+
+- **Memory**: +4MB for 1000×1000 world (acceptable)
+- **CPU**: Negligible (O(1) lookups, zero allocations)
+- **Build Time**: +1-5 seconds for model bounds extraction (cached by Turbo)
+- **Network**: Minimal (only send zones near player, ~344 bytes per zone)
+
+### OSRS Accuracy
+
+- ✅ Depleted resources remain solid (stumps block movement)
+- ✅ Safespotting mechanics (player behind tree, mob can't reach)
+- ✅ Multi-tile interaction (can use furnace from any side)
+- ✅ Directional walls (ready for dungeons/buildings)
+- ✅ Entity collision (players/NPCs block tiles)
+
+### Documentation
+
+New documentation pages:
+- `/wiki/game-systems/collision` - Collision system guide
+- Updated `/wiki/game-systems/movement` - Collision integration
+- Updated `/concepts/manifests` - Model bounds manifest
+- Updated `/architecture` - Build pipeline documentation
+- Updated `/packages/shared` - Collision exports
+- Updated `/guides/development` - Build commands
+
+---
+

@@ -182,5 +182,47 @@ Game content is defined in JSON manifest files in `packages/server/world/assets/
 | `world-areas.json` | Zone configuration |
 | `biomes.json` | Biome definitions |
 | `vegetation.json` | Procedural vegetation |
+| `stations.json` | Station models and configurations |
+| `model-bounds.json` | Auto-generated model footprints (build-time) |
 
 Add new content by editing these JSON files—no code changes required.
+
+## Build Pipeline
+
+### Automated Model Bounds Extraction
+
+The server package includes a build-time task that automatically extracts collision footprints from 3D models:
+
+```bash
+# Runs automatically during build (cached by Turbo)
+bun run extract-bounds
+```
+
+**How it works:**
+1. Scans `world/assets/models/**/*.glb` files
+2. Parses glTF position accessor min/max values
+3. Calculates bounding boxes and tile footprints
+4. Generates `world/assets/manifests/model-bounds.json`
+
+**Turbo Configuration** (`packages/server/turbo.json`):
+```json
+{
+  "tasks": {
+    "extract-bounds": {
+      "inputs": [
+        "world/assets/models/**/*.glb",
+        "scripts/extract-model-bounds.ts"
+      ],
+      "outputs": ["world/assets/manifests/model-bounds.json"],
+      "cache": true
+    },
+    "build": {
+      "dependsOn": ["^build", "extract-bounds"]
+    }
+  }
+}
+```
+
+<Info>
+The bounds extraction is **cached** - it only re-runs when GLB files or the script changes. This keeps builds fast while ensuring collision data stays in sync with models.
+</Info>
