@@ -41,6 +41,7 @@ All manifests are in `world/assets/manifests/`:
 | `gathering/` | Resource gathering data (woodcutting, mining, fishing) |
 | `recipes/` | Processing recipes (cooking, firemaking, smelting, smithing) |
 | `stations.json` | World station configurations (anvils, furnaces, ranges) |
+| `model-bounds.json` | 3D model bounding boxes and footprints for spatial calculations |
 
 ## Manifest Structure
 
@@ -568,6 +569,51 @@ const yOffset = stationDataProvider.getModelYOffset("furnace");
 - Graceful fallback to blue box placeholder if model fails
 - Shadows and raycasting layers configured automatically
 
+### Model Bounds (`model-bounds.json`)
+
+The `model-bounds.json` manifest contains pre-calculated bounding box data for all 3D models in the game. This data is used for spatial calculations, collision detection, and tile-based placement:
+
+```json
+{
+  "generatedAt": "2026-01-15T11:00:57.005Z",
+  "tileSize": 1,
+  "models": [
+    {
+      "id": "anvil",
+      "assetPath": "asset://models/anvil/anvil.glb",
+      "bounds": {
+        "min": { "x": -1.0048660039901733, "y": -0.6355410218238831, "z": -0.5779970288276672 },
+        "max": { "x": 1.007843017578125, "y": 0.6261950135231018, "z": 0.5753570199012756 }
+      },
+      "dimensions": {
+        "x": 2.0127090215682983,
+        "y": 1.2617360353469849,
+        "z": 1.1533540487289429
+      },
+      "footprint": {
+        "width": 2,
+        "depth": 1
+      }
+    }
+  ]
+}
+```
+
+**Properties**:
+- `bounds` — Minimum and maximum coordinates of the model's bounding box
+- `dimensions` — Calculated width (x), height (y), and depth (z) of the model
+- `footprint` — Tile-based footprint for placement (width × depth in tiles)
+- `generatedAt` — Timestamp of when bounds were calculated
+- `tileSize` — Base tile size used for footprint calculations (typically 1.0)
+
+**Use Cases**:
+- **Placement Validation** — Ensure entities fit within available space
+- **Collision Detection** — Fast AABB checks for physics and interactions
+- **Tile Occupancy** — Calculate which tiles an entity occupies
+- **Spatial Queries** — Optimize raycasting and proximity checks
+
+The bounds are automatically generated from the actual 3D model geometry and updated when models change.
+
 ## Best Practices
 
 1. **Use descriptive IDs**: `bronze_sword` not `sword1`
@@ -589,7 +635,8 @@ DataManager loads manifests in this order:
 5. **Recipe manifests** (`recipes/*.json`)
 6. **Skill unlocks** (`skill-unlocks.json`)
 7. **Stations** (`stations.json`)
-8. **World areas** (`world-areas.json`)
-9. **Stores** (`stores.json`)
+8. **Model bounds** (`model-bounds.json`) - 3D model bounding boxes
+9. **World areas** (`world-areas.json`)
+10. **Stores** (`stores.json`)
 
 This order ensures dependencies are loaded before dependent data (e.g., tier requirements before items).
