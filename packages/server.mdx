@@ -143,11 +143,27 @@ bun run dev:server    # With hot reload and auto-restart
 ### Production
 
 ```bash
-bun run build:server  # Build to dist/
+bun run build:server  # Build to dist/ (includes extract-bounds)
 bun start             # Start production server
 ```
 
 Server runs at `http://localhost:5555` by default.
+
+### Build Scripts
+
+The server package includes specialized build scripts:
+
+```bash
+# Extract model bounds from GLB files (auto-runs during build)
+bun run extract-bounds
+
+# Inject collision data into GLB files (manual post-processing)
+bun run inject-collision
+```
+
+<Info>
+**Automatic Bounds Extraction**: The `extract-bounds` script runs automatically during `bun run build` via Turbo task dependencies. It scans all GLB files in `world/assets/models/` and generates `manifests/model-bounds.json` with bounding boxes and footprints.
+</Info>
 
 ## Dependencies
 
