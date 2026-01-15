@@ -182,46 +182,108 @@ private depositItem(data: BankDepositEvent): void {
 
 ### Withdrawing Items
 
+Bank withdrawals support three item types with different stacking behavior:
+
 ```typescript
-private withdrawItem(data: BankWithdrawEvent): void {
-  const playerId = createPlayerID(data.playerId);
-  const bankId = this.openBanks.get(playerId);
-  const bank = this.playerBanks.get(playerId)?.get(bankId);
-  
-  // Find item in bank
-  const bankItemIndex = bank.items.findIndex(item => item.id === data.itemId);
-  if (bankItemIndex === -1) {
-    this.emitMessage(data.playerId, "Item not found in bank.", "error");
-    return;
-  }
-  
-  const bankItem = bank.items[bankItemIndex];
-  if (bankItem.quantity < data.quantity) {
-    this.emitMessage(data.playerId, "Not enough of that item in bank.", "error");
-    return;
-  }
-  
-  // Remove from bank
-  bankItem.quantity -= data.quantity;
-  if (bankItem.quantity <= 0) {
-    bank.items.splice(bankItemIndex, 1);
-  }
-  
-  // Add to inventory
-  this.emitTypedEvent(EventType.INVENTORY_ITEM_ADDED, {
-    playerId: data.playerId,
-    item: {
-      id: generateUniqueId(),
-      itemId: bankItem.id,
-      quantity: data.quantity,
-      slot: -1, // Find empty slot
-      metadata: null,
+// From packages/server/src/systems/ServerNetwork/handlers/bank/core.ts
+
+// STACKING RULES:
+// 1. Noted items: Always stackable (1 slot, unlimited quantity)
+// 2. Stackable base items: Stack in inventory (arrows, bait, runes)
+// 3. Non-stackable items: One slot per item (max 28 per withdrawal)
+
+// Check if base item is stackable
+const itemData = getItem(data.itemId);
+const isBaseStackable = itemData?.stackable === true;
+
+// Apply withdrawal limits
+const withdrawQty = withdrawAsNote || isBaseStackable
+  ? data.quantity  // Stackable: no limit
+  : Math.min(data.quantity, MAX_INVENTORY_SLOTS); // Non-stackable: 28 max
+
+// Execute transaction with inventory lock
+const result = await executeInventoryTransaction(ctx, async () => {
+  return executeSecureTransaction(ctx, {
+    execute: async (tx) => {
+      // ... lock bank and inventory rows
+      
+      if (withdrawAsNote) {
+        // Noted item: Create single stack
+        await tx.insert(schema.inventory).values({
+          playerId: ctx.playerId,
+          itemId: notedItemId,
+          quantity: finalWithdrawQty,
+          slotIndex: freeSlots[0],
+        });
+      } else if (isBaseStackable) {
+        // Stackable base item: Merge with existing stack or create new
+        const existingStack = await tx.execute(
+          sql`SELECT id, quantity, "slotIndex" FROM inventory
+              WHERE "playerId" = ${ctx.playerId} AND "itemId" = ${data.itemId}
+              FOR UPDATE`
+        );
+        
+        if (existingStack.rows.length > 0) {
+          // Add to existing stack
+          await tx.execute(
+            sql`UPDATE inventory SET quantity = quantity + ${finalWithdrawQty}
+                WHERE id = ${existingRow.id}`
+          );
+        } else {
+          // Create new stack
+          await tx.insert(schema.inventory).values({
+            playerId: ctx.playerId,
+            itemId: data.itemId,
+            quantity: finalWithdrawQty,
+            slotIndex: freeSlots[0],
+          });
+        }
+      } else {
+        // Non-stackable: One item per slot
+        for (let i = 0; i < finalWithdrawQty; i++) {
+          await tx.insert(schema.inventory).values({
+            playerId: ctx.playerId,
+            itemId: data.itemId,
+            quantity: 1,
+            slotIndex: freeSlots[i],
+          });
+        }
+      }
     },
   });
-  
-  this.updateBankInterface(data.playerId, bankId);
+});
+```
+
+<Info>
+**Stackable Items**: Arrows, fishing bait, runes, and other stackable items can be withdrawn in unlimited quantities (all fit in 1 inventory slot). Non-stackable items are limited to 28 per withdrawal.
+</Info>
+
+### Race Condition Prevention
+
+All bank and store transactions use `executeInventoryTransaction` to prevent race conditions:
+
+```typescript
+// From packages/server/src/systems/ServerNetwork/handlers/common/transaction.ts
+
+// Queue + Lock + Flush + Transaction + Reload pattern
+export async function executeInventoryTransaction<T>(
+  ctx: TransactionContext,
+  operation: () => Promise<T>
+): Promise<T | null> {
+  // 1. QUEUE: Serialize concurrent operations for same player
+  // 2. LOCK: Block pickups and auto-save during transaction
+  // 3. FLUSH: Persist pending in-memory changes to DB
+  // 4. EXECUTE: Run the transaction (DB is source of truth)
+  // 5. RELOAD: Replace in-memory state with DB state
+  // 6. UNLOCK: Resume normal operations (in finally block)
 }
 ```
+
+**Benefits:**
+- Zero data loss (flush before transaction)
+- No race conditions (lock serializes access)
+- No divergence (reload ensures in-memory == DB)
+- Supports optimistic UI (queue instead of reject)
 
 ### Deposit All
 
