@@ -143,7 +143,8 @@ bun run dev:reset         # Clean rebuild and restart
 bun run build             # Build all packages (with docs generation)
 bun run build:shared      # Build core engine
 bun run build:client      # Build web client
-bun run build:server      # Build game server
+bun run build:server      # Build game server (includes extract-bounds)
+bun run extract-bounds    # Extract model bounds from GLB files (server package)
 
 # Mobile
 bun run ios               # Run iOS simulator
