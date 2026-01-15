@@ -584,13 +584,61 @@ const yOffset = stationDataProvider.getModelYOffset("furnace");
 DataManager loads manifests in this order:
 
 1. **Tier requirements** (`tier-requirements.json`) - Needed for item normalization
-2. **Items** (`items/` directory or `items.json` fallback)
-3. **NPCs** (`npcs.json`)
-4. **Gathering resources** (`gathering/*.json`)
-5. **Recipe manifests** (`recipes/*.json`)
-6. **Skill unlocks** (`skill-unlocks.json`)
-7. **Stations** (`stations.json`)
-8. **World areas** (`world-areas.json`)
-9. **Stores** (`stores.json`)
+2. **Model bounds** (`model-bounds.json`) - Needed for station footprint calculation
+3. **Items** (`items/` directory or `items.json` fallback)
+4. **NPCs** (`npcs.json`)
+5. **Gathering resources** (`gathering/*.json`)
+6. **Recipe manifests** (`recipes/*.json`)
+7. **Skill unlocks** (`skill-unlocks.json`)
+8. **Stations** (`stations.json`) - Uses model bounds for footprints
+9. **World areas** (`world-areas.json`)
+10. **Stores** (`stores.json`)
 
-This order ensures dependencies are loaded before dependent data (e.g., tier requirements before items).
+This order ensures dependencies are loaded before dependent data (e.g., model bounds before stations).
+
+## Build-Time Manifests
+
+### Model Bounds Extraction
+
+The `model-bounds.json` manifest is **auto-generated** during build:
+
+```bash
+# Runs automatically via Turbo (cached)
+bun run extract-bounds
+```
+
+**Process:**
+1. Scans `world/assets/models/**/*.glb` files
+2. Parses glTF position accessor min/max values
+3. Calculates bounding boxes and footprints at scale 1.0
+4. Writes to `world/assets/manifests/model-bounds.json`
+
+**Output Format:**
+```json
+{
+  "generatedAt": "2026-01-15T11:25:00.000Z",
+  "tileSize": 1.0,
+  "models": [
+    {
+      "id": "furnace",
+      "assetPath": "asset://models/furnace/furnace.glb",
+      "bounds": {
+        "min": { "x": -0.755, "y": 0.0, "z": -0.725 },
+        "max": { "x": 0.755, "y": 2.1, "z": 0.725 }
+      },
+      "dimensions": { "x": 1.51, "y": 2.1, "z": 1.45 },
+      "footprint": { "width": 2, "depth": 1 }
+    }
+  ]
+}
+```
+
+**Runtime Usage:**
+- `StationDataProvider` loads this manifest at startup
+- Combines model bounds × `modelScale` from `stations.json`
+- Calculates final collision footprint for each station type
+- No manual footprint configuration needed
+
+<Warning>
+Do not edit `model-bounds.json` manually. It is regenerated on every build when GLB files change.
+</Warning>
