@@ -60,8 +60,7 @@ export class Entity implements IEntity {
   // Physics body reference
   private rigidBody?: PhysXRigidDynamic;
 
-  // UI elements
-  protected nameSprite: THREE.Sprite | null = null;
+  // UI elements (health bars only - names shown in right-click menu)
   protected healthSprite: THREE.Sprite | null = null;
 
   // Network state
