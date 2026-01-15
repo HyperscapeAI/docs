@@ -98,15 +98,26 @@ Handles all economic interactions:
 - **Inventory** — 28-slot management with stacking
 - **Loot** — Item drops and ground items
 
-### Movement System
+### Movement & Collision System
 
 **Location:** `systems/shared/movement/`
 
-Implements tile-based movement:
+Implements tile-based movement and OSRS-accurate collision:
 
 - **TileSystem.ts** — Grid-based coordinate system
-- **Pathfinding** — A* navigation around obstacles
-- **Click-to-move** — Orthographic camera targeting
+- **CollisionMatrix.ts** — Zone-based collision storage (8×8 tile zones)
+- **CollisionFlags.ts** — Bitmask flags (BLOCKED, WATER, OCCUPIED, walls)
+- **EntityOccupancyMap.ts** — Entity tracking with collision integration
+- **BFSPathfinder.ts** — Breadth-first search pathfinding around obstacles
+- **ChasePathfinding.ts** — Combat chase behavior
+- **WanderBehavior.ts** — NPC wandering AI
+
+**Collision Features:**
+- Static object blocking (trees, rocks, stations)
+- Multi-tile footprints (2×2 furnaces, large resources)
+- Directional walls (for future dungeons)
+- Network synchronization (zone serialization)
+- Safespotting mechanics (OSRS-accurate)
 
 ### Character Systems
 
