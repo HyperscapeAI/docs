@@ -179,8 +179,14 @@ Game content is defined in JSON manifest files in `packages/server/world/assets/
 | `tier-requirements.json` | Centralized level requirements |
 | `skill-unlocks.json` | Skill progression milestones |
 | `stores.json` | Shop inventories |
+| `stations.json` | Crafting stations (anvils, furnaces, ranges, banks) |
+| `model-bounds.json` | Auto-generated model bounding boxes and footprints |
 | `world-areas.json` | Zone configuration |
 | `biomes.json` | Biome definitions |
 | `vegetation.json` | Procedural vegetation |
 
 Add new content by editing these JSON files—no code changes required.
+
+<Info>
+**Automatic Footprint Detection**: The `model-bounds.json` manifest is auto-generated at build time by scanning GLB files. Station footprints are calculated from `(model dimensions × scale) / tile size`.
+</Info>
