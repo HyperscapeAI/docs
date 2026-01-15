@@ -352,9 +352,115 @@ export function getCardinalFaceDirection(
 
 ---
 
+## Collision System
+
+Hyperscape uses a unified **CollisionMatrix** for OSRS-accurate tile-based collision. The system handles static objects (trees, rocks, stations), entities (players, NPCs), and terrain (water, slopes).
+
+### CollisionMatrix Architecture
+
+The collision system uses zone-based storage for optimal memory and performance:
+
+```typescript
+// From CollisionMatrix.ts
+export interface ICollisionMatrix {
+  // Get collision flags for a tile
+  getFlags(tileX: number, tileZ: number): number;
+  
+  // Add/remove flags (bitwise operations)
+  addFlags(tileX: number, tileZ: number, flags: number): void;
+  removeFlags(tileX: number, tileZ: number, flags: number): void;
+  
+  // Check if tile has specific flags
+  hasFlags(tileX: number, tileZ: number, flags: number): boolean;
+  
+  // Check if movement is blocked
+  isBlocked(fromX: number, fromZ: number, toX: number, toZ: number): boolean;
+  isWalkable(tileX: number, tileZ: number): boolean;
+}
+```
+
+**Zone-Based Storage:**
+- World divided into 8×8 tile zones
+- Each zone = `Int32Array[64]` = 256 bytes
+- 1000×1000 tile world = ~4MB memory
+- Lazy allocation (zones created on first write)
+
+### Collision Flags
+
+Tiles use bitmask flags for efficient collision queries:
+
+```typescript
+// From CollisionFlags.ts
+export const CollisionFlag = {
+  // Static objects
+  BLOCKED: 0x00200000,        // Trees, rocks, stations
+  WATER: 0x00800000,          // Water tiles
+  STEEP_SLOPE: 0x01000000,    // Impassable terrain
+  
+  // Entity occupancy
+  OCCUPIED_PLAYER: 0x00000100,
+  OCCUPIED_NPC: 0x00000200,
+  
+  // Directional walls (for future dungeons)
+  WALL_NORTH: 0x00000002,
+  WALL_EAST: 0x00000008,
+  WALL_SOUTH: 0x00000020,
+  WALL_WEST: 0x00000080,
+  // ... diagonal walls
+} as const;
+
+// Combined masks for common queries
+export const CollisionMask = {
+  BLOCKS_WALK: BLOCKED | WATER | STEEP_SLOPE,
+  OCCUPIED: OCCUPIED_PLAYER | OCCUPIED_NPC,
+  BLOCKS_MOVEMENT: BLOCKS_WALK | OCCUPIED,
+} as const;
+```
+
+### Usage Examples
+
+```typescript
+// Check if tile is walkable
+if (world.collision.isWalkable(tileX, tileZ)) {
+  // Safe to move here
+}
+
+// Check for static objects only (ignore entities)
+if (world.collision.hasFlags(tileX, tileZ, CollisionMask.BLOCKS_WALK)) {
+  // Tree, rock, or station blocking
+}
+
+// Check if movement is blocked (includes walls)
+if (world.collision.isBlocked(fromX, fromZ, toX, toZ)) {
+  // Cannot move from -> to
+}
+```
+
+### Multi-Tile Footprints
+
+Stations and large resources can occupy multiple tiles:
+
+```typescript
+// 2x2 furnace centered at (10, 10) occupies:
+// (9,9), (10,9), (9,10), (10,10)
+
+// Players can interact from any adjacent tile
+const inRange = tilesWithinRangeOfFootprint(
+  playerTile,
+  stationCenterTile,
+  2, // width
+  2, // depth
+  1  // range
+);
+```
+
+<Info>
+Footprints are **centered** on the entity position, not corner-based. A 2×2 station at (10,10) occupies tiles (9,9) through (10,10).
+</Info>
+
 ## Entity Occupancy
 
-The `EntityOccupancyMap` tracks which tiles are occupied by entities.
+The `EntityOccupancyMap` tracks which tiles are occupied by entities and delegates to `CollisionMatrix` for unified storage:
 
 ```typescript
 // From EntityOccupancyMap.ts
@@ -365,7 +471,7 @@ export interface IEntityOccupancy {
   // Get entity at tile
   getEntityAt(tile: TileCoord): EntityID | null;
 
-  // Update entity position
+  // Update entity position (atomic with collision updates)
   moveEntity(entityId: EntityID, fromTile: TileCoord, toTile: TileCoord): void;
 
   // Add/remove entities
@@ -373,6 +479,10 @@ export interface IEntityOccupancy {
   removeEntity(entityId: EntityID): void;
 }
 ```
+
+<Note>
+Entity moves are **atomic** - old tiles are freed and new tiles occupied in a single operation. Delta optimization ensures only changed tiles are updated.
+</Note>
 
 ### Zero-Allocation Helpers
 
