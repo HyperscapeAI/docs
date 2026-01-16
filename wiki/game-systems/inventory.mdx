@@ -18,6 +18,7 @@ Inventory code lives in `packages/shared/src/systems/shared/character/InventoryS
 // From InventorySystem.ts
 private readonly MAX_INVENTORY_SLOTS = 28;      // OSRS standard
 private readonly AUTO_SAVE_INTERVAL = 30000;    // 30 seconds auto-save
+private readonly MAX_COINS = 2147483647;        // Max 32-bit signed integer (OSRS cap)
 ```
 
 ---
@@ -40,6 +41,148 @@ interface InventoryItem {
   metadata: unknown | null;    // Custom item data
 }
 ```
+
+---
+
+## Money Pouch System
+
+Hyperscape uses an RS3-style **money pouch** for protected coin storage:
+
+### Architecture
+
+- **Money Pouch** (`characters.coins`): Protected storage, doesn't use inventory slots
+- **Physical Coins** (`inventory` with `itemId='coins'`): Stackable item, uses inventory slot
+
+### Coin Pouch Withdrawal
+
+Players can withdraw coins from the money pouch to inventory:
+
+```typescript
+// Client: Click coin pouch to open modal
+<CoinPouch coins={coins} onWithdrawClick={openCoinModal} />
+
+// Server: Handle withdrawal request
+async function handleCoinPouchWithdraw(
+  socket: ServerSocket,
+  data: { amount: number; timestamp: number },
+  world: World,
+): Promise<void> {
+  // 1. Rate limit check (10/sec)
+  if (!getCoinPouchRateLimiter().check(playerId)) return;
+  
+  // 2. Timestamp validation (replay attack protection)
+  const timestampResult = validateRequestTimestamp(data.timestamp);
+  if (!timestampResult.valid) return;
+  
+  // 3. Amount validation
+  if (!isValidQuantity(data.amount)) return;
+  
+  // 4. Atomic database transaction
+  await db.drizzle.transaction(async (tx) => {
+    // Lock character row
+    const charRow = await tx.execute(
+      sql`SELECT coins FROM characters WHERE id = ${playerId} FOR UPDATE`
+    );
+    
+    // Check sufficient balance
+    if (charRow.coins < amount) throw new Error("INSUFFICIENT_COINS");
+    
+    // Add to existing coins stack or create new
+    if (existingStack) {
+      if (wouldOverflow(existingStack.quantity, amount)) {
+        throw new Error("STACK_OVERFLOW");
+      }
+      await tx.execute(
+        sql`UPDATE inventory SET quantity = quantity + ${amount}
+            WHERE playerId = ${playerId} AND itemId = 'coins'`
+      );
+    } else {
+      // Find empty slot and insert
+      await tx.insert(schema.inventory).values({
+        playerId, itemId: "coins", quantity: amount, slotIndex: emptySlot
+      });
+    }
+    
+    // Deduct from pouch
+    await tx.execute(
+      sql`UPDATE characters SET coins = coins - ${amount} WHERE id = ${playerId}`
+    );
+  });
+  
+  // 5. Sync in-memory systems
+  world.emit(EventType.INVENTORY_UPDATE_COINS, { playerId, coins: newBalance });
+  await inventorySystem.reloadFromDatabase(playerId);
+}
+```
+
+### Security Features
+
+| Feature | Implementation | Purpose |
+|---------|----------------|---------|
+| **Rate Limiting** | 10 requests/second | Prevents spam attacks |
+| **Timestamp Validation** | ±30 second window | Prevents replay attacks |
+| **Input Validation** | Positive integers, max 2.1B | Prevents exploits |
+| **Overflow Protection** | `wouldOverflow()` check | Prevents MAX_COINS overflow |
+| **Row Locking** | `FOR UPDATE` in transaction | Prevents race conditions |
+| **Audit Logging** | Logs withdrawals ≥1M coins | Security monitoring |
+
+### UI Components
+
+```typescript
+// CoinPouch component (extracted for reusability)
+export function CoinPouch({ coins, onWithdrawClick }: CoinPouchProps) {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onWithdrawClick();
+    }
+  }, [onWithdrawClick]);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onWithdrawClick}
+      onKeyDown={handleKeyDown}
+      aria-label={`Money pouch: ${coins.toLocaleString()} coins. Press Enter to withdraw.`}
+      title="Click to withdraw coins to inventory"
+    >
+      {/* Coin pouch display */}
+    </div>
+  );
+}
+```
+
+**Accessibility Features:**
+- `role="button"` for screen readers
+- `tabIndex={0}` for keyboard focus
+- Enter/Space key activation
+- Descriptive `aria-label`
+
+### Error Handling
+
+```typescript
+// Error messages for withdrawal failures
+const userMessages: Record<string, string> = {
+  INSUFFICIENT_COINS: "Not enough coins in pouch",
+  INVENTORY_FULL: "Your inventory is full",
+  STACK_OVERFLOW: "Cannot stack that many coins",
+  PLAYER_NOT_FOUND: "Character not found",
+};
+
+// Graceful sync failure handling
+try {
+  await inventorySystem.reloadFromDatabase(playerId);
+  inventorySystem.emitInventoryUpdate(playerId);
+} catch (syncError) {
+  // Log but don't fail - transaction succeeded, player can relog to resync
+  console.error(`Sync failed for player ${playerId}:`, syncError);
+}
+```
+
+<Info>
+**Testing**: The coin pouch system has 32 comprehensive unit tests covering input validation, insufficient coins, inventory full, stack overflow, new stack creation, existing stack updates, and atomicity simulation.
+</Info>
 
 ---
 
