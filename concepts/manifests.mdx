@@ -729,10 +729,11 @@ DataManager loads manifests in this order:
 4. **NPCs** (`npcs.json`)
 5. **Gathering resources** (`gathering/*.json`)
 6. **Recipe manifests** (`recipes/*.json`)
-7. **Skill unlocks** (`skill-unlocks.json`)
-8. **Stations** (`stations.json`) - Uses model bounds for footprints
-9. **World areas** (`world-areas.json`)
-10. **Stores** (`stores.json`)
+7. **Prayers** (`prayers.json`) - Prayer definitions and bonuses
+8. **Skill unlocks** (`skill-unlocks.json`)
+9. **Stations** (`stations.json`) - Uses model bounds for footprints
+10. **World areas** (`world-areas.json`)
+11. **Stores** (`stores.json`)
 
 This order ensures dependencies are loaded before dependent data (e.g., model bounds before stations).
 
