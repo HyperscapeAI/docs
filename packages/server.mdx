@@ -140,6 +140,57 @@ LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-url
 ```
 
+## Build Scripts
+
+### Model Bounds Extraction
+
+The server includes build-time scripts for automatic collision footprint detection:
+
+```bash
+# Extract bounding boxes from GLB models
+bun run extract-bounds
+
+# Generates: world/assets/manifests/model-bounds.json
+```
+
+**How it works:**
+1. Scans `world/assets/models/**/*.glb` files
+2. Parses glTF position accessor min/max values
+3. Calculates bounding boxes and dimensions
+4. Computes tile footprints at scale 1.0
+5. Writes manifest for runtime use
+
+**Turbo Integration:**
+- Runs automatically before `build` and `dev` commands
+- Cached based on GLB file changes
+- Only rebuilds when models are added/modified
+
+**Example Output:**
+```json
+{
+  "generatedAt": "2026-01-15T11:25:00.000Z",
+  "tileSize": 1.0,
+  "models": [
+    {
+      "id": "furnace",
+      "assetPath": "asset://models/furnace/furnace.glb",
+      "bounds": {
+        "min": { "x": -0.755, "y": 0.0, "z": -0.725 },
+        "max": { "x": 0.755, "y": 2.1, "z": 0.725 }
+      },
+      "dimensions": { "x": 1.51, "y": 2.1, "z": 1.45 },
+      "footprint": { "width": 2, "depth": 1 }
+    }
+  ]
+}
+```
+
+<Info>
+Footprints are calculated from model dimensions × `modelScale` from `stations.json`. A furnace with raw dimensions 1.51×1.45 and scale 1.5 becomes 2.27×2.18 meters → 2×2 tiles.
+</Info>
+
+---
+
 ## Running
 
 ### Development
@@ -151,7 +202,7 @@ bun run dev:server    # With hot reload and auto-restart
 ### Production
 
 ```bash
-bun run build:server  # Build to dist/
+bun run build:server  # Build to dist/ (runs extract-bounds automatically)
 bun start             # Start production server
 ```
 
