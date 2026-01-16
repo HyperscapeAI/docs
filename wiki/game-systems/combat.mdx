@@ -184,8 +184,14 @@ Damage uses the authentic OSRS formula from [the wiki](https://oldschool.runesca
 ### Maximum Hit Formula
 
 ```typescript
-// Effective Strength = Strength Level + 8 + Style Bonus
-const effectiveStrength = strengthLevel + 8 + styleBonus.strength;
+// Get prayer bonuses (if any prayers active)
+const prayerBonuses = prayerSystem.getCombinedBonuses(attackerId);
+
+// Apply prayer multipliers to base levels
+const prayeredStrength = strengthLevel × (prayerBonuses.strengthMultiplier ?? 1);
+
+// Effective Strength = Prayered Strength + 8 + Style Bonus
+const effectiveStrength = prayeredStrength + 8 + styleBonus.strength;
 
 // Strength Bonus from equipment
 const strengthBonus = equipmentStats?.strength || 0;
@@ -193,6 +199,10 @@ const strengthBonus = equipmentStats?.strength || 0;
 // Max Hit = floor(0.5 + (Effective Strength × (Strength Bonus + 64)) / 640)
 const maxHit = Math.floor(0.5 + (effectiveStrength * (strengthBonus + 64)) / 640);
 ```
+
+<Info>
+Prayer bonuses are applied **before** the effective level calculation, matching OSRS mechanics.
+</Info>
 
 ### Accuracy Formula
 
