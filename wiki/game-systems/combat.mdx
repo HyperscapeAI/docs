@@ -215,10 +215,18 @@ function calculateAccuracy(
   targetDefenseBonus: number,
   attackerStyle: CombatStyle = "accurate",
 ): boolean {
-  const effectiveAttack = attackerAttackLevel + 8 + styleBonus.attack;
+  // Get prayer bonuses for attacker and defender
+  const attackerPrayerBonuses = prayerSystem.getCombinedBonuses(attackerId);
+  const defenderPrayerBonuses = prayerSystem.getCombinedBonuses(targetId);
+  
+  // Apply prayer multipliers
+  const prayeredAttack = attackerAttackLevel × (attackerPrayerBonuses.attackMultiplier ?? 1);
+  const prayeredDefense = targetDefenseLevel × (defenderPrayerBonuses.defenseMultiplier ?? 1);
+  
+  const effectiveAttack = prayeredAttack + 8 + styleBonus.attack;
   const attackRoll = effectiveAttack * (attackerAttackBonus + 64);
 
-  const effectiveDefence = targetDefenseLevel + 9 + defenderStyleBonus.defense;
+  const effectiveDefence = prayeredDefense + 9 + defenderStyleBonus.defense;
   const defenceRoll = effectiveDefence * (targetDefenseBonus + 64);
 
   let hitChance: number;
@@ -231,6 +239,10 @@ function calculateAccuracy(
   return random.random() < hitChance;
 }
 ```
+
+<Info>
+Prayer bonuses apply to both attacker and defender, affecting accuracy and defense rolls.
+</Info>
 
 ### Damage Roll
 
