@@ -570,6 +570,58 @@ const yOffset = stationDataProvider.getModelYOffset("furnace");
 - Graceful fallback to blue box placeholder if model fails
 - Shadows and raycasting layers configured automatically
 
+### Prayers (`prayers.json`)
+
+The `prayers.json` manifest defines OSRS-accurate prayer abilities with stat bonuses and drain mechanics:
+
+```json
+{
+  "$schema": "./prayers.schema.json",
+  "_comment": "OSRS-accurate prayer definitions. drainEffect: higher = faster drain.",
+  "prayers": [
+    {
+      "id": "thick_skin",
+      "name": "Thick Skin",
+      "description": "Increases your Defence by 5%",
+      "icon": "prayer_thick_skin",
+      "level": 1,
+      "category": "defensive",
+      "drainEffect": 1,
+      "bonuses": {
+        "defenseMultiplier": 1.05
+      },
+      "conflicts": ["rock_skin", "steel_skin", "chivalry", "piety"]
+    }
+  ]
+}
+```
+
+**Properties**:
+- `id` — Unique prayer identifier
+- `name` — Display name shown in prayer book
+- `description` — Effect description for tooltip
+- `icon` — Icon asset path for prayer book UI
+- `level` — Prayer level required to unlock
+- `category` — Prayer type: `offensive`, `defensive`, or `utility`
+- `drainEffect` — Drain rate (higher = faster drain)
+- `bonuses` — Stat multipliers applied when active
+  - `attackMultiplier` — Attack bonus (e.g., 1.05 = +5%)
+  - `strengthMultiplier` — Strength bonus
+  - `defenseMultiplier` — Defense bonus
+- `conflicts` — Array of prayer IDs that cannot be active simultaneously
+
+**Categories**:
+- **Offensive** — Attack and strength bonuses (Burst of Strength, Clarity of Thought)
+- **Defensive** — Defense bonuses (Thick Skin, Rock Skin, Steel Skin)
+- **Utility** — Special effects (future: Protect from Melee, Rapid Heal)
+
+**Conflict System**:
+Prayers in the same category typically conflict. Activating a prayer automatically deactivates conflicting prayers (OSRS-accurate behavior).
+
+<Info>
+Prayer drain rates follow OSRS formulas. The `drainEffect` value determines how quickly prayer points deplete while the prayer is active.
+</Info>
+
 ### Model Bounds (`model-bounds.json`)
 
 The `model-bounds.json` manifest contains pre-calculated bounding box data for all 3D models in the game. This data is used for spatial calculations, collision detection, and tile-based placement:
