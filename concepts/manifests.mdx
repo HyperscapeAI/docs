@@ -503,6 +503,16 @@ Defines world stations with 3D models:
 
 ## Data Providers
 
+The manifest system uses specialized data providers for efficient lookups:
+
+| Provider | Purpose | Manifest Source |
+|----------|---------|-----------------| 
+| `ProcessingDataProvider` | Cooking, firemaking, smelting, smithing recipes | `recipes/*.json` |
+| `TierDataProvider` | Equipment level requirements by tier | `tier-requirements.json` |
+| `StationDataProvider` | Station models and configurations | `stations.json` |
+| `PrayerDataProvider` | Prayer definitions, bonuses, conflicts | `prayers.json` |
+| `DataManager` | Central loader for all manifests | All manifests |
+
 ### DataManager
 
 The `DataManager` class in `packages/shared/src/data/DataManager.ts` loads all manifests from JSON files and populates runtime data structures:
