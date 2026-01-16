@@ -189,12 +189,19 @@ Migrations are stored in `packages/server/src/database/migrations/`:
 ### Migration Format
 
 ```sql
--- 0015_add_smithing_skill.sql
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "smithingLevel" integer DEFAULT 1;
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "smithingXp" integer DEFAULT 0;
+-- 0016_add_prayer_system.sql
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerLevel" integer DEFAULT 1;
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerXp" integer DEFAULT 0;
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerPoints" integer DEFAULT 1;
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerMaxPoints" integer DEFAULT 1;
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "activePrayers" text DEFAULT '[]';
 ```
 
 Migrations use `IF NOT EXISTS` to be idempotent and safe to re-run.
+
+<Info>
+The `activePrayers` column stores a JSON array of prayer IDs. Format: `'["thick_skin", "burst_of_strength"]'`. Empty array when no prayers are active: `'[]'`.
+</Info>
 
 ## Schema Changes
 
