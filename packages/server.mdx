@@ -27,9 +27,17 @@ packages/server/
 │   ├── types/          # TypeScript types
 │   ├── types.ts        # Core type definitions
 │   └── index.ts        # Entry point
+├── scripts/
+│   ├── extract-model-bounds.ts  # Build-time model bounds extraction
+│   └── inject-model-collision.ts # GLB collision data injection
 ├── world/
 │   └── assets/         # Game assets (Git LFS)
+│       ├── models/     # 3D models (GLB files)
+│       └── manifests/  # Generated manifests
+│           ├── model-bounds.json  # Auto-generated model bounds
+│           └── stations.json      # Station configurations
 ├── docker-compose.yml  # Docker services
+├── turbo.json          # Turbo build configuration
 └── .env.example        # Environment template
 ```
 
