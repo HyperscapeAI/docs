@@ -557,8 +557,31 @@ The combat system emits events for UI and logging:
 
 ---
 
+## Prayer Bonuses in Combat
+
+Active prayers provide multipliers to combat stats. See [Prayer System](/wiki/game-systems/prayer) for complete details.
+
+**Example Prayer Effects:**
+- **Clarity of Thought** (Level 7): +5% Attack (1.05× multiplier)
+- **Burst of Strength** (Level 4): +5% Strength (1.05× multiplier)
+- **Thick Skin** (Level 1): +5% Defense (1.05× multiplier)
+
+**Bonus Application:**
+```typescript
+// Prayer bonuses are applied BEFORE effective level calculation
+const prayeredAttack = baseAttack × attackMultiplier;
+const effectiveAttack = prayeredAttack + 8 + styleBonus;
+```
+
+<Warning>
+Multiple prayers of the same type do NOT stack. The system uses the highest multiplier for each stat.
+</Warning>
+
+---
+
 ## Related Documentation
 
+- [Prayer System](/wiki/game-systems/prayer) (Prayer mechanics, drain, altars, bone burying)
 - [Inventory System](/wiki/game-systems/inventory) (for food consumption)
 - [Tile Movement System](/wiki/game-systems/movement)
 - [Skills & Progression](/wiki/game-systems/skills)
