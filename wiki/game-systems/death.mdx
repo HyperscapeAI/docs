@@ -29,19 +29,61 @@ type ZoneType =
 
 ## Death Lock System
 
-To prevent item duplication on server restart/crash, deaths are tracked with database persistence:
+To prevent item duplication on server restart/crash, deaths are tracked with **database-first persistence** and crash recovery.
 
 ```typescript
-interface DeathLock {
+interface DeathLockData {
   playerId: string;
-  gravestoneId?: string;           // If gravestone spawned
-  groundItemIds?: string[];        // If items on ground
+  gravestoneId: string | null;     // If gravestone spawned
+  groundItemIds: string[];         // If items on ground
   position: { x: number; y: number; z: number };
   timestamp: number;
-  zoneType: ZoneType;
+  zoneType: string;                // "safe_area" | "wilderness" | "pvp_zone"
   itemCount: number;               // Total items dropped
+  // Crash recovery fields
+  items: DeathItemData[];          // Actual item data for recovery
+  killedBy: string;                // What killed the player
+  recovered: boolean;              // Whether death was processed during crash recovery
+}
+
+interface DeathItemData {
+  itemId: string;
+  quantity: number;
 }
 ```
+
+### Atomic Death Lock Acquisition
+
+Death locks use **atomic database operations** to prevent race conditions:
+
+```typescript
+// From DeathRepository.ts
+async acquireDeathLockAsync(
+  data: DeathLockData,
+  tx?: TransactionContext,
+): Promise<boolean> {
+  // Use INSERT ... ON CONFLICT DO NOTHING for atomic check-and-create
+  const result = await db
+    .insert(schema.playerDeaths)
+    .values({
+      playerId: data.playerId,
+      gravestoneId: data.gravestoneId,
+      items: data.items,              // Full item list for crash recovery
+      killedBy: sanitizeKilledBy(data.killedBy),
+      recovered: false,
+      // ... other fields
+    })
+    .onConflictDoNothing({ target: schema.playerDeaths.playerId })
+    .returning({ playerId: schema.playerDeaths.playerId });
+
+  // If conflict occurred, nothing is returned = lock already exists
+  return result.length > 0;
+}
+```
+
+<Info>
+**Atomic Operations**: Using PostgreSQL's `INSERT ... ON CONFLICT` ensures only ONE death lock can exist per player, preventing duplicate death processing even under high concurrency.
+</Info>
 
 ### Creating a Death Lock
 
@@ -49,37 +91,47 @@ interface DeathLock {
 async createDeathLock(
   playerId: string,
   options: {
-    gravestoneId?: string;
-    groundItemIds?: string[];
+    gravestoneId: string | null;
+    groundItemIds: string[];
     position: { x: number; y: number; z: number };
-    zoneType: ZoneType;
+    zoneType: string;
     itemCount: number;
+    items: DeathItemData[];        // NEW: Full item data for recovery
+    killedBy: string;              // NEW: What killed the player
   },
-  tx?: TransactionContext,  // Optional DB transaction
-): Promise<void> {
+  tx?: TransactionContext,
+): Promise<boolean> {
   // Server authority check
   if (!this.world.isServer) {
     console.error(`[DeathStateManager] Client attempted death lock creation - BLOCKED`);
-    return;
+    return false;
   }
-  
-  const deathData: DeathLock = {
-    playerId,
-    gravestoneId: options.gravestoneId,
-    groundItemIds: options.groundItemIds,
-    position: options.position,
-    timestamp: Date.now(),
-    zoneType: options.zoneType,
-    itemCount: options.itemCount,
-  };
-  
+
+  // Atomic acquisition - prevents duplicate deaths
+  const acquired = await this.databaseSystem.acquireDeathLockAsync(
+    {
+      playerId,
+      gravestoneId: options.gravestoneId,
+      groundItemIds: options.groundItemIds,
+      position: options.position,
+      timestamp: Date.now(),
+      zoneType: options.zoneType,
+      itemCount: options.itemCount,
+      items: options.items,
+      killedBy: options.killedBy,
+      recovered: false,
+    },
+    tx,
+  );
+
+  if (!acquired) {
+    // Player already has active death lock
+    return false;
+  }
+
   // Store in memory cache
   this.activeDeaths.set(playerId, deathData);
-  
-  // Persist to database (prevents duplication on restart)
-  if (this.databaseSystem) {
-    await this.databaseSystem.saveDeathLockAsync(deathData, tx);
-  }
+  return true;
 }
 ```
 
