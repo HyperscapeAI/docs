@@ -582,8 +582,58 @@ The combat system emits events for UI and logging:
 
 ---
 
+## Prayer Integration
+
+### Prayer Deactivation on Death
+
+When a player dies, all active prayers are automatically deactivated:
+
+```typescript
+// From PrayerSystem.ts
+world.on(EventType.PLAYER_SET_DEAD, (data) => {
+  if (data.isDead) {
+    this.deactivateAllPrayers(data.playerId, "death");
+  }
+});
+```
+
+### Prayer Points and Combat
+
+Prayer points drain continuously while prayers are active. If points reach 0, all prayers deactivate automatically:
+
+```typescript
+// Drain processing every tick (600ms)
+processTick(currentTick: number): void {
+  for (const [playerId, state] of this.prayerStates) {
+    if (state.active.length === 0) continue;
+
+    // Calculate total drain from all active prayers
+    let totalDrain = 0;
+    for (const prayerId of state.active) {
+      totalDrain += this.calculateDrainPerTick(prayer.drainEffect, state.prayerBonus);
+    }
+
+    // Drain points
+    const newPoints = Math.max(0, state.points - totalDrain);
+    this.setPrayerPoints(playerId, newPoints);
+
+    // Deactivate all prayers if points reach 0
+    if (newPoints <= 0) {
+      this.deactivateAllPrayers(playerId, "no_points");
+    }
+  }
+}
+```
+
+<Info>
+See the [Prayer System](/wiki/game-systems/prayer) documentation for complete details on prayer mechanics, drain formulas, and altar recharging.
+</Info>
+
+---
+
 ## Related Documentation
 
+- [Prayer System](/wiki/game-systems/prayer) (prayer bonuses and mechanics)
 - [Inventory System](/wiki/game-systems/inventory) (for food consumption)
 - [Tile Movement System](/wiki/game-systems/movement)
 - [Skills & Progression](/wiki/game-systems/skills)
