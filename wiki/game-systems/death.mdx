@@ -208,55 +208,220 @@ async onGravestoneExpired(playerId: string, groundItemIds: string[]): Promise<vo
 
 ### Looting from Gravestone
 
+The loot system uses **shadow state with transaction tracking** for optimistic UI updates with automatic rollback:
+
 ```typescript
-// Player interacts with their gravestone
-async lootGravestone(playerId: string, gravestoneId: string): Promise<void> {
-  const gravestone = this.world.entities.get(gravestoneId);
-  
-  // Verify ownership
-  if (gravestone.ownerId !== playerId) {
-    this.emitMessage(playerId, "This isn't your gravestone.", "error");
+// From LootWindow.tsx (client)
+const handleTakeItem = (item: InventoryItem, index: number) => {
+  const transactionId = generateTransactionId();
+
+  // 1. Track pending transaction for rollback
+  setPendingTransactions(prev => new Map(prev).set(transactionId, {
+    itemId: item.itemId,
+    quantity: item.quantity,
+    originalIndex: index,
+    originalItem: { ...item },
+  }));
+
+  // 2. Optimistically remove from UI
+  setItems(prev => prev.filter((_, i) => i !== index));
+
+  // 3. Set timeout for automatic rollback (3 seconds)
+  const timeout = setTimeout(() => {
+    rollbackTransaction(transactionId);  // Put item back if no response
+  }, 3000);
+
+  // 4. Send request with transaction ID
+  world.network.send("entityEvent", {
+    event: EventType.CORPSE_LOOT_REQUEST,
+    payload: { corpseId, itemId, quantity, transactionId },
+  });
+};
+
+// Server confirms/rejects via LOOT_RESULT event
+const handleLootResult = (result: LootResult) => {
+  if (result.success) {
+    // Confirmed - remove from pending
+    setPendingTransactions(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(result.transactionId);
+      return newMap;
+    });
+  } else {
+    // Failed - rollback (put item back)
+    rollbackTransaction(result.transactionId);
+  }
+};
+```
+
+### Server-Side Loot Processing
+
+```typescript
+// From HeadstoneEntity.ts
+private async processLootRequest(data: {
+  playerId: string;
+  itemId: string;
+  quantity: number;
+  transactionId: string;
+}): Promise<void> {
+  // 1. Check loot protection
+  if (!this.canPlayerLoot(playerId)) {
+    this.emitLootResult(playerId, transactionId, false, "PROTECTED");
     return;
   }
-  
-  // Transfer items to inventory
-  for (const item of gravestone.items) {
-    const success = await this.inventorySystem.addItem(
-      playerId,
-      item.itemId,
-      item.quantity
-    );
-    
-    if (!success) {
-      // Inventory full - leave remaining items
-      break;
+
+  // 2. Check if item exists
+  const itemIndex = this.lootItems.findIndex(item => item.itemId === itemId);
+  if (itemIndex === -1) {
+    this.emitLootResult(playerId, transactionId, false, "ITEM_NOT_FOUND");
+    return;
+  }
+
+  // 3. CRITICAL: Check inventory space BEFORE removing item
+  const hasSpace = this.checkInventorySpace(playerId, itemId, quantity);
+  if (!hasSpace) {
+    this.emitLootResult(playerId, transactionId, false, "INVENTORY_FULL");
+    return;
+  }
+
+  // 4. Block looting during death animation
+  if (this.isPlayerInDeathState(playerId)) {
+    this.emitLootResult(playerId, transactionId, false, "PLAYER_DYING");
+    return;
+  }
+
+  // 5. Atomic remove from gravestone
+  const removed = this.removeItem(itemId, quantity);
+  if (!removed) {
+    this.emitLootResult(playerId, transactionId, false, "ITEM_NOT_FOUND");
+    return;
+  }
+
+  // 6. DEFENSIVE: Re-check inventory space (closes race window)
+  const stillHasSpace = this.checkInventorySpace(playerId, itemId, quantity);
+  if (!stillHasSpace) {
+    // Rollback: put item back in gravestone
+    this.lootItems.push({ id, itemId, quantity, slot, metadata });
+    this.emitLootResult(playerId, transactionId, false, "INVENTORY_FULL");
+    return;
+  }
+
+  // 7. Add to player inventory (safe now, space double-checked)
+  this.world.emit(EventType.INVENTORY_ITEM_ADDED, {
+    playerId,
+    item: { id: `loot_${playerId}_${Date.now()}`, itemId, quantity, slot: -1 },
+  });
+
+  // 8. Confirm success to client
+  this.emitLootResult(playerId, transactionId, true);
+}
+```
+
+### Loot Result Events
+
+```typescript
+interface LootResult {
+  transactionId: string;
+  success: boolean;
+  itemId?: string;
+  quantity?: number;
+  reason?: LootFailureReason;
+  timestamp: number;
+}
+
+type LootFailureReason =
+  | "ITEM_NOT_FOUND"      // Item already looted
+  | "INVENTORY_FULL"      // No inventory space
+  | "PROTECTED"           // Loot protection active
+  | "GRAVESTONE_GONE"     // Gravestone despawned
+  | "RATE_LIMITED"        // Too many requests
+  | "INVALID_REQUEST"     // Malformed request
+  | "PLAYER_DYING";       // Player is dying/dead
+```
+
+<Info>
+**Shadow State Pattern**: The client optimistically updates the UI immediately, then rolls back if the server rejects the request. This provides instant feedback while maintaining server authority.
+</Info>
+
+### Loot All Feature
+
+Players can loot all items at once with a single batch request:
+
+```typescript
+// Client sends batch request
+world.network.send("entityEvent", {
+  event: EventType.CORPSE_LOOT_ALL_REQUEST,
+  payload: { corpseId, playerId, transactionId },
+});
+
+// Server processes all items atomically
+private async processLootAllRequest(data: {
+  playerId: string;
+  transactionId: string;
+}): Promise<void> {
+  // Process each item, stopping if inventory becomes full
+  for (const item of [...this.lootItems]) {
+    const hasSpace = this.checkInventorySpace(playerId, item.itemId, item.quantity);
+    if (!hasSpace) break;  // Stop looting, remaining items stay
+
+    const removed = this.removeItem(item.itemId, item.quantity);
+    if (removed) {
+      this.world.emit(EventType.INVENTORY_ITEM_ADDED, { playerId, item });
+      successfullyLooted.push(item);
     }
-    
-    // Track item looted
-    await this.deathStateManager.onItemLooted(playerId, item.id);
   }
-  
-  // Destroy gravestone if empty
-  if (gravestone.items.length === 0) {
-    this.entityManager.destroyEntity(gravestoneId);
-    await this.deathStateManager.clearDeathLock(playerId);
+
+  this.emitLootResult(playerId, transactionId, true, undefined, undefined, successfullyLooted.length);
+}
+```
+
+### Rate Limiting
+
+Loot requests are rate-limited to prevent spam:
+
+```typescript
+// From HeadstoneEntity.ts
+private lootRateLimiter = new Map<string, number>();
+private readonly LOOT_RATE_LIMIT_MS = 100;
+
+private handleLootRequest(data: LootRequestData): void {
+  const now = Date.now();
+  const lastRequest = this.lootRateLimiter.get(data.playerId) || 0;
+
+  if (now - lastRequest < this.LOOT_RATE_LIMIT_MS) {
+    this.emitLootResult(data.playerId, data.transactionId, false, "RATE_LIMITED");
+    return;
   }
+
+  this.lootRateLimiter.set(data.playerId, now);
+  // ... process loot
 }
 ```
 
 ### Clearing Death Lock
 
+Death locks persist until all items are looted or despawn:
+
 ```typescript
 async clearDeathLock(playerId: string): Promise<void> {
   // Remove from memory
   this.activeDeaths.delete(playerId);
-  
+
   // Remove from database
   if (this.databaseSystem) {
     await this.databaseSystem.deleteDeathLockAsync(playerId);
   }
 }
+
+// Death lock is cleared when:
+// 1. All items are looted from gravestone (CORPSE_EMPTY event)
+// 2. Ground items despawn (timeout)
+// 3. Gravestone expires and ground items despawn
 ```
+
+<Warning>
+**Death Lock Persistence**: The death lock is NOT cleared on respawn. It persists until all items are recovered or despawn. This enables crash recovery.
+</Warning>
 
 ---
 
