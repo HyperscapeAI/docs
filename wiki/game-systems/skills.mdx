@@ -298,6 +298,37 @@ This normalization runs once when a model is first loaded, before caching. All c
 | Swordfish | 50 | 100 |
 | Shark | 76 | 110 |
 
+### Prayer XP
+
+Prayer is trained by burying bones dropped by monsters:
+
+**Bone Types** (defined in item manifests):
+| Bone | Prayer XP | Dropped By |
+|------|-----------|------------|
+| Bones | 4.5 | Most monsters |
+| Big Bones | 15 | Larger monsters |
+| Dragon Bones | 72 | Dragons |
+
+**Burying Mechanics**:
+- 2-tick (1.2 second) delay between burying bones
+- Bones consumed from inventory
+- XP granted immediately
+- Message shown: "You bury the bones."
+
+```typescript
+// From BuryDelayManager.ts
+const BURY_DELAY_TICKS = 2;  // OSRS-accurate
+
+canBury(playerId: string, currentTick: number): boolean {
+  const lastTick = this.lastBuryTick.get(playerId) ?? 0;
+  return currentTick - lastTick >= BURY_DELAY_TICKS;
+}
+```
+
+<Info>
+**Prayer Training**: Burying bones is routed through the `useItem` flow for proper server-side handling. The server detects bone items and processes them as bury actions.
+</Info>
+
 ### Artisan XP
 
 Processing recipes are defined in `manifests/recipes/` with OSRS-accurate XP values:
