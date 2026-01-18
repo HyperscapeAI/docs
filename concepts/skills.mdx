@@ -243,6 +243,26 @@ Skill configuration is in `packages/shared/src/data/`:
 | `equipment-requirements.json` | Level requirements for equipment |
 | `equipment-stats.json` | Stat bonuses for equipment |
 
+## Prayer Training
+
+Prayer is trained by burying bones dropped by monsters:
+
+| Bone Type | Prayer XP | Source |
+|-----------|-----------|--------|
+| Bones | 4.5 | Most monsters |
+| Big Bones | 15 | Larger monsters |
+| Dragon Bones | 72 | Dragons |
+
+**Mechanics:**
+- Use "Bury" action on bones in inventory
+- 2-tick (1.2 second) delay between burying
+- Prayer points can be recharged at altars
+- Prayer level = maximum prayer points
+
+<Info>
+  See the [Prayer System](/wiki/game-systems/prayer) documentation for complete details on prayer mechanics, drain formulas, and combat bonuses.
+</Info>
+
 ## Default Skill Values
 
 Skills start at level 1 with 0 XP, except Constitution which starts at level 10:
@@ -254,11 +274,11 @@ playerData.skills = {
   strength: { level: 1, xp: 0 },
   defense: { level: 1, xp: 0 },
   constitution: { level: 10, xp: 1154 },  // Starts at level 10
+  ranged: { level: 1, xp: 0 },
   prayer: { level: 1, xp: 0 },
   woodcutting: { level: 1, xp: 0 },
   mining: { level: 1, xp: 0 },
   fishing: { level: 1, xp: 0 },
-  mining: { level: 1, xp: 0 },
   firemaking: { level: 1, xp: 0 },
   cooking: { level: 1, xp: 0 },
   smithing: { level: 1, xp: 0 },
