@@ -179,19 +179,34 @@ const STYLE_BONUSES: Record<CombatStyle, StyleBonus> = {
 
 ## Damage Calculation
 
-Damage uses the authentic OSRS formula from [the wiki](https://oldschool.runescape.wiki/w/Damage_per_second/Melee).
+Damage uses the authentic OSRS formula from [the wiki](https://oldschool.runescape.wiki/w/Damage_per_second/Melee). **Prayer bonuses are applied as multipliers** to effective levels.
 
 ### Maximum Hit Formula
 
 ```typescript
-// Effective Strength = Strength Level + 8 + Style Bonus
-const effectiveStrength = strengthLevel + 8 + styleBonus.strength;
+// From CombatCalculations.ts
+function calculateMaxHit(
+  strengthLevel: number,
+  strengthBonus: number,
+  styleBonus: number,
+  prayerMultiplier: number = 1.0,  // NEW: Prayer bonus
+): number {
+  // Effective Strength = floor((Strength Level + 8 + Style Bonus) × Prayer Multiplier)
+  const effectiveStrength = Math.floor(
+    (strengthLevel + 8 + styleBonus) * prayerMultiplier
+  );
 
-// Strength Bonus from equipment
-const strengthBonus = equipmentStats?.strength || 0;
+  // Max Hit = floor(0.5 + (Effective Strength × (Strength Bonus + 64)) / 640)
+  return Math.floor(0.5 + (effectiveStrength * (strengthBonus + 64)) / 640);
+}
 
-// Max Hit = floor(0.5 + (Effective Strength × (Strength Bonus + 64)) / 640)
-const maxHit = Math.floor(0.5 + (effectiveStrength * (strengthBonus + 64)) / 640);
+// Example: Burst of Strength (+5% Strength)
+const strengthLevel = 60;
+const styleBonus = 3;  // Aggressive style
+const prayerMultiplier = 1.05;  // +5% from prayer
+
+const effectiveStrength = Math.floor((60 + 8 + 3) * 1.05) = 74;
+const maxHit = Math.floor(0.5 + (74 * (0 + 64)) / 640) = 7;
 ```
 
 ### Accuracy Formula
@@ -204,11 +219,19 @@ function calculateAccuracy(
   targetDefenseLevel: number,
   targetDefenseBonus: number,
   attackerStyle: CombatStyle = "accurate",
+  attackerPrayerMult: number = 1.0,   // NEW: Attacker prayer bonus
+  defenderPrayerMult: number = 1.0,   // NEW: Defender prayer bonus
 ): boolean {
-  const effectiveAttack = attackerAttackLevel + 8 + styleBonus.attack;
+  // Effective Attack = floor((Attack Level + 8 + Style Bonus) × Prayer Multiplier)
+  const effectiveAttack = Math.floor(
+    (attackerAttackLevel + 8 + styleBonus.attack) * attackerPrayerMult
+  );
   const attackRoll = effectiveAttack * (attackerAttackBonus + 64);
 
-  const effectiveDefence = targetDefenseLevel + 9 + defenderStyleBonus.defense;
+  // Effective Defence = floor((Defense Level + 9 + Style Bonus) × Prayer Multiplier)
+  const effectiveDefence = Math.floor(
+    (targetDefenseLevel + 9 + defenderStyleBonus.defense) * defenderPrayerMult
+  );
   const defenceRoll = effectiveDefence * (targetDefenseBonus + 64);
 
   let hitChance: number;
@@ -221,6 +244,30 @@ function calculateAccuracy(
   return random.random() < hitChance;
 }
 ```
+
+### Prayer Multipliers
+
+Prayer bonuses are retrieved from the Prayer System and applied to combat calculations:
+
+```typescript
+// From CombatSystem.ts
+const prayerBonuses = prayerSystem.getPrayerCombatBonuses(attackerId);
+
+// prayerBonuses = {
+//   attack: 1.05,    // +5% from Clarity of Thought
+//   strength: 1.10,  // +10% from Superhuman Strength
+//   defense: 1.05,   // +5% from Thick Skin
+// }
+
+// Applied to effective levels
+const effectiveAttack = Math.floor(
+  (attackLevel + 8 + styleBonus) * prayerBonuses.attack
+);
+```
+
+<Info>
+**Prayer Stacking**: Multiple prayers stack multiplicatively. For example, Clarity of Thought (+5% Attack) and Thick Skin (+5% Defense) can both be active, but two Strength prayers cannot (they conflict).
+</Info>
 
 ### Damage Roll
 
