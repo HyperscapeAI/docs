@@ -302,15 +302,136 @@ This prevents:
 
 ---
 
+## Crash Recovery System
+
+The death system includes **enterprise-grade crash recovery** to prevent item loss when the server restarts mid-death.
+
+### Recovery on Server Startup
+
+```typescript
+// From DeathStateManager.ts
+async recoverUnfinishedDeaths(): Promise<void> {
+  // Query all unrecovered deaths from database
+  const unrecoveredDeaths = await this.databaseSystem.getUnrecoveredDeathsAsync();
+
+  for (const death of unrecoveredDeaths) {
+    // Recreate gravestones/ground items from death.items
+    if (death.zoneType === "safe_area") {
+      await this.spawnGravestoneForRecovery(death);
+    } else {
+      await this.spawnGroundItemsForRecovery(death);
+    }
+
+    // Mark as recovered to prevent duplicate recovery
+    await this.databaseSystem.markDeathRecoveredAsync(death.playerId);
+  }
+}
+```
+
+### Recovery Database Queries
+
+```sql
+-- Get all unrecovered deaths (called on server startup)
+SELECT * FROM player_deaths WHERE recovered = false;
+
+-- Mark death as recovered after processing
+UPDATE player_deaths SET recovered = true WHERE playerId = ?;
+```
+
+<Info>
+**Crash Safety**: The death lock is created with full item data BEFORE clearing inventory. If the server crashes after clearing inventory but before spawning the gravestone, the items can be recovered from the death lock on restart.
+</Info>
+
+### Transaction Isolation
+
+Critical death operations use **serializable transactions** to prevent race conditions:
+
+```typescript
+// From DatabaseSystem.ts
+await dbSystem.executeInTransaction(async (tx) => {
+  // 1. Create death lock with full item list (crash recovery data)
+  await deathStateManager.createDeathLock(playerId, {
+    items: itemsToDrop,  // Full item data
+    killedBy,
+    // ... other fields
+  }, tx);
+
+  // 2. Clear inventory/equipment atomically
+  await inventorySystem.clearInventoryImmediate(playerId);
+  await equipmentSystem.clearEquipmentAndReturn(playerId, tx);
+
+  // If crash happens here, items are recoverable from death lock
+}, { isolationLevel: "serializable" });
+```
+
+---
+
+## Input Sanitization
+
+The death system sanitizes all player-provided input to prevent injection attacks:
+
+```typescript
+// From PlayerDeathSystem.ts
+function sanitizeKilledBy(killedBy: unknown): string {
+  if (typeof killedBy !== "string" || !killedBy) {
+    return "unknown";
+  }
+
+  // Normalize Unicode to NFKC form to prevent homograph attacks
+  let normalized = killedBy.normalize("NFKC");
+
+  let sanitized = "";
+  for (const char of normalized) {
+    const code = char.charCodeAt(0);
+
+    // Skip zero-width characters (U+200B-U+200D, U+FEFF)
+    if (code >= 0x200b && code <= 0x200d) continue;
+    if (code === 0xfeff) continue;
+
+    // Skip BiDi override characters (U+202A-U+202E)
+    if (code >= 0x202a && code <= 0x202e) continue;
+
+    // Skip control characters (0x00-0x1F and 0x7F)
+    if (code < 32 || code === 127) continue;
+
+    // Skip dangerous HTML characters
+    if ("<>'\"&".includes(char)) continue;
+
+    sanitized += char;
+  }
+
+  return sanitized.trim().substring(0, 64) || "unknown";
+}
+```
+
+<Warning>
+**Security**: The `killedBy` field is sanitized to prevent Unicode attacks, BiDi override exploits, and HTML injection.
+</Warning>
+
+---
+
 ## Death Constants
 
 ```typescript
 // From CombatConstants.ts
 GRAVESTONE_TICKS: 1500,              // 15 minutes to reclaim
-GROUND_ITEM_DESPAWN_TICKS: 200,      // 2 minutes on ground
+GROUND_ITEM_DESPAWN_TICKS: 6000,     // 60 minutes on ground (OSRS-accurate)
+UNTRADEABLE_DESPAWN_TICKS: 6000,     // 60 minutes for untradeable (OSRS-accurate)
 LOOT_PROTECTION_TICKS: 100,          // 1 minute killer protection
-UNTRADEABLE_DESPAWN_TICKS: 300,      // 3 minutes for untradeable
+
+DEATH: {
+  ANIMATION_TICKS: 7,                // Death animation duration
+  COOLDOWN_TICKS: 17,                // Cooldown before can die again
+  RECONNECT_RESPAWN_DELAY_TICKS: 1,  // Instant respawn on reconnect
+  STALE_LOCK_AGE_TICKS: 3000,        // 30 minutes (stale lock cleanup)
+  DEFAULT_RESPAWN_POSITION: { x: 0, y: 0, z: 0 },
+  DEFAULT_RESPAWN_TOWN: "Central Haven",
+}
 ```
+
+<Info>
+**OSRS Accuracy**: Ground item despawn time was updated from 3 minutes to 60 minutes to match OSRS behavior.
+</Info>
 
 ---
 
