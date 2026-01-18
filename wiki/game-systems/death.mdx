@@ -455,15 +455,77 @@ This prevents:
 
 ---
 
+## Combat State Cleanup
+
+When a player dies or respawns, all combat-related states are cleaned up across multiple systems:
+
+### Death Event Handlers
+
+```typescript
+// From AggroSystem.ts
+world.on(EventType.PLAYER_SET_DEAD, (data) => {
+  if (data.isDead) {
+    // Stop all mobs from chasing this player
+    for (const [mobId, mobState] of this.mobStates) {
+      if (mobState.currentTarget === playerId) {
+        mobState.isChasing = false;
+        mobState.currentTarget = null;
+        mobState.isInCombat = false;
+      }
+      mobState.aggroTargets.delete(playerId);
+    }
+  }
+});
+
+// From CombatSystem.ts
+world.on(EventType.PLAYER_RESPAWNED, (data) => {
+  // Clear all combat states targeting this player
+  const clearedAttackers = combatStateService.clearStatesTargeting(playerId);
+
+  // Clear player's own combat state
+  combatStateService.clearState(playerId);
+});
+```
+
+### Multi-Layer Cleanup
+
+The system uses **defense-in-depth** with three layers of cleanup:
+
+1. **Event-based cleanup**: Death/respawn events trigger immediate cleanup
+2. **Runtime guards**: Health checks in aggro/combat loops
+3. **Timeout cleanup**: Stale states cleaned up after timeout
+
+```typescript
+// Layer 3: Runtime guard in aggro loop
+const player = this.world.getPlayer(mobState.currentTarget);
+
+// Check if player is dead - stop chasing immediately
+const playerHealth = player.health;
+if (playerHealth?.current !== undefined && playerHealth.current <= 0) {
+  this.stopChasing(mobState);
+  mobState.currentTarget = null;
+  mobState.aggroTargets.delete(player.id);
+  return;
+}
+```
+
+---
+
 ## Death Events
 
 | Event | Data | Description |
 |-------|------|-------------|
 | `ENTITY_DEATH` | `entityId`, `killerId`, `position` | Entity died |
 | `PLAYER_DEATH` | `playerId`, `killerId`, `position`, `zoneType` | Player death |
+| `PLAYER_SET_DEAD` | `playerId`, `isDead` | Player death state changed |
 | `PLAYER_RESPAWNED` | `playerId`, `spawnPosition` | Player respawned |
 | `GRAVESTONE_SPAWNED` | `gravestoneId`, `playerId`, `position` | Gravestone created |
-| `GRAVESTONE_EXPIRED` | `gravestoneId`, `playerId`, `groundItemIds` | Gravestone timed out |
+| `DEATH_HEADSTONE_EXPIRED` | `gravestoneId`, `playerId`, `groundItemIds` | Gravestone timed out |
+| `CORPSE_LOOT_REQUEST` | `corpseId`, `playerId`, `itemId`, `quantity`, `transactionId` | Loot item request |
+| `CORPSE_LOOT_ALL_REQUEST` | `corpseId`, `playerId`, `transactionId` | Loot all items request |
+| `LOOT_RESULT` | `transactionId`, `success`, `reason?` | Loot request result |
+| `CORPSE_EMPTY` | `corpseId`, `playerId` | All items looted |
+| `AUDIT_LOG` | `action`, `playerId`, `items`, `success`, `transactionId` | Audit trail for loot operations |
 
 ---
 
