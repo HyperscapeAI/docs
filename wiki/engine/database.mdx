@@ -66,33 +66,57 @@ export const characters = pgTable('characters', {
   positionY: real('position_y').notNull().default(0),
   positionZ: real('position_z').notNull().default(0),
 
-  // Skill levels (individual columns for efficient queries)
+  // Combat skill levels
   attackLevel: integer('attackLevel').default(1),
   strengthLevel: integer('strengthLevel').default(1),
   defenseLevel: integer('defenseLevel').default(1),
   constitutionLevel: integer('constitutionLevel').default(10),
   rangedLevel: integer('rangedLevel').default(1),
+  
+  // Prayer skill (added in PR #563)
   prayerLevel: integer('prayerLevel').default(1),
+  
+  // Gathering skill levels
   woodcuttingLevel: integer('woodcuttingLevel').default(1),
   miningLevel: integer('miningLevel').default(1),
   fishingLevel: integer('fishingLevel').default(1),
+  
+  // Artisan skill levels
   firemakingLevel: integer('firemakingLevel').default(1),
   cookingLevel: integer('cookingLevel').default(1),
   smithingLevel: integer('smithingLevel').default(1),
 
-  // Skill XP (individual columns)
+  // Combat skill XP
   attackXp: integer('attackXp').default(0),
   strengthXp: integer('strengthXp').default(0),
   defenseXp: integer('defenseXp').default(0),
   constitutionXp: integer('constitutionXp').default(1154),
   rangedXp: integer('rangedXp').default(0),
+  
+  // Prayer skill XP (added in PR #563)
   prayerXp: integer('prayerXp').default(0),
+  
+  // Gathering skill XP
   woodcuttingXp: integer('woodcuttingXp').default(0),
   miningXp: integer('miningXp').default(0),
   fishingXp: integer('fishingXp').default(0),
+  
+  // Artisan skill XP
   firemakingXp: integer('firemakingXp').default(0),
   cookingXp: integer('cookingXp').default(0),
   smithingXp: integer('smithingXp').default(0),
+  
+  // Prayer points (added in PR #563)
+  prayerPoints: integer('prayerPoints').default(1),
+  prayerMaxPoints: integer('prayerMaxPoints').default(1),
+  
+  /**
+   * Active prayers stored as JSON array of prayer ID strings.
+   * Format: '["thick_skin", "burst_of_strength"]'
+   * IDs must match valid entries in prayers.json manifest.
+   * Empty array '[]' when no prayers are active.
+   */
+  activePrayers: text('activePrayers').default('[]'),
 
   // Combat state
   health: integer('health').default(100),
