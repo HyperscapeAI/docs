@@ -413,6 +413,8 @@ bunx drizzle-kit push
 
 | Migration | Description |
 |-----------|-------------|
+| `0017_add_death_recovery_columns.sql` | Added crash recovery columns to `player_deaths` (PR #566) |
+| `0016_add_prayer_system.sql` | Added Prayer skill and prayer points (PR #563) |
 | `0015_add_smithing_skill.sql` | Added `smithingLevel` and `smithingXp` columns |
 | `0014_add_mining_skill.sql` | Added `miningLevel` and `miningXp` columns |
 | `0013_add_auto_retaliate.sql` | Added auto-retaliate preference |
@@ -421,6 +423,64 @@ bunx drizzle-kit push
 | `0010_add_player_deaths.sql` | Added death tracking |
 
 Migrations are located in `packages/server/src/database/migrations/`.
+
+---
+
+## Player Deaths Table
+
+The `player_deaths` table tracks active deaths with crash recovery support (added in PR #566):
+
+```sql
+CREATE TABLE player_deaths (
+  playerId TEXT PRIMARY KEY,
+  gravestoneId TEXT,
+  groundItemIds TEXT,                    -- JSON array of ground item entity IDs
+  position TEXT NOT NULL,                -- JSON: {x, y, z}
+  timestamp BIGINT NOT NULL,
+  zoneType TEXT NOT NULL,                -- 'safe_area', 'wilderness', 'pvp_zone', 'unknown'
+  itemCount INTEGER DEFAULT 0 NOT NULL,
+  
+  -- Crash recovery columns (PR #566)
+  items JSONB DEFAULT '[]'::jsonb NOT NULL,  -- Array of {itemId, quantity}
+  killedBy TEXT DEFAULT 'unknown' NOT NULL,
+  recovered BOOLEAN DEFAULT false NOT NULL,
+  
+  createdAt BIGINT NOT NULL,
+  updatedAt BIGINT NOT NULL,
+  
+  -- Constraints
+  CONSTRAINT player_deaths_zoneType_check 
+    CHECK (zoneType IN ('safe_area', 'wilderness', 'pvp_zone', 'unknown'))
+);
+
+-- Indexes for crash recovery queries
+CREATE INDEX idx_player_deaths_recovered ON player_deaths (recovered);
+CREATE INDEX idx_player_deaths_recovery_lookup ON player_deaths (recovered, timestamp);
+```
+
+### Crash Recovery Fields
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `items` | JSONB | Full item data for recreating gravestones/ground items after crash |
+| `killedBy` | TEXT | What killed the player (for loot mechanics) |
+| `recovered` | BOOLEAN | Whether death was processed during crash recovery (prevents duplicates) |
+
+<Info>
+The `items` JSONB column stores the actual item data (not just IDs), enabling the server to recreate gravestones with correct items after a crash.
+</Info>
+
+### Recovery Query
+
+```typescript
+// From DeathRepository.ts
+async getUnrecoveredDeathsAsync(): Promise<DeathLockData[]> {
+  return this.db
+    .select()
+    .from(schema.playerDeaths)
+    .where(eq(schema.playerDeaths.recovered, false));
+}
+```
 
 ---
 
