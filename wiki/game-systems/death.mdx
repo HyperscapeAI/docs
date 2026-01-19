@@ -382,39 +382,140 @@ async onGravestoneExpired(playerId: string, groundItemIds: string[]): Promise<vo
 
 ### Looting from Gravestone
 
+The loot system uses **shadow state with transaction tracking** for optimistic UI updates with automatic rollback on failure.
+
 ```typescript
-// Player interacts with their gravestone
-async lootGravestone(playerId: string, gravestoneId: string): Promise<void> {
-  const gravestone = this.world.entities.get(gravestoneId);
-  
-  // Verify ownership
-  if (gravestone.ownerId !== playerId) {
-    this.emitMessage(playerId, "This isn't your gravestone.", "error");
+// From HeadstoneEntity.ts
+private async processLootRequest(data: {
+  playerId: string;
+  itemId: string;
+  quantity: number;
+  transactionId: string;
+}): Promise<void> {
+  // Step 1: Check loot protection
+  if (!this.canPlayerLoot(playerId)) {
+    this.emitLootResult(playerId, transactionId, false, "PROTECTED");
     return;
   }
   
-  // Transfer items to inventory
-  for (const item of gravestone.items) {
-    const success = await this.inventorySystem.addItem(
-      playerId,
-      item.itemId,
-      item.quantity
-    );
-    
-    if (!success) {
-      // Inventory full - leave remaining items
-      break;
-    }
-    
-    // Track item looted
-    await this.deathStateManager.onItemLooted(playerId, item.id);
+  // Step 2: Find item in gravestone
+  const itemIndex = this.lootItems.findIndex(i => i.itemId === itemId);
+  if (itemIndex === -1) {
+    this.emitLootResult(playerId, transactionId, false, "ITEM_NOT_FOUND");
+    return;
   }
   
-  // Destroy gravestone if empty
-  if (gravestone.items.length === 0) {
-    this.entityManager.destroyEntity(gravestoneId);
-    await this.deathStateManager.clearDeathLock(playerId);
+  // Step 3: Check inventory space BEFORE removing
+  const hasSpace = this.checkInventorySpace(playerId, itemId, quantity);
+  if (!hasSpace) {
+    this.emitLootResult(playerId, transactionId, false, "INVENTORY_FULL");
+    return;
   }
+  
+  // Step 4: Block looting during death animation
+  if (this.isPlayerInDeathState(playerId)) {
+    this.emitLootResult(playerId, transactionId, false, "PLAYER_DYING");
+    return;
+  }
+  
+  // Step 5: Atomic remove from gravestone
+  const removed = this.removeItem(itemId, quantity);
+  if (!removed) {
+    this.emitLootResult(playerId, transactionId, false, "ITEM_NOT_FOUND");
+    return;
+  }
+  
+  // Step 6: Double-check inventory space (closes race window)
+  const stillHasSpace = this.checkInventorySpace(playerId, itemId, quantity);
+  if (!stillHasSpace) {
+    // Rollback: put item back
+    this.lootItems.push({ id, itemId, quantity, slot, metadata });
+    this.emitLootResult(playerId, transactionId, false, "INVENTORY_FULL");
+    return;
+  }
+  
+  // Step 7: Add to player inventory
+  this.world.emit(EventType.INVENTORY_ITEM_ADDED, {
+    playerId,
+    item: { id: `loot_${playerId}_${Date.now()}`, itemId, quantity, slot: -1 },
+  });
+  
+  // Step 8: Confirm success to client
+  this.emitLootResult(playerId, transactionId, true);
+}
+```
+
+### Shadow State Pattern (Client)
+
+The client uses optimistic updates with automatic rollback:
+
+```typescript
+// From LootWindow.tsx
+const handleLootClick = (itemId, quantity) => {
+  const txnId = generateTransactionId();
+  
+  // 1. Optimistically remove from UI
+  setItems(prev => prev.filter(i => i.itemId !== itemId));
+  
+  // 2. Track for rollback
+  setPendingTransactions(prev => new Map(prev).set(txnId, {
+    originalItem: item,
+    originalIndex: index,
+  }));
+  
+  // 3. Auto-rollback after 3 seconds if no response
+  setTimeout(() => rollbackTransaction(txnId), 3000);
+  
+  // 4. Send request
+  world.network.send("entityEvent", {
+    event: EventType.CORPSE_LOOT_REQUEST,
+    payload: { corpseId, itemId, quantity, transactionId: txnId },
+  });
+};
+
+// Server confirms/rejects
+const handleLootResult = (result: LootResult) => {
+  if (result.success) {
+    confirmTransaction(result.transactionId);
+  } else {
+    rollbackTransaction(result.transactionId);  // Put item back
+  }
+};
+```
+
+<Info>
+The shadow state pattern ensures the client UI always stays in sync with the server, even if loot requests fail or time out.
+</Info>
+
+### Loot All
+
+Players can loot all items at once with a single request:
+
+```typescript
+// Client sends batch request
+world.network.send("entityEvent", {
+  event: EventType.CORPSE_LOOT_ALL_REQUEST,
+  payload: { corpseId, playerId, transactionId },
+});
+
+// Server processes atomically
+private async processLootAllRequest(data: {
+  playerId: string;
+  transactionId: string;
+}): Promise<void> {
+  // Process each item with inventory space checking
+  for (const item of this.lootItems) {
+    const hasSpace = this.checkInventorySpace(playerId, item.itemId, item.quantity);
+    if (!hasSpace) break;  // Stop if inventory full
+    
+    const removed = this.removeItem(item.itemId, item.quantity);
+    if (removed) {
+      this.world.emit(EventType.INVENTORY_ITEM_ADDED, { playerId, item });
+      successfullyLooted.push(item);
+    }
+  }
+  
+  this.emitLootResult(playerId, transactionId, true, undefined, undefined, successfullyLooted.length);
 }
 ```
 
