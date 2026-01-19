@@ -1,45 +1,124 @@
 ---
 title: "Death & Respawn System"
-description: "Player death handling, gravestones, and item recovery"
+description: "Player death handling, crash recovery, gravestones, and item recovery"
 icon: "skull"
 ---
 
 # Death & Respawn System
 
-The death system handles player deaths with zone-aware mechanics, gravestone spawning, and secure item recovery. It uses database persistence to prevent item duplication exploits.
+The death system handles player deaths with zone-aware mechanics, crash recovery, gravestone spawning, and secure item recovery. It uses database-first persistence with atomic operations to prevent item duplication and loss.
 
 <Info>
-Death code lives in `packages/shared/src/systems/shared/death/` with:
-- `DeathStateManager.ts` - Death tracking and persistence
-- `SafeAreaDeathHandler.ts` - Safe zone death logic
-- `WildernessDeathHandler.ts` - PvP zone death logic
-- `ZoneDetectionSystem.ts` - Zone type detection
+Death code lives in:
+- `packages/shared/src/systems/shared/combat/PlayerDeathSystem.ts` - Main death orchestrator (1,263 lines)
+- `packages/shared/src/systems/shared/death/DeathStateManager.ts` - Death persistence (368 lines)
+- `packages/shared/src/systems/shared/death/SafeAreaDeathHandler.ts` - Safe zone logic (322 lines)
+- `packages/shared/src/systems/shared/death/WildernessDeathHandler.ts` - PvP zone logic (130 lines)
+- `packages/shared/src/systems/shared/death/ZoneDetectionSystem.ts` - Zone detection (213 lines)
+- `packages/server/src/database/repositories/DeathRepository.ts` - Database operations
 </Info>
 
 ## Death Zones
 
 ```typescript
 type ZoneType = 
-  | "safe"       // Town, bank areas - items kept
-  | "dangerous"  // PvE wilderness - items drop on death
-  | "pvp";       // PvP zones - items dropped, lootable by killer
+  | "safe_area"   // Town, bank areas - gravestone system
+  | "wilderness"  // PvE wilderness - immediate ground items
+  | "pvp_zone"    // PvP zones - items lootable by killer
+  | "unknown";    // Fallback (treated as safe_area)
 ```
+
+---
+
+## Crash Recovery System
+
+The death system includes comprehensive crash recovery to prevent item loss during server restarts.
+
+### Database-First Persistence
+
+Death locks are created in the database **before** clearing inventory, ensuring items are always recoverable:
+
+```typescript
+// From PlayerDeathSystem.ts
+await databaseSystem.executeInTransaction(async (tx) => {
+  // 1. Create death lock with full item list (crash-safe)
+  const acquired = await this.deathStateManager.createDeathLock(
+    playerId,
+    {
+      items: itemsToDrop,  // Full item data for recovery
+      killedBy: sanitizeKilledBy(killedBy),
+      position: deathPosition,
+      zoneType,
+      // ...
+    },
+    tx
+  );
+  
+  // 2. Clear inventory/equipment (atomic)
+  await inventorySystem.clearInventoryImmediate(playerId);
+  await equipmentSystem.clearEquipmentAndReturn(playerId, tx);
+}, { isolationLevel: 'serializable' });
+```
+
+### Recovery on Startup
+
+When the server starts, it automatically recovers unfinished deaths:
+
+```typescript
+// From PlayerDeathSystem.ts - init()
+async init(): Promise<void> {
+  // Recover deaths that weren't completed before crash
+  await this.recoverUnfinishedDeaths();
+}
+
+private async recoverUnfinishedDeaths(): Promise<void> {
+  const unrecoveredDeaths = await this.databaseSystem.getUnrecoveredDeathsAsync();
+  
+  for (const death of unrecoveredDeaths) {
+    // Recreate gravestones/ground items from death.items
+    if (death.zoneType === 'safe_area') {
+      await this.spawnGravestoneForRecovery(death);
+    } else {
+      await this.spawnGroundItemsForRecovery(death);
+    }
+    
+    // Mark as recovered to prevent duplicate processing
+    await this.databaseSystem.markDeathRecoveredAsync(death.playerId);
+  }
+}
+```
+
+<Info>
+Crash recovery ensures that if the server crashes during death processing, items are never lost. The system recreates gravestones/ground items from the database on restart.
+</Info>
 
 ---
 
 ## Death Lock System
 
-To prevent item duplication on server restart/crash, deaths are tracked with database persistence:
+Death locks prevent item duplication and track death state across server restarts.
+
+### Death Lock Structure
 
 ```typescript
-interface DeathLock {
+interface DeathLockData {
   playerId: string;
-  gravestoneId?: string;           // If gravestone spawned
-  groundItemIds?: string[];        // If items on ground
+  gravestoneId: string | null;     // If gravestone spawned
+  groundItemIds: string[];         // If items on ground
   position: { x: number; y: number; z: number };
   timestamp: number;
-  zoneType: ZoneType;
+  zoneType: string;
   itemCount: number;               // Total items dropped
+  
+  // Crash recovery fields (added in PR #566)
+  items: DeathItemData[];          // Full item data for recovery
+  killedBy: string;                // What killed the player
+  recovered: boolean;              // Whether death was processed during recovery
+}
+
+interface DeathItemData {
+  itemId: string;
+  quantity: number;
 }
 ```
 
