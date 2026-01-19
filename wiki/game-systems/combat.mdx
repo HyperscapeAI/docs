@@ -554,9 +554,50 @@ The combat system emits events for UI and logging:
 
 ---
 
+## Prayer Integration
+
+Prayers provide temporary combat bonuses that modify effective levels. See the [Prayer System](/wiki/game-systems/prayer) documentation for complete details.
+
+### Prayer Bonuses in Combat
+
+```typescript
+// From CombatCalculations.ts
+interface PrayerBonuses {
+  attack?: number;      // Attack level multiplier (e.g., 1.05 = +5%)
+  strength?: number;    // Strength level multiplier
+  defense?: number;     // Defense level multiplier
+  ranged?: number;      // Ranged level multiplier
+  magic?: number;       // Magic level multiplier
+}
+
+// Get combined bonuses from all active prayers
+const prayerBonuses = prayerSystem.getCombinedBonuses(playerId);
+
+// Apply to effective levels
+effectiveAttack = Math.floor(effectiveAttack * (prayerBonuses.attack ?? 1));
+effectiveStrength = Math.floor(effectiveStrength * (prayerBonuses.strength ?? 1));
+effectiveDefense = Math.floor(effectiveDefense * (prayerBonuses.defense ?? 1));
+```
+
+### Example: Burst of Strength
+
+**Without prayer**:
+- Strength level: 70
+- Effective strength: 70 + 8 + 3 = 81
+- Max hit: 18
+
+**With Burst of Strength (+5%)**:
+- Strength level: 70
+- Effective strength: (70 + 8 + 3) × 1.05 = 85
+- Max hit: 19
+
+---
+
 ## Related Documentation
 
-- [Inventory System](/wiki/game-systems/inventory) (for food consumption)
+- [Prayer System](/wiki/game-systems/prayer)
+- [Death & Respawn](/wiki/game-systems/death)
+- [Inventory System](/wiki/game-systems/inventory)
 - [Tile Movement System](/wiki/game-systems/movement)
 - [Skills & Progression](/wiki/game-systems/skills)
 - [NPC Data Structure](/wiki/data/npcs)
