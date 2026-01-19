@@ -213,11 +213,17 @@ function calculateAccuracy(
   targetDefenseLevel: number,
   targetDefenseBonus: number,
   attackerStyle: CombatStyle = "accurate",
+  attackerPrayerBonuses?: PrayerBonuses,  // NEW in PR #563
+  defenderPrayerBonuses?: PrayerBonuses,  // NEW in PR #563
 ): boolean {
-  const effectiveAttack = attackerAttackLevel + 8 + styleBonus.attack;
+  // Apply prayer bonuses to effective levels
+  const prayerAttackMult = attackerPrayerBonuses?.attack ?? 1;
+  const prayerDefenseMult = defenderPrayerBonuses?.defense ?? 1;
+  
+  const effectiveAttack = Math.floor((attackerAttackLevel + 8 + styleBonus.attack) * prayerAttackMult);
   const attackRoll = effectiveAttack * (attackerAttackBonus + 64);
 
-  const effectiveDefence = targetDefenseLevel + 9 + defenderStyleBonus.defense;
+  const effectiveDefence = Math.floor((targetDefenseLevel + 9 + defenderStyleBonus.defense) * prayerDefenseMult);
   const defenceRoll = effectiveDefence * (targetDefenseBonus + 64);
 
   let hitChance: number;
@@ -230,6 +236,10 @@ function calculateAccuracy(
   return random.random() < hitChance;
 }
 ```
+
+<Info>
+Prayer bonuses from active prayers (e.g., Clarity of Thought +5% attack, Thick Skin +5% defense) are applied to effective levels before calculating attack and defense rolls.
+</Info>
 
 ### Damage Roll
 
