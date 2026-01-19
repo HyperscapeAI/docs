@@ -122,6 +122,39 @@ interface DeathItemData {
 }
 ```
 
+### Atomic Death Lock Acquisition
+
+Death locks use atomic database operations to prevent race conditions:
+
+```typescript
+// From DeathRepository.ts
+async acquireDeathLockAsync(
+  data: DeathLockData,
+  tx?: Transaction
+): Promise<boolean> {
+  // Use INSERT ... ON CONFLICT DO NOTHING for atomic check-and-create
+  const result = await db
+    .insert(schema.playerDeaths)
+    .values({
+      playerId: data.playerId,
+      items: data.items,  // Full item data for crash recovery
+      killedBy: data.killedBy,
+      recovered: false,
+      // ...
+    })
+    .onConflictDoNothing({ target: schema.playerDeaths.playerId })
+    .returning({ playerId: schema.playerDeaths.playerId });
+  
+  // If result has a row, insert succeeded (lock acquired)
+  // If result is empty, conflict occurred (player already has lock)
+  return result.length > 0;
+}
+```
+
+<Warning>
+The atomic acquisition prevents duplicate deaths if a player receives multiple death events simultaneously (e.g., from multiple mobs attacking on the same tick).
+</Warning>
+
 ### Creating a Death Lock
 
 ```typescript
@@ -133,32 +166,43 @@ async createDeathLock(
     position: { x: number; y: number; z: number };
     zoneType: ZoneType;
     itemCount: number;
+    items: DeathItemData[];      // NEW: Full item data
+    killedBy: string;            // NEW: Killer identification
+    recovered?: boolean;         // NEW: Recovery tracking
   },
-  tx?: TransactionContext,  // Optional DB transaction
-): Promise<void> {
+  tx?: TransactionContext,
+): Promise<boolean> {
   // Server authority check
   if (!this.world.isServer) {
     console.error(`[DeathStateManager] Client attempted death lock creation - BLOCKED`);
-    return;
+    return false;
   }
   
-  const deathData: DeathLock = {
-    playerId,
-    gravestoneId: options.gravestoneId,
-    groundItemIds: options.groundItemIds,
-    position: options.position,
-    timestamp: Date.now(),
-    zoneType: options.zoneType,
-    itemCount: options.itemCount,
-  };
+  // Atomic acquisition (prevents duplicate deaths)
+  const acquired = await this.databaseSystem.acquireDeathLockAsync(
+    {
+      playerId,
+      gravestoneId: options.gravestoneId ?? null,
+      groundItemIds: options.groundItemIds ?? [],
+      position: options.position,
+      timestamp: Date.now(),
+      zoneType: options.zoneType,
+      itemCount: options.itemCount,
+      items: options.items,
+      killedBy: options.killedBy,
+      recovered: options.recovered ?? false,
+    },
+    tx
+  );
+  
+  if (!acquired) {
+    console.warn(`[DeathStateManager] Player ${playerId} already has death lock`);
+    return false;
+  }
   
   // Store in memory cache
   this.activeDeaths.set(playerId, deathData);
-  
-  // Persist to database (prevents duplication on restart)
-  if (this.databaseSystem) {
-    await this.databaseSystem.saveDeathLockAsync(deathData, tx);
-  }
+  return true;
 }
 ```
 
