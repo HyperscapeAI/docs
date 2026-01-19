@@ -26,7 +26,7 @@ Database schema is defined in `packages/server/src/database/schema.ts`.
 | `world_chunks` | Persistent world modifications | WorldRepository |
 | `player_sessions` | Login/logout tracking | SessionRepository |
 | `npc_kills` | Kill statistics | StatsRepository |
-| `death_locks` | Death state for reconnects | PlayerDeathSystem |
+| `player_deaths` | Death locks with crash recovery | DeathRepository |
 
 ---
 
