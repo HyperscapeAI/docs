@@ -131,14 +131,14 @@ public getXPProgress(skill: SkillData): number {
 
 ## Combat Level
 
-Combat level is calculated from combat skills using the OSRS formula.
+Combat level is calculated from combat skills using the OSRS formula. Prayer contributes to the base calculation.
 
 ```typescript
 // From SkillsSystem.ts
 public getCombatLevel(stats: StatsComponent): number {
   const defenseLevel = stats.defense?.level ?? 1;
   const hitpointsLevel = stats.constitution?.level ?? 10;
-  const prayerLevel = stats.prayer?.level ?? 1;
+  const prayerLevel = stats.prayer?.level ?? 1;  // Prayer affects combat level
   const attackLevel = stats.attack?.level ?? 1;
   const strengthLevel = stats.strength?.level ?? 1;
   const rangedLevel = stats.ranged?.level ?? 1;
@@ -160,6 +160,10 @@ public getCombatLevel(stats: StatsComponent): number {
   return Math.floor(base + Math.max(melee, rangedCalc, magicCalc));
 }
 ```
+
+<Info>
+Prayer level contributes to combat level via the base calculation. Each Prayer level adds 0.125 to combat level (since it's divided by 2 then multiplied by 0.25).
+</Info>
 
 ### Combat Level Examples
 
