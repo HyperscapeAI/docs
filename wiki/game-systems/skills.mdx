@@ -725,9 +725,46 @@ All skill-related data is now defined in JSON manifests:
 
 This allows easy content updates without code changes and enables community modding.
 
+## Prayer System
+
+Prayer is a combat skill that provides temporary buffs at the cost of prayer points. See the dedicated [Prayer System](/wiki/game-systems/prayer) documentation for complete details.
+
+### Prayer Points
+
+Prayer points scale with Prayer level:
+
+```typescript
+maxPoints = Math.floor(prayerLevel / 2) + Math.floor(prayerLevel / 4) + 10
+```
+
+| Prayer Level | Max Points |
+|--------------|------------|
+| 1 | 10 |
+| 50 | 47 |
+| 99 | 84 |
+
+### Available Prayers
+
+Prayers are defined in `manifests/prayers.json`:
+
+| Prayer | Level | Effect | Category |
+|--------|-------|--------|----------|
+| Thick Skin | 1 | +5% Defense | Defensive |
+| Burst of Strength | 4 | +5% Strength | Offensive |
+| Clarity of Thought | 7 | +5% Attack | Offensive |
+| Rock Skin | 10 | +10% Defense | Defensive |
+| Superhuman Strength | 13 | +10% Strength | Offensive |
+
+<Info>
+Prayers drain points over time based on their drain effect and your prayer bonus from equipment. Recharge at altars or by leveling up Prayer.
+</Info>
+
+---
+
 ## Related Documentation
 
 - [Combat System](/wiki/game-systems/combat)
+- [Prayer System](/wiki/game-systems/prayer)
 - [Data Manifests Overview](/wiki/data/overview)
 - [Item Data Structure](/wiki/data/items)
 - [NPC Data Structure](/wiki/data/npcs)
