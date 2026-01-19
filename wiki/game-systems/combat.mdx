@@ -187,12 +187,21 @@ Damage uses the authentic OSRS formula from [the wiki](https://oldschool.runesca
 // Effective Strength = Strength Level + 8 + Style Bonus
 const effectiveStrength = strengthLevel + 8 + styleBonus.strength;
 
+// Apply prayer bonuses (NEW in PR #563)
+const prayerBonuses = getPrayerBonuses(attacker);
+const prayerMultiplier = prayerBonuses.strength ?? 1;
+const effectiveStrengthWithPrayer = Math.floor(effectiveStrength * prayerMultiplier);
+
 // Strength Bonus from equipment
 const strengthBonus = equipmentStats?.strength || 0;
 
 // Max Hit = floor(0.5 + (Effective Strength × (Strength Bonus + 64)) / 640)
-const maxHit = Math.floor(0.5 + (effectiveStrength * (strengthBonus + 64)) / 640);
+const maxHit = Math.floor(0.5 + (effectiveStrengthWithPrayer * (strengthBonus + 64)) / 640);
 ```
+
+<Info>
+Prayer bonuses are applied to effective levels before damage calculation. For example, Burst of Strength (+5%) multiplies effective strength by 1.05.
+</Info>
 
 ### Accuracy Formula
 
