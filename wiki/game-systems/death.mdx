@@ -580,11 +580,71 @@ This prevents:
 ## Death Constants
 
 ```typescript
-// From CombatConstants.ts
-GRAVESTONE_TICKS: 1500,              // 15 minutes to reclaim
-GROUND_ITEM_DESPAWN_TICKS: 200,      // 2 minutes on ground
-LOOT_PROTECTION_TICKS: 100,          // 1 minute killer protection
-UNTRADEABLE_DESPAWN_TICKS: 300,      // 3 minutes for untradeable
+// From CombatConstants.ts (updated in PR #566)
+DEATH: {
+  ANIMATION_TICKS: 7,                    // 4.2 seconds (was 8)
+  COOLDOWN_TICKS: 17,                    // 10.2 seconds between deaths
+  RECONNECT_RESPAWN_DELAY_TICKS: 1,      // Instant respawn on reconnect
+  STALE_LOCK_AGE_TICKS: 3000,            // 30 minutes (was 6000 = 1 hour)
+  DEFAULT_RESPAWN_POSITION: { x: 0, y: 0, z: 0 },
+  DEFAULT_RESPAWN_TOWN: "Central Haven",
+},
+
+GRAVESTONE_TICKS: 1500,                  // 15 minutes
+GROUND_ITEM_DESPAWN_TICKS: 6000,         // 60 minutes (was 300 = 3 min)
+UNTRADEABLE_DESPAWN_TICKS: 6000,         // 60 minutes (was 300 = 3 min)
+LOOT_PROTECTION_TICKS: 100,              // 1 minute killer protection
+```
+
+<Info>
+Ground item despawn time was increased from 3 minutes to 60 minutes in PR #566 to match OSRS mechanics.
+</Info>
+
+---
+
+## Security Features
+
+### Rate Limiting
+
+```typescript
+// Loot requests are rate-limited per player
+private lootRateLimiter = new Map<string, number>();
+private readonly LOOT_RATE_LIMIT_MS = 100;
+```
+
+### Atomic Operations
+
+All loot operations are queued to prevent concurrent access:
+
+```typescript
+// From HeadstoneEntity.ts
+private lootQueue: Promise<void> = Promise.resolve();
+
+private handleLootRequest(data): void {
+  // Queue operation to ensure atomicity
+  this.lootQueue = this.lootQueue
+    .then(() => this.processLootRequest(data))
+    .catch(error => {
+      console.error(`[HeadstoneEntity] Loot request failed:`, error);
+      this.emitLootResult(data.playerId, data.transactionId, false, "INVALID_REQUEST");
+    });
+}
+```
+
+### Death State Blocking
+
+Players cannot loot while dying or dead:
+
+```typescript
+private isPlayerInDeathState(playerId: string): boolean {
+  const playerEntity = this.world.entities.get(playerId);
+  if (playerEntity && "data" in playerEntity) {
+    const data = playerEntity.data as { deathState?: DeathState };
+    return data?.deathState === DeathState.DYING || 
+           data?.deathState === DeathState.DEAD;
+  }
+  return false;
+}
 ```
 
 ---
@@ -594,3 +654,4 @@ UNTRADEABLE_DESPAWN_TICKS: 300,      // 3 minutes for untradeable
 - [Combat System](/wiki/game-systems/combat)
 - [Ground Items & Loot](/wiki/game-systems/loot)
 - [Database Schema](/wiki/engine/database)
+- [Prayer System](/wiki/game-systems/prayer)
