@@ -23,6 +23,123 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Prayer System & Death System Overhaul" description="January 2026" date="2026-01-19">
+
+### 🙏 Prayer System (PR #563)
+
+Complete OSRS-style prayer system with drain mechanics and combat integration:
+
+- **Prayer Skill**: New combat skill with XP and leveling (1-99)
+  - Train by burying bones (4.5 XP for regular bones, 15 for big bones, 72 for dragon bones)
+  - 2-tick (1.2s) bury delay (OSRS-accurate)
+  - Prayer points scale with level: `floor(level/2) + floor(level/4) + 10`
+- **5 Launch Prayers**: Thick Skin, Rock Skin, Burst of Strength, Clarity of Thought, Superhuman Strength
+  - Defensive prayers: +5% and +10% defense
+  - Offensive prayers: +5% and +10% attack/strength
+  - Manifest-driven: add more prayers via `prayers.json`
+- **Prayer Drain**: OSRS-accurate drain formula
+  - `drainResistance = 2 × prayerBonus + 60`
+  - Points drain over time based on active prayers
+  - Prayer bonus from equipment reduces drain rate
+- **Prayer Altars**: Interactable entities that restore prayer points to maximum
+  - Left-click to pray, right-click for context menu
+  - Purple altar model (placeholder)
+  - 1×1 tile footprint with collision
+- **Combat Integration**: Prayer bonuses applied to effective levels
+  - Bonuses modify attack, strength, and defense before damage calculation
+  - Example: Burst of Strength (+5%) increases max hit from 18 to 19
+- **UI**: Prayer tab in Skills panel
+  - Prayer points bar with color coding (green/red)
+  - Prayer cards organized by category
+  - Lock indicators for prayers above player level
+  - Hover tooltips with descriptions and drain rates
+- **Database**: New columns in `characters` table
+  - `prayerLevel`, `prayerXp`, `prayerPoints`, `prayerMaxPoints`, `activePrayers`
+- **Security**: Comprehensive input validation
+  - Prayer ID format validation (regex pattern, length limits)
+  - Rate limiting (5 toggles/second)
+  - Timestamp validation (prevents replay attacks)
+  - Server-side prayer existence verification
+- **Testing**: 62 unit tests covering all edge cases
+
+### ⚰️ Death System Overhaul (PR #566)
+
+Production-grade death/respawn system with crash recovery and atomic operations:
+
+- **Crash Recovery**: Database-first persistence prevents item loss on server restart
+  - Death locks created with full item data before clearing inventory
+  - Unrecovered deaths automatically restored on server startup
+  - `recovered` flag prevents duplicate processing
+  - New columns: `items` (JSONB), `killedBy`, `recovered`
+- **Atomic Death Lock Acquisition**: Prevents duplicate deaths
+  - Uses `INSERT ... ON CONFLICT DO NOTHING` for atomic check-and-create
+  - Race-free: multiple simultaneous death events handled correctly
+  - Database enforces uniqueness constraint on `playerId`
+- **Combat State Cleanup**: Three-layer cleanup prevents stale states
+  - Layer 1: `CombatStateService.clearStatesTargeting()` clears all attackers
+  - Layer 2: `AggroSystem` event handlers clear mob aggro/chase
+  - Layer 3: Runtime guards check health in AI loops
+  - Mobs no longer chase dead players to spawn point
+- **Shadow State Loot UI**: Transaction-based loot with automatic rollback
+  - Optimistic UI updates with pending transaction tracking
+  - 3-second timeout with automatic rollback if no server response
+  - `LOOT_RESULT` events confirm/reject loot requests
+  - Prevents client/server desync on loot failures
+- **Input Sanitization**: Comprehensive security hardening
+  - `killedBy` field: Unicode normalization, zero-width char removal, BiDi override filtering
+  - Position validation: NaN/Infinity checks, world bounds clamping
+  - 32-bit safe tick calculations (prevents MessagePack overflow)
+- **OSRS-Accurate Timing**: Updated constants
+  - Ground item despawn: 300 ticks (3 min) → 6000 ticks (60 min)
+  - Death animation: 8 ticks → 7 ticks (4.2s)
+  - Stale lock cleanup: 6000 ticks (1 hour) → 3000 ticks (30 min)
+- **Loot All**: Batch loot operation with single transaction
+  - Takes all items that fit in inventory
+  - Stops gracefully when inventory full
+  - Single network request instead of N requests
+- **Death State Blocking**: Players cannot loot while dying/dead
+  - Prevents item loss from race conditions
+  - Checks `DeathState.DYING` and `DeathState.DEAD`
+- **Rate Limiting**: 100ms cooldown on loot requests
+- **Close Confirmation**: Warning dialog when closing loot window with items remaining
+- **Event-Driven Sync**: Loot window uses events instead of 100ms polling
+  - `ENTITY_UPDATED` and `DEATH_HEADSTONE_EXPIRED` events
+  - 1000ms fallback polling (10x reduction in CPU usage)
+- **Testing**: Comprehensive integration tests for crash recovery scenarios
+
+### 🎒 Equipment Sync Fix (PR #568)
+
+Eliminated equipment disappearing on login via single source of truth pattern:
+
+- **Root Cause**: Race condition where `character-selection.ts` and `EquipmentSystem` both queried database independently
+- **Solution**: Load equipment once in `character-selection.ts`, pass via `PLAYER_JOINED` event payload
+- **New Type**: `EquipmentSyncData` interface for event payloads
+- **Backwards Compatibility**: Falls back to DB query if payload missing
+- **Error Handling**: DB load failures trigger fallback instead of showing empty equipment
+- **Network Efficiency**: Eliminates duplicate DB query (was 2 queries, now 1)
+- **Skills Cache**: Fixed validation failures by populating `EquipmentSystem.playerSkills` cache
+
+### 🎯 Interaction System Improvements (PR #567)
+
+Fixed dead mobs blocking item pickup:
+
+- **Dead Mob Raycast Skip**: Dead mobs no longer block raycasts to items underneath
+- **Type Safety**: Uses `MobAIState.DEAD` enum instead of string literal
+- **Dual Health Check**: Checks both `aiState === DEAD` and `currentHealth <= 0`
+- **Comment Clarity**: Improved inline documentation
+
+### 🐛 Additional Bug Fixes
+
+- **Movement During Death**: Players cannot move while dying or dead (DeathState check)
+- **Respawn Validation**: Server validates player is actually dead before allowing respawn
+- **Player ID Spoofing**: Fixed `handleEntityEvent` to always override `playerId` with `socket.player.id`
+- **Gravestone Names**: Shows player name instead of ID on context menu and loot window
+- **Death Countdown**: Client shows timer for item despawn with color coding
+- **Respawn Button**: Disabled state while respawning, timeout handling (10s)
+- **Loot Window**: Error boundary prevents UI crash on data issues
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
