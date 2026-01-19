@@ -317,26 +317,49 @@ async createDeathLock(
 
 ## Gravestone System
 
-```typescript
-// Gravestone entity config
-const gravestone = new GravestoneEntity(this.world, {
-  position: deathPosition,
-  ownerId: playerId,
-  items: droppedItems,
-  expiresAt: Date.now() + 15 * 60 * 1000,  // 15 minutes
-});
+Gravestones protect items in safe areas with OSRS-accurate timing.
 
+### Gravestone Timing (Updated in PR #566)
+
+```typescript
 // From CombatConstants.ts
-GRAVESTONE_TICKS: 1500,          // 15 minutes in ticks (1500 × 0.6s)
-GRAVESTONE_WARNING_TICKS: 500,   // 5 minute warning
+GRAVESTONE_TICKS: 1500,              // 15 minutes (was 1500)
+GROUND_ITEM_DESPAWN_TICKS: 6000,     // 60 minutes (was 300 = 3 min)
+UNTRADEABLE_DESPAWN_TICKS: 6000,     // 60 minutes (was 300 = 3 min)
+LOOT_PROTECTION_TICKS: 100,          // 1 minute killer protection
+```
+
+<Info>
+Ground item despawn time was increased from 3 minutes to **60 minutes** to match OSRS mechanics. This gives players ample time to retrieve items after gravestone expiration.
+</Info>
+
+### Gravestone Entity
+
+```typescript
+const gravestone = new HeadstoneEntity(world, {
+  id: generateEntityId(),
+  name: `${playerName}'s gravestone`,
+  position: deathPosition,
+  headstoneData: {
+    playerId,
+    playerName,
+    deathTime: Date.now(),
+    deathMessage: `Here lies ${playerName}`,
+    position: deathPosition,
+    items: droppedItems,
+    itemCount: droppedItems.length,
+    despawnTime: Date.now() + (1500 * 600),  // 15 minutes
+  },
+});
 ```
 
 ### Gravestone Expiration
 
 When gravestone expires:
 1. Items transition to ground items
-2. Ground items have additional despawn timer
-3. `onGravestoneExpired()` updates death lock
+2. Ground items have 60-minute despawn timer
+3. Death lock updated with ground item IDs
+4. Items become lootable by anyone
 
 ```typescript
 async onGravestoneExpired(playerId: string, groundItemIds: string[]): Promise<void> {
@@ -344,7 +367,7 @@ async onGravestoneExpired(playerId: string, groundItemIds: string[]): Promise<vo
   if (!deathData) return;
   
   // Update tracking: gravestone → ground items
-  deathData.gravestoneId = undefined;
+  deathData.gravestoneId = null;
   deathData.groundItemIds = groundItemIds;
   this.activeDeaths.set(playerId, deathData);
   
