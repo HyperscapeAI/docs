@@ -210,28 +210,108 @@ async createDeathLock(
 
 ## Death Flow
 
-### Safe Zone Death
+### Safe Zone Death (OSRS-Accurate)
 
-1. Player HP reaches 0
-2. Items kept in inventory (no drop)
-3. Player respawns at nearest safe point
-4. Short death animation plays
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  SAFE AREA DEATH FLOW                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  [Player HP = 0]                                             │
+│         │                                                    │
+│         ▼                                                    │
+│  ┌──────────────────┐                                       │
+│  │ Atomic Death Lock│ ──► Database transaction              │
+│  │ Acquisition      │     (prevents duplication)            │
+│  └────────┬─────────┘                                       │
+│           │ SUCCESS                                          │
+│           ▼                                                  │
+│  ┌──────────────────┐                                       │
+│  │ Clear Inventory  │ ──► Items stored in death lock        │
+│  │ & Equipment      │     (crash-safe)                      │
+│  └────────┬─────────┘                                       │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                       │
+│  │ Play Death Anim  │ ──► 7 ticks (4.2s)                   │
+│  └────────┬─────────┘                                       │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                       │
+│  │ Respawn Player   │ ──► Central Haven (0, 0, 0)          │
+│  └────────┬─────────┘                                       │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                       │
+│  │ Spawn Gravestone │ ──► AFTER respawn (OSRS-style)       │
+│  │ at Death Location│     1500 ticks (15 min) timer         │
+│  └────────┬─────────┘                                       │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                       │
+│  │ Gravestone       │ ──► Items protected                   │
+│  │ Expires          │     Only owner can loot               │
+│  └────────┬─────────┘                                       │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                       │
+│  │ Items → Ground   │ ──► 6000 ticks (60 min) timer        │
+│  │ Items            │     Anyone can loot                   │
+│  └────────┬─────────┘                                       │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                       │
+│  │ Items Despawn    │ ──► Death lock cleared                │
+│  └──────────────────┘                                       │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### Dangerous Zone Death
+### Wilderness Death
 
-1. Player HP reaches 0
-2. **Gravestone spawns** at death location
-3. Player's items stored in gravestone (15 minute timer)
-4. Player respawns at starter town
-5. Player can return to reclaim items
-
-### PvP Zone Death
-
-1. Player killed by another player
-2. **Items drop directly to ground**
-3. Loot protection for killer (100 ticks)
-4. After protection, anyone can loot
-5. Items despawn after 200 ticks
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  WILDERNESS DEATH FLOW                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  [Player HP = 0]                                             │
+│         │                                                    │
+│         ▼                                                    │
+│  ┌──────────────────┐                                       │
+│  │ Atomic Death Lock│ ──► Database transaction              │
+│  │ Acquisition      │                                       │
+│  └────────┬─────────┘                                       │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                       │
+│  │ Clear Inventory  │ ──► Items stored in death lock        │
+│  │ & Equipment      │                                       │
+│  └────────┬─────────┘                                       │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                       │
+│  │ Spawn Ground     │ ──► Immediate drop (no gravestone)    │
+│  │ Items            │     6000 ticks (60 min) timer         │
+│  └────────┬─────────┘                                       │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                       │
+│  │ Loot Protection  │ ──► Killer has 100 ticks (1 min)     │
+│  │ for Killer       │     exclusive access                  │
+│  └────────┬─────────┘                                       │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                       │
+│  │ Play Death Anim  │ ──► 7 ticks (4.2s)                   │
+│  └────────┬─────────┘                                       │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                       │
+│  │ Respawn Player   │ ──► Central Haven                     │
+│  └──────────────────┘                                       │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
