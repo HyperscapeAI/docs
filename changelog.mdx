@@ -166,6 +166,43 @@ OSRS-style terrain interaction with right-click menu:
 
 </Update>
 
+<Update label="Skill System Expansion" description="January 2026" date="2026-01-21">
+
+### 🙏 Prayer System
+
+Complete OSRS-accurate prayer system with manifest-driven definitions:
+
+- **Prayer Manifest**: New `prayers.json` with 5 initial prayers
+  - Thick Skin (L1): +5% Defence
+  - Burst of Strength (L4): +5% Strength
+  - Clarity of Thought (L7): +5% Attack
+  - Rock Skin (L10): +10% Defence
+  - Superhuman Strength (L13): +10% Strength
+- **Prayer Mechanics**: Drain effects and conflict resolution
+  - Each prayer has `drainEffect` value (higher = faster drain)
+  - Conflict system prevents incompatible prayers (e.g., Thick Skin conflicts with Rock Skin)
+  - Category-based organization (offensive, defensive)
+  - Bonus multipliers applied to combat stats
+- **Skill Unlocks**: 29 prayer unlocks documented in `skill-unlocks.json`
+  - Levels 1-77 covering all OSRS prayers
+  - Includes protection prayers (L37-43), overhead prayers (L46-52)
+  - High-level prayers: Chivalry (L60), Piety (L70), Rigour (L74), Augury (L77)
+
+### 🏃 Agility Skill
+
+New agility skill with stamina regeneration mechanics:
+
+- **Skill Unlocks**: 6 agility milestones in `skill-unlocks.json`
+  - Base mechanic: Stamina regen scales +1% per level
+  - L10: +10% stamina regeneration
+  - L25: +25% stamina regeneration
+  - L50: +50% stamina regeneration
+  - L75: +75% stamina regeneration
+  - L99: +99% stamina regeneration (mastery)
+- **Passive Benefit**: Continuous stamina regen improvement as you level
+
+</Update>
+
 <Update label="Asset System Updates" description="January 2026" date="2026-01-15">
 
 ### 📦 Asset System Enhancements
