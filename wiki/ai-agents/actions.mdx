@@ -344,7 +344,7 @@ Drop an item on the ground.
 ```typescript
 export const dropItemAction: Action = {
   name: "DROP_ITEM",
-  description: "Drop an item from inventory",
+  description: "Drop an item from inventory onto the ground",
   parameters: {
     itemId: { type: "string", description: "Item ID to drop" },
     quantity: { type: "number", optional: true, description: "Amount to drop" },
@@ -352,7 +352,37 @@ export const dropItemAction: Action = {
 };
 ```
 
-**Usage**: Make room in inventory.
+**Usage**: Make room in inventory, drop unwanted items.
+
+**Special Features:**
+- Supports "drop all" commands (e.g., "drop all logs", "drop everything")
+- Word boundary matching prevents false matches (e.g., "bronze pickaxe" won't match "bronze hatchet")
+- Limited to 50 items per drop-all operation to prevent memory leaks
+- Consecutive failure tracking stops operation after 3 failures
+
+---
+
+### `pickupItem`
+
+Pick up an item from the ground.
+
+```typescript
+export const pickupItemAction: Action = {
+  name: "PICKUP_ITEM",
+  description: "Pick up an item from the ground nearby",
+  parameters: {
+    itemId: { type: "string", optional: true, description: "Specific item ID" },
+  },
+};
+```
+
+**Usage**: Loot drops, collect resources.
+
+**Features:**
+- Automatically walks to items beyond pickup range (4m)
+- Scoring system matches best item when multiple items nearby
+- Word boundary matching for accurate item selection
+- Handles server's 200-tile movement limit with stepping
 
 ---
 
