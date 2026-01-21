@@ -285,6 +285,29 @@ scene.traverse((node) => {
 This normalization runs once when a model is first loaded, before caching. All clones will have correct proportions.
 </Info>
 
+**Agility** (movement-based):
+
+Agility is a unique skill that rewards exploration and world traversal:
+
+| Training Method | XP Rate | Notes |
+|----------------|---------|-------|
+| Walking | ~100 XP/min | 2 tiles/tick movement |
+| Running | ~200 XP/min | 4 tiles/tick movement |
+
+**XP Batching**: XP is granted every 100 tiles (50 XP) to prevent visual spam. This creates XP drops approximately every 15 seconds while running or 30 seconds while walking.
+
+**Death Penalty**: Death resets your tile counter to 0, losing any accumulated progress toward the next XP grant (maximum ~50 XP lost).
+
+**Benefits**:
+- **Stamina Regeneration Bonus**: +1% regen per Agility level
+  - Level 1: 1.01x regen (4.04/sec idle, 2.02/sec walking)
+  - Level 50: 1.50x regen (6.00/sec idle, 3.00/sec walking)
+  - Level 99: 1.99x regen (7.96/sec idle, 3.98/sec walking)
+
+<Info>
+Agility does NOT affect combat level, matching OSRS design. It's purely a utility skill for stamina management.
+</Info>
+
 **Fishing** (`gathering/fishing.json`):
 | Fish | Level | XP |
 |------|-------|-----|
