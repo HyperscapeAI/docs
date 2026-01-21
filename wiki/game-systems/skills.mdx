@@ -695,6 +695,87 @@ Example unlocks:
 See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
 </Info>
 
+## Skill Guide Panel
+
+The Skill Guide Panel is an OSRS-style UI that displays skill unlock progression. Players can click any skill in the Skills Panel to view what they unlock at each level.
+
+### Features
+
+- **Unlock Progression**: Shows all unlocks from level 1-99
+- **Visual States**: 
+  - ✓ Green = Unlocked (player level ≥ unlock level)
+  - ➤ Yellow = Next unlock (highlighted with "NEXT" badge)
+  - 🔒 Gray = Locked (player level < unlock level)
+- **Progress Tracking**: Shows "X/Y unlocked" and levels to next unlock
+- **Unlock Types**: Items, abilities, areas, quests, activities
+- **Animations**: Smooth fade-in and slide-up transitions
+- **Keyboard Support**: Press ESC to close
+
+### Usage
+
+```typescript
+// From SkillsPanel.tsx
+const handleSkillClick = (skillKey: string) => {
+  setSelectedSkill(skillKey);
+  setShowGuide(true);
+};
+
+// Render the panel
+<SkillGuidePanel
+  visible={showGuide}
+  skillLabel="Woodcutting"
+  skillIcon="🪓"
+  playerLevel={playerSkills.woodcutting.level}
+  unlocks={skillUnlocks}
+  isLoading={isLoadingUnlocks}
+  onClose={() => setShowGuide(false)}
+/>
+```
+
+### Server API Endpoint
+
+The client fetches skill unlocks from the server:
+
+```typescript
+// GET /api/data/skill-unlocks
+// Returns: Record<string, SkillUnlock[]>
+
+interface SkillUnlock {
+  level: number;
+  description: string;
+  type: "item" | "ability" | "area" | "quest" | "activity";
+}
+```
+
+Example response:
+```json
+{
+  "woodcutting": [
+    { "level": 1, "description": "Normal trees", "type": "item" },
+    { "level": 15, "description": "Oak trees", "type": "item" },
+    { "level": 30, "description": "Willow trees", "type": "item" }
+  ]
+}
+```
+
+### Data Loading
+
+Skill unlocks are loaded from the `skill-unlocks.json` manifest:
+
+```typescript
+// From skill-unlocks.ts
+export function loadSkillUnlocks(manifest: SkillUnlocksManifest): void {
+  // Normalize British/American spelling
+  if (loadedUnlocks["defence"] && !loadedUnlocks["defense"]) {
+    loadedUnlocks["defense"] = loadedUnlocks["defence"];
+  }
+}
+```
+
+<Info>
+The manifest uses OSRS-accurate British spelling ("defence"), but the UI normalizes to American spelling ("defense") for consistency.
+</Info>
+
 ## Manifest-Driven Design
 
 All skill-related data is now defined in JSON manifests:
