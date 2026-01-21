@@ -157,14 +157,19 @@ flowchart TD
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `@elizaos/core` | ^1.2.9 | ElizaOS framework |
+| `@elizaos/core` | ^1.7.0 | ElizaOS framework |
 | `@elizaos/plugin-anthropic` | ^1.5.12 | Anthropic LLM |
-| `@elizaos/plugin-openai` | 1.5.16 | OpenAI LLM |
-| `@elizaos/plugin-openrouter` | ^1.5.15 | OpenRouter LLM |
-| `@elizaos/plugin-sql` | ^1.6.4 | SQL database |
+| `@elizaos/plugin-openai` | ^1.6.0 | OpenAI LLM |
+| `@elizaos/plugin-openrouter` | ^1.5.17 | OpenRouter LLM |
+| `@elizaos/plugin-ollama` | ^1.2.4 | Ollama (local LLM) |
+| `@elizaos/plugin-sql` | ^1.7.0 | SQL database |
 | `@hyperscape/shared` | workspace | Core engine |
 | `ws` | ^8.18.3 | WebSocket client |
 | `zod` | ^3.25.67 | Schema validation |
+
+<Info>
+Hyperscape uses ElizaOS 1.7.0 with backwards-compatible shims. LLM API calls support both 1.6.x and 1.7.x interfaces.
+</Info>
 
 ## Building
 
