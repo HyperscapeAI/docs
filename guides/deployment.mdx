@@ -46,24 +46,151 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
+Railway deployment is fully automated via GitHub Actions. The workflow triggers on pushes to `main` that affect server-related files.
+
+### Automated Deployment
+
+The repository includes a pre-configured Railway deployment workflow (`.github/workflows/deploy-railway.yml`) that:
+
+1. **Triggers automatically** on push to `main` when these paths change:
+   - `packages/shared/**`
+   - `packages/server/**`
+   - `packages/plugin-hyperscape/**`
+   - `package.json`, `bun.lock`
+   - `nixpacks.toml`, `railway.server.json`, `Dockerfile.server`
+
+2. **Uses Railway GraphQL API** to trigger redeployment
+3. **Monitors deployment status** and reports success/failure
+
+**Required GitHub Secret**:
+- `RAILWAY_TOKEN` - Your Railway API token from [Railway Dashboard](https://railway.app/account/tokens)
+
+### Railway Configuration Files
+
+The repository includes three Railway configuration options:
+
+#### Option 1: Nixpacks (Recommended)
+
+**File**: `nixpacks.toml`
+
+```toml
+[phases.setup]
+aptPkgs = ["python3", "make", "g++", "git", "pkg-config", "libcairo2-dev", ...]
+
+[phases.install]
+cmds = ["bun install --frozen-lockfile"]
+
+[phases.assets]
+cmds = ["git clone --depth 1 https://github.com/HyperscapeAI/assets.git packages/server/world/assets"]
+
+[phases.build]
+cmds = ["bun run build:shared", "bun run build:server"]
+
+[start]
+cmd = "bun dist/index.js"
+
+[variables]
+CI = "true"
+SKIP_ASSETS = "true"
+NODE_ENV = "production"
+```
+
+**Advantages**:
+- Faster builds (uses Nix package manager)
+- Automatic dependency detection
+- Optimized caching
+
+#### Option 2: Dockerfile
+
+**File**: `Dockerfile.server`
+
+Multi-stage Docker build with:
+- **Builder stage**: Installs dependencies, clones assets, builds packages
+- **Runtime stage**: Minimal production image with only runtime dependencies
+- **Health check**: Built-in health monitoring on `/status` endpoint
+
+**Advantages**:
+- Full control over build process
+- Smaller final image size
+- Portable to any Docker host
+
+#### Option 3: Railway Service Config
+
+**File**: `railway.server.json`
+
+```json
+{
+  "build": {
+    "builder": "NIXPACKS",
+    "nixpacksConfigPath": "nixpacks.toml",
+    "watchPatterns": ["packages/shared/**", "packages/server/**", ...]
+  },
+  "deploy": {
+    "startCommand": "cd packages/server && bun dist/index.js",
+    "healthcheckPath": "/status",
+    "restartPolicyType": "ON_FAILURE",
+    "numReplicas": 1
+  }
+}
+```
+
+### Manual Railway Setup
+
 <Steps>
   <Step title="Create Railway project">
-    Connect your GitHub repository to Railway.
-  </Step>
-  
-  <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+    1. Go to [Railway Dashboard](https://railway.app/new)
+    2. Click "New Project" → "Deploy from GitHub repo"
+    3. Select your Hyperscape fork
+    4. Railway will auto-detect the configuration
   </Step>
   
   <Step title="Add PostgreSQL">
-    Add PostgreSQL service from Railway marketplace.
+    1. Click "New" → "Database" → "PostgreSQL"
+    2. Railway automatically sets `DATABASE_URL` environment variable
   </Step>
   
-  <Step title="Set environment variables">
-    Add all required server environment variables.
+  <Step title="Configure environment variables">
+    Add these required variables in Railway dashboard:
+    
+    ```bash
+    JWT_SECRET=<generate with: openssl rand -base64 32>
+    PRIVY_APP_ID=<from Privy dashboard>
+    PRIVY_APP_SECRET=<from Privy dashboard>
+    PUBLIC_CDN_URL=<your CDN URL>
+    ```
+  </Step>
+  
+  <Step title="Deploy">
+    Railway automatically deploys on push to `main`. Monitor deployment in Railway dashboard.
   </Step>
 </Steps>
+
+### Asset Handling in Production
+
+The `ensure-assets.mjs` script automatically detects CI/Railway environments and skips asset download:
+
+```javascript
+function isCI() {
+  return !!(
+    process.env.CI ||
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_SERVICE_ID ||
+    process.env.SKIP_ASSETS
+  );
+}
+```
+
+**Why**: Assets are served from CDN in production, not bundled with the server. This keeps deployment sizes small and builds fast.
+
+### Railway-Specific Files
+
+| File | Purpose |
+|------|---------|
+| `.railwayignore` | Excludes large directories from upload (node_modules, assets, etc.) |
+| `nixpacks.toml` | Nixpacks build configuration |
+| `railway.server.json` | Railway service configuration |
+| `Dockerfile.server` | Alternative Docker-based deployment |
+| `.github/workflows/deploy-railway.yml` | Automated deployment workflow |
 
 ## Vercel Client Deployment
 
