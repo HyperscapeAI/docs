@@ -418,6 +418,8 @@ private async handlePlayerDisconnect(playerId: string): Promise<void> {
 | `PLAYER_RESPAWNED` | `playerId`, `spawnPosition` | Player respawned |
 | `GRAVESTONE_SPAWNED` | `gravestoneId`, `playerId`, `position` | Gravestone created |
 | `GRAVESTONE_EXPIRED` | `gravestoneId`, `playerId`, `groundItemIds` | Gravestone timed out |
+| `DEATH_RECOVERED` | `playerId`, `position`, `items`, `killedBy`, `zoneType` | Death recovered after crash |
+| `PLAYER_UNREGISTERED` | `id` | Player disconnected (triggers death lock cleanup) |
 
 ---
 
