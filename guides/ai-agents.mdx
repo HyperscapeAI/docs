@@ -187,5 +187,16 @@ HYPERSCAPE_PRIVY_USER_ID=optional-privy-user-id
 ### Inventory Actions
 
 - `equipItem(itemId)`: Wear equipment
-- `dropItem(itemId)`: Drop from inventory
+- `dropItem(itemId)`: Drop from inventory (supports "drop all")
+- `pickupItem(itemId)`: Pick up items from ground
 - `useItem(itemId)`: Consume or use
+
+### Goal Management
+
+- `setGoal(description)`: Set autonomous goal
+- `navigateTo(location)`: Navigate to named location
+- `idle()`: Wait and observe
+
+<Info>
+**Goal Pause State**: The dashboard Stop button pauses autonomous goal selection. When paused, SET_GOAL is blocked and the agent stays idle until resumed or given a manual command.
+</Info>
