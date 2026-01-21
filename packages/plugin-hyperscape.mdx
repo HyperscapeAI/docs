@@ -83,9 +83,24 @@ actions: [
 | **Movement** | moveTo, followEntity, stopMovement | `actions/movement.ts` |
 | **Combat** | attackEntity, changeCombatStyle | `actions/combat.ts` |
 | **Skills** | chopTree, catchFish, lightFire, cookFood | `actions/skills.ts` |
-| **Inventory** | equipItem, useItem, dropItem | `actions/inventory.ts` |
+| **Inventory** | equipItem, useItem, dropItem, pickupItem | `actions/inventory.ts` |
 | **Social** | chatMessage | `actions/social.ts` |
 | **Banking** | bankDeposit, bankWithdraw | `actions/banking.ts` |
+
+### New Actions in ElizaOS 1.7
+
+**PICKUP_ITEM**: Pick up items from the ground with intelligent matching
+- Supports "pick up bronze pickaxe" with word-boundary matching
+- Automatically walks to items beyond pickup range (4m)
+- Handles server's 200-tile movement limit with stepping
+- Scoring system prevents wrong item pickup (e.g., "bronze pickaxe" won't match "bronze hatchet")
+
+**DROP_ITEM**: Drop items with "drop all" support
+- Single item: "drop bronze hatchet"
+- Drop all of type: "drop all logs"
+- Drop everything: "drop all items"
+- Memory leak protection: Limited to 50 items per operation
+- Consecutive failure tracking: Stops after 3 failures in a row
 
 ## Providers
 
