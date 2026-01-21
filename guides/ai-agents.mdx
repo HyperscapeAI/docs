@@ -23,19 +23,23 @@ This starts:
 
 ### Available Actions
 
-AI agents have 17 actions across 6 categories:
+AI agents have 22 actions across 7 categories:
 
 ```typescript
-// From packages/plugin-hyperscape/src/index.ts (lines 161-188)
+// From packages/plugin-hyperscape/src/index.ts
 actions: [
-  // Movement (3 actions)
+  // Movement (6 actions)
   moveToAction,
   followEntityAction,
   stopMovementAction,
+  exploreAction,
+  approachEntityAction,
+  navigateToAction,
 
-  // Combat (2 actions)
+  // Combat (3 actions)
   attackEntityAction,
   changeCombatStyleAction,
+  fleeAction,
 
   // Skills (4 actions)
   chopTreeAction,
@@ -43,10 +47,11 @@ actions: [
   lightFireAction,
   cookFoodAction,
 
-  // Inventory (3 actions)
+  // Inventory (4 actions)
   equipItemAction,
   useItemAction,
   dropItemAction,
+  pickupItemAction,  // NEW in PR #569
 
   // Social (1 action)
   chatMessageAction,
@@ -54,6 +59,10 @@ actions: [
   // Banking (2 actions)
   bankDepositAction,
   bankWithdrawAction,
+
+  // Goals (2 actions)
+  setGoalAction,
+  idleAction,
 ],
 ```
 
