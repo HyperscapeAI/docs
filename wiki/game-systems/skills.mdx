@@ -418,6 +418,68 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 
 ---
 
+## Agility System
+
+The Agility skill rewards players for traversing the game world and ties into the stamina system.
+
+### Movement XP
+
+Players gain Agility XP by moving through the world:
+
+- **XP Rate**: 1 XP per 2 tiles traveled
+- **XP Batching**: XP is granted in batches of 50 XP every 100 tiles to prevent visual spam
+- **Walking Speed**: ~100 XP/minute (2 tiles/tick)
+- **Running Speed**: ~200 XP/minute (4 tiles/tick)
+
+```typescript
+// XP batching constants
+const AGILITY_TILES_PER_XP_GRANT = 100;  // Tiles needed before XP is granted
+const AGILITY_XP_PER_GRANT = 50;         // XP granted per threshold
+```
+
+### Death Penalty
+
+When a player dies, accumulated tiles toward the next XP grant are reset to 0. Already-earned XP is preserved.
+
+### Weight-Based Stamina Drain
+
+Carrying heavy items increases stamina drain while running:
+
+- **Base Drain**: 2 stamina/second while running
+- **Weight Modifier**: +0.5% drain per kg carried
+- **Example**: 20kg load = +10% drain = 2.2 stamina/second
+
+| Weight (kg) | Drain Multiplier | Drain/Second |
+|-------------|------------------|--------------|
+| 0 | 1.0x | 2.0 |
+| 10 | 1.05x | 2.1 |
+| 20 | 1.1x | 2.2 |
+| 40 | 1.2x | 2.4 |
+| 60 | 1.3x | 2.6 |
+| 100 | 1.5x | 3.0 |
+
+### Agility-Based Stamina Regeneration
+
+Higher Agility levels increase stamina regeneration:
+
+- **Bonus**: +1% regen per Agility level
+- **Applies to**: Both walking regen (2/sec base) and idle regen (4/sec base)
+
+| Agility Level | Regen Multiplier | Idle Regen/Sec | Walk Regen/Sec |
+|---------------|------------------|----------------|----------------|
+| 1 | 1.01x | 4.04 | 2.02 |
+| 10 | 1.10x | 4.40 | 2.20 |
+| 25 | 1.25x | 5.00 | 2.50 |
+| 50 | 1.50x | 6.00 | 3.00 |
+| 75 | 1.75x | 7.00 | 3.50 |
+| 99 | 1.99x | 7.96 | 3.98 |
+
+<Info>
+The Agility system creates a meaningful progression loop: higher Agility allows you to run longer, which helps you train Agility faster.
+</Info>
+
+---
+
 ## Level Requirements
 
 Skills gate access to equipment and activities. Requirements are now centralized in `tier-requirements.json` and `skill-unlocks.json`.
