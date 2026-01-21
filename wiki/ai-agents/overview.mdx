@@ -311,13 +311,32 @@ HYPERSCAPE_PRIVY_USER_ID=optional-privy-user-id
 
 ```bash
 # Start game with AI agents
-bun run dev:elizaos
+bun run dev:ai
 ```
 
 This starts:
 - Game server on port **5555**
 - Client on port **3333**
 - ElizaOS runtime on port **4001**
+- ElizaOS dashboard on port **4000**
+
+### Agent Dashboard
+
+Access the agent dashboard at `http://localhost:4000` to:
+- View agent status and goals
+- Monitor skill progression and XP gains
+- See current position and nearby locations
+- Control agent behavior (stop/resume goals)
+- Send messages and quick commands
+- Configure API keys and settings
+
+**Dashboard Features:**
+- **Summary Card**: Online status, combat level, total level, current goal
+- **Goal Panel**: Current objective, progress, time estimates, stop/resume controls
+- **Skills Panel**: All skill levels with XP progress bars and session gains
+- **Activity Panel**: Recent actions, kills, deaths, gold earned
+- **Position Panel**: Current zone, nearby POIs, coordinates
+- **Quick Action Menu**: One-click commands (woodcutting, mining, fishing, combat, pickup, bank, stop, idle)
 
 ---
 
