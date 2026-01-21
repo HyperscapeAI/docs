@@ -435,6 +435,57 @@ UNTRADEABLE_DESPAWN_TICKS: 300,      // 3 minutes for untradeable
 
 ---
 
+## Database Schema
+
+Death locks are stored in the `player_deaths` table:
+
+```sql
+CREATE TABLE player_deaths (
+  player_id TEXT PRIMARY KEY,
+  gravestone_id TEXT,
+  ground_item_ids TEXT[],           -- Array of entity IDs
+  position_x REAL NOT NULL,
+  position_y REAL NOT NULL,
+  position_z REAL NOT NULL,
+  timestamp BIGINT NOT NULL,
+  zone_type TEXT NOT NULL,
+  item_count INTEGER NOT NULL,
+  items JSONB,                      -- Crash recovery: [{itemId, quantity}]
+  killed_by TEXT,                   -- Crash recovery: killer name
+  recovered BOOLEAN DEFAULT FALSE,  -- Crash recovery: has been processed
+  created_at BIGINT NOT NULL
+);
+```
+
+**Key Fields:**
+- `items`: Stores item data for crash recovery (recreate gravestone if entities lost)
+- `killed_by`: Displays on gravestone ("Here lies X, killed by Y")
+- `recovered`: Prevents duplicate recovery on multiple restarts
+
+### Gravestone Display
+
+Gravestones now show the player's name instead of their ID:
+
+```typescript
+// From HeadstoneEntity.ts
+const playerName = this.getPlayerName(ownerId);
+const killedByText = killedBy ? ` killed by ${killedBy}` : "";
+
+contextMenu.addOption({
+  id: "loot",
+  label: `Loot ${playerName}'s gravestone${killedByText}`,
+  enabled: true,
+  priority: 1,
+});
+```
+
+**Name Resolution:**
+- Queries `characters` table for player's username
+- Falls back to player ID if name not found
+- Sanitizes names with Unicode normalization (security)
+
+---
+
 ## Related Documentation
 
 - [Combat System](/wiki/game-systems/combat)
