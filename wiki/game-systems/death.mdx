@@ -347,15 +347,27 @@ When a player reconnects, the system checks for active deaths:
 
 ```typescript
 async hasActiveDeathLock(playerId: string): Promise<boolean> {
-  // Check memory cache first
+  // Check memory cache first (fast path)
   if (this.activeDeaths.has(playerId)) return true;
   
   // Fallback to database (critical for crash recovery)
   if (this.databaseSystem) {
     const dbData = await this.databaseSystem.getDeathLockAsync(playerId);
     if (dbData) {
-      // Restore to memory cache
-      this.activeDeaths.set(playerId, dbData);
+      // Restore to memory cache INCLUDING crash recovery fields
+      const deathLock: DeathLock = {
+        playerId: dbData.playerId,
+        gravestoneId: dbData.gravestoneId,
+        groundItemIds: dbData.groundItemIds,
+        position: dbData.position,
+        timestamp: dbData.timestamp,
+        zoneType: dbData.zoneType,
+        itemCount: dbData.itemCount,
+        items: dbData.items,
+        killedBy: dbData.killedBy,
+        recovered: dbData.recovered,
+      };
+      this.activeDeaths.set(playerId, deathLock);
       return true;
     }
   }
@@ -368,6 +380,32 @@ This prevents:
 - Item duplication if server crashes mid-death
 - Double death processing on reconnect
 - Gravestone re-creation exploits
+- Item loss when player disconnects during death
+
+### Player Disconnect Handling
+
+When a player disconnects mid-death, the death lock is preserved:
+
+```typescript
+private async handlePlayerDisconnect(playerId: string): Promise<void> {
+  const deathData = this.activeDeaths.get(playerId);
+  if (!deathData) return;
+  
+  // Clear from memory but keep in database for reconnect validation
+  this.activeDeaths.delete(playerId);
+  
+  console.log(
+    `Cleared death lock from memory for disconnected player ${playerId}` +
+    ` (preserved in database for reconnect)`
+  );
+}
+```
+
+**Why This Matters:**
+- Gravestone/ground items persist for other players to see
+- Player can recover items when they reconnect
+- Memory is freed for disconnected players
+- Database ensures no item duplication on reconnect
 
 ---
 
