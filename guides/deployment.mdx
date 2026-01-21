@@ -46,24 +46,98 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
+Hyperscape includes automated Railway deployment via GitHub Actions and Nixpacks configuration.
+
+### Automated Deployment
+
+The repository includes a GitHub Actions workflow that automatically deploys to Railway on every push to `main`:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/shared/**'
+      - 'packages/server/**'
+      - 'packages/plugin-hyperscape/**'
+```
+
+**Required Secret**: Add `RAILWAY_TOKEN` to your GitHub repository secrets.
+
+### Manual Deployment
+
 <Steps>
   <Step title="Create Railway project">
-    Connect your GitHub repository to Railway.
+    1. Connect your GitHub repository to Railway
+    2. Select the `main` branch
+    3. Railway will auto-detect the `railway.server.json` configuration
   </Step>
   
   <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+    Railway uses Nixpacks with the included `nixpacks.toml` configuration:
+    
+    ```toml
+    [phases.install]
+    cmds = ["bun install --frozen-lockfile"]
+    
+    [phases.build]
+    cmds = [
+      "bun run build:shared",
+      "bun run build:server"
+    ]
+    
+    [start]
+    cmd = "bun dist/index.js"
+    ```
+    
+    **Build Command**: Automatically configured via `nixpacks.toml`  
+    **Start Command**: `cd packages/server && bun dist/index.js`
   </Step>
   
   <Step title="Add PostgreSQL">
-    Add PostgreSQL service from Railway marketplace.
+    Add PostgreSQL service from Railway marketplace. Railway will automatically set `DATABASE_URL`.
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    Add required environment variables in Railway dashboard:
+    
+    ```bash
+    JWT_SECRET=your-random-secret-key
+    PRIVY_APP_ID=your-privy-app-id
+    PRIVY_APP_SECRET=your-privy-app-secret
+    PUBLIC_CDN_URL=https://your-cdn-url.com
+    NODE_ENV=production
+    ```
+  </Step>
+  
+  <Step title="Configure health checks">
+    Railway automatically uses the health check configuration from `railway.server.json`:
+    
+    ```json
+    {
+      "deploy": {
+        "healthcheckPath": "/status",
+        "healthcheckTimeout": 300
+      }
+    }
+    ```
   </Step>
 </Steps>
+
+### Asset Handling
+
+In production, assets are served from a CDN. The build process automatically skips asset downloads:
+
+```toml
+# nixpacks.toml
+[variables]
+CI = "true"
+SKIP_ASSETS = "true"
+```
+
+The `ensure-assets.mjs` script detects CI environments and skips Git LFS downloads.
 
 ## Vercel Client Deployment
 
