@@ -96,6 +96,11 @@ export const stopMovementAction: Action = {
 };
 ```
 
+**Features:**
+- **Movement Cancellation**: Sends `cancel: true` flag to clear server-side path
+- **Immediate Stop**: Prevents "walking in place" bug
+- **Path Clearing**: Removes queued movement commands
+
 **Usage**: Halt when reaching destination or when threatened.
 
 ---
