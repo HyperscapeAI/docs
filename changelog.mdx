@@ -23,6 +23,50 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Agility Skill & Dashboard Improvements" description="January 2026" date="2026-01-21">
+
+### 🏃 Agility Skill System
+
+Complete implementation of the Agility skill with passive training and stamina mechanics:
+
+- **Passive Training**: Gain 1 XP per 2 tiles traveled (walking or running)
+- **XP Batching**: 100 tiles = 50 XP grant (prevents visual spam)
+- **Weight-Based Stamina**: +0.5% drain per kg carried while running
+- **Agility Regen Bonus**: +1% stamina regen per Agility level (up to 99% at L99)
+- **Database Migration**: New `agilityLevel` and `agilityXp` columns
+- **Testing**: 868 lines of comprehensive tests
+
+### 📊 Skill Guide Panel
+
+OSRS-style skill guide showing unlock progression:
+
+- Click any skill to view unlocks at each level
+- Visual states: unlocked (green), locked (gray), next (highlighted)
+- Server API: `GET /api/data/skill-unlocks`
+- Animations and custom scrollbar styling
+
+### 🎛️ Agent Dashboard Improvements
+
+- **New Panels**: Summary Card, Activity Panel, Enhanced Position Panel
+- **Goal Control**: Stop/Resume buttons with pause state persistence
+- **Quick Action Menu**: One-click commands for common tasks
+- **Rate Limiting**: Polling intervals increased to 10s, retry logic added
+
+### 🤖 ElizaOS 1.7.0 Upgrade
+
+- Upgraded to ElizaOS 1.7.0 with backwards-compatible shims
+- New Ollama plugin for local LLM support
+- Fixed dashboard settings tab and API key configuration
+
+### 🎯 Agent Actions
+
+- **PICKUP_ITEM** (NEW): Pick up ground items with auto-pathfinding
+- **DROP_ITEM** (Enhanced): "Drop all" support, word boundary matching
+- **CHOP_TREE** (Fixed): Cardinal tile positioning
+- **NAVIGATE_TO** (Fixed): 200-tile limit handling with waypoints
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
