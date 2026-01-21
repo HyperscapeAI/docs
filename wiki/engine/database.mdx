@@ -391,6 +391,9 @@ bunx drizzle-kit push
 
 | Migration | Description |
 |-----------|-------------|
+| `0018_add_agility_skill.sql` | Added `agilityLevel` and `agilityXp` columns |
+| `0017_add_death_recovery_columns.sql` | Added crash recovery fields to `player_deaths` |
+| `0016_add_prayer_system.sql` | Added Prayer skill and prayer points |
 | `0015_add_smithing_skill.sql` | Added `smithingLevel` and `smithingXp` columns |
 | `0014_add_mining_skill.sql` | Added `miningLevel` and `miningXp` columns |
 | `0013_add_auto_retaliate.sql` | Added auto-retaliate preference |
@@ -399,6 +402,51 @@ bunx drizzle-kit push
 | `0010_add_player_deaths.sql` | Added death tracking |
 
 Migrations are located in `packages/server/src/database/migrations/`.
+
+---
+
+## Death System Tables
+
+### Player Deaths
+
+The `player_deaths` table tracks active player deaths for crash recovery:
+
+```typescript
+export const playerDeaths = pgTable('player_deaths', {\n  playerId: text('player_id').primaryKey(),
+  gravestoneId: text('gravestone_id'),
+  groundItemIds: text('ground_item_ids').array(),  // Array of entity IDs
+  positionX: real('position_x').notNull(),
+  positionY: real('position_y').notNull(),
+  positionZ: real('position_z').notNull(),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+  zoneType: text('zone_type').notNull(),           // safe, dangerous, pvp
+  itemCount: integer('item_count').notNull(),
+  
+  // Crash recovery fields (added in migration 0017)
+  items: jsonb('items').$type<Array<{ itemId: string; quantity: number }>>(),
+  killedBy: text('killed_by'),                     // Killer name for gravestone
+  recovered: boolean('recovered').default(false),  // Has been processed
+  
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+});
+```
+
+**Purpose:**
+- Prevents item duplication if server crashes during death handling
+- Stores item data for gravestone recreation after crash
+- Tracks recovery status to prevent duplicate processing
+- Displays killer name on gravestone
+
+**Lifecycle:**
+1. Created when player dies (atomic acquisition)
+2. Updated when items are looted (`onItemLooted`)
+3. Updated when gravestone expires (`onGravestoneExpired`)
+4. Deleted when all items recovered (`clearDeathLock`)
+5. Recovered on server restart if `recovered = false`
+
+<Warning>
+Death locks persist until items are fully looted. This is critical for preventing item duplication on server crashes.
+</Warning>
 
 ---
 
