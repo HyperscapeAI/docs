@@ -249,6 +249,55 @@ Skill configuration is in `packages/shared/src/data/`:
 | `equipment-requirements.json` | Level requirements for equipment |
 | `equipment-stats.json` | Stat bonuses for equipment |
 
+## Agility & Weight Mechanics
+
+### Agility Training
+
+Agility is trained passively by moving through the world:
+
+**XP Rate:**
+- 1 XP per 2 tiles traveled
+- XP batched at 100 tiles (50 XP grant) to prevent visual spam
+- Both walking and running grant XP
+
+**XP Frequency:**
+- Running (4 tiles/tick): XP drop every ~15 seconds
+- Walking (2 tiles/tick): XP drop every ~30 seconds
+
+**Death Penalty:**
+- Accumulated tiles toward next XP grant are reset on death
+- Earned XP is never lost
+
+### Weight-Based Stamina Drain
+
+Inventory weight affects stamina drain while running:
+
+- Base drain: 2 stamina/second
+- Weight modifier: +0.5% drain per kg carried
+- Example: 20kg load = +10% drain = 2.2 stamina/second
+
+### Agility-Based Stamina Regeneration
+
+Higher Agility levels provide faster stamina regeneration:
+
+- Base regen: 2 stamina/second (walking), 4 stamina/second (idle)
+- Agility bonus: +1% regen per level
+- Example: Level 50 Agility = +50% regen = 3 stamina/second (walking)
+
+| Agility Level | Idle Regen/Sec | Walk Regen/Sec |
+|---------------|----------------|----------------|
+| 1 | 4.04 | 2.02 |
+| 25 | 5.00 | 2.50 |
+| 50 | 6.00 | 3.00 |
+| 75 | 7.00 | 3.50 |
+| 99 | 7.96 | 3.98 |
+
+<Info>
+  Weight is calculated server-side and synced to the client via `PLAYER_WEIGHT_CHANGED` events. Stamina calculations are client-side in `PlayerLocal.ts`.
+</Info>
+
+---
+
 ## Default Skill Values
 
 Skills start at level 1 with 0 XP, except Constitution which starts at level 10:
@@ -264,10 +313,10 @@ playerData.skills = {
   woodcutting: { level: 1, xp: 0 },
   mining: { level: 1, xp: 0 },
   fishing: { level: 1, xp: 0 },
-  mining: { level: 1, xp: 0 },
   firemaking: { level: 1, xp: 0 },
   cooking: { level: 1, xp: 0 },
   smithing: { level: 1, xp: 0 },
+  agility: { level: 1, xp: 0 },
 };
 ```
 
