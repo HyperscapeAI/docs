@@ -327,6 +327,31 @@ This normalization runs once when a model is first loaded, before caching. All c
 | Swordfish | 50 | 100 |
 | Shark | 76 | 110 |
 
+### Support Skill XP
+
+**Agility** (passive training):
+
+Agility is trained by moving through the world:
+
+| Movement Type | Tiles/Tick | XP/Minute | XP Frequency |
+|---------------|------------|-----------|--------------|
+| Walking | 2 | ~100 XP | Every ~30 seconds |
+| Running | 4 | ~200 XP | Every ~15 seconds |
+
+**Mechanics:**
+- 1 XP per 2 tiles traveled
+- XP batched at 100 tiles (50 XP grant) to prevent visual spam
+- Death resets accumulated tiles (not earned XP)
+- Teleportation does not grant XP
+
+**Benefits:**
+- +1% stamina regeneration per Agility level
+- Level 99: ~2x stamina regeneration (99% bonus)
+
+<Info>
+Agility XP is tracked server-side in `TileMovementManager` and granted when the 100-tile threshold is reached.
+</Info>
+
 ### Artisan XP
 
 Processing recipes are defined in `manifests/recipes/` with OSRS-accurate XP values:
