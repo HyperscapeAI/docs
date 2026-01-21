@@ -734,6 +734,48 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
+## Weight and Stamina System
+
+Inventory weight affects stamina drain while running:
+
+**Weight-Based Stamina Drain:**
+- Base drain: 2 stamina/second while running
+- Weight modifier: +0.5% drain per kg carried
+- Example: 20kg load = +10% drain = 2.2 stamina/second
+
+**Agility-Based Stamina Regeneration:**
+- Base regen: 2 stamina/second while walking, 4 stamina/second while idle
+- Agility bonus: +1% regen per Agility level
+- Example: Level 50 Agility = +50% regen = 3 stamina/second while walking
+
+**Weight Impact Table:**
+
+| Weight (kg) | Drain Multiplier | Drain/Second |
+|-------------|------------------|--------------|
+| 0 | 1.0x | 2.0 |
+| 10 | 1.05x | 2.1 |
+| 20 | 1.1x | 2.2 |
+| 40 | 1.2x | 2.4 |
+| 60 | 1.3x | 2.6 |
+| 100 | 1.5x | 3.0 |
+
+**Agility Regen Bonus Table:**
+
+| Agility Level | Regen Multiplier | Idle Regen/Sec | Walk Regen/Sec |
+|---------------|------------------|----------------|----------------|
+| 1 | 1.01x | 4.04 | 2.02 |
+| 10 | 1.10x | 4.40 | 2.20 |
+| 25 | 1.25x | 5.00 | 2.50 |
+| 50 | 1.50x | 6.00 | 3.00 |
+| 75 | 1.75x | 7.00 | 3.50 |
+| 99 | 1.99x | 7.96 | 3.98 |
+
+<Info>
+Weight is calculated server-side and synced to the client via `PLAYER_WEIGHT_CHANGED` events when inventory changes. Stamina calculations are client-side in `PlayerLocal.ts`.
+</Info>
+
+---
+
 ## Skill Unlocks
 
 The `skill-unlocks.json` manifest documents what players unlock at each level. This is used for UI display and progression tracking.
@@ -745,6 +787,7 @@ Example unlocks:
 - **Mining 30**: Coal
 - **Cooking 40**: Lobster
 - **Smithing 50**: Mithril bar
+- **Agility 99**: Agility cape, +99% stamina regeneration
 
 <Info>
 See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
