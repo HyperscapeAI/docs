@@ -181,12 +181,34 @@ Migrations are stored in `packages/server/src/database/migrations/`:
 ### Migration Format
 
 ```sql
--- 0015_add_smithing_skill.sql
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "smithingLevel" integer DEFAULT 1;
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "smithingXp" integer DEFAULT 0;
+-- 0018_add_agility_skill.sql
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "agilityLevel" integer DEFAULT 1;--> statement-breakpoint
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "agilityXp" integer DEFAULT 0;--> statement-breakpoint
 ```
 
-Migrations use `IF NOT EXISTS` to be idempotent and safe to re-run.
+Migrations use `IF NOT EXISTS` to be idempotent and safe to re-run. The `--> statement-breakpoint` comment is used by Drizzle to separate statements.
+
+### Migration Journal
+
+Migrations must be registered in `meta/_journal.json` to run:
+
+```json
+{
+  "entries": [
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1768728921620,
+      "tag": "0018_add_agility_skill",
+      "breakpoints": true
+    }
+  ]
+}
+```
+
+<Warning>
+If you create a migration file but forget to add it to `_journal.json`, it will not run automatically.
+</Warning>
 
 ## Schema Changes
 
