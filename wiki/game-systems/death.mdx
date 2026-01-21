@@ -29,7 +29,7 @@ type ZoneType =
 
 ## Death Lock System
 
-To prevent item duplication on server restart/crash, deaths are tracked with database persistence:
+To prevent item duplication on server restart/crash, deaths are tracked with **dual persistence** (memory + database):
 
 ```typescript
 interface DeathLock {
@@ -40,10 +40,16 @@ interface DeathLock {
   timestamp: number;
   zoneType: ZoneType;
   itemCount: number;               // Total items dropped
+  // Crash recovery fields
+  items?: Array<{ itemId: string; quantity: number }>;
+  killedBy?: string;
+  recovered?: boolean;
 }
 ```
 
-### Creating a Death Lock
+### Creating a Death Lock (Atomic Acquisition)
+
+The system uses **atomic acquisition** to prevent race conditions:
 
 ```typescript
 async createDeathLock(
@@ -54,34 +60,114 @@ async createDeathLock(
     position: { x: number; y: number; z: number };
     zoneType: ZoneType;
     itemCount: number;
+    items?: Array<{ itemId: string; quantity: number }>;
+    killedBy?: string;
   },
-  tx?: TransactionContext,  // Optional DB transaction
-): Promise<void> {
+  tx?: TransactionContext,
+): Promise<boolean> {
   // Server authority check
   if (!this.world.isServer) {
-    console.error(`[DeathStateManager] Client attempted death lock creation - BLOCKED`);
-    return;
+    console.error(`Client attempted death lock creation - BLOCKED`);
+    return false;
   }
   
-  const deathData: DeathLock = {
+  // Fast path - check memory first
+  if (this.activeDeaths.has(playerId)) {
+    console.warn(`Death lock already exists for ${playerId} - rejecting duplicate`);
+    return false;
+  }
+  
+  const deathLockData = {
     playerId,
     gravestoneId: options.gravestoneId,
-    groundItemIds: options.groundItemIds,
+    groundItemIds: options.groundItemIds || [],
     position: options.position,
     timestamp: Date.now(),
     zoneType: options.zoneType,
     itemCount: options.itemCount,
+    items: options.items || [],
+    killedBy: options.killedBy || "unknown",
+    recovered: false,
   };
   
-  // Store in memory cache
-  this.activeDeaths.set(playerId, deathData);
-  
-  // Persist to database (prevents duplication on restart)
+  // ATOMIC acquisition using INSERT ... ON CONFLICT DO NOTHING
   if (this.databaseSystem) {
-    await this.databaseSystem.saveDeathLockAsync(deathData, tx);
+    const acquired = await this.databaseSystem.acquireDeathLockAsync(
+      deathLockData,
+      tx
+    );
+    
+    if (!acquired) {
+      // Another request already created a death lock
+      console.warn(`Death lock already exists in database for ${playerId}`);
+      return false;
+    }
+  }
+  
+  // Update memory AFTER successful database write
+  this.activeDeaths.set(playerId, deathLockData);
+  
+  return true;
+}
+```
+
+<Info>
+Atomic acquisition prevents duplicate death processing when multiple requests arrive simultaneously (e.g., client retry + server timeout).
+</Info>
+
+### Crash Recovery
+
+When the server restarts, the `DeathStateManager` automatically recovers unfinished deaths:
+
+```typescript
+// Called during system start()
+async recoverUnfinishedDeaths(): Promise<void> {
+  const unrecoveredDeaths = await this.databaseSystem.getUnrecoveredDeathsAsync();
+  
+  for (const death of unrecoveredDeaths) {
+    // Check if gravestone/ground items still exist
+    const gravestoneExists = !!this.world.entities?.get(death.gravestoneId);
+    const existingGroundItems = death.groundItemIds.filter(id => 
+      !!this.world.entities?.get(id)
+    );
+    
+    if (gravestoneExists || existingGroundItems.length > 0) {
+      // Entities exist - restore to memory cache
+      this.activeDeaths.set(death.playerId, death);
+    } else if (death.items && death.items.length > 0) {
+      // Items stored but entities don't exist - recreate them
+      const inventoryItems = death.items.map((item, index) => ({
+        id: `recovery_${death.playerId}_${Date.now()}_${index}`,
+        itemId: item.itemId,
+        quantity: item.quantity,
+        slot: -1,
+        metadata: null,
+      }));
+      
+      // Emit DEATH_RECOVERED event to recreate gravestone/ground items
+      this.world.emit(EventType.DEATH_RECOVERED, {
+        playerId: death.playerId,
+        position: death.position,
+        items: inventoryItems,
+        killedBy: death.killedBy,
+        zoneType: death.zoneType,
+      });
+    }
+    
+    // Mark as recovered in database
+    await this.databaseSystem.markDeathRecoveredAsync(death.playerId);
   }
 }
 ```
+
+**Recovery Scenarios:**
+1. **Entities exist**: Restore death lock to memory (items already in world)
+2. **Entities missing**: Recreate gravestone/ground items from stored item data
+3. **No items**: Mark as recovered and clean up
+
+<Warning>
+Death locks persist until items are fully looted. This prevents item duplication if the server crashes before cleanup completes.
+</Warning>
 
 ---
 
