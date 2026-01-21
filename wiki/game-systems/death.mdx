@@ -278,6 +278,53 @@ async lootGravestone(playerId: string, gravestoneId: string): Promise<void> {
 }
 ```
 
+### Item Looting Tracking
+
+When items are looted from gravestones or ground, the death lock is updated:
+
+```typescript
+async onItemLooted(
+  playerId: string,
+  itemId: string,
+  quantity: number = 1,
+): Promise<void> {
+  const deathData = this.activeDeaths.get(playerId);
+  if (!deathData) return;
+  
+  // Remove from ground item list
+  if (deathData.groundItemIds) {
+    const index = deathData.groundItemIds.indexOf(itemId);
+    if (index !== -1) {
+      deathData.groundItemIds.splice(index, 1);
+    }
+  }
+  
+  // Update items array (crash recovery tracking)
+  if (deathData.items) {
+    const itemIndex = deathData.items.findIndex(i => i.itemId === itemId);
+    if (itemIndex !== -1) {
+      const item = deathData.items[itemIndex];
+      if (item.quantity <= quantity) {
+        // Remove entire item and decrement count
+        deathData.items.splice(itemIndex, 1);
+        deathData.itemCount = Math.max(0, deathData.itemCount - 1);
+      } else {
+        // Reduce quantity but keep item (don't decrement itemCount)
+        item.quantity -= quantity;
+      }
+    }
+  }
+  
+  // If all items looted, clear death lock
+  if (deathData.itemCount === 0) {
+    await this.clearDeathLock(playerId);
+  } else {
+    // Update database with new state
+    await this.databaseSystem.saveDeathLockAsync(deathData);
+  }
+}
+```
+
 ### Clearing Death Lock
 
 ```typescript
