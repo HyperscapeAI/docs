@@ -418,6 +418,51 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 
 ---
 
+## Prayer System
+
+The Prayer skill allows players to activate temporary combat bonuses and protective effects.
+
+### Prayer Points
+
+- **Maximum Prayer Points**: Equal to Prayer level (level 43 = 43 prayer points)
+- **Drain Rate**: Each active prayer drains points over time based on its `drainEffect` value
+- **Restoration**: Prayer points restore at altars or by drinking prayer potions
+
+### Prayer Categories
+
+| Category | Effect | Examples |
+|----------|--------|----------|
+| **Offensive** | Attack and strength bonuses | Burst of Strength (+5% strength), Clarity of Thought (+5% attack) |
+| **Defensive** | Defense bonuses | Thick Skin (+5% defense), Rock Skin (+10% defense), Steel Skin (+15% defense) |
+| **Utility** | Special effects | Protect from Melee, Rapid Heal (future) |
+
+### Prayer Conflicts
+
+Prayers in the same category conflict with each other. Activating a prayer automatically deactivates conflicting prayers (OSRS-accurate behavior).
+
+```typescript
+// Example from prayers.json
+{
+  "id": "thick_skin",
+  "name": "Thick Skin",
+  "level": 1,
+  "bonuses": { "defenseMultiplier": 1.05 },
+  "conflicts": ["rock_skin", "steel_skin", "chivalry", "piety"]
+}
+```
+
+### Training Prayer
+
+Prayer XP is gained by:
+- **Burying bones**: Varies by bone type (4-15 XP)
+- **Using bones on altars**: 3.5x XP multiplier (future feature)
+
+<Info>
+Prayer is defined in `manifests/prayers.json` and managed by `PrayerSystem.ts`.
+</Info>
+
+---
+
 ## Agility System
 
 The Agility skill rewards players for traversing the game world and ties into the stamina system.
