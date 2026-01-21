@@ -256,6 +256,15 @@ export const chopTreeAction: Action = {
 
 **Requirements**: Hatchet in inventory, Woodcutting level.
 
+**Positioning:**
+- Server requires player to be on a **cardinal adjacent tile** (N/S/E/W, not diagonal)
+- Action automatically finds nearest cardinal tile and walks there
+- Ensures proper face direction for gathering animation
+
+<Info>
+The cardinal positioning requirement ensures consistent face direction during woodcutting, matching OSRS behavior.
+</Info>
+
 ---
 
 ### `catchFish`
