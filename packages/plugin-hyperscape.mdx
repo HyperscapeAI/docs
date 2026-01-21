@@ -44,34 +44,43 @@ packages/plugin-hyperscape/
 Agent capabilities are defined in `src/actions/`:
 
 ```typescript
-// From packages/plugin-hyperscape/src/index.ts (lines 161-188)
+// From packages/plugin-hyperscape/src/index.ts
 actions: [
-  // Movement
+  // Movement (6 actions)
   moveToAction,
   followEntityAction,
   stopMovementAction,
+  exploreAction,
+  approachEntityAction,
+  navigateToAction,
 
-  // Combat
+  // Combat (3 actions)
   attackEntityAction,
   changeCombatStyleAction,
+  fleeAction,
 
-  // Skills
+  // Skills (4 actions)
   chopTreeAction,
   catchFishAction,
   lightFireAction,
   cookFoodAction,
 
-  // Inventory
+  // Inventory (4 actions)
   equipItemAction,
   useItemAction,
   dropItemAction,
+  pickupItemAction,  // NEW in ElizaOS 1.7 update
 
-  // Social
+  // Social (1 action)
   chatMessageAction,
 
-  // Banking
+  // Banking (2 actions)
   bankDepositAction,
   bankWithdrawAction,
+
+  // Goals (2 actions)
+  setGoalAction,
+  idleAction,
 ],
 ```
 
@@ -79,12 +88,13 @@ actions: [
 
 | Category | Actions | Source File |
 |----------|---------|-------------|
-| **Movement** | moveTo, followEntity, stopMovement | `actions/movement.ts` |
-| **Combat** | attackEntity, changeCombatStyle | `actions/combat.ts` |
+| **Movement** | moveTo, followEntity, stopMovement, explore, approachEntity, navigateTo | `actions/movement.ts`, `actions/autonomous.ts`, `actions/goals.ts` |
+| **Combat** | attackEntity, changeCombatStyle, flee | `actions/combat.ts`, `actions/autonomous.ts` |
 | **Skills** | chopTree, catchFish, lightFire, cookFood | `actions/skills.ts` |
-| **Inventory** | equipItem, useItem, dropItem | `actions/inventory.ts` |
+| **Inventory** | equipItem, useItem, dropItem, pickupItem | `actions/inventory.ts` |
 | **Social** | chatMessage | `actions/social.ts` |
 | **Banking** | bankDeposit, bankWithdraw | `actions/banking.ts` |
+| **Goals** | setGoal, idle | `actions/goals.ts`, `actions/autonomous.ts` |
 
 ## Providers
 
