@@ -731,9 +731,33 @@ Example unlocks:
 - **Mining 30**: Coal
 - **Cooking 40**: Lobster
 - **Smithing 50**: Mithril bar
+- **Agility 50**: +50% stamina regeneration
 
 <Info>
 See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
+</Info>
+
+### Skill Guide Panel
+
+Players can click any skill in the Skills Panel to open an OSRS-style guide showing all unlocks for that skill:
+
+**Features**:
+- **Click-to-view**: Click any skill icon to open its guide
+- **Unlock progression**: Shows all unlocks with level requirements
+- **Visual distinction**: Unlocked items shown in green with checkmarks, locked items dimmed with lock icons
+- **Next unlock highlight**: The next unlock you're working toward is highlighted in gold
+- **Progress tracking**: Shows "X of Y unlocks achieved" at the top
+- **Type indicators**: Badges show whether unlocks are items or abilities
+- **Scrollable**: Handles skills with many unlocks (Prayer has 29!)
+
+**Implementation**:
+- **Server API**: `GET /api/data/skill-unlocks` provides unlock data
+- **Client Component**: `SkillGuidePanel.tsx` renders the modal
+- **Loading States**: Shows spinner while fetching data
+- **Animations**: Smooth fade-in and slide-up transitions
+
+<Info>
+The Skill Guide Panel is purely informational - it doesn't affect gameplay, just helps players understand what they can unlock at each level.
 </Info>
 
 ## Manifest-Driven Design
