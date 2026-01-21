@@ -44,7 +44,7 @@ packages/plugin-hyperscape/
 Agent capabilities are defined in `src/actions/`:
 
 ```typescript
-// From packages/plugin-hyperscape/src/index.ts (lines 161-188)
+// From packages/plugin-hyperscape/src/index.ts
 actions: [
   // Movement
   moveToAction,
@@ -65,6 +65,7 @@ actions: [
   equipItemAction,
   useItemAction,
   dropItemAction,
+  pickupItemAction,  // NEW in 1.7
 
   // Social
   chatMessageAction,
