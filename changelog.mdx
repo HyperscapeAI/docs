@@ -23,6 +23,101 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Agility Skill, Agent Dashboard & Railway Deployment" description="January 2026" date="2026-01-21">
+
+### 🏃 Agility Skill System
+
+Complete implementation of the Agility skill with movement-based progression:
+
+- **Movement XP**: Gain 1 XP per 2 tiles traveled (batched at 100 tiles = 50 XP to prevent spam)
+- **XP Rates**: ~100 XP/min walking, ~200 XP/min running
+- **Death Penalty**: Accumulated tiles toward next XP grant reset on death (earned XP preserved)
+- **Weight-Based Stamina Drain**: Carrying heavy items increases stamina drain (+0.5% per kg)
+  - 20kg load = +10% drain (2.2 stamina/sec vs 2.0 base)
+  - 50kg load = +25% drain (2.5 stamina/sec)
+- **Agility-Based Stamina Regen**: Higher Agility increases regen (+1% per level)
+  - Level 50 = +50% regen (6.0/sec idle vs 4.0 base)
+  - Level 99 = +99% regen (7.96/sec idle)
+- **Weight Sync**: Server calculates total inventory weight and syncs to client for stamina calculations
+- **Database**: New `agilityLevel` and `agilityXp` columns with migration
+- **Testing**: 868 lines of comprehensive unit and integration tests
+
+### 📊 Skill Guide Panel
+
+OSRS-style skill guide showing unlocks at each level:
+
+- **Click to Open**: Click any skill in Skills Panel to view its guide
+- **Visual States**: Green checkmarks for unlocked, lock icons for locked, highlighted next unlock
+- **Scrollable**: Handles skills with many unlocks (Prayer has 29!)
+- **Type Indicators**: Item vs ability badges
+- **Server API**: `GET /api/data/skill-unlocks` endpoint for server-authoritative data
+- **Loading State**: Spinner while fetching unlock data
+- **Keyboard Support**: ESC key and click-outside to close
+
+### 🤖 Agent Dashboard Improvements
+
+Major enhancements to the AI agent dashboard with ElizaOS 1.7 upgrade:
+
+- **ElizaOS 1.7.0**: Upgraded from 1.6.4 with backwards-compatible shims
+- **Ollama Support**: Added local LLM support via `@elizaos/plugin-ollama`
+- **Stop/Resume Goals**: Robust goal control with pause state
+  - Stop button immediately halts agent and blocks auto-goal selection
+  - Resume button re-enables autonomous behavior
+  - Pause state persists across reconnections
+  - Chat commands work while paused (agent returns to idle after)
+- **Quick Action Menu**: One-click dropdown for common tasks
+  - Woodcutting, Mining, Fishing, Combat
+  - Pick up items, Go to bank
+  - Stop/Idle commands
+  - Context-aware availability indicators
+- **Enhanced Panels**:
+  - **Summary Card**: Online status, uptime, combat/total level, current goal
+  - **Goal Panel**: Progress tracking, time estimates, XP rates, recent goals history
+  - **Skills Panel**: Session XP gains, improved layout with combat/gathering sections
+  - **Activity Feed**: Recent actions, session stats (kills/deaths/gold/resources)
+  - **Location Panel**: Zone names, nearby POIs with distances
+- **Rate Limiting Fixes**: Increased polling intervals (2s → 10s) with exponential backoff retry logic
+- **Settings Tab**: Fixed tab switching, API key configuration now works
+
+### 🎒 New Agent Actions
+
+**PICKUP_ITEM**: Intelligent item pickup with word-boundary matching
+- Scoring system prevents wrong item pickup (e.g., "bronze pickaxe" won't match "bronze hatchet")
+- Automatically walks to items beyond 4m pickup range
+- Handles server's 200-tile movement limit with stepping
+- Word boundary regex prevents substring false matches
+
+**DROP_ITEM**: Drop items with "drop all" support
+- Single item: "drop bronze hatchet"
+- Drop all of type: "drop all logs"
+- Drop everything: "drop all items"
+- Memory leak protection: Limited to 50 items per operation
+- Consecutive failure tracking: Stops after 3 failures in a row
+
+### 🚂 Railway Deployment
+
+Automated deployment to Railway with Nixpacks:
+
+- **GitHub Actions**: Auto-deploy on push to main via Railway GraphQL API
+- **Nixpacks Config**: `nixpacks.toml` with Bun, build phases, and system dependencies
+- **Railway Config**: `railway.server.json` with health checks and restart policy
+- **Dockerfile**: Multi-stage `Dockerfile.server` for Docker-based deployments
+- **Asset Skipping**: CI environment detection skips Git LFS downloads (assets served from CDN)
+- **Health Checks**: `/status` endpoint with 300s timeout
+
+### 🐛 Bug Fixes
+
+- **Equipment Sync**: Fixed login race condition via single source of truth pattern (#568)
+- **Dead Mob Blocking**: Dead mobs no longer block item pickup via raycast (#567)
+- **Death State Cleanup**: Proper combat state cleanup on death/respawn (#566)
+- **Gravestone Display**: Shows player name instead of ID on context menu and loot window
+- **Movement Cancellation**: Added `cancel` flag to properly stop walking-in-place
+- **Chat Routing**: Dashboard messages now reach agent and open in-game chat automatically
+- **CHOP_TREE**: Positions on cardinal adjacent tiles (N/S/E/W, not diagonal)
+- **NAVIGATE_TO**: Handles 200-tile server limit with stepping
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
