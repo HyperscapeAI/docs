@@ -521,6 +521,17 @@ export const setGoalAction: Action = {
 };
 ```
 
+**Features:**
+- **Autonomous Goal Selection**: Agent chooses goals based on context
+- **Manual Override**: Dashboard can set specific goals
+- **Pause State Blocking**: SET_GOAL is blocked when goals are paused
+  - User clicks "Stop" button → goals paused
+  - Agent forced to IDLE instead of setting new goals
+  - Prevents unwanted autonomous behavior
+- **Locked Goals**: User commands create locked goals that persist
+  - 60-second grace period for multi-step actions
+  - Agent continues executing until action completes or times out
+
 **Usage**: Direct agent behavior toward objectives.
 
 **Example Goals**:
@@ -528,6 +539,10 @@ export const setGoalAction: Action = {
 - "Collect 100 logs"
 - "Kill 50 goblins"
 - "Earn 10,000 coins"
+
+<Info>
+When goals are paused (via dashboard Stop button), SET_GOAL is automatically blocked and replaced with IDLE. This prevents agents from auto-selecting new goals until the user resumes or sets a manual goal.
+</Info>
 
 ---
 
