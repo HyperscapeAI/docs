@@ -546,7 +546,12 @@ export const idleAction: Action = {
 };
 ```
 
-**Usage**: Wait for events, conserve resources.
+**Features:**
+- **Movement Cancellation**: Stops current movement with `cancel: true` flag
+- **Pause State**: Used when goals are paused by user
+- **Observation Mode**: Agent stands still and observes surroundings
+
+**Usage**: Wait for events, conserve resources, or when goals are paused.
 
 ---
 
