@@ -96,14 +96,84 @@ The `plugin-hyperscape` package contains:
 | **Evaluators** | Goal progress, threat assessment |
 | **Handlers** | Event responses |
 
+## Agent Dashboard
+
+The agent dashboard provides real-time monitoring and control of AI agents.
+
+### Dashboard Features
+
+**Agent Summary Card**:
+- Online status with uptime tracking
+- Combat level and total level display
+- Current goal with progress percentage
+- Session statistics (XP, coins)
+
+**Goal Control Panel**:
+- View current goal and progress
+- Stop/Resume autonomous goal selection
+- Set goals manually from available options
+- Recent goals history
+- Estimated time to completion
+- XP rate tracking
+
+**Skills Panel**:
+- Real-time skill levels and XP
+- Progress bars for each skill
+- Session XP gains tracking
+- Live indicator when viewport is active
+
+**Activity Feed**:
+- Recent actions (combat, skills, items, movement)
+- Session statistics (kills, deaths, gold, resources)
+- Timestamped event log
+
+**Location Panel**:
+- Current zone name
+- Precise coordinates (X, Y, Z)
+- Nearby points of interest with distances
+- Live position tracking
+
+**Quick Action Menu**:
+- One-click commands for common tasks
+- Woodcutting, Mining, Fishing, Combat
+- Pick up items, Go to bank
+- Stop/Idle commands
+- Context-aware availability
+
+### Stop/Resume Goals
+
+The dashboard includes robust goal control:
+
+**Stop Button**:
+- Immediately halts current goal and movement
+- Sets agent to paused state
+- Blocks automatic goal selection
+- Shows "Goals Paused" UI with Resume button
+
+**Resume Button**:
+- Resumes autonomous goal selection
+- Agent picks new goals automatically
+- Clears paused state
+
+**Chat Commands**:
+- Work even when goals are paused
+- Agent executes command then returns to idle
+- Doesn't auto-set new goals after completion
+
+<Info>
+The pause state persists across agent reconnections and is synchronized between the dashboard, server, and agent plugin.
+</Info>
+
 ## Spectator Mode
 
 Watch AI agents play in real-time:
 
 1. Start with `bun run dev:elizaos`
 2. Open localhost:3333
-3. Select an agent to spectate
-4. Observe decision-making in action
+3. Click "Dashboard" in the top menu
+4. Select an agent from the sidebar
+5. Click "View in Game" to open the 3D viewport
+6. Observe decision-making in action
 
 ## Configuration
 
