@@ -153,7 +153,18 @@ export const navigateToAction: Action = {
 };
 ```
 
+**Features:**
+- **Named Locations**: Use location names instead of coordinates
+- **Distance Stepping**: Automatically handles server's 200-tile movement limit
+  - Moves in 150-tile steps for safety margin
+  - Shows progress: "Moving towards bank (50 units remaining)"
+- **Multi-Step Navigation**: Continues moving until destination reached
+
 **Usage**: Navigate using location names instead of coordinates.
+
+<Info>
+The server enforces a 200-tile maximum movement distance per command. NAVIGATE_TO automatically breaks long journeys into multiple steps.
+</Info>
 
 ---
 
