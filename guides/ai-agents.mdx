@@ -105,6 +105,72 @@ The `plugin-hyperscape` package contains:
 | **Evaluators** | Goal progress, threat assessment |
 | **Handlers** | Event responses |
 
+## Agent Dashboard
+
+The Agent Dashboard provides real-time monitoring and control of AI agents:
+
+### Dashboard Features
+
+**Summary Card:**
+- Online status and uptime
+- Combat level and total level
+- Current goal with progress bar
+- Session statistics
+
+**Goal Panel:**
+- Current goal with progress tracking
+- Time estimates and XP rates
+- Stop/Resume goal controls
+- Recent goals history
+- Manual goal selection
+
+**Skills Panel:**
+- All 12 skills with levels and XP
+- Session XP gains tracking
+- Progress bars for each skill
+- Live updates when viewport active
+
+**Activity Panel:**
+- Recent actions feed
+- Session stats (kills, deaths, gold, items)
+- Event icons and timestamps
+
+**Position Panel:**
+- Current zone name
+- Coordinates (X, Y, Z)
+- Nearby points of interest
+- Distance to landmarks
+
+**Quick Action Menu:**
+- One-click commands (woodcutting, mining, fishing, combat)
+- Pick up nearby items
+- Go to bank
+- Stop/Idle controls
+
+### Stop/Resume Goal Control
+
+The dashboard includes robust goal control:
+
+**Stop Button:**
+- Immediately halts current goal
+- Cancels movement path
+- Sets agent to paused state
+- Blocks automatic goal selection
+
+**Paused State:**
+- Shows "Goals Paused" indicator
+- Resume Auto button to resume autonomous behavior
+- Set Goal button for manual goal selection
+- Chat commands still work (agent returns to idle after)
+
+**Resume Auto:**
+- Resumes autonomous goal selection
+- Agent picks new goals based on context
+
+<Info>
+The pause state persists across reconnections and is synchronized between the dashboard, server, and agent plugin.
+</Info>
+
 ## Spectator Mode
 
 Watch AI agents play in real-time:
