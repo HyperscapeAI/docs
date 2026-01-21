@@ -420,6 +420,36 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 | Yew | 60 | 202.5 |
 | Magic | 75 | 303.8 |
 
+### Agility XP
+
+Agility is a passive skill that trains automatically as you move through the world:
+
+**XP Mechanics**:
+- **Rate**: 1 XP per 2 tiles traveled
+- **Batching**: XP is granted in batches of 50 XP every 100 tiles
+- **Frequency**: ~15 seconds running, ~30 seconds walking between XP drops
+- **Death Penalty**: Accumulated tiles toward next XP grant are lost on death (earned XP is kept)
+
+**Stamina Benefits**:
+- **Regeneration Bonus**: +1% stamina regen per agility level
+- **Level 1**: 1% bonus (4.04/sec idle, 2.02/sec walking)
+- **Level 50**: 50% bonus (6.0/sec idle, 3.0/sec walking)
+- **Level 99**: 99% bonus (7.96/sec idle, 3.98/sec walking)
+
+**Weight-Based Stamina Drain**:
+- **Base Drain**: 2 stamina/second while running
+- **Weight Modifier**: +0.5% drain per kg carried
+- **Example**: 20kg load = +10% drain = 2.2 stamina/second
+- **Heavy Load**: 50kg load = +25% drain = 2.5 stamina/second
+
+<Info>
+Agility does NOT affect combat level. It's purely a support skill for movement efficiency.
+</Info>
+
+<Warning>
+Teleportation does not grant agility XP - only walking and running count toward the tile counter.
+</Warning>
+
 ---
 
 ## Level Requirements
