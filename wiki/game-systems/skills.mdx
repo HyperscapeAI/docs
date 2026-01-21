@@ -419,6 +419,44 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 | Yew | 60 | 202.5 |
 | Magic | 75 | 303.8 |
 
+### Agility XP
+
+Agility is trained passively through movement:
+
+**Movement XP Tracking**:
+- XP granted every 100 tiles traveled
+- 1 XP per tile (100 XP per batch)
+- Distance resets on death
+- Server-authoritative tracking prevents exploits
+
+**Stamina System Integration**:
+- **Weight-Based Drain**: Heavier inventory = faster stamina drain
+- **Agility Bonus**: +1% stamina regeneration per Agility level
+- **Server-Client Sync**: Weight updates forwarded via event bridge
+
+```typescript
+// From AgilitySystem (conceptual - integrated into movement)
+const TILES_PER_XP_BATCH = 100;
+const XP_PER_TILE = 1;
+
+// Grant XP every 100 tiles
+if (tilesTraveled >= TILES_PER_XP_BATCH) {
+  const xp = TILES_PER_XP_BATCH * XP_PER_TILE;
+  skillsSystem.grantXP(playerId, "agility", xp);
+  tilesTraveled = 0;  // Reset counter
+}
+```
+
+**Stamina Regeneration Formula**:
+```typescript
+const agilityBonus = 1 + (agilityLevel * 0.01);  // +1% per level
+const regenRate = baseRegenRate * agilityBonus;
+```
+
+<Info>
+Agility XP is batched to reduce network traffic and database writes. The 100-tile threshold ensures XP grants are meaningful while preventing spam.
+</Info>
+
 ---
 
 ## Level Requirements
