@@ -348,7 +348,8 @@ Drop an item on the ground.
 ```typescript
 export const dropItemAction: Action = {
   name: "DROP_ITEM",
-  description: "Drop an item from inventory",
+  similes: ["DROP", "DISCARD", "THROW_AWAY", "TRASH", "REMOVE"],
+  description: "Drop an item from inventory onto the ground",
   parameters: {
     itemId: { type: "string", description: "Item ID to drop" },
     quantity: { type: "number", optional: true, description: "Amount to drop" },
@@ -356,7 +357,59 @@ export const dropItemAction: Action = {
 };
 ```
 
-**Usage**: Make room in inventory.
+**Features:**
+- **Single Item**: Drop specific items by name
+- **Drop All**: "drop all logs" or "drop everything"
+- **Smart Matching**: Word boundary regex prevents false matches
+- **Safety Limits**: Maximum 50 items per drop-all operation
+- **Error Recovery**: Stops after 3 consecutive failures
+
+**Examples:**
+```
+"Drop the bronze hatchet"
+"Drop all logs"
+"Drop everything"
+```
+
+<Warning>
+Drop-all operations are limited to 50 items to prevent memory leaks and DoS attacks.
+</Warning>
+
+---
+
+### `pickupItem`
+
+Pick up an item from the ground.
+
+```typescript
+export const pickupItemAction: Action = {
+  name: "PICKUP_ITEM",
+  similes: ["PICKUP", "PICK_UP", "GRAB", "TAKE", "LOOT", "GET"],
+  description: "Pick up an item from the ground nearby",
+  parameters: {
+    itemId: { type: "string", optional: true, description: "Specific item to pick up" },
+  },
+};
+```
+
+**Features:**
+- **Smart Matching**: Scoring system matches items by word count
+  - "bronze pickaxe" scores 20 points (2 words match)
+  - "bronze hatchet" scores 10 points (1 word matches)
+  - Picks highest scoring item
+- **Auto-Walk**: Walks to items beyond pickup range (4m)
+- **Distance Stepping**: Handles server's 200-tile movement limit
+
+**Examples:**
+```
+"Pick up the bronze pickaxe"
+"Grab that sword"
+"Loot the coins"
+```
+
+<Info>
+The scoring system uses word boundary regex to prevent false matches. "pick up axe" won't match "Bronze Hatchet" (contains "axe" substring) - it requires exact word matches.
+</Info>
 
 ---
 
