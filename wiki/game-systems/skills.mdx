@@ -53,6 +53,29 @@ Smithing is a two-step process: first smelt ores into bars at a furnace, then sm
 
 ---
 
+## Skill Guide Panel
+
+Players can click any skill in the Skills Panel to open an OSRS-style Skill Guide showing all unlocks at each level.
+
+**Features:**
+- Click-to-view unlock progression for any skill
+- Visual distinction between unlocked (green checkmark) and locked (lock icon) items
+- Next unlock highlighted with progress indicator
+- Scrollable list for skills with many unlocks
+- Type badges (item vs ability)
+- Shows "X of Y unlocks achieved" progress
+
+**Implementation:**
+- Client-side component: `packages/client/src/game/panels/SkillGuidePanel.tsx`
+- Server API endpoint: `GET /api/data/skill-unlocks`
+- Data source: `packages/server/world/assets/manifests/skill-unlocks.json`
+
+<Info>
+The Skill Guide Panel fetches unlock data from the server on first load and caches it for the session. This ensures server-authoritative unlock definitions.
+</Info>
+
+---
+
 ## XP Formula
 
 The XP table uses the authentic RuneScape formula. Level 92 represents the halfway point to 99 in total XP.
