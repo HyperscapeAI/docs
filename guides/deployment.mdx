@@ -139,6 +139,44 @@ SKIP_ASSETS = "true"
 
 The `ensure-assets.mjs` script detects CI environments and skips Git LFS downloads.
 
+### Dockerfile Option
+
+Alternatively, you can use the included `Dockerfile.server` for Docker-based deployments:
+
+```dockerfile
+# Multi-stage build
+FROM oven/bun:1.1.38-debian AS builder
+# ... build steps ...
+
+FROM oven/bun:1.1.38-debian AS runtime
+# ... runtime setup ...
+CMD ["bun", "run", "start"]
+```
+
+Build and run:
+
+```bash
+docker build -f Dockerfile.server -t hyperscape-server .
+docker run -p 5555:5555 hyperscape-server
+```
+
+### Railway GraphQL API
+
+The GitHub Actions workflow uses Railway's GraphQL API for deployments:
+
+```bash
+# Trigger deployment
+curl -X POST https://backboard.railway.com/graphql/v2 \
+  -H "Authorization: Bearer $RAILWAY_TOKEN" \
+  -d '{"query":"mutation { serviceInstanceRedeploy(...) }"}'
+```
+
+**Required Environment Variables**:
+- `RAILWAY_PROJECT_ID`
+- `RAILWAY_SERVICE_ID`
+- `RAILWAY_ENVIRONMENT_ID`
+- `RAILWAY_TOKEN` (GitHub secret)
+
 ## Vercel Client Deployment
 
 <Steps>
