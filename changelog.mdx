@@ -23,6 +23,131 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Agility Skill & Railway Deployment" description="January 2026" date="2026-01-21">
+
+### 🏃 Agility Skill System
+
+Complete implementation of the Agility skill with movement-based progression and stamina benefits:
+
+**Core Mechanics**:
+- **Movement XP**: Gain 1 XP per 2 tiles traveled (walking or running)
+- **XP Batching**: XP granted in batches of 50 XP every 100 tiles to prevent visual spam
+- **Frequency**: ~15 seconds running, ~30 seconds walking between XP drops
+- **Death Penalty**: Accumulated tiles toward next XP grant are lost on death (earned XP is kept)
+
+**Stamina System Integration**:
+- **Weight-Based Drain**: +0.5% stamina drain per kg carried while running
+  - 0kg: 2.0 stamina/sec (base rate)
+  - 20kg: 2.2 stamina/sec (+10% drain)
+  - 50kg: 2.5 stamina/sec (+25% drain)
+- **Agility-Based Regeneration**: +1% stamina regen per agility level
+  - Level 1: 4.04/sec idle, 2.02/sec walking
+  - Level 50: 6.0/sec idle, 3.0/sec walking (+50% bonus)
+  - Level 99: 7.96/sec idle, 3.98/sec walking (+99% bonus)
+- **Weight Sync**: Server calculates total inventory weight and syncs to client for accurate stamina calculations
+- **Equipment Panel**: Now displays server-synced weight (single source of truth)
+
+**Database Changes**:
+- New `agilityLevel` and `agilityXp` columns in characters table
+- Migration `0018_add_agility_skill.sql` adds columns with defaults
+- Full persistence support across all repositories
+
+**Testing**:
+- 868 lines of comprehensive tests
+- `AgilitySystem.test.ts`: Unit tests for XP batching, weight drain, and regen formulas
+- `AgilityPersistence.test.ts`: Integration tests for database persistence and death mechanics
+
+<Info>
+Agility does NOT affect combat level - it's purely a support skill for movement efficiency.
+</Info>
+
+### 📖 Skill Guide Panel
+
+OSRS-style skill guide UI showing unlock progression for all skills:
+
+**Features**:
+- **Click-to-View**: Click any skill icon in Skills Panel to open its guide
+- **Unlock Progression**: Shows all unlocks with level requirements
+- **Visual States**: 
+  - Unlocked items: Green background with checkmarks
+  - Locked items: Dimmed with lock icons
+  - Next unlock: Highlighted in gold with "NEXT" badge
+- **Progress Tracking**: Shows "X of Y unlocks achieved" at the top
+- **Type Indicators**: Badges distinguish items vs abilities
+- **Scrollable**: Handles skills with many unlocks (Prayer has 29!)
+- **Loading States**: Shows spinner while fetching data from server
+- **Animations**: Smooth fade-in and slide-up transitions
+
+**Implementation**:
+- **Server API**: New `GET /api/data/skill-unlocks` endpoint
+- **Client Component**: `SkillGuidePanel.tsx` with portal rendering
+- **Event System**: ESC key and click-outside-to-close behavior
+- **Responsive**: 400px width with custom scrollbar styling
+
+### 🚂 Railway Deployment
+
+Automated deployment to Railway with multiple configuration options:
+
+**GitHub Actions Workflow**:
+- **Auto-Deploy**: Triggers on push to main when server files change
+- **Smart Triggers**: Only deploys when relevant paths modified (shared, server, plugin-hyperscape)
+- **GraphQL API**: Uses Railway GraphQL API for deployment control
+- **Status Monitoring**: Checks deployment status and reports failures
+- **Required Secret**: `RAILWAY_TOKEN` from Railway dashboard
+
+**Configuration Files**:
+- **`nixpacks.toml`**: Nixpacks build configuration (recommended)
+  - Installs system dependencies (python3, make, g++, git, cairo, pango)
+  - Clones assets repository during build
+  - Builds packages in correct order (shared → server)
+  - Sets CI environment variables
+- **`Dockerfile.server`**: Multi-stage Docker build (alternative)
+  - Builder stage: Installs deps, clones assets, builds packages
+  - Runtime stage: Minimal production image
+  - Health check on `/status` endpoint
+- **`railway.server.json`**: Railway service configuration
+  - Specifies Nixpacks builder
+  - Watch patterns for auto-redeploy
+  - Health check and restart policy
+- **`.railwayignore`**: Excludes large directories from upload
+  - node_modules, .git, assets (cloned during build)
+
+**Asset Handling**:
+- **CI Detection**: `ensure-assets.mjs` detects Railway/CI environments
+- **Skip Download**: Assets not downloaded in production (served from CDN)
+- **Build-Time Clone**: Assets cloned during Railway build phase
+- **Environment Variables**: `CI`, `RAILWAY_ENVIRONMENT`, `SKIP_ASSETS` trigger skip
+
+### 🛡️ Equipment & Death System Fixes
+
+Multiple fixes for equipment sync and death state management:
+
+**Equipment Sync** (PR #568):
+- **Single Source of Truth**: Equipment state managed entirely by server
+- **Eliminated Race Conditions**: Client no longer maintains separate equipment state
+- **Login Flow**: Equipment loaded from database and synced to client on character selection
+- **Type Safety**: New `EquipmentSyncData` type for consistent sync payloads
+- **Error Handling**: Graceful fallback for empty equipment and malformed data
+
+**Death State Management** (PR #566):
+- **Death Lock Persistence**: Death lock persists until items looted (crash recovery)
+- **Proper Cleanup**: Death lock released after loot window closes
+- **Item Count Tracking**: Only decrements on full item removal (not partial stacks)
+- **32-bit Safe Serialization**: Uses `TICK_MAX_32BIT` for safe tick serialization
+- **Unicode Sanitization**: Enhanced `killedBy` sanitization with Unicode normalization
+
+**Interaction Fixes** (PR #567):
+- **Dead Mob Raycast**: Dead mobs skipped in raycast to allow picking up items underneath
+- **MobAIState Enum**: Uses proper enum instead of string literals for type safety
+
+### 🧪 Testing Improvements
+
+- **Test Fixes**: Fixed multiple test suite issues across combat, agility, and bank systems
+- **CI Stability**: Improved test reliability in CI environments
+- **Code Coverage**: Added comprehensive tests for new features
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
