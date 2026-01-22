@@ -153,7 +153,7 @@ The F5 keybind was added to match Minecraft's familiar debug screen shortcut.
 
 ## GitHub Actions
 
-The repository includes automated workflows for code quality and documentation:
+The repository includes automated workflows for code quality, deployment, and documentation:
 
 ### Claude Code Review
 
@@ -163,7 +163,7 @@ Automatically reviews pull requests for bugs and code quality issues:
 # .github/workflows/claude-code-review.yml
 name: Claude Code Review
 on:
-  pull_request:
+  pull_request_target:  # Allows fork PRs to access secrets
     types: [opened, synchronize, ready_for_review, reopened]
 ```
 
@@ -171,6 +171,9 @@ on:
 - Automated code review on every PR
 - Checks for bugs and CLAUDE.md compliance
 - Posts review comments directly on PRs
+- Uses `pull_request_target` for fork PR support
+
+**Security**: Checks out PR head commit explicitly to review actual changes.
 
 ### Claude PR Assistant
 
@@ -190,6 +193,48 @@ on:
 - Comment `@claude` in any issue or PR
 - Claude will respond with code suggestions
 - Can read CI results and provide context-aware help
+
+### Railway Deployment
+
+Automatically deploys server to Railway on push to main:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+name: Deploy to Railway
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/shared/**'
+      - 'packages/server/**'
+      - 'packages/client/**'
+      - 'packages/plugin-hyperscape/**'
+```
+
+**Features:**
+- Triggers Railway deployment via GraphQL API
+- Monitors deployment status
+- Only deploys when relevant files change
+- Requires `RAILWAY_TOKEN` secret
+
+### Cloudflare Pages Deployment
+
+Deploys frontend to Cloudflare Pages:
+
+```yaml
+# .github/workflows/deploy-cloudflare.yml
+name: Deploy to Cloudflare Pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/client/**'
+```
+
+**Features:**
+- Builds and deploys client to Cloudflare Pages
+- Automatic preview deployments for PRs
+- Production deployment on main branch
 
 ### Documentation Updates
 
@@ -216,5 +261,8 @@ Configure these in your repository settings:
 | Secret | Purpose |
 |--------|---------|
 | `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code authentication |
+| `RAILWAY_TOKEN` | Railway deployment API token |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare Pages deployment |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
 | `MINTLIFY_API_KEY` | Documentation updates |
 | `MINTLIFY_PROJECT_ID` | Documentation project ID |
