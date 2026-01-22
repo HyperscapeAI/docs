@@ -176,14 +176,53 @@ Located in `packages/client/src/game/panels/`:
 | Panel | Description |
 |-------|-------------|
 | `InventoryPanel.tsx` | 28-slot inventory with drag & drop |
-| `EquipmentPanel.tsx` | Equipment slots with stat display |
-| `SkillsPanel.tsx` | All skills with XP progress bars |
+| `EquipmentPanel.tsx` | Equipment slots with stat display and total weight |
+| `SkillsPanel.tsx` | All 12 skills with XP progress bars and click-to-view guides |
+| `SkillGuidePanel.tsx` | Skill unlock progression viewer (OSRS-style) |
 | `CombatPanel.tsx` | Combat style selection |
 | `BankPanel.tsx` | Bank interface with tabs |
 | `DialoguePanel.tsx` | NPC conversation UI |
 | `StorePanel.tsx` | Shop/trading interface |
 | `SettingsPanel.tsx` | Game settings |
 | `LootWindow.tsx` | Ground item pickup interface |
+
+### Skill Guide Panel
+
+The Skill Guide Panel is an OSRS-inspired interface that shows skill unlock progression:
+
+**Features:**
+- Click any skill in the Skills Panel to open its guide
+- Shows all unlocks with level requirements
+- Visual distinction between unlocked (green checkmark) and locked (lock icon)
+- Next unlock highlighted with progress indicator
+- Type badges for unlock categories (item, ability, area, quest, activity)
+- Scrollable list for skills with many unlocks (Prayer has 29)
+- Loading state with spinner while fetching data
+- Keyboard support (ESC to close)
+- Click outside to dismiss
+
+**Implementation:**
+```typescript
+// SkillGuidePanel.tsx
+interface SkillGuidePanelProps {
+  visible: boolean;
+  skillLabel: string;
+  skillIcon: string;
+  playerLevel: number;
+  unlocks: readonly SkillUnlock[];
+  isLoading: boolean;
+  onClose: () => void;
+}
+```
+
+**Data Source:**
+- Fetches from `/api/data/skill-unlocks` endpoint
+- Server-authoritative unlock definitions
+- Cached for 5 minutes
+
+<Info>
+The Skill Guide Panel helps players plan their progression by showing what they'll unlock at each level.
+</Info>
 
 ### HUD Components
 
