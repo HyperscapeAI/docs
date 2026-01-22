@@ -151,12 +151,56 @@ npm test
 - Server not running
 - Wrong port configuration
 - Firewall blocking
+- CORS origin not allowed
+
+**Solutions**:
+
+1. **Verify server is running:**
+   ```bash
+   lsof -i:5555
+   ```
+
+2. **Check client configuration:**
+   ```bash
+   # packages/client/.env
+   PUBLIC_WS_URL=ws://localhost:5555/ws  # Development
+   PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws  # Production
+   ```
+
+3. **Check CORS configuration:**
+   - Verify your origin is in the allowlist (see `packages/server/src/startup/http-server.ts`)
+   - For custom domains, set `PUBLIC_APP_URL` in server environment
+
+4. **Check browser console:**
+   - Look for CORS errors
+   - Verify WebSocket URL is correct
+   - Check for SSL/TLS certificate issues (wss:// requires valid cert)
+
+### CORS Errors
+
+**Symptom**: Browser console shows "CORS policy" errors
+
+**Cause**: Client origin not in server's CORS allowlist
 
 **Solution**:
 
-1. Verify server is running: `lsof -i:5555`
-2. Check client config: `PUBLIC_WS_URL`
-3. Ensure no firewall blocks
+**For Cloudflare Pages preview deployments:**
+- Automatically allowed via regex: `/^https?:\/\/.+\.hyperscape\.pages\.dev$/`
+
+**For custom domains:**
+```bash
+# In packages/server/.env
+PUBLIC_APP_URL=https://yourdomain.com
+```
+
+**For localhost with custom port:**
+- Automatically allowed via regex: `/^https?:\/\/localhost:\d+$/`
+
+**Verify allowed origins:**
+Check server logs on startup:
+```
+[HTTP] ✅ CORS configured for: https://hyperscape.club, https://www.hyperscape.club, ...
+```
 
 ### Hot Reload Not Working
 
