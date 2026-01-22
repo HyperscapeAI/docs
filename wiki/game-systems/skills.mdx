@@ -686,6 +686,186 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
+---
+
+## Agility System
+
+Agility is a unique support skill that rewards exploration and affects stamina mechanics.
+
+### Training Agility
+
+Agility XP is gained passively by moving around the world:
+
+- **XP Rate**: 1 XP per 2 tiles traveled
+- **XP Batching**: XP is granted in batches of 50 XP every 100 tiles to reduce visual spam
+- **Movement Types**: Both walking and running grant XP at the same rate
+- **Death Penalty**: Accumulated tiles toward the next XP grant are lost on death (earned XP is kept)
+- **Teleportation**: Does not grant Agility XP
+
+**XP Rates:**
+
+| Movement Type | Tiles/Second | XP/Minute | Time to Level 50 | Time to Level 99 |
+|---------------|--------------|-----------|------------------|------------------|
+| Walking | 3.33 | ~100 XP | ~17 hours | ~2,000 hours |
+| Running | 6.67 | ~200 XP | ~8.5 hours | ~1,000 hours |
+
+<Info>
+XP drops appear every ~15 seconds while running or ~30 seconds while walking. This batching prevents spam while maintaining fair XP rates.
+</Info>
+
+### Agility Benefits
+
+#### Stamina Regeneration Bonus
+
+Higher Agility levels increase stamina regeneration rate:
+
+- **Formula**: +1% stamina regen per Agility level
+- **Applies to**: Both walking regen and idle regen
+- **Maximum Bonus**: +99% at level 99 (nearly double regen speed)
+
+**Stamina Regen Rates:**
+
+| Agility Level | Walking Regen/sec | Idle Regen/sec |
+|---------------|-------------------|----------------|
+| 1 | 2.02 | 4.04 |
+| 10 | 2.20 | 4.40 |
+| 25 | 2.50 | 5.00 |
+| 50 | 3.00 | 6.00 |
+| 75 | 3.50 | 7.00 |
+| 99 | 3.98 | 7.96 |
+
+<Info>
+Base stamina regen is 2/sec while walking and 4/sec while idle. Agility multiplies these base rates.
+</Info>
+
+### Weight and Stamina
+
+Inventory weight affects stamina drain while running:
+
+- **Base Drain**: 2 stamina/second while running
+- **Weight Penalty**: +0.5% drain per kg carried
+- **Formula**: `drainRate = baseDrain × (1 + weight × 0.005)`
+
+**Weight Impact Examples:**
+
+| Weight (kg) | Drain Multiplier | Drain/Second | Run Duration (100 stamina) |
+|-------------|------------------|--------------|----------------------------|
+| 0 | 1.0× | 2.0 | 50 seconds |
+| 10 | 1.05× | 2.1 | 47.6 seconds |
+| 20 | 1.10× | 2.2 | 45.5 seconds |
+| 50 | 1.25× | 2.5 | 40 seconds |
+| 100 | 1.50× | 3.0 | 33.3 seconds |
+
+<Warning>
+Heavy loads significantly impact run sustainability. High Agility can partially offset this penalty through faster regeneration.
+</Warning>
+
+### Combined Effects
+
+High Agility with heavy weight creates interesting gameplay:
+
+**Example: Level 50 Agility with 50kg load**
+- Drain rate: 2.5/sec (25% penalty from weight)
+- Idle regen: 6.0/sec (50% bonus from Agility)
+- Net effect: Even with heavy load, idle regen exceeds drain rate
+
+This rewards players who train Agility for carrying heavy equipment or loot.
+
+### Agility Unlocks
+
+| Level | Unlock |
+|-------|--------|
+| 1 | Basic stamina regeneration (+1% per level) |
+| 10 | +10% stamina regeneration |
+| 25 | +25% stamina regeneration |
+| 50 | +50% stamina regeneration |
+| 75 | +75% stamina regeneration |
+| 99 | Agility cape, +99% stamina regeneration |
+
+---
+
+## Prayer System
+
+Prayer provides temporary combat bonuses and protection at the cost of prayer points.
+
+### Prayer Points
+
+- **Maximum Points**: Equal to Prayer level
+- **Restoration**: Pray at altars to restore points to maximum
+- **Drain**: Active prayers drain points over time
+- **Bone Burial**: Bury bones to gain Prayer XP and restore some points
+
+### Training Prayer
+
+**Burying Bones:**
+- Use bones from inventory to bury them
+- Grants Prayer XP based on bone type
+- Restores a small amount of prayer points
+
+**Using Altars:**
+- Click on an altar to restore prayer points to maximum
+- Does not grant XP
+- Instant restoration
+
+### Prayer Unlocks
+
+Prayer has 29 unlockable prayers from level 1 to 77:
+
+**Protection Prayers:**
+- **Protect from Melee** (level 43) - Blocks melee damage
+- **Protect from Missiles** (level 40) - Blocks ranged damage
+- **Protect from Magic** (level 37) - Blocks magic damage
+
+**Offensive Prayers:**
+- **Burst of Strength** (level 4) - +5% Strength
+- **Clarity of Thought** (level 7) - +5% Attack
+- **Sharp Eye** (level 8) - +5% Ranged
+- **Mystic Will** (level 9) - +5% Magic
+
+**Ultimate Prayers:**
+- **Piety** (level 70) - +20% Attack, +23% Strength, +25% Defense
+- **Rigour** (level 74) - +20% Ranged, +23% Ranged Strength, +25% Defense
+- **Augury** (level 77) - +20% Magic, +25% Magic Damage, +25% Defense
+
+<Info>
+Click on the Prayer skill in the Skills Panel to view all 29 unlockable prayers and their level requirements.
+</Info>
+
+---
+
+## Skill Guide Panel
+
+The Skill Guide Panel is an OSRS-style UI feature that shows what you can unlock at each level.
+
+### Opening the Guide
+
+Click on any skill in the Skills Panel to open its guide.
+
+### Features
+
+- **Unlock List**: Shows all items, abilities, and activities unlocked at each level
+- **Progress Tracking**: Visual distinction between unlocked (green) and locked (gray) content
+- **Next Unlock**: Highlights the next unlock you're working toward
+- **Type Indicators**: Badges showing whether unlocks are items or abilities
+- **Scrollable**: Handles skills with many unlocks (Prayer has 29!)
+
+### Example: Attack Skill Guide
+
+```
+✓ Lvl 1   Bronze weapons       [item]
+✓ Lvl 5   Steel weapons        [item]
+✓ Lvl 40  Rune weapons         [item]
+➤ Lvl 60  Dragon weapons       [item]  [NEXT]
+🔒 Lvl 70 Abyssal whip         [item]
+🔒 Lvl 75 Godswords            [item]
+```
+
+<Info>
+The Skill Guide Panel fetches data from the server endpoint `/api/data/skill-unlocks` to ensure server-authoritative unlock information.
+</Info>
+
+---
+
 ## Skill Unlocks
 
 The `skill-unlocks.json` manifest documents what players unlock at each level. This is used for UI display and progression tracking.
@@ -697,9 +877,11 @@ Example unlocks:
 - **Mining 30**: Coal
 - **Cooking 40**: Lobster
 - **Smithing 50**: Mithril bar
+- **Agility 50**: +50% stamina regeneration
+- **Prayer 43**: Protect from Melee
 
 <Info>
-See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
+See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills. You can also view unlocks in-game by clicking on any skill in the Skills Panel.
 </Info>
 
 ## Manifest-Driven Design
