@@ -109,7 +109,12 @@ This starts the game server plus the ElizaOS agent runtime. The AI agent will co
 |---------|------|-------------|
 | Client | 3333 | Vite dev server with hot reload (dev mode) |
 | Server | 5555 | Game server (Fastify + WebSockets) |
-| CDN | 8080 | Asset server (Docker nginx, if started) |
+| CDN | 8080 | Asset server (Docker nginx) |
+| PostgreSQL | 5432 | Database (Docker, auto-started by server) |
+
+<Info>
+  PostgreSQL starts automatically when the server starts. The CDN must be started manually with `bun run cdn:up`.
+</Info>
 
 ## Quick Play Guide
 
