@@ -107,6 +107,39 @@ dashboard/                // Dashboard components
 - VRM avatar display with emotes
 - Skill Guide Panel (OSRS-style unlock progression viewer)
 
+### Game Panels
+
+Located in `src/game/panels/`:
+
+| Panel | File | Description |
+|-------|------|-------------|
+| Inventory | `InventoryPanel.tsx` | 28-slot inventory with drag & drop |
+| Equipment | `EquipmentPanel.tsx` | Equipment slots with stat bonuses |
+| Skills | `SkillsPanel.tsx` | All skills with XP progress bars |
+| Skill Guide | `SkillGuidePanel.tsx` | OSRS-style unlock progression viewer |
+| Combat | `CombatPanel.tsx` | Attack style selection |
+| Bank | `BankPanel.tsx` | Unlimited storage with tabs |
+| Dialogue | `DialoguePanel.tsx` | NPC conversations |
+| Store | `StorePanel.tsx` | Shop interface |
+| Settings | `SettingsPanel.tsx` | Game settings |
+| Loot | `LootWindow.tsx` | Ground item pickup |
+
+**Skill Guide Panel** (`SkillGuidePanel.tsx`):
+
+Opens when clicking any skill in the Skills Panel. Displays all unlocks for that skill with:
+- Current level and progress (X/Y unlocked)
+- Next unlock highlighting with countdown
+- Visual distinction (green checkmark for unlocked, lock icon for locked)
+- Type badges (item/ability)
+- Loading state while fetching from server
+- Smooth animations and OSRS-themed styling
+
+```typescript
+// Data fetched from server on first load
+const response = await fetch(`${GAME_API_URL}/api/data/skill-unlocks`);
+const skillUnlocks = await response.json();
+```
+
 ## Environment Variables
 
 ```bash
