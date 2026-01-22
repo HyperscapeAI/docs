@@ -44,7 +44,7 @@ packages/plugin-hyperscape/
 Agent capabilities are defined in `src/actions/`:
 
 ```typescript
-// From packages/plugin-hyperscape/src/index.ts (lines 161-188)
+// From packages/plugin-hyperscape/src/index.ts
 actions: [
   // Movement
   moveToAction,
@@ -65,6 +65,7 @@ actions: [
   equipItemAction,
   useItemAction,
   dropItemAction,
+  pickupItemAction,  // NEW in ElizaOS 1.7
 
   // Social
   chatMessageAction,
@@ -82,9 +83,22 @@ actions: [
 | **Movement** | moveTo, followEntity, stopMovement | `actions/movement.ts` |
 | **Combat** | attackEntity, changeCombatStyle | `actions/combat.ts` |
 | **Skills** | chopTree, catchFish, lightFire, cookFood | `actions/skills.ts` |
-| **Inventory** | equipItem, useItem, dropItem | `actions/inventory.ts` |
+| **Inventory** | equipItem, useItem, dropItem, **pickupItem** | `actions/inventory.ts` |
 | **Social** | chatMessage | `actions/social.ts` |
 | **Banking** | bankDeposit, bankWithdraw | `actions/banking.ts` |
+
+### New Actions in 1.7
+
+**PICKUP_ITEM**: Pick up items from the ground with smart matching
+- Word-boundary scoring prevents false matches
+- Auto-walks to items beyond pickup range
+- Handles server's 200-tile movement limit
+
+**DROP_ITEM Enhancements**:
+- "Drop all" support for entire inventory
+- "Drop all \<type\>" for specific item types
+- Safety limits (max 50 items)
+- Consecutive failure protection
 
 ## Providers
 
