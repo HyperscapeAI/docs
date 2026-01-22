@@ -281,16 +281,63 @@ bun run assets:deploy # Deploy to R2 (production)
 
 ## Deployment
 
-### Cloudflare Workers
+### Railway (Production)
 
+The server is deployed to Railway with automatic builds from GitHub.
+
+**Configuration files:**
+- `nixpacks.toml` - Build configuration (Nixpacks builder)
+- `railway.server.json` - Service configuration
+- `Dockerfile.server` - Multi-stage Docker build (alternative to Nixpacks)
+
+**Build process:**
+1. Install dependencies with Bun
+2. Build `shared` package (core engine)
+3. Build `server` package (game server)
+4. Build `client` package (frontend)
+5. Copy client build to `server/public/` directory
+6. Create manifests directory
+7. Start server with `bun dist/index.js`
+
+**Manifest fetching:**
+At server startup, manifests are automatically fetched from `PUBLIC_CDN_URL` and cached locally. This ensures the server always has the latest game data without bundling large JSON files.
+
+**Environment variables:**
 ```bash
-bun run deploy        # Deploy to staging
-bun run deploy:prod   # Deploy to production
+# Required
+DATABASE_URL=postgresql://...  # Auto-set by Railway PostgreSQL
+PRIVY_APP_ID=your-app-id
+PRIVY_APP_SECRET=your-app-secret
+JWT_SECRET=your-secret-32-chars
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+NODE_ENV=production
+
+# Optional
+ADMIN_CODE=your-admin-code
+SAVE_INTERVAL=60
 ```
 
-### Railway
+**Health checks:**
+Railway monitors the `/status` endpoint to verify server health.
 
-The `railway.server.json` in the project root configures Railway deployment.
+### Local Docker
+
+For local testing with Docker:
+
+```bash
+# Build Docker image
+docker build -f Dockerfile.server -t hyperscape-server .
+
+# Run container
+docker run -p 5555:5555 \
+  -e DATABASE_URL=postgresql://... \
+  -e JWT_SECRET=your-secret \
+  hyperscape-server
+```
+
+### Cloudflare Workers (Deprecated)
+
+The server previously supported Cloudflare Workers deployment but has migrated to Railway for better WebSocket support and PostgreSQL integration.
 
 ## Key Files
 
