@@ -749,6 +749,29 @@ All skill-related data is now defined in JSON manifests:
 
 This allows easy content updates without code changes and enables community modding.
 
+### Defence/Defense Spelling Normalization
+
+The skill unlocks system handles British/American spelling differences automatically:
+
+```typescript
+// From packages/shared/src/data/skill-unlocks.ts
+// Normalize British/American spelling: "defence" -> "defense"
+// JSON uses OSRS-accurate British spelling, but UI uses American spelling
+if (loadedUnlocks["defence"] && !loadedUnlocks["defense"]) {
+  loadedUnlocks["defense"] = loadedUnlocks["defence"];
+}
+```
+
+**Why this matters:**
+- `skill-unlocks.json` uses British spelling "defence" (OSRS-accurate)
+- Client UI uses American spelling "defense" (consistent with codebase)
+- Normalization ensures both spellings work correctly
+- No duplicate data needed in manifests
+
+<Info>
+This normalization happens once at manifest load time. Both `defence` and `defense` keys will work in API calls and UI components.
+</Info>
+
 ## Related Documentation
 
 - [Combat System](/wiki/game-systems/combat)
