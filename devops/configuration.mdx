@@ -43,14 +43,25 @@ PRIVY_APP_SECRET=your-privy-app-secret
 ```bash
 # Server
 PORT=5555
+NODE_ENV=development
 
-# Assets
+# Assets & CDN
 PUBLIC_CDN_URL=http://localhost:8080
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5555/ws
+
+# Manifest Fetching
+# In development, manifests are fetched from CDN only if local manifests don't exist
+# In production, manifests are always fetched from CDN at startup
+# Set SKIP_MANIFESTS=true to bypass manifest fetching in test environments
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
+
+# ElizaOS Integration
+ELIZAOS_API_URL=http://localhost:4001
 ```
 
 ## Client Environment
