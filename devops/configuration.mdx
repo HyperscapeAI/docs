@@ -43,15 +43,51 @@ PRIVY_APP_SECRET=your-privy-app-secret
 ```bash
 # Server
 PORT=5555
+NODE_ENV=development
 
-# Assets
+# Assets & CDN
 PUBLIC_CDN_URL=http://localhost:8080
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5555/ws
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
+
+# Database (local development)
+USE_LOCAL_POSTGRES=true
+POSTGRES_CONTAINER=hyperscape-postgres
+POSTGRES_USER=hyperscape
+POSTGRES_PASSWORD=hyperscape_dev
+POSTGRES_DB=hyperscape
+POSTGRES_PORT=5432
 ```
+
+### Production/Railway
+
+```bash
+# Railway automatically sets DATABASE_URL
+DATABASE_URL=postgresql://...  # Auto-set by Railway
+
+# Required for production
+NODE_ENV=production
+CI=true                        # Skips local asset download
+SKIP_ASSETS=true              # Skips Git LFS clone
+PUBLIC_CDN_URL=https://your-cdn.com  # Required for manifest fetching
+
+# Security
+JWT_SECRET=your-secure-random-secret
+ADMIN_CODE=your-admin-code
+
+# Privy
+PRIVY_APP_ID=your-privy-app-id
+PRIVY_APP_SECRET=your-privy-app-secret
+```
+
+<Info>
+**Manifest Fetching**: In production (CI=true), the server fetches manifests from `PUBLIC_CDN_URL` at startup. Manifests are downloaded to `packages/server/world/assets/manifests/` and cached for the server lifetime.
+</Info>
 
 ## Client Environment
 
