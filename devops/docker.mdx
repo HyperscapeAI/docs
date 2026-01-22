@@ -6,16 +6,24 @@ icon: "container"
 
 ## Overview
 
-Hyperscape uses Docker for:
+Hyperscape uses Docker for local development and production deployment:
 
-- **Asset CDN**: nginx serving game assets
-- **PostgreSQL**: Database for player data
-- **Development services**: Local infrastructure
+**Local Development**:
+- **Asset CDN**: nginx serving game assets (port 8080)
+- **PostgreSQL**: Database for player data (port 5432)
+
+**Production Deployment**:
+- **Railway**: Uses `Dockerfile.server` for multi-stage builds
+- **Nixpacks**: Alternative builder for Railway (configured in `nixpacks.toml`)
 
 ## Prerequisites
 
 - [Docker Desktop](https://docker.com/products/docker-desktop) (macOS/Windows)
 - Or Docker Engine on Linux: `apt install docker.io`
+
+<Info>
+For production deployment, Railway handles Docker builds automatically. You only need Docker locally for development.
+</Info>
 
 ## CDN Container
 
