@@ -348,9 +348,34 @@ Upload assets to S3, R2, or similar:
 
 ## Production Checklist
 
+### Railway (Backend)
 - [ ] PostgreSQL database provisioned
-- [ ] Environment variables configured
-- [ ] Privy credentials set (both client and server)
-- [ ] CDN serving assets
-- [ ] WebSocket URL configured
-- [ ] SSL/TLS enabled
+- [ ] Environment variables configured in Railway dashboard
+- [ ] Privy credentials set (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`)
+- [ ] JWT secret generated (`JWT_SECRET`)
+- [ ] CDN URL configured (`PUBLIC_CDN_URL`)
+- [ ] GitHub Actions workflow configured with `RAILWAY_TOKEN`
+
+### Cloudflare Pages (Frontend)
+- [ ] Pages project created and connected to GitHub
+- [ ] Build command configured: `cd packages/client && bun run build`
+- [ ] Environment variables set (`PUBLIC_PRIVY_APP_ID`, `PUBLIC_API_URL`, `PUBLIC_WS_URL`, `PUBLIC_CDN_URL`)
+- [ ] Custom domain configured (optional)
+- [ ] Preview deployments enabled for pull requests
+
+### Cloudflare R2 (Assets)
+- [ ] R2 bucket created (`hyperscape-assets`)
+- [ ] Manifests uploaded to `manifests/` prefix
+- [ ] Public access configured for bucket
+- [ ] GitHub Actions workflow configured with `CLOUDFLARE_API_TOKEN`
+
+### CORS Configuration
+- [ ] Server CORS allowlist includes Cloudflare Pages domains
+  - `https://hyperscape.pages.dev`
+  - `https://*.hyperscape.pages.dev` (preview deployments)
+- [ ] WebSocket connections allowed from frontend domain
+
+### SSL/TLS
+- [ ] Railway provides automatic HTTPS
+- [ ] Cloudflare Pages provides automatic HTTPS
+- [ ] WebSocket URL uses `wss://` protocol
