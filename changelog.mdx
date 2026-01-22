@@ -23,6 +23,99 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Agility Skill & Skill Guide Panel" description="January 2026" date="2026-01-22">
+
+### 🏃 Agility Skill System
+
+Complete implementation of the Agility skill with movement-based XP and stamina mechanics:
+
+**Training Agility:**
+- **XP Rate**: 1 XP per 2 tiles traveled (both walking and running)
+- **XP Batching**: Grants 50 XP every 100 tiles to reduce visual spam
+- **XP Frequency**: ~15 seconds while running, ~30 seconds while walking
+- **Death Penalty**: Accumulated tiles toward next XP grant are lost on death (earned XP is kept)
+- **Teleportation**: Does not grant Agility XP
+
+**Stamina Benefits:**
+- **Regen Bonus**: +1% stamina regeneration per Agility level
+- **Applies to**: Both walking regen (2/sec base) and idle regen (4/sec base)
+- **Level 99 Bonus**: +99% regen (nearly double speed)
+
+**Weight System:**
+- **Stamina Drain**: +0.5% drain per kg carried while running
+- **Base Drain**: 2 stamina/second while running
+- **Heavy Load Impact**: 50kg = +25% drain, 100kg = +50% drain
+- **Weight Sync**: Server calculates total inventory weight and syncs to client
+- **Equipment Panel**: Now displays server-synced weight instead of client-calculated
+
+**Database:**
+- New migration `0018_add_agility_skill.sql`
+- Added `agilityLevel` and `agilityXp` columns to characters table
+- Full persistence through PlayerRepository and CharacterRepository
+
+**Testing:**
+- 868 lines of comprehensive tests
+- `AgilitySystem.test.ts` - XP batching, weight drain, agility regen formulas
+- `AgilityPersistence.test.ts` - Database loading, saving, death reset
+
+### 📊 Skill Guide Panel
+
+OSRS-style UI panel showing skill unlock progression:
+
+**Features:**
+- Click any skill in Skills Panel to open its guide
+- Shows all unlocks with level requirements
+- Visual states: Unlocked (green ✓), Locked (gray 🔒), Next (gold ➤)
+- Type badges: Item vs Ability
+- Scrollable for skills with many unlocks (Prayer has 29!)
+- Loading state with spinner
+- ESC key and click-outside-to-close
+
+**Implementation:**
+- New `SkillGuidePanel.tsx` component with portal rendering
+- Fetches data from `/api/data/skill-unlocks` endpoint
+- Server-authoritative unlock information
+- Smooth animations (fade-in, slide-up)
+- Custom scrollbar styling matching OSRS theme
+
+**API Endpoint:**
+- New `GET /api/data/skill-unlocks` endpoint
+- Returns all skill unlocks from CDN-hosted manifest
+- Used by Skill Guide Panel for display
+
+**Data:**
+- Defence/Defense spelling normalization in `skill-unlocks.ts`
+- JSON uses British "defence" for OSRS accuracy
+- Code automatically aliases to American "defense"
+
+### 🚀 Railway Deployment Improvements
+
+Enhanced Railway deployment with CDN manifest fetching:
+
+**CDN Manifest Fetching:**
+- Server fetches manifests from CDN at startup in production
+- Skips fetch in development if local manifests exist
+- Reduces deployment size (no bundled assets)
+- Faster deployments and better caching
+
+**Build Process:**
+- Split build commands for better debugging
+- Explicit Bun provider in nixpacks.toml
+- Client build copied to `packages/server/public/`
+- Single service serves both API and static files
+
+**GitHub Actions:**
+- Automated deployment via Railway GraphQL API
+- Triggers on push to main for server/shared/client changes
+- Uses Nixpacks for consistent builds
+
+**Debug Endpoints:**
+- `/debug/public` endpoint to verify build artifacts
+- Build timestamp file for deployment verification
+- Index.html existence checks before server start
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
