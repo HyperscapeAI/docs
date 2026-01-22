@@ -4,6 +4,43 @@ description: "Monorepo structure and package overview"
 icon: "boxes"
 ---
 
+## Production Architecture
+
+Hyperscape uses a **split deployment model** for optimal performance:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Production Deployment                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Frontend (Cloudflare Pages)                                │
+│  ├─ hyperscape.club                                         │
+│  ├─ www.hyperscape.club                                     │
+│  └─ *.hyperscape.pages.dev (preview deployments)           │
+│                                                              │
+│  Server/API (Railway)                                       │
+│  ├─ hyperscape-production.up.railway.app                   │
+│  ├─ WebSocket: wss://.../ws                                │
+│  ├─ REST API: /api/*                                        │
+│  └─ Serves frontend at / (SPA routing)                     │
+│                                                              │
+│  Assets/CDN (Cloudflare R2)                                 │
+│  ├─ assets.hyperscape.club                                  │
+│  ├─ 3D models, textures, audio                             │
+│  └─ Game data manifests (JSON)                             │
+│                                                              │
+│  Database (Railway PostgreSQL)                              │
+│  └─ Player data, inventory, world state                    │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Features:**
+- Frontend served from Cloudflare's global CDN (low latency)
+- Server handles game logic and WebSocket connections
+- Assets served from R2 (not bundled with frontend)
+- Manifests fetched from CDN at server startup (allows content updates without redeployment)
+
 ## Monorepo Structure
 
 Hyperscape is a **Turbo monorepo** with 7 packages:
