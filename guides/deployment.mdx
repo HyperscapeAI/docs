@@ -46,14 +46,13 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
+Railway deployment is fully automated via GitHub Actions. See the [Railway Deployment Guide](/guides/deployment-railway) for detailed instructions.
+
+### Quick Setup
+
 <Steps>
   <Step title="Create Railway project">
     Connect your GitHub repository to Railway.
-  </Step>
-  
-  <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
   </Step>
   
   <Step title="Add PostgreSQL">
@@ -61,9 +60,33 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    ```bash
+    DATABASE_URL=${{Postgres.DATABASE_URL}}
+    PUBLIC_PRIVY_APP_ID=your-privy-app-id
+    PRIVY_APP_SECRET=your-privy-app-secret
+    JWT_SECRET=your-random-secret
+    PUBLIC_CDN_URL=https://cdn.hyperscape.ai
+    ```
+  </Step>
+  
+  <Step title="Configure GitHub Actions">
+    Add Railway secrets to GitHub repository:
+    - `RAILWAY_TOKEN`
+    - `RAILWAY_PROJECT_ID`
+    - `RAILWAY_ENVIRONMENT_ID` (optional)
+  </Step>
+  
+  <Step title="Deploy">
+    Push to `main` branch - GitHub Actions handles the rest.
   </Step>
 </Steps>
+
+**Features**:
+- Automatic deployments on push to `main`
+- Nixpacks build with Bun support
+- Frontend and backend served from single service
+- CDN manifest fetching (no Git LFS in production)
+- Health checks with curl
 
 ## Vercel Client Deployment
 
