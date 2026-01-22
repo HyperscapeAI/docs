@@ -292,25 +292,99 @@ bunx drizzle-kit push      # Apply schema
 bunx drizzle-kit migrate   # Run migrations
 ```
 
-## CDN Setup
+## Cloudflare R2 Asset Deployment
 
-### Option 1: Self-Hosted
+Assets are automatically deployed to Cloudflare R2 via GitHub Actions.
 
-Use the included Docker CDN:
+### Automatic Upload
+
+The `.github/workflows/deploy-cloudflare.yml` workflow uploads assets when:
+
+- Manifests change: `packages/server/world/assets/manifests/**`
+- Assets change: `assets/**`
+- Manual trigger via workflow dispatch
+
+**Buckets:**
+- Production: `hyperscape-assets` → `assets.hyperscape.club`
+- Staging: `hyperscape-assets-staging` → `staging-assets.hyperscape.club`
+
+### Manual R2 Upload
+
+<Steps>
+  <Step title="Install Wrangler">
+    ```bash
+    npm install -g wrangler
+    ```
+  </Step>
+  
+  <Step title="Authenticate">
+    ```bash
+    wrangler login
+    ```
+  </Step>
+  
+  <Step title="Upload manifests">
+    ```bash
+    # Production
+    find packages/server/world/assets/manifests -type f -name "*.json" | while read file; do
+      rel_path="${file#packages/server/world/assets/manifests/}"
+      wrangler r2 object put "hyperscape-assets/manifests/$rel_path" \
+        --file="$file" \
+        --content-type="application/json"
+    done
+    
+    # Staging
+    # Replace bucket name with hyperscape-assets-staging
+    ```
+  </Step>
+  
+  <Step title="Upload 3D assets">
+    ```bash
+    # Upload models, textures, audio from assets/ directory
+    find assets -type f | while read file; do
+      rel_path="${file#assets/}"
+      wrangler r2 object put "hyperscape-assets/$rel_path" \
+        --file="$file" \
+        --content-type="application/octet-stream"
+    done
+    ```
+  </Step>
+</Steps>
+
+### CDN Configuration
+
+The server fetches manifests from the CDN at startup:
+
+```typescript
+// From packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Manifest files fetched:**
+- Root manifests: `npcs.json`, `stores.json`, `world-areas.json`, etc.
+- Items: `items/weapons.json`, `items/tools.json`, `items/resources.json`, etc.
+- Gathering: `gathering/woodcutting.json`, `gathering/mining.json`, etc.
+- Recipes: `recipes/cooking.json`, `recipes/smithing.json`, etc.
+
+**Caching behavior:**
+- Manifests cached locally in `packages/server/world/assets/manifests/`
+- Only updated files are written (content comparison)
+- Development mode skips fetch if local manifests exist
+- 5-minute cache headers for manifest HTTP requests
+
+<Info>
+  This architecture allows updating game content by uploading new manifests to R2 without redeploying the server.
+</Info>
+
+### Local CDN (Development)
+
+For local development, use the Docker CDN:
 
 ```bash
 bun run cdn:up
 ```
 
-Configure `PUBLIC_CDN_URL` to point to your CDN host.
-
-### Option 2: Cloud Storage
-
-Upload assets to S3, R2, or similar:
-
-1. Build assets: `bun run assets:optimize`
-2. Upload `packages/server/world/assets/`
-3. Set `PUBLIC_CDN_URL` to bucket URL
+This serves assets from `packages/server/world/assets/` on port 8080.
 
 ## Production Checklist
 
