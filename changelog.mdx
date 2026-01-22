@@ -23,6 +23,93 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Agility Skill & Deployment Updates" description="January 2026" date="2026-01-22">
+
+### 🏃 Agility Skill System
+
+Complete implementation of the 12th skill with movement-based progression:
+
+- **Movement XP**: Gain 1 XP per 2 tiles traveled (walking or running)
+  - XP batched every 100 tiles (50 XP grant) to prevent visual spam
+  - Running: ~200 XP/minute, Walking: ~100 XP/minute
+  - Death penalty: Resets accumulated tile progress (max 50 XP lost)
+- **Weight-Based Stamina Drain**: Carrying heavy items increases stamina drain
+  - Formula: `Drain Rate = Base × (1 + Weight × 0.005)`
+  - 50kg load = +25% drain (2.5/sec instead of 2.0/sec)
+  - Weight synced from server to client for accurate calculations
+- **Agility-Based Stamina Regen**: Higher agility increases stamina regeneration
+  - Formula: `Regen Rate = Base × (1 + Agility Level × 0.01)`
+  - Level 99 = +99% regen (nearly double base rate)
+  - Applies to both idle (4/sec base) and walking (2/sec base) regen
+- **Database Migration**: Added `agilityLevel` and `agilityXp` columns
+- **Full Integration**: UI panels, event system, network sync, persistence
+- **Testing**: 868 lines of comprehensive tests (unit + integration)
+
+### 🎯 Skill Guide Panel
+
+OSRS-style skill progression viewer:
+
+- **Click-to-View**: Click any skill in Skills panel to open its guide
+- **Visual States**: Green checkmark (unlocked), lock icon (locked), arrow (next unlock)
+- **Progress Tracking**: Shows unlocked count and levels to next unlock
+- **Scrollable**: Custom themed scrollbar for skills with many unlocks
+- **Loading State**: Spinner while fetching unlock data from server
+- **Server API**: New `/api/data/skill-unlocks` endpoint
+- **Spelling Normalization**: Defence/Defense handled automatically
+
+### 🚀 Railway Deployment
+
+Production deployment infrastructure with automated CI/CD:
+
+- **Nixpacks Build**: Optimized build configuration for Railway
+  - Builds only `shared` and `server` packages (frontend on Cloudflare Pages)
+  - Fetches manifests from CDN instead of bundling
+  - System dependencies for native modules (Cairo, Pango)
+- **GitHub Actions**: Automated deployment on push to main
+  - Uses Railway GraphQL API for deployments
+  - Monitors deployment status
+  - Triggers on server-related file changes
+- **Configuration Files**: `nixpacks.toml`, `railway.server.json`, deploy workflow
+- **Removed AWS**: Deprecated AWS deployment workflow
+
+### 🌐 Cloudflare Pages Integration
+
+Frontend deployment with global CDN distribution:
+
+- **CORS Configuration**: Added Cloudflare Pages domains to allowlist
+  - Production: `hyperscape.pages.dev`
+  - Preview deployments: `*.hyperscape.pages.dev` (wildcard subdomain)
+- **Preview Deployments**: Automatic preview URLs for all pull requests
+- **Environment Variables**: Documented in `.env.example` files
+
+### 📦 CDN Manifest Fetching
+
+Server-side manifest loading from CDN:
+
+- **Startup Fetch**: Server downloads manifests from CDN at startup
+  - Skips in development if local manifests exist
+  - Reduces deployment size
+  - Allows manifest updates without redeploying server
+- **Configuration**: `manifestsDir` in ServerConfig
+- **Conditional Routes**: Asset routes only registered when client assets exist
+
+### 🔧 Build & CI Improvements
+
+- **Split Build Commands**: Separate phases for better debugging
+- **Cache Bust**: Timestamp-based cache invalidation
+- **Verification Steps**: Index.html and build artifact checks
+- **Debug Endpoints**: `/debug/public` for directory inspection
+- **Lockfile Sync**: Fixed bun.lock drift issues
+
+### 🐛 Bug Fixes
+
+- **Weight Display**: Equipment panel now uses server-synced weight (single source of truth)
+- **Initial Weight**: Weight emitted on inventory load (fixes stamina drain on login)
+- **Event Bridge**: Weight changes forwarded to client for UI updates
+- **Prayer Integration**: Added missing prayer field to CharacterRepository
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
