@@ -625,6 +625,31 @@ Noted items must be un-noted at a bank before they can be equipped or used for s
 
 ---
 
+## Skill Guide Panel
+
+The Skill Guide Panel is an OSRS-style interface that shows what you unlock at each level for any skill.
+
+### Opening the Guide
+
+Click any skill in the Skills Panel to open its guide. The panel displays:
+
+- **All unlocks** with level requirements
+- **Visual indicators** for unlocked (green checkmark) vs locked (lock icon) items
+- **Next unlock** highlighted with gold accent and "NEXT" badge
+- **Progress tracking**: "X of Y unlocks achieved"
+- **Type badges**: Item vs ability unlocks with color coding
+
+### Features
+
+- **Scrollable list** for skills with many unlocks (Prayer has 29!)
+- **Keyboard support**: ESC key or click outside to close
+- **Loading states**: Spinner during data fetch
+- **Server-authoritative**: Unlock data fetched from `/api/data/skill-unlocks`
+
+<Info>
+  The guide helps you plan your progression by showing exactly what you'll unlock at each level milestone.
+</Info>
+
 ## Skill Events
 
 The system emits events for UI updates and logging:
