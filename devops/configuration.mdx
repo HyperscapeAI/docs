@@ -44,14 +44,50 @@ PRIVY_APP_SECRET=your-privy-app-secret
 # Server
 PORT=5555
 
-# Assets
-PUBLIC_CDN_URL=http://localhost:8080
+# Assets & CDN
+PUBLIC_CDN_URL=http://localhost:8080  # Development
+# PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
+
+# Admin Access
+ADMIN_CODE=your-admin-code  # Required in production
+
+# CI/Deployment
+CI=true  # Set by Railway/GitHub Actions
+SKIP_ASSETS=true  # Skip asset download in CI
+COMMIT_HASH=abc123  # Auto-populated by CI
 ```
+
+### CORS Configuration
+
+The server automatically configures CORS for production and development domains:
+
+**Allowed Origins:**
+- `https://hyperscape.club` (production frontend)
+- `https://www.hyperscape.club` (www subdomain)
+- `https://hyperscape.pages.dev` (Cloudflare Pages)
+- `http://hyperscape.pages.dev` (HTTP fallback for testing)
+- `https://*.hyperscape.pages.dev` (preview deployments)
+- `https://hyperscape-production.up.railway.app` (Railway server)
+- `http://localhost:*` (any localhost port for development)
+
+**Dynamic Patterns:**
+```typescript
+// From packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  /^https?:\/\/localhost:\d+$/,  // Matches any localhost port
+  /^https?:\/\/.+\.hyperscape\.pages\.dev$/,  // Cloudflare preview deployments
+  /^https:\/\/.+\.up\.railway\.app$/,  // Railway deployments
+];
+```
+
+<Info>
+CORS configuration is automatically applied to all API routes. No additional configuration needed for standard deployments.
+</Info>
 
 ## Client Environment
 
