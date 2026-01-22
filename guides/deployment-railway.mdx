@@ -1,0 +1,326 @@
+---
+title: "Railway Deployment"
+description: "Deploy Hyperscape to Railway with automatic CI/CD"
+icon: "train"
+---
+
+## Overview
+
+Hyperscape can be deployed to [Railway](https://railway.app) with automatic deployments via GitHub Actions. The deployment uses Nixpacks for building and serves both the game server and client from a single service.
+
+## Prerequisites
+
+- Railway account ([railway.app](https://railway.app))
+- GitHub repository with Hyperscape code
+- Railway API token (for CI/CD)
+
+## Deployment Architecture
+
+```
+GitHub Push → GitHub Actions → Railway GraphQL API → Railway Build → Deploy
+```
+
+**Services**:
+- **Game Server**: Fastify + WebSockets on port 5555
+- **Client**: Static files served from `/dist/client`
+- **PostgreSQL**: Railway-managed database
+- **CDN**: Assets fetched from CDN at startup (no Git LFS in production)
+
+## Railway Configuration
+
+### Project Setup
+
+1. Create a new Railway project
+2. Add a PostgreSQL database service
+3. Link your GitHub repository
+4. Set environment variables (see below)
+
+### Build Configuration
+
+Railway uses **Nixpacks** for building. Configuration in `nixpacks.toml`:
+
+```toml
+[phases.setup]
+nixPkgs = ["bun"]
+
+[phases.install]
+cmds = ["bun install --frozen-lockfile"]
+
+[phases.build]
+cmds = [
+  "bun run build:shared",
+  "bun run build:client",
+  "bun run build:server"
+]
+
+[start]
+cmd = "cd packages/server && bun run start"
+```
+
+### Environment Variables
+
+**Required**:
+```bash
+DATABASE_URL=${{Postgres.DATABASE_URL}}  # Auto-set by Railway
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
+PRIVY_APP_SECRET=your-privy-app-secret
+JWT_SECRET=your-random-secret
+PUBLIC_CDN_URL=https://cdn.hyperscape.ai
+```
+
+**Optional**:
+```bash
+PORT=5555                    # Server port (Railway auto-assigns)
+NODE_ENV=production
+PUBLIC_API_URL=https://your-app.railway.app
+PUBLIC_WS_URL=wss://your-app.railway.app/ws
+```
+
+## GitHub Actions CI/CD
+
+### Workflow Configuration
+
+The deployment workflow (`.github/workflows/deploy-railway.yml`) triggers on pushes to `main` that affect server-related files:
+
+```yaml
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/server/**'
+      - 'packages/shared/**'
+      - 'packages/client/**'
+      - 'package.json'
+      - 'bun.lock'
+```
+
+### Setup GitHub Secrets
+
+Add these secrets to your GitHub repository (Settings → Secrets and variables → Actions):
+
+```bash
+RAILWAY_TOKEN=your-railway-api-token
+RAILWAY_PROJECT_ID=your-project-id
+RAILWAY_ENVIRONMENT_ID=your-environment-id  # Optional, defaults to production
+```
+
+**Get Railway Token**:
+1. Go to [Railway Account Settings](https://railway.app/account/tokens)
+2. Create a new token with deployment permissions
+3. Copy and add to GitHub secrets
+
+**Get Project/Environment IDs**:
+```bash
+# Install Railway CLI
+npm i -g @railway/cli
+
+# Login
+railway login
+
+# Link project
+railway link
+
+# Get IDs
+railway status
+```
+
+### Deployment Process
+
+1. Push to `main` branch
+2. GitHub Actions workflow starts
+3. Uses Railway GraphQL API to trigger deployment
+4. Railway builds using Nixpacks
+5. Deployment goes live automatically
+
+## Asset Handling
+
+### CDN Manifest Fetching
+
+In production, assets are served from a CDN instead of being bundled with the deployment. The server fetches manifests at startup:
+
+```typescript
+// From packages/server/src/startup/world.ts
+async function fetchManifestsFromCDN(cdnUrl: string, manifestsDir: string) {
+  const manifestFiles = [
+    'items.json',
+    'npcs.json',
+    'gathering/woodcutting.json',
+    'gathering/mining.json',
+    'gathering/fishing.json',
+    'recipes/smelting.json',
+    'recipes/smithing.json',
+    'recipes/cooking.json',
+    'recipes/firemaking.json',
+    'skill-unlocks.json',
+    'tier-requirements.json',
+    'stores.json',
+    'world-areas.json',
+  ];
+
+  for (const file of manifestFiles) {
+    const url = `${cdnUrl}/manifests/${file}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    // Save to local cache
+  }
+}
+```
+
+**Behavior**:
+- **Production**: Always fetches from CDN
+- **Development**: Skips CDN fetch if local manifests exist
+
+### CDN Configuration
+
+Set `PUBLIC_CDN_URL` to your asset hosting:
+
+```bash
+# Railway environment variable
+PUBLIC_CDN_URL=https://cdn.hyperscape.ai
+
+# Or use Railway's static file serving
+PUBLIC_CDN_URL=https://your-app.railway.app/assets
+```
+
+## Frontend Serving
+
+The server serves the built client files from `/dist/client`:
+
+```typescript
+// From packages/server/src/startup/http-server.ts
+if (fs.existsSync(clientDistPath)) {
+  fastify.register(fastifyStatic, {
+    root: clientDistPath,
+    prefix: '/',
+  });
+  
+  // SPA fallback
+  fastify.setNotFoundHandler((req, reply) => {
+    reply.sendFile('index.html');
+  });
+}
+```
+
+**Build Process**:
+```bash
+# Client build outputs to packages/client/dist
+bun run build:client
+
+# Server expects it at packages/server/dist/client
+# Nixpacks build phase handles this automatically
+```
+
+## Health Checks
+
+Railway uses the `/health` endpoint for health checks:
+
+```typescript
+// From packages/server/src/startup/routes/health-routes.ts
+fastify.get('/health', async (req, reply) => {
+  return reply.send({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+```
+
+**Dockerfile Health Check**:
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:${PORT:-5555}/health || exit 1
+```
+
+## Troubleshooting
+
+### Build Failures
+
+**Lockfile Frozen Error**:
+```
+lockfile had changes, but lockfile is frozen
+```
+
+**Fix**: Regenerate lockfile with the same Bun version:
+```bash
+bun install
+git add bun.lock
+git commit -m "fix: update bun.lock"
+```
+
+### Asset 404 Errors
+
+**Symptoms**: Models, avatars, or textures not loading
+
+**Fix**: Verify `PUBLIC_CDN_URL` is set correctly and CDN is accessible:
+```bash
+curl https://cdn.hyperscape.ai/manifests/items.json
+```
+
+### Database Connection Issues
+
+**Symptoms**: Server starts but can't connect to database
+
+**Fix**: Verify `DATABASE_URL` is set and PostgreSQL service is running:
+```bash
+# In Railway dashboard
+railway logs --service postgres
+```
+
+### Client Not Serving
+
+**Symptoms**: 404 on root path, client files not found
+
+**Fix**: Verify client build completed successfully:
+```bash
+# Check Railway build logs for:
+# ✓ built in XXXms
+# Look for packages/client/dist/ directory
+```
+
+## Monitoring
+
+### Railway Dashboard
+
+Monitor your deployment:
+- **Metrics**: CPU, memory, network usage
+- **Logs**: Real-time server logs
+- **Deployments**: Build history and rollback
+- **Environment**: Variable management
+
+### Application Logs
+
+```bash
+# View live logs
+railway logs
+
+# Filter by service
+railway logs --service web
+```
+
+## Scaling
+
+Railway automatically scales based on traffic. For manual scaling:
+
+1. Go to Railway dashboard
+2. Select your service
+3. Settings → Resources
+4. Adjust CPU/memory limits
+
+**Recommended Resources**:
+- **CPU**: 2 vCPU minimum
+- **Memory**: 2GB minimum
+- **Disk**: 1GB (manifests cached locally)
+
+## Cost Optimization
+
+**Tips**:
+- Use Railway's PostgreSQL (included in plan)
+- Serve assets from external CDN (reduces bandwidth)
+- Enable Railway's sleep mode for staging environments
+- Use environment-specific builds (skip dev dependencies)
+
+## Related Documentation
+
+- [Deployment Overview](/guides/deployment)
+- [Environment Variables](/devops/configuration)
+- [Docker Deployment](/devops/docker)
