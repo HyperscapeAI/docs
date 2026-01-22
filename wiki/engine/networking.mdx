@@ -375,6 +375,57 @@ export const NETWORK_CONSTANTS = {
 
 ---
 
+## Rate Limiting
+
+Network handlers use **sliding window rate limiters** to prevent abuse:
+
+```typescript
+// From ServerNetwork/services/SlidingWindowRateLimiter.ts
+
+// Quest handlers
+getQuestListRateLimiter()    // 5 requests/sec
+getQuestDetailRateLimiter()  // 10 requests/sec
+getQuestAcceptRateLimiter()  // 3 requests/sec
+
+// Inventory handlers
+getPickupRateLimiter()       // 5 requests/sec
+getConsumeRateLimiter()      // 3 requests/sec
+getCoinPouchRateLimiter()    // 5 requests/sec
+
+// Combat handlers
+getAttackRateLimiter()       // 10 requests/sec
+getPrayerRateLimiter()       // 5 requests/sec
+
+// Movement handlers
+getMoveRateLimiter()         // 30 requests/sec
+getFollowRateLimiter()       // 5 requests/sec
+```
+
+**Features:**
+- Per-player tracking
+- Sliding window algorithm (more accurate than fixed window)
+- Automatic stale entry cleanup
+- Configurable cleanup interval (60s default)
+
+**Example:**
+
+```typescript
+// Handler with rate limiting
+export function handleQuestAccept(socket: ServerSocket, data: { questId: string }, world: World): void {
+  const playerId = getPlayerId(socket);
+  
+  // Rate limit check
+  if (!getQuestAcceptRateLimiter().check(playerId)) {
+    logger.debug(`Rate limit exceeded for ${playerId} on questAccept`);
+    return;
+  }
+  
+  // Process request...
+}
+```
+
+---
+
 ## Related Documentation
 
 - [Entity Component System](/wiki/engine/ecs)
