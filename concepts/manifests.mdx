@@ -473,9 +473,43 @@ const npc = ALL_NPCS.get("goblin");
 DataManager supports two loading modes:
 
 1. **Filesystem** (server-side): Loads from `packages/server/world/assets/manifests/`
-2. **CDN** (client-side): Fetches from `http://localhost:8080/assets/manifests/`
+2. **CDN** (client-side): Fetches from `PUBLIC_CDN_URL/manifests/`
 
 The loading is **atomic** for directory-based manifests - all required files must exist or it falls back to legacy single-file format.
+
+### CDN Manifest Fetching
+
+The server automatically fetches manifests from the CDN at startup:
+
+```typescript
+// From packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Fetching behavior:**
+
+| Environment | Behavior |
+|-------------|----------|
+| **Development** | Skips fetch if local manifests exist (allows local editing) |
+| **Production** | Always fetches latest from CDN (ensures consistency) |
+| **Staging** | Always fetches from staging CDN bucket |
+| **Test** | Skips fetch if `SKIP_MANIFESTS=true` or `NODE_ENV=test` |
+
+**Manifest files fetched** (30+ files):
+- Root: `npcs.json`, `stores.json`, `world-areas.json`, `prayers.json`, `skill-unlocks.json`, etc.
+- Items: `items/weapons.json`, `items/tools.json`, `items/resources.json`, `items/food.json`, `items/misc.json`
+- Gathering: `gathering/woodcutting.json`, `gathering/mining.json`, `gathering/fishing.json`
+- Recipes: `recipes/cooking.json`, `recipes/firemaking.json`, `recipes/smelting.json`, `recipes/smithing.json`
+
+**Caching:**
+- Manifests cached in `packages/server/world/assets/manifests/`
+- Content comparison: Only changed files are written to disk
+- HTTP cache headers: 5-minute cache with revalidation
+- Startup logs: `X fetched, Y updated, Z failed`
+
+<Info>
+  This architecture allows updating game content by uploading new manifests to R2 without redeploying the server. The server will fetch the latest manifests on next restart.
+</Info>
 
 ## Adding Content
 
