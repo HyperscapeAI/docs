@@ -144,6 +144,10 @@ Host assets on cloud storage:
 PUBLIC_CDN_URL=https://your-cdn.example.com
 ```
 
+<Info>
+In production, the server fetches manifests from the CDN at startup using `fetchManifestsFromCDN()`. This eliminates the need for Git LFS in CI/production environments.
+</Info>
+
 ## Container Status
 
 Check running containers:
