@@ -79,6 +79,42 @@ curl https://api.hyperscape.lol/health
   List all world areas
 </ParamField>
 
+### Game Data
+
+<ParamField path="GET /api/data/skill-unlocks" type="endpoint">
+  Get skill unlock definitions for all skills
+</ParamField>
+
+Returns a map of skill names to unlock arrays:
+
+```json
+{
+  "attack": [
+    {
+      "level": 1,
+      "description": "Bronze weapons, Iron weapons",
+      "type": "item"
+    },
+    {
+      "level": 40,
+      "description": "Rune weapons",
+      "type": "item"
+    }
+  ],
+  "agility": [
+    {
+      "level": 1,
+      "description": "Basic stamina regeneration (+1% per level)",
+      "type": "ability"
+    }
+  ]
+}
+```
+
+<Info>
+This endpoint is used by the Skill Guide Panel to display level-based unlocks. Data is server-authoritative and loaded from `skill-unlocks.json` manifest.
+</Info>
+
 ## WebSocket Events
 
 Connect to the game server via WebSocket for real-time updates:
