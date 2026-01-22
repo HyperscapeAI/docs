@@ -27,15 +27,40 @@ PRIVY_APP_SECRET=your-app-secret
 
 **Symptom**: 404 errors for models/avatars
 
-**Cause**: CDN container not running
+**Causes**:
+1. CDN container not running (development)
+2. Wrong `PUBLIC_CDN_URL` configuration
+3. Manifests not fetched from CDN (production)
 
-**Solution**:
+**Solutions**:
 
+**Development:**
 ```bash
+# Start local CDN
 bun run cdn:up
+
+# Or use bun run dev which starts it automatically
+bun run dev
 ```
 
-Or ensure you're using `bun run dev` which starts it automatically.
+**Production:**
+```bash
+# Verify CDN URL is correct
+echo $PUBLIC_CDN_URL
+# Should be: https://assets.hyperscape.club
+
+# Check server logs for manifest fetch errors
+# Server fetches manifests at startup from CDN
+```
+
+**Verify CDN is accessible:**
+```bash
+# Test manifest fetch
+curl https://assets.hyperscape.club/manifests/npcs.json
+
+# Test model fetch
+curl -I https://assets.hyperscape.club/models/goblin/goblin.vrm
+```
 
 ### Database Schema Errors
 
