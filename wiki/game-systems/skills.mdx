@@ -695,6 +695,33 @@ Example unlocks:
 See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
 </Info>
 
+### Skill Guide Panel
+
+Players can view all unlocks for a skill by **clicking on the skill icon** in the Skills panel. This opens an OSRS-style guide showing:
+
+- All unlocks with level requirements
+- Visual distinction between unlocked (achieved) and locked (future) items
+- Next unlock highlighted with progress indicator
+- Type badges (item vs ability)
+- Scrollable list for skills with many unlocks
+
+**Features**:
+- Click any skill in Skills Panel to open its guide
+- Shows current level and unlock progress (e.g., "15/29 unlocked")
+- Next unlock highlighted with "X more levels to unlock..." message
+- Green checkmarks for achieved unlocks
+- Lock icons for future unlocks
+- Close with ESC key, X button, or click outside
+
+**Implementation**:
+- Component: `packages/client/src/game/panels/SkillGuidePanel.tsx`
+- Data source: `/api/data/skill-unlocks` endpoint
+- Fetched once at Skills Panel mount and cached
+
+<Info>
+The Skill Guide Panel matches OSRS visual design with dark brown backgrounds, gold accents, and smooth animations.
+</Info>
+
 ## Manifest-Driven Design
 
 All skill-related data is now defined in JSON manifests:
