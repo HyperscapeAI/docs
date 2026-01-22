@@ -679,20 +679,55 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
-## Skill Unlocks
+## Skill Unlocks & Guide Panel
 
 The `skill-unlocks.json` manifest documents what players unlock at each level. This is used for UI display and progression tracking.
 
-Example unlocks:
+### Skill Guide Panel (OSRS-Style)
+
+Players can click any skill in the Skills Panel to open an OSRS-style guide showing all unlocks:
+
+**Features:**
+- Click any skill icon to open guide
+- Shows all unlocks with level requirements
+- Visual distinction between unlocked (green ✓) and locked (🔒) items
+- Next unlock highlighted with progress indicator
+- Scrollable list for skills with many unlocks
+- Type badges (item/ability) with color coding
+- ESC key or click outside to close
+
+**Implementation:**
+```typescript
+// packages/client/src/game/panels/SkillGuidePanel.tsx
+interface SkillGuidePanelProps {
+  visible: boolean;
+  skillLabel: string;
+  skillIcon: string;
+  playerLevel: number;
+  unlocks: readonly SkillUnlock[];
+  isLoading: boolean;
+  onClose: () => void;
+}
+```
+
+**Data source:**
+- Fetched from server API: `GET /api/data/skill-unlocks`
+- Returns all skill unlocks from `skill-unlocks.json` manifest
+- Cached in client state after initial fetch
+
+**Example unlocks:**
+- **Attack 1**: Bronze weapons, Iron weapons
+- **Attack 5**: Steel weapons
 - **Attack 40**: Rune weapons
 - **Attack 60**: Dragon weapons
 - **Woodcutting 15**: Oak trees
 - **Mining 30**: Coal
 - **Cooking 40**: Lobster
 - **Smithing 50**: Mithril bar
+- **Prayer 1-77**: 29 different prayers
 
 <Info>
-See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
+The guide panel handles British/American spelling differences automatically (defence → defense) for consistent display.
 </Info>
 
 ## Manifest-Driven Design
