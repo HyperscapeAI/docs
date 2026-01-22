@@ -23,6 +23,85 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Skill Guide Panel & Production Deployment" description="January 2026" date="2026-01-22">
+
+### 🎯 Skill Guide Panel
+
+OSRS-style skill progression viewer with detailed unlock information:
+
+- **Click-to-View**: Click any skill in the Skills tab to open its guide
+- **Unlock Progression**: Shows all unlocks with level requirements
+  - Visual distinction: unlocked (green ✓) vs locked (🔒)
+  - Next unlock highlighted with gold accent
+  - Progress indicator: "X of Y unlocks achieved"
+- **Type Badges**: Color-coded badges for unlock types (item, ability, area, quest, activity)
+- **Smooth Animations**: Fade-in backdrop and slide-up panel transitions
+- **Loading States**: Spinner during data fetch, graceful empty state handling
+- **Keyboard Support**: ESC key to close, click outside to dismiss
+- **Scrollable**: Custom-styled scrollbar for skills with many unlocks (Prayer has 29!)
+- **Data Source**: New `/api/data/skill-unlocks` endpoint serves manifest data
+- **Implementation**: `SkillGuidePanel.tsx` component with portal rendering
+
+**Technical Details**:
+- Server endpoint: `GET /api/data/skill-unlocks` (packages/server/src/startup/routes/data-routes.ts)
+- Client component: `packages/client/src/game/panels/SkillGuidePanel.tsx`
+- Data manifest: `packages/server/world/assets/manifests/skill-unlocks.json`
+- Defence/Defense spelling normalization in `skill-unlocks.ts` loader
+
+### 🚀 Production Deployment Infrastructure
+
+Complete Railway and Cloudflare Pages deployment setup:
+
+**Railway Server Deployment**:
+- **Nixpacks Configuration**: `nixpacks.toml` with multi-phase build
+  - Setup: Install system dependencies (Python, Cairo, etc.)
+  - Install: `bun install` with production dependencies
+  - Build: Build shared → server → client, copy client to server public/
+  - Start: `cd packages/server && bun dist/index.js`
+- **Dockerfile.server**: Multi-stage Docker build for alternative deployment
+  - Builder stage: Installs deps, builds all packages
+  - Runtime stage: Minimal production image with only runtime deps
+  - Health check: `curl -f http://localhost:5555/status`
+- **GitHub Actions**: Automated deployment workflow (`.github/workflows/deploy-railway.yml`)
+  - Triggers on push to main for server-related paths
+  - Uses Railway GraphQL API for deployment
+  - Monitors deployment status with retries
+
+**Cloudflare Pages Frontend**:
+- **Build Command**: `cd packages/client && bun install && bun run build`
+- **Output Directory**: `packages/client/dist`
+- **Custom Domains**: hyperscape.club, www.hyperscape.club
+- **Preview Deployments**: Automatic preview URLs for PRs
+
+**CORS Configuration**:
+- Added production domains: `hyperscape.club`, `www.hyperscape.club`
+- Added Cloudflare Pages: `hyperscape.pages.dev`, `*.hyperscape.pages.dev`
+- Added Railway: `hyperscape-production.up.railway.app`
+- HTTP fallback for Cloudflare Pages preview deployments
+- Regex patterns for localhost (any port) and preview deployments
+
+**Manifest Fetching**:
+- Server fetches manifests from CDN at startup (production)
+- Skips asset download in CI/Railway environments
+- `fetchManifestsFromCDN()` function in `packages/server/src/startup/config.ts`
+- Manifests cached locally after fetch
+
+**Build Optimizations**:
+- Split build commands for better debugging
+- Cache bust timestamp for frontend builds
+- Explicit bun provider in Nixpacks
+- Debug logging for build verification
+- Frontend fallback error with directory contents
+
+### 🐛 Bug Fixes
+
+- **Lockfile Sync**: Updated `bun.lock` to match `package.json` dependencies (Railway deployment fix)
+- **Build Verification**: Added build timestamp file and index.html verification
+- **Asset Route Conflicts**: Server skips `/assets/` route when client assets exist in `public/`
+- **Debug Endpoints**: Added `/debug/public` to inspect directory contents
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
