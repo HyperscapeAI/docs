@@ -214,23 +214,67 @@ await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
 
 This ensures the server always has the latest game data without bundling large manifest files in the Docker image.
 
-## Vercel Client Deployment
+## Cloudflare Pages Deployment
+
+Cloudflare Pages automatically deploys the frontend via GitHub integration.
+
+### Automatic Deployment
+
+**Production** (`main` branch):
+- URL: [hyperscape.club](https://hyperscape.club)
+- Custom domain configured in Cloudflare Pages settings
+
+**Staging** (`staging` branch):
+- URL: [staging.hyperscape.club](https://staging.hyperscape.club)
+- Preview deployments: `*.hyperscape.pages.dev`
+
+### Manual Setup
 
 <Steps>
-  <Step title="Import project">
-    Import `packages/client` directory to Vercel.
+  <Step title="Connect repository">
+    1. Go to Cloudflare Pages dashboard
+    2. Create new project from GitHub
+    3. Select the Hyperscape repository
   </Step>
   
   <Step title="Configure build">
-    Root directory: `packages/client`
-    Build command: `bun run build`
-    Output directory: `dist`
+    **Framework preset**: None (custom)
+    
+    **Build settings:**
+    - Build command: `cd packages/client && bun install && bun run build`
+    - Build output directory: `packages/client/dist`
+    - Root directory: `/` (repository root)
+    
+    **Environment variables** (set in Pages dashboard):
+    - `PUBLIC_PRIVY_APP_ID`
+    - `PUBLIC_API_URL`
+    - `PUBLIC_WS_URL`
+    - `PUBLIC_CDN_URL`
+    - `PUBLIC_APP_URL`
   </Step>
   
-  <Step title="Set environment variables">
-    Add `PUBLIC_*` environment variables.
+  <Step title="Configure custom domains">
+    **Production branch** (`main`):
+    - Primary: `hyperscape.club`
+    - Alternate: `www.hyperscape.club`
+    
+    **Staging branch** (`staging`):
+    - Primary: `staging.hyperscape.club`
+  </Step>
+  
+  <Step title="Configure CORS">
+    The server automatically allows these origins:
+    - `https://hyperscape.club`
+    - `https://www.hyperscape.club`
+    - `https://hyperscape.pages.dev`
+    - `http://hyperscape.pages.dev`
+    - `https://*.hyperscape.pages.dev` (preview deployments)
   </Step>
 </Steps>
+
+<Warning>
+  Ensure `PUBLIC_PRIVY_APP_ID` matches between Cloudflare Pages and Railway environments.
+</Warning>
 
 ## Database Setup
 
