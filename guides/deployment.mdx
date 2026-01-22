@@ -318,9 +318,99 @@ Upload assets to S3, R2, or similar:
 
 ## Production Checklist
 
-- [ ] PostgreSQL database provisioned
-- [ ] Environment variables configured
-- [ ] Privy credentials set (both client and server)
-- [ ] CDN serving assets
-- [ ] WebSocket URL configured
-- [ ] SSL/TLS enabled
+### Infrastructure
+- [ ] Railway project created and linked to GitHub
+- [ ] Cloudflare Pages project created
+- [ ] PostgreSQL database provisioned (Neon or Railway)
+- [ ] Cloudflare R2 bucket created for assets
+- [ ] Custom domains configured (optional)
+
+### Configuration
+- [ ] Server environment variables set in Railway
+- [ ] Client environment variables set in Cloudflare Pages
+- [ ] Privy App ID and Secret configured (both client and server)
+- [ ] JWT_SECRET generated (32+ characters)
+- [ ] ADMIN_CODE set for production security
+
+### Assets & CDN
+- [ ] Assets uploaded to Cloudflare R2
+- [ ] Manifests publicly accessible at `<CDN_URL>/manifests/`
+- [ ] PUBLIC_CDN_URL configured in both client and server
+- [ ] CDN CORS headers configured for cross-origin access
+
+### Security
+- [ ] SSL/TLS enabled (automatic with Railway and Cloudflare)
+- [ ] WebSocket URL uses wss:// protocol
+- [ ] Rate limiting enabled (automatic in production)
+- [ ] CORS origins configured for production domains
+
+### Verification
+- [ ] Server health check responds: `https://<server>/status`
+- [ ] Frontend loads: `https://hyperscape.club`
+- [ ] WebSocket connects successfully
+- [ ] Assets load from CDN (check browser network tab)
+- [ ] Authentication works (Privy login flow)
+
+## Deployment Architecture Diagram
+
+```mermaid
+flowchart LR
+    A[Player Browser] -->|HTTPS| B[Cloudflare Pages]
+    A -->|WSS| C[Railway Server]
+    A -->|HTTPS| D[Cloudflare R2 CDN]
+    C -->|SQL| E[PostgreSQL]
+    C -->|Fetch Manifests| D
+    
+    B -.->|Static HTML/JS/CSS| A
+    D -.->|Models/Audio/Textures| A
+    C -.->|Game State| A
+```
+
+## Troubleshooting Deployments
+
+### Railway Build Failures
+
+**Issue**: Build fails with "lockfile had changes"
+
+**Solution**: Regenerate lockfile locally and commit:
+```bash
+bun install
+git add bun.lock
+git commit -m "chore: update bun.lock"
+```
+
+### Frontend Not Loading
+
+**Issue**: Railway serves 503 "Frontend not available"
+
+**Cause**: Client build not copied to server's public directory
+
+**Solution**: Verify build phase in `nixpacks.toml` includes:
+```bash
+cp -r packages/client/dist/* packages/server/public/
+```
+
+### Manifests Not Loading
+
+**Issue**: Server logs "Failed to fetch manifests from CDN"
+
+**Solutions**:
+1. Verify `PUBLIC_CDN_URL` is set correctly
+2. Check manifests are publicly accessible: `curl <CDN_URL>/manifests/items.json`
+3. Ensure CORS headers allow server origin
+4. In development, manifests can be local (skips CDN fetch)
+
+### CORS Errors
+
+**Issue**: Browser console shows CORS errors
+
+**Solution**: Verify allowed origins in `packages/server/src/startup/http-server.ts`:
+```typescript
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://hyperscape.pages.dev",
+  /^https?:\/\/.+\.hyperscape\.pages\.dev$/,
+];
+```
+
+Add your custom domain if using one.
