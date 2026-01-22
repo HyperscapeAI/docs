@@ -6,12 +6,19 @@ icon: "rocket"
 
 ## Deployment Overview
 
-Hyperscape uses a split deployment model:
+Hyperscape uses a **split deployment model** optimized for modern cloud platforms:
 
-- **Server**: Railway, Fly.io, or Docker host
-- **Client**: Vercel, Netlify, or static hosting
+- **Frontend**: Cloudflare Pages (`hyperscape.club`)
+- **Server/API**: Railway (`hyperscape-production.up.railway.app`)
 - **Database**: PostgreSQL (Neon recommended)
-- **Assets**: CDN or object storage
+- **Assets/CDN**: Cloudflare R2 (`assets.hyperscape.club`)
+
+### Why Split Deployment?
+
+- **Frontend on Cloudflare Pages**: Global CDN, instant deploys, free SSL
+- **Server on Railway**: WebSocket support, persistent connections, easy scaling
+- **Assets on R2**: Low-cost object storage, global distribution
+- **Database on Neon**: Serverless PostgreSQL, automatic scaling, generous free tier
 
 ## Environment Variables
 
