@@ -713,6 +713,161 @@ All skill-related data is now defined in JSON manifests:
 
 This allows easy content updates without code changes and enables community modding.
 
+---
+
+## Agility Skill
+
+The Agility skill is trained passively by moving through the world. Unlike traditional RuneScape agility courses, Hyperscape's Agility system rewards exploration and travel.
+
+### Training Mechanics
+
+**XP Gain**:
+- 1 XP per 2 tiles traveled (walking or running)
+- XP is batched every 100 tiles to prevent visual spam
+- Each batch grants 50 XP (equivalent to 1 XP per 2 tiles)
+
+**XP Batching**:
+```typescript
+// From tile-movement.ts
+const AGILITY_TILES_PER_XP_GRANT = 100;
+const AGILITY_XP_PER_GRANT = 50;
+
+// Visual XP drop frequency:
+// - Running (4 tiles/tick): ~15 seconds between drops
+// - Walking (2 tiles/tick): ~30 seconds between drops
+```
+
+**Death Penalty**:
+- Accumulated tiles toward next XP grant are lost on death
+- Already-earned XP is preserved
+- Small consequence that adds risk to exploration
+
+**Logout Behavior**:
+- Tile counter resets on disconnect
+- Maximum ~50 XP can be lost (less than 1 minute of running)
+
+### Stamina System Integration
+
+Agility affects stamina regeneration, while inventory weight affects stamina drain.
+
+**Weight-Based Stamina Drain**:
+```typescript
+// Base drain: 2 stamina/second while running
+// Weight modifier: +0.5% drain per kg carried
+
+const weightMultiplier = 1 + (totalWeight * 0.005);
+const drainRate = baseDrain * weightMultiplier;
+```
+
+| Weight (kg) | Drain Multiplier | Drain/Second |
+|-------------|------------------|--------------|
+| 0 | 1.0x | 2.0 |
+| 10 | 1.05x | 2.1 |
+| 20 | 1.1x | 2.2 |
+| 40 | 1.2x | 2.4 |
+| 60 | 1.3x | 2.6 |
+| 100 | 1.5x | 3.0 |
+
+**Agility-Based Stamina Regeneration**:
+```typescript
+// Base regen: 2/sec walking, 4/sec idle
+// Agility bonus: +1% regen per agility level
+
+const agilityMultiplier = 1 + (agilityLevel * 0.01);
+const regenRate = baseRegen * agilityMultiplier;
+```
+
+| Agility Level | Regen Multiplier | Idle Regen/Sec | Walk Regen/Sec |
+|---------------|------------------|----------------|----------------|
+| 1 | 1.01x | 4.04 | 2.02 |
+| 10 | 1.10x | 4.40 | 2.20 |
+| 25 | 1.25x | 5.00 | 2.50 |
+| 50 | 1.50x | 6.00 | 3.00 |
+| 75 | 1.75x | 7.00 | 3.50 |
+| 99 | 1.99x | 7.96 | 3.98 |
+
+### Agility Unlocks
+
+From `skill-unlocks.json`:
+
+| Level | Unlock |
+|-------|--------|
+| 1 | Basic stamina regeneration (+1% per level) |
+| 10 | +10% stamina regeneration |
+| 25 | +25% stamina regeneration |
+| 50 | +50% stamina regeneration |
+| 75 | +75% stamina regeneration |
+| 99 | Agility cape, +99% stamina regeneration |
+
+---
+
+## Skill Guide Panel
+
+Players can click any skill in the Skills Panel to view a detailed guide showing all unlocks at each level.
+
+### Features
+
+- **Click-to-View**: Click any skill icon to open its guide
+- **Unlock Progression**: Shows all items, abilities, and areas unlocked at each level
+- **Visual States**:
+  - ✓ Green checkmark for unlocked content (player level ≥ requirement)
+  - 🔒 Lock icon for locked content (player level < requirement)
+  - ➤ Arrow for next unlock (highlighted with gold border)
+- **Progress Tracking**: Shows "X of Y unlocks achieved"
+- **Next Unlock Indicator**: Displays how many levels until next unlock
+- **Type Badges**: Distinguishes between items and abilities
+
+### UI Components
+
+**SkillGuidePanel** (`packages/client/src/game/panels/SkillGuidePanel.tsx`):
+- Portal-rendered modal overlay
+- Scrollable list for skills with many unlocks (Prayer has 29!)
+- ESC key and click-outside-to-close
+- Smooth animations (fade-in, slide-up)
+- Custom scrollbar styling
+
+**Data Source**:
+- Server endpoint: `GET /api/data/skill-unlocks`
+- Returns all skill unlock definitions from `skill-unlocks.json`
+- Client-side caching with loading state
+
+### Implementation Details
+
+```typescript
+// From SkillsPanel.tsx
+const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
+const [isGuideOpen, setIsGuideOpen] = useState(false);
+const [skillUnlocks, setSkillUnlocks] = useState<Record<string, SkillUnlock[]>>({});
+
+// Fetch unlocks from server
+useEffect(() => {
+  const fetchSkillUnlocks = async () => {
+    const response = await fetch(`${GAME_API_URL}/api/data/skill-unlocks`);
+    if (response.ok) {
+      const data = await response.json();
+      setSkillUnlocks(data);
+    }
+  };
+  fetchSkillUnlocks();
+}, []);
+
+// Open guide on skill click
+const handleSkillClick = (skill: Skill) => {
+  setSelectedSkill(skill);
+  setIsGuideOpen(true);
+};
+```
+
+**Server Endpoint** (`packages/server/src/startup/routes/data-routes.ts`):
+```typescript
+fastify.get('/api/data/skill-unlocks', async (_req, reply) => {
+  const unlocks = getAllSkillUnlocks();
+  return reply.send(unlocks);
+});
+```
+
+---
+
 ## Related Documentation
 
 - [Combat System](/wiki/game-systems/combat)
