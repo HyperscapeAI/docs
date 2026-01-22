@@ -477,6 +477,58 @@ DataManager supports two loading modes:
 
 The loading is **atomic** for directory-based manifests - all required files must exist or it falls back to legacy single-file format.
 
+### CDN Manifest Fetching (Production)
+
+**New in v1.0:** The server automatically fetches manifests from the CDN at startup instead of bundling them.
+
+**How it works:**
+1. Server starts and checks `packages/server/world/assets/manifests/` directory
+2. If in production or manifests are missing, fetches from `PUBLIC_CDN_URL`
+3. Downloads all manifest JSON files from CDN
+4. Caches locally for faster subsequent starts
+5. Compares content hashes to avoid unnecessary updates
+
+**Manifest files fetched:**
+```typescript
+const MANIFEST_FILES = [
+  "items.json",
+  "npcs.json",
+  "resources.json",
+  "tools.json",
+  "biomes.json",
+  "world-areas.json",
+  "stores.json",
+  "music.json",
+  "vegetation.json",
+  "buildings.json",
+];
+```
+
+**Configuration:**
+```typescript
+// packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Behavior by environment:**
+- **Development**: Skips fetch if local manifests exist (uses Git LFS assets)
+- **Production**: Always fetches from CDN to ensure latest data
+- **CI/Test**: Skips fetch if `SKIP_MANIFESTS=true` is set
+
+**Benefits:**
+- Manifests can be updated without redeploying the server
+- Smaller Docker images (no bundled JSON files)
+- Faster deployments (no asset cloning in CI)
+- Single source of truth (CDN)
+
+**Fallback behavior:**
+If CDN fetch fails and no local manifests exist:
+- In test/CI: Continues with warning (minimal mode)
+- In production: Throws error (prevents starting with stale data)
+
+**Cache invalidation:**
+The server compares fetched content with existing files and only writes if content changed. This avoids unnecessary disk I/O and preserves file timestamps.
+
 ## Adding Content
 
 ### Step 1: Choose the Right Manifest
