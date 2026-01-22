@@ -411,6 +411,23 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 | Yew | 60 | 202.5 |
 | Magic | 75 | 303.8 |
 
+### Movement XP (Agility)
+
+Agility XP is gained passively by moving through the world:
+
+| Movement Type | Tiles/Tick | XP Rate | XP/Minute |
+|---------------|------------|---------|-----------|
+| Walking | 2 | 1 XP per 2 tiles | ~100 XP |
+| Running | 4 | 1 XP per 2 tiles | ~200 XP |
+
+<Info>
+**XP Batching**: To prevent visual spam, agility XP is granted in batches of 50 XP every 100 tiles traveled. This creates XP drops approximately every 15 seconds while running or 30 seconds while walking.
+</Info>
+
+<Warning>
+**Death Penalty**: When you die, accumulated tiles toward your next agility XP grant are lost (maximum ~50 XP worth of progress). Already-earned XP is not affected.
+</Warning>
+
 ---
 
 ## Level Requirements
