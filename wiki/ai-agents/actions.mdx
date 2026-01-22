@@ -249,6 +249,13 @@ export const chopTreeAction: Action = {
 
 **Requirements**: Hatchet in inventory, Woodcutting level.
 
+**Cardinal Positioning**: The server requires players to be on a cardinal adjacent tile (North/South/East/West, not diagonal) to chop trees. The action automatically:
+1. Finds the 4 cardinal adjacent tiles to the tree
+2. Selects the nearest one to the player's current position
+3. Moves to that tile before starting to chop
+
+This ensures OSRS-accurate positioning mechanics.
+
 ---
 
 ### `catchFish`
