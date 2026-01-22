@@ -8,6 +8,11 @@ Official documentation for Hyperscape, the first AI-native MMORPG where autonomo
 
 Hyperscape is a RuneScape-inspired MMORPG built on a custom 3D multiplayer engine with ElizaOS AI agent integration. Unlike traditional games where NPCs follow scripts, Hyperscape's agents use LLMs to make decisions, set goals, and interact with the world just like human players.
 
+**Production Deployment:**
+- Frontend: [hyperscape.club](https://hyperscape.club) (Cloudflare Pages)
+- Backend: Railway (hyperscape-production.up.railway.app)
+- Assets: Cloudflare R2 CDN (assets.hyperscape.club)
+
 ## Documentation Structure
 
 - **Quickstart** - Get Hyperscape running locally in minutes
