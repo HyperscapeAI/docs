@@ -61,26 +61,137 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
   `PUBLIC_PRIVY_APP_ID` must match between client and server.
 </Warning>
 
-## Railway Deployment
+## Railway Deployment (Game Server)
+
+Railway hosts the game server with automatic deployments from GitHub.
+
+### Automated Deployment
+
+The repository includes a GitHub Actions workflow that automatically deploys to Railway on every push to `main`:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+# Triggers on changes to server, shared, or client packages
+```
+
+**What happens on push:**
+1. GitHub Actions triggers Railway deployment via GraphQL API
+2. Railway builds using Nixpacks configuration
+3. Builds shared package → server package → client package
+4. Copies client build to server's `public/` directory
+5. Fetches manifests from CDN at startup
+6. Deploys to production with health checks
+
+### Manual Railway Setup
 
 <Steps>
   <Step title="Create Railway project">
-    Connect your GitHub repository to Railway.
+    1. Go to [railway.app](https://railway.app)
+    2. Create new project from GitHub repo
+    3. Select `HyperscapeAI/hyperscape`
   </Step>
   
-  <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+  <Step title="Configure build settings">
+    Railway uses `nixpacks.toml` and `railway.server.json` for configuration:
+    
+    - **Builder**: Nixpacks (auto-detected)
+    - **Start command**: `cd packages/server && bun dist/index.js`
+    - **Health check**: `/status` endpoint
+    - **Watch patterns**: `packages/shared/**`, `packages/server/**`, `packages/client/**`
   </Step>
   
-  <Step title="Add PostgreSQL">
-    Add PostgreSQL service from Railway marketplace.
+  <Step title="Add PostgreSQL database">
+    1. In Railway dashboard, click "New" → "Database" → "PostgreSQL"
+    2. Railway automatically sets `DATABASE_URL` environment variable
+    3. No manual configuration needed
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    Required variables:
+    ```bash
+    PRIVY_APP_ID=your-app-id
+    PRIVY_APP_SECRET=your-app-secret
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    JWT_SECRET=your-random-secret-32-chars
+    NODE_ENV=production
+    ```
+    
+    Optional variables:
+    ```bash
+    ADMIN_CODE=your-admin-code
+    LIVEKIT_API_KEY=your-livekit-key
+    LIVEKIT_API_SECRET=your-livekit-secret
+    ```
+  </Step>
+  
+  <Step title="Deploy">
+    Push to `main` branch or click "Deploy" in Railway dashboard.
+    
+    Monitor deployment:
+    - Build logs show package compilation
+    - Health check validates `/status` endpoint
+    - WebSocket connections tested automatically
   </Step>
 </Steps>
+
+### Railway Configuration Files
+
+**nixpacks.toml** - Build configuration:
+```toml
+[phases.setup]
+aptPkgs = ["python3", "make", "g++", "pkg-config", "libcairo2-dev"]
+
+[phases.build]
+cmds = [
+  "bun run build:shared",
+  "bun run build:server",
+  "mkdir -p packages/server/world/assets/manifests"
+]
+
+[start]
+cmd = "cd packages/server && bun dist/index.js"
+
+[variables]
+CI = "true"
+SKIP_ASSETS = "true"
+NODE_ENV = "production"
+```
+
+**railway.server.json** - Service configuration:
+```json
+{
+  "build": {
+    "builder": "NIXPACKS",
+    "nixpacksConfigPath": "nixpacks.toml"
+  },
+  "deploy": {
+    "startCommand": "cd packages/server && bun dist/index.js",
+    "healthcheckPath": "/status",
+    "restartPolicyType": "ON_FAILURE"
+  }
+}
+```
+
+### Troubleshooting Railway Deployments
+
+**Build fails with "lockfile frozen" error:**
+```bash
+# Regenerate lockfile locally
+bun install
+git add bun.lock
+git commit -m "chore: update bun.lock"
+git push
+```
+
+**Frontend not loading (404 on index.html):**
+- Check build logs for client build step
+- Verify `cp -r dist/* public/` command succeeded
+- Check `/debug/public` endpoint to see directory contents
+
+**WebSocket connection fails:**
+- Verify `PUBLIC_WS_URL` in client points to Railway domain
+- Check CORS allowlist includes your frontend domain
+- Ensure Railway exposes WebSocket port (default: 5555)
 
 ## Vercel Client Deployment
 
