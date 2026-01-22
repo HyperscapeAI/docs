@@ -44,14 +44,40 @@ PRIVY_APP_SECRET=your-privy-app-secret
 # Server
 PORT=5555
 
-# Assets
+# Assets & CDN
 PUBLIC_CDN_URL=http://localhost:8080
+
+# Deployment
+NODE_ENV=production
+COMMIT_HASH=abc123def456  # Git commit hash for tracking
+SKIP_ASSETS=true           # Skip asset download in CI/Railway
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
+
+# ElizaOS Integration
+ELIZAOS_URL=http://localhost:4001
+ELIZAOS_API_URL=http://localhost:4001
 ```
+
+### CI/Production Variables
+
+These variables control build and deployment behavior:
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `CI` | Detected CI environment, skips asset download | `false` |
+| `SKIP_ASSETS` | Explicitly skip asset download | `false` |
+| `NODE_ENV` | Environment mode (development/production) | `development` |
+| `RAILWAY_ENVIRONMENT` | Railway deployment environment | - |
+| `TURBO_FORCE` | Force fresh Turbo builds (no cache) | `false` |
+
+**Asset Download Behavior**:
+- **Local Development**: Assets downloaded via Git LFS during `bun install`
+- **CI/Railway**: Assets skipped, manifests fetched from CDN at runtime
+- **Production**: Manifests fetched from `PUBLIC_CDN_URL` at server startup
 
 ## Client Environment
 
