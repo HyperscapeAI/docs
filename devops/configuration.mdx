@@ -68,10 +68,40 @@ PUBLIC_PRIVY_APP_ID=your-privy-app-id
 ### Production
 
 ```bash
-PUBLIC_API_URL=https://api.hyperscape.lol
-PUBLIC_WS_URL=wss://api.hyperscape.lol
-PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app
+PUBLIC_CDN_URL=https://cdn.hyperscape.club
 ```
+
+## CORS Configuration
+
+The server accepts requests from multiple origins for development and production:
+
+### Allowed Origins
+
+**Production Domains**:
+- `https://hyperscape.club` - Main production site
+- `https://www.hyperscape.club` - WWW subdomain
+- `https://hyperscape.pages.dev` - Cloudflare Pages (HTTPS)
+- `http://hyperscape.pages.dev` - Cloudflare Pages (HTTP fallback)
+- `https://hyperscape-production.up.railway.app` - Railway backend
+
+**Dynamic Patterns**:
+- `http://localhost:*` - Any localhost port (development)
+- `https://*.hyperscape.pages.dev` - Cloudflare preview deployments
+- `https://*.up.railway.app` - Railway preview deployments
+
+**Configuration Location**: `packages/server/src/startup/http-server.ts`
+
+### Custom Domains
+
+Add custom domains via environment variable:
+
+```bash
+PUBLIC_APP_URL=https://custom.example.com
+```
+
+This automatically adds the domain to the CORS allowlist.
 
 ## AI Agent Environment
 
