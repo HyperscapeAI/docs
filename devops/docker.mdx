@@ -129,16 +129,25 @@ Use a hosted database (e.g., [Neon](https://neon.tech)):
 ```bash
 # packages/server/.env
 DATABASE_URL=postgresql://user:pass@host.neon.tech:5432/db
+USE_LOCAL_POSTGRES=false
 ```
 
 ### External CDN
 
-Host assets on cloud storage:
+Host assets on cloud storage and configure manifest loading:
 
 ```bash
 # packages/server/.env and packages/client/.env
 PUBLIC_CDN_URL=https://your-cdn.example.com
 ```
+
+**Manifest Loading:**
+The server will automatically fetch manifests from `PUBLIC_CDN_URL/manifests/` at startup and cache them locally in `world/assets/manifests/`. This eliminates the need for local asset cloning in production.
+
+**CDN Requirements:**
+- Must serve manifests at `/manifests/*.json`
+- Must serve assets at `/models/`, `/audio/`, `/textures/`
+- CORS headers must allow your server domain
 
 ## Container Status
 
