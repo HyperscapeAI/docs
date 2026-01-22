@@ -23,6 +23,114 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Skill Guide Panel & Railway Deployment" description="January 2026" date="2026-01-22">
+
+### 🎯 Skill Guide Panel
+
+OSRS-style skill guide interface showing progression unlocks:
+
+- **Click-to-Open**: Click any skill in Skills Panel to view its guide
+- **Unlock Display**: Shows all unlocks with level requirements
+  - Green checkmarks (✓) for achieved unlocks
+  - Lock icons (🔒) for future unlocks
+  - Next unlock highlighted with "➤" indicator
+- **Progress Tracking**: "X of Y unlocks achieved" counter
+- **Type Badges**: Visual distinction between items and abilities
+- **Smooth UX**: Fade-in/slide-up animations, ESC key support, click-outside-to-close
+- **Loading States**: Spinner during data fetch, proper empty state handling
+- **Server-Authoritative Data**: New `/api/data/skill-unlocks` endpoint
+  - Fetched once at Skills Panel mount
+  - Cached in component state
+  - No authentication required (public data)
+
+**Implementation:**
+- Component: `packages/client/src/game/panels/SkillGuidePanel.tsx` (392 lines)
+- Data route: `packages/server/src/startup/routes/data-routes.ts`
+- Data source: `packages/shared/src/data/skill-unlocks.ts`
+- Spelling normalization: British "defence" → American "defense" for UI consistency
+
+**Unlock Types:**
+- `item` - Equipment, resources, craftables (blue badge)
+- `ability` - Prayers, passive bonuses (purple badge)
+- `area` - Accessible locations
+- `quest` - Quest requirements
+- `activity` - Minigames
+
+### 🚀 Railway Deployment Architecture
+
+Production deployment migrated from AWS to Railway with Cloudflare integration:
+
+**Architecture:**
+- **Frontend**: Cloudflare Pages (hyperscape.club)
+- **Game Server**: Railway (hyperscape-production.up.railway.app)
+- **Database**: Railway PostgreSQL (managed)
+- **Assets/CDN**: Cloudflare R2 (assets.hyperscape.club)
+
+**Automated Deployments:**
+- GitHub Actions workflow triggers Railway deployment on push to `main`
+- Cloudflare Pages auto-deploys frontend from GitHub
+- R2 assets uploaded via GitHub Actions on manifest changes
+
+**Build Configuration:**
+- `nixpacks.toml` - Railway Nixpacks builder configuration
+- `railway.server.json` - Service health checks and restart policy
+- `Dockerfile.server` - Multi-stage Docker build (alternative)
+- `.github/workflows/deploy-railway.yml` - Automated deployment workflow
+
+**Manifest Fetching System:**
+- Server fetches manifests from CDN at startup
+- Compares content hashes to avoid unnecessary updates
+- Caches locally in `packages/server/world/assets/manifests/`
+- Skips fetch in development if local manifests exist
+- Supports `SKIP_MANIFESTS=true` for CI/test environments
+
+**CORS Updates:**
+- Added `https://www.hyperscape.club` (www subdomain)
+- Added `http://hyperscape.pages.dev` (HTTP fallback)
+- Regex pattern for HTTP preview deployments
+- Automatic allowlist for `PUBLIC_APP_URL` environment variable
+
+**Frontend Build Integration:**
+- Client build copied to server's `public/` directory
+- Server serves frontend at root path (`/`)
+- SPA catch-all routing for client-side navigation
+- Conditional asset route registration (avoids conflicts)
+
+**Health Monitoring:**
+- `/status` endpoint for Railway health checks
+- `/debug/public` endpoint for deployment debugging
+- Build timestamp file for verification
+- Directory contents logging for troubleshooting
+
+### 🔧 Infrastructure Improvements
+
+**Asset Management:**
+- `ensure-assets.mjs` now detects CI environments and skips Git LFS download
+- Manifests committed to repo (no longer require asset clone in CI)
+- `SKIP_ASSETS=true` environment variable for production builds
+
+**Build Optimizations:**
+- Split build commands for better debugging
+- Explicit phase separation in nixpacks
+- Cache bust timestamp for frontend builds
+- Verbose logging for build verification
+
+**Docker Enhancements:**
+- Multi-stage Dockerfile for lean runtime images
+- Runtime dependencies for native modules (canvas, better-sqlite3)
+- Health check with curl
+- Proper WORKDIR and EXPOSE directives
+
+### 🐛 Bug Fixes
+
+- Fixed lockfile frozen errors by regenerating bun.lock
+- Fixed frontend serving by using `cp -r dist/* public/` instead of `cp dist/*`
+- Added index.html verification before server start
+- Improved error messages for missing frontend builds
+- Fixed CORS allowlist to include all required origins
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
