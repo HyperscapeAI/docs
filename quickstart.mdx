@@ -115,7 +115,12 @@ This starts the game server plus the ElizaOS agent runtime. The AI agent will co
 |---------|------|-------------|
 | Client | 3333 | Vite dev server with hot reload (dev mode) |
 | Server | 5555 | Game server (Fastify + WebSockets) |
-| CDN | 8080 | Asset server (Docker nginx, if started) |
+| CDN | 8080 | Asset server (Docker nginx) - serves models, audio, manifests |
+| PostgreSQL | 5432 | Database (Docker, auto-started by server) |
+
+<Info>
+  The server fetches manifests from the CDN at startup. In production, manifests are served from Cloudflare R2. In development, the local CDN serves them from `packages/server/world/assets/`.
+</Info>
 
 ## Quick Play Guide
 
