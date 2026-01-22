@@ -23,7 +23,9 @@ Hyperscape uses Docker for local development infrastructure:
 - [Docker Desktop](https://docker.com/products/docker-desktop) (macOS/Windows)
 - Or Docker Engine on Linux: `apt install docker.io`
 
-## CDN Container
+## CDN Container (Development Only)
+
+The local CDN is only used for development. In production, assets are served from Cloudflare R2.
 
 ### Start CDN
 
@@ -32,6 +34,12 @@ bun run cdn:up
 ```
 
 This starts an nginx container serving assets from `packages/server/world/assets/` on port 8080.
+
+**What it serves:**
+- 3D models: `http://localhost:8080/models/`
+- Audio: `http://localhost:8080/audio/`
+- Textures: `http://localhost:8080/textures/`
+- Manifests: `http://localhost:8080/manifests/`
 
 ### Stop CDN
 
@@ -42,6 +50,10 @@ bun run cdn:down
 ### Automatic Start
 
 The CDN starts automatically with `bun run dev`. Only run manually if using services separately.
+
+<Info>
+The server fetches manifests from `PUBLIC_CDN_URL` at startup. In development, this defaults to `http://localhost:8080`, so the CDN container must be running.
+</Info>
 
 ## PostgreSQL Container
 
