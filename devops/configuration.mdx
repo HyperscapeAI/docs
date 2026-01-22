@@ -238,3 +238,48 @@ Configure these in your repository settings:
 | `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code authentication |
 | `MINTLIFY_API_KEY` | Documentation updates |
 | `MINTLIFY_PROJECT_ID` | Documentation project ID |
+| `RAILWAY_TOKEN` | Railway deployment automation |
+
+## CORS Configuration
+
+The server is configured to allow requests from production and development origins:
+
+### Allowed Origins
+
+**Production Domains**:
+- `https://hyperscape.club` - Main production site
+- `https://www.hyperscape.club` - WWW subdomain
+- `https://hyperscape.pages.dev` - Cloudflare Pages primary
+- `https://hyperscape-production.up.railway.app` - Railway server
+
+**Development Patterns**:
+- `http://localhost:*` - Any localhost port (3000, 3333, 5555, etc.)
+- `https://*.hyperscape.pages.dev` - Cloudflare Pages preview deployments
+- `https://*.up.railway.app` - Railway preview environments
+
+**Integration Domains**:
+- `https://*.farcaster.xyz` - Farcaster frame integration
+- `https://*.warpcast.com` - Warpcast integration
+- `https://*.privy.io` - Privy authentication
+
+<Info>
+CORS configuration is defined in `packages/server/src/startup/http-server.ts`. If you add custom domains, update the `allowedOrigins` array.
+</Info>
+
+### Adding Custom Domains
+
+To add a custom domain to CORS allowlist:
+
+1. Edit `packages/server/src/startup/http-server.ts`
+2. Add your domain to the `allowedOrigins` array:
+   ```typescript
+   const allowedOrigins = [
+     // ... existing origins
+     "https://your-custom-domain.com",
+   ];
+   ```
+3. Redeploy the server
+
+<Warning>
+Never use `origin: "*"` in production - it disables CORS protection and exposes your API to abuse.
+</Warning>
