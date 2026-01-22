@@ -299,6 +299,21 @@ Skill configuration is in `packages/shared/src/data/`:
 | `equipment-requirements.json` | Level requirements for equipment |
 | `equipment-stats.json` | Stat bonuses for equipment |
 
+## Skill Guide Panel
+
+Click any skill in the Skills panel to open its Skill Guide, which shows all unlocks available at each level.
+
+**Features**:
+- Visual distinction between unlocked (green) and locked (gray) items
+- Next unlock highlighted with progress indicator
+- Scrollable list for skills with many unlocks
+- Type indicators (item vs ability)
+- Shows levels needed to reach next unlock
+
+<Info>
+  The Skill Guide Panel helps players plan their progression by showing what they'll unlock at future levels.
+</Info>
+
 ## Default Skill Values
 
 Skills start at level 1 with 0 XP, except Constitution which starts at level 10:
@@ -314,10 +329,10 @@ playerData.skills = {
   woodcutting: { level: 1, xp: 0 },
   mining: { level: 1, xp: 0 },
   fishing: { level: 1, xp: 0 },
-  mining: { level: 1, xp: 0 },
   firemaking: { level: 1, xp: 0 },
   cooking: { level: 1, xp: 0 },
   smithing: { level: 1, xp: 0 },
+  agility: { level: 1, xp: 0 },
 };
 ```
 
