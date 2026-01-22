@@ -46,14 +46,31 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
+Railway deployment is automated via GitHub Actions and uses Nixpacks for building.
+
 <Steps>
   <Step title="Create Railway project">
     Connect your GitHub repository to Railway.
   </Step>
   
   <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+    Railway automatically detects the build configuration from `nixpacks.toml`:
+    
+    ```toml
+    [phases.setup]
+    nixPkgs = ['bun']
+    
+    [phases.build]
+    cmds = [
+      'bun install --frozen-lockfile',
+      'bun run build:shared',
+      'bun run build:client',
+      'bun run build:server'
+    ]
+    
+    [start]
+    cmd = 'cd packages/server && bun run start:railway'
+    ```
   </Step>
   
   <Step title="Add PostgreSQL">
@@ -61,9 +78,83 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    Add all required server environment variables:
+    
+    ```bash
+    DATABASE_URL=postgresql://...  # Auto-set by Railway PostgreSQL
+    JWT_SECRET=your-secret-key
+    PRIVY_APP_ID=your-app-id
+    PRIVY_APP_SECRET=your-app-secret
+    PUBLIC_CDN_URL=https://d20g7vd4m53hpb.cloudfront.net
+    NODE_ENV=production
+    ```
   </Step>
 </Steps>
+
+### Railway-Specific Features
+
+**CDN Manifest Fetching:**
+
+In production, the server fetches game manifests from the CDN at startup instead of bundling them:
+
+```typescript
+// From packages/server/src/startup/http-server.ts
+async function fetchManifestsFromCDN(manifestsDir: string): Promise<void> {
+  // Downloads manifests from PUBLIC_CDN_URL at server startup
+  // Skipped in development if local manifests exist
+}
+```
+
+**Benefits:**
+- Smaller deployment size (no bundled assets)
+- Faster deployments
+- Assets served from CDN with proper caching
+- Manifests can be updated without redeploying server
+
+**Frontend Serving:**
+
+The Railway deployment serves both the game server and the built client from a single service:
+
+```typescript
+// Static file serving for built client
+fastify.register(fastifyStatic, {
+  root: path.join(process.cwd(), 'public'),
+  prefix: '/',
+});
+
+// Fallback to index.html for SPA routing
+fastify.setNotFoundHandler((req, reply) => {
+  reply.sendFile('index.html');
+});
+```
+
+### GitHub Actions Workflow
+
+Deployment is triggered automatically on push to main:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+name: Deploy to Railway
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/server/**'
+      - 'packages/shared/**'
+      - 'packages/client/**'
+```
+
+The workflow:
+1. Checks out code
+2. Triggers Railway deployment via GraphQL API
+3. Railway builds using Nixpacks
+4. Client is built and copied to `packages/server/public/`
+5. Server fetches manifests from CDN at startup
+6. Service starts and serves both API and static files
+
+<Info>
+The Railway deployment serves both the game server (WebSocket + API) and the built client (static files) from a single service on port 5555.
+</Info>
 
 ## Vercel Client Deployment
 
