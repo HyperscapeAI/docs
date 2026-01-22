@@ -152,14 +152,40 @@ JWT_SECRET=your-jwt-secret
 PORT=5555
 NODE_ENV=development
 
-# CDN (optional)
-PUBLIC_CDN_URL=http://localhost:8080
+# CDN (required for production)
+PUBLIC_CDN_URL=http://localhost:8080  # Development
+# PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production
 
 # Voice Chat (optional)
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-url
 ```
+
+### Manifest Fetching
+
+On server startup, the server fetches game data manifests from the CDN:
+
+```typescript
+// Fetched from: PUBLIC_CDN_URL/manifests/*.json
+// Cached to: packages/server/world/assets/manifests/
+
+const MANIFEST_FILES = [
+  "items.json", "npcs.json", "resources.json", "tools.json",
+  "biomes.json", "world-areas.json", "stores.json", "music.json",
+  "vegetation.json", "buildings.json"
+];
+```
+
+**Behavior:**
+- **Production/CI**: Always fetches from CDN to ensure latest data
+- **Development**: Skips fetch if local manifests already exist (allows local development with custom manifests)
+- **Caching**: Compares content before writing to avoid unnecessary disk writes
+- **Fallback**: Uses existing local manifests if CDN fetch fails
+
+<Info>
+This architecture allows updating game content (items, NPCs, etc.) by deploying new manifests to the CDN without requiring server redeployment.
+</Info>
 
 ## Build Scripts
 
