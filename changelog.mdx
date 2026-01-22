@@ -23,6 +23,81 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Railway Deployment & Skill Guide Panel" description="January 2026" date="2026-01-22">
+
+### 🚀 Railway Production Deployment
+
+Automated deployment pipeline for Railway with unified server + client builds:
+
+- **Automated Deployment**: GitHub Actions workflow triggers Railway deployments on push to main
+  - Uses Railway GraphQL API for deployment control
+  - Monitors deployment status and reports success/failure
+  - Triggers on changes to packages, configs, or deployment files
+- **Nixpacks Build**: Optimized build configuration in `nixpacks.toml`
+  - Installs system dependencies for native modules (canvas, better-sqlite3)
+  - Builds shared, server, AND client packages in single deployment
+  - Copies client build to `packages/server/public/` for unified serving
+  - Skips asset download in CI (manifests fetched from CDN at runtime)
+- **Multi-Stage Docker**: Alternative `Dockerfile.server` for Docker deployments
+  - Builder stage: Installs deps, builds all packages
+  - Runtime stage: Minimal production image with only necessary files
+  - Includes curl for healthchecks
+  - Exposes port 5555 with health check endpoint
+- **Manifest Fetching**: Server fetches manifests from CDN at startup
+  - Production: Always fetches from `PUBLIC_CDN_URL`
+  - Development: Skips if local manifests exist
+  - Fallback: Uses existing local manifests if CDN fetch fails
+  - Reduces deployment size and ensures manifest/asset sync
+- **Asset Serving**: Conditional `/assets/` route registration
+  - Checks if client assets exist in `public/assets/`
+  - Only registers `/assets/` for world assets if no client assets found
+  - Prevents route conflicts between client and world assets
+
+### 🎯 Skill Guide Panel
+
+OSRS-style skill progression viewer with unlock tracking:
+
+- **Click-to-View**: Click any skill in Skills Panel to open its guide
+- **Unlock Progression**: Shows all unlocks with level requirements
+  - Green checkmarks for achieved unlocks
+  - Lock icons for future unlocks
+  - Next unlock highlighted with progress indicator
+- **Visual Design**: Matches OSRS theme with dark brown backgrounds and gold accents
+- **Animations**: Smooth fade-in and slide-up animations
+- **Data Source**: New `/api/data/skill-unlocks` endpoint
+  - Fetched once at Skills Panel mount and cached
+  - Returns all skill unlocks from `skill-unlocks.json` manifest
+- **Loading State**: Spinner shown during initial fetch
+- **Keyboard Support**: Close with ESC key, X button, or click outside
+- **Spelling Normalization**: Handles British "defence" vs American "defense" automatically
+
+### 🌐 CORS Expansion
+
+Enhanced CORS configuration for production domains and preview deployments:
+
+- **Production Domains**:
+  - `https://hyperscape.club` (main site)
+  - `https://www.hyperscape.club` (www subdomain)
+  - `https://hyperscape.pages.dev` (Cloudflare Pages HTTPS)
+  - `http://hyperscape.pages.dev` (HTTP fallback)
+  - `https://hyperscape-production.up.railway.app` (Railway backend)
+- **Dynamic Patterns**:
+  - `http://localhost:*` (any localhost port)
+  - `https://*.hyperscape.pages.dev` (Cloudflare preview deployments)
+  - `http://*.hyperscape.pages.dev` (HTTP preview deployments)
+  - `https://*.up.railway.app` (Railway preview deployments)
+- **Custom Domains**: `PUBLIC_APP_URL` env var automatically added to allowlist
+
+### 🐛 Bug Fixes & Improvements
+
+- **Build Stability**: Split build commands and added cache bust timestamp
+- **Index.html Verification**: Debug logging to verify client build exists before starting server
+- **Frontend Fallback**: Helpful error message when client build is missing (503 with debug info)
+- **Debug Endpoint**: `/debug/public` shows directory contents for troubleshooting
+- **Lockfile Sync**: Updated `bun.lock` to match `package.json` dependencies
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
