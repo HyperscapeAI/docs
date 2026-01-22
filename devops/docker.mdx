@@ -172,3 +172,63 @@ View container logs:
 docker logs hyperscape-postgres
 docker logs hyperscape-cdn
 ```
+
+## Production Docker Build
+
+The repository includes `Dockerfile.server` for production deployments.
+
+### Multi-Stage Build
+
+The Dockerfile uses a two-stage build for optimal image size:
+
+**Stage 1: Builder**
+- Installs build dependencies (Python, Cairo, etc.)
+- Runs `bun install` with all dependencies
+- Builds packages in order: physx-js-webidl → shared → client → server
+- Copies client build to `packages/server/public/`
+
+**Stage 2: Runtime**
+- Minimal production image with only runtime dependencies
+- Copies built artifacts from builder stage
+- Installs production dependencies only
+- Exposes port 5555 for game server
+
+### Building Locally
+
+Test the production Docker build:
+
+```bash
+# Build from repository root
+docker build -f Dockerfile.server -t hyperscape-server .
+
+# Run the container
+docker run -p 5555:5555 \
+  -e DATABASE_URL=postgresql://... \
+  -e JWT_SECRET=your-secret \
+  -e PUBLIC_PRIVY_APP_ID=your-app-id \
+  -e PRIVY_APP_SECRET=your-secret \
+  hyperscape-server
+```
+
+### Railway Deployment
+
+Railway can use either Nixpacks or Dockerfile:
+
+**Nixpacks** (default):
+- Configured in `nixpacks.toml`
+- Faster builds with caching
+- Automatic dependency detection
+
+**Dockerfile** (alternative):
+- More control over build process
+- Consistent with local builds
+- Useful for debugging build issues
+
+To switch to Dockerfile on Railway:
+1. Go to project settings
+2. Change "Builder" from "Nixpacks" to "Dockerfile"
+3. Set "Dockerfile Path" to `Dockerfile.server`
+
+<Info>
+The current production deployment uses Nixpacks for faster builds. The Dockerfile is maintained for local testing and alternative deployment platforms.
+</Info>
