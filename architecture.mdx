@@ -18,10 +18,46 @@ hyperscape/
 │   ├── physx-js-webidl/     # @hyperscape/physx-js-webidl - PhysX WASM bindings
 │   ├── asset-forge/         # 3d-asset-forge - AI asset generation (Elysia + React Three Fiber)
 │   └── docs-site/           # Documentation (Docusaurus)
-├── assets/                  # Shared game assets
+├── assets/                  # Shared game assets (Git LFS, dev only)
 ├── world/                   # World configuration and manifests
 └── scripts/                 # Build and dev scripts
 ```
+
+## Production Architecture
+
+Hyperscape uses a split deployment model with specialized infrastructure:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Cloudflare Pages                         │
+│              Frontend (hyperscape.pages.dev)                │
+│         React + Vite + Three.js Client                      │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     │ HTTPS/WSS
+                     │
+        ┌────────────┴────────────┐
+        │                         │
+        ▼                         ▼
+┌──────────────────┐    ┌──────────────────────┐
+│     Railway      │    │   Cloudflare R2      │
+│   Game Server    │    │    Asset CDN         │
+│  + PostgreSQL    │    │  Manifests, Models   │
+└──────────────────┘    └──────────────────────┘
+```
+
+**Components:**
+- **Frontend**: Cloudflare Pages (global CDN, automatic deployments)
+- **Backend**: Railway (Nixpacks builder, PostgreSQL included)
+- **Assets**: Cloudflare R2 (manifests, 3D models, textures, audio)
+- **Database**: PostgreSQL on Railway (automatic backups)
+
+**Deployment Flow:**
+1. Push to `main` branch
+2. GitHub Actions triggers Railway deployment (backend)
+3. Cloudflare Pages auto-deploys frontend
+4. Manifests uploaded to R2 via GitHub Actions
+5. Server fetches manifests from R2 at startup
 
 ## Build Dependency Graph
 
