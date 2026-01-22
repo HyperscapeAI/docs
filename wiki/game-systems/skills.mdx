@@ -681,19 +681,66 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ## Skill Unlocks
 
-The `skill-unlocks.json` manifest documents what players unlock at each level. This is used for UI display and progression tracking.
+The `skill-unlocks.json` manifest documents what players unlock at each level. This data powers the in-game Skill Guide Panel.
 
-Example unlocks:
+### Skill Guide Panel
+
+Players can click any skill in the Skills tab to open a detailed guide showing all unlocks:
+
+**Features**:
+- Lists all unlocks with level requirements
+- Visual distinction between unlocked (green ✓) and locked (🔒) items
+- Highlights the next unlock to work toward
+- Shows progress: "X of Y unlocks achieved"
+- Type badges (item, ability, area, etc.)
+- Scrollable for skills with many unlocks
+
+**Implementation**:
+- Component: `packages/client/src/game/panels/SkillGuidePanel.tsx`
+- Data source: `/api/data/skill-unlocks` endpoint
+- Manifest: `packages/server/world/assets/manifests/skill-unlocks.json`
+
+**Example Unlocks**:
+- **Attack 1**: Bronze weapons, Iron weapons
 - **Attack 40**: Rune weapons
 - **Attack 60**: Dragon weapons
 - **Woodcutting 15**: Oak trees
 - **Mining 30**: Coal
 - **Cooking 40**: Lobster
 - **Smithing 50**: Mithril bar
+- **Prayer 43**: Protect from Melee
 
 <Info>
-See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
+The Skill Guide Panel fetches unlock data from the server API to ensure it's always up-to-date with the latest manifest changes.
 </Info>
+
+### Unlock Data Structure
+
+```json
+{
+  "skills": {
+    "attack": [
+      {
+        "level": 1,
+        "description": "Bronze weapons, Iron weapons",
+        "type": "item"
+      },
+      {
+        "level": 40,
+        "description": "Rune weapons",
+        "type": "item"
+      }
+    ]
+  }
+}
+```
+
+**Unlock Types**:
+- `item` - Equipment, resources, or craftable items
+- `ability` - Passive bonuses, prayers, or unlocked actions
+- `area` - Access to new zones or locations
+- `quest` - Quest requirements
+- `activity` - Minigames or special activities
 
 ## Manifest-Driven Design
 
