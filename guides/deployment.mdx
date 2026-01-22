@@ -46,24 +46,61 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
+Railway deployment uses Nixpacks for automatic builds. The configuration is in `nixpacks.toml` at the repository root.
+
 <Steps>
   <Step title="Create Railway project">
     Connect your GitHub repository to Railway.
   </Step>
   
   <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+    Railway automatically detects `nixpacks.toml` and uses it for builds.
+    
+    Build phases:
+    - **Setup**: Installs system dependencies (Python, Cairo, etc.)
+    - **Install**: Runs `bun install`
+    - **Build**: Builds shared and server packages only (client is on Cloudflare Pages)
+    - **Start**: Runs `cd packages/server && bun dist/index.js`
   </Step>
   
   <Step title="Add PostgreSQL">
     Add PostgreSQL service from Railway marketplace.
+    Railway automatically sets `DATABASE_URL` environment variable.
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    Required variables:
+    ```bash
+    DATABASE_URL=postgresql://...  # Auto-set by Railway
+    JWT_SECRET=your-secret-key
+    PRIVY_APP_ID=your-app-id
+    PRIVY_APP_SECRET=your-app-secret
+    PUBLIC_CDN_URL=https://your-cdn.com
+    NODE_ENV=production
+    ```
+  </Step>
+  
+  <Step title="Configure CDN">
+    Assets are served from CDN (Cloudflare R2 recommended).
+    
+    The server fetches manifests from `PUBLIC_CDN_URL` at startup:
+    - Manifests are downloaded to `packages/server/world/assets/manifests/`
+    - Skipped in development if local manifests exist
+    - Required in production (CI=true environment)
   </Step>
 </Steps>
+
+### Railway GitHub Actions
+
+Automatic deployment is configured in `.github/workflows/deploy-railway.yml`:
+
+- Triggers on push to `main` for server-related paths
+- Uses Railway GraphQL API for deployments
+- Requires `RAILWAY_TOKEN` secret in GitHub repository settings
+
+<Info>
+The Railway deployment workflow was updated to use the GraphQL API instead of the deprecated CLI method.
+</Info>
 
 ## Vercel Client Deployment
 
