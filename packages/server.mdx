@@ -56,8 +56,29 @@ packages/server/
 | Route | Method | Purpose |
 |-------|--------|---------|
 | `/health` | GET | Health check |
+| `/status` | GET | Server status (used by Railway healthcheck) |
 | `/auth` | POST | Authentication |
 | `/ws` | WS | Game WebSocket connection |
+| `/api/data/skill-unlocks` | GET | Skill unlock definitions (server-authoritative) |
+| `/manifests/*.json` | GET | Game data manifests (fetched from CDN at startup) |
+| `/debug/public` | GET | Debug endpoint showing public directory contents |
+
+### Data Routes
+
+The server provides static game data endpoints that are server-authoritative:
+
+```typescript
+// packages/server/src/startup/routes/data-routes.ts
+export function registerDataRoutes(fastify: FastifyInstance): void {
+  // Get skill unlock definitions
+  fastify.get("/api/data/skill-unlocks", async (_req, reply) => {
+    const unlocks = getAllSkillUnlocks();
+    return reply.send(unlocks);
+  });
+}
+```
+
+These endpoints serve data that the client needs but shouldn't bundle (to allow server-side updates without client rebuilds).
 
 ## Database
 
