@@ -96,11 +96,30 @@ This starts the game server plus the ElizaOS agent runtime. The AI agent will co
 
 ## What Gets Started
 
-| Service | Port | Description |
-|---------|------|-------------|
-| Client | 3333 | Vite dev server with hot reload (dev mode) |
-| Server | 5555 | Game server (Fastify + WebSockets) |
-| CDN | 8080 | Asset server (Docker nginx, if started) |
+When you run `bun run dev`, the following services start:
+
+| Service | Port | Description | Auto-Start |
+|---------|------|-------------|------------|
+| Client | 3333 | Vite dev server with hot reload | ✅ Yes |
+| Server | 5555 | Game server (Fastify + WebSockets) | ✅ Yes |
+| PostgreSQL | 5432 | Database (Docker) | ✅ Yes |
+| CDN | 8080 | Asset server (Docker nginx) | ❌ Manual |
+
+<Info>
+The CDN must be started manually with `bun run cdn:up` before running the game. It serves 3D models, audio, textures, and manifests required by the client and server.
+</Info>
+
+### Service Dependencies
+
+```mermaid
+flowchart TD
+    A[CDN :8080] -->|Manifests| B[Server :5555]
+    A -->|Assets| C[Client :3333]
+    B -->|WebSocket| C
+    D[PostgreSQL :5432] -->|Data| B
+```
+
+The server fetches manifests from the CDN at startup, so the CDN must be running first.
 
 ## Quick Play Guide
 
