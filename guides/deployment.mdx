@@ -6,12 +6,50 @@ icon: "rocket"
 
 ## Deployment Overview
 
-Hyperscape uses a split deployment model:
+Hyperscape uses a **split deployment architecture** for optimal performance and scalability:
 
-- **Server**: Railway, Fly.io, or Docker host
-- **Client**: Vercel, Netlify, or static hosting
-- **Database**: PostgreSQL (Neon recommended)
-- **Assets**: CDN or object storage
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Production Architecture                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Frontend (Cloudflare Pages)                                │
+│  ├─ hyperscape.club                                         │
+│  ├─ www.hyperscape.club                                     │
+│  └─ *.hyperscape.pages.dev (preview deployments)           │
+│                                                              │
+│  Server/API (Railway)                                       │
+│  ├─ hyperscape-production.up.railway.app                   │
+│  ├─ WebSocket: wss://hyperscape-production.up.railway.app/ws│
+│  └─ REST API: /api/*                                        │
+│                                                              │
+│  Assets/CDN (Cloudflare R2)                                 │
+│  ├─ assets.hyperscape.club                                  │
+│  ├─ Models, textures, audio (3D assets)                    │
+│  └─ Manifests (game data JSON files)                       │
+│                                                              │
+│  Database (Railway PostgreSQL)                              │
+│  └─ Managed PostgreSQL instance                            │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Deployment Model
+
+| Component | Platform | Purpose |
+|-----------|----------|---------|
+| **Frontend** | Cloudflare Pages | Static React app with global CDN |
+| **Server** | Railway | Game server (Fastify + WebSockets) |
+| **Database** | Railway PostgreSQL | Player data, inventory, world state |
+| **Assets** | Cloudflare R2 | 3D models, audio, textures, manifests |
+
+### Why Split Deployment?
+
+- **Performance**: Frontend served from Cloudflare's global CDN (low latency)
+- **Scalability**: Server can scale independently from frontend
+- **Cost**: Static hosting is cheaper than running servers for static files
+- **Flexibility**: Update frontend without server redeployment and vice versa
+- **Assets**: Large game assets (models, audio) served from CDN, not bundled with frontend
 
 ## Environment Variables
 
