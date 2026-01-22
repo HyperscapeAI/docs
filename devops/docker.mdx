@@ -27,6 +27,12 @@ bun run cdn:up
 
 This starts an nginx container serving assets from `packages/server/world/assets/` on port 8080.
 
+**What the CDN serves**:
+- 3D models (`/models/`)
+- Audio files (`/audio/`)
+- Textures (`/textures/`)
+- Manifests (`/manifests/`) - Game data JSON files
+
 ### Stop CDN
 
 ```bash
@@ -36,6 +42,20 @@ bun run cdn:down
 ### Automatic Start
 
 The CDN starts automatically with `bun run dev`. Only run manually if using services separately.
+
+### Manifest Serving
+
+The server fetches manifests from the CDN at startup and caches them locally:
+
+```typescript
+// From packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Development**: Skips fetch if local manifests exist (allows local asset development)  
+**Production**: Always fetches from `PUBLIC_CDN_URL` to ensure latest data
+
+Cached manifests are served to clients via `/manifests/` route with 5-minute cache headers.
 
 ## PostgreSQL Container
 
