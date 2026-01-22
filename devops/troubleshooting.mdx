@@ -235,11 +235,77 @@ docker logs hyperscape-postgres
 docker logs hyperscape-cdn
 ```
 
+### Railway Deployment Issues
+
+**Issue**: Build fails with "lockfile had changes, but lockfile is frozen"
+
+**Solution**: Regenerate lockfile locally and commit:
+```bash
+bun install
+git add bun.lock
+git commit -m "chore: update bun.lock"
+git push
+```
+
+**Issue**: Frontend not loading (503 "Frontend not available")
+
+**Cause**: Client build not copied to server's public directory
+
+**Solution**: Verify `nixpacks.toml` build phase includes client build:
+```toml
+[phases.build]
+cmds = [
+  "bun run build:shared",
+  "bun run build:server",
+  "cp -r packages/client/dist/* packages/server/public/"
+]
+```
+
+**Issue**: Manifests not loading from CDN
+
+**Symptoms**:
+- Server logs: "Failed to fetch manifests from CDN"
+- Game features not working (no items, NPCs, etc.)
+
+**Solutions**:
+1. Verify `PUBLIC_CDN_URL` environment variable is set
+2. Check manifests are publicly accessible:
+   ```bash
+   curl https://assets.hyperscape.club/manifests/items.json
+   ```
+3. Verify CORS headers allow Railway origin
+4. Check Railway logs for detailed error messages
+
+### Cloudflare Pages Issues
+
+**Issue**: Environment variables not updating
+
+**Cause**: Cloudflare Pages caches environment variables
+
+**Solution**:
+1. Update variables in Pages dashboard
+2. Trigger new deployment (push to branch or manual redeploy)
+3. Clear browser cache
+
+**Issue**: Preview deployment CORS errors
+
+**Cause**: Preview URL not in CORS allowlist
+
+**Solution**: Preview deployments are automatically allowed via regex:
+```typescript
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/
+```
+
+If still failing, check server logs to verify the pattern matches your preview URL.
+
 ## Getting Help
 
 1. Check [GitHub Issues](https://github.com/HyperscapeAI/hyperscape/issues)
 2. Search existing discussions
-3. Open a new issue with:
-   - Error message
+3. Join [Discord](https://discord.gg/JD3MEwNbbX) for community support
+4. Open a new issue with:
+   - Error message (full stack trace)
    - Steps to reproduce
    - Environment details (OS, Node version, Bun version)
+   - Deployment platform (Railway, Cloudflare, local)
+   - Relevant logs (server, browser console, Railway logs)
