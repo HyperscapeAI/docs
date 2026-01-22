@@ -211,11 +211,47 @@ bun run cap:sync:android  # Android only
 
 ## Deployment
 
-### Cloudflare Pages
+### Cloudflare Pages (Production)
+
+The client is deployed to Cloudflare Pages with automatic GitHub integration.
+
+**Production domains:**
+- Primary: https://hyperscape.club
+- Pages: https://hyperscape.pages.dev
+- Preview: `<branch>.hyperscape.pages.dev`
+
+**Build configuration:**
+```
+Framework preset: None (Vite)
+Build command: cd packages/client && bun run build
+Build output: packages/client/dist
+Root directory: / (repository root)
+```
+
+**Environment variables** (set in Pages dashboard):
+```bash
+PUBLIC_PRIVY_APP_ID=<from-privy-dashboard>
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_APP_URL=https://hyperscape.club
+```
+
+**Manual deployment:**
+```bash
+# Via Cloudflare Pages dashboard
+# Or via wrangler CLI:
+cd packages/client
+bunx wrangler pages deploy dist
+```
+
+### Alternative: Vercel
 
 ```bash
-bun run deploy        # Deploy to staging
-bun run deploy:prod   # Deploy to production
+# Import packages/client directory to Vercel
+# Set build command: bun run build
+# Set output directory: dist
+# Add PUBLIC_* environment variables
 ```
 
 ## Key Files
