@@ -35,30 +35,71 @@ Hyperscape uses a split deployment architecture with separate environments for p
 
 ## Environment Variables
 
-### Server Production
+### Server Environment Variables
 
-```bash
-# Required
-DATABASE_URL=postgresql://...
-JWT_SECRET=your-secret-key
-PRIVY_APP_ID=your-app-id
-PRIVY_APP_SECRET=your-app-secret
+<Tabs>
+  <Tab title="Production">
+    ```bash
+    # Required
+    DATABASE_URL=postgresql://...
+    JWT_SECRET=your-secret-key
+    PUBLIC_PRIVY_APP_ID=your-app-id
+    PRIVY_APP_SECRET=your-app-secret
+    
+    # CDN Configuration
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    PUBLIC_API_URL=https://api.hyperscape.club
+    PUBLIC_WS_URL=wss://api.hyperscape.club/ws
+    
+    # Optional
+    PORT=5555
+    NODE_ENV=production
+    LIVEKIT_API_KEY=...
+    LIVEKIT_API_SECRET=...
+    ```
+  </Tab>
+  <Tab title="Staging">
+    ```bash
+    # Required
+    DATABASE_URL=postgresql://...  # Separate staging database
+    JWT_SECRET=your-secret-key
+    PUBLIC_PRIVY_APP_ID=your-app-id
+    PRIVY_APP_SECRET=your-app-secret
+    
+    # CDN Configuration
+    PUBLIC_CDN_URL=https://staging-assets.hyperscape.club
+    PUBLIC_API_URL=https://staging-api.hyperscape.club
+    PUBLIC_WS_URL=wss://staging-api.hyperscape.club/ws
+    
+    # Optional
+    PORT=5555
+    NODE_ENV=production
+    ```
+  </Tab>
+</Tabs>
 
-# Optional
-PORT=5555
-PUBLIC_CDN_URL=https://cdn.example.com
-LIVEKIT_API_KEY=...
-LIVEKIT_API_SECRET=...
-```
+### Client Environment Variables
 
-### Client Production
-
-```bash
-PUBLIC_PRIVY_APP_ID=your-app-id
-PUBLIC_API_URL=https://api.hyperscape.lol
-PUBLIC_WS_URL=wss://api.hyperscape.lol
-PUBLIC_CDN_URL=https://cdn.hyperscape.lol
-```
+<Tabs>
+  <Tab title="Production">
+    ```bash
+    PUBLIC_PRIVY_APP_ID=your-app-id
+    PUBLIC_API_URL=https://api.hyperscape.club
+    PUBLIC_WS_URL=wss://api.hyperscape.club/ws
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    PUBLIC_APP_URL=https://hyperscape.club
+    ```
+  </Tab>
+  <Tab title="Staging">
+    ```bash
+    PUBLIC_PRIVY_APP_ID=your-app-id
+    PUBLIC_API_URL=https://staging-api.hyperscape.club
+    PUBLIC_WS_URL=wss://staging-api.hyperscape.club/ws
+    PUBLIC_CDN_URL=https://staging-assets.hyperscape.club
+    PUBLIC_APP_URL=https://staging.hyperscape.club
+    ```
+  </Tab>
+</Tabs>
 
 <Warning>
   `PUBLIC_PRIVY_APP_ID` must match between client and server.
