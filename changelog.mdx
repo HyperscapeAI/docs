@@ -23,6 +23,113 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Railway Deployment & Manifest Loading" description="January 2026" date="2026-01-22">
+
+### 🚀 Railway Production Deployment
+
+Complete Railway deployment infrastructure with automated CI/CD:
+
+- **Nixpacks Build Configuration**: `nixpacks.toml` defines multi-phase build
+  - Setup phase: Installs system dependencies (Python, Cairo, Pango for native modules)
+  - Install phase: Runs `bun install`
+  - Build phase: Builds `shared` and `server` packages only (client on Cloudflare Pages)
+  - Creates manifests directory for CDN-fetched manifests
+  - Skips asset download (`SKIP_ASSETS=true`) - assets served from CDN
+- **GitHub Actions Workflow**: `.github/workflows/deploy-railway.yml`
+  - Triggers on push to `main` for relevant paths
+  - Uses Railway GraphQL API for deployment
+  - Polls deployment status with 5 retries
+  - Manual trigger via `workflow_dispatch`
+- **Service Configuration**: `railway.server.json`
+  - Nixpacks builder with custom config path
+  - Watch patterns for automatic redeployment
+  - Health check at `/status` endpoint
+  - Restart policy: `ON_FAILURE` with 3 max retries
+- **Railway Ignore**: `.railwayignore` excludes unnecessary files
+  - Skips `node_modules/`, `.git/`, test results
+  - Excludes `packages/server/world/assets/` (served from CDN)
+  - Reduces upload time and deployment size
+
+### 📦 CDN Manifest Loading
+
+Server now fetches manifests from CDN at startup instead of requiring local assets:
+
+- **Automatic Fetching**: `fetchManifestsFromCDN()` in `src/startup/config.ts`
+  - Fetches 25+ manifest files from `PUBLIC_CDN_URL/manifests/`
+  - Includes root files (npcs.json, biomes.json, etc.)
+  - Includes subdirectories (items/, gathering/, recipes/)
+  - Caches locally in `world/assets/manifests/`
+- **Smart Caching**: Compares content before writing to avoid unnecessary disk I/O
+- **Environment-Aware Behavior**:
+  - **Production/CI**: Always fetches from CDN
+  - **Development**: Skips fetch if local manifests exist
+  - **Test**: Can skip with `SKIP_MANIFESTS=true`
+- **Error Handling**: Graceful fallback to existing local manifests
+  - Logs warnings for failed fetches
+  - Continues with cached manifests if CDN unavailable
+  - Only throws error if no manifests exist at all
+- **HTTP Caching**: Manifests served with `max-age=300, must-revalidate` (5 minutes)
+
+**Benefits:**
+- No Git LFS required in production
+- Faster deployments (no asset cloning)
+- Automatic manifest updates from CDN
+- Reduced deployment size
+
+### 🌐 CORS Configuration Updates
+
+Expanded CORS allowlist for production domains:
+
+- **Production Domains**:
+  - `https://hyperscape.club` (main site)
+  - `https://www.hyperscape.club` (www subdomain)
+  - `https://hyperscape.pages.dev` (Cloudflare Pages)
+  - `https://hyperscape-production.up.railway.app` (Railway backend)
+  - `http://hyperscape.pages.dev` (HTTP fallback for testing)
+- **Dynamic Patterns**:
+  - `/^https?:\/\/localhost:\d+$/` - Any localhost port
+  - `/^https?:\/\/.+\.hyperscape\.pages\.dev$/` - Cloudflare preview deployments (HTTP and HTTPS)
+  - `/^https:\/\/.+\.up\.railway\.app$/` - Railway preview deployments
+  - Farcaster, Warpcast, Privy domains
+- **Environment Variables**: Additional origins from `CLIENT_URL`, `PUBLIC_APP_URL`, `ELIZAOS_URL`
+
+### 🏗️ Frontend Build Integration
+
+Server can now serve built client from `public/` directory:
+
+- **Conditional Asset Routes**: Server checks for client build in `public/assets/`
+  - If client assets exist: Serves from `public/` (production mode)
+  - If no client assets: Registers `/assets/` for world assets (development mode)
+- **SPA Routing**: Catch-all route serves `index.html` for client-side routing
+  - Excludes API routes (`/api/`, `/ws`, `/manifests/`)
+  - Excludes file extensions (static files)
+- **Build Verification**: Debug endpoint `/debug/public` shows directory contents
+- **Cache Headers**: Proper caching for static assets (1 year) and HTML (no-cache)
+
+### 🔧 Build Process Improvements
+
+- **Split Build Commands**: Separate phases for better debugging
+  - `bun run build:shared` → `bun run build:server`
+  - Explicit logging for each phase
+- **Client Build Copy**: Client dist copied to server public directory
+  - `cp -r /app/packages/client/dist/* /app/packages/server/public/`
+  - Enables single-server deployment option
+- **Dockerfile Updates**: Multi-stage Docker build with lean runtime image
+  - Builder stage: Installs dependencies and builds packages
+  - Runtime stage: Minimal image with only production dependencies
+  - Health check with curl
+  - Proper WORKDIR for server execution
+
+### 🐛 Bug Fixes & Improvements
+
+- **Lockfile Sync**: Updated `bun.lock` to match `package.json` dependencies
+- **Build Timestamps**: Added timestamp file to verify builds are running
+- **Directory Verification**: Index.html existence check before registering routes
+- **Error Logging**: Enhanced error messages with directory contents for debugging
+- **Nixpacks Logging**: Verbose logging for build debugging
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
