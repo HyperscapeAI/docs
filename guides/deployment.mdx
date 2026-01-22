@@ -46,24 +46,141 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
+Railway deployment is automated via GitHub Actions and uses Nixpacks for building.
+
+### Automated Deployment
+
+The repository includes a GitHub Actions workflow (`.github/workflows/deploy-railway.yml`) that automatically deploys to Railway when changes are pushed to `main`:
+
+**Trigger Paths**:
+- `packages/shared/**`
+- `packages/client/**`
+- `packages/server/**`
+- `packages/plugin-hyperscape/**`
+- `package.json`, `bun.lock`
+- `nixpacks.toml`, `railway.server.json`, `Dockerfile.server`
+
+**Deployment Process**:
+1. GitHub Actions triggers on push to main
+2. Workflow calls Railway GraphQL API to trigger redeployment
+3. Railway builds using Nixpacks configuration
+4. Client is built and copied to server's `public/` directory
+5. Manifests are fetched from CDN at server startup
+6. Server starts and serves both API and frontend
+
+### Nixpacks Configuration
+
+The `nixpacks.toml` file configures the Railway build process:
+
+```toml
+[phases.setup]
+# Install system dependencies for native modules
+aptPkgs = ["python3", "make", "g++", "pkg-config", "libcairo2-dev", ...]
+
+[phases.install]
+cmds = ["bun install"]
+
+[phases.build]
+# Build packages in order: shared -> client -> server
+cmds = [
+  "bun run build:shared",
+  "bun run build:client",
+  "bun run build:server",
+  "mkdir -p packages/server/public",
+  "cp -r packages/client/dist/* packages/server/public/",
+]
+
+[start]
+cmd = "cd packages/server && bun dist/index.js"
+
+[variables]
+CI = "true"
+SKIP_ASSETS = "true"  # Assets served from CDN
+NODE_ENV = "production"
+```
+
+### Manual Railway Setup
+
 <Steps>
   <Step title="Create Railway project">
     Connect your GitHub repository to Railway.
   </Step>
   
-  <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+  <Step title="Configure service">
+    - Builder: Nixpacks (automatic)
+    - Root directory: `/` (monorepo root)
+    - Start command: Defined in `nixpacks.toml`
   </Step>
   
   <Step title="Add PostgreSQL">
-    Add PostgreSQL service from Railway marketplace.
+    Add PostgreSQL service from Railway marketplace. Railway will automatically set `DATABASE_URL`.
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    Required variables:
+    ```bash
+    PUBLIC_PRIVY_APP_ID=your-app-id
+    PRIVY_APP_SECRET=your-app-secret
+    JWT_SECRET=your-jwt-secret
+    PUBLIC_CDN_URL=https://d20g7vd4m53hpb.cloudfront.net
+    ```
+  </Step>
+  
+  <Step title="Configure GitHub Actions">
+    Add `RAILWAY_TOKEN` secret to your GitHub repository:
+    1. Generate token at [Railway Dashboard](https://railway.app/account/tokens)
+    2. Add as repository secret: Settings → Secrets → Actions → New secret
+    3. Name: `RAILWAY_TOKEN`
   </Step>
 </Steps>
+
+### Railway Environment Variables
+
+```bash
+# Required
+PUBLIC_PRIVY_APP_ID=your-app-id
+PRIVY_APP_SECRET=your-app-secret
+JWT_SECRET=your-jwt-secret
+PUBLIC_CDN_URL=https://d20g7vd4m53hpb.cloudfront.net
+
+# Optional
+PORT=5555  # Railway sets this automatically
+DATABASE_URL=postgresql://...  # Set by Railway PostgreSQL service
+ADMIN_CODE=your-admin-code
+```
+
+### CDN Manifest Fetching
+
+In production, the server fetches game manifests from the CDN at startup instead of bundling them:
+
+**Manifest Files Fetched**:
+- `items.json` - Item definitions
+- `npcs.json` - NPC and mob data
+- `resources.json` - Gathering resources
+- `tools.json` - Tool definitions
+- `biomes.json` - Biome configurations
+- `world-areas.json` - World area definitions
+- `stores.json` - Shop inventories
+- `music.json` - Music track metadata
+- `vegetation.json` - Vegetation spawning
+- `buildings.json` - Building placements
+
+**Fetch Process** (from `config.ts`):
+1. Server starts and checks for local manifests
+2. If in production or manifests missing, fetches from `PUBLIC_CDN_URL/manifests/`
+3. Compares with existing cached files
+4. Only updates files that changed (avoids unnecessary disk writes)
+5. Falls back to cached manifests if CDN is unreachable
+
+**Benefits**:
+- Smaller deployment size (no bundled assets)
+- Faster builds (no asset copying)
+- Easier content updates (update CDN, restart server)
+- Reduced Git LFS usage in CI/CD
+
+<Info>
+In development, manifest fetching is skipped if local manifests already exist. This allows developers to work with local asset repositories.
+</Info>
 
 ## Vercel Client Deployment
 
