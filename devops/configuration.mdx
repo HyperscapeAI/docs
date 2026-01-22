@@ -152,6 +152,95 @@ Only configure `.env` files when:
 - Deploying to production
 - Running AI agents
 
+## CORS Configuration
+
+The server automatically configures CORS to allow requests from the frontend and preview deployments.
+
+### Allowed Origins
+
+**Production domains:**
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  "https://hyperscape-production.up.railway.app",
+  // HTTP fallbacks for testing
+  "http://hyperscape.pages.dev",
+];
+```
+
+**Dynamic patterns:**
+```typescript
+// Localhost development (any port)
+/^https?:\/\/localhost:\d+$/
+
+// Cloudflare Pages preview deployments
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/
+
+// Railway preview deployments
+/^https:\/\/.+\.up\.railway\.app$/
+
+// Farcaster frames
+/^https:\/\/.+\.farcaster\.xyz$/
+/^https:\/\/.+\.warpcast\.com$/
+
+// Privy authentication
+/^https:\/\/.+\.privy\.io$/
+```
+
+### Adding Custom Domains
+
+If you deploy to a custom domain, add it to the allowlist:
+
+**Option 1: Environment variable**
+```bash
+# In Railway dashboard or .env
+PUBLIC_APP_URL=https://yourdomain.com
+```
+
+The server automatically adds `PUBLIC_APP_URL` to the CORS allowlist.
+
+**Option 2: Code modification**
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  // ... existing origins
+  "https://yourdomain.com",
+];
+```
+
+### CORS Headers
+
+The server sends these CORS headers:
+
+```http
+Access-Control-Allow-Origin: <origin>
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, PUT, POST, DELETE, OPTIONS, PATCH
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With
+```
+
+### Troubleshooting CORS
+
+**Error: "CORS policy: No 'Access-Control-Allow-Origin' header"**
+
+1. Check that your frontend domain is in the allowlist
+2. Verify `PUBLIC_APP_URL` is set correctly
+3. Check browser console for the exact origin being blocked
+4. Add the origin to `allowedOrigins` array in `http-server.ts`
+
+**Preview deployments not working:**
+
+Cloudflare Pages preview deployments use subdomains like `abc123.hyperscape.pages.dev`. These are automatically allowed by the regex pattern:
+
+```typescript
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/
+```
+
+If you use a different preview domain pattern, add a regex for it.
+
 ## Debug Controls
 
 ### FPS Debug Panel
