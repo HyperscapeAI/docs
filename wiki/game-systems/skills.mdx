@@ -685,6 +685,104 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
+## Agility System
+
+Agility is a unique skill that rewards players for traversing the game world and directly impacts stamina mechanics.
+
+### Training Agility
+
+**XP Gain**: Earn 1 XP per 2 tiles traveled (walking or running)
+
+**XP Batching**: To prevent visual spam, XP is granted in batches:
+- Every 100 tiles traveled = 50 XP granted
+- Partial progress is preserved between batches
+- Death resets accumulated tiles (not earned XP)
+- Logout/disconnect clears tile counter (max ~50 XP lost)
+
+**XP Rates**:
+| Movement Type | Tiles/Second | XP/Minute | Time to Level 50 |
+|---------------|--------------|-----------|------------------|
+| Walking | 3.33 | ~100 XP | ~17 hours |
+| Running | 6.67 | ~200 XP | ~8.5 hours |
+
+<Info>
+Agility XP is granted automatically as you move around the world - no special actions required!
+</Info>
+
+### Stamina Regeneration Bonus
+
+Agility provides a **+1% stamina regen bonus per level**:
+
+| Agility Level | Regen Multiplier | Idle Regen/Sec | Walk Regen/Sec |
+|---------------|------------------|----------------|----------------|
+| 1 | 1.01x | 4.04 | 2.02 |
+| 10 | 1.10x | 4.40 | 2.20 |
+| 25 | 1.25x | 5.00 | 2.50 |
+| 50 | 1.50x | 6.00 | 3.00 |
+| 75 | 1.75x | 7.00 | 3.50 |
+| 99 | 1.99x | 7.96 | 3.98 |
+
+<Info>
+High agility levels significantly improve stamina sustainability, allowing longer running sessions and faster recovery.
+</Info>
+
+### Weight-Based Stamina Drain
+
+Inventory weight affects stamina drain while running:
+
+**Weight Penalty**: +0.5% stamina drain per kg carried
+
+| Weight (kg) | Drain Multiplier | Drain/Second | Stamina Duration |
+|-------------|------------------|--------------|------------------|
+| 0 | 1.0x | 2.0 | 50 seconds |
+| 20 | 1.1x | 2.2 | 45 seconds |
+| 50 | 1.25x | 2.5 | 40 seconds |
+| 100 | 1.5x | 3.0 | 33 seconds |
+
+<Warning>
+Heavy loads significantly increase stamina drain. Manage your inventory weight for optimal running efficiency. The Equipment Panel displays your total weight.
+</Warning>
+
+### Combined Effects
+
+High agility can partially offset heavy weight penalties:
+
+**Example**: Level 50 Agility with 50kg load
+- Weight increases drain by 25% (2.0 → 2.5/sec)
+- Agility increases idle regen by 50% (4.0 → 6.0/sec)
+- Net effect: Still regenerate faster than you drain while idle
+
+### Agility Unlocks
+
+| Level | Unlock |
+|-------|--------|
+| 1 | Basic stamina regeneration (+1% per level) |
+| 10 | +10% stamina regeneration |
+| 25 | +25% stamina regeneration |
+| 50 | +50% stamina regeneration |
+| 75 | +75% stamina regeneration |
+| 99 | Agility cape, +99% stamina regeneration |
+
+---
+
+## Skill Guide Panel
+
+Click any skill in the Skills panel to open its Skill Guide, which shows all unlocks available at each level.
+
+**Features**:
+- Visual distinction between unlocked (green) and locked (gray) items
+- Next unlock highlighted with progress indicator
+- Scrollable list for skills with many unlocks
+- Type indicators (item vs ability)
+- Shows levels needed to reach next unlock
+- Loading state while fetching unlock data from server
+
+<Info>
+The Skill Guide Panel helps players plan their progression by showing what they'll unlock at future levels. Data is fetched from the server endpoint `/api/data/skill-unlocks`.
+</Info>
+
+---
+
 ## Skill Unlocks
 
 The `skill-unlocks.json` manifest documents what players unlock at each level. This is used for UI display and progression tracking.
@@ -696,6 +794,7 @@ Example unlocks:
 - **Mining 30**: Coal
 - **Cooking 40**: Lobster
 - **Smithing 50**: Mithril bar
+- **Agility 50**: +50% stamina regeneration
 
 <Info>
 See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
@@ -715,6 +814,7 @@ This allows easy content updates without code changes and enables community modd
 ## Related Documentation
 
 - [Combat System](/wiki/game-systems/combat)
+- [Movement System](/wiki/game-systems/movement)
 - [Data Manifests Overview](/wiki/data/overview)
 - [Item Data Structure](/wiki/data/items)
 - [NPC Data Structure](/wiki/data/npcs)
