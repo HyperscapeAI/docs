@@ -695,6 +695,49 @@ Example unlocks:
 See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
 </Info>
 
+### Skill Guide Panel
+
+Players can click any skill in the Skills Panel to open an OSRS-style Skill Guide that displays all unlocks for that skill:
+
+**Features:**
+- Click any skill icon to open its guide
+- Shows all unlocks with level requirements
+- Visual distinction between unlocked (green checkmark) and locked (lock icon) items
+- Highlights the next unlock the player is working toward
+- Displays progress: "X more levels to unlock: [description]"
+- Scrollable list for skills with many unlocks
+- Type badges (item/ability) for each unlock
+- Loading state while fetching unlock data from server
+
+**Implementation:**
+- Component: `packages/client/src/game/panels/SkillGuidePanel.tsx`
+- Data source: `/api/data/skill-unlocks` endpoint (server-authoritative)
+- Unlock data: `packages/server/world/assets/manifests/skill-unlocks.json`
+
+**User Experience:**
+```
+Skills Panel → Click skill icon → Skill Guide Panel opens
+  ├─ Header: [Icon] Skill Name Guide [X]
+  ├─ Current Level: Your Level: 45
+  ├─ Progress: 12/29 unlocked
+  ├─ Next Unlock: 5 more levels to unlock: Rune weapons
+  └─ Scrollable List:
+      ✓ Lvl 1   Bronze weapons    [item]
+      ✓ Lvl 5   Steel weapons     [item]
+      ✓ Lvl 40  Rune weapons      [item]
+      ➤ Lvl 50  Dragon weapons    [item]  [NEXT]
+      🔒 Lvl 60 Godswords         [item]
+```
+
+**Keyboard Controls:**
+- **ESC** - Close panel
+- **Click outside** - Close panel
+- **Click X button** - Close panel
+
+<Info>
+The Skill Guide Panel fetches unlock data from the server on first load and caches it for the session. This ensures unlock data is always server-authoritative and can be updated without client rebuilds.
+</Info>
+
 ## Manifest-Driven Design
 
 All skill-related data is now defined in JSON manifests:
