@@ -235,6 +235,52 @@ Game content is defined in JSON manifest files in `packages/server/world/assets/
 
 Add new content by editing these JSON files—no code changes required.
 
+## Asset Serving Architecture
+
+### Development
+
+In development, assets are served from a local Docker CDN:
+
+```bash
+bun run cdn:up  # Starts nginx on port 8080
+```
+
+**Asset flow:**
+1. Client requests asset: `http://localhost:8080/models/goblin/goblin.vrm`
+2. nginx serves from `packages/server/world/assets/`
+3. Manifests loaded from local filesystem
+
+### Production
+
+In production, assets are served from Cloudflare R2:
+
+```bash
+# Automatic upload via GitHub Actions
+# .github/workflows/deploy-cloudflare.yml
+```
+
+**Asset flow:**
+1. Client requests asset: `https://assets.hyperscape.club/models/goblin/goblin.vrm`
+2. Cloudflare R2 serves with global CDN caching
+3. Server fetches manifests from R2 at startup
+4. Manifests cached locally in `packages/server/world/assets/manifests/`
+
+**Manifest fetching:**
+```typescript
+// From packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Files fetched** (30+ manifests):
+- `npcs.json`, `stores.json`, `world-areas.json`, `prayers.json`
+- `items/*.json` (weapons, tools, resources, food, misc)
+- `gathering/*.json` (woodcutting, mining, fishing)
+- `recipes/*.json` (cooking, firemaking, smelting, smithing)
+
+### Staging
+
+Staging uses a separate R2 bucket (`hyperscape-assets-staging`) to isolate test content from production.
+
 ## Build Pipeline
 
 ### Automated Model Bounds Extraction
