@@ -152,16 +152,23 @@ Use a hosted database (e.g., [Neon](https://neon.tech)):
 ```bash
 # packages/server/.env
 DATABASE_URL=postgresql://user:pass@host.neon.tech:5432/db
+USE_LOCAL_POSTGRES=false
 ```
 
 ### External CDN
 
-Host assets on cloud storage:
+Point to the production CDN (or host your own):
 
 ```bash
 # packages/server/.env and packages/client/.env
-PUBLIC_CDN_URL=https://your-cdn.example.com
+PUBLIC_CDN_URL=https://assets.hyperscape.club
 ```
+
+**Manifest fetching:**
+The server will automatically fetch manifests from the CDN at startup. You don't need to clone the assets repository.
+
+**Asset serving:**
+All 3D models, textures, and audio will be loaded from the CDN. The local Docker CDN is not required.
 
 ## Container Status
 
