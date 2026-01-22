@@ -6,82 +6,200 @@ icon: "rocket"
 
 ## Deployment Overview
 
-Hyperscape uses a split deployment model:
+Hyperscape uses a **split deployment architecture** optimized for performance and scalability:
 
-- **Server**: Railway, Fly.io, or Docker host
-- **Client**: Vercel, Netlify, or static hosting
-- **Database**: PostgreSQL (Neon recommended)
-- **Assets**: CDN or object storage
+- **Frontend**: Cloudflare Pages (hyperscape.club)
+- **Game Server**: Railway (hyperscape-production.up.railway.app)
+- **Database**: PostgreSQL on Railway
+- **Assets/CDN**: Cloudflare R2
+
+<Info>
+The server builds and serves the frontend as a fallback, but production traffic uses Cloudflare Pages for optimal edge caching and global distribution.
+</Info>
+
+## Production Architecture
+
+```
+┌─────────────────┐
+│ Cloudflare Pages│  ← Frontend (hyperscape.club)
+│  (Edge Network) │     - Static assets
+└────────┬────────┘     - Client bundle
+         │              - Global CDN
+         │
+         ↓ API/WebSocket
+┌─────────────────┐
+│  Railway Server │  ← Game Server (hyperscape-production.up.railway.app)
+│   (US Region)   │     - Game logic
+└────────┬────────┘     - WebSocket connections
+         │              - Database queries
+         │
+         ↓
+┌─────────────────┐
+│   PostgreSQL    │  ← Database (Railway)
+│   (Persistent)  │     - Player data
+└─────────────────┘     - World state
+
+┌─────────────────┐
+│ Cloudflare R2   │  ← Assets (assets.hyperscape.club)
+│   (CDN/Storage) │     - 3D models
+└─────────────────┘     - Textures, audio
+                        - Manifests
+```
 
 ## Environment Variables
 
-### Server Production
+### Server Production (Railway)
 
 ```bash
 # Required
-DATABASE_URL=postgresql://...
-JWT_SECRET=your-secret-key
-PRIVY_APP_ID=your-app-id
-PRIVY_APP_SECRET=your-app-secret
+DATABASE_URL=postgresql://...              # Auto-set by Railway PostgreSQL
+JWT_SECRET=your-secret-key                 # Generate with: openssl rand -base64 32
+PUBLIC_PRIVY_APP_ID=your-app-id           # From Privy dashboard
+PRIVY_APP_SECRET=your-app-secret          # From Privy dashboard
+
+# Production URLs
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
 
 # Optional
-PORT=5555
-PUBLIC_CDN_URL=https://cdn.example.com
-LIVEKIT_API_KEY=...
+PORT=5555                                  # Railway auto-assigns if not set
+ADMIN_CODE=your-admin-code                # For /admin command
+LIVEKIT_API_KEY=...                       # Voice chat (optional)
 LIVEKIT_API_SECRET=...
+LIVEKIT_URL=wss://...
 ```
 
-### Client Production
+### Client Production (Cloudflare Pages)
 
 ```bash
-PUBLIC_PRIVY_APP_ID=your-app-id
-PUBLIC_API_URL=https://api.hyperscape.lol
-PUBLIC_WS_URL=wss://api.hyperscape.lol
-PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+PUBLIC_PRIVY_APP_ID=your-app-id           # Must match server
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_APP_URL=https://hyperscape.club
 ```
 
 <Warning>
-  `PUBLIC_PRIVY_APP_ID` must match between client and server.
+  `PUBLIC_PRIVY_APP_ID` must match between client and server for authentication to work.
 </Warning>
 
 ## Railway Deployment
 
+Railway handles the game server deployment with automatic builds via Nixpacks.
+
 <Steps>
   <Step title="Create Railway project">
-    Connect your GitHub repository to Railway.
+    1. Go to [railway.app](https://railway.app)
+    2. Click "New Project" → "Deploy from GitHub repo"
+    3. Select your Hyperscape fork
+    4. Railway will auto-detect the Nixpacks configuration
   </Step>
   
-  <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+  <Step title="Add PostgreSQL database">
+    1. In your Railway project, click "New"
+    2. Select "Database" → "PostgreSQL"
+    3. Railway automatically sets `DATABASE_URL` environment variable
   </Step>
   
-  <Step title="Add PostgreSQL">
-    Add PostgreSQL service from Railway marketplace.
+  <Step title="Configure environment variables">
+    Add these in Railway dashboard → Variables:
+    
+    ```bash
+    JWT_SECRET=<generate-with-openssl-rand-base64-32>
+    PUBLIC_PRIVY_APP_ID=<from-privy-dashboard>
+    PRIVY_APP_SECRET=<from-privy-dashboard>
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    ADMIN_CODE=<your-secret-admin-code>
+    ```
   </Step>
   
-  <Step title="Set environment variables">
-    Add all required server environment variables.
+  <Step title="Configure build settings">
+    Railway uses `nixpacks.toml` automatically. Verify these settings:
+    
+    - **Builder**: Nixpacks (auto-detected)
+    - **Start Command**: `cd packages/server && bun dist/index.js`
+    - **Watch Paths**: `packages/server/**`, `packages/shared/**`, `packages/client/**`
+  </Step>
+
+  <Step title="Enable GitHub Actions deployment">
+    The repository includes `.github/workflows/deploy-railway.yml` for automatic deployments.
+    
+    Add these secrets to your GitHub repository:
+    - `RAILWAY_TOKEN` - Generate at railway.app/account/tokens
+    
+    Update workflow environment IDs:
+    ```yaml
+    env:
+      RAILWAY_PROJECT_ID: <your-project-id>
+      RAILWAY_SERVICE_ID: <your-service-id>
+      RAILWAY_ENVIRONMENT_ID: <your-environment-id>
+    ```
   </Step>
 </Steps>
 
-## Vercel Client Deployment
+### Railway Build Process
+
+The Nixpacks build runs these phases:
+
+1. **Setup**: Install system dependencies (Python, Cairo, etc.)
+2. **Install**: `bun install` with production dependencies
+3. **Build**: 
+   - Build `packages/shared` (core engine)
+   - Build `packages/server` (game server)
+   - Build `packages/client` (frontend)
+   - Copy client build to `packages/server/public/`
+4. **Start**: Run `bun dist/index.js` from server package
+
+<Info>
+Assets are served from Cloudflare R2 CDN in production. The server fetches manifests from the CDN at startup and caches them locally.
+</Info>
+
+## Cloudflare Pages Deployment
+
+Cloudflare Pages hosts the frontend with global edge caching.
 
 <Steps>
-  <Step title="Import project">
-    Import `packages/client` directory to Vercel.
+  <Step title="Connect repository">
+    1. Go to [dash.cloudflare.com](https://dash.cloudflare.com)
+    2. Navigate to Workers & Pages → Create application → Pages
+    3. Connect your GitHub repository
+    4. Select the `main` branch
   </Step>
   
-  <Step title="Configure build">
-    Root directory: `packages/client`
-    Build command: `bun run build`
-    Output directory: `dist`
+  <Step title="Configure build settings">
+    - **Framework preset**: None (custom Vite build)
+    - **Build command**: `cd packages/client && bun install && bun run build`
+    - **Build output directory**: `packages/client/dist`
+    - **Root directory**: `/` (repository root)
   </Step>
   
   <Step title="Set environment variables">
-    Add `PUBLIC_*` environment variables.
+    Add these in Cloudflare Pages → Settings → Environment variables:
+    
+    ```bash
+    PUBLIC_PRIVY_APP_ID=<from-privy-dashboard>
+    PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+    PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    PUBLIC_APP_URL=https://hyperscape.club
+    ```
+  </Step>
+
+  <Step title="Configure custom domain">
+    1. Go to Custom domains → Set up a custom domain
+    2. Add `hyperscape.club` and `www.hyperscape.club`
+    3. Cloudflare will auto-configure DNS
   </Step>
 </Steps>
+
+### Preview Deployments
+
+Cloudflare Pages automatically creates preview deployments for pull requests:
+
+- **URL Pattern**: `https://<branch>.<project>.pages.dev`
+- **CORS**: Server is configured to allow `*.hyperscape.pages.dev` origins
+- **Environment**: Uses production environment variables by default
 
 ## Database Setup
 
