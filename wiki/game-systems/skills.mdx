@@ -411,6 +411,46 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 | Yew | 60 | 202.5 |
 | Magic | 75 | 303.8 |
 
+### Agility XP
+
+Agility is trained passively by moving through the world:
+
+**Movement XP** (`tile-movement.ts`):
+- XP is granted in batches to prevent visual spam
+- 100 tiles traveled = 50 XP (effectively 1 XP per 2 tiles)
+- Both walking and running grant XP
+- Teleportation does NOT grant XP
+
+**XP Rates**:
+| Movement Type | Tiles/Second | XP/Minute |
+|---------------|--------------|-----------|
+| Walking | 3.33 | ~100 XP |
+| Running | 6.67 | ~200 XP |
+
+**Death Penalty**:
+- Accumulated tiles toward next XP grant are lost on death
+- Already-earned XP is preserved
+- Maximum loss: ~50 XP worth of progress
+
+<Info>
+Agility XP is batched at 100-tile intervals to prevent XP drops from appearing every few seconds. This creates a more pleasant visual experience while maintaining the same effective XP rate.
+</Info>
+
+### Prayer XP
+
+Prayer is trained by burying bones or using them on altars:
+
+**Bone Types**:
+| Bone | XP (Bury) | XP (Altar) |
+|------|-----------|------------|
+| Bones | 4.5 | 15.75 |
+| Big bones | 15 | 52.5 |
+| Dragon bones | 72 | 252 |
+
+<Info>
+Using bones on an altar grants 3.5x the XP compared to burying them. Altars are found in churches and temples.
+</Info>
+
 ---
 
 ## Level Requirements
