@@ -38,11 +38,75 @@ Hyperscape has **12 skills** total:
 | **Cooking** | Prepare food from raw fish |
 | **Smithing** | Smelt ores into bars and smith equipment |
 
-### Support Skills
+#### Support Skills
 
 | Skill | Activity |
 |-------|----------|
 | **Agility** | Traverse the world to gain XP and improve stamina regeneration |
+
+## Agility System
+
+Agility is a unique skill that rewards exploration and movement. Unlike traditional RuneScape agility courses, Hyperscape's agility system integrates with the stamina and weight mechanics.
+
+### Training Agility
+
+**XP Gain**: Earn 1 XP per 2 tiles traveled (batched at 100 tiles = 50 XP)
+
+- Walking or running both grant XP
+- XP drops appear every ~15 seconds while running, ~30 seconds while walking
+- Teleportation does not grant agility XP
+- Death resets accumulated tile progress (but not earned XP)
+
+**XP Rates**:
+
+| Movement | Tiles/Second | XP/Minute |
+|----------|--------------|-----------|
+| Walking | 3.33 | ~100 XP |
+| Running | 6.67 | ~200 XP |
+
+### Agility Benefits
+
+**Stamina Regeneration Bonus**: +1% stamina regen per agility level
+
+| Agility Level | Idle Regen/Sec | Walking Regen/Sec |
+|---------------|----------------|-------------------|
+| 1 | 4.04 | 2.02 |
+| 10 | 4.40 | 2.20 |
+| 25 | 5.00 | 2.50 |
+| 50 | 6.00 | 3.00 |
+| 75 | 7.00 | 3.50 |
+| 99 | 7.96 | 3.98 |
+
+<Info>
+  Higher agility levels allow you to recover stamina nearly twice as fast, making it easier to maintain running speed during long journeys.
+</Info>
+
+### Weight and Stamina
+
+**Weight-Based Stamina Drain**: +0.5% drain per kg carried
+
+| Weight (kg) | Drain Multiplier | Drain/Second |
+|-------------|------------------|--------------|
+| 0 | 1.0x | 2.0 |
+| 10 | 1.05x | 2.1 |
+| 20 | 1.1x | 2.2 |
+| 50 | 1.25x | 2.5 |
+| 100 | 1.5x | 3.0 |
+
+<Warning>
+  Carrying heavy loads significantly increases stamina drain while running. Manage your inventory weight for optimal travel efficiency.
+</Warning>
+
+### Agility Unlocks
+
+| Level | Unlock |
+|-------|--------|
+| 1 | Basic stamina regeneration (+1% per level) |
+| 10 | +10% stamina regeneration |
+| 25 | +25% stamina regeneration |
+| 50 | +50% stamina regeneration |
+| 75 | +75% stamina regeneration |
+| 99 | Agility cape, +99% stamina regeneration |
 
 ## XP and Leveling
 
