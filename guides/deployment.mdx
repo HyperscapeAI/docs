@@ -107,24 +107,112 @@ Hyperscape uses a split deployment architecture with separate environments for p
 
 ## Railway Deployment
 
+Railway deployment is automated via GitHub Actions for both production and staging environments.
+
+### Automated Deployment
+
+The `.github/workflows/deploy-railway.yml` workflow automatically deploys when you push to:
+
+- **`main` branch** → Production environment
+- **`staging` branch** → Staging environment
+
+**Trigger paths** (deployment only runs when these files change):
+- `packages/shared/**`
+- `packages/client/**`
+- `packages/server/**`
+- `packages/plugin-hyperscape/**`
+- `package.json`, `bun.lock`
+- `nixpacks.toml`, `railway.server.json`, `Dockerfile.server`
+
+### Railway Configuration
+
+The deployment uses **nixpacks** for building (configured in `nixpacks.toml`):
+
+```toml
+[phases.setup]
+aptPkgs = ["python3", "make", "g++", "pkg-config", "libcairo2-dev", ...]
+
+[phases.install]
+cmds = ["bun install"]
+
+[phases.build]
+cmds = [
+  "bun run build:shared",
+  "bun run build:server",
+  "mkdir -p packages/server/world/assets/manifests"
+]
+
+[start]
+cmd = "cd packages/server && bun dist/index.js"
+```
+
+<Info>
+  The build phase creates the manifests directory but does NOT download manifests. Manifests are fetched from the CDN at server startup.
+</Info>
+
+### Manual Railway Setup
+
 <Steps>
   <Step title="Create Railway project">
-    Connect your GitHub repository to Railway.
+    1. Connect your GitHub repository to Railway
+    2. Create two environments: `production` and `staging`
   </Step>
   
-  <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+  <Step title="Configure service">
+    Railway automatically detects `nixpacks.toml` and `railway.server.json`.
+    
+    **Build settings:**
+    - Builder: Nixpacks
+    - Config path: `nixpacks.toml`
+    - Watch patterns: Defined in `railway.server.json`
+    
+    **Deploy settings:**
+    - Start command: `cd packages/server && bun dist/index.js`
+    - Healthcheck path: `/status`
+    - Healthcheck timeout: 300s
   </Step>
   
   <Step title="Add PostgreSQL">
-    Add PostgreSQL service from Railway marketplace.
+    Add PostgreSQL service from Railway marketplace for each environment.
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    Configure environment variables for each environment (see tabs above).
+    
+    **Required secrets:**
+    - `DATABASE_URL` (auto-populated by Railway PostgreSQL)
+    - `JWT_SECRET`
+    - `PUBLIC_PRIVY_APP_ID`
+    - `PRIVY_APP_SECRET`
+    - `PUBLIC_CDN_URL`
+  </Step>
+  
+  <Step title="Configure GitHub Actions">
+    Add these secrets to your GitHub repository:
+    
+    - `RAILWAY_TOKEN` - Railway API token
+    
+    Add these variables:
+    - `RAILWAY_STAGING_SERVICE_ID` - Staging service ID
+    - `RAILWAY_STAGING_ENVIRONMENT_ID` - Staging environment ID
   </Step>
 </Steps>
+
+### Manifest Fetching at Startup
+
+The server automatically fetches manifests from the CDN at startup:
+
+```typescript
+// From packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Behavior:**
+- **Production/Staging**: Always fetches latest manifests from CDN
+- **Development**: Skips fetch if local manifests already exist
+- **Caching**: Compares content and only writes changed files
+
+This ensures the server always has the latest game data without bundling large manifest files in the Docker image.
 
 ## Vercel Client Deployment
 
