@@ -6,12 +6,36 @@ icon: "rocket"
 
 ## Deployment Overview
 
-Hyperscape uses a split deployment model:
+Hyperscape uses a split deployment model with production infrastructure:
 
-- **Server**: Railway, Fly.io, or Docker host
-- **Client**: Vercel, Netlify, or static hosting
-- **Database**: PostgreSQL (Neon recommended)
-- **Assets**: CDN or object storage
+- **Frontend**: Cloudflare Pages (hyperscape.pages.dev)
+- **Backend**: Railway (hyperscape-production.up.railway.app)
+- **Database**: PostgreSQL on Railway
+- **Assets/CDN**: Cloudflare R2
+
+### Production Architecture
+
+```
+┌─────────────────────┐
+│  Cloudflare Pages   │  Frontend (React + Vite)
+│  hyperscape.club    │  Global CDN distribution
+└──────────┬──────────┘
+           │
+           ├─────────────────────────────────┐
+           │                                 │
+           ▼                                 ▼
+┌─────────────────────┐         ┌─────────────────────┐
+│     Railway         │         │   Cloudflare R2     │
+│  Game Server API    │         │   Asset CDN         │
+│  + PostgreSQL       │         │  Manifests, Models  │
+└─────────────────────┘         └─────────────────────┘
+```
+
+**Alternative Deployment Options:**
+- **Server**: Railway (recommended), Fly.io, or Docker host
+- **Client**: Cloudflare Pages (recommended), Vercel, Netlify, or static hosting
+- **Database**: Railway PostgreSQL (included), Neon, or self-hosted
+- **Assets**: Cloudflare R2 (recommended), S3, or self-hosted CDN
 
 ## Environment Variables
 
