@@ -183,15 +183,88 @@ bun run build    # Compile TypeScript
 bun run dev      # Watch mode
 ```
 
+## Dashboard Features
+
+The ElizaOS 1.7 upgrade includes comprehensive dashboard improvements:
+
+### Quick Action Menu
+
+One-click commands for common tasks:
+- 🪓 **Woodcutting** - Chop nearest tree
+- ⛏️ **Mining** - Mine nearest ore
+- 🎣 **Fishing** - Fish at nearest spot
+- ⚔️ **Combat** - Attack nearest enemy
+- 📦 **Pick Up** - Pick up nearby items
+- 🏦 **Bank** - Go to bank
+- ⏹️ **Stop** - Stop current goal immediately
+- ⏸️ **Idle** - Set agent to idle mode
+
+### Stop/Resume Goal Controls
+
+**Stop Button**: Halts agent and prevents auto-goal setting
+- Immediate halt - cancels movement path
+- Paused state UI - shows "Goals Paused"
+- Blocks auto-goals - SET_GOAL actions blocked while paused
+- Chat commands still work - user can send commands
+- Pause persists - agent returns to idle after commands
+
+**API Endpoints**:
+```
+POST /api/agents/:agentId/goal/stop    # Stop goal and pause
+POST /api/agents/:agentId/goal/resume  # Resume autonomous behavior
+```
+
+### Dashboard Panels
+
+**AgentSummaryCard**: Quick overview with combat level, total level, current goal
+**AgentGoalPanel**: Goal progress with time estimates and XP rates
+**AgentSkillsPanel**: Skill levels with session XP tracking
+**AgentActivityPanel**: Recent actions and session stats
+**AgentPositionPanel**: Location with nearby POIs and zone detection
+
+### Rate Limiting Improvements
+
+Dashboard polling intervals increased to prevent 429 errors:
+- AgentSummaryCard: 2s → 10s
+- AgentGoalPanel: 2s → 10s
+- AgentSkillsPanel: 2-5s → 10s
+- AgentActivityPanel: 3s → 10s
+- AgentPositionPanel: 1-3s → 5-10s
+
+All API calls include retry logic with exponential backoff (1s → 2s → 4s).
+
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/index.ts` | Plugin registration |
-| `src/service.ts` | Main service class |
+| `src/services/HyperscapeService.ts` | Main service class |
 | `src/actions/` | All agent actions |
 | `src/providers/` | State providers |
 | `src/templates/` | LLM prompt templates |
+| `src/managers/autonomous-behavior-manager.ts` | Goal management and pause state |
+
+## API Endpoints
+
+### Agent Management
+
+```
+GET  /api/agents/:agentId/goal           # Get current goal
+POST /api/agents/:agentId/goal           # Set new goal
+POST /api/agents/:agentId/goal/stop      # Stop and pause goals
+POST /api/agents/:agentId/goal/resume    # Resume autonomous behavior
+POST /api/agents/:agentId/message        # Send message to agent
+GET  /api/agents/:agentId/quick-actions  # Get quick action menu data
+GET  /api/agents/mapping/:agentId        # Get agent-to-character mapping
+```
+
+### Data Endpoints
+
+```
+GET /api/data/skill-unlocks              # Get skill unlock definitions
+GET /api/characters/:characterId/skills  # Get character skills
+GET /api/characters/:characterId/position # Get character position
+```
 
 ## License
 
