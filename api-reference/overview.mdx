@@ -79,6 +79,58 @@ curl https://api.hyperscape.lol/health
   List all world areas
 </ParamField>
 
+### Game Data
+
+<ParamField path="GET /api/data/skill-unlocks" type="endpoint">
+  Get skill unlock definitions for all skills
+</ParamField>
+
+Returns a mapping of skill names to arrays of unlock entries. Each unlock specifies the level requirement, description, and type (item/ability/area/quest/activity).
+
+```bash
+curl https://api.hyperscape.lol/api/data/skill-unlocks
+```
+
+<Accordion title="Response">
+```json
+{
+  "attack": [
+    {
+      "level": 1,
+      "description": "Bronze weapons, Iron weapons",
+      "type": "item"
+    },
+    {
+      "level": 5,
+      "description": "Steel weapons",
+      "type": "item"
+    },
+    {
+      "level": 40,
+      "description": "Rune weapons",
+      "type": "item"
+    }
+  ],
+  "woodcutting": [
+    {
+      "level": 1,
+      "description": "Normal trees",
+      "type": "area"
+    },
+    {
+      "level": 15,
+      "description": "Oak trees",
+      "type": "area"
+    }
+  ]
+}
+```
+</Accordion>
+
+<Info>
+This endpoint is used by the Skill Guide Panel to display unlock progression. Data is server-authoritative and loaded from `manifests/skill-unlocks.json`.
+</Info>
+
 ## WebSocket Events
 
 Connect to the game server via WebSocket for real-time updates:
