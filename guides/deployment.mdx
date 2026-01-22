@@ -248,7 +248,65 @@ const MANIFEST_FILES = [
 
 This ensures the server always has the latest game data without requiring redeployment.
 
-## Vercel Client Deployment
+## Cloudflare Pages Deployment (Recommended)
+
+Hyperscape's production frontend is deployed to Cloudflare Pages for global CDN distribution.
+
+### Automated Deployment
+
+The repository includes a GitHub Actions workflow for Cloudflare Pages:
+
+```yaml
+# .github/workflows/deploy-cloudflare.yml
+name: Deploy to Cloudflare Pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/client/**'
+      - 'packages/shared/**'
+```
+
+<Steps>
+  <Step title="Connect GitHub repository">
+    1. Go to Cloudflare Pages dashboard
+    2. Create new project from GitHub
+    3. Select `HyperscapeAI/hyperscape` repository
+    4. Configure build settings (see next step)
+  </Step>
+  
+  <Step title="Configure build settings">
+    ```
+    Build command: cd packages/client && bun run build
+    Build output directory: packages/client/dist
+    Root directory: (leave empty - monorepo)
+    ```
+  </Step>
+  
+  <Step title="Set environment variables">
+    Add in Cloudflare Pages → Settings → Environment variables:
+    
+    ```bash
+    PUBLIC_PRIVY_APP_ID=your-privy-app-id
+    PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+    PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    PUBLIC_APP_URL=https://hyperscape.club
+    ```
+  </Step>
+  
+  <Step title="Configure custom domain">
+    1. Add custom domain: `hyperscape.club`
+    2. Add www subdomain: `www.hyperscape.club`
+    3. Configure DNS records as instructed by Cloudflare
+  </Step>
+</Steps>
+
+<Info>
+Cloudflare Pages automatically creates preview deployments for pull requests at `*.hyperscape.pages.dev`. These are included in the server's CORS allowlist.
+</Info>
+
+## Vercel Client Deployment (Alternative)
 
 <Steps>
   <Step title="Import project">
@@ -256,13 +314,16 @@ This ensures the server always has the latest game data without requiring redepl
   </Step>
   
   <Step title="Configure build">
-    Root directory: `packages/client`
-    Build command: `bun run build`
-    Output directory: `dist`
+    ```
+    Root directory: packages/client
+    Build command: bun run build
+    Output directory: dist
+    Install command: bun install
+    ```
   </Step>
   
   <Step title="Set environment variables">
-    Add `PUBLIC_*` environment variables.
+    Add `PUBLIC_*` environment variables (same as Cloudflare Pages above).
   </Step>
 </Steps>
 
