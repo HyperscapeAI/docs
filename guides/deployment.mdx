@@ -6,12 +6,29 @@ icon: "rocket"
 
 ## Deployment Overview
 
-Hyperscape uses a split deployment model:
+Hyperscape uses a split deployment architecture optimized for scalability and performance:
 
-- **Server**: Railway, Fly.io, or Docker host
-- **Client**: Vercel, Netlify, or static hosting
-- **Database**: PostgreSQL (Neon recommended)
-- **Assets**: CDN or object storage
+- **Frontend**: Cloudflare Pages (hyperscape.club)
+- **Game Server**: Railway (hyperscape-production.up.railway.app)
+- **Database**: PostgreSQL via Railway or Neon
+- **Assets/CDN**: Cloudflare R2 (assets.hyperscape.club)
+
+This architecture separates static content (frontend) from dynamic game logic (server) and leverages CDN edge caching for assets.
+
+### Production URLs
+
+| Component | URL | Purpose |
+|-----------|-----|---------|
+| Frontend | https://hyperscape.club | Client application (Cloudflare Pages) |
+| Game Server | https://hyperscape-production.up.railway.app | WebSocket + HTTP API (Railway) |
+| Assets CDN | https://assets.hyperscape.club | Game assets (Cloudflare R2) |
+
+### Architecture Benefits
+
+- **Global CDN**: Assets served from edge locations worldwide
+- **Auto-scaling**: Railway handles server scaling automatically
+- **Zero-downtime deploys**: Cloudflare Pages atomic deployments
+- **Cost-effective**: R2 has no egress fees
 
 ## Environment Variables
 
