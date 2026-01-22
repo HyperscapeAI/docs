@@ -258,23 +258,63 @@ bunx drizzle-kit migrate   # Run migrations
 
 ## CDN Setup
 
-### Option 1: Self-Hosted
+### Production: Cloudflare R2
 
-Use the included Docker CDN:
+Hyperscape uses Cloudflare R2 for production asset hosting:
 
-```bash
-bun run cdn:up
+**Domain**: https://assets.hyperscape.club  
+**Bucket**: Cloudflare R2 with public access
+
+**Asset structure:**
+```
+assets.hyperscape.club/
+├── manifests/          # Game data (items.json, npcs.json, etc.)
+├── models/             # 3D models (.glb)
+├── audio/              # Music and sound effects
+└── textures/           # Texture files
 ```
 
-Configure `PUBLIC_CDN_URL` to point to your CDN host.
+**Upload assets:**
+```bash
+# Sync local assets to R2 (requires Cloudflare credentials)
+bun run sync:r2
+bun run sync:r2:dry     # Preview changes
+```
 
-### Option 2: Cloud Storage
+### Development: Local Docker CDN
+
+Use the included nginx CDN for local development:
+
+```bash
+bun run cdn:up          # Start CDN container
+bun run cdn:down        # Stop CDN container
+bun run cdn:restart     # Force restart
+```
+
+**Configuration** (`packages/server/docker-compose.yml`):
+```yaml
+services:
+  cdn:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ../../assets:/usr/share/nginx/html:ro
+```
+
+**Verify CDN:**
+```bash
+bun run cdn:verify      # Check CDN is serving assets
+```
+
+### Alternative: Self-Hosted Cloud Storage
 
 Upload assets to S3, R2, or similar:
 
 1. Build assets: `bun run assets:optimize`
-2. Upload `packages/server/world/assets/`
-3. Set `PUBLIC_CDN_URL` to bucket URL
+2. Upload `assets/` directory to your bucket
+3. Set `PUBLIC_CDN_URL` to bucket URL (both client and server)
+4. Ensure manifests are publicly accessible at `<CDN_URL>/manifests/`
 
 ## Production Checklist
 
