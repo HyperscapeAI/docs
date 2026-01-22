@@ -525,6 +525,139 @@ export function getCardinalMeleeTilesInto(
 
 ---
 
+## Agility XP Tracking
+
+The movement system tracks tiles traveled for Agility skill XP:
+
+```typescript
+// From tile-movement.ts (server-side)
+private tilesTraveledForXP: Map<string, number> = new Map();
+
+// Constants
+const AGILITY_TILES_PER_XP_GRANT = 100;  // Tiles needed before XP is granted
+const AGILITY_XP_PER_GRANT = 50;         // XP granted per threshold
+
+// Track tiles moved during tick processing
+const tilesMoved = Math.abs(state.currentTile.x - prevTile.x) + 
+                   Math.abs(state.currentTile.z - prevTile.z);
+
+if (tilesMoved > 0) {
+  const currentTiles = (this.tilesTraveledForXP.get(playerId) || 0) + tilesMoved;
+  
+  if (currentTiles >= AGILITY_TILES_PER_XP_GRANT) {
+    // Grant XP and preserve overflow
+    const grantsEarned = Math.floor(currentTiles / AGILITY_TILES_PER_XP_GRANT);
+    const xpToGrant = grantsEarned * AGILITY_XP_PER_GRANT;
+    this.tilesTraveledForXP.set(playerId, currentTiles % AGILITY_TILES_PER_XP_GRANT);
+    
+    // Emit XP gain event
+    this.world.emit(EventType.SKILLS_XP_GAINED, {
+      playerId,
+      skill: 'agility',
+      amount: xpToGrant,
+    });
+  } else {
+    // Accumulate tiles silently
+    this.tilesTraveledForXP.set(playerId, currentTiles);
+  }
+}
+```
+
+**XP Batching Design**:
+- Prevents visual spam (XP drop every ~15 seconds running, ~30 seconds walking)
+- Preserves partial progress between batches
+- Death resets tile counter (small penalty)
+- Logout/disconnect clears counter (max ~50 XP lost)
+
+<Info>
+Agility XP is granted automatically as players move. Both walking and running count toward XP at the same rate (1 XP per 2 tiles).
+</Info>
+
+---
+
+## Stamina System
+
+Stamina is a client-side mechanic that affects running ability. It's influenced by both Agility level and inventory weight.
+
+### Base Stamina Rates
+
+```typescript
+// From PlayerLocal.ts
+private readonly staminaDrainPerSecond: number = 2;              // While running
+private readonly staminaRegenWhileWalkingPerSecond: number = 2;  // While walking
+private readonly staminaRegenPerSecond: number = 4;              // While idle
+```
+
+### Weight-Based Drain
+
+Inventory weight increases stamina drain while running:
+
+```typescript
+// Weight modifier: +0.5% drain per kg carried
+private readonly weightDrainModifier: number = 0.005;
+
+// Calculate drain rate with weight
+const weightMultiplier = 1 + this.totalWeight * this.weightDrainModifier;
+const drainRate = this.staminaDrainPerSecond * weightMultiplier;
+```
+
+**Weight Impact**:
+| Weight (kg) | Drain Multiplier | Drain/Second | Stamina Duration |
+|-------------|------------------|--------------|------------------|
+| 0 | 1.0x | 2.0 | 50 seconds |
+| 20 | 1.1x | 2.2 | 45 seconds |
+| 50 | 1.25x | 2.5 | 40 seconds |
+| 100 | 1.5x | 3.0 | 33 seconds |
+
+### Agility-Based Regeneration
+
+Agility level increases stamina regeneration:
+
+```typescript
+// Agility modifier: +1% regen per level
+private readonly agilityRegenModifier: number = 0.01;
+
+// Calculate regen rate with agility
+const agilityMultiplier = 1 + this.skills.agility.level * this.agilityRegenModifier;
+const regenRate = baseRegenRate * agilityMultiplier;
+```
+
+**Agility Impact**:
+| Agility Level | Regen Multiplier | Idle Regen/Sec | Walk Regen/Sec |
+|---------------|------------------|----------------|----------------|
+| 1 | 1.01x | 4.04 | 2.02 |
+| 25 | 1.25x | 5.00 | 2.50 |
+| 50 | 1.50x | 6.00 | 3.00 |
+| 75 | 1.75x | 7.00 | 3.50 |
+| 99 | 1.99x | 7.96 | 3.98 |
+
+### Weight Synchronization
+
+Player weight is calculated server-side and synced to the client:
+
+```typescript
+// Server: InventorySystem emits weight changes
+const totalWeight = this.getTotalWeight(playerId);
+this.emitTypedEvent(EventType.PLAYER_WEIGHT_CHANGED, {
+  playerId,
+  weight: totalWeight,
+});
+
+// Client: PlayerLocal receives weight updates
+onPlayerWeightUpdated = (data: { playerId: string; weight: number }) => {
+  const localPlayer = this.world.getPlayer?.();
+  if (localPlayer && data.playerId === localPlayer.id) {
+    localPlayer.totalWeight = data.weight;
+  }
+};
+```
+
+<Warning>
+Weight is server-authoritative to prevent client-side manipulation. The Equipment Panel displays the server-synced weight value.
+</Warning>
+
+---
+
 ## Client Interpolation
 
 The client smoothly interpolates entity positions between server ticks.
