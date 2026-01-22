@@ -151,6 +151,14 @@ export const navigateToAction: Action = {
 
 **Usage**: Navigate using location names instead of coordinates.
 
+**Long-Distance Movement**: The server has a 200-tile movement limit. For destinations beyond this range, the action automatically moves in steps:
+1. Calculates intermediate waypoint (150 tiles toward destination)
+2. Moves to waypoint
+3. On next tick, continues toward destination
+4. Repeats until destination reached
+
+This prevents movement command rejection while maintaining progress toward distant goals.
+
 ---
 
 ## Combat Actions
