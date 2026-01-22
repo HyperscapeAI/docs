@@ -107,6 +107,11 @@ Entity updates use **abbreviated keys** to minimize bandwidth:
 | `catchFish` | Start fishing | `{ spotId }` |
 | `lightFire` | Light fire | `{ logId }` |
 | `cookFood` | Cook food | `{ foodId, fireId }` |
+| `getQuestList` | Fetch quest list | `{}` |
+| `getQuestDetail` | Fetch quest details | `{ questId }` |
+| `questAccept` | Accept quest | `{ questId }` |
+| `xpLampUse` | Use XP lamp | `{ itemId, slot, skillId, xpAmount }` |
+| `dialogueContinue` | Continue dialogue | `{ npcId }` |
 
 ### Server → Client
 
