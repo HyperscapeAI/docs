@@ -60,19 +60,34 @@ Before you begin, ensure you have:
     <Info>First build takes 5-10 minutes due to PhysX WASM compilation. Subsequent builds are cached.</Info>
   </Step>
   
-  <Step title="Start the game">
-    **Production mode:**
-    ```bash
-    bun start
-    ```
-    Open [http://localhost:5555](http://localhost:5555) in your browser.
+  <Step title="Start the CDN">
+    The CDN serves game assets (models, textures, audio, manifests):
     
+    ```bash
+    bun run cdn:up
+    ```
+    
+    This starts a Docker nginx container on port 8080. The server will fetch manifests from the CDN at startup.
+  </Step>
+  
+  <Step title="Start the game">
     **Development mode (with hot reload):**
     ```bash
     bun run dev
     ```
     - Client: [http://localhost:3333](http://localhost:3333) (Vite HMR)
     - Server: `ws://localhost:5555/ws`
+    - CDN: `http://localhost:8080`
+    
+    **Production mode:**
+    ```bash
+    bun start
+    ```
+    Open [http://localhost:5555](http://localhost:5555) in your browser.
+    
+    <Info>
+      The server fetches manifests from `PUBLIC_CDN_URL` at startup. In development, it skips the fetch if local manifests exist.
+    </Info>
   </Step>
 </Steps>
 
