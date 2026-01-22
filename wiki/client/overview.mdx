@@ -177,13 +177,58 @@ Located in `packages/client/src/game/panels/`:
 |-------|-------------|
 | `InventoryPanel.tsx` | 28-slot inventory with drag & drop |
 | `EquipmentPanel.tsx` | Equipment slots with stat display |
-| `SkillsPanel.tsx` | All skills with XP progress bars |
+| `SkillsPanel.tsx` | All skills with XP progress bars and clickable skill icons |
+| `SkillGuidePanel.tsx` | OSRS-style skill guide showing unlocks at each level |
 | `CombatPanel.tsx` | Combat style selection |
 | `BankPanel.tsx` | Bank interface with tabs |
 | `DialoguePanel.tsx` | NPC conversation UI |
 | `StorePanel.tsx` | Shop/trading interface |
 | `SettingsPanel.tsx` | Game settings |
 | `LootWindow.tsx` | Ground item pickup interface |
+
+### Skill Guide Panel
+
+The Skill Guide Panel is an OSRS-style popup that displays what players unlock at each level for a skill:
+
+**Features:**
+- Click any skill icon in Skills Panel to open
+- Shows all unlocks with level requirements
+- Visual distinction: unlocked (green ✓) vs locked (🔒)
+- Next unlock highlighted with progress indicator
+- Scrollable list for skills with many unlocks (Prayer has 29!)
+- Type badges (item/ability) with color coding
+- ESC key or click outside to close
+- Loading state while fetching data from server
+
+**Data source:**
+```typescript
+// Fetches from server API
+const response = await fetch(`${GAME_API_URL}/api/data/skill-unlocks`);
+const unlocks = await response.json();
+```
+
+**Implementation:**
+```typescript
+// packages/client/src/game/panels/SkillGuidePanel.tsx
+interface SkillGuidePanelProps {
+  visible: boolean;
+  skillLabel: string;      // "Attack", "Mining", etc.
+  skillIcon: string;       // "⚔️", "⛏️", etc.
+  playerLevel: number;     // Current player level
+  unlocks: readonly SkillUnlock[];
+  isLoading: boolean;
+  onClose: () => void;
+}
+```
+
+**Visual states:**
+- **Unlocked**: Green background, checkmark, full opacity
+- **Next unlock**: Gold highlight, arrow icon, "X more levels" indicator
+- **Locked**: Dimmed, lock icon, gray text
+
+<Info>
+The guide panel handles British/American spelling differences automatically (defence → defense) for consistent display.
+</Info>
 
 ### HUD Components
 
