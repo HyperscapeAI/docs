@@ -128,6 +128,12 @@ Entity updates use **abbreviated keys** to minimize bandwidth:
 | `chatMessage` | Incoming chat | `{ sender, message }` |
 | `damageDealt` | Combat damage | `{ targetId, damage, didHit }` |
 | `deathNotification` | Entity died | `{ entityId, killerId }` |
+| `questList` | Quest list response | `{ quests[], questPoints }` |
+| `questDetail` | Quest detail response | `{ id, name, status, stages[], ... }` |
+| `questStartConfirm` | Quest accept screen | `{ questId, questName, requirements, rewards }` |
+| `questProgressed` | Quest progress update | `{ questId, stage, progress }` |
+| `questCompleted` | Quest completion | `{ questId, questName, rewards }` |
+| `xpDrop` | XP gain notification | `{ skill, xpGained, newXp, newLevel }` |
 
 ---
 
