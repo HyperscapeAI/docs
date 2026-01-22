@@ -382,11 +382,71 @@ bun run cdn:up
 
 This starts an nginx container serving assets from `packages/server/world/assets/` at `http://localhost:8080`.
 
+## CORS Configuration
+
+The server automatically allows requests from production and development origins:
+
+**Production Domains:**
+- `https://hyperscape.club` (main site)
+- `https://www.hyperscape.club` (www subdomain)
+- `https://hyperscape.pages.dev` (Cloudflare Pages)
+- `https://hyperscape-production.up.railway.app` (Railway backend)
+
+**Development Patterns:**
+- `http://localhost:<any-port>` (local development)
+- `https://*.hyperscape.pages.dev` (preview deployments)
+- `https://*.up.railway.app` (Railway preview environments)
+
+**Configuration** (`packages/server/src/startup/http-server.ts`):
+```typescript
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  "http://hyperscape.pages.dev",  // HTTP fallback
+  /^https?:\/\/localhost:\d+$/,
+  /^https?:\/\/.+\.hyperscape\.pages\.dev$/,
+  /^https:\/\/.+\.up\.railway\.app$/,
+];
+```
+
+<Info>
+The server automatically adds `PUBLIC_APP_URL` from environment variables to the CORS allowlist if set.
+</Info>
+
 ## Production Checklist
 
-- [ ] PostgreSQL database provisioned
-- [ ] Environment variables configured
-- [ ] Privy credentials set (both client and server)
-- [ ] CDN serving assets
-- [ ] WebSocket URL configured
-- [ ] SSL/TLS enabled
+### Infrastructure
+- [ ] Railway project created and connected to GitHub
+- [ ] Cloudflare Pages project created and connected to GitHub
+- [ ] Cloudflare R2 bucket created for assets
+- [ ] PostgreSQL database provisioned (Railway or Neon)
+- [ ] Custom domains configured (hyperscape.club, assets.hyperscape.club)
+- [ ] SSL/TLS enabled (automatic with Cloudflare)
+
+### Environment Variables
+- [ ] Server: `DATABASE_URL`, `JWT_SECRET`, `PRIVY_APP_ID`, `PRIVY_APP_SECRET`
+- [ ] Server: `PUBLIC_CDN_URL` pointing to R2 bucket
+- [ ] Client: `PUBLIC_PRIVY_APP_ID` matching server
+- [ ] Client: `PUBLIC_API_URL` and `PUBLIC_WS_URL` pointing to Railway
+- [ ] Client: `PUBLIC_CDN_URL` pointing to R2 bucket
+
+### GitHub Actions
+- [ ] `RAILWAY_TOKEN` secret configured
+- [ ] `CLOUDFLARE_API_TOKEN` secret configured
+- [ ] Railway project/service/environment IDs updated in workflow
+- [ ] Cloudflare account ID updated in workflow
+
+### Security
+- [ ] `ADMIN_CODE` set to prevent unauthorized admin access
+- [ ] JWT secret generated with `openssl rand -base64 32`
+- [ ] Privy app configured with production domains
+- [ ] Rate limiting enabled (`DISABLE_RATE_LIMIT` not set)
+
+### Verification
+- [ ] Server health check responds at `/status`
+- [ ] WebSocket connection succeeds
+- [ ] Assets load from CDN
+- [ ] Manifests fetch successfully at startup
+- [ ] Database migrations applied
+- [ ] Authentication works with Privy
