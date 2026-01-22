@@ -28,6 +28,19 @@ export const PATHFIND_RADIUS = 128;     // BFS search radius in tiles
 Hyperscape uses **2x OSRS speed** for a snappier modern feel while keeping the tick-based system. OSRS uses 1 tile/tick walk, 2 tiles/tick run.
 </Note>
 
+### Agility XP from Movement
+
+Movement grants Agility XP at a rate of **1 XP per 2 tiles traveled**:
+
+- Walking: 2 tiles/tick = ~100 XP/minute
+- Running: 4 tiles/tick = ~200 XP/minute
+- XP granted in batches of 50 XP every 100 tiles (prevents visual spam)
+- Death penalty: Accumulated tile progress is lost (max ~50 XP worth)
+
+<Info>
+Agility XP is tracked server-side in `TileMovementManager` and granted via the `SKILLS_XP_GAINED` event. See [Skills System](/wiki/game-systems/skills) for details on agility's stamina regeneration bonus.
+</Info>
+
 ---
 
 ## Tile Coordinates
