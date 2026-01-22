@@ -43,14 +43,38 @@ PRIVY_APP_SECRET=your-privy-app-secret
 ```bash
 # Server
 PORT=5555
+SAVE_INTERVAL=60
 
-# Assets
+# Assets and CDN
 PUBLIC_CDN_URL=http://localhost:8080
+PUBLIC_WS_URL=ws://localhost:5555/ws
+PUBLIC_API_URL=http://localhost:5555
+
+# Admin Access
+ADMIN_CODE=your-secret-admin-code
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
+
+# ElizaOS Integration
+ELIZAOS_API_URL=http://localhost:4001
+```
+
+### Production-Specific
+
+```bash
+# Node environment (affects logging and security)
+NODE_ENV=production
+
+# Skip asset download in CI/production
+# Manifests are fetched from CDN at startup
+CI=true
+SKIP_ASSETS=true
+
+# Deployment tracking
+COMMIT_HASH=<git-commit-sha>
 ```
 
 ## Client Environment
