@@ -27,15 +27,60 @@ PRIVY_APP_SECRET=your-app-secret
 
 **Symptom**: 404 errors for models/avatars
 
-**Cause**: CDN container not running
+**Cause**: CDN container not running (development) or wrong CDN URL (production)
 
 **Solution**:
 
+**Development:**
 ```bash
 bun run cdn:up
 ```
 
 Or ensure you're using `bun run dev` which starts it automatically.
+
+**Production:**
+Verify `PUBLIC_CDN_URL` points to the correct R2 bucket:
+- Production: `https://assets.hyperscape.club`
+- Staging: `https://staging-assets.hyperscape.club`
+
+### Manifest Fetch Failures
+
+**Symptom**: Server logs show "Failed to fetch manifests from CDN"
+
+**Causes**:
+- CDN URL incorrect or unreachable
+- R2 bucket not configured
+- Network connectivity issues
+
+**Solution**:
+
+**Development:**
+```bash
+# Use local manifests (skip CDN fetch)
+# Manifests already exist in packages/server/world/assets/manifests/
+# Server will skip fetch if files exist locally
+```
+
+**Production:**
+```bash
+# Verify CDN URL is accessible
+curl https://assets.hyperscape.club/manifests/npcs.json
+
+# Check Railway logs for fetch errors
+railway logs
+
+# Manually upload manifests to R2 if missing
+wrangler r2 object put "hyperscape-assets/manifests/npcs.json" \
+  --file="packages/server/world/assets/manifests/npcs.json"
+```
+
+**Test environment:**
+```bash
+# Skip manifest fetching entirely
+SKIP_MANIFESTS=true bun run dev
+# or
+NODE_ENV=test bun run dev
+```
 
 ### Database Schema Errors
 
