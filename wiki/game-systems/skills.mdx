@@ -254,6 +254,114 @@ Dragon and Crystal pickaxes have a chance for bonus speed:
 The bonus speed roll is server-authoritative to prevent client/server desyncs.
 </Info>
 
+---
+
+## Agility System
+
+Agility is a unique skill in Hyperscape that rewards exploration and movement. Unlike traditional RuneScape agility courses, it's trained passively by traversing the game world.
+
+### Training Agility
+
+**XP Gain:**
+- 1 XP per 2 tiles traveled (both walking and running)
+- XP is batched at 100 tiles = 50 XP to prevent visual spam
+- XP drops appear every ~15 seconds while running, ~30 seconds while walking
+
+**XP Rates:**
+| Movement Type | Tiles/Second | XP/Minute | Time to Level 50 | Time to Level 99 |
+|---------------|--------------|-----------|------------------|------------------|
+| Walking | 3.33 | ~100 XP | ~17 hours | ~2,000+ hours |
+| Running | 6.67 | ~200 XP | ~8.5 hours | ~1,000+ hours |
+
+**Death Penalty:**
+- Accumulated tiles toward next XP grant are lost on death (max ~50 XP lost)
+- Earned XP is never lost
+- Tile counter resets to 0 on death
+
+**Logout Behavior:**
+- Tile counter is not persisted (resets to 0 on logout)
+- Earned XP is saved to database
+
+<Warning>
+Teleportation does not grant Agility XP - only tiles traveled by walking/running count.
+</Warning>
+
+### Stamina System Integration
+
+Agility directly affects stamina regeneration, while inventory weight affects stamina drain.
+
+#### Weight-Based Stamina Drain
+
+Carrying heavy items increases stamina drain while running:
+
+**Formula:** `Drain Rate = Base Drain × (1 + Weight × 0.005)`
+
+| Weight (kg) | Drain Multiplier | Drain/Second | Impact |
+|-------------|------------------|--------------|--------|
+| 0 | 1.0× | 2.0 | No penalty |
+| 10 | 1.05× | 2.1 | +5% drain |
+| 20 | 1.1× | 2.2 | +10% drain |
+| 40 | 1.2× | 2.4 | +20% drain |
+| 60 | 1.3× | 2.6 | +30% drain |
+| 100 | 1.5× | 3.0 | +50% drain |
+
+<Info>
+Weight is calculated server-side from your inventory and equipment, then synced to the client for stamina calculations.
+</Info>
+
+#### Agility-Based Stamina Regeneration
+
+Higher Agility levels increase stamina regeneration:
+
+**Formula:** `Regen Rate = Base Regen × (1 + Agility Level × 0.01)`
+
+| Agility Level | Regen Multiplier | Idle Regen/Sec | Walking Regen/Sec |
+|---------------|------------------|----------------|-------------------|
+| 1 | 1.01× | 4.04 | 2.02 |
+| 10 | 1.10× | 4.40 | 2.20 |
+| 25 | 1.25× | 5.00 | 2.50 |
+| 50 | 1.50× | 6.00 | 3.00 |
+| 75 | 1.75× | 7.00 | 3.50 |
+| 99 | 1.99× | 7.96 | 3.98 |
+
+**Base Stamina Rates:**
+- Running: -2.0 stamina/second (modified by weight)
+- Walking: +2.0 stamina/second (modified by agility)
+- Idle: +4.0 stamina/second (modified by agility)
+
+<Info>
+High Agility levels can offset the stamina drain penalty from heavy loads. A level 99 Agility player regenerates stamina nearly twice as fast as a level 1 player.
+</Info>
+
+### Agility Unlocks
+
+| Level | Unlock | Type |
+|-------|--------|------|
+| 1 | Basic stamina regeneration (+1% per level) | Ability |
+| 10 | +10% stamina regeneration | Ability |
+| 25 | +25% stamina regeneration | Ability |
+| 50 | +50% stamina regeneration | Ability |
+| 75 | +75% stamina regeneration | Ability |
+| 99 | Agility cape, +99% stamina regeneration | Item |
+
+### Implementation Details
+
+Agility is implemented across multiple systems:
+
+**Server-Side** (`packages/server/src/systems/ServerNetwork/tile-movement.ts`):
+- `TileMovementManager` tracks tiles traveled per player
+- Batches XP grants at 100-tile threshold
+- Resets tile counter on death
+
+**Client-Side** (`packages/shared/src/entities/player/PlayerLocal.ts`):
+- Stamina drain calculation uses `totalWeight` property
+- Stamina regen calculation uses `skills.agility.level`
+- Weight synced from server via `PLAYER_WEIGHT_CHANGED` event
+
+**Database** (`packages/server/src/database/schema.ts`):
+- `agilityLevel` and `agilityXp` columns in characters table
+- Persisted on save, loaded on character selection
+
 <Info>
 **Mining Mechanics**: Rocks always deplete after yielding one ore (100% depletion chance). Success rates are OSRS-accurate and depend only on Mining level, not pickaxe tier. Pickaxe tier affects roll frequency (speed) only. The bonus speed roll for Dragon/Crystal pickaxes is server-authoritative to prevent client/server desyncs.
 </Info>
