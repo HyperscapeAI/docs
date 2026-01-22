@@ -698,6 +698,77 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
+## Agility & Stamina System
+
+Agility is a unique skill that affects stamina regeneration and is trained through movement.
+
+### How Agility Works
+
+**Training Method**: Move through the world (walking or running)
+- 1 XP per 2 tiles traveled
+- XP granted in batches of 50 XP every 100 tiles
+- Both walking and running grant XP at the same rate per tile
+
+**Stamina Regeneration Bonus**:
+- Base regeneration: 2/sec while walking, 4/sec while idle
+- Agility bonus: +1% regeneration per agility level
+- Level 99 agility: Nearly double regeneration speed
+
+| Agility Level | Walking Regen/Sec | Idle Regen/Sec |
+|---------------|-------------------|----------------|
+| 1 | 2.02 | 4.04 |
+| 25 | 2.50 | 5.00 |
+| 50 | 3.00 | 6.00 |
+| 75 | 3.50 | 7.00 |
+| 99 | 3.98 | 7.96 |
+
+### Weight & Stamina Drain
+
+Inventory weight affects stamina drain while running:
+
+**Weight Penalty**: +0.5% stamina drain per kg carried
+
+| Weight (kg) | Drain Multiplier | Drain/Second |
+|-------------|------------------|--------------|
+| 0 | 1.0x | 2.0 |
+| 20 | 1.1x | 2.2 |
+| 50 | 1.25x | 2.5 |
+| 100 | 1.5x | 3.0 |
+
+<Info>
+**Weight Display**: Your total inventory weight is shown in the Equipment panel. Weight is calculated server-side and synced to the client for accurate stamina calculations.
+</Info>
+
+<Tip>
+High agility levels help offset the stamina penalty from carrying heavy loads. A level 50 agility player with 50kg of gear will regenerate stamina faster than a level 1 agility player with no gear.
+</Tip>
+
+---
+
+## Skill Guide Panel
+
+Click any skill in the Skills panel to open its Skill Guide, which shows all unlocks for that skill.
+
+**Features**:
+- Level requirements for each unlock
+- Visual distinction between unlocked (green ✓) and locked (🔒) content
+- Next unlock highlighted with progress indicator
+- Type badges (item/ability) for each unlock
+- Scrollable list for skills with many unlocks
+
+**Example Unlocks**:
+- **Attack 40**: Rune weapons
+- **Attack 60**: Dragon weapons
+- **Agility 50**: +50% stamina regeneration
+- **Woodcutting 75**: Magic trees
+- **Prayer 43**: Protect from Melee
+
+<Info>
+The Skill Guide Panel fetches unlock data from the server endpoint `/api/data/skill-unlocks`, ensuring server-authoritative progression information.
+</Info>
+
+---
+
 ## Skill Unlocks
 
 The `skill-unlocks.json` manifest documents what players unlock at each level. This is used for UI display and progression tracking.
@@ -709,6 +780,8 @@ Example unlocks:
 - **Mining 30**: Coal
 - **Cooking 40**: Lobster
 - **Smithing 50**: Mithril bar
+- **Agility 50**: +50% stamina regeneration
+- **Prayer 43**: Protect from Melee
 
 <Info>
 See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
