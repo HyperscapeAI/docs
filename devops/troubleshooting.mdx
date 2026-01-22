@@ -169,6 +169,88 @@ docker logs hyperscape-postgres
 docker logs hyperscape-cdn
 ```
 
+## Railway Deployment Issues
+
+### Build Fails with "Lockfile Frozen"
+
+**Symptom**: Railway build fails with "lockfile had changes, but lockfile is frozen"
+
+**Cause**: `bun.lock` out of sync with `package.json`
+
+**Solution**:
+```bash
+# Regenerate lockfile locally
+bun install
+git add bun.lock
+git commit -m "chore: update bun.lock"
+git push
+```
+
+### Frontend Not Loading (404 on index.html)
+
+**Symptom**: Railway deployment succeeds but frontend returns 404
+
+**Causes**:
+- Client build failed during deployment
+- Files not copied to `public/` directory
+- Build output directory incorrect
+
+**Solution**:
+1. Check Railway build logs for client build step
+2. Verify `cp -r dist/* public/` command succeeded
+3. Check `/debug/public` endpoint to see directory contents:
+   ```bash
+   curl https://your-app.up.railway.app/debug/public
+   ```
+4. Verify `nixpacks.toml` includes client build step
+
+### Manifests Not Loading
+
+**Symptom**: Server starts but game data is missing
+
+**Cause**: CDN manifest fetch failed
+
+**Solution**:
+1. Check server logs for manifest fetch errors
+2. Verify `PUBLIC_CDN_URL` is set correctly
+3. Test CDN accessibility:
+   ```bash
+   curl https://assets.hyperscape.club/manifests/items.json
+   ```
+4. For development, ensure local manifests exist in `packages/server/world/assets/manifests/`
+
+### WebSocket Connection Fails in Production
+
+**Symptom**: Frontend loads but can't connect to game server
+
+**Causes**:
+- `PUBLIC_WS_URL` incorrect in client environment
+- CORS not allowing frontend domain
+- Railway not exposing WebSocket port
+
+**Solution**:
+1. Verify client `PUBLIC_WS_URL` uses `wss://` (not `ws://`)
+2. Check CORS allowlist includes your frontend domain
+3. Test WebSocket endpoint:
+   ```bash
+   wscat -c wss://hyperscape-production.up.railway.app/ws
+   ```
+4. Verify Railway exposes port 5555
+
+### CORS Errors
+
+**Symptom**: "CORS policy: No 'Access-Control-Allow-Origin' header"
+
+**Cause**: Frontend domain not in server's CORS allowlist
+
+**Solution**:
+1. Add domain to `allowedOrigins` in `packages/server/src/startup/http-server.ts`
+2. Or set `PUBLIC_APP_URL` environment variable in Railway
+3. For preview deployments, verify regex pattern matches:
+   ```typescript
+   /^https?:\/\/.+\.hyperscape\.pages\.dev$/
+   ```
+
 ## Getting Help
 
 1. Check [GitHub Issues](https://github.com/HyperscapeAI/hyperscape/issues)
@@ -177,3 +259,4 @@ docker logs hyperscape-cdn
    - Error message
    - Steps to reproduce
    - Environment details (OS, Node version, Bun version)
+   - Deployment platform (Railway, Cloudflare, local)
