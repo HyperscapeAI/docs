@@ -79,6 +79,28 @@ curl https://api.hyperscape.lol/health
   List all world areas
 </ParamField>
 
+### Game Data
+
+<ParamField path="GET /api/data/skill-unlocks" type="endpoint">
+  Get skill unlock definitions for all skills
+</ParamField>
+
+<Accordion title="Response">
+```json
+{
+  "attack": [
+    { "level": 1, "description": "Bronze weapons", "type": "item" },
+    { "level": 5, "description": "Steel weapons", "type": "item" },
+    { "level": 40, "description": "Rune weapons", "type": "item" }
+  ],
+  "agility": [
+    { "level": 1, "description": "Basic stamina regeneration (+1% per level)", "type": "ability" },
+    { "level": 50, "description": "+50% stamina regeneration", "type": "ability" }
+  ]
+}
+```
+</Accordion>
+
 ## WebSocket Events
 
 Connect to the game server via WebSocket for real-time updates:
