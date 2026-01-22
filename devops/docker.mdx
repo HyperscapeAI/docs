@@ -158,6 +158,83 @@ Host assets on cloud storage:
 PUBLIC_CDN_URL=https://your-cdn.example.com
 ```
 
+## Production Docker Build
+
+Railway uses a multi-stage Dockerfile for production deployments:
+
+### Dockerfile.server
+
+```dockerfile
+# Stage 1: Builder - Install dependencies and build
+FROM oven/bun:1.1.38-debian AS builder
+
+# Install build dependencies for native modules
+RUN apt-get update && apt-get install -y \
+    python3 make g++ pkg-config \
+    libcairo2-dev libpango1.0-dev libjpeg-dev
+
+# Install dependencies (skip asset download in CI)
+ENV CI=true SKIP_ASSETS=true
+RUN bun install
+
+# Build packages in order
+RUN bun run build:shared
+RUN bun run build:client
+RUN bun run build:server
+
+# Copy client build to server public directory
+RUN cp -r packages/client/dist/* packages/server/public/
+
+# Stage 2: Runtime - Minimal production image
+FROM oven/bun:1.1.38-debian AS runtime
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libcairo2 libpango-1.0-0 curl ca-certificates
+
+# Copy built artifacts
+COPY --from=builder /app/packages/server/dist ./packages/server/dist
+COPY --from=builder /app/packages/server/public ./packages/server/public
+
+# Create manifests directory (fetched from CDN at startup)
+RUN mkdir -p ./packages/server/world/assets/manifests
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s \
+  CMD curl -f http://localhost:${PORT:-5555}/status || exit 1
+
+# Run server
+CMD ["bun", "run", "start"]
+```
+
+**Key Features:**
+- Multi-stage build reduces final image size
+- Native module support (canvas, better-sqlite3)
+- Client build bundled with server
+- Manifests fetched from CDN at runtime
+- Health check for Railway monitoring
+
+### Building Locally
+
+Test the production Docker build locally:
+
+```bash
+# Build image
+docker build -f Dockerfile.server -t hyperscape-server .
+
+# Run container
+docker run -p 5555:5555 \
+  -e DATABASE_URL=postgresql://... \
+  -e PUBLIC_CDN_URL=https://assets.hyperscape.club \
+  -e PRIVY_APP_ID=... \
+  -e PRIVY_APP_SECRET=... \
+  hyperscape-server
+```
+
+<Warning>
+The production Docker build is primarily for Railway. For local development, use `bun run dev` instead.
+</Warning>
+
 ## Container Status
 
 Check running containers:
@@ -181,4 +258,7 @@ View container logs:
 ```bash
 docker logs hyperscape-postgres
 docker logs hyperscape-cdn
+
+# Follow logs in real-time
+docker logs -f hyperscape-postgres
 ```
