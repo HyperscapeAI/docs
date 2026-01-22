@@ -92,11 +92,30 @@ dashboard/                // Dashboard components
 - Health/Constitution display
 - Combat status indicators
 - Skills panel with XP progress
+- **Skill Guide Panel** (new in v1.0) - OSRS-style unlock viewer
 - 28-slot inventory grid
 - Equipment slots display
 - Bank interface (unlimited storage)
 - Chat window
 - Minimap with compass
+
+### Game Panels
+
+Located in `src/game/panels/`:
+
+| Panel | Purpose | Trigger |
+|-------|---------|---------|
+| `SkillsPanel` | View skills, levels, and XP | Default keybind |
+| `SkillGuidePanel` | View skill unlocks and progression | Click skill in Skills Panel |
+| `InventoryPanel` | 28-slot item storage | Always visible |
+| `EquipmentPanel` | Worn equipment slots | Equipment button |
+| `BankPanel` | Unlimited item storage | Interact with bank |
+| `StorePanel` | Buy/sell items | Interact with shop |
+| `CombatPanel` | Combat style selection | Combat button |
+| `DialoguePanel` | NPC conversations | Interact with NPC |
+| `SmithingPanel` | Smith equipment at anvils | Interact with anvil |
+| `SmeltingPanel` | Smelt ores at furnaces | Interact with furnace |
+| `SettingsPanel` | Game settings | Settings button |
 
 ### Game Components
 
