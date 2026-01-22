@@ -6,12 +6,32 @@ icon: "rocket"
 
 ## Deployment Overview
 
-Hyperscape uses a split deployment model:
+Hyperscape uses a split deployment architecture with separate environments for production and staging:
 
-- **Server**: Railway, Fly.io, or Docker host
-- **Client**: Vercel, Netlify, or static hosting
-- **Database**: PostgreSQL (Neon recommended)
-- **Assets**: CDN or object storage
+### Production Architecture
+
+- **Frontend**: Cloudflare Pages ([hyperscape.club](https://hyperscape.club))
+- **API/Server**: Railway ([api.hyperscape.club](https://api.hyperscape.club))
+- **Database**: PostgreSQL on Railway
+- **Assets/CDN**: Cloudflare R2 ([assets.hyperscape.club](https://assets.hyperscape.club))
+
+### Staging Architecture
+
+- **Frontend**: Cloudflare Pages ([staging.hyperscape.club](https://staging.hyperscape.club))
+- **API/Server**: Railway ([staging-api.hyperscape.club](https://staging-api.hyperscape.club))
+- **Database**: PostgreSQL on Railway (separate staging database)
+- **Assets/CDN**: Cloudflare R2 staging bucket ([staging-assets.hyperscape.club](https://staging-assets.hyperscape.club))
+
+### Deployment Triggers
+
+| Branch | Environment | Frontend | API | Assets |
+|--------|-------------|----------|-----|--------|
+| `main` | Production | Auto-deploy to Pages | Auto-deploy to Railway | Auto-upload to R2 |
+| `staging` | Staging | Auto-deploy to Pages | Auto-deploy to Railway | Auto-upload to R2 staging |
+
+<Info>
+  The staging environment provides a complete isolated instance for testing changes before production deployment.
+</Info>
 
 ## Environment Variables
 
