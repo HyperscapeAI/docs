@@ -205,7 +205,94 @@ await fetchManifestsFromCDN(config);
 - 5-minute cache headers on manifest JSON files
 - Allows quick updates without full redeployment
 
-## Vercel Client Deployment
+## Cloudflare Pages Deployment
+
+Cloudflare Pages is the recommended frontend deployment platform for Hyperscape.
+
+### Automatic Deployment
+
+The repository is configured for automatic Cloudflare Pages deployments:
+
+**Production:**
+- Branch: `main`
+- URL: `hyperscape.pages.dev`
+- Automatic deployments on push
+
+**Preview Deployments:**
+- All pull requests get preview URLs
+- Format: `<commit-hash>.hyperscape.pages.dev`
+- Useful for testing before merge
+
+### Manual Cloudflare Pages Setup
+
+<Steps>
+  <Step title="Create Pages project">
+    1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com)
+    2. Navigate to Pages
+    3. Create new project from GitHub
+    4. Select the Hyperscape repository
+  </Step>
+  
+  <Step title="Configure build">
+    ```
+    Build command: cd packages/client && bun run build
+    Build output directory: packages/client/dist
+    Root directory: (leave empty)
+    ```
+  </Step>
+  
+  <Step title="Set environment variables">
+    Add these in Pages settings → Environment variables:
+    
+    ```bash
+    PUBLIC_PRIVY_APP_ID=your-privy-app-id
+    PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+    PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    ```
+  </Step>
+  
+  <Step title="Configure CORS on server">
+    Add Cloudflare Pages domains to server CORS allowlist:
+    
+    ```typescript
+    // In packages/server/src/startup/http-server.ts
+    const allowedOrigins = [
+      'https://hyperscape.pages.dev',
+      'https://*.hyperscape.pages.dev',  // Preview deployments
+      // ... other origins
+    ];
+    ```
+    
+    <Info>This is already configured in the repository.</Info>
+  </Step>
+</Steps>
+
+### Cloudflare R2 Asset CDN
+
+Game assets (3D models, textures, manifests) are served from Cloudflare R2:
+
+**Automatic Upload:**
+```yaml
+# .github/workflows/deploy-cloudflare.yml
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/server/world/assets/manifests/**'
+```
+
+**Manual Upload:**
+```bash
+# Install Wrangler CLI
+npm install -g wrangler
+
+# Upload manifests
+wrangler r2 object put hyperscape-assets/manifests/items.json \
+  --file=packages/server/world/assets/manifests/items.json
+```
+
+## Vercel Client Deployment (Alternative)
 
 <Steps>
   <Step title="Import project">
