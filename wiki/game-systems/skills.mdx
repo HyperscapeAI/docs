@@ -707,9 +707,96 @@ All skill-related data is now defined in JSON manifests:
 
 This allows easy content updates without code changes and enables community modding.
 
+---
+
+## Agility Skill System
+
+The Agility skill is unique - it trains passively through movement and affects stamina mechanics.
+
+### Training Agility
+
+**XP Gain**: 1 XP per 2 tiles traveled (batched at 100 tiles = 50 XP)
+
+| Movement Type | Tiles/Tick | XP/Minute | Time to 99 |
+|---------------|------------|-----------|------------|
+| Walking | 2 | ~100 XP | ~2,000 hours |
+| Running | 4 | ~200 XP | ~1,000 hours |
+
+**XP Batching**: To prevent visual spam, XP is granted in batches of 50 XP every 100 tiles. This creates XP drops every ~15 seconds while running or ~30 seconds while walking.
+
+**Death Penalty**: On death, accumulated tiles toward the next XP grant are lost (max 50 XP lost). Earned XP is never lost.
+
+**Teleportation**: Does not grant Agility XP (no tiles traversed).
+
+### Weight-Based Stamina Drain
+
+Carrying heavy items increases stamina drain while running:
+
+**Formula**: `Drain Rate = Base Drain × (1 + Weight × 0.005)`
+
+| Weight (kg) | Drain Multiplier | Drain/Second |
+|-------------|------------------|--------------|
+| 0 | 1.0x | 2.0 |
+| 10 | 1.05x | 2.1 |
+| 20 | 1.1x | 2.2 |
+| 40 | 1.2x | 2.4 |
+| 60 | 1.3x | 2.6 |
+| 100 | 1.5x | 3.0 |
+
+**Weight Calculation**: Total weight is calculated server-side from inventory items and equipment, then synced to the client for stamina calculations.
+
+### Agility-Based Stamina Regeneration
+
+Higher Agility levels increase stamina regeneration:
+
+**Formula**: `Regen Rate = Base Regen × (1 + Agility Level × 0.01)`
+
+| Agility Level | Regen Multiplier | Idle Regen/Sec | Walk Regen/Sec |
+|---------------|------------------|----------------|----------------|
+| 1 | 1.01x | 4.04 | 2.02 |
+| 10 | 1.10x | 4.40 | 2.20 |
+| 25 | 1.25x | 5.00 | 2.50 |
+| 50 | 1.50x | 6.00 | 3.00 |
+| 75 | 1.75x | 7.00 | 3.50 |
+| 99 | 1.99x | 7.96 | 3.98 |
+
+**Base Rates**:
+- Running: 2 stamina/second drain (no regen)
+- Walking: 2 stamina/second regen
+- Idle: 4 stamina/second regen
+
+### Agility Unlocks
+
+| Level | Unlock |
+|-------|--------|
+| 1 | Basic stamina regeneration (+1% per level) |
+| 10 | +10% stamina regeneration |
+| 25 | +25% stamina regeneration |
+| 50 | +50% stamina regeneration |
+| 75 | +75% stamina regeneration |
+| 99 | Agility cape, +99% stamina regeneration |
+
+---
+
+## Skill Guide Panel
+
+Players can click any skill in the Skills Panel to view a detailed guide showing all unlocks for that skill.
+
+**Features**:
+- Shows all unlocks with level requirements
+- Visual distinction between unlocked (green checkmark) and locked (lock icon) items
+- Highlights the next unlock the player is working toward
+- Scrollable list for skills with many unlocks (Prayer has 29!)
+- Type indicators (item vs ability)
+
+**Implementation**: The panel fetches unlock data from `/api/data/skill-unlocks` endpoint, which serves the `skill-unlocks.json` manifest.
+
+---
+
 ## Related Documentation
 
 - [Combat System](/wiki/game-systems/combat)
+- [Movement System](/wiki/game-systems/movement)
 - [Data Manifests Overview](/wiki/data/overview)
 - [Item Data Structure](/wiki/data/items)
 - [NPC Data Structure](/wiki/data/npcs)
