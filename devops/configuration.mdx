@@ -131,6 +131,93 @@ All services have unique default ports:
 | 3400 | AssetForge UI | `ASSET_FORGE_PORT` | `bun run dev:forge` |
 | 3401 | AssetForge API | `ASSET_FORGE_API_PORT` | `bun run dev:forge` |
 
+## Manifest Fetching
+
+The server automatically fetches game data manifests from the CDN at startup.
+
+### How It Works
+
+```typescript
+// From packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Manifest files fetched** (30+ files):
+- Root: `npcs.json`, `stores.json`, `world-areas.json`, `prayers.json`, etc.
+- Items: `items/weapons.json`, `items/tools.json`, `items/resources.json`, `items/food.json`, `items/misc.json`
+- Gathering: `gathering/woodcutting.json`, `gathering/mining.json`, `gathering/fishing.json`
+- Recipes: `recipes/cooking.json`, `recipes/firemaking.json`, `recipes/smelting.json`, `recipes/smithing.json`
+
+### Behavior by Environment
+
+| Environment | Behavior |
+|-------------|----------|
+| **Development** | Skips fetch if local manifests exist (allows local editing) |
+| **Production** | Always fetches latest from CDN (ensures consistency) |
+| **Staging** | Always fetches from staging CDN bucket |
+| **Test** | Skips fetch if `SKIP_MANIFESTS=true` or `NODE_ENV=test` |
+
+### Caching
+
+- Manifests cached in `packages/server/world/assets/manifests/`
+- Content comparison: Only changed files are written
+- HTTP cache headers: 5-minute cache with revalidation
+- Startup logs show: `X fetched, Y updated, Z failed`
+
+<Info>
+  This allows updating game content by uploading new manifests to R2 without redeploying the server.
+</Info>
+
+## CORS Configuration
+
+The server automatically configures CORS for all deployment environments.
+
+### Allowed Origins
+
+**Production domains:**
+- `https://hyperscape.club`
+- `https://www.hyperscape.club`
+- `https://hyperscape.pages.dev`
+- `http://hyperscape.pages.dev`
+- `https://hyperscape-production.up.railway.app`
+
+**Dynamic patterns:**
+- `http://localhost:*` (any port)
+- `https://*.hyperscape.pages.dev` (Cloudflare preview deployments)
+- `https://*.up.railway.app` (Railway deployments)
+- `https://*.farcaster.xyz`, `https://*.warpcast.com`
+- `https://*.privy.io`
+
+**Custom domains:**
+- Any domain set in `PUBLIC_APP_URL` environment variable
+
+### Configuration Location
+
+CORS is configured in `packages/server/src/startup/http-server.ts`:
+
+```typescript
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  "http://hyperscape.pages.dev",
+  /^https?:\/\/localhost:\d+$/,
+  /^https?:\/\/.+\.hyperscape\.pages\.dev$/,
+  // ... more patterns
+];
+
+await fastify.register(cors, {
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ["GET", "PUT", "POST", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+});
+```
+
+<Warning>
+  If you deploy to a custom domain, add it to `PUBLIC_APP_URL` in your server environment variables.
+</Warning>
+
 ## Zero-Config Development
 
 Default values work out of the box for local development:
