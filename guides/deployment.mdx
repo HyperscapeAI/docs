@@ -46,14 +46,32 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
+Railway deployment is automated via GitHub Actions (`.github/workflows/deploy-railway.yml`). The workflow triggers on pushes to `main` that affect server or client files.
+
+### Automated Deployment
+
+The deployment workflow:
+1. Builds the client frontend (`bun run build:client`)
+2. Copies client dist to server's `public/` directory
+3. Deploys to Railway using the GraphQL API
+4. Server fetches game manifests from CDN at startup
+
+<Info>
+  Manifests are fetched from `https://d20g7vd4m53hpb.cloudfront.net` at server startup. No need to clone the assets repository in production.
+</Info>
+
+### Manual Railway Setup
+
 <Steps>
   <Step title="Create Railway project">
     Connect your GitHub repository to Railway.
   </Step>
   
   <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+    Railway uses `nixpacks.toml` for build configuration:
+    - Build command: `bun run build`
+    - Start command: `cd packages/server && bun run start:railway`
+    - Frontend is built and copied to `public/` during build
   </Step>
   
   <Step title="Add PostgreSQL">
@@ -64,6 +82,13 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
     Add all required server environment variables.
   </Step>
 </Steps>
+
+### Railway Configuration Files
+
+- **`nixpacks.toml`**: Nixpacks builder configuration with Bun provider
+- **`railway.server.json`**: Railway service configuration
+- **`.railwayignore`**: Files to exclude from deployment
+- **`Dockerfile.server`**: Multi-stage Docker build (alternative to Nixpacks)
 
 ## Vercel Client Deployment
 
