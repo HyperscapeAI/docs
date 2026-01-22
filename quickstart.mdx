@@ -60,6 +60,14 @@ Before you begin, ensure you have:
     <Info>First build takes 5-10 minutes due to PhysX WASM compilation. Subsequent builds are cached.</Info>
   </Step>
   
+  <Step title="Start the CDN (serves game assets)">
+    ```bash
+    bun run cdn:up
+    ```
+    
+    This starts a Docker nginx container serving assets on port 8080.
+  </Step>
+  
   <Step title="Start the game">
     **Production mode:**
     ```bash
@@ -73,6 +81,7 @@ Before you begin, ensure you have:
     ```
     - Client: [http://localhost:3333](http://localhost:3333) (Vite HMR)
     - Server: `ws://localhost:5555/ws`
+    - CDN: `http://localhost:8080` (Docker)
   </Step>
 </Steps>
 
