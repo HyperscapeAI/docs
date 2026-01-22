@@ -301,25 +301,118 @@ bunx drizzle-kit push      # Apply schema
 bunx drizzle-kit migrate   # Run migrations
 ```
 
-## CDN Setup
+## CDN Setup (Assets)
 
-### Option 1: Self-Hosted
+### Production: Cloudflare R2
 
-Use the included Docker CDN:
+Hyperscape uses Cloudflare R2 for asset storage with automatic uploads via GitHub Actions.
+
+**Automatic Asset Deployment:**
+
+The `.github/workflows/deploy-cloudflare.yml` workflow automatically uploads assets to R2 when:
+- Manifests change in `packages/server/world/assets/manifests/**`
+- Asset files change in `assets/**`
+
+**What gets uploaded:**
+- **Manifests** (JSON files) → `manifests/*.json`
+- **Models** (GLB/GLTF) → `models/**/*.glb`
+- **Audio** (MP3/OGG) → `audio/**/*.mp3`
+- **Textures** (PNG/JPG) → `textures/**/*.png`
+- **WASM binaries** → `*.wasm`
+
+**R2 Configuration:**
+```bash
+# In Cloudflare Dashboard → R2
+Bucket name: hyperscape-assets
+Public access: Enabled via custom domain
+Custom domain: assets.hyperscape.club
+```
+
+**Required GitHub Secrets:**
+- `CLOUDFLARE_API_TOKEN` - API token with R2 write permissions
+
+### Development: Local Docker CDN
+
+For local development, use the included nginx CDN:
 
 ```bash
 bun run cdn:up
 ```
 
-Configure `PUBLIC_CDN_URL` to point to your CDN host.
+This starts a Docker container serving assets from `packages/server/world/assets/` on port 8080.
 
-### Option 2: Cloud Storage
+**CDN Commands:**
+```bash
+bun run cdn:up        # Start CDN container
+bun run cdn:down      # Stop CDN container
+bun run cdn:restart   # Force restart (rebuild container)
+bun run cdn:watch     # Start with file watching
+```
 
-Upload assets to S3, R2, or similar:
+### Manifest Fetching System
 
-1. Build assets: `bun run assets:optimize`
-2. Upload `packages/server/world/assets/`
-3. Set `PUBLIC_CDN_URL` to bucket URL
+**New in v1.0:** The server automatically fetches manifests from the CDN at startup instead of bundling them.
+
+**How it works:**
+1. Server starts and checks `packages/server/world/assets/manifests/` directory
+2. If in production or manifests are missing, fetches from `PUBLIC_CDN_URL`
+3. Downloads all manifest JSON files (items, npcs, resources, etc.)
+4. Caches locally for faster subsequent starts
+5. Compares content hashes to avoid unnecessary updates
+
+**Manifest files fetched:**
+- `items.json` - Item definitions
+- `npcs.json` - NPC and mob data
+- `resources.json` - Gathering resources
+- `tools.json` - Tool definitions
+- `biomes.json` - Biome configurations
+- `world-areas.json` - World zones
+- `stores.json` - Shop inventories
+- `music.json` - Music track metadata
+- `vegetation.json` - Vegetation placement
+- `buildings.json` - Building definitions
+
+**Configuration:**
+```typescript
+// packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Behavior:**
+- **Development**: Skips fetch if local manifests exist (uses Git LFS assets)
+- **Production**: Always fetches from CDN to ensure latest data
+- **CI/Test**: Skips fetch if `SKIP_MANIFESTS=true` is set
+
+### Alternative: Self-Hosted CDN
+
+For self-hosted deployments, you can use any static file server:
+
+**Option 1: nginx**
+```nginx
+server {
+  listen 8080;
+  root /var/www/hyperscape-assets;
+  
+  location /manifests/ {
+    add_header Cache-Control "public, max-age=300, must-revalidate";
+  }
+  
+  location /models/ {
+    add_header Cache-Control "public, max-age=31536000, immutable";
+  }
+}
+```
+
+**Option 2: AWS S3**
+1. Create S3 bucket with public read access
+2. Upload `packages/server/world/assets/` contents
+3. Set `PUBLIC_CDN_URL=https://your-bucket.s3.amazonaws.com`
+
+**Option 3: Other providers**
+- DigitalOcean Spaces
+- Backblaze B2
+- Wasabi
+- Any CDN with object storage
 
 ## Production Checklist
 
