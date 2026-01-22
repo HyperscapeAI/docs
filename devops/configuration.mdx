@@ -89,10 +89,20 @@ PUBLIC_PRIVY_APP_ID=your-privy-app-id
 ### Production
 
 ```bash
-PUBLIC_API_URL=https://api.hyperscape.lol
-PUBLIC_WS_URL=wss://api.hyperscape.lol
-PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+# Server connection (Railway)
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+
+# Assets (Cloudflare R2)
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+
+# App URL (Cloudflare Pages)
+PUBLIC_APP_URL=https://hyperscape.club
 ```
+
+<Info>
+  These URLs are for the official production deployment. For your own deployment, replace with your Railway and Cloudflare domains.
+</Info>
 
 ## AI Agent Environment
 
