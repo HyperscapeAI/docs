@@ -187,6 +187,40 @@ Game content is defined in JSON manifest files in `packages/server/world/assets/
 
 Add new content by editing these JSON files—no code changes required.
 
+## Deployment Architecture
+
+Hyperscape uses a **split deployment model** for optimal performance and cost:
+
+```mermaid
+flowchart LR
+    A[Client Browser] -->|HTTPS| B[Cloudflare Pages]
+    A -->|WSS/HTTPS| C[Railway Server]
+    C -->|Fetch| D[Cloudflare R2 CDN]
+    C -->|Query| E[Railway PostgreSQL]
+    B -->|Assets| D
+```
+
+### Production Services
+
+| Service | Platform | Purpose |
+|---------|----------|---------|
+| **Frontend** | Cloudflare Pages | Static site hosting (`hyperscape.club`) |
+| **Backend/API** | Railway | Game server with WebSockets |
+| **Database** | Railway PostgreSQL | Player data persistence |
+| **Assets/CDN** | Cloudflare R2 | 3D models, audio, textures |
+
+### Deployment Flow
+
+1. **Push to main** triggers GitHub Actions
+2. **Railway workflow** builds server + client via Nixpacks
+3. **Client build** copied to `packages/server/public/`
+4. **Server starts**, fetches manifests from CDN
+5. **Unified deployment** serves both API and frontend
+
+<Info>
+The server serves the built client from `/public/` for unified deployment, while Cloudflare Pages hosts the primary frontend for better global distribution.
+</Info>
+
 ## Build Pipeline
 
 ### Automated Model Bounds Extraction
