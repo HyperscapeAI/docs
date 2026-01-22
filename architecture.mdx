@@ -4,6 +4,54 @@ description: "Monorepo structure and package overview"
 icon: "boxes"
 ---
 
+## Deployment Architecture
+
+Hyperscape uses a modern cloud-native architecture with separate services:
+
+```mermaid
+flowchart LR
+    A[Client Browser] -->|HTTPS| B[Cloudflare Pages]
+    A -->|WSS| C[Railway API]
+    A -->|HTTPS| D[Cloudflare R2 CDN]
+    C -->|Fetches manifests| D
+    C -->|Queries| E[PostgreSQL]
+    
+    subgraph "Frontend"
+        B[Cloudflare Pages<br/>hyperscape.club]
+    end
+    
+    subgraph "Backend"
+        C[Railway<br/>api.hyperscape.club]
+        E[PostgreSQL<br/>Railway]
+    end
+    
+    subgraph "Assets"
+        D[Cloudflare R2<br/>assets.hyperscape.club]
+    end
+```
+
+### Production Stack
+
+| Component | Service | URL | Purpose |
+|-----------|---------|-----|---------|
+| **Frontend** | Cloudflare Pages | hyperscape.club | React SPA, static assets |
+| **API/WebSocket** | Railway | api.hyperscape.club | Game server, real-time sync |
+| **Database** | Railway PostgreSQL | (internal) | Player data, world state |
+| **Assets/CDN** | Cloudflare R2 | assets.hyperscape.club | 3D models, manifests, audio |
+
+### Staging Stack
+
+| Component | Service | URL | Purpose |
+|-----------|---------|-----|---------|
+| **Frontend** | Cloudflare Pages | staging.hyperscape.club | Staging frontend |
+| **API/WebSocket** | Railway | staging-api.hyperscape.club | Staging server |
+| **Database** | Railway PostgreSQL | (internal) | Staging database |
+| **Assets/CDN** | Cloudflare R2 | staging-assets.hyperscape.club | Staging assets |
+
+<Info>
+  The staging environment is a complete isolated instance for testing changes before production deployment.
+</Info>
+
 ## Monorepo Structure
 
 Hyperscape is a **Turbo monorepo** with 7 packages:
