@@ -169,23 +169,57 @@ The server automatically allows requests from:
 
 CORS configuration is in `packages/server/src/startup/http-server.ts`.
 
-## Vercel Client Deployment
+## Cloudflare Pages Client Deployment
+
+Hyperscape's frontend is deployed to Cloudflare Pages for global CDN distribution.
 
 <Steps>
-  <Step title="Import project">
-    Import `packages/client` directory to Vercel.
+  <Step title="Connect repository">
+    Connect your GitHub repository to Cloudflare Pages.
   </Step>
   
   <Step title="Configure build">
-    Root directory: `packages/client`
-    Build command: `bun run build`
-    Output directory: `dist`
+    ```bash
+    Build command: cd packages/client && bun install && bun run build
+    Build output directory: packages/client/dist
+    Root directory: (leave empty - monorepo)
+    ```
   </Step>
   
   <Step title="Set environment variables">
-    Add `PUBLIC_*` environment variables.
+    Add these in Cloudflare Pages dashboard → Settings → Environment variables:
+    
+    ```bash
+    PUBLIC_PRIVY_APP_ID=<your-privy-app-id>
+    PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+    PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    PUBLIC_APP_URL=https://hyperscape.club
+    ```
+  </Step>
+  
+  <Step title="Configure custom domain">
+    Add custom domain in Cloudflare Pages → Custom domains.
+    
+    **Production**: `hyperscape.club`
+    **Preview**: `*.hyperscape.pages.dev` (automatic)
   </Step>
 </Steps>
+
+### Automated Deployment
+
+The repository includes GitHub Actions for automatic deployment:
+
+```yaml
+# .github/workflows/deploy-cloudflare.yml
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/client/**'
+```
+
+Pushes to main automatically deploy to production. Pull requests create preview deployments.
 
 ## Database Setup
 
