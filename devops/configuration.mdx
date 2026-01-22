@@ -159,6 +159,53 @@ The F5 keybind was added to match Minecraft's familiar debug screen shortcut.
   Without Privy, the game runs in anonymous mode with temporary identities.
 </Info>
 
+## New API Endpoints (ElizaOS 1.7)
+
+### Agent Management
+
+```
+GET  /api/agents/:agentId/goal           # Get current goal and progress
+POST /api/agents/:agentId/goal           # Set new goal
+POST /api/agents/:agentId/goal/stop      # Stop goal and pause autonomous behavior
+POST /api/agents/:agentId/goal/resume    # Resume autonomous goal selection
+POST /api/agents/:agentId/message        # Send message to agent
+GET  /api/agents/:agentId/quick-actions  # Get quick action menu data
+GET  /api/agents/mapping/:agentId        # Get agent-to-character mapping
+```
+
+### Data Endpoints
+
+```
+GET /api/data/skill-unlocks              # Get skill unlock definitions for all skills
+GET /api/characters/:characterId/skills  # Get character skill levels and XP
+GET /api/characters/:characterId/position # Get character position and online status
+```
+
+### Goal Control
+
+The stop/resume endpoints enable dashboard control of agent behavior:
+
+**Stop Goal** (`POST /api/agents/:agentId/goal/stop`):
+- Cancels current movement path
+- Sets `goalsPaused` flag to prevent auto-goal setting
+- Agent enters idle state
+- Chat commands still work
+
+**Resume Goal** (`POST /api/agents/:agentId/goal/resume`):
+- Clears `goalsPaused` flag
+- Agent resumes autonomous goal selection
+- Returns to normal behavior
+
+**Response Format**:
+```json
+{
+  "success": true,
+  "goal": null,
+  "goalsPaused": true,
+  "availableGoals": [...]
+}
+```
+
 ## GitHub Actions
 
 The repository includes automated workflows for code quality and documentation:
