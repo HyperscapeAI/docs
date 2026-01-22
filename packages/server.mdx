@@ -240,16 +240,60 @@ bun run assets:deploy # Deploy to R2 (production)
 
 ## Deployment
 
-### Cloudflare Workers
+### Railway (Production)
 
+The server deploys to Railway using Nixpacks for automatic builds:
+
+**Configuration Files:**
+- `nixpacks.toml` - Build configuration (Bun provider, build commands)
+- `railway.server.json` - Service configuration (health checks, restart policy)
+- `Dockerfile.server` - Multi-stage Docker build (alternative to Nixpacks)
+
+**Deployment Process:**
+1. Push to `main` branch triggers GitHub Actions
+2. Workflow calls Railway GraphQL API to trigger deployment
+3. Railway builds using Nixpacks configuration
+4. Server starts with `cd packages/server && bun dist/index.js`
+5. Manifests fetched from Cloudflare R2 CDN at startup
+
+**Environment Variables (Railway):**
 ```bash
-bun run deploy        # Deploy to staging
-bun run deploy:prod   # Deploy to production
+NODE_ENV=production
+DATABASE_URL=<auto-set-by-railway-postgres>
+JWT_SECRET=<generate-with-openssl>
+PRIVY_APP_ID=<from-privy-dashboard>
+PRIVY_APP_SECRET=<from-privy-dashboard>
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+CI=true
+SKIP_ASSETS=true
 ```
 
-### Railway
+**Health Check:**
+Railway monitors `/status` endpoint every 30 seconds. Server must respond within 3 seconds or it will be restarted.
 
-The `railway.server.json` in the project root configures Railway deployment.
+### Manifest Fetching at Startup
+
+In production, the server fetches manifests from the CDN instead of bundling them:
+
+```typescript
+// packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Fetched Manifests:**
+- Root: `npcs.json`, `stores.json`, `world-areas.json`, etc.
+- Items: `items/weapons.json`, `items/tools.json`, etc.
+- Gathering: `gathering/woodcutting.json`, `gathering/mining.json`, etc.
+- Recipes: `recipes/cooking.json`, `recipes/smithing.json`, etc.
+
+**Caching:**
+- Manifests cached locally in `packages/server/world/assets/manifests/`
+- Only re-fetched if content changes (HTTP ETag validation)
+- 5-minute cache headers (`Cache-Control: public, max-age=300, must-revalidate`)
+
+<Info>
+This allows updating game content (items, NPCs, recipes) without redeploying the server—just upload new manifests to R2.
+</Info>
 
 ## Key Files
 
