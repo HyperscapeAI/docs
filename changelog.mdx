@@ -23,6 +23,57 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Asset Repository Updates" description="January 2026" date="2026-01-22">
+
+### 📦 Quest System Manifest
+
+New quest manifest added to the assets repository:
+
+- **Quest Manifest** (`quests.json`) - Defines quest content with stages, requirements, and rewards
+  - Quest structure: ID, name, description, difficulty, quest points
+  - Requirements: prerequisite quests, skill levels, required items
+  - Stages: dialogue, kill, gather, and deliver objectives
+  - Rewards: quest points, items, and XP
+  - Example quest: "Goblin Slayer" - novice difficulty quest to defeat 15 goblins
+  - Supports replayable quests and branching dialogues
+
+### 🏃 Agility Skill Unlocks
+
+Expanded skill unlocks manifest with Agility progression:
+
+- **Agility Unlocks** - Stamina regeneration scales with level
+  - Level 1: +1% stamina regen per level
+  - Level 10: +10% faster stamina regeneration
+  - Level 25: +25% faster stamina regeneration
+  - Level 50: +50% faster stamina regeneration
+  - Level 75: +75% faster stamina regeneration
+  - Level 99: +99% faster stamina regeneration (mastery)
+  - Linear scaling provides consistent progression throughout leveling
+
+### 🙏 Prayer System Expansion
+
+Updated prayers manifest with additional prayer definitions:
+
+- **Prayer Manifest** (`prayers.json`) - OSRS-accurate prayer system
+  - 5 prayers currently defined: Thick Skin, Burst of Strength, Clarity of Thought, Rock Skin, Superhuman Strength
+  - Stat multipliers: attack, strength, and defense bonuses
+  - Drain mechanics: higher drainEffect = faster prayer point drain
+  - Conflict system: prayers in same category cannot be active simultaneously
+  - Categories: offensive, defensive, utility
+
+### 🗺️ Model Bounds Update
+
+Regenerated model bounds manifest with latest 3D models:
+
+- **Model Bounds** (`model-bounds.json`) - Auto-generated at build time
+  - Updated timestamp: 2026-01-22T00:16:26.843Z
+  - Covers 50+ models including weapons, tools, armor, resources, NPCs, and stations
+  - Bounding box data: min/max coordinates, dimensions (x/y/z), tile footprints
+  - Used for collision detection, placement validation, and spatial queries
+  - Includes new fishing rod models and updated rock models
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
