@@ -253,18 +253,41 @@ playerData.skills = {
   strength: { level: 1, xp: 0 },
   defense: { level: 1, xp: 0 },
   constitution: { level: 10, xp: 1154 },  // Starts at level 10
+  ranged: { level: 1, xp: 0 },
   prayer: { level: 1, xp: 0 },
   woodcutting: { level: 1, xp: 0 },
   mining: { level: 1, xp: 0 },
   fishing: { level: 1, xp: 0 },
-  mining: { level: 1, xp: 0 },
   firemaking: { level: 1, xp: 0 },
   cooking: { level: 1, xp: 0 },
   smithing: { level: 1, xp: 0 },
+  agility: { level: 1, xp: 0 },
 };
 ```
 
 <Info>
   Constitution starts at level 10 (1,154 XP) like RuneScape's Hitpoints.
   Player health equals their Constitution level.
+</Info>
+
+## Skill Guide Panel
+
+Click any skill in the Skills panel to view its Skill Guide - an OSRS-style interface showing all unlocks for that skill.
+
+**Features**:
+- Shows all level-based unlocks with requirements
+- Green checkmarks (✓) for unlocked content
+- Lock icons (🔒) for locked content
+- Highlights your next unlock with progress indicator
+- Type badges distinguish items from abilities
+- Scrollable for skills with many unlocks (Prayer has 29!)
+
+**How to Use**:
+1. Open the Skills panel (default keybind: Skills icon in sidebar)
+2. Click on any skill icon
+3. View all unlocks for that skill
+4. Close with ESC, X button, or click outside
+
+<Info>
+The Skill Guide fetches data from `/api/data/skill-unlocks` to ensure server-authoritative unlock information.
 </Info>
