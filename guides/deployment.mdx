@@ -126,23 +126,37 @@ bunx drizzle-kit migrate   # Run migrations
 
 ## CDN Setup
 
-### Option 1: Self-Hosted
+### Production CDN
 
-Use the included Docker CDN:
+In production, the server automatically fetches manifests from the CDN at startup:
+
+```typescript
+// Server fetches manifests from CDN on boot
+const CDN_URL = "https://d20g7vd4m53hpb.cloudfront.net";
+await fetchManifestsFromCDN(CDN_URL, manifestsDir);
+```
+
+<Info>
+  The server only needs manifest JSON files in production. 3D models, textures, and audio are served directly from the CDN to clients.
+</Info>
+
+### Local Development CDN
+
+Use the included Docker CDN for local development:
 
 ```bash
 bun run cdn:up
 ```
 
-Configure `PUBLIC_CDN_URL` to point to your CDN host.
+This serves assets from the local `assets/` directory cloned via Git LFS.
 
-### Option 2: Cloud Storage
+### Custom CDN Setup
 
-Upload assets to S3, R2, or similar:
+To use your own CDN:
 
-1. Build assets: `bun run assets:optimize`
-2. Upload `packages/server/world/assets/`
-3. Set `PUBLIC_CDN_URL` to bucket URL
+1. Upload assets to S3, R2, or similar
+2. Set `PUBLIC_CDN_URL` environment variable
+3. Ensure manifests are accessible at `${CDN_URL}/manifests/`
 
 ## Production Checklist
 
