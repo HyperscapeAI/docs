@@ -344,7 +344,7 @@ Drop an item on the ground.
 ```typescript
 export const dropItemAction: Action = {
   name: "DROP_ITEM",
-  description: "Drop an item from inventory",
+  description: "Drop an item from inventory onto the ground",
   parameters: {
     itemId: { type: "string", description: "Item ID to drop" },
     quantity: { type: "number", optional: true, description: "Amount to drop" },
@@ -352,7 +352,51 @@ export const dropItemAction: Action = {
 };
 ```
 
-**Usage**: Make room in inventory.
+**Usage**: Make room in inventory, drop unwanted items.
+
+**Special Features**:
+- **Drop All**: Use "drop all" to drop entire inventory
+- **Drop All Type**: Use "drop all logs" to drop all items of a specific type
+- **Smart Matching**: Uses word-boundary scoring to match correct items
+- **Safety Limits**: Max 50 items per drop-all operation
+- **Failure Protection**: Stops after 3 consecutive failures
+
+**Examples**:
+```
+"drop bronze hatchet"     → Drops Bronze Hatchet
+"drop all logs"           → Drops all log items
+"drop everything"         → Drops entire inventory (max 50 items)
+```
+
+---
+
+### `pickupItem`
+
+Pick up an item from the ground.
+
+```typescript
+export const pickupItemAction: Action = {
+  name: "PICKUP_ITEM",
+  description: "Pick up an item from the ground nearby",
+  parameters: {
+    itemName: { type: "string", description: "Name of item to pick up" },
+  },
+};
+```
+
+**Usage**: Collect loot, gather dropped items.
+
+**Features**:
+- **Smart Matching**: Word-boundary scoring prevents false matches
+- **Auto-Walk**: Automatically walks to items beyond pickup range (4m)
+- **Distance Stepping**: Handles server's 200-tile movement limit
+- **Nearest Fallback**: Picks nearest item if no name match
+
+**Scoring System**:
+```typescript\n// Prevents "bronze pickaxe" matching "bronze hatchet"\n"Bronze Pickaxe" → "pick up bronze pickaxe" = 30 points (both words match)\n"Bronze Hatchet" → "pick up bronze pickaxe" = 15 points (only "bronze" matches)\n// Agent picks the item with highest score\n```
+
+**Examples**:
+```\n"pick up bronze pickaxe"  → Walks to and picks up Bronze Pickaxe (not Hatchet)\n"grab that sword"         → Picks up nearest sword\n"loot the coins"          → Picks up Coins\n```
 
 ---
 
