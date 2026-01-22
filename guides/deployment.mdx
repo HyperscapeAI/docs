@@ -169,7 +169,59 @@ await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
 Manifests are cached locally in `packages/server/world/assets/manifests/` with 5-minute cache headers for efficient updates.
 </Info>
 
-## Vercel Client Deployment
+## Cloudflare Pages Deployment (Frontend)
+
+The frontend is deployed to Cloudflare Pages with automatic deployments from GitHub.
+
+### Production Domains
+
+- **Primary**: https://hyperscape.club
+- **Pages**: https://hyperscape.pages.dev
+- **Preview**: `<branch>.hyperscape.pages.dev` (automatic for PRs)
+
+### Build Configuration
+
+**Framework preset**: None (Vite)  
+**Build command**: `cd packages/client && bun run build`  
+**Build output directory**: `packages/client/dist`  
+**Root directory**: `/` (repository root)
+
+### Environment Variables
+
+Set in Cloudflare Pages dashboard → Settings → Environment variables:
+
+```bash
+# Required
+PUBLIC_PRIVY_APP_ID=<from-privy-dashboard>
+
+# Production API endpoints
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+
+# Optional
+PUBLIC_APP_URL=https://hyperscape.club
+```
+
+<Warning>
+`PUBLIC_PRIVY_APP_ID` must match the `PRIVY_APP_ID` set in Railway server environment.
+</Warning>
+
+### CORS Configuration
+
+The server automatically allows Cloudflare Pages domains:
+
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  /^https?:\/\/.+\.hyperscape\.pages\.dev$/,  // Preview deployments
+];
+```
+
+### Alternative: Vercel Deployment
 
 <Steps>
   <Step title="Import project">
@@ -177,13 +229,14 @@ Manifests are cached locally in `packages/server/world/assets/manifests/` with 5
   </Step>
   
   <Step title="Configure build">
-    Root directory: `packages/client`
-    Build command: `bun run build`
-    Output directory: `dist`
+    - **Root directory**: `packages/client`
+    - **Build command**: `bun run build`
+    - **Output directory**: `dist`
+    - **Install command**: `bun install`
   </Step>
   
   <Step title="Set environment variables">
-    Add `PUBLIC_*` environment variables.
+    Add all `PUBLIC_*` environment variables listed above.
   </Step>
 </Steps>
 
