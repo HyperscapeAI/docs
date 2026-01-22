@@ -190,23 +190,89 @@ Manifests are cached locally in `packages/server/world/assets/manifests/` and on
 In development, if local manifests exist, CDN fetching is skipped to allow working with local asset modifications.
 </Info>
 
-## Vercel Client Deployment
+## Cloudflare Pages Deployment (Frontend)
+
+Cloudflare Pages hosts the game client with automatic deployments via GitHub integration.
+
+### Automated Deployment
+
+Cloudflare Pages automatically deploys on every push to `main`:
+
+1. **GitHub Integration**: Cloudflare Pages watches the repository
+2. **Build Trigger**: Detects changes to `packages/client/**`
+3. **Build Process**: Runs `bun run build` in `packages/client`
+4. **Deploy**: Publishes to `hyperscape.pages.dev` and `hyperscape.club`
+
+### Manual Setup
 
 <Steps>
-  <Step title="Import project">
-    Import `packages/client` directory to Vercel.
+  <Step title="Connect repository">
+    1. Go to Cloudflare Dashboard → Pages
+    2. Create a new project
+    3. Connect to GitHub repository: `HyperscapeAI/hyperscape`
+    4. Select production branch: `main`
   </Step>
   
   <Step title="Configure build">
-    Root directory: `packages/client`
-    Build command: `bun run build`
-    Output directory: `dist`
+    - **Build command**: `cd packages/client && bun install && bun run build`
+    - **Build output directory**: `packages/client/dist`
+    - **Root directory**: `/` (monorepo root)
+    - **Node version**: 22
   </Step>
   
   <Step title="Set environment variables">
-    Add `PUBLIC_*` environment variables.
+    Add in Pages dashboard → Settings → Environment variables:
+    
+    ```bash
+    PUBLIC_PRIVY_APP_ID=<from-privy-dashboard>
+    PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+    PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    PUBLIC_APP_URL=https://hyperscape.club
+    ```
+  </Step>
+  
+  <Step title="Configure custom domain">
+    1. Add custom domain: `hyperscape.club`
+    2. Add DNS records as instructed by Cloudflare
+    3. Enable automatic HTTPS
   </Step>
 </Steps>
+
+### Preview Deployments
+
+Cloudflare Pages creates preview deployments for every pull request:
+
+- **URL Pattern**: `https://<branch>-<hash>.hyperscape.pages.dev`
+- **CORS**: Server automatically allows `*.hyperscape.pages.dev` origins
+- **Environment**: Uses production environment variables
+
+### Build Configuration
+
+The client uses Vite with environment variable injection:
+
+```typescript
+// packages/client/vite.config.ts
+export default defineConfig({
+  envPrefix: 'PUBLIC_',  // Expose PUBLIC_* vars to client
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'three': ['three'],
+          'react': ['react', 'react-dom']
+        }
+      }
+    }
+  }
+});
+```
+
+<Warning>
+After changing environment variables in Cloudflare Pages, trigger a new deployment for changes to take effect.
+</Warning>
 
 ## Database Setup
 
