@@ -47,11 +47,38 @@ packages/server/
 
 `src/index.ts` initializes:
 
-1. Database connection (PostgreSQL or SQLite)
-2. Asset CDN (Docker nginx, optional)
-3. Fastify HTTP server with plugins
-4. WebSocket handlers
-5. Game world and systems
+1. Server configuration and environment loading
+2. Manifest fetching from CDN (production) or local cache (development)
+3. Database connection (PostgreSQL via Drizzle ORM)
+4. Fastify HTTP server with CORS, rate limiting, and static file serving
+5. WebSocket handlers for real-time multiplayer
+6. Game world and ECS systems
+7. Frontend serving (if client build exists in `public/`)
+
+### Manifest Loading
+
+The server fetches game manifests from CDN at startup:
+
+```typescript
+// From src/startup/config.ts
+const MANIFEST_FILES = [
+  'biomes.json',
+  'npcs.json',
+  'items/weapons.json',
+  'recipes/smithing.json',
+  // ... 25+ manifest files
+];
+
+// Fetched from PUBLIC_CDN_URL/manifests/
+await fetchManifestsFromCDN(cdnUrl, manifestsDir, nodeEnv);
+```
+
+**Behavior:**
+- **Production/CI**: Always fetches from CDN, caches locally
+- **Development**: Skips fetch if local manifests exist
+- **Caching**: Manifests cached in `world/assets/manifests/` with 5-minute TTL
+
+This eliminates the need for Git LFS in production deployments.
 
 ## API Routes
 
