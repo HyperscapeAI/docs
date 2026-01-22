@@ -46,24 +46,115 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
+Hyperscape uses **automated Railway deployment** via GitHub Actions. The server is deployed to Railway while the client is deployed to Cloudflare Pages.
+
+### Architecture
+
+- **Frontend**: Cloudflare Pages (`hyperscape.club`, `hyperscape.pages.dev`)
+- **Backend/API**: Railway (`hyperscape-production.up.railway.app`)
+- **Assets/CDN**: Cloudflare R2 (manifests fetched at server startup)
+- **Database**: Railway PostgreSQL
+
+### Automated Deployment
+
+Deployments trigger automatically on push to `main` when these paths change:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+paths:
+  - 'packages/shared/**'
+  - 'packages/client/**'
+  - 'packages/server/**'
+  - 'packages/plugin-hyperscape/**'
+  - 'package.json'
+  - 'bun.lock'
+  - 'nixpacks.toml'
+  - 'railway.server.json'
+  - 'Dockerfile.server'
+```
+
+The workflow uses Railway's GraphQL API to trigger redeployments and monitor status.
+
+### Build Configuration
+
+Railway uses **Nixpacks** for builds (configured in `nixpacks.toml`):
+
+```toml
+[phases.setup]
+aptPkgs = ["python3", "make", "g++", "pkg-config", "libcairo2-dev", ...]
+
+[phases.install]
+cmds = ["bun install"]
+
+[phases.build]
+cmds = [
+  "bun run build:shared",
+  "bun run build:server",
+  "bun run build:client",
+  "cp -r packages/client/dist/* packages/server/public/"
+]
+
+[start]
+cmd = "cd packages/server && bun dist/index.js"
+```
+
+**Key Features**:
+- Builds shared, server, AND client packages
+- Copies client build to `packages/server/public/` for unified deployment
+- Skips asset download in CI (manifests fetched from CDN at runtime)
+- Uses Bun for fast builds and runtime
+
+### Manual Railway Setup
+
 <Steps>
   <Step title="Create Railway project">
     Connect your GitHub repository to Railway.
   </Step>
   
-  <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+  <Step title="Configure service">
+    - Builder: Nixpacks (auto-detected from `nixpacks.toml`)
+    - Root directory: `/` (monorepo root)
+    - Start command: `cd packages/server && bun dist/index.js`
   </Step>
   
   <Step title="Add PostgreSQL">
-    Add PostgreSQL service from Railway marketplace.
+    Add PostgreSQL service from Railway marketplace. Connection string is automatically set as `DATABASE_URL`.
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    Required variables:
+    ```bash
+    JWT_SECRET=your-random-secret
+    PRIVY_APP_ID=your-privy-app-id
+    PRIVY_APP_SECRET=your-privy-app-secret
+    PUBLIC_CDN_URL=https://cdn.hyperscape.club
+    NODE_ENV=production
+    ```
+  </Step>
+
+  <Step title="Configure GitHub Actions">
+    Add Railway secrets to GitHub repository:
+    - `RAILWAY_TOKEN` - API token from Railway dashboard
+    
+    Project IDs are in `.github/workflows/deploy-railway.yml`.
   </Step>
 </Steps>
+
+### Manifest Fetching
+
+The server **fetches manifests from CDN at startup** instead of bundling them:
+
+```typescript
+// From packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Behavior**:
+- **Production**: Always fetches from CDN
+- **Development**: Skips if local manifests exist (allows local asset development)
+- **Fallback**: Uses existing local manifests if CDN fetch fails
+
+This reduces deployment size and ensures manifests stay in sync with CDN assets.
 
 ## Vercel Client Deployment
 
