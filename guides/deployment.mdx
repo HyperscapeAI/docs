@@ -46,26 +46,149 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
   `PUBLIC_PRIVY_APP_ID` must match between client and server.
 </Warning>
 
-## Railway Deployment
+## Railway Deployment (Backend/API)
+
+Railway hosts the game server with automatic deployments via GitHub Actions.
+
+### Automated Deployment
+
+The repository includes a GitHub Actions workflow that automatically deploys to Railway on every push to `main`:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+name: Deploy to Railway
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/shared/**'
+      - 'packages/server/**'
+      - 'packages/client/**'
+      - 'packages/plugin-hyperscape/**'
+```
+
+**Deployment Process:**
+1. Push to `main` branch triggers workflow
+2. GitHub Actions calls Railway GraphQL API
+3. Railway rebuilds using Nixpacks configuration
+4. Server restarts with new code
+5. Manifests fetched from CDN at startup
+
+### Manual Setup
 
 <Steps>
   <Step title="Create Railway project">
-    Connect your GitHub repository to Railway.
+    1. Connect your GitHub repository to Railway
+    2. Select the `hyperscape` repository
+    3. Railway will auto-detect the Nixpacks configuration
   </Step>
   
-  <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+  <Step title="Configure build (automatic)">
+    Railway uses `nixpacks.toml` for build configuration:
+    - Builder: Nixpacks with Bun provider
+    - Build: `bun run build:shared && bun run build:server`
+    - Start: `cd packages/server && bun dist/index.js`
+    
+    No manual configuration needed - Railway reads `nixpacks.toml` automatically.
   </Step>
   
   <Step title="Add PostgreSQL">
-    Add PostgreSQL service from Railway marketplace.
+    Add PostgreSQL service from Railway marketplace or use external database (Neon).
+    
+    Railway will automatically set `DATABASE_URL` environment variable.
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    Required variables:
+    ```bash
+    NODE_ENV=production
+    JWT_SECRET=<generate-with-openssl-rand-base64-32>
+    PRIVY_APP_ID=<from-privy-dashboard>
+    PRIVY_APP_SECRET=<from-privy-dashboard>
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    ```
+    
+    Optional variables:
+    ```bash
+    ADMIN_CODE=<your-admin-code>
+    SAVE_INTERVAL=60
+    ```
+  </Step>
+  
+  <Step title="Configure GitHub Actions">
+    Add Railway secrets to GitHub repository:
+    
+    1. Go to Settings → Secrets and variables → Actions
+    2. Add `RAILWAY_TOKEN` (from Railway dashboard → Account → Tokens)
+    3. Update workflow with your project/service/environment IDs
+    
+    Find IDs in Railway dashboard URL or via Railway CLI.
   </Step>
 </Steps>
+
+### Railway Configuration Files
+
+**nixpacks.toml** - Build configuration:
+```toml
+[phases.setup]
+aptPkgs = ["python3", "make", "g++", "pkg-config", "libcairo2-dev"]
+
+[phases.install]
+cmds = ["bun install"]
+
+[phases.build]
+cmds = [
+  "bun run build:shared",
+  "bun run build:server",
+  "mkdir -p packages/server/world/assets/manifests"
+]
+
+[start]
+cmd = "cd packages/server && bun dist/index.js"
+
+[variables]
+CI = "true"
+SKIP_ASSETS = "true"
+NODE_ENV = "production"
+```
+
+**railway.server.json** - Service configuration:
+```json
+{
+  "build": {
+    "builder": "NIXPACKS",
+    "nixpacksConfigPath": "nixpacks.toml"
+  },
+  "deploy": {
+    "startCommand": "cd packages/server && bun dist/index.js",
+    "healthcheckPath": "/status",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "numReplicas": 1
+  }
+}
+```
+
+### Manifest Fetching
+
+In production, the server fetches manifests from the CDN at startup instead of bundling them:
+
+```typescript
+// packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Manifest Files Fetched:**
+- Root manifests: `npcs.json`, `stores.json`, `world-areas.json`, etc.
+- Items directory: `items/weapons.json`, `items/tools.json`, etc.
+- Gathering: `gathering/woodcutting.json`, `gathering/mining.json`, etc.
+- Recipes: `recipes/cooking.json`, `recipes/smithing.json`, etc.
+
+Manifests are cached locally in `packages/server/world/assets/manifests/` and only re-fetched if content changes (ETag validation).
+
+<Info>
+In development, if local manifests exist, CDN fetching is skipped to allow working with local asset modifications.
+</Info>
 
 ## Vercel Client Deployment
 
