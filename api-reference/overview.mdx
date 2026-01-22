@@ -79,6 +79,93 @@ curl https://api.hyperscape.lol/health
   List all world areas
 </ParamField>
 
+### Game Data
+
+<ParamField path="GET /api/data/skill-unlocks" type="endpoint">
+  Get skill unlock definitions for all skills
+</ParamField>
+
+**New in v1.0:** Server-authoritative skill unlock data for the Skill Guide Panel.
+
+```bash
+curl https://api.hyperscape.lol/api/data/skill-unlocks
+```
+
+<Accordion title="Response">
+```json
+{
+  "attack": [
+    {
+      "level": 1,
+      "description": "Bronze weapons, Iron weapons",
+      "type": "item"
+    },
+    {
+      "level": 5,
+      "description": "Steel weapons",
+      "type": "item"
+    },
+    {
+      "level": 40,
+      "description": "Rune weapons",
+      "type": "item"
+    },
+    {
+      "level": 60,
+      "description": "Dragon weapons",
+      "type": "item"
+    }
+  ],
+  "woodcutting": [
+    {
+      "level": 1,
+      "description": "Normal trees",
+      "type": "item"
+    },
+    {
+      "level": 15,
+      "description": "Oak trees",
+      "type": "item"
+    }
+  ],
+  "prayer": [
+    {
+      "level": 1,
+      "description": "Thick Skin (+5% Defense)",
+      "type": "ability"
+    },
+    {
+      "level": 4,
+      "description": "Burst of Strength (+5% Strength)",
+      "type": "ability"
+    }
+  ]
+}
+```
+</Accordion>
+
+**Response Fields:**
+- `level` (number) - Required skill level
+- `description` (string) - What is unlocked
+- `type` (string) - Unlock category: `item`, `ability`, `area`, `quest`, or `activity`
+
+**Usage:**
+- Fetched by Skills Panel on mount
+- Cached in client state
+- Used by Skill Guide Panel to display unlocks
+- No authentication required (public data)
+
+**Implementation:**
+```typescript
+// packages/server/src/startup/routes/data-routes.ts
+import { getAllSkillUnlocks } from "@hyperscape/shared";
+
+fastify.get("/api/data/skill-unlocks", async (_req, reply) => {
+  const unlocks = getAllSkillUnlocks();
+  return reply.send(unlocks);
+});
+```
+
 ## WebSocket Events
 
 Connect to the game server via WebSocket for real-time updates:
