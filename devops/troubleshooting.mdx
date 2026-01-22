@@ -152,14 +152,56 @@ npm test
 
 **Causes**:
 - Server not running
-- Wrong port configuration
-- Firewall blocking
+- Wrong `PUBLIC_WS_URL` configuration
+- CORS blocking connection
+- Firewall blocking WebSocket port
 
-**Solution**:
+**Solutions**:
 
-1. Verify server is running: `lsof -i:5555`
-2. Check client config: `PUBLIC_WS_URL`
-3. Ensure no firewall blocks
+**Development:**
+```bash
+# Verify server is running
+lsof -i:5555
+
+# Check client config
+cat packages/client/.env | grep PUBLIC_WS_URL
+# Should be: ws://localhost:5555/ws
+
+# Restart server
+bun run dev
+```
+
+**Production:**
+```bash
+# Verify Railway server is running
+curl https://hyperscape-production.up.railway.app/status
+
+# Check client config in Cloudflare Pages
+# PUBLIC_WS_URL should be: wss://hyperscape-production.up.railway.app/ws
+
+# Verify CORS allows your domain
+# Server logs will show CORS configuration at startup
+```
+
+**CORS Issues:**
+
+If you see CORS errors in browser console, verify your domain is in the allowlist:
+
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  /^https?:\/\/localhost:\d+$/,
+  /^https?:\/\/.+\.hyperscape\.pages\.dev$/,
+];
+```
+
+For custom domains, add to environment variables:
+```bash
+PUBLIC_APP_URL=https://your-custom-domain.com
+```
 
 ### Hot Reload Not Working
 
