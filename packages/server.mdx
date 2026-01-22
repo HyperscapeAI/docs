@@ -53,11 +53,52 @@ packages/server/
 
 ## API Routes
 
+### Core Routes
+
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/health` | GET | Health check |
-| `/auth` | POST | Authentication |
+| `/status` | GET | Health check and server status |
+| `/health` | GET | Health check (legacy) |
 | `/ws` | WS | Game WebSocket connection |
+| `/` | GET | Serve frontend (index.html) |
+
+### Data Routes
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/data/skill-unlocks` | GET | Get skill unlock definitions |
+
+### Player Routes
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/player` | GET | Get player data |
+| `/api/player` | POST | Create/update player |
+
+### Character Routes
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/characters` | GET | List characters |
+| `/api/characters` | POST | Create character |
+| `/api/characters/:id` | GET | Get character details |
+
+### Agent Routes (ElizaOS)
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/agents` | GET | List active agents |
+| `/api/agents/:id` | GET | Get agent details |
+
+### Debug Routes
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/debug/public` | GET | List public directory contents |
+
+<Info>
+All API routes support CORS for Cloudflare Pages, Railway, and localhost origins. See [CORS Configuration](/devops/configuration#cors-configuration) for details.
+</Info>
 
 ## Database
 
