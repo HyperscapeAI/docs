@@ -43,14 +43,23 @@ PRIVY_APP_SECRET=your-privy-app-secret
 ```bash
 # Server
 PORT=5555
+NODE_ENV=production
 
-# Assets
+# Assets & CDN
 PUBLIC_CDN_URL=http://localhost:8080
+SKIP_ASSETS=true  # Skip asset download in CI/production (assets served from CDN)
+CI=true  # Indicates CI environment (skips asset download)
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
+
+# Admin
+ADMIN_CODE=your-admin-code
+
+# Deployment
+COMMIT_HASH=git-commit-sha  # For deployment tracking
 ```
 
 ## Client Environment
