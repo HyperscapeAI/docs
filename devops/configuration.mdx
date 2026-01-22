@@ -86,16 +86,46 @@ PUBLIC_PRIVY_APP_ID=your-privy-app-id
 ```
 
 <Warning>
-  `PUBLIC_PRIVY_APP_ID` must match between client and server.
+  `PUBLIC_PRIVY_APP_ID` must match `PRIVY_APP_ID` on the server.
 </Warning>
 
-### Production
+### Production (Cloudflare Pages)
 
 ```bash
-PUBLIC_API_URL=https://api.hyperscape.lol
-PUBLIC_WS_URL=wss://api.hyperscape.lol
-PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+# Authentication (must match server)
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
+
+# Server connection (Railway backend)
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+
+# Assets (Cloudflare R2)
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+
+# App URL (for Farcaster frames)
+PUBLIC_APP_URL=https://hyperscape.club
 ```
+
+### Development
+
+```bash
+# Authentication (optional for local dev)
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
+
+# Local server connection (defaults)
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5555/ws
+
+# Local CDN (Docker)
+PUBLIC_CDN_URL=http://localhost:8080
+
+# Local app URL
+PUBLIC_APP_URL=http://localhost:3333
+```
+
+<Info>
+In development, if `PUBLIC_PRIVY_APP_ID` is not set, the game runs in anonymous mode where users get a new identity on every page refresh.
+</Info>
 
 ## AI Agent Environment
 
