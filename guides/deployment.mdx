@@ -138,7 +138,21 @@ bunx drizzle-kit migrate   # Run migrations
 
 ## CDN Setup
 
-### Option 1: Self-Hosted
+### Option 1: Cloudflare R2 (Recommended for Production)
+
+Cloudflare R2 provides S3-compatible object storage with zero egress fees.
+
+1. Create R2 bucket at [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Upload assets to bucket (models, textures, manifests)
+3. Configure public access or custom domain
+4. Set `PUBLIC_CDN_URL` to your R2 bucket URL
+
+**Manifest Fetching**:
+- Server automatically fetches manifests from `PUBLIC_CDN_URL` at startup
+- Manifests are cached in `packages/server/world/assets/manifests/`
+- In development, local manifests are used if they exist (skips CDN fetch)
+
+### Option 2: Self-Hosted (Development)
 
 Use the included Docker CDN:
 
@@ -146,15 +160,19 @@ Use the included Docker CDN:
 bun run cdn:up
 ```
 
-Configure `PUBLIC_CDN_URL` to point to your CDN host.
+Configure `PUBLIC_CDN_URL=http://localhost:8080`
 
-### Option 2: Cloud Storage
+### Option 3: Other Cloud Storage
 
-Upload assets to S3, R2, or similar:
+Upload assets to S3, Google Cloud Storage, or similar:
 
 1. Build assets: `bun run assets:optimize`
 2. Upload `packages/server/world/assets/`
 3. Set `PUBLIC_CDN_URL` to bucket URL
+
+<Info>
+**Production Requirement**: In production (CI=true), the server expects manifests to be available at `PUBLIC_CDN_URL`. The `ensure-assets.mjs` script skips local asset downloads in CI environments.
+</Info>
 
 ## Production Checklist
 
