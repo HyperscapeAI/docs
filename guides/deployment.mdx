@@ -109,7 +109,53 @@ Railway deployment is automated via GitHub Actions and uses Nixpacks for buildin
 Railway deployment automatically triggers on pushes to `main` that affect server-related files. The workflow uses Railway's GraphQL API to trigger redeployments.
 </Info>
 
-## Vercel Client Deployment
+## Cloudflare Pages Deployment (Recommended)
+
+Cloudflare Pages provides global CDN distribution and automatic preview deployments.
+
+<Steps>
+  <Step title="Connect repository">
+    1. Go to Cloudflare Pages dashboard
+    2. Create a new project from your GitHub repository
+    3. Select the `packages/client` directory as the root
+  </Step>
+  
+  <Step title="Configure build">
+    ```
+    Build command: bun run build
+    Build output directory: dist
+    Root directory: packages/client
+    ```
+  </Step>
+  
+  <Step title="Set environment variables">
+    Add these in Cloudflare Pages → Settings → Environment variables:
+    ```bash
+    PUBLIC_PRIVY_APP_ID=your-privy-app-id
+    PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+    PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+    PUBLIC_CDN_URL=https://your-r2-cdn-url
+    ```
+  </Step>
+  
+  <Step title="Configure CORS on server">
+    Add your Cloudflare Pages domain to the server's CORS allowlist:
+    ```typescript
+    // In packages/server/src/startup/http-server.ts
+    const allowedOrigins = [
+      'https://hyperscape.pages.dev',
+      'https://*.hyperscape.pages.dev',  // Preview deployments
+      // ... your custom domain
+    ];
+    ```
+  </Step>
+</Steps>
+
+<Info>
+Cloudflare Pages automatically creates preview deployments for pull requests at `*.hyperscape.pages.dev` subdomains. The CORS configuration supports wildcard subdomains for preview deployments.
+</Info>
+
+## Vercel Client Deployment (Alternative)
 
 <Steps>
   <Step title="Import project">
