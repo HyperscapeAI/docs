@@ -193,7 +193,80 @@ git push
 - Check CORS allowlist includes your frontend domain
 - Ensure Railway exposes WebSocket port (default: 5555)
 
-## Vercel Client Deployment
+## Cloudflare Pages Deployment (Frontend)
+
+Cloudflare Pages hosts the game client with automatic deployments from GitHub.
+
+### Automatic Deployment
+
+Cloudflare Pages is connected directly to the GitHub repository:
+
+1. **Push to `main`** → Automatic production deployment
+2. **Open PR** → Automatic preview deployment at `*.hyperscape.pages.dev`
+3. **Merge PR** → Preview becomes production
+
+**No manual deployment needed** - Cloudflare handles everything via GitHub integration.
+
+### Manual Cloudflare Pages Setup
+
+<Steps>
+  <Step title="Create Cloudflare Pages project">
+    1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com) → Pages
+    2. Click "Create a project" → "Connect to Git"
+    3. Select `HyperscapeAI/hyperscape` repository
+  </Step>
+  
+  <Step title="Configure build settings">
+    - **Framework preset**: None (custom Vite build)
+    - **Build command**: `cd packages/client && bun install && bun run build`
+    - **Build output directory**: `packages/client/dist`
+    - **Root directory**: `/` (monorepo root)
+    - **Node version**: 22
+  </Step>
+  
+  <Step title="Set environment variables">
+    In Pages dashboard → Settings → Environment variables:
+    
+    **Production:**
+    ```bash
+    PUBLIC_PRIVY_APP_ID=your-app-id
+    PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+    PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    PUBLIC_APP_URL=https://hyperscape.club
+    ```
+    
+    **Preview (optional):**
+    Same as production, or use preview-specific values for testing.
+  </Step>
+  
+  <Step title="Configure custom domain">
+    1. Pages → Custom domains → Add domain
+    2. Add `hyperscape.club` and `www.hyperscape.club`
+    3. Update DNS records as instructed
+    4. SSL certificates are provisioned automatically
+  </Step>
+</Steps>
+
+### CORS Configuration
+
+The server automatically allows Cloudflare Pages domains:
+
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  /^https?:\\/\\/.+\\.hyperscape\\.pages\\.dev$/,  // Preview deployments
+];
+```
+
+Preview deployments (e.g., `abc123.hyperscape.pages.dev`) are automatically allowed via regex pattern.
+
+### Alternative: Vercel Deployment
+
+If you prefer Vercel over Cloudflare Pages:
 
 <Steps>
   <Step title="Import project">
@@ -201,13 +274,14 @@ git push
   </Step>
   
   <Step title="Configure build">
-    Root directory: `packages/client`
-    Build command: `bun run build`
-    Output directory: `dist`
+    - **Root directory**: `packages/client`
+    - **Build command**: `bun run build`
+    - **Output directory**: `dist`
+    - **Install command**: `bun install`
   </Step>
   
   <Step title="Set environment variables">
-    Add `PUBLIC_*` environment variables.
+    Add all `PUBLIC_*` environment variables from `.env.example`.
   </Step>
 </Steps>
 
