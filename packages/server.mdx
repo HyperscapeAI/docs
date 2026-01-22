@@ -53,11 +53,52 @@ packages/server/
 
 ## API Routes
 
+### Core Endpoints
+
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/health` | GET | Health check |
-| `/auth` | POST | Authentication |
+| `/status` | GET | Health check (used by Railway) |
+| `/health` | GET | Legacy health check |
 | `/ws` | WS | Game WebSocket connection |
+| `/debug/public` | GET | Debug endpoint showing public directory contents |
+
+### Data Endpoints
+
+**New in v1.0:** Server-authoritative game data endpoints.
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/data/skill-unlocks` | GET | Get skill unlock definitions for all skills |
+
+**Example:**
+```bash
+curl https://hyperscape-production.up.railway.app/api/data/skill-unlocks
+```
+
+Returns skill progression data used by the Skill Guide Panel UI.
+
+### Player Endpoints
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/player` | GET | Get current player data |
+| `/api/player` | POST | Create or update player |
+| `/api/character` | POST | Create new character |
+| `/api/character/:id` | GET | Get character by ID |
+
+### Admin Endpoints
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/admin/users` | GET | List all users (requires admin) |
+| `/api/admin/ban` | POST | Ban user (requires admin) |
+
+### Upload Endpoints
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/upload/avatar` | POST | Upload VRM avatar |
+| `/api/upload/model` | POST | Upload GLB model |
 
 ## Database
 
