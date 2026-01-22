@@ -60,24 +60,54 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
+Railway deployment is automated via GitHub Actions and uses Nixpacks for building.
+
 <Steps>
   <Step title="Create Railway project">
-    Connect your GitHub repository to Railway.
+    1. Connect your GitHub repository to Railway
+    2. Create a new service from the repository
+    3. Railway will auto-detect the `railway.server.json` configuration
   </Step>
   
   <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+    Railway uses `nixpacks.toml` for build configuration:
+    - Builds only `shared` and `server` packages (frontend is on Cloudflare Pages)
+    - Fetches manifests from CDN instead of cloning assets repo
+    - Start command: `cd packages/server && bun dist/index.js`
   </Step>
   
   <Step title="Add PostgreSQL">
-    Add PostgreSQL service from Railway marketplace.
+    Add PostgreSQL service from Railway marketplace and link to your service.
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    Required variables:
+    ```bash
+    DATABASE_URL=${{Postgres.DATABASE_URL}}  # Auto-linked
+    JWT_SECRET=your-random-secret
+    PRIVY_APP_ID=your-privy-app-id
+    PRIVY_APP_SECRET=your-privy-app-secret
+    PUBLIC_CDN_URL=https://your-cdn-url
+    NODE_ENV=production
+    ```
+  </Step>
+  
+  <Step title="Configure GitHub Actions (optional)">
+    The repository includes `.github/workflows/deploy-railway.yml` for automated deployments.
+    
+    Add these secrets to your GitHub repository:
+    - `RAILWAY_TOKEN` - Railway API token
+    
+    Set these environment IDs in the workflow file:
+    - `RAILWAY_PROJECT_ID`
+    - `RAILWAY_SERVICE_ID`
+    - `RAILWAY_ENVIRONMENT_ID`
   </Step>
 </Steps>
+
+<Info>
+Railway deployment automatically triggers on pushes to `main` that affect server-related files. The workflow uses Railway's GraphQL API to trigger redeployments.
+</Info>
 
 ## Vercel Client Deployment
 
