@@ -187,6 +187,37 @@ Game content is defined in JSON manifest files. In production, manifests are fet
 
 Add new content by editing these JSON files—no code changes required.
 
+### Manifest Loading System
+
+**Development:**
+- Manifests loaded from local `packages/server/world/assets/manifests/`
+- If directory is empty, server fetches from `PUBLIC_CDN_URL`
+- Assets cloned via Git LFS during `bun install` (see `scripts/ensure-assets.mjs`)
+
+**Production/CI:**
+- Manifests fetched from CDN at server startup
+- Cached locally with 5-minute revalidation headers
+- Asset download skipped (CI=true, SKIP_ASSETS=true)
+- All assets served directly from Cloudflare R2
+
+**Fetch behavior** (`packages/server/src/startup/config.ts`):
+```typescript
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Fetched files:**
+```typescript
+const MANIFEST_FILES = [
+  "items.json", "npcs.json", "resources.json", "tools.json",
+  "biomes.json", "world-areas.json", "stores.json",
+  "music.json", "vegetation.json", "buildings.json"
+];
+```
+
+<Info>
+The server compares fetched manifests with local cache and only writes if content changed, minimizing disk I/O.
+</Info>
+
 ## Build Pipeline
 
 ### Automated Model Bounds Extraction
