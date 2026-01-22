@@ -23,6 +23,121 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Agility Skill & Agent Dashboard" description="January 2026" date="2026-01-22">
+
+### 🏃 Agility Skill System
+
+New skill that trains through movement and affects stamina mechanics:
+
+- **Movement XP**: 1 XP per 2 tiles traveled (batched at 100 tiles = 50 XP)
+  - Running: ~200 XP/minute
+  - Walking: ~100 XP/minute
+  - XP drops every ~15 seconds (running) or ~30 seconds (walking)
+- **Weight-Based Stamina Drain**: Carrying heavy items increases stamina drain
+  - Formula: `Drain Rate = Base × (1 + Weight × 0.005)`
+  - 50kg load = +25% drain (2.5 stamina/second vs 2.0 base)
+  - Weight calculated server-side and synced to client
+- **Agility-Based Stamina Regen**: Higher agility = faster stamina recovery
+  - Formula: `Regen Rate = Base × (1 + Agility Level × 0.01)`
+  - Level 99 = +99% regen (nearly double base rate)
+  - Affects both idle (4/sec) and walking (2/sec) regen
+- **Death Penalty**: Accumulated tiles toward next XP grant are lost (max 50 XP)
+- **Database**: New `agilityLevel` and `agilityXp` columns with migration
+- **Testing**: 868 lines of unit and integration tests
+
+### 🎯 Skill Guide Panel
+
+OSRS-style skill guide showing unlocks at each level:
+
+- **Click-to-View**: Click any skill in Skills Panel to open its guide
+- **Unlock Display**: Shows all unlocks with level requirements
+- **Visual States**: Green checkmark (unlocked), lock icon (locked), gold arrow (next unlock)
+- **Progress Tracking**: "X of Y unlocks achieved" counter
+- **Scrollable**: Handles skills with many unlocks (Prayer has 29!)
+- **Type Indicators**: Item vs ability badges
+- **Server Endpoint**: `/api/data/skill-unlocks` serves manifest data
+- **Loading State**: Spinner during data fetch
+- **Animations**: Fade-in/slide-up with custom scrollbar styling
+
+### 🤖 Agent Dashboard Improvements
+
+Major enhancements to AI agent monitoring and control:
+
+**ElizaOS 1.7 Upgrade**:
+- Updated to ElizaOS 1.7.0 with backwards-compatible shims
+- `max_tokens` → `maxTokens` (with fallback)
+- Added `@elizaos/plugin-ollama` for local LLM support
+- Updated dependencies: `@elizaos/core`, `@elizaos/plugin-sql`, `@elizaos/server`
+
+**Stop/Resume Goal Control**:
+- **Stop Button**: Immediately halts agent and cancels movement
+- **Paused State**: Shows "Goals Paused" with Resume Auto button
+- **Blocks Auto-Goals**: `SET_GOAL` actions blocked while paused
+- **Chat Commands Work**: User can send manual commands while paused
+- **Pause Persists**: State synced across reconnections
+- **Movement Cancel**: Properly clears server-side path (fixes walking-in-place bug)
+
+**Quick Action Menu**:
+- One-click commands: Woodcutting, Mining, Fishing, Combat, Pick Up, Bank, Stop, Idle
+- Nearby locations with distances
+- Available goals
+- Inventory actions (equip, use, drop)
+- Collapsible sections with expand/collapse
+
+**New Dashboard Panels**:
+- **Agent Summary Card**: Online status, uptime, combat/total level, current goal
+- **Activity Panel**: Recent actions feed, session stats (kills, deaths, gold, resources)
+- **Enhanced Position Panel**: Zone names, nearby POIs with distances
+- **Enhanced Skills Panel**: Session XP gains tracking, improved layout
+
+**Rate Limiting Fixes**:
+- Increased polling intervals: 2s → 10s (most panels)
+- Retry logic with exponential backoff (1s → 2s → 4s)
+- Prevents 429 (Too Many Requests) errors
+
+**Item Pickup Improvements**:
+- **Word Boundary Matching**: Prevents "bronze pickaxe" matching "bronze hatchet"
+- **Scoring System**: Counts matching words for better accuracy
+- **Drop All Support**: "drop all logs", "drop everything" commands
+- **Safety Limits**: Max 50 items per drop-all, stops after 3 consecutive failures
+
+**Bug Fixes**:
+- Fixed dashboard settings tabs (tabs now switch correctly)
+- Fixed dashboard chat routing (messages reach agent, in-game chat opens)
+- Fixed CHOP_TREE to position on cardinal adjacent tiles
+- Fixed NAVIGATE_TO to handle 200-tile server limit with stepping
+- Fixed multi-step commands (grace period prevents goal clearing mid-walk)
+- Consolidated duplicate `getItemIcon()` functions into shared utility
+
+### 🚀 Railway Deployment
+
+Production deployment infrastructure with automated CI/CD:
+
+- **Nixpacks Configuration**: `nixpacks.toml` for Railway builds
+  - Installs system dependencies (Python, Cairo, Pango for native modules)
+  - Builds only shared and server packages (frontend on Cloudflare Pages)
+  - Creates manifests directory
+  - Skips asset download in CI (served from CDN)
+- **GitHub Actions**: Automated deployment on push to main
+  - Triggers Railway deployment via GraphQL API
+  - Monitors deployment status
+  - Configured for specific file paths
+- **CDN Manifest Fetching**: Server fetches manifests from CDN at startup
+  - Reduces deployment size
+  - Allows manifest updates without redeployment
+  - Skipped in development if local manifests exist
+- **CORS Configuration**: Automatic allowlist for production domains
+  - `https://hyperscape.club` (production)
+  - `https://www.hyperscape.club` (www subdomain)
+  - `https://*.hyperscape.pages.dev` (Cloudflare preview deployments)
+  - `http://localhost:*` (local development, any port)
+- **Architecture**: Split deployment model
+  - Frontend: Cloudflare Pages
+  - Server/API: Railway
+  - Assets/CDN: Cloudflare R2
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
