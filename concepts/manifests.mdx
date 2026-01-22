@@ -513,43 +513,81 @@ await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
 
 ## Adding Content
 
-### Step 1: Choose the Right Manifest
+### Development Workflow
 
-Determine which manifest file to edit based on content type:
+<Steps>
+  <Step title="Choose the right manifest">
+    Determine which manifest file to edit based on content type:
+    
+    - **Items**: `manifests/items/weapons.json`, `tools.json`, `resources.json`, `food.json`, or `misc.json`
+    - **NPCs/Mobs**: `manifests/npcs.json`
+    - **Gathering Resources**: `manifests/gathering/woodcutting.json`, `mining.json`, or `fishing.json`
+    - **Processing Recipes**: `manifests/recipes/cooking.json`, `firemaking.json`, `smelting.json`, or `smithing.json`
+    - **Stations**: `manifests/stations.json`
+    - **World Areas**: `manifests/world-areas.json`
+  </Step>
+  
+  <Step title="Edit manifest locally">
+    Add your content following the existing structure. Use tier-based requirements for equipment:
+    
+    ```json
+    {
+      "id": "mithril_sword",
+      "name": "Mithril Sword",
+      "type": "weapon",
+      "tier": "mithril",  // Automatically gets attack: 20 requirement
+      "weaponType": "SWORD",
+      "attackSpeed": 4
+    }
+    ```
+  </Step>
+  
+  <Step title="Test locally">
+    Restart the server to reload manifests:
+    
+    ```bash
+    bun run dev
+    ```
+    
+    Verify the content appears correctly in-game.
+  </Step>
+  
+  <Step title="Deploy to staging">
+    1. Commit changes to a feature branch
+    2. Create PR and merge to `staging` branch
+    3. GitHub Actions uploads manifests to R2 staging bucket
+    4. Railway redeploys staging server
+    5. Server fetches updated manifests from staging CDN
+  </Step>
+  
+  <Step title="Deploy to production">
+    After testing in staging:
+    
+    1. Merge `staging` → `main`
+    2. GitHub Actions uploads to production R2 bucket
+    3. Railway redeploys production server
+    4. Server fetches updated manifests from production CDN
+  </Step>
+</Steps>
 
-- **Items**: `manifests/items/weapons.json`, `tools.json`, `resources.json`, `food.json`, or `misc.json`
-- **NPCs/Mobs**: `manifests/npcs.json`
-- **Gathering Resources**: `manifests/gathering/woodcutting.json`, `mining.json`, or `fishing.json`
-- **Processing Recipes**: `manifests/recipes/cooking.json`, `firemaking.json`, `smelting.json`, or `smithing.json`
-- **Stations**: `manifests/stations.json`
-- **World Areas**: `manifests/world-areas.json`
+### Production Manifest Updates
 
-### Step 2: Edit Manifest
+You can update manifests in production without redeploying the server:
 
-Add your content following the existing structure. Use tier-based requirements for equipment:
+1. Upload new manifest to R2:
+   ```bash
+   wrangler r2 object put "hyperscape-assets/manifests/npcs.json" \
+     --file="packages/server/world/assets/manifests/npcs.json" \
+     --content-type="application/json"
+   ```
 
-```json
-{
-  "id": "mithril_sword",
-  "name": "Mithril Sword",
-  "type": "weapon",
-  "tier": "mithril",  // Automatically gets attack: 20 requirement
-  "weaponType": "SWORD",
-  "attackSpeed": 4
-}
-```
+2. Restart the server (Railway dashboard or API)
 
-### Step 3: Restart Server
+3. Server fetches latest manifests from R2 on startup
 
-Manifests are loaded at server startup. Restart to apply changes:
-
-```bash
-bun run dev
-```
-
-### Step 4: Verify
-
-Check the game to ensure content appears correctly. Use the Skills panel to verify level requirements.
+<Warning>
+  Always test manifest changes in staging before uploading to production R2.
+</Warning>
 
 ## Validation
 
