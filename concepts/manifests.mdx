@@ -377,9 +377,58 @@ Station types include:
 - **Range** — Cook food with reduced burn chance
 - **Bank** — Store items
 
+## Manifest Fetching System
+
+The server fetches manifests from the CDN at startup to ensure content is always up-to-date:
+
+```typescript
+// packages/server/src/startup/config.ts
+const MANIFEST_FILES = [
+  // Root-level manifests
+  "biomes.json",
+  "buildings.json",
+  "model-bounds.json",
+  "music.json",
+  "npcs.json",
+  "prayers.json",
+  "skill-unlocks.json",
+  "stations.json",
+  "stores.json",
+  "tier-requirements.json",
+  "tools.json",
+  "vegetation.json",
+  "world-areas.json",
+  // Items directory
+  "items/food.json",
+  "items/misc.json",
+  "items/resources.json",
+  "items/tools.json",
+  "items/weapons.json",
+  // Gathering directory
+  "gathering/fishing.json",
+  "gathering/mining.json",
+  "gathering/woodcutting.json",
+  // Recipes directory
+  "recipes/cooking.json",
+  "recipes/firemaking.json",
+  "recipes/smelting.json",
+  "recipes/smithing.json",
+];
+
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Fetch Behavior:**
+- **Production**: Always fetch from CDN, cache locally
+- **Development**: Skip if local manifests exist (allows local modifications)
+- **CI/Test**: Skip if `SKIP_MANIFESTS=true` or `NODE_ENV=test`
+
+**Cache Headers:**
+Manifests use `Cache-Control: public, max-age=300, must-revalidate` (5 minute cache) to balance freshness with performance.
+
 ## DataManager
 
-Smithing, cooking, and other processing skills use recipe manifests:
+The `DataManager` class loads all manifests and populates runtime data structures. Smithing, cooking, and other processing skills use recipe manifests:
 
 **Smelting Recipe** (`recipes/smelting.json`):
 ```json
