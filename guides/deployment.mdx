@@ -46,24 +46,169 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
+Hyperscape uses Railway for production server deployment with automated GitHub Actions integration.
+
+### Architecture
+
+**Production Deployment Model:**
+- **Frontend**: Cloudflare Pages (hyperscape.club, www.hyperscape.club)
+- **Server/API**: Railway (hyperscape-production.up.railway.app)
+- **Assets/CDN**: Cloudflare R2
+- **Database**: Railway PostgreSQL
+
+### Automated Deployment
+
+The repository includes a GitHub Actions workflow that automatically deploys to Railway on every push to `main`:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+name: Deploy to Railway
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/shared/**'
+      - 'packages/client/**'
+      - 'packages/server/**'
+      - 'packages/plugin-hyperscape/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'nixpacks.toml'
+      - 'railway.server.json'
+      - 'Dockerfile.server'
+```
+
+**Deployment triggers only when relevant files change** to avoid unnecessary builds.
+
+### Build Configuration
+
+Railway uses **Nixpacks** for building the server. Configuration is in `nixpacks.toml`:
+
+```toml
+[phases.setup]
+# Install system dependencies for native modules
+aptPkgs = [
+  "python3", "make", "g++", "pkg-config",
+  "libcairo2-dev", "libpango1.0-dev", "libjpeg-dev",
+  "libgif-dev", "librsvg2-dev", "ca-certificates"
+]
+
+[phases.install]
+cmds = ["bun install"]
+
+[phases.build]
+cmds = [
+  "bun run build:shared",
+  "bun run build:server",
+  "mkdir -p packages/server/world/assets/manifests"
+]
+
+[start]
+cmd = "cd packages/server && bun dist/index.js"
+
+[variables]
+CI = "true"
+SKIP_ASSETS = "true"  # Assets served from CDN
+NODE_ENV = "production"
+```
+
+<Info>
+The build skips asset download (`SKIP_ASSETS=true`) because assets are served from Cloudflare R2 CDN. Manifests are fetched from the CDN at server startup.
+</Info>
+
+### Manual Setup
+
 <Steps>
   <Step title="Create Railway project">
-    Connect your GitHub repository to Railway.
+    1. Connect your GitHub repository to Railway
+    2. Select the `main` branch
+    3. Railway will detect `railway.server.json` automatically
   </Step>
   
   <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+    Railway automatically uses the configuration from `railway.server.json`:
+    - Builder: `NIXPACKS`
+    - Config: `nixpacks.toml`
+    - Start command: `cd packages/server && bun dist/index.js`
+    - Health check: `/status` endpoint
   </Step>
   
   <Step title="Add PostgreSQL">
-    Add PostgreSQL service from Railway marketplace.
+    Add PostgreSQL service from Railway marketplace. Railway will automatically set `DATABASE_URL` environment variable.
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    Configure required environment variables in Railway dashboard:
+    
+    ```bash
+    # Required
+    PRIVY_APP_ID=your-privy-app-id
+    PRIVY_APP_SECRET=your-privy-app-secret
+    JWT_SECRET=your-jwt-secret
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    
+    # Optional
+    ADMIN_CODE=your-admin-code
+    LIVEKIT_API_KEY=your-livekit-key
+    LIVEKIT_API_SECRET=your-livekit-secret
+    ```
+  </Step>
+  
+  <Step title="Configure GitHub Actions (optional)">
+    For automated deployments, add Railway token to GitHub secrets:
+    
+    1. Generate Railway API token in Railway dashboard
+    2. Add `RAILWAY_TOKEN` to GitHub repository secrets
+    3. Update project/service/environment IDs in `.github/workflows/deploy-railway.yml`
   </Step>
 </Steps>
+
+### Deployment Verification
+
+After deployment, verify the server is running:
+
+```bash
+# Check health endpoint
+curl https://hyperscape-production.up.railway.app/status
+
+# Check manifest availability
+curl https://hyperscape-production.up.railway.app/manifests/items.json
+
+# Test WebSocket connection
+wscat -c wss://hyperscape-production.up.railway.app/ws
+```
+
+### Frontend Build Integration
+
+The Railway build includes the frontend client:
+
+1. Client is built during the build phase: `bun run build:client`
+2. Client `dist/` is copied to `packages/server/public/`
+3. Server serves the frontend at `/` with SPA routing
+4. Frontend assets are served from `/assets/` (built client assets)
+5. Game assets are served from CDN (models, audio, textures)
+
+<Warning>
+The server serves BOTH the frontend application AND the game API. The frontend is built into the server's `public/` directory during deployment.
+</Warning>
+
+### Manifest Fetching
+
+On server startup, manifests are fetched from the CDN and cached locally:
+
+```typescript
+// From packages/server/src/startup/config.ts
+const MANIFEST_FILES = [
+  "items.json", "npcs.json", "resources.json", "tools.json",
+  "biomes.json", "world-areas.json", "stores.json", "music.json",
+  "vegetation.json", "buildings.json"
+];
+
+// Fetched from: PUBLIC_CDN_URL/manifests/*.json
+// Cached to: packages/server/world/assets/manifests/
+```
+
+This ensures the server always has the latest game data without requiring redeployment.
 
 ## Vercel Client Deployment
 
