@@ -710,6 +710,47 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
+## Weight and Stamina System
+
+Agility interacts with the weight and stamina mechanics:
+
+### Stamina Drain (Weight-Based)
+
+Carrying heavy items increases stamina drain while running:
+
+**Formula:** `Drain Rate = Base Rate × (1 + Weight × 0.005)`
+
+| Weight (kg) | Drain Multiplier | Drain/Second |
+|-------------|------------------|--------------|
+| 0 | 1.0× | 2.0 |
+| 10 | 1.05× | 2.1 |
+| 20 | 1.1× | 2.2 |
+| 50 | 1.25× | 2.5 |
+| 100 | 1.5× | 3.0 |
+
+<Info>
+Weight is calculated server-side from your inventory and equipment, then synced to the client for stamina calculations.
+</Info>
+
+### Stamina Regeneration (Agility-Based)
+
+Higher agility levels increase stamina regeneration:
+
+**Formula:** `Regen Rate = Base Rate × (1 + Agility Level × 0.01)`
+
+| Agility Level | Idle Regen/Sec | Walking Regen/Sec |
+|---------------|----------------|-------------------|
+| 1 | 4.04 | 2.02 |
+| 10 | 4.4 | 2.2 |
+| 25 | 5.0 | 2.5 |
+| 50 | 6.0 | 3.0 |
+| 75 | 7.0 | 3.5 |
+| 99 | 7.96 | 3.98 |
+
+<Info>
+At level 99 agility, stamina regenerates nearly twice as fast as level 1, making it easier to sustain running even with heavy loads.
+</Info>
+
 ## Skill Unlocks
 
 The `skill-unlocks.json` manifest documents what players unlock at each level. This is used for UI display and progression tracking.
@@ -721,9 +762,22 @@ Example unlocks:
 - **Mining 30**: Coal
 - **Cooking 40**: Lobster
 - **Smithing 50**: Mithril bar
+- **Agility 50**: +50% stamina regeneration
 
 <Info>
 See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
+</Info>
+
+### Skill Guide Panel
+
+Click any skill in the Skills panel to open its guide, which shows:
+- All unlocks for that skill with level requirements
+- Visual distinction between unlocked (green checkmark) and locked (lock icon) items
+- Your current level and progress
+- Next unlock highlight with levels remaining
+
+<Info>
+The Skill Guide Panel provides an OSRS-style interface for viewing skill progression and planning your training goals.
 </Info>
 
 ## Manifest-Driven Design
