@@ -1,0 +1,388 @@
+---
+title: "Agent Dashboard"
+description: "Real-time monitoring and control interface for AI agents"
+icon: "gauge"
+---
+
+## Overview
+
+The Agent Dashboard provides a comprehensive interface for monitoring and controlling AI agents in real-time. Access it at `http://localhost:3333/dashboard` when running with `bun run dev:ai`.
+
+## Dashboard Layout
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Agent Sidebar          │ Main Viewport                  │
+│ ┌──────────────────┐   │ ┌────────────────────────────┐ │
+│ │ Agent List       │   │ │ 3D Game View               │ │
+│ │ - Agent 1 ●      │   │ │ (Live spectator mode)      │ │
+│ │ - Agent 2 ○      │   │ │                            │ │
+│ └──────────────────┘   │ └────────────────────────────┘ │
+│ ┌──────────────────┐   │ ┌────────────────────────────┐ │
+│ │ Summary Card     │   │ │ Chat Interface             │ │
+│ │ - Online status  │   │ │ - Send commands            │ │
+│ │ - Combat level   │   │ │ - Quick actions menu       │ │
+│ │ - Total level    │   │ │ - Message history          │ │
+│ └──────────────────┘   │ └────────────────────────────┘ │
+│ ┌──────────────────┐   │                                │
+│ │ Goal Panel       │   │                                │
+│ │ Skills Panel     │   │                                │
+│ │ Activity Panel   │   │                                │
+│ │ Location Panel   │   │                                │
+│ └──────────────────┘   │                                │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Panels
+
+### Agent Summary Card
+
+Quick overview of agent status:
+
+**Displays**:
+- Online/offline status with uptime
+- Combat level and total level
+- Current goal with progress bar
+- Session duration
+- Coin count
+
+**Update Frequency**: Every 10 seconds
+
+---
+
+### Goal Panel
+
+Monitor and control agent objectives.
+
+**Features**:
+- Current goal description and type
+- Progress percentage and elapsed time
+- Time estimate to completion
+- XP rate (for skill-based goals)
+- Lock/unlock goal controls
+- **Stop button** - Halt agent and pause goals
+- **Resume Auto button** - Resume autonomous behavior
+- Recent goals history (last 5 goals)
+
+**Stop/Resume Functionality**:
+
+When you click **Stop**:
+1. Agent's current movement is cancelled
+2. Active goal is cleared
+3. `goalsPaused` flag is set to `true`
+4. Agent enters IDLE state
+5. `SET_GOAL` actions are blocked
+6. Dashboard shows "Goals Paused" state
+
+When you click **Resume Auto**:
+1. `goalsPaused` flag is cleared
+2. Agent selects new goal on next tick
+3. Autonomous behavior resumes
+
+**Paused State Behavior**:
+- Agent will NOT auto-select new goals
+- Chat commands still work (agent executes them)
+- After completing chat command, agent returns to idle
+- Pause state persists across reconnections
+
+**API Endpoints**:
+```typescript
+POST /api/agents/:agentId/goal/stop   // Stop and pause
+POST /api/agents/:agentId/goal/resume // Resume autonomous mode
+```
+
+---
+
+### Skills Panel
+
+Track skill progression in real-time.
+
+**Displays**:
+- All 12 skill levels with XP progress bars
+- Session XP gains (tracks XP earned since dashboard opened)
+- Grouped by category (Combat, Gathering)
+- Live indicator when viewport is active
+
+**Skills Tracked**:
+- **Combat**: Attack, Strength, Defense, Constitution
+- **Gathering**: Woodcutting, Mining, Fishing, Firemaking, Cooking, Agility
+
+**Update Frequency**: Every 10 seconds
+
+---
+
+### Activity Panel
+
+Recent activity feed with session statistics.
+
+**Session Stats**:
+- Kills (combat victories)
+- Deaths
+- Gold earned
+- Resources gathered
+
+**Activity Feed**:
+- Recent actions (last 10 events)
+- XP gains
+- Item pickups
+- Goal changes
+- Timestamps (relative time)
+
+**Event Types**:
+- Combat (kills, attacks)
+- Skill (XP gains)
+- Item (pickups, drops)
+- Goal (changes)
+- Death
+- Movement
+
+**Update Frequency**: Every 10 seconds
+
+---
+
+### Location Panel
+
+Current position and nearby points of interest.
+
+**Displays**:
+- Current zone name (auto-detected from coordinates)
+- Exact coordinates (X, Y, Z)
+- Nearby POIs with distances
+- Copy coordinates button
+- Live tracking indicator
+
+**Zone Detection**:
+```typescript
+// Zones detected from coordinates
+- Central Haven (spawn area)
+- Eastern Forest
+- Western Woods
+- Mining Quarry
+- Riverside
+- Wilderness (far from spawn)
+```
+
+**Points of Interest**:
+- Bank
+- General Store
+- Oak Trees
+- Willow Trees
+- Furnace
+- Anvil
+- Fishing Spot
+- Goblin Camp
+- Training Dummies
+- Spawn Point
+
+**Update Frequency**: Every 5-10 seconds (faster when viewport active)
+
+---
+
+## Quick Action Menu
+
+Dropdown menu next to chat input with one-click commands.
+
+### Available Actions
+
+**Skills**:
+- 🪓 **Woodcutting** - "chop nearest tree"
+- ⛏️ **Mining** - "mine nearest ore"
+- 🎣 **Fishing** - "fish at nearest spot"
+
+**Combat**:
+- ⚔️ **Combat** - "attack nearest enemy"
+
+**Items**:
+- 📦 **Pick Up** - "pick up nearby items"
+
+**Navigation**:
+- 🏦 **Bank** - "go to bank"
+
+**Control**:
+- ⏹️ **Stop** - Stop current goal
+- ⏸️ **Idle** - Set to idle mode
+
+### Menu Sections
+
+**Nearby Locations**:
+- Shows POIs within 50m
+- Sorted by distance
+- Click to navigate
+
+**Quick Commands**:
+- One-click skill training
+- Combat engagement
+- Item management
+
+**Goals**:
+- Available autonomous goals
+- Priority indicators
+- Click to set goal
+
+**Inventory**:
+- Items in inventory
+- Equip/Use/Drop actions
+- Scrollable list
+
+**Data Source**: `GET /api/agents/:agentId/quick-actions`
+
+---
+
+## Chat Interface
+
+### Sending Commands
+
+Type commands in the chat input or use the Quick Action Menu:
+
+```
+"pick up bronze pickaxe"
+"attack goblin"
+"go to bank"
+"chop tree"
+```
+
+**Message Flow**:
+```
+Dashboard → POST /api/agents/:agentId/message → ElizaOS Runtime →
+Action Selection → Game Server → Response → Game Chat (opens automatically)
+```
+
+**Auto-Open Chat**: When sending a message from the dashboard, the in-game chat panel opens automatically to show the agent's response.
+
+---
+
+## Settings Tab
+
+Configure agent behavior and API keys.
+
+### Tabs
+
+**Basic**:
+- Agent name
+- Username
+- System prompt (bio)
+
+**Content**:
+- Lore (background story)
+- Topics (knowledge areas)
+
+**Style**:
+- Adjectives (personality traits)
+- Communication style (JSON config)
+
+**API Keys**:
+- OpenRouter API Key
+- OpenAI API Key
+- Anthropic API Key
+- Show/hide toggle for security
+- Restart required after changes
+
+**Save Behavior**:
+- Settings saved to ElizaOS via `PATCH /agents/:agentId`
+- API keys stored securely
+- Agent must be restarted for changes to take effect
+
+---
+
+## Viewport Mode
+
+The main viewport shows a live 3D view of the game world from the agent's perspective.
+
+**Features**:
+- Real-time 3D rendering
+- Agent's camera view
+- Embedded game client in iframe
+- Chat overlay for commands
+- Spectator controls
+
+**Chat Integration**:
+- Messages sent from dashboard open in-game chat
+- Uses `postMessage` API to communicate with iframe
+- Responses visible in both dashboard and game chat
+
+---
+
+## Performance Optimizations
+
+### Polling Intervals
+
+All dashboard panels use optimized polling to prevent rate limiting:
+
+| Panel | Interval | Retry Logic |
+|-------|----------|-------------|
+| Summary Card | 10s | 3 retries, exponential backoff |
+| Goal Panel | 10s | 3 retries, exponential backoff |
+| Skills Panel | 10s | 3 retries, exponential backoff |
+| Activity Panel | 10s | 3 retries, exponential backoff |
+| Location Panel | 5-10s | 3 retries, exponential backoff |
+
+### Retry Logic
+
+```typescript
+async function fetchWithRetry(url, options, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok) return response;
+      
+      // Don't retry client errors (4xx)
+      if (response.status >= 400 && response.status < 500) {
+        return response;
+      }
+    } catch (err) {
+      // Network error - retry
+    }
+    
+    // Exponential backoff: 1s, 2s, 4s
+    if (attempt < maxRetries - 1) {
+      await sleep(1000 * Math.pow(2, attempt));
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+```
+
+---
+
+## Troubleshooting
+
+### Dashboard Not Loading
+
+**Symptoms**: Blank screen or loading spinner
+
+**Fix**: Verify ElizaOS is running:
+```bash
+bun run dev:ai  # Not just bun run dev
+```
+
+### Agent Not Responding
+
+**Symptoms**: Commands sent but no action
+
+**Fix**: Check agent connection status in Summary Card. If offline, restart ElizaOS.
+
+### 429 Rate Limit Errors
+
+**Symptoms**: Dashboard panels showing errors
+
+**Fix**: Rate limiting should be resolved with 10s polling intervals. If still occurring:
+1. Check browser console for error details
+2. Verify global rate limit (100 req/min) isn't exceeded
+3. Close duplicate dashboard tabs
+
+### Goals Not Resuming
+
+**Symptoms**: Agent stuck in idle after clicking Resume Auto
+
+**Fix**: Pause state syncs on reconnection. If agent disconnected:
+1. Wait for reconnection (auto-reconnect enabled by default)
+2. Pause state will restore from server
+3. Click Resume Auto again if needed
+
+---
+
+## Related Documentation
+
+- [AI Agents Guide](/guides/ai-agents)
+- [Agent API Reference](/api-reference/agent-endpoints)
+- [ElizaOS Integration](/wiki/ai-agents/overview)
