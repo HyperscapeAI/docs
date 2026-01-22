@@ -191,9 +191,34 @@ bunx drizzle-kit migrate   # Run migrations
 
 ## CDN Setup
 
-### Option 1: Self-Hosted
+### Option 1: Cloudflare R2 (Recommended)
 
-Use the included Docker CDN:
+Cloudflare R2 provides S3-compatible object storage with zero egress fees:
+
+<Steps>
+  <Step title="Create R2 bucket">
+    1. Go to Cloudflare dashboard → R2
+    2. Create a new bucket (e.g., `hyperscape-assets`)
+    3. Enable public access
+  </Step>
+  
+  <Step title="Upload assets">
+    Upload the contents of `packages/server/world/assets/` to your R2 bucket.
+  </Step>
+  
+  <Step title="Configure custom domain">
+    1. Add a custom domain to your R2 bucket (e.g., `assets.hyperscape.club`)
+    2. Set `PUBLIC_CDN_URL=https://assets.hyperscape.club` in both client and server environments
+  </Step>
+</Steps>
+
+<Info>
+In production, the server fetches manifests from the CDN at startup instead of bundling them in the deployment. This reduces deployment size and allows manifest updates without redeploying the server.
+</Info>
+
+### Option 2: Self-Hosted
+
+Use the included Docker CDN for development or self-hosted deployments:
 
 ```bash
 bun run cdn:up
@@ -201,9 +226,9 @@ bun run cdn:up
 
 Configure `PUBLIC_CDN_URL` to point to your CDN host.
 
-### Option 2: Cloud Storage
+### Option 3: AWS S3 or Compatible
 
-Upload assets to S3, R2, or similar:
+Upload assets to S3, DigitalOcean Spaces, or similar:
 
 1. Build assets: `bun run assets:optimize`
 2. Upload `packages/server/world/assets/`
