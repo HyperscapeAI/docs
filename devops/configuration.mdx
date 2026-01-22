@@ -90,12 +90,21 @@ PUBLIC_PRIVY_APP_ID=your-privy-app-id
   `PUBLIC_PRIVY_APP_ID` must match between client and server.
 </Warning>
 
-### Production
+### Production (Cloudflare Pages)
 
 ```bash
-PUBLIC_API_URL=https://api.hyperscape.lol
-PUBLIC_WS_URL=wss://api.hyperscape.lol
-PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+# Required
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
+
+# Production endpoints
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_APP_URL=https://hyperscape.club
+
+# Optional
+PUBLIC_ENABLE_FARCASTER=true        # Enable Farcaster integration
+DEBUG_RPG=0                         # Disable debug logging
 ```
 
 ## AI Agent Environment
