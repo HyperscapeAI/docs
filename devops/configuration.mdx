@@ -82,7 +82,15 @@ ELIZAOS_PORT=4001
 # LLM Providers (at least one required)
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
+OPENROUTER_API_KEY=your-openrouter-key
+
+# Local LLM (optional - ElizaOS 1.7+)
+OLLAMA_API_URL=http://localhost:11434
 ```
+
+<Info>
+**ElizaOS 1.7.0**: Now supports Ollama for local LLM inference. Configure `OLLAMA_API_URL` to use local models.
+</Info>
 
 ## AssetForge Environment
 
