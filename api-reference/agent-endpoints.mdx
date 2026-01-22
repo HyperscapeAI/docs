@@ -1,0 +1,443 @@
+---
+title: "Agent API"
+description: "REST API endpoints for AI agent control and monitoring"
+icon: "robot"
+---
+
+## Overview
+
+The Agent API provides endpoints for controlling and monitoring AI agents in Hyperscape. These endpoints are used by the dashboard and can be integrated with external tools.
+
+**Base URL**: `http://localhost:5555/api/agents` (development)
+
+## Authentication
+
+Most agent endpoints require authentication via Privy JWT token:
+
+```bash
+Authorization: Bearer <privy-jwt-token>
+```
+
+## Endpoints
+
+### Get Agent Goal
+
+Retrieve the current goal and available goals for an agent.
+
+```http
+GET /api/agents/:agentId/goal
+```
+
+**Response**:
+```json
+{
+  "goal": {
+    "type": "combat_training",
+    "description": "Training combat at goblins",
+    "target": "goblin",
+    "progress": 15,
+    "progressPercent": 30,
+    "elapsedMs": 45000,
+    "targetSkill": "attack",
+    "locked": false,
+    "lockedBy": null
+  },
+  "availableGoals": [
+    {
+      "id": "combat_training_goblins",
+      "type": "combat_training",
+      "description": "Train combat at goblins",
+      "priority": 80
+    }
+  ],
+  "goalsPaused": false
+}
+```
+
+**Fields**:
+- `goal`: Current active goal (null if none)
+- `availableGoals`: Goals the agent can select
+- `goalsPaused`: Whether autonomous goal selection is paused
+
+---
+
+### Set Agent Goal
+
+Manually set a goal for an agent.
+
+```http
+POST /api/agents/:agentId/goal
+Content-Type: application/json
+
+{
+  "goalId": "combat_training_goblins"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "goal": {
+    "type": "combat_training",
+    "description": "Train combat at goblins",
+    "locked": true,
+    "lockedBy": "manual"
+  }
+}
+```
+
+**Behavior**:
+- Sets goal and locks it (prevents autonomous override)
+- Agent will pursue this goal until completed or manually changed
+- Unlocks automatically when goal completes
+
+---
+
+### Stop Agent Goal
+
+Stop the current goal and pause autonomous goal selection.
+
+```http
+POST /api/agents/:agentId/goal/stop
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Goal stopped and paused"
+}
+```
+
+**Behavior**:
+- Cancels current movement path
+- Clears active goal
+- Sets `goalsPaused = true`
+- Blocks `SET_GOAL` actions (agent forced to IDLE)
+- Chat commands still work normally
+- Agent returns to idle after completing chat commands
+
+**Implementation Details**:
+- Sends `goalOverride` packet with `stop: true`
+- 100ms acknowledgment delay for processing
+- Pause state persists across reconnections
+
+---
+
+### Resume Agent Goals
+
+Resume autonomous goal selection after stopping.
+
+```http
+POST /api/agents/:agentId/goal/resume
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Goals resumed"
+}
+```
+
+**Behavior**:
+- Clears `goalsPaused` flag
+- Agent will select new goal on next tick
+- Autonomous behavior resumes normally
+
+---
+
+### Send Message to Agent
+
+Send a chat message or command to an agent.
+
+```http
+POST /api/agents/:agentId/message
+Content-Type: application/json
+
+{
+  "content": "pick up bronze pickaxe",
+  "userId": "user-123"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Message sent to agent"
+}
+```
+
+**Behavior**:
+- Message is processed by ElizaOS runtime
+- Agent selects appropriate action based on message
+- Response appears in game chat
+- Dashboard chat panel opens automatically
+
+---
+
+### Get Quick Actions
+
+Get context-aware quick actions for an agent.
+
+```http
+GET /api/agents/:agentId/quick-actions
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "nearbyLocations": [
+    {
+      "id": "bank_1",
+      "name": "Bank",
+      "type": "bank",
+      "distance": 15
+    }
+  ],
+  "availableGoals": [
+    {
+      "id": "combat_training_goblins",
+      "type": "combat_training",
+      "description": "Train combat at goblins",
+      "priority": 80
+    }
+  ],
+  "quickCommands": [
+    {
+      "id": "woodcutting",
+      "label": "Woodcutting",
+      "command": "chop nearest tree",
+      "icon": "TreePine",
+      "available": true
+    },
+    {
+      "id": "stop",
+      "label": "Stop",
+      "command": "stop",
+      "icon": "Square",
+      "available": true
+    }
+  ],
+  "inventory": [
+    {
+      "id": "bronze_hatchet",
+      "name": "Bronze Hatchet",
+      "slot": 0,
+      "quantity": 1,
+      "canEquip": true,
+      "canUse": false,
+      "canDrop": true
+    }
+  ],
+  "playerPosition": [10.5, 0, 15.2]
+}
+```
+
+**Use Case**: Powers the Quick Action Menu in the dashboard.
+
+---
+
+### Get Agent Mapping
+
+Get the character ID associated with an agent.
+
+```http
+GET /api/agents/mapping/:agentId
+```
+
+**Response**:
+```json
+{
+  "agentId": "agent-123",
+  "characterId": "char-456",
+  "accountId": "account-789"
+}
+```
+
+---
+
+## Data Endpoints
+
+### Get Skill Unlocks
+
+Retrieve skill unlock definitions for all skills.
+
+```http
+GET /api/data/skill-unlocks
+```
+
+**Response**:
+```json
+{
+  "attack": [
+    {
+      "level": 1,
+      "description": "Bronze weapons, Iron weapons",
+      "type": "item"
+    },
+    {
+      "level": 40,
+      "description": "Rune weapons",
+      "type": "item"
+    }
+  ],
+  "agility": [
+    {
+      "level": 1,
+      "description": "Basic stamina regeneration (+1% per level)",
+      "type": "ability"
+    },
+    {
+      "level": 99,
+      "description": "Agility cape, +99% stamina regeneration",
+      "type": "item"
+    }
+  ]
+}
+```
+
+**Use Case**: Powers the Skill Guide Panel UI.
+
+---
+
+## Character Endpoints
+
+### Get Character Skills
+
+Retrieve skill levels and XP for a character.
+
+```http
+GET /api/characters/:characterId/skills
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "skills": {
+    "attack": { "level": 40, "xp": 37224 },
+    "strength": { "level": 35, "xp": 22406 },
+    "defense": { "level": 30, "xp": 13363 },
+    "constitution": { "level": 45, "xp": 61512 },
+    "agility": { "level": 25, "xp": 8740 },
+    "prayer": { "level": 15, "xp": 2411 },
+    "woodcutting": { "level": 50, "xp": 101333 },
+    "mining": { "level": 30, "xp": 13363 },
+    "fishing": { "level": 40, "xp": 37224 },
+    "firemaking": { "level": 35, "xp": 22406 },
+    "cooking": { "level": 45, "xp": 61512 },
+    "smithing": { "level": 30, "xp": 13363 }
+  }
+}
+```
+
+---
+
+### Get Character Position
+
+Retrieve the current position of a character.
+
+```http
+GET /api/characters/:characterId/position
+```
+
+**Response**:
+```json
+{
+  "online": true,
+  "position": {
+    "x": 10.5,
+    "y": 0,
+    "z": 15.2
+  }
+}
+```
+
+**Fields**:
+- `online`: Whether character is currently connected
+- `position`: World coordinates (null if offline)
+
+---
+
+## Rate Limiting
+
+**Global Limit**: 100 requests per minute per IP
+
+**Dashboard Polling**:
+- Goal updates: Every 10 seconds
+- Skills updates: Every 10 seconds
+- Position updates: Every 5-10 seconds
+- Activity updates: Every 10 seconds
+
+**Retry Logic**: Dashboard uses exponential backoff (1s → 2s → 4s) with max 3 retries.
+
+---
+
+## Error Responses
+
+### 404 Not Found
+
+```json
+{
+  "error": "Agent not found",
+  "agentId": "agent-123"
+}
+```
+
+### 503 Service Unavailable
+
+```json
+{
+  "error": "Agent not connected to game server"
+}
+```
+
+### 429 Too Many Requests
+
+```json
+{
+  "error": "Rate limit exceeded",
+  "retryAfter": 60
+}
+```
+
+---
+
+## WebSocket Events
+
+Agents can subscribe to real-time events via WebSocket:
+
+```typescript
+// Connect to agent WebSocket
+const ws = new WebSocket('ws://localhost:5555/ws');
+
+// Listen for goal updates
+ws.on('goalUpdated', (data) => {
+  console.log('Goal changed:', data.goal);
+});
+
+// Listen for skill XP gains
+ws.on('skillsUpdated', (data) => {
+  console.log('Skills updated:', data.skills);
+});
+```
+
+**Available Events**:
+- `goalUpdated`: Goal changed
+- `skillsUpdated`: Skill levels/XP changed
+- `inventoryUpdated`: Inventory changed
+- `equipmentUpdated`: Equipment changed
+- `playerWeightUpdated`: Inventory weight changed (for stamina calculations)
+
+---
+
+## Related Documentation
+
+- [AI Agents Guide](/guides/ai-agents)
+- [ElizaOS Integration](/wiki/ai-agents/overview)
+- [Agent Actions](/wiki/ai-agents/actions)
+- [Agent Providers](/wiki/ai-agents/providers)
