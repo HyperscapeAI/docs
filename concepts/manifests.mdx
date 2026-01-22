@@ -451,7 +451,62 @@ Defines world stations with 3D models:
 
 ## Data Providers
 
-### DataManager
+### Manifest Distribution
+
+### Development vs Production
+
+Hyperscape uses different manifest loading strategies for development and production:
+
+**Development (Local):**
+- Manifests loaded from `packages/server/world/assets/manifests/`
+- Assets cloned via Git LFS during `bun install`
+- CDN serves from local Docker nginx container
+
+**Production (Railway/Cloudflare):**
+- Manifests fetched from CDN at server startup
+- Cached locally in `packages/server/world/assets/manifests/`
+- Assets served from Cloudflare R2
+
+### CDN Manifest Fetching
+
+The server automatically fetches manifests from the CDN on startup:
+
+```typescript
+// From packages/server/src/startup/config.ts
+const MANIFEST_FILES = [
+  "items.json", "npcs.json", "resources.json", "tools.json",
+  "biomes.json", "world-areas.json", "stores.json", "music.json",
+  "vegetation.json", "buildings.json"
+];
+
+// Fetched from: PUBLIC_CDN_URL/manifests/*.json
+// Cached to: packages/server/world/assets/manifests/
+```
+
+**Fetching Behavior:**
+- **Production/CI**: Always fetches from CDN to ensure latest data
+- **Development**: Skips fetch if local manifests exist (allows local development)
+- **Caching**: Compares content before writing to avoid unnecessary disk I/O
+- **Fallback**: Uses existing local manifests if CDN fetch fails
+
+**Benefits:**
+- Update game content by deploying new manifests to CDN
+- No server redeployment needed for content changes
+- Server always has latest game data
+- Reduces deployment size (manifests not bundled in Docker image)
+
+**Environment Variable:**
+```bash
+PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production
+# or
+PUBLIC_CDN_URL=http://localhost:8080  # Development
+```
+
+<Info>
+This architecture allows content updates (new items, NPCs, balance changes) to be deployed by updating manifests on the CDN, without requiring server redeployment or downtime.
+</Info>
+
+## DataManager
 
 The `DataManager` class in `packages/shared/src/data/DataManager.ts` loads all manifests from JSON files and populates runtime data structures:
 
