@@ -203,45 +203,139 @@ Cloudflare Pages automatically creates preview deployments for pull requests:
 
 ## Database Setup
 
-### Neon PostgreSQL
+Railway PostgreSQL is automatically configured when you add the database service.
+
+### Railway PostgreSQL (Recommended)
+
+<Steps>
+  <Step title="Add database service">
+    In your Railway project:
+    1. Click "New" → "Database" → "PostgreSQL"
+    2. Railway automatically sets `DATABASE_URL` environment variable
+    3. Database is ready immediately
+  </Step>
+
+  <Step title="Run migrations">
+    Migrations run automatically on server startup. To run manually:
+    
+    ```bash
+    cd packages/server
+    bunx drizzle-kit push      # Apply schema changes
+    bunx drizzle-kit migrate   # Run pending migrations
+    ```
+  </Step>
+</Steps>
+
+### Alternative: Neon PostgreSQL
+
+For serverless PostgreSQL with better free tier:
 
 1. Create database at [neon.tech](https://neon.tech)
 2. Copy connection string
-3. Set as `DATABASE_URL` in server environment
+3. Set as `DATABASE_URL` in Railway environment variables
 
-### Migrations
+## CDN & Assets Setup
+
+### Cloudflare R2 (Production)
+
+Hyperscape uses Cloudflare R2 for asset storage with global CDN distribution.
+
+<Steps>
+  <Step title="Create R2 bucket">
+    1. Go to Cloudflare dashboard → R2
+    2. Create bucket named `hyperscape-assets`
+    3. Enable public access
+  </Step>
+
+  <Step title="Upload assets">
+    Use the sync script to upload assets:
+    
+    ```bash
+    # Set Cloudflare credentials
+    export CLOUDFLARE_ACCOUNT_ID=your-account-id
+    export CLOUDFLARE_API_TOKEN=your-api-token
+    
+    # Upload assets to R2
+    bun run sync:r2
+    ```
+  </Step>
+
+  <Step title="Configure custom domain">
+    1. In R2 bucket settings, add custom domain: `assets.hyperscape.club`
+    2. Cloudflare auto-configures DNS and SSL
+    3. Set `PUBLIC_CDN_URL=https://assets.hyperscape.club` in both server and client
+  </Step>
+</Steps>
+
+### Local CDN (Development)
+
+For local development, use the Docker CDN:
 
 ```bash
-cd packages/server
-bunx drizzle-kit push      # Apply schema
-bunx drizzle-kit migrate   # Run migrations
+bun run cdn:up    # Start nginx CDN container
+bun run cdn:down  # Stop CDN container
 ```
 
-## CDN Setup
+The CDN serves assets from `packages/server/world/assets/` at `http://localhost:8080`.
 
-### Option 1: Self-Hosted
+## Manifest Fetching
 
-Use the included Docker CDN:
+In production, the server fetches manifests from the CDN at startup instead of bundling them:
 
-```bash
-bun run cdn:up
+```typescript
+// From packages/server/src/startup/config.ts
+async function fetchManifestsFromCDN(cdnUrl: string, manifestsDir: string) {
+  // Downloads manifests from CDN to local cache
+  // Runs on server startup in production
+}
 ```
 
-Configure `PUBLIC_CDN_URL` to point to your CDN host.
+<Info>
+Manifests are cached locally after fetching. The server doesn't need to re-fetch on every request.
+</Info>
 
-### Option 2: Cloud Storage
+## GitHub Actions CI/CD
 
-Upload assets to S3, R2, or similar:
+The repository includes automated deployment workflows.
 
-1. Build assets: `bun run assets:optimize`
-2. Upload `packages/server/world/assets/`
-3. Set `PUBLIC_CDN_URL` to bucket URL
+### Automatic Railway Deployment
+
+Pushes to `main` automatically trigger Railway deployments:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/shared/**'
+      - 'packages/server/**'
+      - 'packages/client/**'
+```
+
+**Required GitHub Secrets**:
+- `RAILWAY_TOKEN` - Generate at railway.app/account/tokens
+
+**Environment Variables** (in workflow):
+- `RAILWAY_PROJECT_ID` - From Railway project settings
+- `RAILWAY_SERVICE_ID` - From Railway service settings
+- `RAILWAY_ENVIRONMENT_ID` - From Railway environment settings
+
+### Cloudflare Pages Deployment
+
+Cloudflare Pages automatically deploys on push to `main`:
+
+- **Production**: Deploys from `main` branch
+- **Preview**: Deploys from pull requests
+- **URL**: `https://hyperscape.pages.dev` (and custom domain)
 
 ## Production Checklist
 
-- [ ] PostgreSQL database provisioned
-- [ ] Environment variables configured
-- [ ] Privy credentials set (both client and server)
-- [ ] CDN serving assets
-- [ ] WebSocket URL configured
-- [ ] SSL/TLS enabled
+- [ ] Railway project created with PostgreSQL
+- [ ] Environment variables configured (server and client)
+- [ ] Privy credentials set (both client and server match)
+- [ ] Cloudflare R2 bucket created and assets uploaded
+- [ ] Custom domains configured (hyperscape.club, assets.hyperscape.club)
+- [ ] GitHub Actions secrets configured (RAILWAY_TOKEN)
+- [ ] SSL/TLS enabled (automatic with Railway and Cloudflare)
+- [ ] CORS origins updated in server code if using custom domains
