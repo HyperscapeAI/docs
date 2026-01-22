@@ -185,6 +185,60 @@ The F5 keybind was added to match Minecraft's familiar debug screen shortcut.
   Without Privy, the game runs in anonymous mode with temporary identities.
 </Info>
 
+## CORS Configuration
+
+The server automatically configures CORS for development and production environments.
+
+### Allowed Origins
+
+**Production domains:**
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  "https://hyperscape-production.up.railway.app",
+  "http://hyperscape.pages.dev",  // HTTP fallback for testing
+];
+```
+
+**Dynamic patterns:**
+```typescript
+/^https?:\/\/localhost:\d+$/,                    // localhost:3000, 3333, 5555, etc.
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/,      // Cloudflare preview deployments
+/^https:\/\/.+\.farcaster\.xyz$/,               // Farcaster frames
+/^https:\/\/.+\.warpcast\.com$/,                // Warpcast integration
+/^https:\/\/.+\.privy\.io$/,                    // Privy authentication
+/^https:\/\/.+\.up\.railway\.app$/,             // Railway deployments
+```
+
+**Environment-based origins:**
+- `ELIZAOS_API_URL` (default: http://localhost:4001)
+- `CLIENT_URL` or `PUBLIC_APP_URL` (default: http://localhost:3333)
+- `SERVER_URL` (default: http://localhost:5555)
+
+### Adding Custom Domains
+
+To add a custom domain, set the `PUBLIC_APP_URL` environment variable:
+
+```bash
+# In packages/server/.env
+PUBLIC_APP_URL=https://yourdomain.com
+```
+
+The server automatically adds this to the CORS allowlist.
+
+### CORS Headers
+
+All CORS responses include:
+```
+Access-Control-Allow-Origin: <origin>
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, PUT, POST, DELETE, OPTIONS, PATCH
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With
+```
+
 ## GitHub Actions
 
 The repository includes automated workflows for code quality and documentation:
