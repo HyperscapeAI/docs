@@ -34,24 +34,70 @@ DATABASE_URL=postgresql://user:pass@host:5432/db
 JWT_SECRET=your-random-secret-key
 
 # Authentication
-PRIVY_APP_ID=your-privy-app-id
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
 PRIVY_APP_SECRET=your-privy-app-secret
 ```
+
+<Info>
+  `PUBLIC_PRIVY_APP_ID` is exposed to clients via `/env.js` endpoint. The `PRIVY_APP_SECRET` is server-only and never exposed.
+</Info>
 
 ### Optional
 
 ```bash
 # Server
 PORT=5555
+NODE_ENV=development
+WORLD=world
 
-# Assets
+# Database (development)
+USE_LOCAL_POSTGRES=true      # Auto-start PostgreSQL in Docker
+
+# Assets & CDN
 PUBLIC_CDN_URL=http://localhost:8080
+PUBLIC_WS_URL=ws://localhost:5555/ws
+PUBLIC_API_URL=http://localhost:5555
+
+# Client URLs (for CORS)
+CLIENT_URL=http://localhost:3333
+PUBLIC_APP_URL=http://localhost:3333
+
+# ElizaOS Integration
+ELIZAOS_API_URL=http://localhost:4001
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
+
+# Advanced
+SAVE_INTERVAL=60             # Auto-save interval in seconds
+ADMIN_CODE=your-admin-code   # In-game admin access
+DISABLE_RATE_LIMIT=false     # Disable rate limiting (dev only!)
+COMMIT_HASH=abc123           # Git commit (auto-set by CI)
 ```
+
+### Manifest Loading
+
+The server fetches game manifests from CDN at startup:
+
+```bash
+# Manifests are fetched from PUBLIC_CDN_URL/manifests/
+# and cached in world/assets/manifests/
+```
+
+**Behavior:**
+- **Production/CI**: Always fetches from CDN
+- **Development**: Skips if local manifests exist
+- **Test**: Can skip with `SKIP_MANIFESTS=true`
+
+**Manifest Files:**
+- Root: `biomes.json`, `npcs.json`, `prayers.json`, `stations.json`, etc.
+- Items: `items/food.json`, `items/weapons.json`, `items/tools.json`, etc.
+- Gathering: `gathering/fishing.json`, `gathering/mining.json`, etc.
+- Recipes: `recipes/cooking.json`, `recipes/smithing.json`, etc.
+
+Total: 25+ manifest files fetched and cached at startup.
 
 ## Client Environment
 
