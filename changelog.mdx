@@ -23,6 +23,73 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Agility Skill & Skill Guide Panel" description="January 2026" date="2026-01-21">
+
+### 🏃 Agility Skill System
+
+Complete implementation of the Agility skill with movement-based XP and stamina mechanics:
+
+- **Movement XP**: Earn 1 XP per 2 tiles traveled (walking or running)
+  - XP batched at 100 tiles = 50 XP to prevent visual spam
+  - XP drops every ~15 seconds running, ~30 seconds walking
+  - Partial progress preserved between batches
+  - Death resets tile counter (small penalty)
+- **Stamina Regeneration**: +1% stamina regen per agility level
+  - Level 1: 1.01x multiplier (4.04/sec idle, 2.02/sec walking)
+  - Level 50: 1.50x multiplier (6.00/sec idle, 3.00/sec walking)
+  - Level 99: 1.99x multiplier (7.96/sec idle, 3.98/sec walking)
+- **Weight-Based Stamina Drain**: +0.5% drain per kg carried
+  - 0kg: 2.0/sec drain (base rate)
+  - 50kg: 2.5/sec drain (25% penalty)
+  - 100kg: 3.0/sec drain (50% penalty)
+- **Database**: New `agilityLevel` and `agilityXp` columns with migration
+- **Weight Synchronization**: Server calculates and syncs weight to client
+  - Weight emitted on inventory load and changes
+  - Equipment Panel displays server-synced weight
+  - Single source of truth prevents client/server drift\n- **Testing**: 868 lines of comprehensive tests\n  - Unit tests for XP batching, stamina formulas\n  - Integration tests for persistence and death penalty\n\n### 📊 Skill Guide Panel
+
+OSRS-style UI panel showing skill unlocks at each level:
+
+- **Click-to-View**: Click any skill in Skills Panel to open its guide
+- **Visual States**: Green checkmarks for unlocked, gray locks for locked, gold arrow for next unlock
+- **Progress Indicator**: Shows levels needed to reach next unlock
+- **Type Badges**: Distinguishes items vs abilities
+- **Animations**: Smooth fade-in/slide-up with custom scrollbar styling
+- **Loading State**: Spinner while fetching unlock data from server
+- **Server Endpoint**: New `/api/data/skill-unlocks` endpoint serves unlock definitions
+- **Defence/Defense Normalization**: Handles British/American spelling differences
+- **Keyboard Accessible**: ESC key and click-outside-to-close
+- **Portal Rendering**: Proper z-index layering above all UI
+
+### 🚂 Railway Deployment Improvements
+
+Production deployment enhancements for Railway platform:
+
+- **CDN Manifest Fetching**: Server fetches manifests from CDN at startup
+  - Skips Git LFS asset download in CI/Railway environments
+  - `fetchManifestsFromCDN()` downloads manifests to local cache
+  - Conditional asset route registration based on manifest availability
+- **Multi-Phase Build**: Nixpacks configuration for reliable builds
+  - Phase 1: Install dependencies with Bun
+  - Phase 2: Build shared → client → server
+  - Phase 3: Copy client dist to server public directory
+- **Frontend Serving**: Server serves built client from `/public`
+  - Automatic fallback to `index.html` for SPA routing
+  - Build timestamp file for deployment verification
+  - Debug endpoint `/debug/public` to inspect directory contents
+- **Build Verification**: Explicit checks that `index.html` exists before starting
+- **Verbose Logging**: Improved debugging for Railway build failures
+- **GraphQL API**: Updated Railway workflow to use GraphQL API for deployments
+
+### 🐛 Bug Fixes
+
+- **Prayer System**: Added to database schema and type definitions (was missing from CharacterRepository)
+- **Event Bridge**: Weight change events now forwarded to clients for UI updates
+- **Initial Weight**: Weight emitted on inventory load (not just on changes)
+- **Type Coverage**: Added `prayer` and `agility` to `SkillsData` interface
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
