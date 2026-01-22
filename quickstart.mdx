@@ -96,11 +96,27 @@ This starts the game server plus the ElizaOS agent runtime. The AI agent will co
 
 ## What Gets Started
 
+### Development Mode
+
 | Service | Port | Description |
 |---------|------|-------------|
-| Client | 3333 | Vite dev server with hot reload (dev mode) |
+| Client | 3333 | Vite dev server with hot reload |
 | Server | 5555 | Game server (Fastify + WebSockets) |
-| CDN | 8080 | Asset server (Docker nginx, if started) |
+| CDN | 8080 | Asset server (Docker nginx) |
+| PostgreSQL | 5432 | Database (Docker, auto-started) |
+
+### Production Architecture
+
+| Component | Platform | URL |
+|-----------|----------|-----|
+| Frontend | Cloudflare Pages | https://hyperscape.club |
+| Backend | Railway | https://hyperscape-production.up.railway.app |
+| Database | Neon PostgreSQL | (managed) |
+| Assets | Cloudflare R2 | https://assets.hyperscape.club |
+
+<Info>
+Production uses a split deployment model for optimal performance and global CDN distribution.
+</Info>
 
 ## Quick Play Guide
 
