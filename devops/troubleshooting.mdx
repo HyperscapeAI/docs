@@ -175,12 +175,27 @@ npm test
 - Server not running
 - Wrong port configuration
 - Firewall blocking
+- CORS issues
 
 **Solution**:
 
 1. Verify server is running: `lsof -i:5555`
 2. Check client config: `PUBLIC_WS_URL`
 3. Ensure no firewall blocks
+4. Verify CORS configuration includes your client domain
+
+**CORS Debugging:**
+```bash
+# Check server logs for CORS errors
+# Server automatically allows:
+# - https://hyperscape.club
+# - https://*.hyperscape.pages.dev
+# - https://*.up.railway.app
+# - http://localhost:*
+
+# Add custom domain via environment variable
+CLIENT_URL=https://your-domain.com
+```
 
 ### Hot Reload Not Working
 
