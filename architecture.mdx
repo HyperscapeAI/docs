@@ -4,6 +4,37 @@ description: "Monorepo structure and package overview"
 icon: "boxes"
 ---
 
+## Production Architecture
+
+Hyperscape uses a **split deployment model** for optimal performance:
+
+```mermaid
+flowchart LR
+    A[Player Browser] -->|HTTPS| B[Cloudflare Pages]
+    A -->|WSS| C[Railway Server]
+    A -->|HTTPS| D[Cloudflare R2 CDN]
+    C -->|SQL| E[Neon PostgreSQL]
+    C -->|Fetch Manifests| D
+    
+    B -.->|Static HTML/JS/CSS| A
+    D -.->|Models/Audio/Textures| A
+    C -.->|Game State| A
+```
+
+| Component | Platform | Purpose |
+|-----------|----------|---------|
+| **Frontend** | Cloudflare Pages | Static site hosting with global CDN |
+| **Backend** | Railway | Game server with WebSocket support |
+| **Database** | Neon PostgreSQL | Serverless PostgreSQL with autoscaling |
+| **Assets** | Cloudflare R2 | Object storage for game assets |
+
+**Benefits:**
+- Global CDN distribution for frontend and assets
+- Dedicated compute for game server
+- Independent scaling of components
+- Automatic deployments via GitHub Actions
+- Manifest fetching from CDN at server startup
+
 ## Monorepo Structure
 
 Hyperscape is a **Turbo monorepo** with 7 packages:
