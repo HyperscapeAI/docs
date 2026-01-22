@@ -76,14 +76,40 @@ The dev server provides:
 
 ## Docker Services
 
+### CDN Container (Required)
+
+The CDN serves game assets and manifests. It must be running before starting the game:
+
 ```bash
 bun run cdn:up      # Start CDN container
 bun run cdn:down    # Stop CDN container
+bun run cdn:logs    # View CDN logs
+bun run cdn:verify  # Verify CDN is working
 ```
 
-<Info>
-  The CDN starts automatically with `bun run dev`. Only run manually if using services separately.
-</Info>
+**What it serves:**
+- 3D models: `http://localhost:8080/models/`
+- Audio: `http://localhost:8080/audio/`
+- Manifests: `http://localhost:8080/manifests/`
+
+**Why it's required:**
+The server fetches manifests from `PUBLIC_CDN_URL` at startup. In development, this defaults to `http://localhost:8080`, so the CDN must be running.
+
+<Warning>
+Unlike PostgreSQL which starts automatically, the CDN must be started manually with `bun run cdn:up` before running `bun run dev`.
+</Warning>
+
+### PostgreSQL Container (Automatic)
+
+PostgreSQL starts automatically when the server runs:
+
+```bash
+# No manual start needed - runs automatically with bun run dev
+# To manually control:
+cd packages/server
+docker-compose up postgres    # Start
+docker-compose down postgres  # Stop
+```
 
 ## Testing
 
