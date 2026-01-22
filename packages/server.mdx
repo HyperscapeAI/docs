@@ -146,28 +146,91 @@ bunx drizzle-kit studio    # Open Drizzle Studio GUI
 
 ## Environment Variables
 
+### Core Configuration
+
 ```bash
-# Database (choose one)
-DATABASE_URL=postgresql://user:pass@host/db    # PostgreSQL (production)
-# or SQLite is used automatically for local development
+# Server
+PORT=5555                    # HTTP/WebSocket port
+NODE_ENV=development         # Environment: development, production, test
+WORLD=world                  # World directory path
 
-# Authentication (required for persistent accounts)
-PRIVY_APP_ID=your-privy-app-id
+# Database
+DATABASE_URL=postgresql://user:pass@host/db    # PostgreSQL connection string
+USE_LOCAL_POSTGRES=true      # Auto-start PostgreSQL in Docker (dev only)
+
+# Security
+JWT_SECRET=your-jwt-secret   # Token signing (generate with: openssl rand -base64 32)
+ADMIN_CODE=your-admin-code   # In-game admin access code
+```
+
+### Authentication
+
+```bash
+# Privy (required for persistent accounts)
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
 PRIVY_APP_SECRET=your-privy-app-secret
-JWT_SECRET=your-jwt-secret
+```
 
-# Server Configuration
-PORT=5555
-NODE_ENV=development
+<Warning>
+  `PUBLIC_PRIVY_APP_ID` must match between client and server.
+</Warning>
 
-# CDN (optional)
-PUBLIC_CDN_URL=http://localhost:8080
+### Assets & CDN
 
-# Voice Chat (optional)
+```bash
+# CDN URL for game assets (models, textures, audio, manifests)
+PUBLIC_CDN_URL=http://localhost:8080           # Development
+# PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production
+
+# WebSocket and API URLs (exposed to client)
+PUBLIC_WS_URL=ws://localhost:5555/ws
+PUBLIC_API_URL=http://localhost:5555
+```
+
+**Manifest Loading:**
+- Server fetches manifests from `PUBLIC_CDN_URL/manifests/` at startup
+- Cached locally in `world/assets/manifests/`
+- In development, skips fetch if local manifests exist
+- In production/CI, always fetches fresh manifests
+
+### Optional Services
+
+```bash
+# ElizaOS AI Integration
+ELIZAOS_API_URL=http://localhost:4001
+
+# LiveKit Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
-LIVEKIT_URL=wss://your-livekit-url
+LIVEKIT_URL=wss://your-livekit-server
+
+# Advanced
+SAVE_INTERVAL=60             # Auto-save interval in seconds
+DISABLE_RATE_LIMIT=false     # Disable rate limiting (dev only!)
+COMMIT_HASH=abc123           # Git commit hash (auto-set by CI)
 ```
+
+### CORS Origins
+
+The server automatically allows requests from:
+
+```typescript
+// Production domains
+'https://hyperscape.club'
+'https://www.hyperscape.club'
+'https://hyperscape.pages.dev'
+'https://hyperscape-production.up.railway.app'
+
+// Dynamic patterns
+/^https?:\/\/localhost:\d+$/                    // Any localhost port
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/       // Cloudflare preview deployments
+/^https:\/\/.+\.up\.railway\.app$/              // Railway preview deployments
+```
+
+Additional origins from environment variables:
+- `CLIENT_URL`
+- `PUBLIC_APP_URL`
+- `ELIZAOS_URL` / `ELIZAOS_API_URL`
 
 ## Build Scripts
 
