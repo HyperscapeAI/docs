@@ -1,122 +1,19 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "theme": "maple",
   "name": "Hyperscape",
-  "description": "The first AI-native MMORPG where autonomous agents play alongside humans",
-  "colors": {
-    "primary": "#D4AF37",
-    "light": "#B8860B",
-    "dark": "#F5D061"
-  },
-  "appearance": {
-    "default": "dark",
-    "strict": false,
-    "background": {
-      "decoration": "grid",
-      "color": {
-        "light": "#FAF9F7",
-        "dark": "#0A0A0C"
-      }
-    }
-  },
-  "icons": {
-    "library": "lucide"
-  },
-  "fonts": {
-    "heading": {
-      "family": "Cinzel",
-      "weight": 600
-    },
-    "body": {
-      "family": "Crimson Pro",
-      "weight": 400
-    }
-  },
-  "styling": {
-    "codeblocks": {
-      "theme": {
-        "light": "github-light",
-        "dark": "tokyo-night"
-      }
-    },
-    "eyebrow": "breadcrumbs",
-    "rounded": "default"
-  },
-  "favicon": "/favicon.svg",
   "logo": {
     "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg",
-    "href": "https://hyperscape.lol"
+    "dark": "/logo/dark.svg"
   },
-  "metadata": {
-    "og:site_name": "Hyperscape Documentation",
-    "og:title": "Hyperscape - AI-Native MMORPG",
-    "og:description": "The first AI-native MMORPG where autonomous agents play alongside humans",
-    "og:image": "https://hyperscape.lol/og-image.png",
-    "og:url": "https://docs.hyperscape.lol",
-    "og:type": "website",
-    "og:locale": "en_US",
-    "twitter:card": "summary_large_image",
-    "twitter:site": "@HyperscapeAI",
-    "twitter:creator": "@HyperscapeAI",
-    "twitter:title": "Hyperscape Documentation",
-    "twitter:description": "The first AI-native MMORPG where autonomous agents play alongside humans",
-    "twitter:image": "https://hyperscape.lol/og-image.png",
-    "robots": "index, follow",
-    "charset": "utf-8"
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#c9b386",
+    "light": "#fbbf24",
+    "dark": "#8b4513"
   },
-  "seo": {
-    "indexHiddenPages": false,
-    "indexing": "all"
-  },
-  "search": {
-    "prompt": "Search Hyperscape docs..."
-  },
-  "feedback": {
-    "thumbsRating": true,
-    "suggestEdit": true,
-    "raiseIssue": true
-  },
-  "api": {
-    "baseUrl": "https://api.hyperscape.lol",
-    "playground": {
-      "mode": "simple"
-    },
-    "auth": {
-      "method": "bearer",
-      "name": "Authorization"
-    }
-  },
-  "openapi": ["/openapi.json"],
-  "analytics": {
-    "posthog": {
-      "apiKey": "<your-posthog-api-key>",
-      "apiHost": "https://app.posthog.com"
-    },
-    "ga4": {
-      "measurementId": "<your-ga4-measurement-id>"
-    }
-  },
-  "integrations": {
-    "intercom": {
-      "appId": "<your-intercom-app-id>"
-    }
-  },
-  "redirects": [
-    {
-      "source": "/getting-started",
-      "destination": "/quickstart"
-    },
-    {
-      "source": "/docs",
-      "destination": "/"
-    },
-    {
-      "source": "/api",
-      "destination": "/packages/server"
-    }
-  ],
   "navigation": {
+    "global": {
+      "anchors": []
+    },
     "tabs": [
       {
         "tab": "Documentation",
@@ -126,12 +23,7 @@
             "group": "Get Started",
             "icon": "rocket",
             "expanded": true,
-            "pages": [
-              "index",
-              "quickstart",
-              "architecture",
-              "changelog"
-            ]
+            "pages": ["index", "quickstart", "architecture", "changelog"]
           },
           {
             "group": "Guides",
@@ -142,6 +34,7 @@
               "guides/adding-content",
               "guides/ai-agents",
               "guides/deployment",
+              "guides/railway-deployment",
               "guides/mobile",
               "guides/mcp-server"
             ]
@@ -153,20 +46,12 @@
               {
                 "group": "Architecture",
                 "icon": "layers",
-                "pages": [
-                  "concepts/ecs",
-                  "concepts/entities",
-                  "concepts/multiplayer"
-                ]
+                "pages": ["concepts/ecs", "concepts/entities", "concepts/multiplayer"]
               },
               {
                 "group": "Game Systems",
                 "icon": "swords",
-                "pages": [
-                  "concepts/combat",
-                  "concepts/skills",
-                  "concepts/economy"
-                ]
+                "pages": ["concepts/combat", "concepts/skills", "concepts/economy"]
               },
               "concepts/manifests"
             ]
@@ -186,19 +71,12 @@
           {
             "group": "Core Packages",
             "icon": "cube",
-            "pages": [
-              "packages/shared",
-              "packages/server",
-              "packages/client"
-            ]
+            "pages": ["packages/shared", "packages/server", "packages/client"]
           },
           {
             "group": "Extensions",
             "icon": "puzzle",
-            "pages": [
-              "packages/plugin-hyperscape",
-              "packages/asset-forge"
-            ]
+            "pages": ["packages/plugin-hyperscape", "packages/asset-forge"]
           }
         ]
       },
@@ -222,18 +100,12 @@
             "group": "Configuration",
             "icon": "settings",
             "expanded": true,
-            "pages": [
-              "devops/configuration",
-              "devops/docker"
-            ]
+            "pages": ["devops/configuration", "devops/docker"]
           },
           {
             "group": "Operations",
             "icon": "wrench",
-            "pages": [
-              "devops/database",
-              "devops/troubleshooting"
-            ]
+            "pages": ["devops/database", "devops/troubleshooting"]
           }
         ]
       },
@@ -261,9 +133,7 @@
           {
             "group": "Client Application",
             "icon": "monitor",
-            "pages": [
-              "wiki/client/overview"
-            ]
+            "pages": ["wiki/client/overview"]
           },
           {
             "group": "Game Systems",
@@ -293,122 +163,15 @@
           {
             "group": "Data Manifests",
             "icon": "database",
-            "pages": [
-              "wiki/data/overview",
-              "wiki/data/npcs",
-              "wiki/data/items"
-            ]
+            "pages": ["wiki/data/overview", "wiki/data/npcs", "wiki/data/items"]
           },
           {
             "group": "Technical Reference",
             "icon": "hashtag",
-            "pages": [
-              "wiki/reference/constants",
-              "wiki/reference/mcp-server"
-            ]
-          }
-        ]
-      }
-    ],
-    "global": {
-      "anchors": []
-    }
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Changelog",
-        "href": "/changelog"
-      },
-      {
-        "label": "GitHub",
-        "href": "https://github.com/HyperscapeAI/hyperscape"
-      },
-      {
-        "label": "Discord",
-        "href": "https://discord.gg/JD3MEwNbbX"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Play Game",
-      "href": "https://hyperscape.lol"
-    }
-  },
-  "sidebar": {
-    "items": "border"
-  },
-  "interaction": {
-    "drilldown": false
-  },
-  "topbar": {
-    "style": "default"
-  },
-  "contextual": {
-    "options": ["copy", "view", "mcp", "cursor", "vscode", "claude", "chatgpt", "perplexity"]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/HyperscapeAI",
-      "github": "https://github.com/HyperscapeAI",
-      "discord": "https://discord.gg/JD3MEwNbbX",
-      "youtube": "https://youtube.com/@HyperscapeAI",
-      "linkedin": "https://linkedin.com/company/hyperscape"
-    },
-    "links": [
-      {
-        "title": "Resources",
-        "items": [
-          {
-            "label": "Documentation",
-            "href": "/"
-          },
-          {
-            "label": "API Reference",
-            "href": "/api-reference/overview"
-          },
-          {
-            "label": "GitHub",
-            "href": "https://github.com/HyperscapeAI/hyperscape"
-          }
-        ]
-      },
-      {
-        "title": "Community",
-        "items": [
-          {
-            "label": "Discord",
-            "href": "https://discord.gg/JD3MEwNbbX"
-          },
-          {
-            "label": "Twitter",
-            "href": "https://x.com/HyperscapeAI"
-          },
-          {
-            "label": "Blog",
-            "href": "https://blog.hyperscape.lol"
-          }
-        ]
-      },
-      {
-        "title": "Legal",
-        "items": [
-          {
-            "label": "Privacy Policy",
-            "href": "https://hyperscape.lol/privacy"
-          },
-          {
-            "label": "Terms of Service",
-            "href": "https://hyperscape.lol/terms"
+            "pages": ["wiki/reference/constants", "wiki/reference/mcp-server"]
           }
         ]
       }
     ]
-  },
-  "backgroundImage": "/images/docs-background.svg",
-  "modeToggle": {
-    "default": "dark",
-    "isHidden": false
-  },
-  "isWhiteLabeled": false
+  }
 }
