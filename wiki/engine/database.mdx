@@ -252,6 +252,70 @@ export const playerSessions = pgTable('player_sessions', {
 
 ---
 
+## Quest System Tables
+
+### Quest Progress
+
+Tracks player quest state:
+
+```typescript
+export const questProgress = pgTable('quest_progress', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),              // Quest identifier from manifest
+  status: text('status').default('not_started').notNull(),
+  currentStage: text('currentStage'),              // Current stage ID
+  stageProgress: jsonb('stageProgress').default({}), // e.g., {"kills": 7}
+  startedAt: bigint('startedAt', { mode: 'number' }),
+  completedAt: bigint('completedAt', { mode: 'number' }),
+}, (table) => ({
+  uniquePlayerQuest: unique().on(table.playerId, table.questId),
+  playerIdx: index('idx_quest_progress_player').on(table.playerId),
+  statusIdx: index('idx_quest_progress_status').on(table.playerId, table.status),
+}));
+```
+
+**Status Values:**
+- `not_started` — Quest not started
+- `in_progress` — Quest active
+- `completed` — Quest finished
+
+<Info>
+`ready_to_complete` is a **derived status** computed at runtime when objectives are met. It's not stored in the database.
+</Info>
+
+### Quest Audit Log
+
+Immutable audit trail for security and debugging:
+
+```typescript
+export const questAuditLog = pgTable('quest_audit_log', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),
+  action: text('action').notNull(),                // "started", "progressed", "completed"
+  questPointsAwarded: integer('questPointsAwarded').default(0),
+  stageId: text('stageId'),
+  stageProgress: jsonb('stageProgress').default({}),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+  metadata: jsonb('metadata').default({}),
+}, (table) => ({
+  playerIdx: index('idx_quest_audit_log_player').on(table.playerId),
+  questIdx: index('idx_quest_audit_log_quest').on(table.questId),
+  timestampIdx: index('idx_quest_audit_log_timestamp').on(table.timestamp),
+  actionIdx: index('idx_quest_audit_log_action').on(table.action),
+}));
+```
+
+**Features:**
+- Immutable log (no updates or deletes)
+- Used for fraud detection and debugging
+- Indexed for efficient queries by player, quest, and timestamp
+
+---
+
 ## Statistics Tables
 
 ### NPC Kills
