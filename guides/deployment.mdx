@@ -290,25 +290,97 @@ bunx drizzle-kit push      # Apply schema
 bunx drizzle-kit migrate   # Run migrations
 ```
 
-## CDN Setup
+## Cloudflare R2 Asset CDN
 
-### Option 1: Self-Hosted
+Cloudflare R2 hosts all game assets (3D models, textures, audio, manifests) with global edge caching.
 
-Use the included Docker CDN:
+### Automated Asset Deployment
+
+Assets are automatically uploaded to R2 via GitHub Actions:
+
+```yaml
+# .github/workflows/deploy-cloudflare.yml
+name: Deploy Assets to Cloudflare R2
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/server/world/assets/manifests/**'
+      - 'assets/**'
+```
+
+**Upload Process:**
+1. Detects changes to manifests or assets
+2. Uploads manifests to `manifests/` prefix
+3. Uploads 3D models, audio, textures to root
+4. Sets proper MIME types and cache headers
+
+### Manual R2 Setup
+
+<Steps>
+  <Step title="Create R2 bucket">
+    1. Go to Cloudflare Dashboard → R2
+    2. Create bucket: `hyperscape-assets`
+    3. Enable public access
+  </Step>
+  
+  <Step title="Configure custom domain">
+    1. Add custom domain: `assets.hyperscape.club`
+    2. Point to R2 bucket
+    3. Enable caching rules
+  </Step>
+  
+  <Step title="Upload assets">
+    Use Wrangler CLI to upload assets:
+    
+    ```bash
+    # Install Wrangler
+    npm install -g wrangler
+    
+    # Upload manifests
+    wrangler r2 object put hyperscape-assets/manifests/npcs.json \
+      --file=packages/server/world/assets/manifests/npcs.json \
+      --content-type=application/json
+    
+    # Upload models (if using local assets)
+    wrangler r2 object put hyperscape-assets/models/goblin/goblin.vrm \
+      --file=assets/models/goblin/goblin.vrm \
+      --content-type=model/gltf-binary
+    ```
+  </Step>
+  
+  <Step title="Configure GitHub Actions">
+    Add Cloudflare secrets to GitHub repository:
+    
+    1. Go to Settings → Secrets and variables → Actions
+    2. Add `CLOUDFLARE_API_TOKEN` (from Cloudflare → API Tokens)
+    3. Workflow will automatically upload on manifest changes
+  </Step>
+</Steps>
+
+### Cache Configuration
+
+R2 assets use aggressive caching for performance:
+
+| Asset Type | Cache-Control | Max Age |
+|------------|---------------|---------|
+| Models (.glb, .vrm) | `public, max-age=31536000, immutable` | 1 year |
+| Audio (.mp3, .ogg) | `public, max-age=31536000, immutable` | 1 year |
+| Textures (.png, .jpg) | `public, max-age=31536000, immutable` | 1 year |
+| Manifests (.json) | `public, max-age=300, must-revalidate` | 5 minutes |
+| WASM (.wasm) | `public, max-age=3600` | 1 hour |
+
+Manifests use shorter cache times to allow content updates without cache invalidation.
+
+### Local CDN (Development)
+
+For local development, use the included Docker CDN:
 
 ```bash
 bun run cdn:up
 ```
 
-Configure `PUBLIC_CDN_URL` to point to your CDN host.
-
-### Option 2: Cloud Storage
-
-Upload assets to S3, R2, or similar:
-
-1. Build assets: `bun run assets:optimize`
-2. Upload `packages/server/world/assets/`
-3. Set `PUBLIC_CDN_URL` to bucket URL
+This starts an nginx container serving assets from `packages/server/world/assets/` at `http://localhost:8080`.
 
 ## Production Checklist
 
