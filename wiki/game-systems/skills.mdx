@@ -298,6 +298,16 @@ This normalization runs once when a model is first loaded, before caching. All c
 | Swordfish | 50 | 100 |
 | Shark | 76 | 110 |
 
+**Agility** (passive movement-based):
+| Activity | XP Rate | Notes |
+|----------|---------|-------|
+| Walking | ~100 XP/min | 1 XP per 2 tiles |
+| Running | ~200 XP/min | 1 XP per 2 tiles |
+
+<Info>
+Agility XP is batched at 100 tiles (50 XP) to prevent visual spam. XP drops appear every ~15 seconds while running, ~30 seconds while walking.
+</Info>
+
 ### Artisan XP
 
 Processing recipes are defined in `manifests/recipes/` with OSRS-accurate XP values:
