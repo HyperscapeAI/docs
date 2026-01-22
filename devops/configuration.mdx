@@ -24,33 +24,43 @@ cp packages/server/.env.example packages/server/.env
 
 ## Server Environment
 
-### Required
+### Required (Production)
 
 ```bash
-# Database (production)
+# Database (auto-set by Railway PostgreSQL)
 DATABASE_URL=postgresql://user:pass@host:5432/db
 
 # Security
-JWT_SECRET=your-random-secret-key
+JWT_SECRET=your-random-secret-key              # Generate: openssl rand -base64 32
+ADMIN_CODE=your-admin-code                     # For /admin command access
 
-# Authentication
-PRIVY_APP_ID=your-privy-app-id
+# Authentication (from Privy dashboard)
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
 PRIVY_APP_SECRET=your-privy-app-secret
+
+# Production URLs
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
 ```
 
 ### Optional
 
 ```bash
 # Server
-PORT=5555
+PORT=5555                                      # Railway auto-assigns if not set
+NODE_ENV=production                            # Set automatically by Railway
 
-# Assets
-PUBLIC_CDN_URL=http://localhost:8080
-
-# Voice Chat
+# Voice Chat (LiveKit)
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
+
+# ElizaOS Integration
+ELIZAOS_API_URL=http://localhost:4001
+
+# Development
+DISABLE_RATE_LIMIT=false                       # NEVER set to true in production
 ```
 
 ## Client Environment
@@ -58,19 +68,29 @@ LIVEKIT_URL=wss://your-livekit-server
 ### Required
 
 ```bash
-PUBLIC_PRIVY_APP_ID=your-privy-app-id
+PUBLIC_PRIVY_APP_ID=your-privy-app-id         # Must match server
 ```
 
 <Warning>
-  `PUBLIC_PRIVY_APP_ID` must match between client and server.
+  `PUBLIC_PRIVY_APP_ID` must match between client and server for authentication to work.
 </Warning>
 
-### Production
+### Production (Cloudflare Pages)
 
 ```bash
-PUBLIC_API_URL=https://api.hyperscape.lol
-PUBLIC_WS_URL=wss://api.hyperscape.lol
-PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_APP_URL=https://hyperscape.club
+```
+
+### Development
+
+```bash
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5555/ws
+PUBLIC_CDN_URL=http://localhost:8080
+PUBLIC_APP_URL=http://localhost:3333
 ```
 
 ## AI Agent Environment
