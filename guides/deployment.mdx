@@ -70,24 +70,140 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
+Railway deployment is automated via GitHub Actions and uses Nixpacks for building.
+
+### Automatic Deployment
+
+The repository includes a GitHub Actions workflow that automatically deploys to Railway on every push to main:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/shared/**'
+      - 'packages/client/**'
+      - 'packages/server/**'
+      - 'nixpacks.toml'
+```
+
+**Required GitHub Secrets:**
+- `RAILWAY_TOKEN` - Railway API token for deployments
+
+**Environment Variables** (set in Railway dashboard):
+- `RAILWAY_PROJECT_ID`
+- `RAILWAY_SERVICE_ID`
+- `RAILWAY_ENVIRONMENT_ID`
+
+### Nixpacks Configuration
+
+Railway uses Nixpacks for building. Configuration is in `nixpacks.toml`:
+
+```toml
+[phases.setup]
+aptPkgs = ["python3", "make", "g++", "pkg-config", "libcairo2-dev"]
+
+[phases.install]
+cmds = ["bun install"]
+
+[phases.build]
+cmds = [
+  "bun run build:shared",
+  "bun run build:server",
+  "mkdir -p packages/server/world/assets/manifests"
+]
+
+[start]
+cmd = "cd packages/server && bun dist/index.js"
+
+[variables]
+CI = "true"
+SKIP_ASSETS = "true"
+NODE_ENV = "production"
+```
+
+<Info>
+The `SKIP_ASSETS=true` variable tells the server to skip Git LFS asset downloads and instead fetch manifests from the CDN at startup.
+</Info>
+
+### Manual Railway Setup
+
 <Steps>
   <Step title="Create Railway project">
-    Connect your GitHub repository to Railway.
+    1. Go to [railway.app](https://railway.app)
+    2. Create new project from GitHub repository
+    3. Select the Hyperscape repository
   </Step>
   
-  <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+  <Step title="Configure Nixpacks">
+    Railway automatically detects `nixpacks.toml` and uses it for building.
+    
+    No manual configuration needed - the build process is defined in the file.
   </Step>
   
   <Step title="Add PostgreSQL">
-    Add PostgreSQL service from Railway marketplace.
+    1. Click "New" → "Database" → "PostgreSQL"
+    2. Railway automatically sets `DATABASE_URL` environment variable
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    Add required variables in Railway dashboard:
+    
+    ```bash
+    # Required
+    PRIVY_APP_ID=your-app-id
+    PRIVY_APP_SECRET=your-app-secret
+    JWT_SECRET=your-random-secret
+    
+    # CDN (Cloudflare R2)
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    
+    # Optional
+    ADMIN_CODE=your-admin-code
+    ```
+  </Step>
+  
+  <Step title="Deploy">
+    Push to `main` branch or click "Deploy" in Railway dashboard.
+    
+    The GitHub Action will trigger automatic deployment.
   </Step>
 </Steps>
+
+### Railway Build Process
+
+The build happens in phases:
+
+1. **Setup**: Install system dependencies (Python, Cairo, etc.)
+2. **Install**: Run `bun install` to install Node packages
+3. **Build**: 
+   - Build shared package (core engine)
+   - Build server package (game server)
+   - Create manifests directory (populated at startup from CDN)
+4. **Start**: Run `bun dist/index.js` from server package
+
+<Warning>
+The client is NOT built on Railway - it's deployed separately to Cloudflare Pages. Railway only builds and serves the game server API.
+</Warning>
+
+### Manifest Fetching
+
+At server startup, manifests are fetched from the CDN:
+
+```typescript
+// From packages/server/src/startup/http-server.ts
+await fetchManifestsFromCDN(config);
+```
+
+**Behavior:**
+- **Development**: Skips CDN fetch if local manifests exist
+- **Production/CI**: Always fetches from `PUBLIC_CDN_URL`
+- **Fallback**: Server fails to start if manifests can't be fetched
+
+**Manifest Cache:**
+- 5-minute cache headers on manifest JSON files
+- Allows quick updates without full redeployment
 
 ## Vercel Client Deployment
 
