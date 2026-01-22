@@ -152,6 +152,47 @@ Game content is defined in TypeScript files in `src/data/`:
   Add new NPCs in `world/assets/manifests/npcs.json`.
 </Info>
 
+### Skill Unlocks API
+
+The skill unlocks system provides functions for querying what players unlock at each level:
+
+```typescript
+import { 
+  getAllSkillUnlocks,
+  getUnlocksAtLevel,
+  getUnlocksUpToLevel,
+  loadSkillUnlocks,
+  type SkillUnlock
+} from '@hyperscape/shared';
+
+// Load from manifest (called by DataManager)
+loadSkillUnlocks(manifest);
+
+// Get all unlocks for a skill
+const attackUnlocks = getAllSkillUnlocks()["attack"];
+
+// Get unlocks at specific level
+const level40Unlocks = getUnlocksAtLevel("attack", 40);
+// Returns: [{ level: 40, description: "Rune weapons", type: "item" }]
+
+// Get all unlocks up to level
+const unlockedSoFar = getUnlocksUpToLevel("attack", 45);
+```
+
+**Defence/Defense Normalization:**
+
+The system automatically handles British/American spelling:
+
+```typescript
+// skill-unlocks.json uses "defence" (OSRS-accurate)
+// UI uses "defense" (codebase convention)
+// Both work - normalization happens at load time
+const defenceUnlocks = getAllSkillUnlocks()["defence"];  // Works
+const defenseUnlocks = getAllSkillUnlocks()["defense"];  // Also works
+```
+
+This allows the manifest to use OSRS-accurate British spelling while the codebase uses American spelling consistently.
+
 ## Entry Points
 
 ### Server (index.ts)
