@@ -27,15 +27,61 @@ PRIVY_APP_SECRET=your-app-secret
 
 **Symptom**: 404 errors for models/avatars
 
-**Cause**: CDN container not running
+**Cause**: CDN container not running or manifests not fetched
 
 **Solution**:
 
 ```bash
+# Start CDN container
 bun run cdn:up
+
+# Verify CDN is serving manifests
+curl http://localhost:8080/manifests/npcs.json
 ```
 
 Or ensure you're using `bun run dev` which starts it automatically.
+
+### Manifests Not Loading
+
+**Symptom**: Server logs show "Failed to fetch manifests" or "No manifests available"
+
+**Causes**:
+- CDN not accessible at `PUBLIC_CDN_URL`
+- Manifests not deployed to CDN
+- Network connectivity issues
+
+**Solutions**:
+
+**Development:**
+```bash
+# Ensure local manifests exist
+ls packages/server/world/assets/manifests/
+
+# If missing, clone assets repo
+cd packages/server/world
+git clone https://github.com/HyperscapeAI/assets.git
+
+# Or start CDN
+bun run cdn:up
+```
+
+**Production:**
+```bash
+# Verify CDN URL is correct
+echo $PUBLIC_CDN_URL
+
+# Test manifest accessibility
+curl $PUBLIC_CDN_URL/manifests/npcs.json
+
+# Check Railway logs for fetch errors
+railway logs --filter manifest
+```
+
+**Test Environment:**
+```bash
+# Skip manifest loading for tests
+SKIP_MANIFESTS=true bun test
+```
 
 ### Database Schema Errors
 
