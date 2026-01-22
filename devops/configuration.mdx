@@ -43,14 +43,35 @@ PRIVY_APP_SECRET=your-privy-app-secret
 ```bash
 # Server
 PORT=5555
+NODE_ENV=production
+ADMIN_CODE=your-admin-code
 
-# Assets
+# Assets & CDN
 PUBLIC_CDN_URL=http://localhost:8080
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5555/ws
+
+# Database (if not using Railway's auto-configured DATABASE_URL)
+USE_LOCAL_POSTGRES=true
+POSTGRES_CONTAINER=hyperscape-postgres
+POSTGRES_USER=hyperscape
+POSTGRES_PASSWORD=hyperscape_dev
+POSTGRES_DB=hyperscape
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
+
+# Asset Management
+SKIP_ASSETS=false          # Set to true in CI/production
+SKIP_MANIFESTS=false       # Set to true to skip manifest fetching
+
+# Auto-save
+SAVE_INTERVAL=60           # Seconds between auto-saves
+
+# Deployment
+COMMIT_HASH=abc123         # Auto-populated by CI/CD
 ```
 
 ## Client Environment
