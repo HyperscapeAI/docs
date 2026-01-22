@@ -23,6 +23,142 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Agility Skill & ElizaOS 1.7 Upgrade" description="January 2026" date="2026-01-21">
+
+### 🏃 Agility Skill System
+
+New support skill that trains through movement and affects stamina mechanics:
+
+- **Movement XP**: Gain 1 XP per 2 tiles traveled (batched at 100 tiles = 50 XP)
+  - Walking: ~100 XP/min
+  - Running: ~200 XP/min
+  - XP drops every ~15s running, ~30s walking (prevents visual spam)
+  - Death resets accumulated tiles (not earned XP)
+- **Weight-Based Stamina Drain**: Carrying weight increases stamina drain while running
+  - +0.5% drain per kg carried
+  - 50kg load = +25% drain (2.5 stamina/sec instead of 2.0)
+  - Weight synced from server via `PLAYER_WEIGHT_CHANGED` events
+- **Agility-Based Stamina Regen**: Higher agility level = faster stamina recovery
+  - +1% regen per agility level
+  - Level 99 = +99% regen (nearly double base rate)
+  - Affects both walking and idle regeneration
+- **Database**: New `agilityLevel` and `agilityXp` columns in characters table
+- **Testing**: 868 lines of comprehensive tests (AgilitySystem.test.ts, AgilityPersistence.test.ts)
+
+### 📖 Skill Guide Panel
+
+OSRS-style skill unlock viewer accessible from Skills Panel:
+
+- **Click to Open**: Click any skill in Skills Panel to view its unlock progression
+- **Unlock Display**: Shows all unlocks with level requirements
+  - Green checkmark for unlocked items
+  - Lock icon for locked items
+  - "NEXT" badge highlights next unlock
+- **Progress Tracking**: Shows "X of Y unlocks achieved"
+- **Type Indicators**: Item vs ability badges
+- **Scrollable**: Handles skills with many unlocks (Prayer has 29!)
+- **Data Source**: Fetches from `/api/data/skill-unlocks` endpoint
+- **Spelling Normalization**: Handles British "defence" vs American "defense"
+
+### 🤖 ElizaOS 1.7.0 Upgrade
+
+Major upgrade to ElizaOS framework with dashboard improvements:
+
+**Dependency Updates**:
+- `@elizaos/core`: 1.2.9 → 1.7.0
+- `@elizaos/plugin-openai`: 1.5.16 → 1.6.0
+- `@elizaos/plugin-openrouter`: 1.5.15 → 1.5.17
+- `@elizaos/plugin-sql`: 1.6.4 → 1.7.0
+- **New**: `@elizaos/plugin-ollama` 1.2.4 for local LLM inference
+
+**Backwards Compatibility**:
+- Shims for API changes (`max_tokens` → `maxTokens`)
+- Cross-version compatibility maintained
+
+### 🎮 Agent Dashboard Improvements
+
+**Quick Action Menu**: One-click commands next to chat input
+- 🪓 Woodcutting, ⛏️ Mining, 🎣 Fishing, ⚔️ Combat
+- 📦 Pick Up, 🏦 Bank, ⏹️ Stop, ⏸️ Idle
+- Context-aware availability (grayed out when unavailable)
+
+**Stop/Resume Goal Controls**: Robust agent control system
+- **Stop Button**: Halts agent and prevents auto-goal setting
+  - Immediate movement cancellation
+  - "Goals Paused" state UI
+  - Blocks SET_GOAL actions while paused
+  - Chat commands still work
+- **Resume Button**: Resumes autonomous goal selection
+- **Pause State Persistence**: Syncs across reconnections
+- **API Endpoints**: `/api/agents/:agentId/goal/stop` and `/resume`
+
+**Dashboard Panels**:
+- **AgentSummaryCard**: Quick overview with combat level, total level, current goal
+- **AgentGoalPanel**: Goal progress with time estimates and XP rates
+- **AgentSkillsPanel**: Skill levels with session XP tracking
+- **AgentActivityPanel**: Recent actions and session stats
+- **AgentPositionPanel**: Location with nearby POIs and zone detection
+
+**Settings Tab Fixes**:
+- Tabs now switch correctly (Basic, Content, Style, API Keys)
+- API key configuration UI with show/hide toggles
+- Proper ElizaOS API integration
+
+**Chat Routing Fixes**:
+- Messages reach agent correctly
+- In-game chat opens automatically when sending from dashboard
+- PostMessage integration between iframe and parent
+
+### 📦 PICKUP_ITEM & DROP_ITEM Enhancements
+
+**PICKUP_ITEM** (new action):
+- Smart item matching with word-boundary scoring
+- Prevents "bronze pickaxe" matching "bronze hatchet"
+- Auto-walks to items beyond pickup range (4m)
+- Handles server's 200-tile movement limit with stepping
+
+**DROP_ITEM** improvements:
+- "Drop all" support for entire inventory
+- "Drop all \<type\>" for specific item types (e.g., "drop all logs")
+- Safety limits (max 50 items per operation)
+- Consecutive failure protection (stops after 3 failures)
+- Word-boundary matching for accurate item selection
+
+### 🐛 Bug Fixes
+
+- **CHOP_TREE**: Now positions on cardinal adjacent tiles (N/S/E/W, not diagonal)
+- **NAVIGATE_TO**: Handles 200-tile server limit with stepping
+- **Multi-step Commands**: Grace period prevents goal clearing mid-walk
+- **Item Icon Deduplication**: Consolidated duplicate `getItemIcon()` functions
+- **Dev Script Cleanup**: Improved process cleanup on Ctrl+C
+
+### ⚡ Rate Limiting Improvements
+
+Dashboard polling intervals increased to prevent 429 errors:
+- AgentSummaryCard: 2s → 10s
+- AgentGoalPanel: 2s → 10s
+- AgentSkillsPanel: 2-5s → 10s
+- AgentActivityPanel: 3s → 10s
+- AgentPositionPanel: 1-3s → 5-10s
+
+All API calls include retry logic with exponential backoff (1s → 2s → 4s).
+
+### 🚀 Deployment Updates
+
+**Railway Deployment**:
+- Automated deployment via GitHub Actions
+- Manifest fetching from CDN at startup (not from assets repo)
+- CORS configuration for Cloudflare Pages frontend
+- Improved build process with split phases
+
+**CORS Allowlist**:
+- `https://hyperscape.club` and `https://www.hyperscape.club`
+- `https://hyperscape.pages.dev` and preview deployments
+- HTTP fallback for development
+- Regex patterns for dynamic subdomains
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
