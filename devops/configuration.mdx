@@ -46,12 +46,32 @@ PORT=5555
 
 # Assets
 PUBLIC_CDN_URL=http://localhost:8080
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5555/ws
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
 ```
+
+### CORS Configuration
+
+For production deployments with separate frontend and backend domains, configure CORS in the server:
+
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  'http://localhost:3333',           // Local development
+  'https://hyperscape.pages.dev',    // Cloudflare Pages production
+  'https://*.hyperscape.pages.dev',  // Cloudflare Pages preview deployments
+  // Add your custom domains here
+];
+```
+
+<Info>
+Cloudflare Pages preview deployments use subdomains like `abc123.hyperscape.pages.dev`. The wildcard pattern `*.hyperscape.pages.dev` allows all preview deployments to access the API.
+</Info>
 
 ## Client Environment
 
