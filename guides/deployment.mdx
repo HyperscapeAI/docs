@@ -46,24 +46,100 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
+Railway deployment is automated via GitHub Actions (`.github/workflows/deploy-railway.yml`).
+
 <Steps>
   <Step title="Create Railway project">
     Connect your GitHub repository to Railway.
   </Step>
   
   <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+    Railway uses `nixpacks.toml` for build configuration:
+    
+    ```toml
+    [phases.setup]
+    nixPkgs = ["bun"]
+    
+    [phases.build]
+    cmds = [
+      "bun install --frozen-lockfile",
+      "bun run build:shared",
+      "bun run build:client",
+      "bun run build:server"
+    ]
+    
+    [start]
+    cmd = "cd packages/server && bun run start:railway"
+    ```
   </Step>
   
   <Step title="Add PostgreSQL">
     Add PostgreSQL service from Railway marketplace.
+    Railway automatically sets `DATABASE_URL`.
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    Required variables:
+    ```bash
+    PRIVY_APP_ID=your-app-id
+    PRIVY_APP_SECRET=your-app-secret
+    JWT_SECRET=your-secret-key
+    PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+    ```
+  </Step>
+  
+  <Step title="Configure manifest loading">
+    Railway deployment fetches manifests from CDN at startup:
+    
+    ```typescript
+    // From http-server.ts
+    if (process.env.NODE_ENV === "production") {
+      await fetchManifestsFromCDN(config.manifestsDir);
+    }
+    ```
+    
+    Manifests are downloaded from `PUBLIC_CDN_URL/manifests/` to avoid bundling large asset files.
   </Step>
 </Steps>
+
+### Railway GitHub Actions
+
+The repository includes automated Railway deployment:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+name: Deploy to Railway
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/server/**'
+      - 'packages/shared/**'
+      - 'packages/client/**'
+```
+
+**Features**:
+- Automatic deployment on push to main
+- Builds client and server
+- Fetches manifests from CDN (not from assets repo)
+- Uses Railway GraphQL API for deployment
+
+### CORS Configuration
+
+Railway deployment requires CORS configuration for Cloudflare Pages frontend:
+
+```typescript
+// From http-server.ts
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  "http://hyperscape.pages.dev",
+  /^https:\/\/[a-z0-9-]+\.hyperscape\.pages\.dev$/,  // Preview deployments
+  /^http:\/\/[a-z0-9-]+\.hyperscape\.pages\.dev$/,   // HTTP fallback
+  /^http:\/\/localhost:\d+$/,                         // Local development
+];
+```
 
 ## Vercel Client Deployment
 
