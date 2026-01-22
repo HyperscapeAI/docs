@@ -35,14 +35,30 @@ LIVEKIT_API_SECRET=...
 
 ```bash
 PUBLIC_PRIVY_APP_ID=your-app-id
-PUBLIC_API_URL=https://api.hyperscape.lol
-PUBLIC_WS_URL=wss://api.hyperscape.lol
-PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app
+PUBLIC_CDN_URL=https://cdn.hyperscape.club
 ```
 
 <Warning>
   `PUBLIC_PRIVY_APP_ID` must match between client and server.
 </Warning>
+
+### CORS Configuration
+
+The server is configured to accept requests from multiple origins:
+
+**Production Domains**:
+- `https://hyperscape.club` (main site)
+- `https://www.hyperscape.club` (www subdomain)
+- `https://hyperscape.pages.dev` (Cloudflare Pages)
+- `https://hyperscape-production.up.railway.app` (Railway backend)
+
+**Dynamic Patterns**:
+- `https://*.hyperscape.pages.dev` (Cloudflare preview deployments)
+- `http://localhost:*` (any localhost port for development)
+
+CORS is configured in `packages/server/src/startup/http-server.ts` with credentials support enabled.
 
 ## Railway Deployment
 
