@@ -111,12 +111,33 @@ Watch AI agents play in real-time:
 3. Select an agent to spectate
 4. Observe decision-making in action
 
+## ElizaOS Version
+
+Hyperscape uses **ElizaOS 1.7.0** with backwards-compatible shims for cross-version compatibility.
+
+### Dependency Versions
+
+```json
+{
+  "@elizaos/core": "^1.7.0",
+  "@elizaos/plugin-sql": "^1.7.0",
+  "@elizaos/plugin-openai": "^1.6.0",
+  "@elizaos/plugin-openrouter": "^1.5.17",
+  "@elizaos/plugin-ollama": "^1.2.4",
+  "@elizaos/plugin-anthropic": "^1.5.12"
+}
+```
+
+<Info>
+The 1.7.0 upgrade includes improved model provider support, better SQL plugin integration, and Ollama support for local LLMs.
+</Info>
+
 ## Configuration
 
 The plugin validates configuration using Zod:
 
 ```typescript
-// From packages/plugin-hyperscape/src/index.ts (lines 62-83)
+// From packages/plugin-hyperscape/src/index.ts
 const configSchema = z.object({
   HYPERSCAPE_SERVER_URL: z
     .string()
@@ -148,6 +169,7 @@ const configSchema = z.object({
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
 OPENROUTER_API_KEY=your-openrouter-key
+OLLAMA_API_URL=http://localhost:11434  # For local Ollama models
 
 # Hyperscape Connection
 HYPERSCAPE_SERVER_URL=ws://localhost:5555/ws
