@@ -34,6 +34,45 @@ packages/server/src/database/schema.ts
 | `player_deaths` | Death history |
 | `world_chunks` | World state persistence |
 | `sessions` | Active game sessions |
+| `quest_progress` | Player quest progress and completion |
+| `quest_audit_log` | Quest action audit trail (security) |
+| `activity_log` | Player activity logging (admin panel) |
+| `trades` | Trade history |
+| `user_bans` | User ban records (moderation) |
+
+### Quest Tables
+
+**quest_progress** - Tracks player quest state:
+
+```sql
+CREATE TABLE quest_progress (
+  id SERIAL PRIMARY KEY,
+  playerId TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  questId TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'not_started',
+  currentStage TEXT,
+  stageProgress JSONB DEFAULT '{}',
+  startedAt BIGINT,
+  completedAt BIGINT,
+  CONSTRAINT quest_progress_player_quest_unique UNIQUE(playerId, questId)
+);
+```
+
+**quest_audit_log** - Immutable audit trail for security:
+
+```sql
+CREATE TABLE quest_audit_log (
+  id SERIAL PRIMARY KEY,
+  playerId TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  questId TEXT NOT NULL,
+  action TEXT NOT NULL,
+  questPointsAwarded INTEGER DEFAULT 0,
+  stageId TEXT,
+  stageProgress JSONB DEFAULT '{}',
+  timestamp BIGINT NOT NULL,
+  metadata JSONB DEFAULT '{}'
+);
+```
 
 ### Characters Table Schema
 
