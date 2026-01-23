@@ -112,6 +112,13 @@ CREATE TABLE characters (
   firemakingXp INTEGER DEFAULT 0,
   cookingXp INTEGER DEFAULT 0,
   smithingXp INTEGER DEFAULT 0,
+  agilityXp INTEGER DEFAULT 0,
+  -- Prayer
+  prayerPoints INTEGER DEFAULT 1,
+  prayerMaxPoints INTEGER DEFAULT 1,
+  activePrayers TEXT DEFAULT '[]',
+  -- Quest progression
+  questPoints INTEGER DEFAULT 0,
   -- Status
   health INTEGER DEFAULT 100,
   maxHealth INTEGER DEFAULT 100,
