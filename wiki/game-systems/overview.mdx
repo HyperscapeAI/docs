@@ -129,6 +129,18 @@ Player character management:
 - **Equipment** — Gear slots and bonuses
 - **Skills** — 11 trainable skills (5 combat, 3 gathering, 3 artisan)
 
+### Quest System
+
+**Location:** `systems/shared/progression/`
+
+OSRS-style quest progression with multi-stage tracking:
+
+- **Quest Progression** — Multi-stage quests with flexible completion
+- **Stage Types** — Dialogue, kill, gather, interact objectives
+- **Quest Points** — Character-level quest point tracking
+- **Security** — HMAC kill token validation, rate limiting, audit logging
+- **Database** — `quest_progress` and `quest_audit_log` tables
+
 ---
 
 ## Combat Constants
