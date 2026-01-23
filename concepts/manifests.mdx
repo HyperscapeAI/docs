@@ -624,6 +624,96 @@ Prayers in the same category typically conflict. Activating a prayer automatical
 Prayer drain rates follow OSRS formulas. The `drainEffect` value determines how quickly prayer points deplete while the prayer is active.
 </Info>
 
+### Quests (`quests.json`)
+
+The `quests.json` manifest defines quest content with stages, requirements, and rewards:
+
+```json
+{
+  "goblin_slayer": {
+    "id": "goblin_slayer",
+    "name": "Goblin Slayer",
+    "description": "Captain Rowan needs help dealing with the goblin threat.",
+    "difficulty": "novice",
+    "questPoints": 1,
+    "replayable": false,
+    "requirements": {
+      "quests": [],
+      "skills": {},
+      "items": []
+    },
+    "startNpc": "captain_rowan",
+    "stages": [
+      {
+        "id": "start",
+        "type": "dialogue",
+        "description": "Speak to Captain Rowan in Central Haven",
+        "npcId": "captain_rowan"
+      },
+      {
+        "id": "kill_goblins",
+        "type": "kill",
+        "description": "Kill 15 goblins",
+        "target": "goblin",
+        "count": 15
+      },
+      {
+        "id": "return",
+        "type": "dialogue",
+        "description": "Return to Captain Rowan",
+        "npcId": "captain_rowan"
+      }
+    ],
+    "onStart": {
+      "items": [
+        { "itemId": "bronze_sword", "quantity": 1 }
+      ],
+      "dialogue": "quest_accepted"
+    },
+    "rewards": {
+      "questPoints": 1,
+      "items": [
+        { "itemId": "xp_lamp_100", "quantity": 1 }
+      ],
+      "xp": {}
+    }
+  }
+}
+```
+
+**Properties**:
+- `id` — Unique quest identifier
+- `name` — Display name shown in quest log
+- `description` — Brief quest summary
+- `difficulty` — Quest difficulty: `novice`, `intermediate`, `experienced`, `master`
+- `questPoints` — Quest points awarded on completion
+- `replayable` — Whether the quest can be repeated
+- `requirements` — Prerequisites to start the quest
+  - `quests` — Array of required quest IDs
+  - `skills` — Skill level requirements (e.g., `{"woodcutting": 10}`)
+  - `items` — Required items to start
+- `startNpc` — NPC ID that starts the quest
+- `stages` — Array of quest stages in order
+  - `type` — Stage type: `dialogue`, `kill`, `gather`, `interact`
+  - `description` — Stage objective text
+  - `target` — Target entity/item ID
+  - `count` — Required count for completion
+- `onStart` — Items and dialogue triggered when quest starts
+- `rewards` — Quest completion rewards
+  - `questPoints` — Quest points awarded
+  - `items` — Item rewards
+  - `xp` — Skill XP rewards
+
+**Stage Types**:
+- **dialogue** — Talk to an NPC
+- **kill** — Defeat a specific number of enemies
+- **gather** — Collect resources (woodcutting, mining, fishing)
+- **interact** — Use items or interact with objects
+
+<Info>
+Quests support multi-stage progression with different objective types. NPCs referenced in quests must exist in `npcs.json` and be placed in `world-areas.json`.
+</Info>
+
 ### Model Bounds (`model-bounds.json`)
 
 The `model-bounds.json` manifest contains pre-calculated bounding box data for all 3D models in the game. This data is used for spatial calculations, collision detection, and tile-based placement:
