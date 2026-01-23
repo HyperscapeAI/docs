@@ -417,10 +417,19 @@ Stations are defined in `stations.json`:
 
 - **Anvil** - Used for smithing bars into equipment
 - **Furnace** - Used for smelting ores into bars
-- **Cooking Range** - Used for cooking food (reduces burn chance)
+- **Range** - Used for cooking food (reduces burn chance compared to fires)
 - **Bank Booth** - Used for accessing bank storage
 
 Each station defines its 3D model, scale, position offset, and examine text.
+
+**Range Entity:**
+The range is a permanent cooking station that provides better burn rates than fires. Players can use raw food on ranges just like fires, but with reduced burn chance. Ranges are placed in starter towns and other settlements.
+
+```typescript
+// RangeEntity extends InteractableEntity
+// Location: packages/shared/src/entities/world/RangeEntity.ts
+// Supports cooking with reduced burn rates per cooking.json stopBurnLevel.range
+```
 
 ### Tool Metadata
 
