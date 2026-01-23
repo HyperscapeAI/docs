@@ -43,9 +43,15 @@ PRIVY_APP_SECRET=your-privy-app-secret
 ```bash
 # Server
 PORT=5555
+NODE_ENV=development
 
 # Assets
 PUBLIC_CDN_URL=http://localhost:8080
+
+# CDN Fallback (development only)
+# If local CDN is incomplete, server falls back to production CDN
+# Set to "true" to skip manifest validation in test environments
+SKIP_MANIFESTS=false
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
