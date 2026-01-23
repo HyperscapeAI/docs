@@ -584,6 +584,64 @@ interface VegetationLayer {
 
 ---
 
+## Quests
+
+Quests are defined in `quests.json` and provide structured objectives for players:
+
+```typescript
+interface Quest {
+  id: string;                    // Unique quest identifier
+  name: string;                  // Display name
+  description: string;           // Quest description
+  difficulty: string;            // "novice" | "intermediate" | "experienced" | "master"
+  questPoints: number;           // Quest points awarded
+  replayable: boolean;           // Can be repeated
+  requirements: {
+    quests: string[];            // Required completed quests
+    skills: Record<string, number>; // Required skill levels
+    items: string[];             // Required items
+  };
+  startNpc: string;              // NPC ID to start quest
+  stages: QuestStage[];          // Quest stages
+  onStart: {
+    items: Array<{itemId: string; quantity: number}>; // Items given on start
+    dialogue: string;            // Dialogue key
+  };
+  rewards: {
+    questPoints: number;         // Quest points
+    items: Array<{itemId: string; quantity: number}>; // Item rewards
+    xp: Record<string, number>;  // Skill XP rewards
+  };
+}
+
+interface QuestStage {
+  id: string;                    // Stage identifier
+  type: "dialogue" | "kill" | "gather" | "interact"; // Stage type
+  description: string;           // Stage description
+  npcId?: string;                // For dialogue stages
+  target?: string;               // For kill/gather/interact stages
+  count?: number;                // Required count
+}
+```
+
+### Available Quests
+
+| Quest | Difficulty | Quest Points | Description |
+|-------|-----------|--------------|-------------|
+| **Goblin Slayer** | Novice | 1 | Help Captain Rowan deal with the goblin threat |
+| **Lumberjack's First Lesson** | Novice | 1 | Help Forester Wilma gather and burn firewood |
+| **Fresh Catch** | Novice | 1 | Help Fisherman Pete catch and cook fish |
+| **Torvin's Tools** | Novice | 1 | Help Torvin forge a set of bronze tools |
+
+### Quest Stage Types
+
+- **dialogue** - Talk to an NPC
+- **kill** - Defeat a specific number of NPCs
+- **gather** - Collect items through skilling
+- **interact** - Use items or stations (cooking, smithing, etc.)
+
+---
+
 ## Adding New Content
 
 <Steps>
