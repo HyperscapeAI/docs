@@ -47,6 +47,11 @@ PORT=5555
 # Assets
 PUBLIC_CDN_URL=http://localhost:8080
 
+# CDN Fallback (development only)
+# If localhost CDN is unavailable and required manifests are missing,
+# the server will automatically fall back to production CDN to bootstrap
+# local development. Set SKIP_MANIFESTS=true to bypass manifest checks in tests.
+
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
