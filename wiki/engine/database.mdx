@@ -105,6 +105,9 @@ export const characters = pgTable('characters', {
   combatState: text('combat_state').default('idle'), // idle, fighting, dead
   lastCombatTick: bigint('last_combat_tick', { mode: 'number' }),
 
+  // Quest progression
+  questPoints: integer('questPoints').default(0).notNull(),
+
   // Timestamps
   lastLogin: bigint('last_login', { mode: 'number' }),
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
