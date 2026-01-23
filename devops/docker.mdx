@@ -27,6 +27,8 @@ bun run cdn:up
 
 This starts an nginx container serving assets from `packages/server/world/assets/` on port 8080.
 
+The CDN script (`scripts/cdn.mjs`) uses `--force-recreate` to refresh volume mounts when assets are updated.
+
 ### Stop CDN
 
 ```bash
@@ -36,6 +38,75 @@ bun run cdn:down
 ### Automatic Start
 
 The CDN starts automatically with `bun run dev`. Only run manually if using services separately.
+
+### CDN Architecture
+
+Hyperscape uses a **fully CDN-based architecture** with automatic fallback:
+
+```mermaid
+flowchart TD
+    A[Server Startup] --> B{Local CDN Available?}
+    B -->|Yes| C[Check Required Manifests]
+    B -->|No| D[Fetch from Production CDN]
+    C -->|Complete| E[Use Local CDN]
+    C -->|Incomplete| F{Development Mode?}
+    F -->|Yes| G[Fallback to Production CDN]
+    F -->|No| H[Throw Error]
+    G --> E
+    D --> E
+```
+
+**Required Manifests:**
+- `npcs.json` - NPC definitions
+- `world-areas.json` - World area data
+- `biomes.json` - Biome definitions
+- `stores.json` - Shop data
+- `items/{weapons,tools,resources,food,misc}.json` - Item categories
+
+**Production CDN Fallback:**
+
+In development mode, if the local CDN (`http://localhost:8080`) is missing required manifests, the server automatically falls back to the production CDN (`https://assets.hyperscape.club`):
+
+```typescript
+// packages/server/src/startup/config.ts
+if (
+  nodeEnv === "development" &&
+  missingRequired.length > 0 &&
+  isLocalhostUrl(cdnUrl)
+) {
+  const fallbackCdnUrl = "https://assets.hyperscape.club";
+  console.warn(`[Config] Falling back to production CDN for manifests: ${fallbackCdnUrl}`);
+  await fetchFrom(fallbackCdnUrl);
+}
+```
+
+This allows developers to start the server without cloning the full assets repository.
+
+### Asset Management
+
+```bash
+# Sync assets from Git LFS
+bun run assets:sync
+
+# Deploy to Cloudflare R2 (production)
+bun run assets:deploy
+
+# Verify CDN is working
+bun run cdn:verify
+```
+
+The `ensure-assets.mjs` script detects whether you have full assets (models, audio, textures) or just manifests:
+
+```typescript
+function hasFullAssets(dir) {
+  // Manifests-only is treated as "missing" to trigger auto-download
+  const hasWorld = dirHasNonHiddenFiles(path.join(dir, "world"));
+  const hasModels = dirHasNonHiddenFiles(path.join(dir, "models"));
+  return hasWorld && hasModels;
+}
+```
+
+If only manifests are present, the script clones the full assets repository and pulls Git LFS objects.
 
 ## PostgreSQL Container
 
