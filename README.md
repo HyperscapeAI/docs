@@ -13,7 +13,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a custom 3D multiplayer engin
 - **Quickstart** - Get Hyperscape running locally in minutes
 - **Guides** - Development, deployment, AI agents, and mobile
 - **Concepts** - Core architecture (ECS, combat, economy, multiplayer)
-- **Wiki** - In-depth system documentation
+- **Wiki** - In-depth system documentation (combat, skills, quests, movement, etc.)
 - **API Reference** - TypeScript API documentation
 - **Packages** - Package-specific documentation
 
