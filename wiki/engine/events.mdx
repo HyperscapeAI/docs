@@ -170,9 +170,16 @@ export enum EventType {
 
 ```typescript
 export enum EventType {
+  // Quest lifecycle
+  QUEST_START_CONFIRM = "quest:start_confirm",
   QUEST_STARTED = "quest:started",
-  QUEST_PROGRESS = "quest:progress",
+  QUEST_PROGRESSED = "quest:progressed",
   QUEST_COMPLETED = "quest:completed",
+  
+  // XP Lamp (quest reward item)
+  XP_LAMP_USE_REQUEST = "xp_lamp:use_request",
+  XP_LAMP_SKILL_SELECTED = "xp_lamp:skill_selected",
+  XP_LAMP_APPLIED = "xp_lamp:applied",
 }
 ```
 
