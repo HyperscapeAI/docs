@@ -119,6 +119,39 @@ Upload assets to S3, R2, or similar:
 2. Upload `packages/server/world/assets/`
 3. Set `PUBLIC_CDN_URL` to bucket URL
 
+## CI/CD
+
+### GitHub Actions
+
+Hyperscape includes automated CI/CD workflows:
+
+**Continuous Integration** (`.github/workflows/ci.yml`):
+- Lint, typecheck, and test on every push
+- Builds all packages to verify compilation
+- Installs Tauri system dependencies for Linux builds
+  - GTK 3, WebKitGTK 4.1, AppIndicator, librsvg, patchelf
+  - Rust stable toolchain via `dtolnay/rust-toolchain@stable`
+
+**Deployment Workflows**:
+- `deploy-railway.yml`: Deploy server to Railway on main/staging push
+- `deploy-cloudflare.yml`: Deploy client to Cloudflare Pages
+- `build-app.yml`: Build Tauri desktop app for Linux/macOS/Windows
+
+**Staging Branch**:
+- All deploy workflows trigger on both `main` and `staging` branches
+- Environment-specific URLs for staging builds
+- Separate Railway/Cloudflare environments
+
+### Cloudflare Pages
+
+Client automatically deploys to Cloudflare Pages:
+
+- **Production**: `https://hyperscape.pages.dev` (main branch)
+- **Preview**: `https://<commit>.hyperscape.pages.dev` (PRs)
+- **Custom Domain**: `https://www.hyperscape.club`
+
+CORS is configured to allow all Cloudflare Pages domains.
+
 ## Production Checklist
 
 - [ ] PostgreSQL database provisioned
@@ -127,3 +160,4 @@ Upload assets to S3, R2, or similar:
 - [ ] CDN serving assets
 - [ ] WebSocket URL configured
 - [ ] SSL/TLS enabled
+- [ ] CORS allowlist includes production domains
