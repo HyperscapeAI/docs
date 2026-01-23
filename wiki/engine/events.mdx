@@ -146,6 +146,10 @@ export enum EventType {
   RESOURCE_GATHERED = "resource:gathered",
   RESOURCE_DEPLETED = "resource:depleted",
   RESOURCE_RESPAWNED = "resource:respawned",
+  
+  // Gathering tool visuals (OSRS-style)
+  GATHERING_TOOL_SHOW = "gathering:tool:show",
+  GATHERING_TOOL_HIDE = "gathering:tool:hide",
 
   // Processing
   RESOURCE_PROCESSED = "resource:processed",
@@ -153,6 +157,25 @@ export enum EventType {
   FOOD_COOKED = "food:cooked",
 }
 ```
+
+**Gathering Tool Events:**
+
+```typescript
+interface GatheringToolShowEvent {
+  playerId: string;
+  itemId: string;  // Tool item ID (e.g., "fishing_rod")
+  slot: string;    // Equipment slot to show in (e.g., "weapon")
+}
+
+interface GatheringToolHideEvent {
+  playerId: string;
+  slot: string;    // Equipment slot to hide from
+}
+```
+
+<Info>
+Gathering tool events enable OSRS-style visuals where tools appear in hand during gathering (e.g., fishing rod during fishing) even though they're in inventory, not equipped.
+</Info>
 
 ### Bank Events
 
