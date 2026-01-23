@@ -23,10 +23,15 @@ Database schema is defined in `packages/server/src/database/schema.ts`.
 | `equipment` | Equipped items | EquipmentRepository |
 | `bank_storage` | Bank storage (480 slots) | BankRepository |
 | `bank_tabs` | Custom bank tab configuration | BankRepository |
+| `quest_progress` | Player quest state tracking | QuestRepository |
+| `quest_audit_log` | Quest action audit trail | QuestRepository |
 | `world_chunks` | Persistent world modifications | WorldRepository |
 | `player_sessions` | Login/logout tracking | SessionRepository |
 | `npc_kills` | Kill statistics | StatsRepository |
 | `death_locks` | Death state for reconnects | PlayerDeathSystem |
+| `activity_log` | Player activity logging | ActivityLogRepository |
+| `trades` | Trade history | TradingSystem |
+| `user_bans` | Moderation bans | AdminSystem |
 
 ---
 
