@@ -278,6 +278,73 @@ export const npcKillsIndexes = {
 
 ---
 
+## Quest System Tables
+
+### quest_progress
+
+Tracks player quest state:
+
+```typescript
+export const questProgress = pgTable('quest_progress', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),
+  status: text('status').default('not_started').notNull(),
+  currentStage: text('currentStage'),
+  stageProgress: jsonb('stageProgress').default({}),
+  startedAt: bigint('startedAt', { mode: 'number' }),
+  completedAt: bigint('completedAt', { mode: 'number' }),
+}, (table) => ({
+  uniquePlayerQuest: unique().on(table.playerId, table.questId),
+  playerIdx: index('idx_quest_progress_player').on(table.playerId),
+  statusIdx: index('idx_quest_progress_status').on(table.playerId, table.status),
+}));
+```
+
+**Key Features**:
+- UNIQUE constraint on `(playerId, questId)` prevents duplicate progress entries
+- CASCADE DELETE cleans up on character deletion
+- `stageProgress` JSONB stores flexible progress data (e.g., `{"kills": 7, "copper_ore": 3}`)
+- `status` values: `not_started`, `in_progress`, `completed`
+
+<Info>
+  `ready_to_complete` is a **derived status** computed by QuestSystem when `status === "in_progress"` AND the current stage objective is met. It's not stored in the database.
+</Info>
+
+### quest_audit_log
+
+Immutable audit trail for security and analytics:
+
+```typescript
+export const questAuditLog = pgTable('quest_audit_log', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),
+  action: text('action').notNull(),  // "started", "progressed", "completed"
+  questPointsAwarded: integer('questPointsAwarded').default(0),
+  stageId: text('stageId'),
+  stageProgress: jsonb('stageProgress').default({}),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+  metadata: jsonb('metadata').default({}),
+}, (table) => ({
+  playerIdx: index('idx_quest_audit_log_player').on(table.playerId),
+  questIdx: index('idx_quest_audit_log_quest').on(table.questId),
+  playerQuestIdx: index('idx_quest_audit_log_player_quest').on(table.playerId, table.questId),
+  timestampIdx: index('idx_quest_audit_log_timestamp').on(table.timestamp),
+  actionIdx: index('idx_quest_audit_log_action').on(table.action),
+}));
+```
+
+**Use Cases**:
+- Fraud detection and investigation
+- Debugging quest progression bugs
+- Analytics for game design
+- Customer support inquiries
+
+---
+
 ## Repository Pattern
 
 All database access goes through typed repositories:
