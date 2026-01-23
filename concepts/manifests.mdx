@@ -571,6 +571,72 @@ const yOffset = stationDataProvider.getModelYOffset("furnace");
 - Graceful fallback to blue box placeholder if model fails
 - Shadows and raycasting layers configured automatically
 
+### Quests (`quests.json`)
+
+The `quests.json` manifest defines OSRS-style quests with multi-stage progression:
+
+```json
+{
+  "goblin_slayer": {
+    "id": "goblin_slayer",
+    "name": "Goblin Slayer",
+    "description": "Kill 15 goblins to prove your worth.",
+    "difficulty": "novice",
+    "questPoints": 1,
+    "replayable": false,
+    "requirements": {
+      "quests": [],
+      "skills": {},
+      "items": []
+    },
+    "startNpc": "cook",
+    "stages": [
+      {
+        "id": "talk_to_cook",
+        "type": "dialogue",
+        "description": "Talk to the Cook to start the quest."
+      },
+      {
+        "id": "kill_goblins",
+        "type": "kill",
+        "description": "Kill 15 goblins.",
+        "target": "goblin",
+        "count": 15
+      },
+      {
+        "id": "return_to_cook",
+        "type": "dialogue",
+        "description": "Return to the Cook."
+      }
+    ],
+    "onStart": {
+      "items": [{ "itemId": "bronze_sword", "quantity": 1 }]
+    },
+    "rewards": {
+      "questPoints": 1,
+      "items": [{ "itemId": "xp_lamp_1000", "quantity": 1 }],
+      "xp": { "attack": 500, "strength": 500 }
+    }
+  }
+}
+```
+
+**Stage Types**:
+- `dialogue` — Talk to NPC to progress
+- `kill` — Kill specific number of mobs
+- `gather` — Collect items through gathering skills
+- `interact` — Complete skill actions (cooking, smithing, etc.)
+
+**Quest Integration**:
+- Quests start through NPC dialogue with `questOverrides`
+- Dialogue nodes can have `effect: "startQuest:quest_id"` or `effect: "completeQuest:quest_id"`
+- Progress tracked automatically via game events (NPC_DIED, INVENTORY_ITEM_ADDED, etc.)
+- Quest points stored in `characters.questPoints` column
+
+<Info>
+Quest progress is tracked in the `quest_progress` database table with flexible JSON progress data. See [Quest System](/wiki/game-systems/quests) for full documentation.
+</Info>
+
 ### Prayers (`prayers.json`)
 
 The `prayers.json` manifest defines OSRS-accurate prayer abilities with stat bonuses and drain mechanics:
