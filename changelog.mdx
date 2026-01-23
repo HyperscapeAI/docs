@@ -23,6 +23,134 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Quest System & Rendering Improvements" description="January 2026" date="2026-01-23">
+
+### 📜 Quest System
+
+Complete OSRS-style quest system with multi-stage progression:
+
+- **Quest Types**: Kill, gather, interact, and dialogue stages
+- **Quest Points**: Earned on completion, tracked per character
+- **Prerequisites**: Quest, skill, and item requirements
+- **Rewards**: Quest points, items, and skill XP
+- **XP Lamps**: Quest rewards that let players choose which skill receives XP
+  - Right-click lamp → Select "Rub" → Choose skill from modal
+  - Supports all 13 skills (combat, gathering, artisan)
+- **OSRS-Style UI**: Color-coded quest journal (red/yellow/green status)
+  - Quest list with difficulty and quest points
+  - Detailed quest view with strikethrough for completed steps
+  - Real-time progress counters (e.g., "Kill 15 goblins (7/15)")
+  - Quest start confirmation screen
+  - Quest completion celebration screen
+- **Dialogue Integration**: NPCs show different dialogue based on quest status
+  - `not_started` → Show quest offer
+  - `in_progress` → Show progress hints
+  - `ready_to_complete` → Complete quest
+  - `completed` → Show completion dialogue
+- **Database**: New `quest_progress` and `quest_audit_log` tables
+  - Atomic quest completion with quest points award
+  - Immutable audit trail for security and exploit detection
+- **Security Features**:
+  - HMAC-SHA256 kill token validation (prevents spoofed NPC_DIED events)
+  - Rate limiting (5/10/3 req/sec for list/detail/accept)
+  - Input validation with strict quest ID pattern matching
+  - Audit logging for all quest state changes
+- **Performance Optimizations**:
+  - O(1) stage lookups with pre-allocated caches
+  - Direct mutation in hot paths (eliminates object spread allocations)
+  - Debug-level logging for frequent events
+- **Testing**: 997 lines, 45 comprehensive test cases covering full quest flow
+
+### 🌅 Auto Exposure for Day/Night Cycle
+
+Adaptive exposure system that mimics eye adaptation:
+
+- **Auto Exposure**: Higher exposure at night (1.7) compensates for lower light
+  - Day exposure: 0.85 (standard daylight)
+  - Night exposure: 1.7 (boosted for visibility)
+  - Smooth transitions using smoothstep interpolation
+  - Gradual lerp (0.03 factor, ~30 frames) prevents jarring changes
+- **Enhanced Night Lighting**:
+  - Moon intensity increased from 0.4 to 0.6
+  - Brighter ambient colors (blue-silver moonlight tones)
+  - Hemisphere light at night: 0.4 (was 0.25)
+  - Ambient light at night: 0.3 (was 0.18)
+- **Maintains Atmosphere**: Night still feels darker/cooler than day while staying playable
+- **WebGL Fallback Support**: Proper shadow fallback when WebGPU unavailable
+
+### 🎨 WebGPU/WebGL Renderer Fallback
+
+Graceful degradation for environments without WebGPU:
+
+- **WebGPU Preferred**: Uses WebGPU when available (Chrome 113+, Safari 17+)
+- **WebGL Fallback**: Automatically falls back to WebGL in WKWebView (Tauri)
+  - Uses `THREE.WebGPURenderer` with `forceWebGL` flag
+  - Disables TSL post-processing on WebGL (not supported)
+  - Single directional light shadows (no CSM cascades)
+- **Renderer Detection**: Settings panel displays active backend (WebGPU/WebGL)
+- **Type Safety**: New `RendererBackend` type and `getRendererBackend()` utility
+- **Capability Detection**: `isWebGPUAvailable()` and `isWebGLAvailable()` checks
+
+### 🛠️ Equipment Fitting & Tool Detection
+
+Improved equipment system with better tool detection:
+
+- **Equipment Fitting V2**: New export format preserves scale compensation
+  - Uses relative matrix approach for exact positioning
+  - Eliminates scale hacks from V1 format
+  - Avatar height normalized to 1.6m (matches Hyperscape's VRM factory)
+- **Tool Detection**: Checks both inventory AND equipped items
+  - Mining/woodcutting/fishing tools can be equipped in weapon slot
+  - Gathering system now detects equipped tools
+  - Proper type conversion (number to string) for item IDs
+- **OSRS-Style Fishing Rod Display**: Shows fishing rod in hand during fishing
+  - Temporarily hides equipped weapon while fishing
+  - `GATHERING_TOOL_SHOW` and `GATHERING_TOOL_HIDE` events
+  - Proper state tracking prevents race conditions
+- **Asset Forge**: Added tool category to equipment panel (pickaxe icon)
+
+### 🏠 Spawn & Home Teleport Fixes
+
+- **Central Haven Spawn**: Uses manifest-defined Central Haven for spawn/home teleport
+- **Cooldown Reduction**: Home teleport cooldown reduced to 5 seconds (was 30s)
+- **Manifest Integration**: Reads spawn location from `world-areas.json`
+
+### 🔧 CDN Architecture Improvements
+
+Fully CDN-based architecture with production fallback:
+
+- **CDN Serves from `packages/server/world/assets/`**: Updated path structure
+  - Audio: `/audio/music/{normal|combat}/`
+  - Models: `/models/`
+  - World: `/world/`
+  - Manifests: `/manifests/`
+- **Required Manifest Validation**: Server validates required manifests exist
+  - `npcs.json`, `world-areas.json`, `biomes.json`, `stores.json`
+  - `items.json` OR `items/{weapons,tools,resources,food,misc}.json`
+- **Production CDN Fallback**: Development mode falls back to production CDN if localhost unavailable
+  - Prevents partial-cache startup failures
+  - Bootstraps local manifests from `https://assets.hyperscape.club`
+- **Legacy Manifest Support**: Backwards compatibility for single-file `items.json` and `resources.json`
+- **Idempotent Migrations**: Database constraints use `IF NOT EXISTS` checks
+
+### 🐛 Bug Fixes
+
+- **PLAYER_JOINED Event**: Local player now emits `PLAYER_JOINED` (fixes skill updates)
+- **Equipment Scale**: V2 equipment exports preserve compensated scale
+- **Mining Skill Check**: Added missing mining skill to equipment requirements
+- **Cooking Sources**: Support both fires and permanent range entities
+- **Database Deadlocks**: Inventory sync now retries on deadlock (exponential backoff)
+- **CSM Frustum Updates**: Pre-flight camera validation prevents CSM errors
+- **Vite Import Warnings**: Added `@vite-ignore` to PhysXManager dynamic import
+
+### 📊 Performance
+
+- **Turbo Dev Filter**: Only runs dev for relevant packages (shared, server, client, plugin)
+- **SQL File Watching**: Server dev script now watches `.sql` files for migration changes
+- **Object Spread Elimination**: Quest system uses direct mutation in hot paths
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
