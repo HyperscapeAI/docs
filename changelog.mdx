@@ -23,6 +23,121 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Quest System & Rendering Improvements" description="January 2026" date="2026-01-23">
+
+### 📜 Quest System
+
+Complete OSRS-style quest system with manifest-driven definitions:
+
+- **Quest Definitions**: Manifest-driven quests in `quests.json`
+  - Multi-stage quests with dialogue, kill, gather, and interact objectives
+  - Prerequisites (quest completion, skill levels, items)
+  - Rewards (quest points, items, XP)
+  - Difficulty levels (novice, intermediate, experienced, master, grandmaster)
+- **Quest Journal UI**: OSRS-accurate quest tracking interface
+  - Color-coded status (red/yellow/green)
+  - Strikethrough for completed stages
+  - Progress counters (e.g., "7/15 goblins killed")
+  - Quest points display
+- **Quest Flow**: Request → Confirmation → Accept → Progress → Complete
+  - `QuestStartScreen` shows requirements and rewards
+  - `QuestCompleteScreen` celebration with fanfare
+  - Real-time progress tracking via game events
+- **Security Features**:
+  - HMAC kill token validation (prevents spoofed NPC_DIED events)
+  - Rate limiting (5/10/3 req/sec for list/detail/accept)
+  - Input validation (`isValidQuestId` with pattern matching)
+  - Quest audit logging (immutable security trail)
+- **Performance Optimizations**:
+  - O(1) stage lookups with cached Maps
+  - Direct mutation in hot paths (eliminates object spread allocations)
+  - Debug-level logging in hot paths, info-level for milestones
+- **Database**: New `quest_progress` and `quest_audit_log` tables
+- **Testing**: 997 lines with 45 comprehensive test cases
+- **XP Lamp System**: Quest reward items that grant XP to chosen skill
+  - `SkillSelectModal` UI for skill selection
+  - Server-side validation and consumption
+  - Supports any XP amount via `useEffect.xpAmount`
+
+### 🎨 Rendering & Graphics
+
+**WebGL Fallback**: Graceful degradation for environments without WebGPU support:
+
+- **Automatic Detection**: Checks `navigator.gpu` and WebGL context availability
+- **Fallback Renderer**: Uses `THREE.WebGPURenderer` with `forceWebGL: true`
+- **Conditional Post-Processing**: TSL effects disabled on WebGL (bloom, tone mapping, color grading)
+- **Shadow Fallback**: Single directional light instead of Cascaded Shadow Maps (CSM)
+- **Settings Display**: Shows actual renderer type (WebGPU/WebGL) in settings panel
+- **Tauri Support**: Enables Hyperscape to run in WKWebView environments
+
+**Auto Exposure System**: Mimics eye adaptation for day/night cycle:
+
+- **Adaptive Exposure**: Day (0.85) → Night (1.7) with smoothstep interpolation
+- **Improved Night Visibility**: Higher exposure at night compensates for lower light
+- **Smooth Transitions**: 0.03 lerp factor (~30 frames) prevents jarring changes
+- **Initialization Fix**: Exposure initialized based on current time of day
+- **Enhanced Lighting**:
+  - Moon intensity increased from 0.4 to 0.6
+  - Hemisphere light at night: 0.4 (was 0.25)
+  - Ambient light at night: 0.3 (was 0.18)
+  - Brighter blue-silver tones for nighttime ambient colors
+
+**Station 3D Models**: Altar, Bank, and Range entities now load models from manifest:
+
+- **Manifest-Driven**: Uses `StationDataProvider` for model paths, scale, and Y-offset
+- **Graceful Fallback**: Placeholder geometry if model loading fails
+- **Consistent Materials**: Fallback uses `MeshStandardMaterial` for proper lighting
+- **Shadow Support**: Models cast and receive shadows
+- **Raycasting**: Proper layer setup for interaction detection
+
+### 🎮 Equipment & Visuals
+
+**Equipment Fitting V2 Format**: Improved equipment attachment system:
+
+- **Relative Matrix Approach**: Captures exact visual relationship between bone and equipment
+- **Scale Preservation**: Automatically preserves bone scale compensation
+- **No Scale Hacks**: Eliminates need for `WEAPON_SCALE_MULTIPLIER` workarounds
+- **Avatar Normalization**: Asset Forge normalizes avatars to 1.6m height
+- **Backward Compatible**: V1 format still supported with legacy scale hack
+
+**Gathering Tool Display (OSRS-Style)**: Tools shown in hand during gathering:
+
+- **Fishing Rod Visual**: Fishing rod appears in hand during fishing (even though it's in inventory)
+- **Weapon Hiding**: Equipped weapon temporarily hidden while gathering tool is shown
+- **Tool Detection**: Checks both inventory AND equipped items for tools
+- **Mining Skill Fix**: Mining skill level now properly cached for equipment checks
+- **Asset Forge Tools**: Tools category added to equipment panel with Pickaxe icon
+
+### 🏗️ CDN Architecture
+
+**Fully CDN-Based Architecture**: Improved manifest fetching with production fallback:
+
+- **Required Manifest Validation**: Server validates required manifests on startup
+- **Production CDN Fallback**: Development mode falls back to `https://assets.hyperscape.club` if local CDN incomplete
+- **Asset Detection**: `ensure-assets.mjs` detects full assets vs manifests-only
+- **Git LFS Handling**: Automatically pulls LFS objects for binary assets
+- **Idempotent Migrations**: Database constraints use `IF NOT EXISTS` checks
+- **SQL File Watching**: Dev script watches `.sql` files for migration changes
+
+### 🐛 Bug Fixes
+
+- **Exposure Initialization**: Fixed jarring exposure transitions when joining at night (#622)
+- **Spawn/Home Teleport**: Now uses manifest Central Haven coordinates (#613)
+- **Firemaking Limit**: Removed concurrent fire limit that was blocking skill quests (#605)
+- **Quest Progress Tracking**: Fixed gather/interact progress by item ID for flexible completion order (#605)
+- **Equipment Fitting**: Fixed scale preservation and tool detection for equipped items (#615)
+- **CORS Allowlist**: Added Cloudflare Pages domains and www subdomain (#605)
+
+### 🔧 Developer Experience
+
+- **Turbo Dev Filter**: Filtered to relevant packages only (shared, server, client, plugin-hyperscape)
+- **PhysX Import**: Added `@vite-ignore` to suppress dynamic import warnings
+- **Vite Config**: Fixed ElizaOS URL fallback to use `PUBLIC_API_URL`
+- **CI/CD**: Restricted Cloudflare R2 deploy to main branch only
+- **Tauri Dependencies**: Added Linux system dependencies for CI builds
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
