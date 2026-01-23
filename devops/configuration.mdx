@@ -112,6 +112,61 @@ All services have unique default ports:
 | 3400 | AssetForge UI | `ASSET_FORGE_PORT` | `bun run dev:forge` |
 | 3401 | AssetForge API | `ASSET_FORGE_API_PORT` | `bun run dev:forge` |
 
+## CDN Configuration
+
+### Development CDN
+
+The local CDN serves assets from `packages/server/world/assets/`:
+
+```bash
+bun run cdn:up   # Start CDN container (nginx on port 8080)
+```
+
+**Asset Structure:**
+```
+packages/server/world/assets/
+├── manifests/          # JSON manifests (npcs, items, quests, etc.)
+├── models/             # 3D models (.glb files)
+├── audio/              # Sound effects and music
+│   └── music/
+│       ├── normal/     # Ambient music
+│       └── combat/     # Combat music
+└── world/              # Environment assets
+    ├── base-environment.glb
+    └── day2-2k.jpg
+```
+
+### CDN Fallback (Development)
+
+If the local CDN is unavailable and required manifests are missing, the server automatically falls back to the production CDN (`https://assets.hyperscape.club`) to bootstrap local development.
+
+**Required Manifests:**
+- `npcs.json`
+- `world-areas.json`
+- `biomes.json`
+- `stores.json`
+- `items.json` OR `items/{weapons,tools,resources,food,misc}.json`
+
+**Bypass in Tests:**
+```bash
+SKIP_MANIFESTS=true  # Skip manifest validation (test environments only)
+```
+
+### Production CDN
+
+Set `PUBLIC_CDN_URL` to your asset hosting URL:
+
+```bash
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+```
+
+**Supported Paths:**
+- `/manifests/{file}.json` — Game data manifests
+- `/models/{file}.glb` — 3D models
+- `/audio/music/{normal|combat}/{file}.mp3` — Music tracks
+- `/world/{file}` — Environment assets
+- `/health` — Health check endpoint
+
 ## Zero-Config Development
 
 Default values work out of the box for local development:
