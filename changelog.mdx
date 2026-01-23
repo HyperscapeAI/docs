@@ -23,6 +23,60 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Quest System & Skill Enhancements" description="January 2026" date="2026-01-23">
+
+### 🗺️ Quest System
+
+Complete quest system with 4 starter quests:
+
+- **Quest Manifest**: New `quests.json` with structured quest definitions
+  - **Goblin Slayer**: Kill 15 goblins for Captain Rowan (rewards bronze sword and XP lamp)
+  - **Lumberjack's First Lesson**: Chop and burn 6 logs for Forester Wilma (rewards bronze hatchet, tinderbox, and XP lamp)
+  - **Fresh Catch**: Catch and cook 6 shrimp for Fisherman Pete (rewards small fishing net and XP lamp)
+  - **Torvin's Tools**: Mine ores, smelt bronze bars, and smith tools for Torvin (rewards bronze pickaxe, hammer, and XP lamp)
+- **Quest Structure**: Multi-stage quests with dialogue, kill, gather, and interact objectives
+  - Requirements system (quests, skills, items)
+  - Difficulty ratings (novice, intermediate, experienced, master, grandmaster)
+  - Quest points and XP rewards
+  - Starting items provided on quest acceptance
+  - Replayable flag for repeatable content
+- **Quest Types**: Support for dialogue, kill, gather, and interact stage types
+  - Target tracking with count requirements
+  - NPC-based quest givers and completion
+  - Item rewards and XP lamps
+
+### 🏃 Agility Skill Unlocks
+
+New agility skill progression with stamina regeneration bonuses:
+
+- **Stamina Scaling**: Stamina regeneration increases by 1% per agility level
+- **Milestone Bonuses**:
+  - Level 10: +10% stamina regen
+  - Level 25: +25% stamina regen
+  - Level 50: +50% stamina regen
+  - Level 75: +75% stamina regen
+  - Level 99: +99% stamina regen (mastery)
+- **Skill Unlocks Manifest**: Updated `skill-unlocks.json` with complete agility progression
+
+### 🙏 Prayer System Expansion
+
+Enhanced prayer manifest with OSRS-accurate prayers:
+
+- **Basic Prayers**: Thick Skin, Burst of Strength, Clarity of Thought
+  - Level 1-7 prayers with 5% stat boosts
+  - Drain effect: 1 (slowest drain rate)
+- **Intermediate Prayers**: Rock Skin, Superhuman Strength
+  - Level 10-13 prayers with 10% stat boosts
+  - Drain effect: 6 (moderate drain rate)
+- **Prayer Conflicts**: Prayers properly conflict with higher-tier versions
+  - Thick Skin conflicts with Rock Skin, Steel Skin, Chivalry, Piety
+  - Burst of Strength conflicts with Superhuman Strength, Ultimate Strength, Chivalry, Piety
+  - Clarity of Thought conflicts with Improved Reflexes, Incredible Reflexes, Chivalry, Piety
+- **Prayer Categories**: Offensive and defensive prayer types
+- **Bonus System**: Multipliers for attack, strength, and defense stats
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
