@@ -390,8 +390,13 @@ interface StationData {
 |---------|---------|-------|-------|----------|
 | **Anvil** | Smith bars into equipment | `asset://models/anvil/anvil.glb` | 0.5 | 0.2 |
 | **Furnace** | Smelt ores into bars | `asset://models/furnace/furnace.glb` | 1.5 | 1.0 |
-| **Range** | Cook food with reduced burn chance | TBD | 1.0 | 0 |
-| **Bank** | Store items | TBD | 1.0 | 0 |
+| **Range** | Cook food with reduced burn chance | Loaded from manifest | 1.0 | 0 |
+| **Bank** | Store items | Loaded from manifest | 1.0 | 0 |
+| **Altar** | Prayer restoration | Loaded from manifest | 1.0 | 0 |
+
+<Note>
+Station entities (Altar, Bank, Range) now load 3D models from the manifest system with automatic fallback to placeholder geometry if models are unavailable.
+</Note>
 
 ### Station Models
 
