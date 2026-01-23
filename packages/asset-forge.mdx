@@ -48,6 +48,21 @@ MeshyAI converts concepts to 3D models:
 - Style consistency
 - Multiple variations
 
+### Equipment Fitting
+
+Advanced equipment positioning system for VRM avatars:
+
+- **V2 Export Format**: Relative matrix approach for accurate positioning
+  - Captures position, rotation, and scale in single transform
+  - Eliminates scale hacks and coordinate space conversions
+  - Backward compatible with V1 format
+- **Tool Support**: Pickaxes, hatchets, and fishing rods
+  - Tools category in equipment panel
+  - Proper grip detection and orientation
+- **Scale Preservation**: Equipment scale correctly preserved during export
+  - Compensated scale counteracts bone world scale
+  - Avatar height normalized to 1.6m (matches Hyperscape)
+
 ### Asset Management
 
 Database-backed asset management:
