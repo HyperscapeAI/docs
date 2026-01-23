@@ -166,12 +166,31 @@ OSRS-style terrain interaction with right-click menu:
 
 </Update>
 
-<Update label="Asset System Updates" description="January 2026" date="2026-01-15">
+<Update label="Asset System Updates" description="January 2026" date="2026-01-23">
 
 ### 📦 Asset System Enhancements
 
 New manifest additions and improvements to the asset pipeline:
 
+- **Quest System**: New `quests.json` manifest with 4 novice quests
+  - **Goblin Slayer**: Combat introduction quest with Captain Rowan
+  - **Lumberjack's First Lesson**: Woodcutting and firemaking tutorial with Forester Wilma
+  - **Fresh Catch**: Fishing and cooking tutorial with Fisherman Pete
+    - **Torvin's Tools**: Mining, smelting, and smithing tutorial with dwarf Torvin
+  - Quest stages include dialogue, gathering, combat, and crafting objectives
+  - Rewards include quest points and XP lamps
+- **Aligned Equipment Models**: Equipment models aligned for proper character attachment
+  - Bronze hatchet, pickaxe, and sword with aligned variants
+  - Mithril and steel pickaxes and swords with aligned variants
+  - Fishing rod base with aligned variant
+  - Proper positioning for wielding and wearing animations
+- **New 3D Models**: Additional interactive objects
+  - **Bank Chest**: Bank storage model (`bank-chest.glb`)
+  - **Cooking Range**: Cooking station model (`cooking-range.glb`)
+  - **Prayer Altar**: Prayer training model (`prayer-alter.glb`)
+- **Skill Unlocks**: Updated `skill-unlocks.json` with agility unlocks
+  - Defines what content unlocks at each skill level
+  - Supports future agility course implementation
 - **Model Bounds Manifest**: New `model-bounds.json` with pre-calculated bounding boxes for all 3D models
   - Contains bounds (min/max coordinates), dimensions (x/y/z), and tile footprints
   - Used for spatial calculations, collision detection, and placement validation
