@@ -23,6 +23,214 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Quest System, Island Terrain & Rendering Improvements" description="January 2026" date="2026-01-24">
+
+### 🗺️ Quest System
+
+Complete OSRS-style quest system with progression tracking, rewards, and security:
+
+- **Quest Definitions**: Manifest-driven quest system (`quests.json`)
+  - Multi-stage quests with kill, gather, interact, and dialogue objectives
+  - Quest requirements (prerequisite quests, skill levels, items)
+  - Rewards: Quest points, items, XP in multiple skills
+  - Difficulty ratings (novice, intermediate, experienced, master)
+- **Quest Progression**: Server-authoritative tracking with database persistence
+  - `quest_progress` table with status, current stage, and stage progress
+  - Status types: `not_started`, `in_progress`, `ready_to_complete`, `completed`
+  - Stage progress tracking (e.g., kills: 7/15, items gathered: 3/5)
+  - Atomic quest completion with quest point awards
+- **Quest UI**: OSRS-style interfaces with parchment aesthetic
+  - Quest Journal with color-coded status (red/yellow/green)
+  - Quest Start confirmation screen with requirements and rewards
+  - Quest Complete celebration screen with fanfare
+  - Strikethrough for completed quest steps
+  - Dynamic progress counters (e.g., "Kill 15 goblins (7/15)")
+- **Security & Performance**:
+  - HMAC kill token validation prevents spoofed NPC_DIED events
+  - Rate limiting: 5/sec quest list, 10/sec detail, 3/sec accept
+  - Quest audit logging for all state changes
+  - O(1) stage lookup caches (replaced O(n) find() calls)
+  - Object spread elimination in hot paths
+  - Debug-level logging for frequent events
+- **XP Lamp System**: Reward items that grant XP to chosen skill
+  - Skill selection modal with all trainable skills
+  - Server validates lamp usage and skill selection
+  - Consumed on use with XP granted to selected skill
+- **Network Integration**: Quest packets and event forwarding
+  - `getQuestList`, `getQuestDetail`, `questAccept` handlers
+  - `QUEST_STARTED`, `QUEST_PROGRESSED`, `QUEST_COMPLETED` events
+  - `QUEST_START_CONFIRM` for quest acceptance UI
+- **Testing**: 997 lines of integration tests with 45 test cases
+  - Full quest flow: request → accept → kill 15 goblins → complete
+  - Kill tracking, progress updates, rewards, validation
+  - Prerequisites, multi-quest support, player cleanup
+
+### 🏝️ Island Terrain Generation
+
+Transformed world from continuous landmass into island with natural coastline:
+
+- **Island Configuration**: Configurable island with natural variation
+  - Base radius: 220m (~440m diameter)
+  - Falloff zone: 60m transition from land to ocean
+  - Pond: 50m radius offset from center (-80, 60)
+  - Deep ocean beyond island boundaries
+- **Natural Coastline**: Multi-octave noise for irregular shores
+  - Large-scale bays and peninsulas (±20% radius variation)
+  - Medium features (±8% variation)
+  - Small coves and points (±2% variation)
+  - Noise sampled on circle to avoid seams at angle wrap
+- **Elevation System**: Base elevation ensures vegetation spawns
+  - Base elevation: 0.42 normalized (~12.6m)
+  - Above vegetation threshold (11.4m)
+  - Terrain features scaled to 20% to prevent extreme peaks
+  - Pond depression: 0.55 normalized depth
+- **Shore Height Adjustments**: Updated for elevated island terrain
+  - `shoreMaxHeight`: 8.0m → 20.0m
+  - Allows resource spawning on elevated terrain
+  - Updated in ResourceSystem, ShoreUtils
+- **Town System**: Graceful fallback for manifest-defined towns
+  - Warning instead of error when no procedural towns generate
+  - Supports island worlds with only Central Haven
+
+### 🎨 Rendering & Graphics Improvements
+
+WebGL fallback and auto exposure for day/night cycle:
+
+- **WebGL Fallback**: Graceful degradation for environments without WebGPU
+  - Automatic fallback from WebGPU to WebGL (e.g., WKWebView in Tauri)
+  - `forceWebGL` flag in WebGPURenderer for compatibility
+  - Backend detection: `isWebGPURenderer()`, `getRendererBackend()`
+  - TSL post-processing disabled on WebGL (WebGPU-only)
+  - Single directional shadow map on WebGL (no CSM)
+  - Settings panel displays actual renderer type (WebGPU/WebGL)
+- **Auto Exposure**: Adaptive exposure mimics eye adaptation
+  - Day exposure: 0.85 (standard daylight)
+  - Night exposure: 1.7 (boosted for visibility)
+  - Smooth transitions using smoothstep interpolation
+  - Initialized based on current time of day (prevents jarring transitions)
+  - Lerp factor: 0.03 (~30 frames for gradual adaptation)
+- **Enhanced Night Lighting**: Better visibility while maintaining atmosphere
+  - Moon intensity: 0.4 → 0.6
+  - Hemisphere light at night: 0.25 → 0.4
+  - Ambient light at night: 0.18 → 0.3
+  - Brighter blue-silver tones for nighttime ambient colors
+- **CSM Shadow Improvements**: Robust initialization and validation
+  - Pre-flight camera validation before CSM updates
+  - `initializeCSMFrustums()` ensures shadows work from first frame
+  - Graceful error handling with retry logic
+  - WebGL fallback with larger frustum (250m vs 100m)
+
+### 🏗️ Data-Driven Station Spawning
+
+Refactored station spawning from hardcoded logic to manifest-driven system:
+
+- **StationSpawnerSystem**: Dedicated system for spawning world stations
+  - Reads from `world-areas.json` for station placements
+  - Uses `stations.json` for model/config data
+  - Follows MobNPCSpawnerSystem pattern
+  - Terrain-grounded positioning with height lookup
+- **Station Types**: Support for all station entities
+  - Bank, Furnace, Anvil, Altar, Range
+  - Custom `bankId` property for bank stations
+  - Model loading from manifest with scale and Y-offset
+- **World Areas**: New `StationLocation` interface
+  - Station placements defined per world area
+  - Position, rotation, and type specification
+  - Optional bankId override for banks
+- **Entity Improvements**: 3D model loading for stations
+  - AltarEntity, BankEntity, RangeEntity now load models from manifest
+  - Fallback to colored box placeholders if model fails
+  - Consistent shadow and interaction setup
+  - Material upgrade: MeshBasicMaterial → MeshStandardMaterial
+
+### 🎣 Equipment Fitting & Tool Detection
+
+OSRS-style gathering tool display and improved equipment fitting:
+
+- **Gathering Tool Visuals**: Show tools in hand during gathering
+  - Fishing rod appears in hand during fishing (OSRS-style)
+  - Tool temporarily replaces equipped weapon
+  - `GATHERING_TOOL_SHOW` and `GATHERING_TOOL_HIDE` events
+  - Weapon restored when gathering stops
+- **Tool Detection**: Check both inventory AND equipped items
+  - Tools in weapon slot now detected for gathering
+  - Mining with equipped pickaxe works correctly
+  - Fishing with equipped rod works correctly
+  - Type conversion handling (number to string)
+- **Equipment Fitting V2**: Improved scale preservation
+  - Relative matrix approach for exact positioning
+  - Preserves bone scale compensation
+  - No more scale hacks or magic multipliers
+  - Avatar height normalization to 1.6m
+- **Asset Forge**: Tools added to equipment panel
+  - Pickaxe icon for tool assets
+  - Tools category in asset selection
+  - Expanded position control range (-0.8 to 0.8)
+
+### 🌐 CDN Architecture Improvements
+
+Production-ready CDN with manifest validation and fallback:
+
+- **Required Manifest Validation**: Server validates critical manifests exist
+  - Required files: `npcs.json`, `world-areas.json`, `biomes.json`, `stores.json`
+  - Items manifest: Either `items.json` OR full category directory
+  - Prevents startup with incomplete manifest cache
+- **Production CDN Fallback**: Automatic fallback for localhost development
+  - If localhost CDN missing required manifests, falls back to `https://assets.hyperscape.club`
+  - Development convenience without breaking production
+  - `isLocalhostUrl()` helper for safe detection
+- **Asset Detection**: Distinguish full assets from manifests-only
+  - `hasFullAssets()` checks for world/ and models/ directories
+  - Manifests-only treated as missing (triggers download)
+  - LFS pull ensures binary assets are present
+- **CDN Serving**: Updated paths and force-recreate
+  - Serves from `packages/server/world/assets`
+  - Force-recreate on restart refreshes volume mounts
+  - Updated verify-cdn.mjs paths (audio/music, world/)
+- **Database Migrations**: Idempotent constraint creation
+  - `IF NOT EXISTS` checks wrapped in PL/pgSQL blocks
+  - Error code 42710 (constraint already exists) handled
+  - Safe to run migrations multiple times
+
+### 🏠 Spawn & Home Teleport Improvements
+
+Manifest-driven spawn system with reduced cooldown:
+
+- **Central Haven Spawn**: Uses manifest starter town instead of TownSystem
+  - Spawn position from `STARTER_TOWNS["central_haven"]`
+  - Calculated from town bounds center
+  - Consistent between server init and player death
+  - Removed database-based spawn configuration
+- **Home Teleport Cooldown**: Reduced from 15 minutes to 5 seconds
+  - `HOME_TELEPORT_CONSTANTS.COOLDOWN_MS`: 900,000ms → 5,000ms
+  - Cast time remains 10 seconds
+  - Interruptible by movement/combat
+- **Simplified Logic**: Removed TownSystem dependency
+  - Direct manifest access via `STARTER_TOWNS`
+  - Fallback to default spawn if manifest missing
+  - Cleaner code with fewer dependencies
+
+### 🐛 Bug Fixes & Minor Improvements
+
+- **Equipment Visuals**: Fixed scale preservation and tool detection (#615)
+  - V2 export format with relative matrix approach
+  - Valid matrix validation (16 numbers, no NaN)
+  - Race condition prevention in gathering tool show/hide
+- **Exposure Initialization**: Fixed jarring transitions when joining at night (#622)
+  - `initializeExposure()` called during Environment start
+  - Prevents lerp from day (0.85) to night (1.7) on join
+- **Item Spawns**: Removed hardcoded test item spawns (#626)
+  - `spawnChestLootItems()` and `spawnResourceItems()` removed from startup
+  - Items now come from loot drops only
+- **PhysX Import**: Added `@vite-ignore` to dynamic import
+  - Prevents noisy warnings during client dev bundling
+  - Cleaner variable-based import path
+- **Turbo Dev Filter**: Reduced to relevant packages only
+  - Filters to shared, server, client, plugin-hyperscape
+  - Faster dev startup by excluding unused packages
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
