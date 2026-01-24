@@ -99,6 +99,15 @@ export const characters = pgTable('characters', {
   firemakingXp: integer('firemakingXp').default(0),
   cookingXp: integer('cookingXp').default(0),
   smithingXp: integer('smithingXp').default(0),
+  agilityXp: integer('agilityXp').default(0),
+
+  // Prayer
+  prayerPoints: integer('prayerPoints').default(1),
+  prayerMaxPoints: integer('prayerMaxPoints').default(1),
+  activePrayers: text('activePrayers').default('[]'),
+
+  // Quest progression
+  questPoints: integer('questPoints').default(0),
 
   // Combat state
   health: integer('health').default(100),
