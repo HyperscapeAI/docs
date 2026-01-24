@@ -101,6 +101,42 @@ bunx drizzle-kit migrate   # Run migrations
 
 ## CDN Setup
 
+### CDN Architecture
+
+Hyperscape uses a CDN-based architecture for serving game assets (models, textures, audio, manifests):
+
+**Required Manifests:**
+- `npcs.json` - NPC and mob definitions
+- `world-areas.json` - Zone configuration with station spawns
+- `biomes.json` - Biome definitions
+- `stores.json` - Shop inventories
+- `items.json` OR `items/{weapons,tools,resources,food,misc}.json` - Item definitions
+
+**Asset Structure:**
+```
+assets/
+├── manifests/          # JSON game data
+├── world/              # Environment models and textures
+├── models/             # 3D models (GLB)
+├── audio/              # Sound effects and music
+└── web/                # PhysX WASM runtime
+```
+
+### Development CDN Fallback
+
+In development, if local CDN is incomplete, the server automatically falls back to production CDN:
+
+```typescript
+// From packages/server/src/startup/config.ts
+// If localhost CDN is missing required manifests, fall back to production
+if (isLocalhostUrl(cdnUrl) && missingRequired.length > 0) {
+  const fallbackCdnUrl = "https://assets.hyperscape.club";
+  await fetchFrom(fallbackCdnUrl);
+}
+```
+
+This allows local development without cloning the full assets repository.
+
 ### Option 1: Self-Hosted
 
 Use the included Docker CDN:
@@ -109,15 +145,39 @@ Use the included Docker CDN:
 bun run cdn:up
 ```
 
+The CDN serves from `packages/server/world/assets` by default.
+
 Configure `PUBLIC_CDN_URL` to point to your CDN host.
 
-### Option 2: Cloud Storage
+### Option 2: Cloud Storage (Cloudflare R2)
 
-Upload assets to S3, R2, or similar:
+Upload assets to Cloudflare R2 or similar:
 
-1. Build assets: `bun run assets:optimize`
-2. Upload `packages/server/world/assets/`
-3. Set `PUBLIC_CDN_URL` to bucket URL
+1. Ensure assets are present: `bun run ensure-assets`
+2. Upload `packages/server/world/assets/` to R2 bucket
+3. Set `PUBLIC_CDN_URL` to bucket URL (e.g., `https://assets.hyperscape.club`)
+
+**Cloudflare R2 Deployment:**
+- Automated via `.github/workflows/deploy-r2.yml`
+- Triggers on push to `main` branch
+- Uses `wrangler` to sync assets to R2
+
+### Asset Management
+
+```bash
+# Download full assets (models, audio, textures)
+bun run ensure-assets
+
+# Sync assets from git repository
+bun run assets:sync
+
+# Verify CDN is serving correctly
+bun run cdn:verify
+```
+
+<Info>
+The `ensure-assets` script detects if you have manifests-only vs full assets and automatically downloads missing content via Git LFS.
+</Info>
 
 ## Production Checklist
 
