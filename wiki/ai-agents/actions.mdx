@@ -301,6 +301,31 @@ export const cookFoodAction: Action = {
 
 ---
 
+### `mineRock`
+
+Mine a rock to gather ore.
+
+```typescript
+// From actions/skills.ts
+export const mineRockAction: Action = {
+  name: "MINE_ROCK",
+  description: "Mine a rock to gather ore. Requires a pickaxe.",
+  parameters: {
+    rockId: { type: "string", optional: true, description: "Specific rock entity ID" },
+  },
+};
+```
+
+**Requirements**: Pickaxe in inventory, Mining level.
+
+**Features:**
+- Automatically walks to nearest cardinal-adjacent tile
+- Validates Mining level requirements for rock type
+- Filters out depleted rocks
+- Handles copper, tin, iron, coal, mithril, adamant, rune ores
+
+---
+
 ## Inventory Actions
 
 ### `equipItem`
