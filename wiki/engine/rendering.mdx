@@ -1,0 +1,349 @@
+---
+title: "Rendering & Graphics"
+description: "WebGPU rendering with WebGL fallback, auto exposure, and visual effects"
+icon: "palette"
+---
+
+{/* 
+  Source: packages/shared/src/utils/rendering/RendererFactory.ts
+  Source: packages/shared/src/systems/shared/world/Environment.ts
+  Source: packages/shared/src/systems/client/ClientGraphics.ts
+  Verified against PRs #614, #617
+*/}
+
+## Overview
+
+Hyperscape uses Three.js with WebGPU for high-performance 3D rendering, with automatic fallback to WebGL for compatibility.
+
+---
+
+## Renderer Architecture
+
+### WebGPU with WebGL Fallback
+
+The rendering system uses `THREE.WebGPURenderer` with automatic backend selection:
+
+```typescript
+// From src/utils/rendering/RendererFactory.ts
+import { createRenderer, isWebGPURenderer, getRendererBackend } from '@hyperscape/shared';
+
+// Create renderer (WebGPU preferred, WebGL fallback)
+const renderer = await createRenderer({
+  antialias: true,
+  powerPreference: "high-performance",
+});
+
+// Check active backend
+const isWebGPU = isWebGPURenderer(renderer);  // true or false
+const backend = getRendererBackend(renderer); // "webgpu" or "webgl"
+```
+
+### Backend Selection
+
+**WebGPU (Preferred):**
+- Modern high-performance rendering API
+- TSL (Three.js Shading Language) post-processing
+- Cascaded shadow maps (CSM) for realistic shadows
+- Requires Chrome 113+, Edge 113+, or Safari 17+
+
+**WebGL (Fallback):**
+- Graceful degradation for older browsers and WebViews
+- Single directional shadow maps (no CSM)
+- Disabled TSL post-processing
+- Works in WKWebView (Tauri), older Safari, and browsers without WebGPU
+
+**Detection Logic:**
+```typescript
+// Check if WebGPU is available
+const supportsWebGPU = await isWebGPUAvailable();
+
+if (supportsWebGPU) {
+  // Try WebGPU first
+  return await create(false);
+} else {
+  // Fall back to WebGL
+  return await create(true);
+}
+```
+
+---
+
+## Auto Exposure System
+
+The environment system includes adaptive exposure that mimics eye adaptation to different light levels.
+
+### Exposure Values
+
+```typescript
+// From src/systems/shared/world/Environment.ts
+private readonly DAY_EXPOSURE = 0.85;   // Standard daylight
+private readonly NIGHT_EXPOSURE = 1.7;  // Boosted for night visibility
+private currentExposure: number = 0.85; // Smoothed current value
+```
+
+### How It Works
+
+Auto exposure adjusts based on the day/night cycle:
+
+1. **Calculate target exposure** based on day intensity (0-1)
+2. **Use smoothstep interpolation** for natural transitions
+3. **Lerp to target** with factor 0.03 (~30 frames for smooth adaptation)
+4. **Apply to renderer** via `toneMappingExposure`
+
+```typescript
+private updateAutoExposure(dayIntensity: number): void {
+  // Calculate target exposure: lerp from night (high) to day (low)
+  const t = dayIntensity * dayIntensity * (3 - 2 * dayIntensity); // smoothstep
+  const targetExposure = 
+    this.NIGHT_EXPOSURE + (this.DAY_EXPOSURE - this.NIGHT_EXPOSURE) * t;
+
+  // Smooth interpolation to prevent jarring changes
+  this.currentExposure += (targetExposure - this.currentExposure) * 0.03;
+
+  // Apply to renderer
+  graphics.renderer.toneMappingExposure = this.currentExposure;
+}
+```
+
+**Benefits:**
+- Night scenes remain visible while still darker than day
+- Smooth transitions during sunrise/sunset
+- Mimics realistic eye adaptation
+- No jarring exposure changes
+
+---
+
+## Lighting System
+
+### Day/Night Cycle
+
+The environment system dynamically adjusts lighting based on time of day:
+
+**Daytime Lighting:**
+- Sun intensity: 1.8
+- Sun color: Warm white (1.0, 0.98, 0.92)
+- Hemisphere light: 0.9 intensity
+- Ambient light: 0.5 intensity
+- Exposure: 0.85
+
+**Nighttime Lighting:**
+- Moon intensity: 0.6 (increased from 0.4 for better visibility)
+- Moon color: Cool blue (0.6, 0.7, 0.9)
+- Hemisphere light: 0.4 intensity (blue-silver tones)
+- Ambient light: 0.3 intensity (brighter blue moonlight)
+- Exposure: 1.7 (compensates for lower light)
+
+### Ambient Lighting
+
+```typescript
+// Night ambient colors (brighter for visibility)
+this.ambientLight.color.setRGB(
+  0.5 + dayIntensity * 0.5,   // R: 0.5 at night, 1.0 at day
+  0.55 + dayIntensity * 0.4,  // G: 0.55 at night, 0.95 at day
+  0.7 + dayIntensity * 0.25,  // B: 0.7 at night, 0.95 at day (bluer at night)
+);
+```
+
+---
+
+## Shadow System
+
+### Cascaded Shadow Maps (WebGPU)
+
+WebGPU uses CSM for high-quality shadows:
+
+```typescript
+// From src/systems/shared/world/Environment.ts
+this.csmShadowNode = new CSMShadowNode(this.sunLight, {
+  cascades: csmConfig.cascades,        // 3 cascades
+  maxFar: csmConfig.maxFar,            // 400 units
+  shadowMapSize: csmConfig.shadowMapSize, // 2048×2048
+  shadowBias: csmConfig.shadowBias,
+  shadowNormalBias: csmConfig.shadowNormalBias,
+});
+```
+
+**CSM Levels:**
+
+| Level | Cascades | Map Size | Max Distance |
+|-------|----------|----------|--------------|
+| None | 0 | 0 | 0 |
+| Low | 2 | 1024 | 200 |
+| Med | 3 | 2048 | 400 |
+| High | 4 | 4096 | 600 |
+
+### WebGL Shadow Fallback
+
+WebGL uses simplified single directional shadows:
+
+```typescript
+// WebGL fallback: single directional light shadows (no cascades)
+if (!useWebGPU) {
+  this.csmShadowNode = null;
+  const baseFrustumSize = Math.min(250, csmConfig.maxFar);
+  shadowCam.left = -baseFrustumSize;
+  shadowCam.right = baseFrustumSize;
+  shadowCam.top = baseFrustumSize;
+  shadowCam.bottom = -baseFrustumSize;
+}
+```
+
+**Differences:**
+- No cascaded shadow maps
+- Single shadow frustum
+- Lower shadow quality but better compatibility
+
+---
+
+## Post-Processing
+
+### TSL Post-Processing (WebGPU Only)
+
+WebGPU supports Three.js Shading Language (TSL) post-processing:
+
+```typescript
+// From src/systems/client/ClientGraphics.ts
+this.usePostprocessing = 
+  (this.world.prefs?.postprocessing ?? true) && this.isWebGPU;
+
+if (this.usePostprocessing && isWebGPURenderer(this.renderer)) {
+  // Create post-processing composer with TSL effects
+  this.composer = createPostProcessingComposer(this.renderer, {
+    colorGradingLut,
+    colorGradingIntensity,
+    bloomEnabled,
+    bloomIntensity,
+  });
+}
+```
+
+**Effects:**
+- Color grading with LUT support
+- Bloom for glowing effects
+- Tone mapping
+- Anti-aliasing
+
+**WebGL Limitation:**
+- TSL post-processing disabled on WebGL
+- Basic tone mapping only
+- Maintains playability without advanced effects
+
+---
+
+## Renderer Configuration
+
+### Creating a Renderer
+
+```typescript
+import { createRenderer, configureRenderer, configureShadowMaps } from '@hyperscape/shared';
+
+// Create renderer
+const renderer = await createRenderer({
+  antialias: true,
+  alpha: false,
+  powerPreference: "high-performance",
+  canvas: document.getElementById('game-canvas'),
+});
+
+// Configure renderer
+configureRenderer(renderer, {
+  toneMapping: THREE.ACESFilmicToneMapping,
+  toneMappingExposure: 0.85,
+  outputColorSpace: THREE.SRGBColorSpace,
+  pixelRatio: window.devicePixelRatio,
+});
+
+// Configure shadow maps
+configureShadowMaps(renderer, {
+  enabled: true,
+  type: THREE.PCFSoftShadowMap,
+});
+```
+
+### Renderer Capabilities
+
+```typescript
+import { getWebGPUCapabilities, getMaxAnisotropy } from '@hyperscape/shared';
+
+// Get WebGPU features
+const caps = getWebGPUCapabilities(renderer);
+console.log("Backend:", caps.backend);        // "webgpu" or "webgl"
+console.log("Features:", caps.features);      // WebGPU feature list
+
+// Get max anisotropy
+const maxAniso = getMaxAnisotropy(renderer);  // 16 for WebGPU, varies for WebGL
+```
+
+---
+
+## Visual Effects
+
+### Cloud Rendering
+
+Clouds use depth testing to render correctly behind closer objects:
+
+```typescript
+// Enabled depth testing on clouds
+cloudMaterial.depthTest = true;
+cloudMaterial.depthWrite = false;
+```
+
+This fixes clouds appearing in front of nearby terrain.
+
+### Fog System
+
+Dynamic fog color transitions based on time of day:
+
+```typescript
+// Day fog: warm beige
+private readonly dayFogColor = new THREE.Color(0xd4c8b8);
+
+// Night fog: dark blue
+private readonly nightFogColor = new THREE.Color(0x1a1f2e);
+
+// Lerp between day and night
+this.updateFogColor(dayIntensity);
+```
+
+---
+
+## Performance Considerations
+
+### Renderer Selection
+
+- **WebGPU**: Higher performance, modern features
+- **WebGL**: Better compatibility, slightly lower performance
+- **Automatic fallback**: No user intervention required
+
+### Shadow Quality
+
+Shadow quality can be adjusted via settings:
+
+```typescript
+// From world preferences
+const shadowsLevel = this.world.prefs?.shadows || "med";
+const csmConfig = csmLevels[shadowsLevel];
+```
+
+Users can choose: `none`, `low`, `med`, `high`
+
+### Post-Processing Toggle
+
+Post-processing can be disabled for better performance:
+
+```typescript
+this.usePostprocessing = this.world.prefs?.postprocessing ?? true;
+```
+
+---
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Client Package" icon="monitor" href="/packages/client">
+    Client-side rendering setup and configuration.
+  </Card>
+  <Card title="Environment System" icon="sun" href="/wiki/engine/overview">
+    Day/night cycle, weather, and environmental effects.
+  </Card>
+</CardGroup>
