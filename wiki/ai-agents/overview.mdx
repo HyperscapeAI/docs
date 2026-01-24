@@ -60,6 +60,9 @@ export const hyperscapePlugin: Plugin = {
     skillsProvider,          // Skill levels and XP
     equipmentProvider,       // Equipped items
     availableActionsProvider, // Context-aware actions
+    possibilitiesProvider,   // What actions are currently possible
+    goalTemplatesProvider,   // Structured goal templates for beginners
+    guardrailsProvider,      // Safety constraints and warnings
   ],
 
   evaluators: [
