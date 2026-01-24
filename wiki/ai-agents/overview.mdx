@@ -81,9 +81,70 @@ export const hyperscapePlugin: Plugin = {
 
 ---
 
+## LLM Autonomy System
+
+Hyperscape agents use a **THINKING+ACTION** format that enables genuine LLM reasoning:
+
+### THINKING+ACTION Format
+
+Agents respond with structured reasoning before taking action:
+
+```
+<THINKING>
+I have 3 goblins attacking me and my health is at 40%. I have food in my inventory.
+I should eat to restore health before continuing combat.
+</THINKING>
+
+<ACTION>
+EAT_FOOD
+</ACTION>
+```
+
+**Benefits:**
+- Clear separation of reasoning and decision
+- Debuggable agent behavior (see why it chose an action)
+- Better parsing and error handling
+- Foundation for multi-step reasoning
+
+### Agent Thoughts Dashboard
+
+Real-time visualization of agent decision-making:
+
+- **Parchment/scroll visual style** matching game aesthetic
+- **Live sync** of agent thoughts via API
+- **Expandable history** of recent thoughts
+- **Flash animation** when new thoughts arrive
+- **Spectator overlay** for watching agents
+
+Access via `/api/agents/:agentId/thoughts` endpoint.
+
+### Target Locking
+
+Agents lock onto combat targets for 30 seconds to prevent target switching:
+
+- `lockedTargetId` persists across ticks
+- Lock clears when target dies, despawns, or timeout expires
+- Dramatically improves combat effectiveness
+
+### Force Flee Mechanism
+
+Pre-emptive survival check runs before LLM selection:
+
+- If health < 25% AND threats nearby, agent automatically flees
+- Survival instinct overrides LLM decisions
+- Prevents agents from dying due to poor LLM choices
+
+### Combat Readiness Scoring
+
+`getCombatReadiness()` evaluates agent's combat preparedness:
+
+- Factors: health level, weapon equipped, food available
+- Combat goals scaled down when readiness is low
+- "NOT RECOMMENDED" warnings added to risky combat options
+
 ## Available Actions
 
-The plugin provides **21 actions** across 8 categories:
+The plugin provides **24 actions** across 9 categories:
 
 ### Goal-Oriented Actions
 
