@@ -496,6 +496,36 @@ export const idleAction: Action = {
 
 ---
 
+## World Interaction Actions
+
+### `lootStarterChest`
+
+Interact with the starter chest to get starter equipment.
+
+```typescript
+// From actions/autonomous.ts
+export const lootStarterChestAction: Action = {
+  name: "LOOT_STARTER_CHEST",
+  description: "Search the starter chest to get starter equipment (bronze tools, tinderbox, net, food). Only works once per character.",
+  parameters: {},
+};
+```
+
+**Usage**: New players/agents should use this to acquire basic tools and food.
+
+**Starter Items:**
+- Bronze hatchet (woodcutting)
+- Bronze pickaxe (mining)
+- Tinderbox (firemaking)
+- Small fishing net (fishing)
+- Bread x5 (food)
+
+**Location**: Near spawn at coordinates (5, 0, -20)
+
+**Restrictions**: Only works once per character
+
+---
+
 ## Action Execution
 
 Actions are executed through the HyperscapeService:
