@@ -233,6 +233,35 @@ Hyperscape implements 11 skills with OSRS-accurate mechanics:
 
 ---
 
+## Quest System
+
+**Location:** `systems/shared/progression/`
+
+OSRS-style quest system with multi-stage progression:
+
+| Component | Purpose |
+|-----------|---------|
+| `QuestSystem.ts` | Quest logic and progression tracking (~1100 lines) |
+| `QuestRepository.ts` | Database persistence for quest progress |
+| `quest-types.ts` | Quest definitions and validation |
+| `quest-interfaces.ts` | ISP interfaces (IQuestQuery, IQuestActions) |
+
+**Features:**
+- Multi-stage quests (kill, gather, interact, dialogue)
+- Quest requirements (prerequisite quests, skill levels, items)
+- Quest points and rewards (items, XP)
+- HMAC kill token validation (prevents spoofing)
+- Rate limiting (5/sec list, 10/sec detail, 3/sec accept)
+- Quest audit logging for security
+- O(1) stage lookup caches for performance
+
+**Database Tables:**
+- `quest_progress` — Player quest state (status, current stage, progress)
+- `quest_audit_log` — Immutable audit trail for all quest actions
+- `characters.questPoints` — Total quest points earned
+
+---
+
 ## Attack Styles
 
 Players choose how combat XP is distributed:
