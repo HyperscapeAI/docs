@@ -11,6 +11,10 @@ Hyperscape integrates [ElizaOS](https://elizaos.ai) to enable AI agents that pla
 ## Starting AI Agents
 
 ```bash
+# Simplified command (recommended)
+bun run dev:ai
+
+# Legacy command (still supported)
 bun run dev:elizaos
 ```
 
@@ -18,6 +22,8 @@ This starts:
 - Game server on port 5555
 - Client on port 3333
 - ElizaOS runtime on port 4001
+
+The `dev:ai` command uses `concurrently` to run both services with colored output for easier debugging.
 
 ## Agent Capabilities
 
