@@ -415,6 +415,151 @@ Migrations are located in `packages/server/src/database/migrations/`.
 
 ---
 
+## Quest System Tables
+
+### quest_progress
+
+Tracks player quest progression:
+
+```typescript
+export const questProgress = pgTable('quest_progress', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),
+  status: text('status').default('not_started').notNull(),
+  currentStage: text('currentStage'),
+  stageProgress: jsonb('stageProgress').default({}),
+  startedAt: bigint('startedAt', { mode: 'number' }),
+  completedAt: bigint('completedAt', { mode: 'number' }),
+}, (table) => ({
+  uniquePlayerQuest: unique().on(table.playerId, table.questId),
+  playerIdx: index('idx_quest_progress_player').on(table.playerId),
+  statusIdx: index('idx_quest_progress_status').on(table.playerId, table.status),
+}));
+```
+
+**Status Values**:
+- `not_started` — Quest not yet started
+- `in_progress` — Quest active, objectives incomplete
+- `completed` — Quest finished, rewards claimed
+
+**Note**: `ready_to_complete` is a derived status (computed when `status === "in_progress"` AND current stage objective is met).
+
+**Stage Progress Format**:
+```json
+{
+  "kills": 7,              // Kill stage progress
+  "copper_ore": 3,         // Gather stage progress (by item ID)
+  "fire_created": 1        // Interact stage progress
+}
+```
+
+### quest_audit_log
+
+Immutable audit trail for quest actions:
+
+```typescript
+export const questAuditLog = pgTable('quest_audit_log', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),
+  action: text('action').notNull(),  // "started", "progressed", "completed"
+  questPointsAwarded: integer('questPointsAwarded').default(0),
+  stageId: text('stageId'),
+  stageProgress: jsonb('stageProgress').default({}),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+  metadata: jsonb('metadata').default({}),
+}, (table) => ({
+  playerIdx: index('idx_quest_audit_log_player').on(table.playerId),
+  questIdx: index('idx_quest_audit_log_quest').on(table.questId),
+  timestampIdx: index('idx_quest_audit_log_timestamp').on(table.timestamp),
+  actionIdx: index('idx_quest_audit_log_action').on(table.action),
+}));
+```
+
+**Use Cases**:
+- Fraud detection and investigation
+- Debugging quest progression bugs
+- Analytics for game design
+- Customer support inquiries
+
+---
+
+## Activity & Moderation Tables
+
+### activity_log
+
+Tracks player actions for admin panel:
+
+```typescript
+export const activityLog = pgTable('activity_log', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  eventType: text('eventType').notNull(),
+  action: text('action').notNull(),
+  entityType: text('entityType'),
+  entityId: text('entityId'),
+  details: jsonb('details').default({}),
+  position: jsonb('position'),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+}, (table) => ({
+  playerIdx: index('idx_activity_log_player').on(table.playerId),
+  timestampIdx: index('idx_activity_log_timestamp').on(table.timestamp),
+  eventTypeIdx: index('idx_activity_log_event_type').on(table.eventType),
+}));
+```
+
+### trades
+
+Trade transaction history:
+
+```typescript
+export const trades = pgTable('trades', {
+  id: serial('id').primaryKey(),
+  initiatorId: text('initiatorId')
+    .references(() => characters.id, { onDelete: 'set null' }),
+  receiverId: text('receiverId')
+    .references(() => characters.id, { onDelete: 'set null' }),
+  status: text('status').notNull(),  // "pending", "accepted", "declined", "completed"
+  initiatorItems: jsonb('initiatorItems').default([]),
+  receiverItems: jsonb('receiverItems').default([]),
+  initiatorCoins: integer('initiatorCoins').default(0),
+  receiverCoins: integer('receiverCoins').default(0),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+}, (table) => ({
+  initiatorIdx: index('idx_trades_initiator').on(table.initiatorId),
+  receiverIdx: index('idx_trades_receiver').on(table.receiverId),
+  timestampIdx: index('idx_trades_timestamp').on(table.timestamp),
+}));
+```
+
+### user_bans
+
+Moderation ban records:
+
+```typescript
+export const userBans = pgTable('user_bans', {
+  id: serial('id').primaryKey(),
+  bannedUserId: text('bannedUserId').notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  bannedByUserId: text('bannedByUserId').notNull()
+    .references(() => users.id, { onDelete: 'set null' }),
+  reason: text('reason'),
+  expiresAt: bigint('expiresAt', { mode: 'number' }),
+  createdAt: bigint('createdAt', { mode: 'number' }).notNull(),
+  active: integer('active').default(1).notNull(),
+}, (table) => ({
+  bannedUserIdx: index('idx_user_bans_banned_user').on(table.bannedUserId),
+  activeIdx: index('idx_user_bans_active').on(table.active),
+  activeBannedIdx: index('idx_user_bans_active_banned').on(table.active, table.bannedUserId),
+}));
+```
+
+---
+
 ## Related Documentation
 
 - [Server Architecture](/wiki/server/overview)
