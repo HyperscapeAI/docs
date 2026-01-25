@@ -189,7 +189,8 @@
             "pages": [
               "packages/shared",
               "packages/server",
-              "packages/client"
+              "packages/client",
+              "packages/hs-kit"
             ]
           },
           {
