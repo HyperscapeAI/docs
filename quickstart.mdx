@@ -147,9 +147,10 @@ bun start                 # Start game server (cd packages/server && bun run sta
 
 # Development  
 bun run dev               # All packages with hot reload
-bun run dev:ai            # With AI agents
+bun run dev:ai            # Game + ElizaOS agents (concurrently)
 bun run dev:client        # Client only
 bun run dev:server        # Server only
+bun run dev:app           # Tauri desktop app
 bun run dev:turbo         # Turbo-based dev (excludes asset-forge)
 bun run dev:reset         # Clean rebuild and restart
 
