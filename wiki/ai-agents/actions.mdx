@@ -451,30 +451,56 @@ export const bankWithdrawAction: Action = {
 
 ### `setGoal`
 
-Set a new goal for the agent.
+Set a new goal using LLM with goal templates.
 
 ```typescript
 // From actions/goals.ts
 export const setGoalAction: Action = {
   name: "SET_GOAL",
-  description: "Set a new goal for autonomous behavior",
-  parameters: {
-    goal: {
-      type: "string",
-      description: "Goal description (e.g., 'reach level 10 woodcutting')",
-    },
-    priority: { type: "number", optional: true, description: "Priority (1-10)" },
-  },
+  description: "Choose a new goal using LLM with structured goal templates",
+  parameters: {},
 };
 ```
 
-**Usage**: Direct agent behavior toward objectives.
+**How it works (PR #628):**
 
-**Example Goals**:
-- "Reach level 10 Woodcutting"
-- "Collect 100 logs"
-- "Kill 50 goblins"
-- "Earn 10,000 coins"
+1. **Goal Templates Provider** supplies scored goal options:
+   - `woodcutting_basics` - Chop trees for logs
+   - `mining_basics` - Mine rocks for ore
+   - `combat_training_goblins` - Fight goblins
+   - `bronze_gear_chain` - Mine → smelt → smith
+   - `acquire_starter_tools` - Get basic tools
+   - And more...
+
+2. **LLM selects** best goal based on:
+   - Current skills and levels
+   - Inventory contents
+   - Nearby resources
+   - Combat readiness
+   - Recent goal history (diversity penalty)
+
+3. **Goal is set** with target, progress tracking, and location
+
+**Example LLM Selection:**
+
+```
+THINKING: I have no axe or pickaxe. I should get starter tools first before attempting any gathering skills.
+
+ACTION: SET_GOAL
+
+Selected Goal: acquire_starter_tools
+```
+
+**Goal Types:**
+- `combat_training` - Train combat skills
+- `woodcutting` - Train woodcutting
+- `mining` - Train mining
+- `smithing` - Smelt and smith
+- `fishing` - Catch fish
+- `firemaking` - Burn logs
+- `cooking` - Cook food
+- `exploration` - Discover areas
+- `starter_items` - Get basic tools
 
 ---
 
