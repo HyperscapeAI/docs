@@ -80,26 +80,100 @@ export const hyperscapePlugin: Plugin = {
 
 ---
 
+## LLM Autonomy System
+
+<Info>
+  As of PR #628, agents use a **THINKING+ACTION** format that separates reasoning from action selection, making agent behavior transparent and debuggable.
+</Info>
+
+### THINKING+ACTION Format
+
+Agents respond with structured reasoning before taking actions:
+
+```
+THINKING: I have 3 goblins attacking me and my health is at 40%. I have food in my inventory.
+I should eat to restore health before continuing combat.
+
+ACTION: EAT_FOOD
+```
+
+**Benefits:**
+- Clear separation of reasoning and decision
+- Debuggable agent behavior (see *why* it chose an action)
+- Better parsing and error handling
+- Foundation for multi-step reasoning
+
+### Target Locking
+
+Agents lock onto combat targets for 30 seconds to prevent target switching:
+
+```typescript
+// From autonomous-behavior-manager.ts
+private lockedTargetId: string | null = null;
+private readonly TARGET_LOCK_TIMEOUT = 30000; // 30s
+```
+
+**Behavior:**
+- Agent attacks one target until it dies
+- Lock clears when target dies, despawns, or 30s timeout
+- Dramatically improves combat effectiveness
+
+### Force Flee Mechanism
+
+Pre-emptive survival check runs BEFORE LLM selection:
+
+```typescript
+// If health < 25% AND threats nearby, agent automatically flees
+if (healthPercent < 25 && threats.length > 0) {
+  // Bypass LLM - execute FLEE immediately
+  await executeAction(fleeAction);
+}
+```
+
+Survival instinct overrides LLM decisions to prevent deaths.
+
+### Combat Readiness Scoring
+
+New `getCombatReadiness()` function evaluates combat preparedness:
+
+```typescript
+interface CombatReadiness {
+  score: number;      // 0-100
+  factors: string[];  // Reasons for deductions
+  ready: boolean;     // score >= 50
+}
+```
+
+**Factors:**
+- Health level (deduct up to 30 points for low health)
+- Weapon equipped (deduct 25 points if no weapon)
+- Food available (deduct 20 points if no food)
+
+Combat goals are scaled down when readiness is low.
+
+---
+
 ## Available Actions
 
-The plugin provides **21 actions** across 8 categories:
+The plugin provides **23 actions** across 9 categories:
 
 ### Goal-Oriented Actions
 
 | Action | Description |
 |--------|-------------|
-| `setGoalAction` | Set a new goal when none exists |
+| `setGoalAction` | Set a new goal using LLM with goal templates |
 | `navigateToAction` | Navigate to goal location |
 
 ### Autonomous Behavior
 
 | Action | Description |
 |--------|-------------|
-| `autonomousAttackAction` | Attack nearby mobs |
+| `autonomousAttackAction` | Attack nearby mobs with target locking |
 | `exploreAction` | Move to explore new areas |
-| `fleeAction` | Run away from danger |
+| `fleeAction` | Run away from danger (auto-triggered at <25% HP) |
 | `idleAction` | Stand still and observe |
 | `approachEntityAction` | Move towards a specific entity |
+| `lootStarterChestAction` | Loot starter chest for basic tools (one-time) |
 
 ### Movement Actions
 
