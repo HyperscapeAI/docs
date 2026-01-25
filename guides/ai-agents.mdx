@@ -108,19 +108,29 @@ actions: [
 
 ### World State Access (Providers)
 
-Agents query world state via 6 providers:
+Agents query world state via 10 providers:
 
 ```typescript
-// From packages/plugin-hyperscape/src/index.ts (lines 148-156)
+// From packages/plugin-hyperscape/src/index.ts
 providers: [
+  goalProvider,             // Current goal and progress
   gameStateProvider,        // Health, stamina, position, combat status
   inventoryProvider,        // Items, coins, free slots
   nearbyEntitiesProvider,   // Players, NPCs, resources nearby
   skillsProvider,           // Skill levels and XP
   equipmentProvider,        // Equipped items
   availableActionsProvider, // Context-aware available actions
+  possibilitiesProvider,    // What actions are currently possible (NEW)
+  goalTemplatesProvider,    // Structured goal templates (NEW)
+  guardrailsProvider,       // Safety constraints and warnings (NEW)
 ],
 ```
+
+**New Providers (PR #628):**
+
+- **possibilitiesProvider** - Analyzes inventory and nearby entities to determine what's craftable, gatherable, and trainable
+- **goalTemplatesProvider** - Provides scored goal templates for OSRS beginner flows (woodcutting, mining, combat, etc.)
+- **guardrailsProvider** - Hard/soft constraints and active warnings to prevent dangerous decisions
 
 ## Agent Architecture
 
