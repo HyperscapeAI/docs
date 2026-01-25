@@ -497,15 +497,34 @@ Watch AI agents play in real-time:
 ## Agent Architecture Flow
 
 ```mermaid
-flowchart LR
-    A[ElizaOS Runtime] --> B[plugin-hyperscape]
-    B --> C[Providers]
-    B --> D[Actions]
-    C --> E[Game State]
-    D --> F[WebSocket → Server]
-    E --> G[LLM Decision]
-    G --> D
+flowchart TB
+    A[ElizaOS Runtime] --> B[Providers]
+    B --> C[Compose State]
+    C --> D[Evaluators]
+    D --> E[LLM Decision]
+    E --> F{Parse THINKING+ACTION}
+    F --> G[Validate Action]
+    G --> H[Execute Action]
+    H --> I[WebSocket → Server]
+    I --> J[Game State Update]
+    J --> B
+    
+    K[Force Flee Check] -.->|health < 25%| H
+    L[Target Lock] -.->|30s lock| H
 ```
+
+### Decision-Making Pipeline
+
+1. **Providers** - Gather game context (10 providers)
+2. **Compose State** - Merge provider data into unified state
+3. **Evaluators** - Assess situation (5 evaluators)
+4. **LLM Decision** - Generate THINKING+ACTION response
+5. **Parse** - Extract reasoning and action name
+6. **Validate** - Check if action is possible
+7. **Execute** - Perform action via HyperscapeService
+8. **Update** - Server sends state changes back
+
+**Survival Override:** If health < 25% with threats, skip LLM and force FLEE.
 
 ---
 
