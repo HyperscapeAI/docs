@@ -277,6 +277,7 @@
               "wiki/game-systems/collision",
               "wiki/game-systems/inventory",
               "wiki/game-systems/bank",
+              "wiki/game-systems/trading",
               "wiki/game-systems/death",
               "wiki/game-systems/loot",
               "wiki/game-systems/mob-ai"
