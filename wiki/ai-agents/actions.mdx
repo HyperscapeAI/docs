@@ -244,6 +244,32 @@ export const chopTreeAction: Action = {
 
 **Requirements**: Hatchet in inventory, Woodcutting level.
 
+**Validation**: Checks for trees within 20m approach range, filters by level requirement, walks to tree if needed.
+
+---
+
+### `mineRock`
+
+Mine a rock for ore.
+
+```typescript
+export const mineRockAction: Action = {
+  name: "MINE_ROCK",
+  description: "Mine a rock to gather ore",
+  parameters: {
+    rockId: { type: "string", optional: true, description: "Specific rock entity ID" },
+  },
+};
+```
+
+**Requirements**: Pickaxe in inventory, Mining level.
+
+**Validation**: Checks for rocks within 20m approach range, filters by level requirement, walks to cardinal adjacent tile before mining.
+
+<Info>
+  Added in PR #628 to support mining skill training for AI agents.
+</Info>
+
 ---
 
 ### `catchFish`
