@@ -6,10 +6,10 @@ icon: "database"
 
 # Agent Providers Reference
 
-Providers supply **game context** to ElizaOS agents, enabling the LLM to make informed decisions. There are **7 providers** that run before each agent decision.
+Providers supply **game context** to ElizaOS agents, enabling the LLM to make informed decisions. There are **10 providers** that run before each agent decision.
 
 <Info>
-Providers are defined in `packages/plugin-hyperscape/src/providers/`.
+Providers are defined in `packages/plugin-hyperscape/src/providers/`. PR #628 added 3 new providers for enhanced LLM decision-making.
 </Info>
 
 ## Provider Execution Order
@@ -23,6 +23,9 @@ Providers run in a specific order to ensure dependencies are met:
 5. **skillsProvider** - Skill levels and XP
 6. **equipmentProvider** - Currently equipped items
 7. **availableActionsProvider** - Context-aware action list
+8. **possibilitiesProvider** - What actions are currently possible (NEW)
+9. **goalTemplatesProvider** - Structured goal templates (NEW)
+10. **guardrailsProvider** - Safety constraints and warnings (NEW)
 
 ---
 
