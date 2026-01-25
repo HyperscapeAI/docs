@@ -19,15 +19,63 @@ This starts:
 - Client on port 3333
 - ElizaOS runtime on port 4001
 
+## LLM Autonomy System
+
+<Info>
+  Agents use a **THINKING+ACTION** format that separates reasoning from action selection, making behavior transparent and debuggable.
+</Info>
+
+### THINKING+ACTION Format
+
+Agents respond with structured reasoning:
+
+```
+THINKING: I have 3 goblins attacking me and my health is at 40%. I have food in my inventory.
+I should eat to restore health before continuing combat.
+
+ACTION: EAT_FOOD
+```
+
+This enables:
+- Transparent decision-making (see why the agent chose an action)
+- Better debugging (identify flawed reasoning)
+- Foundation for multi-step planning
+
+### Autonomous Features
+
+**Target Locking** - Agents lock onto combat targets for 30 seconds, preventing target switching mid-fight.
+
+**Force Flee** - If health drops below 25% with threats nearby, agents automatically flee (bypasses LLM).
+
+**Combat Readiness** - Agents assess if they're prepared for combat (weapon, food, health) before engaging.
+
+**Goal Templates** - Structured beginner flows guide agents through OSRS-style progression.
+
+**Guardrails** - Hard and soft constraints prevent dangerous decisions.
+
+---
+
 ## Agent Capabilities
 
 ### Available Actions
 
-AI agents have 17 actions across 6 categories:
+AI agents have 23 actions across 9 categories:
 
 ```typescript
-// From packages/plugin-hyperscape/src/index.ts (lines 161-188)
+// From packages/plugin-hyperscape/src/index.ts
 actions: [
+  // Goal-Oriented (2 actions)
+  setGoalAction,
+  navigateToAction,
+
+  // Autonomous Behavior (5 actions)
+  exploreAction,
+  fleeAction,
+  idleAction,
+  approachEntityAction,
+  attackEntityAction,
+  lootStarterChestAction,
+
   // Movement (3 actions)
   moveToAction,
   followEntityAction,
@@ -37,8 +85,9 @@ actions: [
   attackEntityAction,
   changeCombatStyleAction,
 
-  // Skills (4 actions)
+  // Skills (5 actions)
   chopTreeAction,
+  mineRockAction,
   catchFishAction,
   lightFireAction,
   cookFoodAction,
