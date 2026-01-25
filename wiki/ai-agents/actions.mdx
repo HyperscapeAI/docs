@@ -576,40 +576,64 @@ async executeAction(name: string, params: Record<string, unknown>): Promise<bool
 
 ---
 
-## Action Selection
+## Action Selection (THINKING+ACTION Format)
 
-The LLM selects actions based on:
+As of PR #628, agents use a structured decision format:
 
-1. **Providers** - Current game state context
-2. **Evaluators** - Assessment of opportunities
-3. **Goals** - Current objectives
-4. **Available Actions** - Context-aware action list
+```
+THINKING: [Agent's reasoning about the situation]
+
+ACTION: [Action name to execute]
+```
+
+### Selection Pipeline
+
+1. **Providers** - Gather game context (10 providers)
+2. **Compose State** - Merge provider data
+3. **Evaluators** - Assess opportunities (5 evaluators)
+4. **LLM Prompt** - Build action selection prompt with OSRS common sense rules
+5. **LLM Response** - Generate THINKING+ACTION
+6. **Parse** - Extract reasoning and action name
+7. **Validate** - Check if action is possible
+8. **Execute** - Perform action via HyperscapeService
+
+### Survival Override
+
+Before LLM selection, a force flee check runs:
 
 ```typescript
-// Provider supplies available actions
-export const availableActionsProvider: Provider = {
-  name: "availableActions",
-  async get(runtime, state): Promise<string> {
-    const gameState = await getGameState(runtime);
-
-    const actions = [];
-
-    // Combat actions if enemies nearby
-    if (gameState.nearbyEnemies.length > 0) {
-      actions.push("ATTACK_ENTITY", "FLEE");
-    }
-
-    // Skill actions if resources nearby
-    if (gameState.nearbyTrees.length > 0 && hasHatchet(gameState)) {
-      actions.push("CHOP_TREE");
-    }
-
-    // ... more context-aware action filtering
-
-    return formatActionList(actions);
-  },
-};
+// From autonomous-behavior-manager.ts
+if (healthPercent < 25 && threats.length > 0) {
+  // Bypass LLM - execute FLEE immediately
+  await executeAction(fleeAction);
+  return;
+}
 ```
+
+This ensures agents survive even if the LLM makes poor decisions.
+
+### Target Locking
+
+During combat, agents lock onto targets for 30 seconds:
+
+```typescript
+// From autonomous-behavior-manager.ts
+private lockedTargetId: string | null = null;
+private readonly TARGET_LOCK_TIMEOUT = 30000; // 30s
+
+// In ATTACK_ENTITY action
+if (lockedTargetId) {
+  targetMob = attackableMobs.find(mob => mob.id === lockedTargetId);
+  if (targetMob) {
+    // Continue attacking locked target
+  } else {
+    // Target died/despawned, clear lock and find new target
+    clearTargetLock();
+  }
+}
+```
+
+This prevents agents from switching between targets without finishing kills.
 
 ---
 
