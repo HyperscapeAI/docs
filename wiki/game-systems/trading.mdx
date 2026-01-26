@@ -1,0 +1,312 @@
+---
+title: "Trading System"
+description: "Player-to-player trading with two-screen confirmation and security features"
+icon: "handshake"
+---
+
+## Overview
+
+The trading system enables secure player-to-player item exchanges with OSRS-accurate two-screen confirmation flow, proximity checks, and comprehensive security features.
+
+<Info>
+  Trading code lives in `packages/server/src/systems/TradingSystem/` with modular handlers for each aspect of the trade flow.
+</Info>
+
+## Trade Flow
+
+### Initiating a Trade
+
+1. **Right-click** on another player
+2. Select **"Trade with [Player]"** from context menu
+3. If out of range, character auto-walks to player
+4. Trade request sent when within 2 tiles
+
+### Trade Request
+
+The target player receives:
+- Pink chat message: **"[Player] wishes to trade with you."**
+- Clickable message to accept
+- Trade request modal with Accept/Decline buttons
+
+### Screen 1: Offer Items
+
+Both players can:
+- Click inventory items to add to offer
+- Click offered items to remove
+- Enter quantities for stackable items
+- View partner's offer in real-time
+- See partner's free inventory slots
+- Click **"Accept"** when satisfied
+
+**Interface Blocking:**
+- Bank, store, and dialogue interfaces automatically close
+- Prevents item duplication exploits
+- Trade closes if player opens conflicting interface
+
+### Screen 2: Final Confirmation
+
+After both players accept on Screen 1:
+- **Wealth Transfer Indicator** shows value difference
+  - Green arrow: receiving more value
+  - Red arrow: giving more value
+  - Gray: balanced trade
+- Review final offers (no changes allowed)
+- Both players must click **"Accept"** again
+- Trade completes when both confirm
+
+**Reset Conditions:**
+- Any item change resets both players to Screen 1
+- Moving too far apart cancels trade
+- Closing trade window cancels for both players
+
+## Implementation
+
+### Modular Architecture
+
+```typescript
+// From packages/server/src/systems/TradingSystem/
+index.ts          // Main TradingSystem class
+acceptance.ts     // Accept/decline logic
+items.ts          // Add/remove items from offer
+request.ts        // Trade initiation with proximity checks
+swap.ts           // Screen transitions (Screen 1 ↔ Screen 2)
+helpers.ts        // Shared utilities
+types.ts          // Type definitions
+```
+
+### TradingSystem Interface
+
+```typescript
+export interface TradingSystem {
+  // Request handling
+  requestTrade(requesterId: string, targetId: string): void;
+  acceptRequest(playerId: string): void;
+  declineRequest(playerId: string): void;
+  
+  // Item management
+  addItem(playerId: string, slot: number, quantity: number): void;
+  removeItem(playerId: string, slot: number): void;
+  
+  // Screen transitions
+  acceptScreen1(playerId: string): void;
+  acceptScreen2(playerId: string): void;
+  
+  // Trade completion
+  completeTrade(tradeId: string): void;
+  cancelTrade(playerId: string): void;
+}
+```
+
+## Security Features
+
+### Proximity Validation
+
+```typescript
+// From request.ts
+const TRADE_RANGE = 2; // tiles
+
+// Validated on:
+// - Trade request initiation
+// - Every item add/remove
+// - Screen transitions
+// - Trade completion
+
+if (distance > TRADE_RANGE) {
+  cancelTrade(playerId);
+  sendMessage(playerId, "You are too far away to trade.");
+}
+```
+
+### Transaction Safety
+
+- **Atomic Operations**: Trade completes or fully rolls back
+- **Inventory Checks**: Validates space before accepting
+- **Item Verification**: Confirms items exist before transfer
+- **Rollback on Failure**: Restores state if any step fails
+
+### Audit Logging
+
+All completed trades are logged:
+
+```typescript
+// From helpers.ts
+logTradeCompletion({
+  tradeId: string,
+  player1: { id: string, username: string, items: TradeItem[] },
+  player2: { id: string, username: string, items: TradeItem[] },
+  timestamp: Date,
+  wealthTransfer: number,
+});
+```
+
+## UI Components
+
+### TradePanel
+
+Located in `packages/client/src/game/panels/TradePanel/`:
+
+```typescript
+TradePanel.tsx            // Main trade interface
+TradeRequestModal.tsx     // Accept/decline request modal
+
+components/
+  InventoryItem.tsx       // Draggable inventory items
+  InventoryMiniPanel.tsx  // Mini inventory view
+  TradeSlot.tsx           // Trade offer slots
+  
+modals/
+  ContextMenu.tsx         // Item context menu
+  QuantityPrompt.tsx      // Stackable item quantity input
+  
+hooks/
+  useRemovedItemTracking.ts  // Track removed items for sync
+```
+
+### Trade States
+
+```typescript
+// From types.ts
+export type TradeScreen = 1 | 2;
+
+export interface TradeState {
+  screen: TradeScreen;
+  playerAccepted: boolean;
+  partnerAccepted: boolean;
+  playerOffer: TradeItem[];
+  partnerOffer: TradeItem[];
+  partnerFreeSlots: number;
+  wealthTransfer: number;
+}
+```
+
+## Chat Integration
+
+Trade requests appear as pink-colored messages:
+
+```typescript
+// From packages/server/src/systems/ServerNetwork/handlers/trade/request.ts
+sendChatMessage({
+  playerId: targetId,
+  message: `[${requesterName}] wishes to trade with you.`,
+  color: "pink",
+  clickable: true,
+  action: "accept-trade",
+  actionData: { requesterId },
+});
+```
+
+## Network Protocol
+
+### Client → Server Events
+
+```typescript
+// Trade request
+{ type: "trade:request", targetId: string }
+
+// Accept/decline request
+{ type: "trade:accept-request" }
+{ type: "trade:decline-request" }
+
+// Item management
+{ type: "trade:add-item", slot: number, quantity: number }
+{ type: "trade:remove-item", slot: number }
+
+// Screen transitions
+{ type: "trade:accept-screen1" }
+{ type: "trade:accept-screen2" }
+
+// Cancel
+{ type: "trade:cancel" }
+```
+
+### Server → Client Events
+
+```typescript
+// Trade state updates
+{ type: "trade:state-update", state: TradeState }
+
+// Trade request received
+{ type: "trade:request-received", requesterId: string, requesterName: string }
+
+// Trade cancelled
+{ type: "trade:cancelled", reason: string }
+
+// Trade completed
+{ type: "trade:completed" }
+```
+
+## Error Handling
+
+### Common Errors
+
+| Error | Cause | Resolution |
+|-------|-------|------------|
+| "Too far away" | Distance > 2 tiles | Move closer to partner |
+| "Not enough space" | Inventory full | Free up inventory slots |
+| "Item no longer available" | Item removed during trade | Re-add item to offer |
+| "Trade cancelled" | Partner declined/moved | Initiate new trade |
+
+### Validation
+
+```typescript
+// From helpers.ts
+export function validateTradeCompletion(trade: Trade): ValidationResult {
+  // Check both players have space
+  if (!hasInventorySpace(trade.player1, trade.player2Offer)) {
+    return { valid: false, reason: "Player 1 inventory full" };
+  }
+  
+  // Verify all items still exist
+  if (!verifyItemsExist(trade.player1, trade.player1Offer)) {
+    return { valid: false, reason: "Items no longer available" };
+  }
+  
+  // Check proximity
+  if (getDistance(trade.player1, trade.player2) > TRADE_RANGE) {
+    return { valid: false, reason: "Players too far apart" };
+  }
+  
+  return { valid: true };
+}
+```
+
+## Testing
+
+Comprehensive test coverage in `packages/server/tests/integration/trade/`:
+
+```typescript
+// trade.integration.test.ts
+describe("Trading System", () => {
+  test("complete trade flow", async () => {
+    // 1. Request trade
+    // 2. Accept request
+    // 3. Add items to offers
+    // 4. Accept screen 1
+    // 5. Accept screen 2
+    // 6. Verify items transferred
+  });
+  
+  test("proximity validation", async () => {
+    // Verify trade cancels when players move apart
+  });
+  
+  test("inventory space validation", async () => {
+    // Verify trade fails if inventory full
+  });
+  
+  test("rollback on failure", async () => {
+    // Verify items restored if trade fails
+  });
+});
+```
+
+## Related Systems
+
+<CardGroup cols={2}>
+  <Card title="Inventory System" icon="backpack" href="/wiki/game-systems/inventory">
+    Item management and stacking
+  </Card>
+  <Card title="Economy" icon="coins" href="/concepts/economy">
+    Banking, shops, and currency
+  </Card>
+</CardGroup>
