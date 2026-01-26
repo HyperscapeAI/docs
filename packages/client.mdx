@@ -21,14 +21,26 @@ The `@hyperscape/client` package is the web game client:
 packages/client/
 ├── src/
 │   ├── auth/           # Privy authentication
-│   ├── components/     # React UI components
 │   ├── constants/      # Client constants
 │   ├── game/           # Game loop and logic
+│   │   ├── components/ # Game-specific components (chat, currency, dialog, equipment, map, quest, settings, skilltree)
+│   │   ├── dashboard/  # Agent dashboard
+│   │   ├── hud/        # HUD elements
+│   │   ├── interface/  # Interface manager
+│   │   ├── panels/     # Game panels (inventory, bank, combat, etc.)
+│   │   └── systems/    # Client-side game systems
 │   ├── hooks/          # React hooks
 │   ├── lib/            # Networking, utilities
 │   ├── public/         # Static assets
 │   ├── screens/        # UI screens
 │   ├── types/          # TypeScript types
+│   ├── ui/             # Consolidated UI system (components, controls, core, stores, theme, types)
+│   │   ├── components/ # Reusable UI components (Window, TabBar, Portal, etc.)
+│   │   ├── controls/   # Form controls (Slider, Toggle, Select, etc.)
+│   │   ├── core/       # Core UI systems (drag-and-drop, window management, presets)
+│   │   ├── stores/     # Zustand state stores
+│   │   ├── theme/      # Theme system
+│   │   └── types/      # UI type definitions
 │   ├── utils/          # Helper functions
 │   ├── index.tsx       # React entry point
 │   ├── index.html      # HTML template
