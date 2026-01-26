@@ -60,6 +60,47 @@ packages/server/
 4. WebSocket handlers
 5. Game world and systems
 
+## Server Systems
+
+### TradingSystem
+
+Located in `src/systems/TradingSystem/`:
+
+Modular player-to-player trading system with:
+- **acceptance.ts**: Accept/decline logic
+- **items.ts**: Add/remove items from offers
+- **request.ts**: Trade initiation with proximity checks
+- **swap.ts**: Screen transitions (Screen 1 ↔ Screen 2)
+- **helpers.ts**: Shared utilities and validation
+- **types.ts**: Type definitions
+
+Features:
+- Two-screen confirmation flow (OSRS-accurate)
+- Wealth transfer indicators
+- Proximity validation (2-tile range)
+- Interface blocking (prevents exploits)
+- Audit logging for all trades
+
+### ServerNetwork Handlers
+
+Located in `src/systems/ServerNetwork/handlers/`:
+
+| Handler | Purpose |
+|---------|---------|
+| `bank/` | Banking operations (deposit, withdraw, tabs, coins, equipment) |
+| `trade/` | Trading system handlers |
+| `friends.ts` | Friend management and private messaging |
+| `combat.ts` | Combat actions and validation |
+| `inventory.ts` | Inventory management |
+| `player.ts` | Player state updates |
+| `chat.ts` | Chat message handling |
+| `dialogue.ts` | NPC dialogue |
+| `quest.ts` | Quest progression |
+| `resources.ts` | Resource gathering |
+| `store.ts` | Shop transactions |
+| `prayer.ts` | Prayer system |
+| `home-teleport.ts` | Home teleport functionality |
+
 ## API Routes
 
 | Route | Method | Purpose |
@@ -67,6 +108,10 @@ packages/server/
 | `/health` | GET | Health check |
 | `/auth` | POST | Authentication |
 | `/ws` | WS | Game WebSocket connection |
+| `/api/agent/*` | Various | ElizaOS agent API endpoints |
+| `/api/character/*` | Various | Character management |
+| `/api/player/*` | Various | Player data queries |
+| `/api/template/*` | Various | Character templates |
 
 ## Database
 
