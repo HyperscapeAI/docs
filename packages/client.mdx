@@ -78,26 +78,104 @@ GameClient.tsx            // Main 3D gameplay
 | `GameClient` | Main 3D gameplay |
 | `LoadingScreen` | Asset loading state |
 
-## UI Components
+## UI Architecture
 
-Located in `src/components/`:
+The client uses a clear separation between reusable UI primitives and game-specific code:
+
+### UI Design System (`src/ui/`)
+
+Pure, reusable UI components and systems:
 
 ```typescript
-// From packages/client/src/components/
-CharacterPreview.tsx      // VRM character preview
-DraggableWindow.tsx       // Draggable UI windows
-EmbeddedGameClient.tsx    // Embedded game in dashboard
-GameWindow.tsx            // Main game container
-MinimapCompass.tsx        // Minimap with compass
-MinimapStaminaBar.tsx     // Stamina display
-MenuButton.tsx            // Menu buttons
-Portal.tsx                // React portal for overlays
-Fields.tsx                // Form field components
-Icons.tsx                 // Icon components
+// From packages/client/src/ui/
+components/               // Base UI primitives
+  Window.tsx             // Draggable, resizable windows
+  TabBar.tsx             // Tab navigation
+  DragOverlay.tsx        // Drag preview overlay
+  Portal.tsx             // React portal for overlays
+  MenuButton.tsx         // Menu buttons
+  Slider.tsx             // Range sliders
+  ToggleSwitch.tsx       // Toggle switches
+  ItemSlot.tsx           // Item slot component
+  // ... and more
 
-// Subfolders
-character/                // Character-related components
-dashboard/                // Dashboard components
+core/                    // Core UI systems
+  drag/                  // Drag-and-drop system (@dnd-kit integration)
+  edit/                  // Edit mode (L key to unlock)
+  notifications/         // Notification system
+  presets/               // Layout presets and cloud sync
+  responsive/            // Breakpoint and mobile detection
+  tabs/                  // Tab management
+  tooltip/               # Progressive tooltips
+  virtual/               # Virtual scrolling
+  window/                # Window management
+
+stores/                  # UI state management (Zustand)
+  windowStore.ts         # Window positions and state
+  dragStore.ts           # Drag-and-drop state
+  editStore.ts           # Edit mode state
+  anchorUtils.ts         # Anchor-based positioning utilities
+  // ... and more
+
+theme/                   # Theme system
+  themes.ts              # Color themes
+  animations.ts          # Animation presets
+```
+
+### Game-Specific Code (`src/game/`)
+
+All game logic and components:
+
+```typescript
+// From packages/client/src/game/
+interface/               # Window management
+  InterfaceManager.tsx   # Main UI orchestrator
+  DefaultLayoutFactory.ts # Default window layouts
+  useViewportResize.ts   # Responsive window positioning
+  
+dashboard/               # Agent dashboard
+  AgentActivityPanel.tsx
+  AgentChat.tsx
+  DashboardLayout.tsx
+  // ... and more
+
+hud/                     # HUD elements
+  Minimap.tsx
+  MinimapCompass.tsx
+  MinimapStaminaBar.tsx
+  StatusBars.tsx
+  XPProgressOrb.tsx
+  level-up/              # Level-up notifications
+  
+panels/                  # Game panels
+  InventoryPanel.tsx
+  EquipmentPanel.tsx
+  CombatPanel.tsx
+  SkillsPanel.tsx
+  BankPanel/             # Modular bank system
+  TradePanel/            # Modular trade system
+  ActionBarPanel/        # Action bar with drag-drop
+  // ... and more
+
+components/              # Game components
+  chat/                  # Chat system
+  currency/              # Currency display
+  dialog/                # Dialogue system
+  equipment/             # Equipment components
+  map/                   # World map
+  quest/                 # Quest system
+  settings/              # Settings panels
+  skilltree/             # Skill tree
+
+systems/                 # Game systems
+  chat/                  # Chat filters and state
+  currency/              # Currency utilities
+  dialog/                # Dialog parser
+  equipment/             # Equipment utilities
+  map/                   # Map navigation
+  quest/                 # Quest tracking
+  settings/              # Settings schema
+  skilltree/             # Skill tree utilities
 ```
 
 ### HUD Components
