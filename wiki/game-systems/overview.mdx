@@ -120,6 +120,26 @@ Implements tile-based movement and OSRS-accurate collision:
 - Network synchronization (zone serialization)
 - Safespotting mechanics (OSRS-accurate)
 
+### World Systems
+
+**Location:** `systems/shared/world/`
+
+Manages world generation and environment:
+
+- **TerrainSystem.ts** — Procedural terrain with flat zones for stations (see [Terrain System](/wiki/game-systems/terrain))
+- **WaterSystem.ts** — Water rendering and physics
+- **VegetationSystem.ts** — Procedural tree/rock placement
+- **RoadNetworkSystem.ts** — Road generation between towns
+- **SkySystem.ts** — Day/night cycle
+- **Environment.ts** — Lighting and atmosphere
+
+**Terrain Features:**
+- Noise-based procedural generation (50m max height)
+- Flat zones under stations with smooth blending
+- Spatial indexing for O(1) flat zone lookup
+- Biome-based height modulation
+- Water threshold detection
+
 ### Character Systems
 
 **Location:** `systems/shared/character/`
