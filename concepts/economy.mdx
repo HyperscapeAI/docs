@@ -171,8 +171,83 @@ flowchart LR
 | Oak | 10 | Oak Bow |
 | Willow | 20 | Willow Bow |
 
-## Future Features
+## Player Trading
+
+### Overview
+
+Player-to-player trading uses an OSRS-accurate two-screen confirmation flow to prevent scams:
+
+1. **Offer Screen**: Players add/remove items and accept
+2. **Confirmation Screen**: Players review final trade and confirm
+3. **Completion**: Items swapped atomically via database transaction
+
+### Trading Flow
+
+```mermaid
+sequenceDiagram
+    participant P1 as Player 1
+    participant Server as TradingSystem
+    participant P2 as Player 2
+    
+    P1->>Server: tradeRequest(targetPlayerId)
+    Server->>P2: tradeIncoming (pink chat message)
+    P2->>Server: tradeRequestRespond(accept: true)
+    Server->>P1: tradeStarted
+    Server->>P2: tradeStarted
+    
+    P1->>Server: tradeAddItem(slot, quantity)
+    Server->>P1: tradeUpdated
+    Server->>P2: tradeUpdated
+    
+    P1->>Server: tradeAccept
+    P2->>Server: tradeAccept
+    Server->>P1: tradeConfirmScreen
+    Server->>P2: tradeConfirmScreen
+    
+    P1->>Server: tradeAccept (confirm)
+    P2->>Server: tradeAccept (confirm)
+    Server->>Server: Atomic item swap
+    Server->>P1: tradeCompleted
+    Server->>P2: tradeCompleted
+```
+
+### Trade UI Features
+
+- **Click-Based Interaction**: Left-click to add 1, right-click for context menu
+- **Context Menu Options**: Offer-1, Offer-5, Offer-10, Offer-X, Offer-All, Value, Examine
+- **Anti-Scam Indicators**:
+  - Red flashing exclamation when items removed
+  - Wealth transfer indicator (green = gaining, red = losing)
+  - Warning icon if value difference >50%
+  - Partner's free inventory slots displayed
+- **Proximity System**: Players automatically walk to target if out of range
+- **Interface Blocking**: Can't trade while banking/shopping
+
+### Security
+
+- **Server-Authoritative**: All validation happens server-side
+- **Atomic Swaps**: Database transactions prevent item duplication
+- **Inventory Locks**: Prevent race conditions during swap
+- **Tradeable Flag**: Items with `tradeable: false` cannot be traded
+- **Proximity Validation**: Players must be adjacent (1 tile)
+- **Interface Checks**: Blocks trading during bank/store/dialogue sessions
+
+### Trade Session States
+
+| State | Description |
+|-------|-------------|
+| `pending` | Trade request sent, awaiting response |
+| `active` | Both players in offer screen |
+| `confirming` | Both players in confirmation screen |
+| `completed` | Trade successfully completed |
+| `cancelled` | Trade cancelled by player or timeout |
+
+### Timeouts
+
+- **Request Timeout**: 5 minutes (auto-decline if not responded)
+- **Active Trade Timeout**: 10 minutes (auto-cancel if inactive)
+- **Cleanup Interval**: 60 seconds (removes expired sessions)
 
 <Info>
-  Player-to-player trading and a Grand Exchange are planned but not in MVP scope.
+Trading system code is in `packages/server/src/systems/TradingSystem/` and `packages/server/src/systems/ServerNetwork/handlers/trade/`.
 </Info>
