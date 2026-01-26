@@ -710,11 +710,118 @@ export function dispatchInventoryAction(
 
 ---
 
+## Equipment System Integration
+
+The inventory system integrates with the equipment system for atomic equip/unequip operations that prevent item duplication.
+
+### Atomic Equip Operation
+
+```typescript
+// From packages/shared/src/systems/shared/character/EquipmentSystem.ts
+async equipItem(playerId: string, itemId: string, inventorySlot: number): Promise<boolean> {
+  // 1. Acquire transaction lock
+  if (!this.acquireLock(playerId)) return false;
+  
+  try {
+    // 2. Remove from inventory FIRST (prevents duplication)
+    const removed = await inventorySystem.removeItemDirect(playerId, {
+      itemId,
+      slot: inventorySlot,
+      quantity: 1,
+    });
+    
+    if (!removed) {
+      return false;  // Abort if removal fails
+    }
+    
+    // 3. Equip to slot
+    this.setEquipmentSlot(playerId, slot, itemId);
+    
+    return true;
+  } finally {
+    this.releaseLock(playerId);
+  }
+}
+```
+
+### Atomic Unequip Operation
+
+```typescript
+async unequipItem(playerId: string, slot: EquipmentSlot): Promise<boolean> {
+  // 1. Check inventory has space BEFORE unequipping
+  if (!inventorySystem.hasSpace(playerId, 1)) {
+    return false;
+  }
+  
+  // 2. Acquire transaction lock
+  if (!this.acquireLock(playerId)) return false;
+  
+  try {
+    // 3. Clear equipment slot FIRST (prevents item loss)
+    const itemId = this.getEquippedItem(playerId, slot);
+    this.clearEquipmentSlot(playerId, slot);
+    
+    // 4. Add to inventory
+    const added = await inventorySystem.addItemDirect(playerId, {
+      itemId,
+      quantity: 1,
+    });
+    
+    if (!added) {
+      // Rollback: restore equipment slot
+      this.setEquipmentSlot(playerId, slot, itemId);
+      return false;
+    }
+    
+    return true;
+  } finally {
+    this.releaseLock(playerId);
+  }
+}
+```
+
+### New InventorySystem Helper Methods
+
+```typescript
+// From packages/shared/src/systems/shared/character/InventorySystem.ts
+
+/**
+ * Check if inventory has space for items
+ */
+hasSpace(playerId: string, slotsNeeded: number): boolean;
+
+/**
+ * Verify item exists at specific slot
+ */
+hasItemAtSlot(playerId: string, itemId: string, slot: number): boolean;
+
+/**
+ * Synchronous removal with return value (for atomic operations)
+ */
+removeItemDirect(playerId: string, params: RemoveItemParams): boolean;
+
+/**
+ * Synchronous add with return value (for atomic operations)
+ */
+addItemDirect(playerId: string, params: AddItemParams): boolean;
+```
+
+**Key Safety Features:**
+
+- **Transaction locks** prevent concurrent equip/unequip race conditions
+- **Order of operations** prevents both duplication and item loss:
+  - Equip: Remove from inventory FIRST, then equip
+  - Unequip: Clear equipment FIRST, then add to inventory
+- **Rollback on failure** restores state if operation fails
+- **Inventory validation** checks space before unequipping
+
+---
+
 ## Related Documentation
 
-- [Context Menu System](/wiki/game-systems/context-menus)
-- [Equipment System](/wiki/game-systems/equipment)
-- [Bank System](/wiki/game-systems/bank)
-- [Ground Items & Loot](/wiki/game-systems/loot)
-- [Item Data Structure](/wiki/data/items)
-- [Combat System](/wiki/game-systems/combat) (for eat delay mechanics)
+- [Equipment System](/wiki/game-systems/equipment) (equip/unequip mechanics)
+- [Bank System](/wiki/game-systems/bank) (bank storage)
+- [Trading System](/wiki/game-systems/trading) (player-to-player trading)
+- [Ground Items & Loot](/wiki/game-systems/loot) (item drops)
+- [Item Data Structure](/wiki/data/items) (item definitions)
+- [Combat System](/wiki/game-systems/combat) (eat delay mechanics)
