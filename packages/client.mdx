@@ -178,6 +178,30 @@ systems/                 # Game systems
   skilltree/             # Skill tree utilities
 ```
 
+### Anchor-Based UI Positioning
+
+The UI system uses viewport anchors (Unity/Unreal-style) for responsive window positioning:
+
+**WindowAnchor System:**
+- 9 anchor points: corners, edges, and center
+- Windows maintain offset from anchor instead of absolute positions
+- Automatic repositioning on viewport resize
+- Mobile-to-desktop transitions use default layouts
+
+**Anchor Utilities** (`src/ui/stores/anchorUtils.ts`):
+```typescript
+getAnchorPosition(anchor, viewport)      // Get anchor coordinates
+calculateOffsetFromAnchor(position, anchor, viewport)  // Calculate offset
+calculatePositionFromAnchor(anchor, offset, viewport)  // Position from anchor
+repositionWindowForViewport(window, oldViewport, newViewport)  // Resize handler
+```
+
+**Default Anchors:**
+- Chat, Skills/Prayer: `bottom-left`
+- Minimap: `top-right`
+- Inventory, Menubar: `bottom-right`
+- Action bar: `bottom-center`
+
 ### HUD Components
 
 - Health/Constitution display
@@ -188,6 +212,7 @@ systems/                 # Game systems
 - Bank interface (unlimited storage)
 - Chat window
 - Minimap with compass
+- Action bar with drag-drop support
 
 ### Game Components
 
@@ -196,6 +221,8 @@ systems/                 # Game systems
 - Input handler (WASD movement, click actions)
 - Entity renderers (players, mobs, items)
 - VRM avatar display with emotes
+- Drag-and-drop system (@dnd-kit)
+- Window management with tabs
 
 ## Environment Variables
 
