@@ -23,6 +23,271 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="UI System Overhaul & Trading Upgrade" description="January 2026" date="2026-01-26">
+
+### 🎨 Anchor-Based UI Positioning System
+
+Complete redesign of UI window positioning for responsive scaling across all screen sizes:
+
+- **WindowAnchor System**: Windows maintain position relative to viewport anchors (Unity/Unreal-style)
+  - 9 anchor points: corners (top-left, top-right, bottom-left, bottom-right), edges (top-center, bottom-center, left-center, right-center), and center
+  - Windows store offset from anchor instead of absolute pixel positions
+  - Automatic repositioning on viewport resize maintains intended layout
+  - Migration v13 auto-detects anchors for existing windows based on window ID
+- **Anchor Utilities** (`anchorUtils.ts`):
+  - `getAnchorPosition()`: Get viewport coordinates for any anchor point
+  - `calculateOffsetFromAnchor()`: Calculate window's offset from its anchor
+  - `calculatePositionFromAnchor()`: Position window from anchor + offset
+  - `detectNearestAnchor()`: Auto-detect appropriate anchor from position
+  - `repositionWindowForViewport()`: Main resize handler with anchor preservation
+- **Default Layout Anchors**:
+  - Chat, Skills/Prayer: bottom-left
+  - Minimap: top-right
+  - Inventory, Menubar: bottom-right
+  - Action bar: bottom-center
+- **Mobile-to-Desktop Transitions**: Proper window repositioning when switching layouts
+  - Uses `createDefaultWindows()` positions instead of anchor calculations
+  - Prevents window clustering from meaningless mobile positions
+  - Stacking offsets for windows sharing same anchor (prevents overlapping)
+- **Proportional Scaling**: Saved layouts scale proportionally to new viewport size
+  - Stores viewport size with persisted layout
+  - Calculates scale factor on load (saved vs current viewport)
+  - Maintains edge alignment for edge-positioned windows
+
+### 🤝 Trading System Upgrade
+
+Production-ready player-to-player trading with comprehensive security and UX improvements:
+
+- **Two-Screen Confirmation Flow**: OSRS-accurate trade confirmation
+  - Screen 1: Offer items and review partner's offer
+  - Screen 2: Final confirmation with wealth transfer indicator
+  - Both players must accept on both screens
+  - Any change resets both players to screen 1
+- **Wealth Transfer Indicator**: Visual warning for unbalanced trades
+  - Shows net value difference with directional arrow
+  - Color-coded: green (receiving), red (giving), gray (balanced)
+  - Helps prevent scams and accidental mistakes
+- **Proximity Checks**: Players must be within 2 tiles to trade
+  - Auto-walk to player when initiating trade from distance
+  - Trade closes if players move too far apart
+  - Server validates distance on every action
+- **Interface Blocking**: Trading locks out other interfaces
+  - Bank, store, dialogue automatically close when trade starts
+  - Prevents item duplication exploits
+  - Trade closes if player opens conflicting interface
+- **Click-Based UI**: Improved interaction model
+  - Click items to add/remove from trade offer
+  - Click partner's items to examine
+  - Quantity prompts for stackable items
+  - Partner's free inventory slots displayed
+- **Chat Integration**: Pink-colored trade request messages
+  - \"[Player] wishes to trade with you.\" format
+  - Clickable to accept trade request
+  - Consistent with OSRS messaging style
+- **Inventory Synchronization**: Critical fixes for state consistency
+  - Proper event ordering prevents ghost items
+  - Transaction rollback on failure
+  - Audit logging for all trade completions
+- **TradingSystem Interface**: Modular architecture with split handlers
+  - `acceptance.ts`: Accept/decline logic
+  - `items.ts`: Add/remove items
+  - `request.ts`: Trade initiation
+  - `swap.ts`: Screen transitions
+  - `helpers.ts`: Shared utilities
+  - `types.ts`: Type definitions
+- **Error Handling**: Comprehensive validation and error recovery
+  - Swap validation with proper error messages
+  - Dead code removal for cleaner codebase
+  - Default slot count fixes
+
+### 👥 Social Features
+
+Comprehensive friend management and private messaging system:
+
+- **Friend Management**:
+  - Send, accept, decline, and remove friend requests
+  - Online status notifications for friends
+  - Friend list synchronization on player connection
+  - Database schema: friendships, friend_requests, ignore_lists tables
+- **Private Messaging**: Direct player-to-player communication
+  - Send messages to online friends
+  - Message history and notifications
+  - Integration with chat system
+- **UI Components**: Enhanced social panel
+  - Friend status display (online/offline)
+  - Friend request notifications
+  - Ignore list management
+  - Seamless integration with existing UI
+
+### 🎯 Drag-and-Drop System Improvements
+
+Major enhancements to drag-and-drop functionality across the UI:
+
+- **Combat Styles on Action Bar**: Drag combat styles from combat panel to action bar
+  - Accurate (🎯), Aggressive (⚔️), Defensive (🛡️), Controlled (⚖️)
+  - Click action bar slot to switch attack style
+  - Visual highlight when style is active
+  - SVG icons with color-coded active states (red, green, blue, purple)
+  - Tracks active style via `UI_ATTACK_STYLE_UPDATE` events
+- **Tab/Window Combining**: Restored window merging functionality
+  - Drag windows onto each other to combine into tabs
+  - Full-window drop zones with visual feedback
+  - Header drop zones for single-tab windows
+  - Tab preview shows combined result before drop
+  - Works in edit mode (L key to unlock)
+- **Drag-Drop Core Fixes**: Resolved 5 interconnected bugs
+  - `DragEndEvent` now includes type and sourceId
+  - `DragContext` passes complete drag item data
+  - Fixed race condition in `useDrop` (wasOverRef timing)
+  - Dynamic disabled registration for drop zones
+  - Proper drop zone recognition for all window types
+- **Accessibility**: Keyboard and pointer support for all drag operations
+  - @dnd-kit integration for inventory and action bar
+  - Context menu options for clearing action bar slots
+  - Improved state management for drag events
+
+### 🛡️ Equipment System Bug Fixes
+
+Critical fixes to prevent item duplication and loss:
+
+- **Transaction Locks**: Prevent race conditions during concurrent equip/unequip
+  - Per-player locks ensure atomic operations
+  - Order of operations prevents duplication and item loss
+- **Equip Flow**: Remove from inventory FIRST, then equip
+  - Verifies item exists at specified inventory slot
+  - Aborts equip if removal fails (prevents duplication)
+- **Unequip Flow**: Clear equipment slot FIRST, then add to inventory
+  - Checks inventory has space before unequipping
+  - Restores equipment slot if add fails (prevents item loss)
+- **New Helper Methods** in InventorySystem:
+  - `hasSpace(playerId, slotsNeeded)`: Check inventory capacity
+  - `hasItemAtSlot(playerId, itemId, slot)`: Verify item at specific slot
+  - `removeItemDirect(playerId, params)`: Synchronous removal with return value
+  - `addItemDirect(playerId, params)`: Synchronous add with return value
+- **Error Handling**: Proper rollback on failure with detailed logging
+
+### 🏗️ UI Component Architecture Refactor
+
+Eliminated confusing `src/components/` directory by properly organizing code:
+
+**New Architecture:**
+- `src/ui/` — Pure design system (hooks, stores, base components)
+- `src/game/` — All game-specific code in one place
+  - `game/interface/` — Window management (InterfaceManager, DefaultLayoutFactory)
+  - `game/dashboard/` — Agent dashboard components
+  - `game/character/` — Character preview
+  - `game/hud/` — Minimap and HUD elements
+  - `game/panels/` — Game panels (inventory, equipment, etc.)
+  - `game/components/` — Game-specific components (chat, currency, dialog, equipment, map, quest, settings, skilltree)
+  - `game/systems/` — Game systems (chat, currency, dialog, equipment, map, quest, settings, skilltree)
+- No more `src/components/` confusion
+
+**Deleted:**
+- Dead `ui/components/InterfaceManager.tsx` (258 lines, never used)
+- Empty `components/index.ts`
+- Unused mobile UI components (CompactStatusHUD, MobileInterfaceManager)
+- Duplicate components (MenuButton, MinimapCompass, MinimapStaminaBar, Slider, ToggleSwitch)
+
+**Moves:**
+- `components/interface/` → `game/interface/`
+- `components/dashboard/` → `game/dashboard/`
+- `components/character/` → `game/character/`
+- `components/Minimap*.tsx` → `game/hud/`
+- `components/{Portal,Slider,Icons,etc}` → `ui/components/`
+- `components/{CurvePane,Fields,EmbeddedGameClient}` → `game/`
+
+### 🔌 Auto-Reconnect & Error Handling
+
+Improved connection reliability and error recovery:
+
+- **Auto-Reconnect**: Disconnected component with countdown timer
+  - Automatic reconnection attempts with exponential backoff
+  - Manual reconnect button for user control
+  - Connection status display with helpful messages
+- **Error Boundaries**: Wrapped all major screens
+  - LoginScreen, UsernameSelectionScreen, CharacterSelectScreen, GameClient
+  - Catches rendering errors and displays fallback UI
+  - Prevents full app crashes from component errors
+- **URL Validation**: AgentDynamicPanel validates panel URLs
+  - Prevents unsafe protocols (javascript:, data:, etc.)
+  - XSS protection for user-provided URLs
+- **Notification System**: AgentSettings user feedback
+  - Success/error notifications for actions
+  - API key save confirmation
+  - Settings update feedback
+- **Improved Logging**: Centralized logger for error handling
+  - PlayerTokenManager uses logger for errors
+  - PrivyAuthProvider error logging
+  - Better debugging and monitoring
+
+### 🎮 UI/UX Improvements
+
+- **Quest Log Redesign**: Collapsible filters for cleaner layout
+  - Compact header with quest counts (active, available, completed)
+  - Search and filters collapsed by default
+  - More room for actual quest list
+  - OSRS-inspired design
+- **Combat Panel Styling**: Compact layout with OSRS-style colors
+  - Smaller buttons and reduced padding
+  - Red HP bar (OSRS style)
+  - SVG icons for attack styles
+  - Cleaner combat stats display
+- **Equipment Panel**: Theme-aligned colors
+  - Updated slot backgrounds to match theme
+  - Removed button labels (icons only)
+  - Consistent with inventory styling
+- **Inventory Panel**: Lighter theme palette
+  - Slot backgrounds use theme colors
+  - Softened box shadows
+  - Better visual hierarchy
+- **Status Bars**: Compact design with improved consistency
+  - Adjusted size presets for orbs and panels
+  - Enhanced styling with theme tokens
+  - Reduced padding for cleaner appearance
+- **Mobile Responsiveness**: Enhanced touch targets and layouts
+  - QuestLog and StatusBars mobile optimizations
+  - Improved padding and font sizes
+  - Better touch target sizes
+
+### 🔧 Technical Improvements
+
+- **Dependency Cleanup**: Removed unused dependencies
+  - Removed styled-components and type definitions
+  - Streamlined package.json
+  - Updated Vite configuration for better optimization
+- **Accessibility Features**: Enhanced keyboard navigation
+  - Skip links for screen readers
+  - Improved focus management
+  - Better ARIA labels
+- **Memory Optimizations**: Component memoization
+  - Wrapped ChatBox, SettingsCategory, SettingsControl with memo
+  - Prevents unnecessary re-renders
+  - Improved performance
+- **Security Enhancements**: XSS prevention in ChatMessage
+  - Content sanitization
+  - URL validation
+  - Prevents malicious content injection
+- **Event Handling**: Named handlers for proper cleanup
+  - CoreUI uses named handlers for character selection
+  - Prevents memory leaks
+  - Better event lifecycle management
+
+### 🐛 Bug Fixes
+
+- **Multi-Tab Character Selection**: Fixed character selection bug when multiple tabs open (#641)
+- **Trade Panel UI**: Fixed trade panel flow issues and visual bugs
+- **Mobile-to-Desktop Transitions**: Fixed window clustering on layout mode change
+  - Proper grid repositioning instead of scaling
+  - Prevents windows from clustering in top-left corner
+- **UI Scale Handling**: Removed UI scale state management
+  - Eliminated from CoreUI and SettingsPanel
+  - Simplified component architecture
+- **Import Cleanup**: Streamlined imports across InterfaceManager and useThreeCleanup
+  - Removed unused types and imports
+  - Enhanced code clarity
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
