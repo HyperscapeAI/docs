@@ -32,12 +32,20 @@ packages/plugin-hyperscape/
 │   ├── systems/        # Agent systems
 │   ├── templates/      # LLM prompts
 │   ├── testing/        # Test utilities
-│   ├── types/          # TypeScript types
+│   ├── types/          # TypeScript types (local type definitions)
+│   │   ├── core-types.ts      # Local World, Entity, System, Player types
+│   │   ├── core-interfaces.ts # Agent interfaces
+│   │   ├── external-libs.ts   # THREE and PhysX types
+│   │   └── system-types.ts    # System interfaces
 │   ├── utils/          # Helper functions
 │   ├── index.ts        # Plugin entry
 │   └── service.ts      # Main service
 └── .env.example        # Environment template
 ```
+
+<Info>
+**Type System (PR #629)**: The plugin now defines core types locally instead of importing from `@hyperscape/shared` to resolve 70+ TypeScript build errors. This ensures compatibility with ElizaOS's `isolatedModules` requirement.
+</Info>
 
 ## Actions
 
