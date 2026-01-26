@@ -19,11 +19,20 @@ The `@hyperscape/server` package runs the authoritative game server:
 packages/server/
 ├── src/
 │   ├── database/       # Database schema and queries
+│   │   ├── repositories/  # Data access layer
+│   │   ├── migrations/    # Database migrations
+│   │   └── schema.ts      # Drizzle schema definitions
 │   ├── infrastructure/ # Docker, CDN configuration
 │   ├── scripts/        # Utility scripts
 │   ├── shared/         # Shared server utilities
 │   ├── startup/        # Server initialization
+│   │   └── routes/     # API route handlers
 │   ├── systems/        # Server-specific systems
+│   │   ├── ServerNetwork/  # Network handlers
+│   │   │   └── handlers/   # Event handlers (bank, trade, friends, etc.)
+│   │   ├── TradingSystem/  # Player trading system
+│   │   ├── DatabaseSystem/ # Database persistence
+│   │   └── ActivityLoggerSystem/  # Activity logging
 │   ├── types/          # TypeScript types
 │   ├── types.ts        # Core type definitions
 │   └── index.ts        # Entry point
