@@ -65,27 +65,122 @@ GameClient.tsx            // Main 3D gameplay
 | `GameClient` | Main 3D gameplay |
 | `LoadingScreen` | Asset loading state |
 
-## UI Components
+## UI System
 
-Located in `src/components/`:
+### UI Package Structure
+
+All UI components are located in `src/ui/` (consolidated from the removed `hs-kit` package):
+
+```
+src/ui/
+├── components/         # Core UI components
+│   ├── Window.tsx      # Draggable, resizable windows
+│   ├── Tab.tsx         # Tab component
+│   ├── TabBar.tsx      # Tab container
+│   ├── ModalWindow.tsx # Modal dialogs
+│   ├── DragOverlay.tsx # Drag preview overlay
+│   ├── ItemSlot.tsx    # Inventory/equipment slots
+│   ├── StatusBar.tsx   # HP/Prayer bars
+│   ├── Slider.tsx      # Range input slider
+│   ├── ToggleSwitch.tsx # Toggle control
+│   └── ...
+├── controls/           # Form controls
+│   ├── ColorControl.tsx
+│   ├── KeybindControl.tsx
+│   ├── SelectControl.tsx
+│   ├── SliderControl.tsx
+│   └── ToggleControl.tsx
+├── core/               # Core UI systems
+│   ├── drag/           # Drag-and-drop system
+│   ├── edit/           # Edit mode
+│   ├── presets/        # Layout presets
+│   ├── responsive/     # Responsive utilities
+│   ├── tabs/           # Tab management
+│   ├── tooltip/        # Tooltip system
+│   └── window/         # Window management
+├── stores/             # Zustand state stores
+│   ├── windowStore.ts  # Window positions/state
+│   ├── themeStore.ts   # Theme configuration
+│   ├── dragStore.ts    # Drag state
+│   ├── editStore.ts    # Edit mode state
+│   └── ...
+├── theme/              # Theme system
+│   ├── themes.ts       # Theme definitions
+│   └── animations.ts   # Animation utilities
+└── types.ts            # UI type definitions
+```
+
+### Game Components
+
+Game-specific components are in `src/game/components/`:
+
+```
+src/game/components/
+├── chat/               # Chat system
+│   ├── ChatBox.tsx
+│   ├── ChatMessage.tsx
+│   ├── ChatInput.tsx
+│   └── ChatTabs.tsx
+├── currency/           # Currency display
+│   ├── CurrencyDisplay.tsx
+│   ├── CurrencyExchange.tsx
+│   └── CurrencyInput.tsx
+├── dialog/             # NPC dialogue
+│   ├── DialogBox.tsx
+│   ├── DialogChoices.tsx
+│   └── DialogHistory.tsx
+├── equipment/          # Equipment panel
+│   ├── EquipmentPanel.tsx
+│   ├── EquipmentSlot.tsx
+│   └── StatsSummary.tsx
+├── map/                # World map
+│   ├── WorldMap.tsx
+│   ├── MapMarker.tsx
+│   └── MapControls.tsx
+├── quest/              # Quest system
+│   ├── QuestLog.tsx
+│   ├── QuestEntry.tsx
+│   └── QuestTracker.tsx
+├── settings/           # Settings panel
+│   ├── SettingsPanel.tsx
+│   ├── SettingsCategory.tsx
+│   └── SettingsControl.tsx
+└── skilltree/          # Skill tree
+    ├── SkillTree.tsx
+    ├── SkillNode.tsx
+    └── SkillTooltip.tsx
+```
+
+### Drag-and-Drop System
+
+The client uses `@dnd-kit` for drag-and-drop functionality:
 
 ```typescript
-// From packages/client/src/components/
-CharacterPreview.tsx      // VRM character preview
-DraggableWindow.tsx       // Draggable UI windows
-EmbeddedGameClient.tsx    // Embedded game in dashboard
-GameWindow.tsx            // Main game container
-MinimapCompass.tsx        // Minimap with compass
-MinimapStaminaBar.tsx     // Stamina display
-MenuButton.tsx            // Menu buttons
-Portal.tsx                // React portal for overlays
-Fields.tsx                // Form field components
-Icons.tsx                 // Icon components
+// From src/ui/core/drag/
+import { useDrag, useDrop, DragContext } from '@/ui/core/drag';
 
-// Subfolders
-character/                // Character-related components
-dashboard/                // Dashboard components
+// Draggable item
+const { attributes, listeners, setNodeRef } = useDrag({
+  id: 'item-123',
+  data: { type: 'inventory', slot: 5, itemId: 'bronze_sword' },
+});
+
+// Drop zone
+const { setNodeRef, isOver } = useDrop({
+  id: 'equipment-weapon',
+  accept: ['inventory'],
+  onDrop: (item) => {
+    // Handle drop
+  },
+});
 ```
+
+**Features:**
+- Keyboard and pointer accessibility
+- Custom collision detection
+- Drag modifiers (snap to grid, restrict axis)
+- Visual feedback (hover states, drop previews)
+- Touch support for mobile
 
 ### HUD Components
 
