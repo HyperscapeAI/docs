@@ -136,7 +136,103 @@ export function GameClient({ characterId }: { characterId: string }) {
 
 ---
 
-## UI Components
+## UI Architecture
+
+The client uses a clear separation between reusable UI primitives and game-specific code:
+
+### UI Design System (`src/ui/`)
+
+Pure, reusable UI components and systems:
+
+```typescript
+// From packages/client/src/ui/
+components/               // Base UI primitives
+  Window.tsx             // Draggable, resizable windows with anchor-based positioning
+  TabBar.tsx             // Tab navigation with drag-to-combine
+  DragOverlay.tsx        // Drag preview overlay
+  Portal.tsx             // React portal for overlays
+  MenuButton.tsx         // Menu buttons
+  ItemSlot.tsx           // Item slot component
+  // ... and more
+
+core/                    // Core UI systems
+  drag/                  // Drag-and-drop (@dnd-kit integration)
+    DragContext.tsx      // Global drag state
+    useDrag.ts           // Drag hook
+    useDrop.ts           // Drop hook with race condition fixes
+  edit/                  // Edit mode (L key to unlock)
+  notifications/         // Notification system
+  presets/               // Layout presets and cloud sync
+  responsive/            // Breakpoint and mobile detection
+  tabs/                  // Tab management and combining
+  window/                // Window management with anchors
+
+stores/                  # UI state management (Zustand)
+  windowStore.ts         # Window positions with anchor-based positioning
+  dragStore.ts           # Drag-and-drop state
+  editStore.ts           # Edit mode state
+  anchorUtils.ts         # Anchor positioning utilities
+  // ... and more
+```
+
+**Anchor-Based Positioning:**
+
+Windows use viewport anchors (Unity/Unreal-style) for responsive scaling:
+
+```typescript
+// From src/ui/stores/anchorUtils.ts
+export type WindowAnchor =
+  | "top-left" | "top-center" | "top-right"
+  | "left-center" | "center" | "right-center"
+  | "bottom-left" | "bottom-center" | "bottom-right";
+
+// Key functions
+getAnchorPosition(anchor, viewport)      // Get anchor coordinates
+calculateOffsetFromAnchor(position, anchor, viewport)  // Calculate offset
+repositionWindowForViewport(window, oldViewport, newViewport)  // Resize handler
+```
+
+### Game-Specific Code (`src/game/`)
+
+All game logic and components:
+
+```typescript
+// From packages/client/src/game/
+interface/               # Window management
+  InterfaceManager.tsx   # Main UI orchestrator with drag-drop
+  DefaultLayoutFactory.ts # Default window layouts with anchors
+  useViewportResize.ts   # Responsive window positioning
+  
+panels/                  # Game panels
+  InventoryPanel.tsx     # 28-slot inventory with drag & drop
+  EquipmentPanel.tsx     # Equipment slots with stat display
+  SkillsPanel.tsx        # All skills with XP progress bars
+  CombatPanel.tsx        # Combat style selection with draggable styles
+  BankPanel/             # Modular bank system
+  TradePanel/            # Two-screen trade confirmation
+  ActionBarPanel/        # Action bar with drag-drop support
+  // ... and more
+
+hud/                     # HUD elements
+  StatusBars.tsx         # Health, prayer, run energy bars
+  XPProgressOrb.tsx      # XP tracking orb with skill icons
+  ActionProgressBar.tsx  # Skilling action progress
+  Minimap.tsx            # Top-down map view
+  MinimapCompass.tsx     # Compass overlay
+  MinimapStaminaBar.tsx  # Stamina display
+  level-up/              # Level-up notifications
+  xp-orb/                # XP orb components
+
+components/              # Game components
+  chat/                  # Chat system (ChatBox, ChatInput, ChatMessage, ChatTabs)
+  currency/              # Currency display and exchange
+  dialog/                # Dialogue system
+  equipment/             # Equipment components
+  map/                   # World map
+  quest/                 # Quest system
+  settings/              # Settings panels
+  skilltree/             # Skill tree
+```
 
 ### Core UI (CoreUI.tsx)
 
@@ -158,9 +254,8 @@ export function CoreUI({ world }: { world: ClientWorld }) {
   
   return (
     <>
-      <Sidebar world={world} />
+      <InterfaceManager world={world} />
       <StatusBars world={world} />
-      <Chat world={world} />
       <ActionProgressBar world={world} />
       <XPProgressOrb world={world} />
       {deathScreen && <DeathScreen {...deathScreen} />}
@@ -168,33 +263,6 @@ export function CoreUI({ world }: { world: ClientWorld }) {
   );
 }
 ```
-
-### Game Panels
-
-Located in `packages/client/src/game/panels/`:
-
-| Panel | Description |
-|-------|-------------|
-| `InventoryPanel.tsx` | 28-slot inventory with drag & drop |
-| `EquipmentPanel.tsx` | Equipment slots with stat display |
-| `SkillsPanel.tsx` | All skills with XP progress bars |
-| `CombatPanel.tsx` | Combat style selection |
-| `BankPanel.tsx` | Bank interface with tabs |
-| `DialoguePanel.tsx` | NPC conversation UI |
-| `StorePanel.tsx` | Shop/trading interface |
-| `SettingsPanel.tsx` | Game settings |
-| `LootWindow.tsx` | Ground item pickup interface |
-
-### HUD Components
-
-Located in `packages/client/src/game/hud/`:
-
-- `StatusBars.tsx` - Health, prayer, run energy bars
-- `XPProgressOrb.tsx` - XP tracking orb with skill icons
-- `ActionProgressBar.tsx` - Skilling action progress
-- `EntityContextMenu.tsx` - Right-click context menus
-- `Minimap.tsx` - Top-down map view
-- `Nametags.ts` - Entity name/level labels
 
 ---
 
