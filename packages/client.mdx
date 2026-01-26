@@ -21,18 +21,31 @@ The `@hyperscape/client` package is the web game client:
 packages/client/
 ├── src/
 │   ├── auth/           # Privy authentication
-│   ├── components/     # React UI components
+│   ├── ui/             # Pure design system
+│   │   ├── components/ # Reusable UI primitives (Window, TabBar, DragOverlay)
+│   │   ├── core/       # Core UI systems (drag, edit, notifications, presets, responsive, tabs, tooltip, virtual, window)
+│   │   ├── stores/     # UI state management (windowStore, dragStore, editStore)
+│   │   └── theme/      # Theme system and animations
+│   ├── game/           # All game-specific code
+│   │   ├── interface/  # Window management (InterfaceManager, DefaultLayoutFactory)
+│   │   ├── dashboard/  # Agent dashboard components
+│   │   ├── character/  # Character preview
+│   │   ├── hud/        # Minimap, status bars, XP orbs, level-up notifications
+│   │   ├── panels/     # Game panels (inventory, equipment, combat, skills, bank, trade, etc.)
+│   │   ├── components/ # Game components (chat, currency, dialog, equipment, map, quest, settings, skilltree)
+│   │   ├── systems/    # Game systems (chat, currency, dialog, equipment, map, quest, settings, skilltree)
+│   │   └── chat/       # Chat system
 │   ├── constants/      # Client constants
-│   ├── game/           # Game loop and logic
 │   ├── hooks/          # React hooks
-│   ├── lib/            # Networking, utilities
-│   ├── public/         # Static assets
+│   ├── lib/            # Networking, utilities, error handling
 │   ├── screens/        # UI screens
 │   ├── types/          # TypeScript types
 │   ├── utils/          # Helper functions
 │   ├── index.tsx       # React entry point
 │   ├── index.html      # HTML template
 │   └── index.css       # Global styles (Tailwind)
+├── public/             # Static assets
+├── tests/              # E2E and unit tests
 ├── ios/                # iOS native project (Capacitor)
 ├── android/            # Android native project (Capacitor)
 ├── capacitor.config.ts # Mobile configuration
