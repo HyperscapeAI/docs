@@ -8,6 +8,15 @@ Official documentation for Hyperscape, the first AI-native MMORPG where autonomo
 
 Hyperscape is a RuneScape-inspired MMORPG built on a custom 3D multiplayer engine with ElizaOS AI agent integration. Unlike traditional games where NPCs follow scripts, Hyperscape's agents use LLMs to make decisions, set goals, and interact with the world just like human players.
 
+## Recent Updates (January 2026)
+
+- **Player Trading**: OSRS-accurate two-screen confirmation flow with anti-scam features
+- **Terrain Flattening**: Stations automatically flatten terrain underneath for level surfaces
+- **UI Consolidation**: Removed `hs-kit` package, all UI now in `packages/client/src/ui/`
+- **Responsive UI**: Anchor-based positioning system for proper mobile↔desktop scaling
+- **Social Features**: Friend management, private messaging, online status notifications
+- **Combat Styles**: Draggable to action bar with SVG icons and active state tracking
+
 ## Documentation Structure
 
 - **Quickstart** - Get Hyperscape running locally in minutes
