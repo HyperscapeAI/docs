@@ -23,6 +23,295 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Trading System, Terrain Flattening & UI Overhaul" description="January 2026" date="2026-01-26">
+
+### 🤝 Player-to-Player Trading System
+
+Complete OSRS-style trading system with two-screen confirmation flow and anti-scam features:
+
+- **Trade Request Flow**: Click-based trade initiation with proximity checks
+  - Players must be adjacent (1 tile) to trade
+  - Auto-walk to target if out of range (OSRS-style)
+  - Pink clickable chat messages for trade requests
+  - Interface blocking: can't trade while banking/shopping
+- **Two-Screen Confirmation**: OSRS-accurate anti-scam flow
+  - **Offer Screen**: Add/remove items, see partner's offer
+  - **Confirmation Screen**: Final review with wealth transfer indicator
+  - Both players must accept on each screen
+  - Acceptance resets if either offer changes
+- **Anti-Scam Features**:
+  - Red flashing exclamation when items removed from trade
+  - Wealth transfer indicator shows value difference (green = gaining, red = losing)
+  - Partner's free inventory slots displayed
+  - Warning if wealth difference >50% of offer value
+- **Click-Based UI**: OSRS-style item management
+  - Left-click inventory item: add 1 to trade
+  - Right-click inventory item: context menu (Offer-1, Offer-5, Offer-10, Offer-X, Offer-All, Value, Examine)
+  - Click trade slot to remove item
+  - Quantity prompt with K/M notation support (e.g., "10k", "1.5m")
+- **Security & Validation**:
+  - Server-authoritative state management
+  - Atomic database transactions prevent item duplication
+  - Inventory locks during swap operations
+  - Tradeable flag enforcement
+  - Rate limiting on trade requests
+  - Proximity validation on every action
+- **Modular Architecture**: Refactored from 1,105-line monolith into focused modules
+  - `request.ts`: Trade initiation and response
+  - `items.ts`: Add, remove, set quantity
+  - `acceptance.ts`: Accept, cancel, two-screen flow
+  - `swap.ts`: Atomic item swap execution
+  - `helpers.ts`: Shared utilities
+- **PendingTradeManager**: Server-authoritative walk-to-trade system
+  - Zero-allocation hot path with pre-allocated buffers
+  - Intelligent re-pathing when target moves
+  - Proper cleanup on disconnect
+- **Testing**: 291 lines of integration tests with real TradingSystem instances
+
+### 🗺️ Terrain Flattening System
+
+Automatic terrain flattening under stations for professional world building:
+
+- **Flat Zones**: Rectangular areas with level ground
+  - Defined per-station in `stations.json` manifest
+  - `flattenGround: true` enables flattening
+  - `flattenPadding`: extra meters around footprint (default: 0.3m)
+  - `flattenBlendRadius`: smooth transition distance (default: 0.5m)
+- **Spatial Indexing**: Efficient O(1) flat zone lookup
+  - Terrain tiles (100m) used for spatial index
+  - Multiple zones can overlap same terrain tile
+  - Pre-calculated affected tiles on registration
+- **Smooth Blending**: Natural transitions to procedural terrain
+  - Smoothstep interpolation: t² × (3 - 2t)
+  - Rectangular blend zones (not circular)
+  - Blends from flat height to procedural height
+- **Manifest-Driven**: Configured in station manifests
+  - Banks, furnaces, anvils, altars, ranges support flattening
+  - Auto-calculated from station footprint + padding
+  - Height sampled from procedural terrain at station center
+- **TerrainSystem API**: Public methods for dynamic flat zones
+  - `registerFlatZone(zone)`: Add flat zone
+  - `unregisterFlatZone(id)`: Remove flat zone
+  - `getFlatZoneAt(x, z)`: Check if position is in flat zone
+- **Increased Terrain Bumpiness**: Made terrain more varied to showcase flat zones
+  - MAX_HEIGHT: 30m → 50m
+  - Hill noise increased for more pronounced hills
+  - Flat zones now visibly contrast with bumpy surroundings
+
+### 🎨 UI System Consolidation
+
+Removed `hs-kit` package and consolidated all UI into client:
+
+- **Package Removal**: Deleted `packages/hs-kit/` entirely (80+ files, ~18k lines)
+- **UI Migration**: All components moved to `packages/client/src/ui/`
+  - `ui/components/`: Window, Tab, Slider, Portal, etc.
+  - `ui/controls/`: Color, Keybind, Select, Slider, Toggle
+  - `ui/core/`: Drag, edit, notifications, presets, responsive, tabs, tooltip, virtual, window
+  - `ui/stores/`: Accessibility, complexity, drag, edit, keybind, notification, player, preset, quest, theme, window
+  - `ui/theme/`: Animations, themes, dark theme tokens
+  - `ui/types/`: Accessibility, complexity, UI types
+- **Game Components**: Organized into domain folders
+  - `game/components/chat/`: ChatBox, ChatMessage, ChatInput, ChatTabs
+  - `game/components/currency/`: CurrencyDisplay, CurrencyExchange, CurrencyIcon
+  - `game/components/dialog/`: DialogBox, DialogChoices, DialogHistory
+  - `game/components/equipment/`: CharacterModel, EquipmentPanel, EquipmentSlot
+  - `game/components/map/`: WorldMap, MapControls, MapMarker
+  - `game/components/quest/`: QuestLog, QuestEntry, QuestObjective
+  - `game/components/settings/`: SettingsPanel, SettingsCategory, SettingsControl
+  - `game/components/skilltree/`: SkillTree, SkillNode, SkillTooltip
+- **Drag & Drop Improvements**: Fixed race conditions and added features
+  - Fixed timing bugs preventing `onDrop` from firing
+  - Dynamic drop zone registration
+  - Tab/window combining with visual previews
+  - Header drop zones for better UX
+- **Dark Theme Alignment**: Consistent colors across all panels
+  - Inventory slots use theme colors
+  - Equipment panel aligned with theme
+  - Panel backgrounds use dark theme tokens
+- **Build System**: Removed hs-kit build steps from CI workflows
+- **Dependencies**: Added `@dnd-kit` packages for drag-and-drop
+  - `@dnd-kit/core`: Core drag-and-drop functionality
+  - `@dnd-kit/sortable`: Sortable lists
+  - `@dnd-kit/utilities`: Utility functions
+
+### 🎮 Anchor-Based UI Positioning
+
+Unity/Unreal-style anchor system for responsive UI scaling:
+
+- **WindowAnchor System**: Windows maintain position relative to viewport anchors
+  - 9 anchor points: corners, edges, center
+  - Windows store offset from anchor, not absolute position
+  - Responsive scaling preserves anchor relationships
+- **Anchor Points**:
+  - `top-left`, `top-center`, `top-right`
+  - `center-left`, `center`, `center-right`
+  - `bottom-left`, `bottom-center`, `bottom-right`
+- **Default Anchors**: Sensible defaults for each window
+  - Chat, Skills/Prayer: `bottom-left`
+  - Minimap: `top-right`
+  - Inventory, Menubar: `bottom-right`
+  - Action bar: `bottom-center`
+- **Viewport Resize**: Windows reposition based on anchor
+  - Mobile → Desktop transitions use default layout
+  - Desktop resizes preserve anchor offsets
+  - Prevents windows clustering in corners
+- **Migration**: v13 migration sets anchors on existing windows
+- **Anchor Utilities**: Helper functions in `anchorUtils.ts`
+  - `getAnchorPosition()`: Get viewport coordinates for anchor
+  - `calculateOffsetFromAnchor()`: Window offset from anchor
+  - `calculatePositionFromAnchor()`: Position from anchor + offset
+  - `detectNearestAnchor()`: Auto-detect anchor from position
+  - `repositionWindowForViewport()`: Main resize handler
+
+### 👥 Social Features
+
+Comprehensive friend management and private messaging:
+
+- **Friend System**: Add, remove, and manage friends
+  - Send friend requests to other players
+  - Accept or decline incoming requests
+  - Remove friends from list
+  - Online status tracking
+- **Friend List UI**: Real-time friend status display
+  - Shows online/offline status
+  - Friend count display
+  - Notifications for friend requests
+- **Private Messaging**: Direct messages between players
+  - Send private messages to friends
+  - Message history per conversation
+  - Notification system for new messages
+- **Ignore List**: Block unwanted players
+  - Add players to ignore list
+  - Blocked players can't send messages or trade requests
+- **Database Schema**: New tables for social features
+  - `friendships`: Tracks friend relationships
+  - `friend_requests`: Pending friend requests
+  - `ignore_list`: Blocked players
+- **Synchronization**: Friend lists sync on player connection
+  - Online status broadcast to friends
+  - Friend list updates on login/logout
+
+### ⚔️ Combat Style Action Bar
+
+Drag combat styles to action bar for quick switching:
+
+- **Draggable Combat Styles**: All 4 styles can be dragged to action bar
+  - Accurate (🎯): Red when active
+  - Aggressive (⚔️): Green when active
+  - Defensive (🛡️): Blue when active
+  - Controlled (⚖️): Purple when active
+- **SVG Icons**: Distinct icons for each combat style
+  - Accurate: Target/bullseye with concentric circles
+  - Aggressive: Double chevrons crossing
+  - Defensive: Shield shape
+  - Controlled: Balance/currency symbol
+- **Active State Tracking**: Visual highlight when style is active
+  - Listens to `UI_ATTACK_STYLE_UPDATE` and `UI_ATTACK_STYLE_CHANGED` events
+  - Glowing border on active style slot
+  - Color-coded by style type
+- **Action Bar Integration**: Combat styles work like any other action bar item
+  - Click to activate style
+  - Drag from combat panel to action bar
+  - Remove by dragging off action bar
+- **Action Bar Expansion**: Increased max slots from 9 to 12 (RS3-style)
+
+### 🐛 Equipment System Fixes
+
+Critical bug fixes preventing item duplication:
+
+- **Transaction Locks**: Prevent race conditions during equip/unequip
+  - Added locks to EquipmentSystem operations
+  - Prevents concurrent equip/unequip on same player
+- **Order of Operations**: Atomic equip/unequip flow
+  - **equipItem**: Remove from inventory FIRST, then equip
+    - If removal fails, abort equip (prevents duplication)
+    - Verify item exists at specified inventory slot
+  - **unequipItem**: Clear equipment slot FIRST, then add to inventory
+    - Check inventory has space before unequipping
+    - If add fails, restore equipment slot (prevents item loss)
+- **New InventorySystem Methods**: Synchronous operations with return values
+  - `hasSpace(playerId, slotsNeeded)`: Check if inventory has room
+  - `hasItemAtSlot(playerId, itemId, slot)`: Verify item at specific slot
+  - `removeItemDirect(playerId, params)`: Synchronous removal with return value
+  - `addItemDirect(playerId, params)`: Synchronous add with return value
+
+### 🔧 Health Bar Improvements
+
+Fixed health bar atlas slot cleanup and mob respawn health:
+
+- **Atlas Slot Cleanup**: Clear atlas slot on health bar destroy
+  - Prevents stale health bar images
+  - Swap operation now clears both old and new slots
+- **Mob Respawn Health**: Reset mob health to full on respawn
+  - Server sends correct health value
+  - Client resets `currentHealth` and `_lastKnownHealth` to max
+  - Health bar visibility timeout reset
+- **System Lookup**: Simplified health bar system lookup
+  - Use `world.getSystem("healthbars")` instead of array search
+  - Consistent across all entity types
+
+### 🎨 UI Polish & Accessibility
+
+Numerous UI improvements and accessibility enhancements:
+
+- **Auto-Reconnect**: Disconnection screen with countdown timer
+  - 5-second countdown before auto-reconnect
+  - Manual reconnect button
+  - Cancel auto-reconnect option
+  - Pulsing connection indicator
+- **Error Boundaries**: Wrapped screens in ErrorBoundary
+  - LoginScreen, UsernameSelectionScreen, CharacterSelectScreen, GameClient
+  - Prevents white screen crashes
+  - Graceful error recovery
+- **Accessibility Features**: Keyboard navigation and ARIA labels
+  - Skip links for screen readers
+  - `role="button"` and `tabIndex={0}` for interactive elements
+  - Enter/Space key activation
+  - Descriptive `aria-label` attributes
+  - `role="main"` for main content area
+- **Security Improvements**: XSS prevention in chat
+  - HTML sanitization for chat messages
+  - URL validation (blocks `javascript:` and dangerous protocols)
+  - Username sanitization
+  - Safe JSON parsing with error handling
+- **Mobile Responsiveness**: Improved touch target sizes
+  - QuestLog and StatusBars optimized for mobile
+  - Adaptive padding and font sizes
+  - Touch-friendly button sizes
+- **Connection Indicator**: Visual connection status
+  - Shows connection state (connected, disconnected, reconnecting)
+  - Pulsing animation for active states
+- **Notification System**: Toast notifications for user feedback
+  - Success, error, warning, info types
+  - Auto-dismiss after timeout
+  - Stacking notifications
+
+### 🔄 Session Storage Fix
+
+Fixed multi-tab character selection bug:
+
+- **sessionStorage**: Use per-tab storage instead of localStorage
+  - Prevents Tab B from overwriting Tab A's selected character
+  - Each tab maintains independent character selection
+  - Fixes character vanishing when opening multiple tabs
+- **Character Selection**: Improved character selection flow
+  - Named event handlers for proper cleanup
+  - Prevents memory leaks from anonymous functions
+
+### 🔧 Plugin Type Fixes
+
+Fixed TypeScript build errors in plugin-hyperscape:
+
+- **Type Exports**: Resolved 70 TypeScript build errors
+  - Added missing `Player` type export
+  - Removed duplicate type declarations
+  - Fixed import paths for shared types
+- **Build System**: Improved type checking
+  - Proper type resolution across packages
+  - No more `any` type fallbacks
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
@@ -163,118 +452,6 @@ OSRS-style terrain interaction with right-click menu:
   - Scaling ratios: 10x→50x (allows parallel test contention)
   - Added documentation of observed values (local vs CI)
 - **Mock Fixes**: Added missing `entities.players` to mock worlds
-
-</Update>
-
-<Update label="Asset System Updates" description="January 2026" date="2026-01-15">
-
-### 📦 Asset System Enhancements
-
-New manifest additions and improvements to the asset pipeline:
-
-- **Model Bounds Manifest**: New `model-bounds.json` with pre-calculated bounding boxes for all 3D models
-  - Contains bounds (min/max coordinates), dimensions (x/y/z), and tile footprints
-  - Used for spatial calculations, collision detection, and placement validation
-  - Auto-generated from actual model geometry
-  - Covers 50+ models including tools, weapons, armor, resources, NPCs, and stations
-- **Fishing Content**: Complete fishing system with tools and spots
-  - New models: `fishing-rod-base` and `fishing-rod-standard`
-  - 7 fishing spots with OSRS-accurate catch rates (net, bait, fly, cage, harpoon, monkfish, shark)
-  - Catch rate formulas with `catchLow` and `catchHigh` values for level-based success
-  - Secondary requirements (bait, feathers) for certain fishing methods
-- **Mining Expansion**: Additional ore rocks with depleted states
-  - Copper rock with depleted model variant
-  - Mithril rock model added
-  - Runite rock with depleted variant
-  - All rocks include proper model paths and scale values
-- **Crafting Stations**: 3D models for smithing and smelting
-  - Anvil model (`anvil.glb`) with scale 0.5 and yOffset 0.2
-  - Furnace model (`furnace.glb`) with scale 1.5 and yOffset 1.0
-  - Station manifest updated with proper model paths and positioning
-
-</Update>
-
-<Update label="Combat & Food System" description="January 2026" date="2026-01-13">
-
-### 🛡️ Combat Session Management
-
-OSRS-accurate behavior where being attacked closes bank/store/dialogue interfaces:
-
-- **Session Interruption**: Bank, store, and dialogue UIs automatically close when player is attacked
-- **OSRS-Accurate**: Even splash attacks (0 damage) interrupt banking - being in combat matters
-- **Server-Authoritative**: Server sends close packets with `reason: "combat"`
-- **Defensive Guards**: Malformed events handled gracefully (missing targetId/targetType)
-- **Session Close Reasons**: Added `"combat"` to `SessionCloseReason` type
-- **Testing**: 342 lines of comprehensive unit tests covering all session types and edge cases
-
-### ⚡ Performance Optimizations
-
-Raycast proxy optimization for fast entity click detection:
-
-- **Raycast Proxy**: Invisible capsule meshes for instant click detection on NPCs and mobs
-- **Performance Gain**: Avoids expensive VRM SkinnedMesh raycast (~700-1800ms per click)
-- **Implementation**: Proxy added directly to THREE.Scene, bypasses Node system
-- **VRM Optimization**: Disabled raycast on all VRM/GLB meshes (`child.raycast = () => {}`)
-- **Constants**: Centralized `RAYCAST_PROXY` constants (radius, height, segments, Y-offset)
-- **Memory Management**: Proper cleanup in `destroy()` methods
-
-### 🍖 Food Consumption & Healing System
-
-OSRS-accurate food consumption with 3-tick eat delay and combat integration:
-
-- **Eat Delay**: 3-tick (1.8s) cooldown between eating foods
-- **Combat Integration**: Eating during combat adds 3-tick attack delay (only if already on cooldown)
-- **Server-Authoritative**: All validation happens server-side with comprehensive security
-  - Rate limiting (3 requests/second)
-  - Input validation (slot bounds, item ID mismatch detection)
-  - Exploit prevention (`MAX_HEAL_AMOUNT: 99` caps healing)
-  - Consume-after-check (food only removed after validation passes)
-- **OSRS Behavior**: Food consumed even at full health, message format: "You eat the shrimp."
-- **Event-Driven Health**: Client health bars now use `PLAYER_HEALTH_UPDATED` events (eliminates race conditions)
-- **New Classes**: `EatDelayManager` for per-player cooldown tracking
-- **Testing**: 30 unit tests covering eat delay and combat integration
-
-### ⛏️ Mining System Improvements
-
-OSRS-accurate mining mechanics with correct depletion and success rates:
-
-- **100% Rock Depletion**: Rocks always deplete after yielding one ore (OSRS-accurate)
-- **Accurate Success Rates**: Updated to match OSRS wiki formulas
-  - Copper/Tin: ~39.5% at L1, 100% at L62
-  - Iron: ~52% at L15, 100% at L63
-  - Coal: ~16.4% at L30, ~39.5% at L99
-  - Runite: ~6.64% at L85, ~7.42% at L97+
-- **Pickaxe Bonuses**: Dragon/Crystal pickaxe bonus speed implemented
-  - Dragon: 1/6 chance for 2-tick roll (avg 2.83 ticks)
-  - Crystal: 1/4 chance for 2-tick roll (avg 2.75 ticks)
-  - Server-side roll for determinism (prevents client/server desync)
-- **Model Scale Fix**: Normalized non-uniform scales in GLTF models (fixes "squished" rocks)
-- **Depleted Models**: Generalized depleted model swapping for all resource types
-
-### 🎨 Context Menu Enhancements
-
-Continued improvements to OSRS-style context menus:
-
-- **Centralized Constants**: All context menu colors now use `CONTEXT_MENU_COLORS` from `GameConstants.ts`
-- **Consistency**: Eliminated hardcoded color values across all interaction handlers
-- **Resource Colors**: Resources now use cyan (object color) instead of yellow (NPC color) for OSRS accuracy
-- **Performance**: Added `useMemo` and `useCallback` for render optimization in `InventoryPanel`
-- **Testing**: 333 lines of tests for `InventoryActionDispatcher`
-
-### 🐛 Bug Fixes
-
-- **UI Border Conflicts**: Fixed border shorthand conflicts in `SettingsPanel` and `CombatPanel` (#510)
-- **Noted Tools**: Noted items now correctly rejected as valid tools for skilling (#508)
-- **Quaternion Normalization**: Fixed squished resources by using `config.rotation.w` instead of hardcoded 1 (#507)
-- **Auto-Retaliate Guards**: Added server guards to prevent client-side rotation conflicts (#511)
-- **Bank Placeholders**: Fixed unique constraint violation on "release all placeholders" using two-phase slot update (#502)
-
-### 🎮 UX Improvements
-
-- **F5 Debug Toggle**: Added F5 keybind to toggle FPS debug panel (matches Minecraft) (#505)
-- **Invalid Target Feedback**: "Nothing interesting happens." message when using item on invalid target
-- **Cancel Option**: OSRS-style Cancel option always shown last in context menus
-- **Debug Panel**: F5 or backslash key now toggles FPS/performance stats
 
 </Update>
 
