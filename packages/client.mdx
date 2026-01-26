@@ -67,44 +67,120 @@ GameClient.tsx            // Main 3D gameplay
 
 ## UI Components
 
-Located in `src/components/`:
+### UI System (`src/ui/`)
 
-```typescript
-// From packages/client/src/components/
-CharacterPreview.tsx      // VRM character preview
-DraggableWindow.tsx       // Draggable UI windows
-EmbeddedGameClient.tsx    // Embedded game in dashboard
-GameWindow.tsx            // Main game container
-MinimapCompass.tsx        // Minimap with compass
-MinimapStaminaBar.tsx     // Stamina display
-MenuButton.tsx            // Menu buttons
-Portal.tsx                // React portal for overlays
-Fields.tsx                // Form field components
-Icons.tsx                 // Icon components
+Consolidated UI system with all components, hooks, and stores:
 
-// Subfolders
-character/                // Character-related components
-dashboard/                // Dashboard components
+```
+src/ui/
+├── components/        # Core UI components
+│   ├── Window.tsx     # Draggable, resizable windows
+│   ├── Tab.tsx        # Tab component
+│   ├── TabBar.tsx     # Tab container
+│   ├── Slider.tsx     # Range slider
+│   ├── Portal.tsx     # React portal
+│   ├── MenuButton.tsx # Menu buttons
+│   └── ...
+├── controls/          # Form controls
+│   ├── ColorControl.tsx
+│   ├── KeybindControl.tsx
+│   ├── SelectControl.tsx
+│   ├── SliderControl.tsx
+│   └── ToggleControl.tsx
+├── core/              # Core UI systems
+│   ├── drag/          # Drag-and-drop (@dnd-kit)
+│   ├── edit/          # Edit mode
+│   ├── notifications/ # Toast notifications
+│   ├── presets/       # Layout presets
+│   ├── responsive/    # Responsive utilities
+│   ├── tabs/          # Tab management
+│   ├── tooltip/       # Tooltip system
+│   ├── virtual/       # Virtual scrolling
+│   └── window/        # Window management
+├── stores/            # Zustand stores
+│   ├── windowStore.ts # Window state
+│   ├── themeStore.ts  # Theme state
+│   ├── dragStore.ts   # Drag state
+│   └── ...
+├── theme/             # Theme system
+│   ├── themes.ts      # Dark theme
+│   └── animations.ts  # CSS animations
+└── types/             # TypeScript types
 ```
 
-### HUD Components
+### Game Components (`src/game/components/`)
 
-- Health/Constitution display
+Domain-organized game UI components:
+
+```
+src/game/components/
+├── chat/              # Chat system
+│   ├── ChatBox.tsx
+│   ├── ChatMessage.tsx
+│   ├── ChatInput.tsx
+│   └── ChatTabs.tsx
+├── currency/          # Currency display
+│   ├── CurrencyDisplay.tsx
+│   ├── CurrencyExchange.tsx
+│   └── CurrencyIcon.tsx
+├── dialog/            # NPC dialogue
+│   ├── DialogBox.tsx
+│   ├── DialogChoices.tsx
+│   └── DialogHistory.tsx
+├── equipment/         # Equipment panel
+│   ├── CharacterModel.tsx
+│   ├── EquipmentPanel.tsx
+│   └── EquipmentSlot.tsx
+├── map/               # World map
+│   ├── WorldMap.tsx
+│   ├── MapControls.tsx
+│   └── MapMarker.tsx
+├── quest/             # Quest system
+│   ├── QuestLog.tsx
+│   ├── QuestEntry.tsx
+│   └── QuestObjective.tsx
+├── settings/          # Settings panel
+│   ├── SettingsPanel.tsx
+│   ├── SettingsCategory.tsx
+│   └── SettingsControl.tsx
+└── skilltree/         # Skill tree
+    ├── SkillTree.tsx
+    ├── SkillNode.tsx
+    └── SkillTooltip.tsx
+```
+
+### HUD Components (`src/game/hud/`)
+
+- Health/Constitution display (StatusBars)
 - Combat status indicators
-- Skills panel with XP progress
-- 28-slot inventory grid
-- Equipment slots display
-- Bank interface (unlimited storage)
-- Chat window
+- XP progress orbs
+- Action progress bar
 - Minimap with compass
+- Level-up notifications
+- Connection indicator
 
-### Game Components
+### Anchor-Based Positioning
 
-- Three.js 3D renderer
-- Camera controller (third-person, click-to-move)
-- Input handler (WASD movement, click actions)
-- Entity renderers (players, mobs, items)
-- VRM avatar display with emotes
+Windows use Unity/Unreal-style anchors for responsive scaling:
+
+- **9 anchor points**: corners, edges, center
+- **Offset-based**: Windows store offset from anchor, not absolute position
+- **Responsive**: Preserves anchor relationships on resize
+- **Default anchors**:
+  - Chat, Skills/Prayer: `bottom-left`
+  - Minimap: `top-right`
+  - Inventory, Menubar: `bottom-right`
+  - Action bar: `bottom-center`
+
+### Drag-and-Drop System
+
+Powered by `@dnd-kit` with custom enhancements:
+
+- **Inventory items**: Drag to move, combine, or drop
+- **Action bar**: Drag skills, prayers, combat styles
+- **Tabs**: Drag to reorder or combine windows
+- **Windows**: Drag headers to move
+- **Context menus**: Right-click for OSRS-style menus
 
 ## Environment Variables
 
