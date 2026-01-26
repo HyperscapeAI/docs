@@ -1,0 +1,348 @@
+---
+title: "Terrain System"
+description: "Procedural terrain generation with flat zone support"
+icon: "mountain"
+---
+
+# Terrain System
+
+Hyperscape uses procedural terrain generation with support for flat zones underneath stations and structures.
+
+<Info>
+Terrain system code is in `packages/shared/src/systems/shared/world/TerrainSystem.ts`.
+</Info>
+
+---
+
+## Terrain Configuration
+
+```typescript
+// From TerrainSystem.ts
+private readonly CONFIG = {
+  // Core World Specs
+  TILE_SIZE: 100,           // 100m × 100m tiles
+  WORLD_SIZE: 100,          // 100×100 grid = 10km × 10km world
+  TILE_RESOLUTION: 64,      // 64×64 vertices per tile
+  MAX_HEIGHT: 50,           // 50m max height variation
+  WATER_THRESHOLD: 9.0,     // Water appears below 9m
+  
+  // Performance
+  CAMERA_FAR: 400,          // Draw distance
+  RENDER_DISTANCE_TILES: 3, // Tiles around camera
+  
+  // Noise Scales
+  CONTINENT_SCALE: 0.0008,
+  RIDGE_SCALE: 0.003,
+  HILL_SCALE: 0.02,
+  EROSION_SCALE: 0.015,
+  DETAIL_SCALE: 0.08,
+};
+```
+
+---
+
+## Height Generation
+
+Terrain height is calculated using multiple noise layers:
+
+```typescript
+// Procedural height calculation
+let height = 0;
+height += continentNoise * 0.35;   // Large-scale landmasses
+height += ridgeNoise * 0.15;       // Mountain ridges
+height += hillNoise * 0.25;        // Rolling hills
+height += erosionNoise * 0.1;      // Erosion patterns
+height += detailNoise * 0.08;      // Local bumps
+
+// Normalize to [0, 1] range
+height = (height + 1) * 0.5;
+
+// Apply biome boost (mountains get extra height)
+if (inMountainBiome) {
+  height = height + (1 - height) * mountainBoost;
+}
+
+// Scale to world units
+return height * CONFIG.MAX_HEIGHT;
+```
+
+### Noise Layers
+
+| Layer | Scale | Weight | Purpose |
+|-------|-------|--------|---------|
+| Continent | 0.0008 | 0.35 | Large landmasses |
+| Ridge | 0.003 | 0.15 | Mountain ridges |
+| Hill | 0.02 | 0.25 | Rolling hills |
+| Erosion | 0.015 | 0.1 | Erosion patterns |
+| Detail | 0.08 | 0.08 | Local bumps |
+
+---
+
+## Flat Zone System
+
+Stations and structures can flatten terrain underneath for level building surfaces.
+
+### FlatZone Interface
+
+```typescript
+// From packages/shared/src/types/world/terrain.ts
+export interface FlatZone {
+  id: string;              // Unique identifier
+  centerX: number;         // Center X in world coordinates (meters)
+  centerZ: number;         // Center Z in world coordinates (meters)
+  width: number;           // Width in meters (X axis)
+  depth: number;           // Depth in meters (Z axis)
+  height: number;          // Target height for flat area (meters)
+  blendRadius: number;     // Blend radius for smooth transition (meters)
+}
+```
+
+### Height Calculation Priority
+
+```typescript
+// From TerrainSystem.getHeightAt()
+public getHeightAt(worldX: number, worldZ: number): number {
+  // 1. Check flat zones FIRST
+  const flatHeight = this.getFlatZoneHeight(worldX, worldZ);
+  if (flatHeight !== null) {
+    return flatHeight;
+  }
+  
+  // 2. Fall back to procedural terrain
+  return this.getProceduralHeightWithBoost(worldX, worldZ);
+}
+```
+
+### Flat Zone Lookup
+
+Flat zones use spatial indexing for O(1) lookup performance:
+
+```typescript
+private getFlatZoneHeight(worldX: number, worldZ: number): number | null {
+  // Quick terrain-tile-based lookup (100m tiles)
+  const tileX = Math.floor(worldX / this.CONFIG.TILE_SIZE);
+  const tileZ = Math.floor(worldZ / this.CONFIG.TILE_SIZE);
+  const key = `${tileX}_${tileZ}`;
+  
+  const zones = this.flatZonesByTile.get(key);
+  if (!zones || zones.length === 0) {
+    return null; // No flat zones overlap this terrain tile
+  }
+  
+  // Check each zone that overlaps this terrain tile
+  for (const zone of zones) {
+    const dx = Math.abs(worldX - zone.centerX);
+    const dz = Math.abs(worldZ - zone.centerZ);
+    
+    const halfWidth = zone.width / 2;
+    const halfDepth = zone.depth / 2;
+    
+    // Inside core flat area - return exact flat height
+    if (dx <= halfWidth && dz <= halfDepth) {
+      return zone.height;
+    }
+    
+    // Check blend area
+    const blendHalfWidth = halfWidth + zone.blendRadius;
+    const blendHalfDepth = halfDepth + zone.blendRadius;
+    
+    if (dx <= blendHalfWidth && dz <= blendHalfDepth) {
+      // Blend to procedural terrain
+      const proceduralHeight = this.getProceduralHeightWithBoost(worldX, worldZ);
+      
+      const blendX = dx > halfWidth ? (dx - halfWidth) / zone.blendRadius : 0;
+      const blendZ = dz > halfDepth ? (dz - halfDepth) / zone.blendRadius : 0;
+      const blend = Math.max(blendX, blendZ);
+      
+      // Smoothstep: t² × (3 - 2t)
+      const t = blend * blend * (3 - 2 * blend);
+      
+      return zone.height + (proceduralHeight - zone.height) * t;
+    }
+  }
+  
+  return null;
+}
+```
+
+**Spatial Index:**
+- World divided into 100m terrain tiles
+- Each flat zone registered to all overlapping tiles
+- O(1) lookup by terrain tile key
+- Only zones in relevant tiles are checked
+
+### Blend Formula
+
+Flat zones use smoothstep interpolation for natural transitions:
+
+```typescript
+// Smoothstep: t² × (3 - 2t)
+const t = blend * blend * (3 - 2 * blend);
+const finalHeight = flatHeight + (proceduralHeight - flatHeight) * t;
+```
+
+This creates a smooth S-curve transition from flat to procedural terrain.
+
+---
+
+## Station Integration
+
+Stations automatically create flat zones when `flattenGround: true` in manifest:
+
+```json
+{
+  "type": "furnace",
+  "name": "Furnace",
+  "model": "asset://models/furnace/furnace.glb",
+  "modelScale": 1.5,
+  "flattenGround": true,
+  "flattenPadding": 0.5,
+  "flattenBlendRadius": 0.8
+}
+```
+
+### Flat Zone Calculation
+
+```typescript
+// From TerrainSystem.loadFlatZonesFromManifest()
+for (const station of area.stations) {
+  const stationData = stationDataProvider.getStationData(station.type);
+  
+  if (!stationData.flattenGround) continue;
+  
+  // Get footprint from model bounds
+  const footprint = stationDataProvider.getFootprint(station.type);
+  const size = resolveFootprint(footprint);
+  
+  // Calculate flat zone dimensions
+  const padding = stationData.flattenPadding;
+  const blendRadius = stationData.flattenBlendRadius;
+  const width = size.x * MOVEMENT_TILE_SIZE + padding * 2;
+  const depth = size.z * MOVEMENT_TILE_SIZE + padding * 2;
+  
+  // Sample procedural height at station center
+  const flatHeight = this.getProceduralHeightWithBoost(
+    station.position.x,
+    station.position.z,
+  );
+  
+  // Register flat zone
+  this.registerFlatZone({
+    id: `station_${station.id}`,
+    centerX: station.position.x,
+    centerZ: station.position.z,
+    width,
+    depth,
+    height: flatHeight,
+    blendRadius,
+  });
+}
+```
+
+**Process:**
+1. Load station from `world-areas.json`
+2. Get station config from `stations.json`
+3. Calculate footprint from model bounds × scale
+4. Add padding around footprint
+5. Sample terrain height at station center
+6. Register flat zone with blend radius
+
+---
+
+## API
+
+### Register Flat Zone
+
+```typescript
+terrainSystem.registerFlatZone(zone: FlatZone): void
+```
+
+Registers a flat zone and updates spatial index. Used for dynamic structures (e.g., player-placed buildings).
+
+### Unregister Flat Zone
+
+```typescript
+terrainSystem.unregisterFlatZone(id: string): void
+```
+
+Removes a flat zone by ID. Used when structures are removed.
+
+### Query Flat Zone
+
+```typescript
+terrainSystem.getFlatZoneAt(worldX: number, worldZ: number): FlatZone | null
+```
+
+Returns the flat zone at a position, or null if none exists.
+
+---
+
+## Biome System
+
+Terrain uses biome-based height modulation:
+
+```typescript
+// From packages/shared/src/data/world-structure.ts
+export const BIOMES = {
+  plains: { heightBoost: 0.0, color: "#7cb342" },
+  forest: { heightBoost: 0.05, color: "#558b2f" },
+  mountains: { heightBoost: 0.3, color: "#8d6e63" },
+  desert: { heightBoost: 0.0, color: "#fdd835" },
+  tundra: { heightBoost: 0.1, color: "#e0f7fa" },
+};
+```
+
+**Mountain Boost:**
+```typescript
+// Mountains get 30% extra height
+if (biome === "mountains") {
+  const boost = 0.3;
+  height = height + (1 - height) * boost;
+}
+```
+
+---
+
+## Performance
+
+### Terrain Tiles
+
+- **100m × 100m** tiles with **64×64 vertices** each
+- **Render distance**: 3 tiles around camera (700m × 700m)
+- **LOD system**: Distant tiles use lower resolution
+- **Lazy generation**: Tiles generated on-demand as camera moves
+
+### Flat Zone Optimization
+
+- **Spatial indexing**: O(1) lookup using terrain tile keys
+- **Early exit**: Returns immediately if no zones in tile
+- **Pre-allocated buffers**: Zero-allocation hot path
+- **Debug counters**: Track flat zone hit rate for profiling
+
+```typescript
+// Debug output
+console.log(
+  `Flat zone stats: ${this.flatZones.size} zones registered, ` +
+  `${this.flatZonesByTile.size} tile keys in spatial index, ` +
+  `${this._flatZoneHitCount} height lookups used flat zones`
+);
+```
+
+---
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Manifests" icon="file-json" href="/concepts/manifests">
+    Station configuration with terrain flattening options
+  </Card>
+  <Card title="Movement System" icon="route" href="/wiki/game-systems/movement">
+    Tile-based movement and collision detection
+  </Card>
+  <Card title="World Areas" icon="map" href="/wiki/data/overview">
+    World area definitions and station placement
+  </Card>
+  <Card title="Shared Package" icon="share-2" href="/packages/shared">
+    Core engine architecture and systems
+  </Card>
+</CardGroup>
