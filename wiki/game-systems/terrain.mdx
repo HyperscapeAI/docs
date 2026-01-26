@@ -1,0 +1,304 @@
+---
+title: "Terrain System"
+description: "Procedural terrain generation with flat zones for stations"
+icon: "mountain"
+---
+
+## Overview
+
+The terrain system generates procedural 3D terrain using Perlin noise with support for flat zones under stations and buildings.
+
+**Location:** `packages/shared/src/systems/shared/world/TerrainSystem.ts`
+
+## Terrain Configuration
+
+### World Specs
+
+```typescript
+// From TerrainSystem.ts CONFIG
+const CONFIG = {
+  TILE_SIZE: 100,           // 100m × 100m tiles
+  WORLD_SIZE: 100,          // 100×100 grid = 10km × 10km world
+  TILE_RESOLUTION: 64,      // 64×64 vertices per tile
+  MAX_HEIGHT: 50,           // 50m max height variation
+  WATER_THRESHOLD: 9.0,     // Water appears below 9m
+  CAMERA_FAR: 400,          // Draw distance
+};
+```
+
+### Noise Layers
+
+Terrain height is generated from multiple Perlin noise layers:
+
+| Layer | Scale | Weight | Purpose |
+|-------|-------|--------|---------|
+| **Continent** | 0.002 | 0.35 | Large-scale landmasses |
+| **Ridge** | 0.008 | 0.15 | Mountain ridges |
+| **Hill** | 0.02 | 0.25 | Rolling hills |
+| **Erosion** | 0.04 | 0.10 | Weathering patterns |
+| **Detail** | 0.1 | 0.08 | Local bumps and variation |
+
+Combined height is normalized to [0, 1] then scaled by `MAX_HEIGHT`.
+
+## Flat Zone System
+
+### Purpose
+
+Flat zones create level ground under stations (banks, furnaces, anvils) for professional world building. Without flattening, stations would sit on bumpy terrain at odd angles.
+
+### Configuration
+
+Flat zones are defined in station manifests (`stations.json`):
+
+```json
+{
+  "type": "bank",
+  "model": "bank.glb",
+  "flattenGround": true,
+  "flattenPadding": 0.3,
+  "flattenBlendRadius": 0.5
+}
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `flattenGround` | boolean | `false` | Enable terrain flattening |
+| `flattenPadding` | number | `0.3` | Extra meters around footprint to flatten |
+| `flattenBlendRadius` | number | `0.5` | Smooth transition distance to procedural terrain |
+
+### How It Works
+
+#### 1. Flat Zone Registration
+
+When a station spawns, TerrainSystem registers a flat zone:
+
+```typescript
+interface FlatZone {
+  id: string;              // "station_bank_lumbridge_1"
+  centerX: number;         // World X coordinate
+  centerZ: number;         // World Z coordinate
+  width: number;           // Flat area width (meters)
+  depth: number;           // Flat area depth (meters)
+  height: number;          // Target flat height (meters)
+  blendRadius: number;     // Transition distance (meters)
+}
+```
+
+**Dimensions calculated from:**
+- Station footprint (from model bounds)
+- `flattenPadding` (extra space around footprint)
+- `flattenBlendRadius` (smooth transition zone)
+
+**Height sampled from:**
+- Procedural terrain at station center
+- Ensures flat zone matches surrounding terrain elevation
+
+#### 2. Spatial Indexing
+
+Flat zones are indexed by terrain tiles (100m) for O(1) lookup:
+
+```typescript
+// Spatial index: terrain tile → flat zones
+private flatZonesByTile = new Map<string, FlatZone[]>();
+
+// Register zone
+registerFlatZone(zone: FlatZone): void {
+  // Calculate affected terrain tiles
+  const minTileX = Math.floor((zone.centerX - totalRadius) / TILE_SIZE);
+  const maxTileX = Math.floor((zone.centerX + totalRadius) / TILE_SIZE);
+  // ... same for Z
+  
+  // Add to each overlapping tile
+  for (let tx = minTileX; tx <= maxTileX; tx++) {
+    for (let tz = minTileZ; tz <= maxTileZ; tz++) {
+      const key = `${tx}_${tz}`;
+      flatZonesByTile.get(key).push(zone);
+    }
+  }
+}
+```
+
+#### 3. Height Calculation
+
+When terrain height is requested, flat zones are checked first:
+
+```typescript
+getHeightAt(worldX: number, worldZ: number): number {
+  // 1. Check flat zones (O(1) via spatial index)
+  const flatHeight = getFlatZoneHeight(worldX, worldZ);
+  if (flatHeight !== null) {
+    return flatHeight;
+  }
+  
+  // 2. Fall back to procedural height
+  return getProceduralHeightWithBoost(worldX, worldZ);
+}
+```
+
+#### 4. Smooth Blending
+
+Flat zones use smoothstep interpolation for natural transitions:
+
+```typescript
+// Inside flat zone core area
+if (dx <= halfWidth && dz <= halfDepth) {
+  return zone.height; // Exact flat height
+}
+
+// Inside blend area
+if (dx <= blendHalfWidth && dz <= blendHalfDepth) {
+  const proceduralHeight = getProceduralHeightWithBoost(worldX, worldZ);
+  
+  // Calculate blend factor (0 at flat edge, 1 at blend edge)
+  const blendX = dx > halfWidth ? (dx - halfWidth) / blendRadius : 0;
+  const blendZ = dz > halfDepth ? (dz - halfDepth) / blendRadius : 0;
+  const blend = Math.max(blendX, blendZ);
+  
+  // Smoothstep: t² × (3 - 2t)
+  const t = blend * blend * (3 - 2 * blend);
+  
+  // Interpolate from flat to procedural
+  return zone.height + (proceduralHeight - zone.height) * t;
+}
+```
+
+### API Methods
+
+```typescript
+interface TerrainSystem {
+  // Register a flat zone (for dynamic structures)
+  registerFlatZone(zone: FlatZone): void;
+  
+  // Remove a flat zone by ID
+  unregisterFlatZone(id: string): void;
+  
+  // Check if position is in a flat zone
+  getFlatZoneAt(worldX: number, worldZ: number): FlatZone | null;
+}
+```
+
+## Station Manifest Integration
+
+### StationDataProvider
+
+**Location:** `packages/shared/src/data/StationDataProvider.ts`
+
+Loads station configurations including flat zone settings:
+
+```typescript
+interface StationManifestEntry {
+  type: string;
+  model: string;
+  scale?: number;
+  modelYOffset?: number;
+  examine: string;
+  footprint?: FootprintSpec;
+  
+  // Flat zone settings
+  flattenGround?: boolean;
+  flattenPadding?: number;
+  flattenBlendRadius?: number;
+}
+```
+
+### Automatic Flat Zone Creation
+
+When `StationSpawnerSystem` spawns a station:
+
+1. Check if `flattenGround: true` in station manifest
+2. Get station footprint from model bounds
+3. Calculate flat zone dimensions (footprint + padding)
+4. Sample terrain height at station center
+5. Register flat zone with TerrainSystem
+6. Terrain mesh updates automatically
+
+### Example Station Config
+
+```json
+{
+  "type": "bank",
+  "model": "bank.glb",
+  "scale": 1.0,
+  "modelYOffset": 0.0,
+  "examine": "A secure place to store your items.",
+  "flattenGround": true,
+  "flattenPadding": 0.5,
+  "flattenBlendRadius": 1.0
+}
+```
+
+This creates:
+- Flat zone centered on bank position
+- Width/depth = bank footprint + 1m (0.5m padding on each side)
+- 1m blend radius for smooth transition
+- Height = procedural terrain at bank center
+
+## Performance
+
+### Spatial Index Efficiency
+
+- **Lookup**: O(1) via terrain tile key
+- **Memory**: Only stores zones, not per-vertex data
+- **Updates**: Flat zones registered once at startup
+- **Runtime**: Zero allocations in height lookup hot path
+
+### Terrain Tile Caching
+
+- Terrain tiles (100m) cached after generation
+- Flat zones don't invalidate cache
+- Height lookups check flat zones before cache
+
+## Biome Integration
+
+Flat zones work with all biome types:
+
+- Grasslands: Flat zones blend with gentle hills
+- Forests: Stations clear vegetation in flat area
+- Mountains: Flat zones create plateaus on slopes
+- Deserts: Flat zones blend with dunes
+
+## Debugging
+
+### Console Logging
+
+TerrainSystem logs flat zone activity:
+
+```
+[TerrainSystem] Registered flat zone "station_bank_lumbridge_1" -> tile keys: [0_-1, 0_0]
+[TerrainSystem] FLAT ZONE HIT: "station_bank_lumbridge_1" at (2.5, -24.8) -> height=42.15
+[TerrainSystem] Flat zone stats: 5 zones registered, 12 tile keys in spatial index, 1247 height lookups used flat zones
+```
+
+### Visual Debugging
+
+Flat zones are visible in-game:
+- Bumpy terrain contrasts with flat station areas
+- Smooth blend transitions prevent sharp edges
+- Stations sit level on ground
+
+## Future Enhancements
+
+Potential improvements for dynamic flat zones:
+
+- **Player-Placed Structures**: Flatten ground under player buildings
+- **Dynamic Registration**: Add/remove flat zones at runtime
+- **Circular Zones**: Support circular flat areas (not just rectangular)
+- **Height Adjustment**: Raise/lower flat zones relative to terrain
+- **Vegetation Clearing**: Auto-clear trees/rocks in flat zones
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="World Areas" icon="map" href="/wiki/data/world-areas">
+    Defining stations in world-areas.json
+  </Card>
+  <Card title="Station Manifests" icon="building" href="/wiki/data/stations">
+    Station configuration and models
+  </Card>
+  <Card title="Collision System" icon="shield" href="/wiki/game-systems/collision">
+    Tile-based collision and footprints
+  </Card>
+  <Card title="Biomes" icon="tree" href="/wiki/game-systems/biomes">
+    Biome system and vegetation
+  </Card>
+</CardGroup>
