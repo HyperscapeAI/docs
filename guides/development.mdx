@@ -126,9 +126,35 @@ Requires `CLAUDE_CODE_OAUTH_TOKEN` and `MINTLIFY_API_KEY` secrets to be configur
 
 ### Adding a New Feature
 
-1. Make changes in `packages/shared/src/`
+1. Make changes in appropriate package:
+   - Game logic: `packages/shared/src/systems/`
+   - UI components: `packages/client/src/ui/` (reusable) or `packages/client/src/game/` (game-specific)
+   - Server handlers: `packages/server/src/systems/ServerNetwork/handlers/`
 2. Hot reload applies automatically
 3. Test in browser at localhost:3333
+
+### Adding UI Components
+
+**Reusable UI Primitive** (goes in `packages/client/src/ui/components/`):
+```typescript
+// Example: Button component
+export function Button({ children, onClick }: ButtonProps) {
+  return (
+    <button onClick={onClick} className="ui-button">
+      {children}
+    </button>
+  );
+}
+```
+
+**Game-Specific Component** (goes in `packages/client/src/game/components/`):
+```typescript
+// Example: Quest tracker
+export function QuestTracker({ world }: { world: ClientWorld }) {
+  const quests = useQuestStore((state) => state.activeQuests);
+  return <div>{quests.map(renderQuest)}</div>;
+}
+```
 
 ### Updating Game Content
 
