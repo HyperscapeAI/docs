@@ -93,6 +93,8 @@ Web client featuring:
 - **Vite**: Fast development builds with HMR
 - **React 19**: UI framework
 - **Three.js**: 3D rendering
+- **@dnd-kit**: Drag-and-drop system
+- **Zustand**: State management
 - **Capacitor**: iOS/Android mobile builds
 - **Privy**: Authentication
 - **Farcaster**: Miniapp SDK integration
@@ -101,12 +103,26 @@ Web client featuring:
 ```
 packages/client/src/
 ├── auth/           # Privy authentication
-├── components/     # React UI components
+├── ui/             # UI system (consolidated from hs-kit)
+│   ├── components/ # Window, Tab, Modal, ItemSlot, etc.
+│   ├── controls/   # Form controls (Slider, Toggle, etc.)
+│   ├── core/       # Drag-and-drop, edit mode, presets, responsive
+│   ├── stores/     # Zustand state stores
+│   ├── theme/      # Theme system and animations
+│   └── types.ts    # UI type definitions
 ├── game/           # Game loop and logic
+│   ├── components/ # Game-specific components (chat, currency, dialog, etc.)
+│   ├── panels/     # Game panels (inventory, equipment, bank, trade, etc.)
+│   ├── hud/        # HUD elements (status bars, minimap, etc.)
+│   └── interface/  # Interface management
 ├── hooks/          # React hooks
 ├── screens/        # UI screens (login, game, etc.)
 └── index.tsx       # React entry point
 ```
+
+<Note>
+The UI system was consolidated from the removed `hs-kit` package in January 2026. All UI components, stores, and utilities are now in `packages/client/src/ui/`.
+</Note>
 
 ### plugin-hyperscape (`@hyperscape/plugin-hyperscape`)
 
