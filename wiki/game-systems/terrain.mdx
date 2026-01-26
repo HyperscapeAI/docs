@@ -1,0 +1,321 @@
+---
+title: "Terrain System"
+description: "Procedural terrain generation with flat zones for stations"
+icon: "mountain"
+---
+
+# Terrain System
+
+Hyperscape features a procedural terrain generation system with support for flat zones under stations and buildings. The terrain uses noise-based generation for natural-looking hills and valleys, with configurable flattening for structures.
+
+<Info>
+Terrain code lives in `packages/shared/src/systems/shared/world/TerrainSystem.ts` with types in `packages/shared/src/types/world/terrain.ts`.
+</Info>
+
+## Core Configuration
+
+```typescript
+// From TerrainSystem.ts
+private readonly CONFIG = {
+  // Core World Specs
+  TILE_SIZE: 100,              // 100m × 100m tiles
+  WORLD_SIZE: 100,             // 100×100 grid = 10km × 10km world
+  TILE_RESOLUTION: 64,         // 64×64 vertices per tile for smooth terrain
+  MAX_HEIGHT: 50,              // 50m max height variation (bumpy terrain)
+  WATER_THRESHOLD: 9.0,        // Water appears below 9m (0.18 × MAX_HEIGHT)
+  
+  // Performance
+  CAMERA_FAR: 400,             // Match fog far + buffer
+};
+```
+
+---
+
+## Flat Zone System
+
+The flat zone system allows terrain to be flattened under stations (banks, furnaces, anvils, altars, ranges) for proper building placement.
+
+### FlatZone Interface
+
+```typescript
+// From packages/shared/src/types/world/terrain.ts
+export interface FlatZone {
+  /** Unique identifier (e.g., "station_furnace_lumbridge_1") */
+  id: string;
+  /** Center X position in world coordinates (meters) */
+  centerX: number;
+  /** Center Z position in world coordinates (meters) */
+  centerZ: number;
+  /** Width in meters (X axis) */
+  width: number;
+  /** Depth in meters (Z axis) */
+  depth: number;
+  /** Target height for the flat area (meters) */
+  height: number;
+  /** Blend radius for smooth transition to procedural terrain (meters) */
+  blendRadius: number;
+}
+```
+
+### Station Manifest Configuration
+
+Stations can enable terrain flattening via their manifest entries:
+
+```typescript
+// From packages/shared/src/data/StationDataProvider.ts
+export interface StationManifestEntry {
+  type: string;
+  name: string;
+  model: string;
+  // ... other fields
+  
+  /** Enable terrain flattening under this station (default: false) */
+  flattenGround?: boolean;
+  /** Extra meters around footprint to flatten (default: 0.3) */
+  flattenPadding?: number;
+  /** Meters over which to blend from flat to procedural terrain (default: 0.5) */
+  flattenBlendRadius?: number;
+}
+```
+
+**Example station configuration:**
+
+```json
+{
+  "type": "altar",
+  "name": "Altar",
+  "model": "altar.glb",
+  "flattenGround": true,
+  "flattenPadding": 0.3,
+  "flattenBlendRadius": 0.5
+}
+```
+
+### How Flat Zones Work
+
+1. **Registration**: During terrain initialization, flat zones are loaded from `world-areas.json` for all stations with `flattenGround: true`
+2. **Spatial Indexing**: Zones are indexed by terrain tile (100m each) for O(1) lookup
+3. **Height Calculation**: When terrain height is queried, flat zones are checked first before procedural generation
+4. **Blending**: Smooth transitions use smoothstep interpolation: `t² × (3 - 2t)`
+
+```typescript
+// From TerrainSystem.ts - getHeightAt()
+getHeightAt(worldX: number, worldZ: number): number {
+  // Check flat zones first (for stations, etc.)
+  const flatHeight = this.getFlatZoneHeight(worldX, worldZ);
+  if (flatHeight !== null) {
+    return flatHeight;
+  }
+  
+  // Get procedural height with mountain boost
+  return this.getProceduralHeightWithBoost(worldX, worldZ);
+}
+```
+
+### Blend Calculation
+
+Flat zones have three regions:
+
+1. **Core flat area**: Returns exact flat height
+2. **Blend zone**: Smoothly interpolates between flat and procedural height
+3. **Outside**: Uses normal procedural terrain
+
+```typescript
+// Inside core flat area - return exact flat height
+if (dx <= halfWidth && dz <= halfDepth) {
+  return zone.height;
+}
+
+// Check blend area
+const blendHalfWidth = halfWidth + zone.blendRadius;
+const blendHalfDepth = halfDepth + zone.blendRadius;
+
+if (dx <= blendHalfWidth && dz <= blendHalfDepth) {
+  // Get procedural height for blending
+  const proceduralHeight = this.getProceduralHeightWithBoost(worldX, worldZ);
+  
+  // Calculate blend factor (0 at edge of flat zone, 1 at edge of blend zone)
+  const blendX = dx > halfWidth ? (dx - halfWidth) / zone.blendRadius : 0;
+  const blendZ = dz > halfDepth ? (dz - halfDepth) / zone.blendRadius : 0;
+  const blend = Math.max(blendX, blendZ);
+  
+  // Smoothstep for natural transition: t² × (3 - 2t)
+  const t = blend * blend * (3 - 2 * blend);
+  
+  return zone.height + (proceduralHeight - zone.height) * t;
+}
+```
+
+---
+
+## TerrainSystem Interface
+
+The terrain system exposes flat zone methods for dynamic registration:
+
+```typescript
+// From packages/shared/src/types/systems/system-interfaces.ts
+export interface TerrainSystem extends System {
+  // ... existing methods
+  
+  /**
+   * Register a flat zone for terrain flattening.
+   * Used for dynamic flat zone registration (e.g., player-placed structures).
+   */
+  registerFlatZone(zone: FlatZone): void;
+  
+  /**
+   * Remove a flat zone by ID.
+   * Used when dynamic structures are removed.
+   */
+  unregisterFlatZone(id: string): void;
+  
+  /**
+   * Check if a position is within a flat zone.
+   * Returns the zone if found, null otherwise.
+   */
+  getFlatZoneAt(worldX: number, worldZ: number): FlatZone | null;
+}
+```
+
+### Usage Example
+
+```typescript
+// Register a flat zone for a player-placed structure
+const terrainSystem = world.getSystem<TerrainSystem>("terrain");
+
+terrainSystem.registerFlatZone({
+  id: "player_house_123",
+  centerX: 50,
+  centerZ: 100,
+  width: 10,
+  depth: 10,
+  height: 42.5,
+  blendRadius: 1.0,
+});
+
+// Later, when structure is removed
+terrainSystem.unregisterFlatZone("player_house_123");
+```
+
+---
+
+## Procedural Generation
+
+The terrain uses multi-octave noise for natural-looking landscapes:
+
+```typescript
+// From TerrainSystem.ts - getBaseHeightAt()
+private getBaseHeightAt(worldX: number, worldZ: number): number {
+  // Continental scale (large features)
+  const continentScale = 0.002;
+  const continentNoise = this.noise.fractal2D(
+    worldX * continentScale,
+    worldZ * continentScale,
+    3,
+    0.5,
+    2.0,
+  );
+  
+  // Ridge noise (mountain ranges)
+  const ridgeScale = 0.005;
+  const ridgeNoise = this.noise.ridge2D(
+    worldX * ridgeScale,
+    worldZ * ridgeScale,
+  );
+  
+  // Hill scale (rolling hills)
+  const hillScale = 0.02;
+  const hillNoise = this.noise.fractal2D(
+    worldX * hillScale,
+    worldZ * hillScale,
+    4,
+    0.6,
+    2.2,
+  );
+  
+  // Combine layers - bumpy terrain to make flat zones visible
+  let height = 0;
+  height += continentNoise * 0.35;
+  height += ridgeNoise * 0.15;
+  height += hillNoise * 0.25;
+  height += erosionNoise * 0.1;
+  height += detailNoise * 0.08;
+  
+  // Normalize to [0, 1] range
+  height = (height + 1) * 0.5;
+  
+  return height * this.CONFIG.MAX_HEIGHT;
+}
+```
+
+---
+
+## Station Spawning Integration
+
+Stations are spawned by `StationSpawnerSystem` which reads from `world-areas.json`:
+
+```typescript
+// From packages/shared/src/systems/shared/entities/StationSpawnerSystem.ts
+// Stations are grounded to terrain height automatically
+const terrainHeight = terrainSystem.getHeightAt(station.position.x, station.position.z);
+const groundedY = terrainHeight + (stationData.modelYOffset ?? 0);
+
+// Spawn station at grounded position
+await this.spawnStation({
+  ...station,
+  position: { ...station.position, y: groundedY },
+});
+```
+
+<Info>
+**Migration Note**: Previously, stations were hardcoded in `EntityManager.spawnWorldObjects()`. As of PR #644, all stations are now manifest-driven via `StationSpawnerSystem` from `world-areas.json`.
+</Info>
+
+---
+
+## Performance Optimizations
+
+### Spatial Indexing
+
+Flat zones use terrain tiles (100m each) for efficient lookup:
+
+```typescript
+// Pre-allocated buffers for zero-allocation hot path
+private readonly _playerTile: TileCoord = { x: 0, z: 0 };
+private readonly _targetTile: TileCoord = { x: 0, z: 0 };
+
+// Spatial index by terrain tile
+private flatZonesByTile = new Map<string, FlatZone[]>();
+
+// O(1) lookup by tile key
+const tileX = Math.floor(worldX / this.CONFIG.TILE_SIZE);
+const tileZ = Math.floor(worldZ / this.CONFIG.TILE_SIZE);
+const key = `${tileX}_${tileZ}`;
+const zones = this.flatZonesByTile.get(key);
+```
+
+### Debug Logging
+
+The system includes debug counters to track flat zone usage:
+
+```typescript
+// Debug counter to avoid log spam
+private _flatZoneHitCount = 0;
+private _flatZoneLoggedZones = new Set<string>();
+
+// Log first time each zone is hit
+if (!this._flatZoneLoggedZones.has(zone.id)) {
+  this._flatZoneLoggedZones.add(zone.id);
+  console.log(
+    `[TerrainSystem] FLAT ZONE HIT: "${zone.id}" at (${worldX.toFixed(1)}, ${worldZ.toFixed(1)}) -> height=${zone.height.toFixed(2)}`
+  );
+}
+```
+
+---
+
+## Related Documentation
+
+- [Station Data Provider](/wiki/data/stations) (station manifest structure)
+- [World Areas](/wiki/data/world-areas) (zone configuration)
+- [Entity Manager](/wiki/engine/ecs) (entity spawning)
