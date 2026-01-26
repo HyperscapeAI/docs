@@ -191,6 +191,28 @@ import {
 | `fastify` | ^5.0.0 | HTTP server (server builds) |
 | `livekit-client` | ^2.9.9 | Voice chat |
 
+## Recent Changes
+
+### Terrain Flattening System (PR #644)
+
+The terrain system now supports flat zones under stations for proper building placement:
+
+- **FlatZone interface** — Defines rectangular flat areas with smooth blending
+- **Spatial indexing** — O(1) flat zone lookup using terrain tiles
+- **Manifest-driven** — Stations configure `flattenGround`, `flattenPadding`, `flattenBlendRadius`
+- **Dynamic registration** — `registerFlatZone()`, `unregisterFlatZone()`, `getFlatZoneAt()`
+
+See [Terrain System](/wiki/game-systems/terrain) for details.
+
+### Equipment System Fixes (PR #641)
+
+Atomic equip/unequip operations prevent item duplication:
+
+- **Transaction locks** prevent race conditions
+- **Order of operations** — Remove from inventory FIRST (equip), clear equipment FIRST (unequip)
+- **Rollback on failure** — Restores state if operation fails
+- **New helper methods** — `hasSpace()`, `hasItemAtSlot()`, `removeItemDirect()`, `addItemDirect()`
+
 ## Building
 
 ```bash
