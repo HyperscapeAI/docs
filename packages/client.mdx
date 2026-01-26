@@ -273,13 +273,20 @@ bun run cap:sync:android  # Android only
 | `react-dom` | React DOM renderer |
 | `vite` | Build tool |
 | `three` | 3D rendering |
+| `@dnd-kit/core` | Drag-and-drop core |
+| `@dnd-kit/sortable` | Sortable lists |
+| `@dnd-kit/utilities` | DnD utilities |
 | `@capacitor/core` | Mobile builds |
 | `@hyperscape/shared` | Core engine |
 | `@privy-io/react-auth` | Authentication |
 | `@farcaster/miniapp-sdk` | Farcaster integration |
-| `styled-components` | CSS-in-JS |
 | `tailwindcss` | Utility CSS |
 | `livekit-client` | Voice chat |
+| `zustand` | State management |
+
+<Note>
+The `hs-kit` package was removed in January 2026. All UI components were consolidated into `packages/client/src/ui/`. The `styled-components` dependency was also removed in favor of inline styles with theme tokens.
+</Note>
 
 ## Deployment
 
