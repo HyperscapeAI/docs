@@ -97,6 +97,23 @@ Handles all economic interactions:
 - **Shops** — Buy/sell with general stores
 - **Inventory** — 28-slot management with stacking
 - **Loot** — Item drops and ground items
+- **Trading** — Player-to-player trading with two-screen confirmation
+  - Proximity checks (2-tile range)
+  - Wealth transfer indicators
+  - Interface blocking during trades
+  - Audit logging for completed trades
+
+### Social Systems
+
+**Location:** `packages/server/src/systems/` and client handlers
+
+Player social interactions:
+
+- **Friend Management** — Send, accept, decline, remove friend requests
+- **Private Messaging** — Direct player-to-player communication
+- **Online Status** — Friend online/offline notifications
+- **Ignore List** — Block unwanted interactions
+- **Database Schema** — friendships, friend_requests, ignore_lists tables
 
 ### Movement & Collision System
 
