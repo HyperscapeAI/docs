@@ -156,6 +156,37 @@ flowchart TD
 | `ws` | ^8.18.3 | WebSocket client |
 | `zod` | ^3.25.67 | Schema validation |
 
+## TypeScript Configuration
+
+The plugin uses local type definitions for core Hyperscape types to avoid build errors:
+
+```typescript
+// From src/types/core-types.ts
+// Core types defined locally instead of importing from @hyperscape/shared
+export type World = InstanceType<typeof WorldClass>;
+export type System = InstanceType<typeof SystemClass>;
+export type Vector3 = THREEVector3;  // Import from 'three' directly
+export type Quaternion = THREEQuaternion;
+
+// Entity interface defined locally
+export interface Entity {
+  id: string;
+  type: string;
+  node: { position: Vector3; quaternion: Quaternion };
+  // ...
+}
+```
+
+**Why local types?**
+- Avoids issues with built package exports
+- THREE namespace types imported directly from 'three' package
+- PhysX types (PxVec3, PxTransform, PxQuat) defined locally
+- Satisfies TypeScript's `isolatedModules` requirement
+
+<Note>
+This approach was implemented in PR #629 to resolve 70 TypeScript build errors related to type imports from `@hyperscape/shared`.
+</Note>
+
 ## Building
 
 ```bash
