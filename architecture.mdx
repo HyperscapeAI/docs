@@ -149,16 +149,21 @@ ElizaOS plugin enabling AI agents to:
 - Make LLM-driven decisions with Anthropic, OpenAI, or OpenRouter
 - Play autonomously as real players with full WebSocket connectivity
 
+**Type System:**
+
+The plugin uses **local type definitions** instead of importing from `@hyperscape/shared` to satisfy ElizaOS's `isolatedModules: true` requirement. This resolves 70+ TypeScript build errors.
+
 **Key Dependencies:**
 
-```typescript
-// From packages/plugin-hyperscape/package.json
-"@elizaos/core": "^1.2.9"
-"@elizaos/plugin-anthropic": "^1.5.12"
-"@elizaos/plugin-openai": "1.5.16"
-"@elizaos/plugin-openrouter": "^1.5.15"
-"@elizaos/plugin-sql": "^1.6.4"
-"@hyperscape/shared": "workspace:*"
+```json
+{
+  "@elizaos/core": "^1.2.9",
+  "@elizaos/plugin-anthropic": "^1.5.12",
+  "@elizaos/plugin-openai": "1.5.16",
+  "@elizaos/plugin-openrouter": "^1.5.15",
+  "@hyperscape/shared": "workspace:*",
+  "three": "^0.181.0"
+}
 ```
 
 ### asset-forge (`3d-asset-forge`)
