@@ -552,8 +552,73 @@ function interpolateEntity(state: InterpolationState, alpha: number): void {
 
 ---
 
+## Terrain Flattening
+
+Stations and structures can flatten terrain underneath for level building surfaces using the **Flat Zone System**.
+
+### Flat Zone Interface
+
+```typescript
+// From packages/shared/src/types/world/terrain.ts
+export interface FlatZone {
+  id: string;              // Unique identifier (e.g., "station_furnace_spawn_1")
+  centerX: number;         // Center X position in world coordinates (meters)
+  centerZ: number;         // Center Z position in world coordinates (meters)
+  width: number;           // Width in meters (X axis)
+  depth: number;           // Depth in meters (Z axis)
+  height: number;          // Target height for the flat area (meters)
+  blendRadius: number;     // Blend radius for smooth transition (meters)
+}
+```
+
+### TerrainSystem API
+
+```typescript
+// Register a flat zone (for dynamic structures)
+terrainSystem.registerFlatZone({
+  id: "player_house_1",
+  centerX: 50.0,
+  centerZ: 50.0,
+  width: 10.0,
+  depth: 10.0,
+  height: 42.5,
+  blendRadius: 1.0,
+});
+
+// Remove a flat zone
+terrainSystem.unregisterFlatZone("player_house_1");
+
+// Query flat zone at position
+const zone = terrainSystem.getFlatZoneAt(worldX, worldZ);
+if (zone) {
+  console.log(`Standing on flat zone: ${zone.id}`);
+}
+```
+
+### How It Works
+
+1. **Height Calculation Priority**: Flat zones checked before procedural terrain
+2. **Core Flat Area**: Inside the zone, terrain returns exact `height` value
+3. **Blend Area**: Within `blendRadius` of zone edge, smoothstep interpolation blends to procedural terrain
+4. **Spatial Indexing**: Terrain tiles (100m) used for O(1) lookup
+5. **Manifest-Driven**: Stations with `flattenGround: true` automatically create flat zones
+
+**Blend Formula:**
+```typescript
+// Smoothstep interpolation: t² × (3 - 2t)
+const t = blend * blend * (3 - 2 * blend);
+const finalHeight = flatHeight + (proceduralHeight - flatHeight) * t;
+```
+
+<Info>
+Flat zones are loaded from `world-areas.json` during terrain initialization. Station footprints are calculated from model bounds × scale.
+</Info>
+
+---
+
 ## Related Documentation
 
 - [Combat System](/wiki/game-systems/combat) - Uses tile range for attacks
 - [NPC Behavior](/wiki/data/npcs) - NPC aggro and pathing
 - [Entity System](/wiki/engine/ecs) - Entity management
+- [Manifests](/concepts/manifests) - Station configuration with terrain flattening
