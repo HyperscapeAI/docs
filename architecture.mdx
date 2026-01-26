@@ -110,6 +110,8 @@ Web client featuring:
 - **Vite**: Fast development builds with HMR
 - **React 19**: UI framework
 - **Three.js**: 3D rendering
+- **@dnd-kit**: Accessible drag-and-drop
+- **Zustand**: State management
 - **Capacitor**: iOS/Android mobile builds
 - **Privy**: Authentication
 - **Farcaster**: Miniapp SDK integration
@@ -118,10 +120,23 @@ Web client featuring:
 ```
 packages/client/src/
 ├── auth/           # Privy authentication
-├── components/     # React UI components
 ├── game/           # Game loop and logic
+│   ├── components/ # Game-specific components (chat, currency, dialog, equipment, map, quest, settings, skilltree)
+│   ├── dashboard/  # Agent dashboard
+│   ├── hud/        # HUD elements (StatusBars, Minimap, XPProgressOrb, etc.)
+│   ├── interface/  # Interface manager and layout
+│   ├── panels/     # Game panels (Inventory, Bank, Combat, Trade, etc.)
+│   └── systems/    # Client-side game systems
 ├── hooks/          # React hooks
 ├── screens/        # UI screens (login, game, etc.)
+├── ui/             # Consolidated UI system (from hs-kit)
+│   ├── components/ # Reusable UI components (Window, TabBar, Portal, etc.)
+│   ├── controls/   # Form controls (Slider, Toggle, Select, etc.)
+│   ├── core/       # Core UI systems (drag-and-drop, window management, presets)
+│   ├── stores/     # Zustand state stores (windowStore, themeStore, etc.)
+│   ├── theme/      # Theme system
+│   └── types/      # UI type definitions
+├── utils/          # Helper functions
 └── index.tsx       # React entry point
 ```
 
