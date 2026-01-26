@@ -190,7 +190,8 @@
             "group": "Client Application",
             "icon": "monitor",
             "pages": [
-              "wiki/client/overview"
+              "wiki/client/overview",
+              "wiki/client/ui-system"
             ]
           },
           {
