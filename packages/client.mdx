@@ -77,46 +77,177 @@ GameClient.tsx            // Main 3D gameplay
 | `GameClient` | Main 3D gameplay |
 | `LoadingScreen` | Asset loading state |
 
-## UI Components
+## UI System Architecture
 
-Located in `src/components/`:
+<Info>
+**Major Change (PR #638)**: The `hs-kit` package has been removed and all UI components consolidated into `packages/client/src/ui/`. This eliminates the separate package dependency and improves build times.
+</Info>
+
+### UI Package Structure
+
+Located in `src/ui/`:
 
 ```typescript
-// From packages/client/src/components/
-CharacterPreview.tsx      // VRM character preview
-DraggableWindow.tsx       // Draggable UI windows
-EmbeddedGameClient.tsx    // Embedded game in dashboard
-GameWindow.tsx            // Main game container
-MinimapCompass.tsx        // Minimap with compass
-MinimapStaminaBar.tsx     // Stamina display
-MenuButton.tsx            // Menu buttons
-Portal.tsx                // React portal for overlays
-Fields.tsx                // Form field components
-Icons.tsx                 // Icon components
+// From packages/client/src/ui/
+components/               // Reusable UI components
+├── Window.tsx           // Draggable, resizable windows
+├── TabBar.tsx           // Tab management
+├── Portal.tsx           // React portals
+├── ModalWindow.tsx      // Modal dialogs
+├── Hint.tsx             // Tooltip system
+├── Icons.tsx            // Icon components
+├── MenuButton.tsx       // Menu buttons
+├── Slider.tsx           // Range sliders
+├── ToggleSwitch.tsx     // Toggle controls
+└── NotificationContainer.tsx  // Toast notifications
 
-// Subfolders
-character/                // Character-related components
-dashboard/                // Dashboard components
+controls/                 // Form controls
+├── ColorControl.tsx     // Color pickers
+├── KeybindControl.tsx   // Keybind editors
+├── SelectControl.tsx    // Dropdown selects
+├── SliderControl.tsx    // Slider inputs
+└── ToggleControl.tsx    // Toggle switches
+
+core/                     // Core UI systems
+├── drag/                # Drag-and-drop system (@dnd-kit integration)
+├── edit/                # Edit mode and layout tools
+├── notifications/       # Notification system
+├── presets/             # Layout presets and sharing
+├── responsive/          # Responsive breakpoints
+├── tabs/                # Tab management
+├── tooltip/             # Tooltip positioning
+├── virtual/             # Virtual scrolling
+└── window/              # Window management
+
+stores/                   # Zustand state stores
+├── windowStore.ts       # Window positions and state
+├── themeStore.ts        # Theme configuration
+├── dragStore.ts         # Drag-and-drop state
+├── editStore.ts         # Edit mode state
+├── presetStore.ts       # Layout presets
+├── notificationStore.ts # Notifications
+├── anchorUtils.ts       # Anchor-based positioning
+└── index.ts             # Store exports
+
+theme/                    # Theme system
+├── themes.ts            # Theme definitions
+├── animations.ts        # Animation utilities
+└── index.ts             # Theme exports
+
+types/                    # UI type definitions
+├── accessibility.ts     # Accessibility types
+├── complexity.ts        # Complexity mode types
+└── index.ts             # Type exports
 ```
+
+### Drag-and-Drop System
+
+The UI uses `@dnd-kit` for accessible drag-and-drop:
+
+```typescript
+// From packages/client/src/ui/core/drag/
+import { DndProvider, useDraggable, useDroppable } from '@/ui';
+
+// Draggable item
+const { attributes, listeners, setNodeRef } = useDraggable({
+  id: 'item-123',
+  data: { type: 'inventory', itemId: 'bronze_sword' },
+});
+
+// Drop zone
+const { setNodeRef: setDropRef, isOver } = useDroppable({
+  id: 'equipment-weapon',
+});
+```
+
+**Features:**
+- Keyboard and pointer support for accessibility
+- Collision detection algorithms
+- Drag modifiers (snap to grid, constrain to axis)
+- Composable drag overlay
+- Touch support for mobile
+
+### Window Management
+
+Windows use anchor-based positioning for responsive scaling:
+
+```typescript
+// From packages/client/src/ui/stores/windowStore.ts
+export type WindowAnchor =
+  | "top-left" | "top-center" | "top-right"
+  | "center-left" | "center" | "center-right"
+  | "bottom-left" | "bottom-center" | "bottom-right";
+
+// Windows maintain position relative to viewport anchor
+// Ensures proper scaling across different screen sizes
+```
+
+**Window Features:**
+- Draggable and resizable
+- Anchor-based positioning (Unity/Unreal-style)
+- Responsive scaling for mobile ↔ desktop transitions
+- Tab combining (drag tabs between windows)
+- Layout presets and sharing
+- Edit mode with alignment guides
+- Collision visualization
+- Grid snapping
 
 ### HUD Components
 
-- Health/Constitution display
-- Combat status indicators
-- Skills panel with XP progress
-- 28-slot inventory grid
-- Equipment slots display
-- Bank interface (unlimited storage)
-- Chat window
-- Minimap with compass
+Located in `src/game/hud/`:
+
+- **StatusBars.tsx** — Health/Constitution display
+- **XPProgressOrb.tsx** — XP orb with skill tracking
+- **ActionProgressBar.tsx** — Action progress (gathering, cooking)
+- **Minimap.tsx** — Minimap with compass
+- **ConnectionIndicator.tsx** — Network status
+- **EntityContextMenu.tsx** — Right-click context menus
+- **EscapeMenu.tsx** — Pause menu
+- **LevelUpNotification.tsx** — Level-up popups
+
+### Game Panels
+
+Located in `src/game/panels/`:
+
+- **InventoryPanel.tsx** — 28-slot inventory grid
+- **EquipmentPanel.tsx** — Equipment slots
+- **BankPanel/** — Bank interface (modular structure)
+- **CombatPanel.tsx** — Combat styles and stats
+- **SkillsPanel.tsx** — Skills overview
+- **PrayerPanel.tsx** — Prayer book
+- **ChatPanel.tsx** — Chat window
+- **QuestsPanel.tsx** — Quest journal
+- **TradePanel/** — Player-to-player trading (OSRS-style)
+- **ActionBarPanel/** — Customizable action bar
 
 ### Game Components
 
-- Three.js 3D renderer
+Located in `src/game/components/`:
+
+```
+chat/                     # Chat system
+├── ChatBox.tsx          # Main chat component
+├── ChatMessage.tsx      # Message rendering
+├── ChatInput.tsx        # Input field
+└── ChatTabs.tsx         # Channel tabs
+
+currency/                 # Currency display
+dialog/                   # NPC dialogue
+equipment/                # Equipment UI
+map/                      # World map
+quest/                    # Quest UI
+settings/                 # Settings panels
+skilltree/                # Skill tree visualization
+```
+
+### Three.js Integration
+
+- Three.js 3D renderer with WebGPU support
 - Camera controller (third-person, click-to-move)
 - Input handler (WASD movement, click actions)
 - Entity renderers (players, mobs, items)
 - VRM avatar display with emotes
+- Post-processing effects
 
 ## Environment Variables
 
