@@ -1,0 +1,256 @@
+---
+title: "Social Features"
+description: "Friend management, private messaging, and player interactions"
+icon: "users"
+---
+
+# Social Features
+
+Hyperscape includes comprehensive social features for player interaction, including friend management, private messaging, and online status notifications.
+
+<Info>
+Social system code is in `packages/shared/src/systems/client/SocialSystem.ts` and `packages/server/src/systems/ServerNetwork/handlers/friends.ts`.
+</Info>
+
+---
+
+## Friend Management
+
+### Friend System Features
+
+- **Send Friend Requests**: Request to add another player as a friend
+- **Accept/Decline Requests**: Respond to incoming friend requests
+- **Remove Friends**: Remove players from your friend list
+- **Online Status**: See which friends are currently online
+- **Friend List Sync**: Automatic synchronization on login
+
+### Database Schema
+
+```sql
+-- Friend relationships (bidirectional)
+CREATE TABLE friendships (
+  id SERIAL PRIMARY KEY,
+  player_id VARCHAR(255) NOT NULL,
+  friend_id VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(player_id, friend_id)
+);
+
+-- Friend requests (pending)
+CREATE TABLE friend_requests (
+  id SERIAL PRIMARY KEY,
+  from_player_id VARCHAR(255) NOT NULL,
+  to_player_id VARCHAR(255) NOT NULL,
+  status VARCHAR(50) DEFAULT 'pending',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(from_player_id, to_player_id)
+);
+
+-- Ignore list
+CREATE TABLE ignore_list (
+  id SERIAL PRIMARY KEY,
+  player_id VARCHAR(255) NOT NULL,
+  ignored_player_id VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(player_id, ignored_player_id)
+);
+```
+
+---
+
+## Private Messaging
+
+### Direct Messages
+
+Players can send private messages to friends:
+
+```typescript
+// Client → Server
+world.network.send('privateMessage', {
+  targetPlayerId: 'player-123',
+  message: 'Hello!',
+});
+
+// Server → Client
+{
+  type: 'privateMessage',
+  fromPlayerId: 'player-456',
+  fromPlayerName: 'Alice',
+  message: 'Hello!',
+  timestamp: 1234567890,
+}
+```
+
+### Message Types
+
+| Type | Description | Color |
+|------|-------------|-------|
+| `chat` | Public chat | White |
+| `whisper` | Private message | Purple |
+| `system` | System message | Yellow |
+| `trade_request` | Trade request | Pink |
+
+---
+
+## Online Status
+
+### Status Notifications
+
+Friends are notified when you:
+- **Log in**: "Alice has logged in"
+- **Log out**: "Alice has logged out"
+- **Change status**: Custom status messages (future feature)
+
+### Friend List Display
+
+```typescript
+interface FriendListEntry {
+  playerId: string;
+  playerName: string;
+  isOnline: boolean;
+  lastSeen?: Date;
+  combatLevel?: number;
+}
+```
+
+**UI Features:**
+- Green dot for online friends
+- Gray dot for offline friends
+- Last seen timestamp
+- Combat level display
+- Quick actions (Message, Trade, Remove)
+
+---
+
+## Network Protocol
+
+### Friend Requests
+
+**Send Request:**
+```typescript
+// Client → Server
+{
+  type: 'friendRequest',
+  targetPlayerId: 'player-123',
+}
+
+// Server → Target Player
+{
+  type: 'friendRequestReceived',
+  fromPlayerId: 'player-456',
+  fromPlayerName: 'Alice',
+  fromPlayerLevel: 42,
+}
+```
+
+**Respond to Request:**
+```typescript
+// Client → Server
+{
+  type: 'friendRequestRespond',
+  requestId: 'req-789',
+  accept: true,  // or false
+}
+
+// Server → Both Players (if accepted)
+{
+  type: 'friendAdded',
+  friendId: 'player-123',
+  friendName: 'Bob',
+  isOnline: true,
+}
+```
+
+### Friend Removal
+
+```typescript
+// Client → Server
+{
+  type: 'removeFriend',
+  friendId: 'player-123',
+}
+
+// Server → Client
+{
+  type: 'friendRemoved',
+  friendId: 'player-123',
+}
+```
+
+---
+
+## UI Components
+
+### Friends Panel
+
+Located in `packages/client/src/game/panels/FriendsPanel.tsx`:
+
+**Features:**
+- Friend list with online status indicators
+- Pending friend requests section
+- Quick actions (Message, Trade, Remove)
+- Search/filter functionality
+- Compact design with theme colors
+
+**Layout:**
+```
+┌─────────────────────────┐
+│ Friends Panel           │
+├─────────────────────────┤
+│ 🟢 Alice (Lv 42)        │
+│ 🟢 Bob (Lv 38)          │
+│ ⚫ Charlie (Lv 55)      │
+├─────────────────────────┤
+│ Pending Requests (2)    │
+│ Dave wants to be friends│
+│ [Accept] [Decline]      │
+└─────────────────────────┘
+```
+
+---
+
+## Security
+
+### Spam Prevention
+
+- **Rate Limiting**: 10 friend requests per minute
+- **Duplicate Prevention**: Can't send multiple requests to same player
+- **Validation**: Player existence checked before sending request
+
+### Privacy
+
+- **Ignore List**: Block unwanted messages and requests
+- **Friend-Only Messaging**: Private messages only work between friends
+- **Status Privacy**: Online status only visible to friends
+
+---
+
+## Future Features
+
+<Info>
+Planned social features for future releases:
+- Clan/guild system
+- Group chat channels
+- Player profiles with stats
+- Achievement sharing
+- Friend activity feed
+</Info>
+
+---
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Trading System" icon="handshake" href="/wiki/game-systems/trading">
+    Player-to-player trading mechanics
+  </Card>
+  <Card title="Chat System" icon="message-square" href="/wiki/client/overview">
+    Chat interface and message types
+  </Card>
+  <Card title="Network Protocol" icon="network-wired" href="/api-reference/overview">
+    WebSocket event structure
+  </Card>
+  <Card title="Database Schema" icon="database" href="/wiki/engine/database">
+    Database tables and relationships
+  </Card>
+</CardGroup>
