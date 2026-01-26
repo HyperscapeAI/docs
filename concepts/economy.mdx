@@ -171,8 +171,58 @@ flowchart LR
 | Oak | 10 | Oak Bow |
 | Willow | 20 | Willow Bow |
 
+## Player Trading
+
+### Trade System
+
+Players can trade items directly with each other using an OSRS-style two-screen confirmation flow:
+
+#### Initiating a Trade
+
+1. Right-click another player
+2. Select "Trade with [Player Name]"
+3. If not adjacent, your character walks to them automatically
+4. Trade request appears as pink clickable chat message
+
+#### Trade Flow
+
+**Offer Screen:**
+- Add items by left-clicking inventory items (adds 1)
+- Right-click for context menu: Offer-1, Offer-5, Offer-10, Offer-X, Offer-All
+- Remove items by clicking them in your trade offer
+- Both players must accept to proceed
+
+**Confirmation Screen:**
+- Final review of both offers
+- Wealth transfer indicator shows value difference
+- Both players must accept again to complete
+- Trade executes atomically (no item duplication possible)
+
+#### Anti-Scam Features
+
+| Feature | Description |
+|---------|-------------|
+| **Two-Screen Flow** | Must accept twice (offer + confirm) |
+| **Removal Warning** | Red flashing exclamation when items removed |
+| **Wealth Indicator** | Shows if you're gaining/losing value (green/red) |
+| **Free Slots** | Displays partner's available inventory space |
+| **Value Warning** | ⚠️ if wealth difference >50% of offer |
+
+#### Security
+
+- Server-authoritative state management
+- Atomic database transactions
+- Inventory locks during swap
+- Proximity validation (must be adjacent)
+- Rate limiting on requests
+- Tradeable flag enforcement
+
+<Tip>
+  Trade requests appear as pink clickable messages in chat. Click to accept instantly.
+</Tip>
+
 ## Future Features
 
 <Info>
-  Player-to-player trading and a Grand Exchange are planned but not in MVP scope.
+  A Grand Exchange (automated marketplace) is planned for future updates.
 </Info>
