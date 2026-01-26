@@ -23,6 +23,192 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Trading System, Terrain Flattening & UI Overhaul" description="January 2026" date="2026-01-26">
+
+### 🏞️ Terrain Flattening System
+
+Stations now automatically flatten terrain underneath for level building surfaces:
+
+- **Flat Zone System**: Rectangular areas where terrain is flattened to a target height
+  - Configured per-station via `flattenGround`, `flattenPadding`, `flattenBlendRadius` in `stations.json`
+  - Spatial indexing using terrain tiles (100m) for O(1) lookup performance
+  - Smoothstep blending (t² × (3 - 2t)) creates natural transitions to procedural terrain
+  - Supports dynamic registration/unregistration for player-placed structures
+- **Station Manifest Integration**: New optional fields in station definitions
+  - `flattenGround: boolean` — Enable terrain flattening (default: false)
+  - `flattenPadding: number` — Extra meters around footprint to flatten (default: 0.3)
+  - `flattenBlendRadius: number` — Blend distance to procedural terrain (default: 0.5)
+- **Terrain System Updates**: Enhanced height calculation with flat zone priority
+  - Flat zones checked first, procedural terrain as fallback
+  - Increased terrain bumpiness (hillScale: 0.012→0.02) to make flat zones more visible
+  - Adjusted MAX_HEIGHT (30m→50m) for more dramatic terrain variation
+- **World Area Loading**: Flat zones loaded from `world-areas.json` after DataManager ready
+  - Automatic footprint calculation from station model bounds
+  - Debug logging for troubleshooting flat zone registration
+- **API**: New TerrainSystem interface methods
+  - `registerFlatZone(zone: FlatZone): void` — Register flat zone
+  - `unregisterFlatZone(id: string): void` — Remove flat zone
+  - `getFlatZoneAt(worldX, worldZ): FlatZone | null` — Query flat zone at position
+
+### 💱 Trading System Upgrade
+
+Complete overhaul of player-to-player trading with OSRS-accurate two-screen confirmation flow:
+
+- **Two-Screen Confirmation**: Offer screen → Confirmation screen prevents scams
+  - First screen: Add/remove items, both players accept
+  - Second screen: Review final trade, both players confirm
+  - Acceptance resets if items change (OSRS-accurate)
+- **Click-Based UI**: Replaced drag-and-drop with OSRS-style click interactions
+  - Left-click inventory item: Add 1 to trade
+  - Right-click inventory item: Context menu (Offer-1, Offer-5, Offer-10, Offer-X, Offer-All, Value, Examine)
+  - Click trade slot: Remove item from offer
+- **Anti-Scam Features**:
+  - Red flashing exclamation when items removed from trade
+  - Wealth transfer indicator shows value difference (green = gaining, red = losing)
+  - Warning icon if value difference >50% of larger offer
+  - Partner's free inventory slots displayed (prevents failed trades)
+- **Proximity System**: Players walk to target before trading if out of range
+  - New `PendingTradeManager` handles automatic pathfinding
+  - Re-paths if target moves during approach
+  - Cancels on new click or disconnect
+- **Interface Blocking**: Can't trade while using bank/store/dialogue
+- **Chat Integration**: Pink clickable trade request messages (OSRS-style)
+- **Modular Architecture**: Split 1,105-line handler into focused modules
+  - `request.ts` — Trade request initiation and response
+  - `items.ts` — Add, remove, set quantity
+  - `acceptance.ts` — Accept, cancel, complete
+  - `swap.ts` — Atomic item swap execution
+  - `helpers.ts` — Shared utilities
+- **Security**: Tradeable flag enforcement, atomic swaps, inventory validation
+- **Testing**: 291 lines of integration tests with real TradingSystem
+
+### 🎨 UI System Consolidation
+
+Removed `hs-kit` package and consolidated all UI into client:
+
+- **Package Removal**: Deleted `packages/hs-kit/` entirely (80+ files, ~18k lines)
+- **UI Migration**: All components moved to `packages/client/src/ui/`
+  - `ui/components/` — Window, Tab, Drag, Modal, etc.
+  - `ui/controls/` — Slider, Toggle, Color, Keybind, Select
+  - `ui/core/` — Drag-and-drop, edit mode, presets, responsive, tabs, tooltip, window
+  - `ui/stores/` — Zustand stores for UI state
+  - `ui/theme/` — Theme system and animations
+- **Game Components**: Organized into `packages/client/src/game/components/`
+  - `chat/` — ChatBox, ChatMessage, ChatInput, ChatTabs
+  - `currency/` — CurrencyDisplay, CurrencyExchange, CurrencyInput
+  - `dialog/` — DialogBox, DialogChoices, DialogHistory
+  - `equipment/` — EquipmentPanel, EquipmentSlot, StatsSummary
+  - `map/` — WorldMap, MapMarker, MapControls
+  - `quest/` — QuestLog, QuestEntry, QuestTracker
+  - `settings/` — SettingsPanel, SettingsCategory, SettingsControl
+  - `skilltree/` — SkillTree, SkillNode, SkillTooltip
+- **Drag-and-Drop Improvements**:
+  - Fixed race conditions in `useDrop` hook
+  - Consolidated 6 refs into single `savedStateRef` object
+  - Combined 3 effects into 2 for better performance
+  - Added keyboard and pointer accessibility support
+- **Build Optimization**: Removed conditional hs-kit build steps from CI workflows
+
+### 🎯 Responsive UI System
+
+Anchor-based positioning system for proper scaling across screen sizes:
+
+- **Anchor System**: Windows maintain position relative to viewport anchors
+  - 9 anchor points: corners, edges, center (Unity/Unreal-style)
+  - Windows store offset from anchor instead of absolute position
+  - Proper scaling when resizing between mobile and desktop
+- **Default Anchors**: Sensible defaults for each window type
+  - Chat, Skills: bottom-left
+  - Minimap: top-right
+  - Inventory, Menubar: bottom-right
+  - Action bar: bottom-center
+- **Migration**: Automatic anchor detection for existing saved layouts (v13)
+- **Mobile Transitions**: Fixed window clustering when switching mobile→desktop
+  - Uses default layout positions instead of scaled mobile positions
+  - Stacking offsets prevent overlapping windows with same anchor
+
+### ⚔️ Combat Style Enhancements
+
+Combat styles now draggable to action bar with visual feedback:
+
+- **Draggable Styles**: Accurate, Aggressive, Defensive, Controlled can be dragged to action bar
+- **Active State Tracking**: Combat style slots glow when that style is active
+- **SVG Icons**: Distinct icons for each combat style
+  - Accurate: Target/bullseye (🎯 style)
+  - Aggressive: Double chevrons (⚔️ style)
+  - Defensive: Shield (🛡️ style)
+  - Controlled: Balance symbol (⚖️ style)
+- **Color Coding**: Icons change color based on active state
+  - Accurate: red (#ef4444)
+  - Aggressive: green (#22c55e)
+  - Defensive: blue (#3b82f6)
+  - Controlled: purple (#a855f7)
+- **Event Synchronization**: Tracks active style via `UI_ATTACK_STYLE_UPDATE` events
+
+### 👥 Social Features
+
+Comprehensive friend management and private messaging system:
+
+- **Friend Management**:
+  - Send, accept, decline, and remove friend requests
+  - Online status notifications for friends
+  - Friend list synchronization on login
+- **Private Messaging**: Direct messages between players
+- **Database Schema**: New tables for friendships, friend requests, ignore lists
+- **UI Components**: Friend status display and notifications
+- **Network Integration**: Real-time friend status updates
+
+### 🐛 Equipment System Fixes
+
+Fixed critical item duplication bugs during equip/unequip:
+
+- **Transaction Locks**: Prevent race conditions during concurrent operations
+- **Atomic Operations**: Proper order of operations prevents duplication and item loss
+  - `equipItem`: Remove from inventory FIRST, then equip (rollback if removal fails)
+  - `unequipItem`: Clear equipment slot FIRST, then add to inventory (restore if add fails)
+- **New Helper Methods**:
+  - `hasSpace(playerId, slotsNeeded)` — Check inventory capacity
+  - `hasItemAtSlot(playerId, itemId, slot)` — Verify item at specific slot
+  - `removeItemDirect(playerId, params)` — Synchronous removal with return value
+  - `addItemDirect(playerId, params)` — Synchronous add with return value
+
+### 🔧 Plugin TypeScript Fixes
+
+Resolved 70 TypeScript build errors in `@hyperscape/plugin-hyperscape`:
+
+- **Local Type Definitions**: Core types (World, Entity, System, Player) defined locally instead of importing from built package
+- **THREE.js Imports**: Import types directly from 'three' package instead of THREE namespace
+- **PhysX Types**: Define PxVec3, PxTransform, PxQuat locally
+- **Export Type**: Use `export type` for type-only re-exports (satisfies isolatedModules)
+- **Build Success**: Package now builds cleanly with zero errors
+
+### 🎨 UI Polish
+
+- **Theme Consistency**: Inventory slots, equipment panel, panel backgrounds use consistent theme colors
+- **Combat Panel**: Compact design with SVG icons, red HP bar (OSRS-style)
+- **Quest Log**: Cleaner headers, slot.filled colors, reduced borders
+- **Equipment Panel**: Removed button labels (icons only), aligned colors with theme
+- **Status Bars**: Compact sizing with improved visual hierarchy
+- **Prayer Panel**: Dynamic prayer icon mapping and loading states
+
+### 🔐 Security Improvements
+
+- **Auto-Reconnect**: Disconnected screen now shows countdown timer with manual reconnect option
+- **URL Validation**: AgentDynamicPanel validates panel URLs to prevent unsafe protocols
+- **XSS Prevention**: ChatMessage sanitizes content and validates URLs
+- **Error Handling**: Improved JSON parsing with graceful fallback for corrupted tokens
+- **CSRF Token**: Cleared on logout for security
+
+### 🧹 Code Quality
+
+- **Error Boundary**: Wrapped UI screens (Login, CharacterSelect, GameClient) for better error handling
+- **Memory Optimization**: Memoized components (ChatBox, SettingsCategory, SettingsControl) prevent unnecessary re-renders
+- **Event Cleanup**: Named handlers for character selection events ensure proper cleanup
+- **Accessibility**: Skip links and keyboard navigation support added to UI components
+- **Dependency Cleanup**: Removed unused styled-components and type definitions
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
