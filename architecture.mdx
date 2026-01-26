@@ -78,16 +78,28 @@ Game server built with:
 
 - **Fastify 5**: HTTP API with rate limiting
 - **WebSockets**: Real-time game state via `@fastify/websocket`
-- **PostgreSQL/SQLite**: Database persistence
+- **PostgreSQL**: Database persistence (Drizzle ORM)
 - **LiveKit**: Voice chat integration
+- **Trading System**: Player-to-player trading with atomic swaps
+- **Social System**: Friend management and private messaging
 
 **Key directories:**
 ```
 packages/server/src/
-├── database/       # Database schema and queries
+├── database/       # Database schema and repositories
+│   ├── repositories/  # Data access layer (Inventory, Bank, Character, etc.)
+│   ├── migrations/    # Database migrations
+│   └── schema.ts      # Drizzle schema definitions
 ├── infrastructure/ # Docker, CDN configuration
 ├── startup/        # Server initialization
 ├── systems/        # Server-specific systems
+│   ├── ServerNetwork/  # Network handlers
+│   │   ├── handlers/   # Packet handlers (trade, bank, combat, friends, etc.)
+│   │   ├── PendingTradeManager.ts  # Walk-to-trade behavior
+│   │   ├── FollowManager.ts        # Follow player behavior
+│   │   └── InteractionSessionManager.ts  # UI session tracking
+│   ├── TradingSystem/  # Trade session management
+│   └── TickSystem.ts   # Game tick processing
 └── index.ts        # Entry point
 ```
 
