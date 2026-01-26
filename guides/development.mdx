@@ -130,6 +130,31 @@ Requires `CLAUDE_CODE_OAUTH_TOKEN` and `MINTLIFY_API_KEY` secrets to be configur
 2. Hot reload applies automatically
 3. Test in browser at localhost:3333
 
+### Adding UI Components
+
+1. Create component in `packages/client/src/ui/components/`
+2. Add to barrel export in `index.ts`
+3. Import via `@/ui` alias
+4. Use theme tokens from `useThemeStore`
+
+```typescript
+// Example: Creating a new UI component
+import { useThemeStore } from '@/ui';
+
+export function MyComponent() {
+  const theme = useThemeStore((s) => s.theme);
+  
+  return (
+    <div style={{ 
+      background: theme.colors.background.primary,
+      border: `1px solid ${theme.colors.border.default}`,
+    }}>
+      Content
+    </div>
+  );
+}
+```
+
 ### Updating Game Content
 
 1. Edit manifest files in `world/assets/manifests/`
