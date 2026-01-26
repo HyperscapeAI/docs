@@ -102,6 +102,12 @@ ws.onmessage = (event) => {
 | `inventory:use` | Use inventory item |
 | `bank:deposit` | Deposit item to bank |
 | `bank:withdraw` | Withdraw item from bank |
+| `tradeRequest` | Request trade with another player |
+| `tradeRequestRespond` | Accept/decline trade request |
+| `tradeAddItem` | Add item to trade offer |
+| `tradeRemoveItem` | Remove item from trade offer |
+| `tradeAccept` | Accept current trade state |
+| `tradeCancel` | Cancel trade |
 
 ### Server → Client Events
 
@@ -112,6 +118,63 @@ ws.onmessage = (event) => {
 | `combat:hit` | Combat hit event |
 | `skill:xp` | Skill XP gained |
 | `chat:message` | Chat message received |
+| `tradeIncoming` | Trade request received |
+| `tradeStarted` | Trade session started |
+| `tradeUpdated` | Trade offer changed |
+| `tradeConfirmScreen` | Move to confirmation screen |
+| `tradeCompleted` | Trade completed successfully |
+| `tradeCancelled` | Trade cancelled |
+| `tradeError` | Trade error occurred |
+
+### Trading Protocol
+
+<Accordion title="Trade Request Flow">
+```mermaid
+sequenceDiagram
+    participant P1 as Player 1
+    participant Server
+    participant P2 as Player 2
+    
+    P1->>Server: tradeRequest { targetPlayerId }
+    Server->>P2: tradeIncoming { tradeId, fromPlayerId, fromPlayerName }
+    P2->>Server: tradeRequestRespond { tradeId, accept: true }
+    Server->>P1: tradeStarted { tradeId, partnerId, partnerName }
+    Server->>P2: tradeStarted { tradeId, partnerId, partnerName }
+```
+</Accordion>
+
+<Accordion title="Trade Offer Flow">
+```mermaid
+sequenceDiagram
+    participant P1 as Player 1
+    participant Server
+    participant P2 as Player 2
+    
+    P1->>Server: tradeAddItem { tradeId, inventorySlot, quantity }
+    Server->>P1: tradeUpdated { myOffer, theirOffer }
+    Server->>P2: tradeUpdated { myOffer, theirOffer }
+    
+    P1->>Server: tradeAccept { tradeId }
+    P2->>Server: tradeAccept { tradeId }
+    Server->>P1: tradeConfirmScreen { myOffer, theirOffer, values }
+    Server->>P2: tradeConfirmScreen { myOffer, theirOffer, values }
+```
+</Accordion>
+
+<Accordion title="Trade Completion Flow">
+```mermaid
+sequenceDiagram
+    participant P1 as Player 1
+    participant Server
+    participant P2 as Player 2
+    
+    P1->>Server: tradeAccept { tradeId } (on confirm screen)
+    P2->>Server: tradeAccept { tradeId } (on confirm screen)
+    Server->>Server: Atomic item swap (database transaction)
+    Server->>P1: tradeCompleted { receivedItems }
+    Server->>P2: tradeCompleted { receivedItems }
+```
+</Accordion>
 
 ## Rate Limits
 
