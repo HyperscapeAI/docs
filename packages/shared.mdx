@@ -83,15 +83,15 @@ Located in `src/systems/shared/`:
 
 | Category | Systems |
 |----------|---------|
-| `character/` | Character stats, equipment, skills |
-| `combat/` | Combat mechanics, damage, death |
-| `death/` | Death handling, respawn |
-| `economy/` | Banks, shops, trading |
-| `entities/` | Entity lifecycle management |
-| `interaction/` | Player-world interactions |
-| `movement/` | Tile-based movement, collision, pathfinding |
-| `presentation/` | Visual rendering |
-| `world/` | World management |
+| `character/` | Character stats, equipment (with atomic operations), skills, inventory (with transaction locks), prayer, coin pouch |
+| `combat/` | Combat mechanics, damage, death, aggro, animations |
+| `death/` | Death handling, respawn, safe area vs wilderness |
+| `economy/` | Banks, shops, trading (player-to-player), loot, ground items |
+| `entities/` | Entity lifecycle management, spawning, gathering, processing |
+| `interaction/` | Player-world interactions, cooking, firemaking, smelting, smithing |
+| `movement/` | Tile-based movement, collision, pathfinding, chase behavior |
+| `presentation/` | Visual rendering, particles, music |
+| `world/` | World management, terrain (with flat zones), water, vegetation, roads |
 
 ### Collision System
 
