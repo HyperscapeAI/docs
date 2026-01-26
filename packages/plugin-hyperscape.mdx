@@ -164,6 +164,67 @@ flowchart TD
 | `ws` | ^8.18.3 | WebSocket client |
 | `zod` | ^3.25.67 | Schema validation |
 
+## Type System
+
+<Warning>
+**Breaking Change (PR #629)**: The plugin now uses **local type definitions** instead of importing from `@hyperscape/shared` to fix TypeScript build errors with `isolatedModules`.
+</Warning>
+
+### Local Type Definitions
+
+Core types are defined in `src/types/core-types.ts`:
+
+```typescript
+// Local type aliases for THREE types
+export type Vector3 = THREEVector3;
+export type Quaternion = THREEQuaternion;
+export type Object3D = THREEObject3D;
+
+// World type as instance type of WorldClass
+export type World = InstanceType<typeof WorldClass>;
+
+// System type based on SystemClass
+export type System = InstanceType<typeof SystemClass>;
+
+// Entity interface defined locally
+export interface Entity {
+  id: string;
+  type: string;
+  data?: Record<string, unknown>;
+  node: {
+    position: Vector3;
+    quaternion: Quaternion;
+    visible?: boolean;
+  };
+  velocity?: Vector3;
+  speed?: number;
+  isMoving?: boolean;
+}
+
+// Player interface extends Entity
+export interface Player extends Entity {
+  username?: string;
+  input?: PlayerInput;
+  stats?: PlayerStats;
+  health?: { current: number; max: number };
+  inventory?: unknown;
+  equipment?: unknown;
+}
+```
+
+### Why Local Types?
+
+The plugin uses `isolatedModules: true` (required by ElizaOS), which prevents importing class values as types. Local type definitions solve this by:
+
+1. Importing THREE types directly from `'three'` package
+2. Defining PhysX types locally (PxVec3, PxTransform, PxQuat)
+3. Using `InstanceType<typeof WorldClass>` for World type
+4. Defining Entity, Player, System interfaces locally
+
+<Info>
+This approach ensures the plugin builds successfully while maintaining type safety and compatibility with ElizaOS.
+</Info>
+
 ## Building
 
 ```bash
