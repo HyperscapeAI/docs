@@ -23,6 +23,55 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Duel Arena & UI Enhancements" description="January 2026" date="2026-01-27">
+
+### ⚔️ Duel Arena System (PR #685)
+
+Complete player-vs-player dueling system with OSRS-accurate mechanics (15,066 additions, 85 files changed):
+
+- **Multi-Stage Negotiation**: 6-phase state machine (Challenge → Rules → Stakes → Confirm → Countdown → Fighting → Finished)
+- **10 Combat Rules**: No ranged, no melee, no magic, no food, no forfeit, no movement, etc.
+- **11 Equipment Restrictions**: Disable specific equipment slots before combat
+- **Item Staking**: Bet inventory items with anti-scam protection
+- **6 Dedicated Arenas**: 2×3 grid with wall collision, terrain flattening, forfeit pillars
+- **Server Architecture** (SOLID principles):
+  - `DuelSystem` (1600+ lines), `DuelSessionManager` (290 lines)
+  - `PendingDuelManager` (310 lines), `ArenaPoolManager` (260 lines)
+  - `DuelCombatResolver` (280 lines)
+- **Client UI**: 8 components (DuelPanel, DuelCountdown, DuelHUD, DuelResultModal, etc.)
+- **Testing**: 1,755 lines of unit tests with 100% critical path coverage
+- **Network Protocol**: 21 typed events for client-server communication
+- **Disconnect Handling**: 30s grace period, auto-forfeit, reconnect support
+
+### 🎨 UI Improvements & Mobile Enhancements (PR #656)
+
+Major UI refactoring with mobile support and accessibility:
+
+- **RS3-Style Keyboard Shortcuts**: 5 action bars with modifier keys (Ctrl, Shift, Alt)
+  - 70 total keybinds across all bars
+  - Modifier symbols on slots (^1, ⇧2, ⌥3)
+- **Vertical Action Bars**: Mobile-optimized layout with shared state
+- **Chat Filtering**: Proper tab-based filtering (All/Game/Clan/Private)
+  - Extended message types including `duel_challenge`
+  - Clickable duel challenges (red underlined text)
+- **Edit Mode Refactor**: Hold-to-toggle with progress indicator, Escape to exit
+- **Delete Zone**: Drag panels to trash to remove them
+- **Responsive Menu Bar**: Auto-reflow between 1-5 rows based on container size
+- **Panel Size Increase**: All panels scaled up ~30% for readability
+- **Theme Updates**: New `panelPrimary`/`panelSecondary` colors, improved contrast
+- **Type Safety**: Proper event payload types for ActionBar, Prayer, AttackStyle
+- **Performance**: Memoized styles, race condition fixes, debug log cleanup
+- **Inventory Cross-Tab Isolation**: Fixed updates affecting other browser tabs
+
+### 🔧 Code Quality
+
+- **Law of Demeter**: Helper methods on `PlayerEntity` and `World`
+- **Exhaustive Switches**: `assertNever()` for type-safe state machines
+- **Logger Service**: Structured logging replaces console.log
+- **Memoized Styles**: `useMemo` hooks prevent unnecessary re-renders
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
