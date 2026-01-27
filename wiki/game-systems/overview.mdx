@@ -87,6 +87,32 @@ The combat system implements OSRS-style tick-based combat with 20+ supporting fi
   Combat runs on a 600ms tick cycle, matching Old School RuneScape exactly.
 </Tip>
 
+### Duel Arena System
+
+**Location:** `packages/server/src/systems/DuelSystem/`
+
+Player-vs-player dueling with stakes and customizable rules:
+
+| Component | Purpose |
+|-----------|---------|
+| `DuelSystem` | Main orchestrator, state machine (1600+ lines) |
+| `DuelSessionManager` | Session CRUD, player mapping (290 lines) |
+| `PendingDuelManager` | Challenge lifecycle, timeouts (310 lines) |
+| `ArenaPoolManager` | Arena reservation, spawn points (260 lines) |
+| `DuelCombatResolver` | Combat resolution, stake transfers (280 lines) |
+
+**Features:**
+- 10 toggleable combat rules (no ranged, no food, no forfeit, etc.)
+- 11 equipment slot restrictions
+- Item staking with anti-scam protection
+- 6 dedicated arenas with wall collision
+- Disconnect handling (30s grace period)
+- Comprehensive unit tests (1700+ lines)
+
+<Info>
+See [Duel Arena System](/wiki/game-systems/duel-arena) for complete documentation.
+</Info>
+
 ### Economy Systems
 
 **Location:** `systems/shared/economy/`
