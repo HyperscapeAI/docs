@@ -794,7 +794,13 @@ await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
   </Step>
 </Steps>
 
-### Production Manifest Updates
+- **Items**: `manifests/items/weapons.json`, `tools.json`, `resources.json`, `food.json`, or `misc.json`
+- **NPCs/Mobs**: `manifests/npcs.json`
+- **Gathering Resources**: `manifests/gathering/woodcutting.json`, `mining.json`, or `fishing.json`
+- **Processing Recipes**: `manifests/recipes/cooking.json`, `firemaking.json`, `smelting.json`, or `smithing.json`
+- **Stations**: `manifests/stations.json`
+- **Quests**: `manifests/quests.json`
+- **World Areas**: `manifests/world-areas.json`
 
 You can update manifests in production without redeploying the server:
 
@@ -900,68 +906,92 @@ const yOffset = stationDataProvider.getModelYOffset("furnace");
 
 ### Quests (`quests.json`)
 
-The `quests.json` manifest defines multi-stage quests with requirements and rewards:
+The `quests.json` manifest defines quest content with stages, requirements, and rewards:
 
 ```json
 {
-  \"goblin_slayer\": {
-    \"id\": \"goblin_slayer\",
-    \"name\": \"Goblin Slayer\",
-    \"description\": \"Kill 15 goblins to prove your worth.\",
-    \"difficulty\": \"novice\",
-    \"questPoints\": 1,
-    \"replayable\": false,
-    \"requirements\": {
-      \"quests\": [],
-      \"skills\": {},
-      \"items\": []
+  "goblin_slayer": {
+    "id": "goblin_slayer",
+    "name": "Goblin Slayer",
+    "description": "Captain Rowan needs help dealing with the goblin threat.",
+    "difficulty": "novice",
+    "questPoints": 1,
+    "replayable": false,
+    "requirements": {
+      "quests": [],
+      "skills": {},
+      "items": []
     },
-    \"startNpc\": \"cook\",
-    \"stages\": [
+    "startNpc": "captain_rowan",
+    "stages": [
       {
-        \"id\": \"talk_to_cook\",
-        \"type\": \"dialogue\",
-        \"description\": \"Talk to the Cook to start the quest.\"
+        "id": "start",
+        "type": "dialogue",
+        "description": "Speak to Captain Rowan in Central Haven",
+        "npcId": "captain_rowan"
       },
       {
-        \"id\": \"kill_goblins\",
-        \"type\": \"kill\",
-        \"description\": \"Kill 15 goblins.\",
-        \"target\": \"goblin\",
-        \"count\": 15
+        "id": "kill_goblins",
+        "type": "kill",
+        "description": "Kill 15 goblins",
+        "target": "goblin",
+        "count": 15
       },
       {
-        \"id\": \"return_to_cook\",
-        \"type\": \"dialogue\",
-        \"description\": \"Return to the Cook.\"
+        "id": "return",
+        "type": "dialogue",
+        "description": "Return to Captain Rowan",
+        "npcId": "captain_rowan"
       }
     ],
-    \"onStart\": {
-      \"items\": [{ \"itemId\": \"bronze_sword\", \"quantity\": 1 }]
+    "onStart": {
+      "items": [
+        { "itemId": "bronze_sword", "quantity": 1 }
+      ],
+      "dialogue": "quest_accepted"
     },
-    \"rewards\": {
-      \"questPoints\": 1,
-      \"items\": [{ \"itemId\": \"xp_lamp_1000\", \"quantity\": 1 }],
-      \"xp\": { \"attack\": 500, \"strength\": 500 }
+    "rewards": {
+      "questPoints": 1,
+      "items": [
+        { "itemId": "xp_lamp_100", "quantity": 1 }
+      ],
+      "xp": {}
     }
   }
 }
 ```
 
-**Stage Types**:
-- `dialogue` — Talk to an NPC
-- `kill` — Kill specific NPCs (with HMAC validation)
-- `gather` — Collect items via gathering skills
-- `interact` — Use objects/stations (fires, cooking, smithing)
+**Properties**:
+- `id` — Unique quest identifier
+- `name` — Display name shown in quest log
+- `description` — Brief quest summary
+- `difficulty` — Quest difficulty: `novice`, `intermediate`, `experienced`, `master`
+- `questPoints` — Quest points awarded on completion
+- `replayable` — Whether quest can be repeated after completion
+- `requirements` — Prerequisites to start the quest
+  - `quests` — Required completed quests
+  - `skills` — Minimum skill levels (e.g., `{"woodcutting": 15}`)
+  - `items` — Required items in inventory
+- `startNpc` — NPC ID to start the quest
+- `stages` — Ordered list of quest objectives
+  - `type` — Stage type: `dialogue`, `kill`, `gather`, `interact`
+  - `description` — Objective description shown to player
+  - `target` — Target entity/item ID
+  - `count` — Required count for completion
+- `onStart` — Items and dialogue triggered when quest starts
+- `rewards` — Quest completion rewards
+  - `questPoints` — Quest points awarded
+  - `items` — Item rewards
+  - `xp` — Skill XP rewards (e.g., `{"attack": 100}`)
 
-**Security Features**:
-- Quest IDs validated with strict pattern (`/^[a-z][a-z0-9_]{0,63}$/`)
-- HMAC-SHA256 kill tokens prevent event spoofing
-- Rate limiting on quest network handlers
-- Audit logging for all quest state changes
+**Stage Types**:
+- **dialogue** — Talk to an NPC
+- **kill** — Defeat a specific number of enemies
+- **gather** — Collect resources (woodcutting, mining, fishing)
+- **interact** — Use items or interact with objects
 
 <Info>
-See [Quest System](/wiki/game-systems/quests) for complete documentation on quest mechanics and API reference.
+Quest progress is tracked server-side. Players can view active and completed quests in the quest log interface.
 </Info>
 
 ### Prayers (`prayers.json`)
@@ -1176,7 +1206,7 @@ DataManager loads manifests in this order:
 6. **Recipe manifests** (`recipes/*.json`)
 7. **Skill unlocks** (`skill-unlocks.json`)
 8. **Prayers** (`prayers.json`)
-9. **Quests** (`quests.json`) - Loaded by QuestSystem separately
+9. **Quests** (`quests.json`)
 10. **Stations** (`stations.json`) - Uses model bounds for footprints
 11. **World areas** (`world-areas.json`)
 12. **Stores** (`stores.json`)
