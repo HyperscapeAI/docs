@@ -1,74 +1,55 @@
 ---
 title: "Prayer System"
-description: "OSRS-accurate prayer mechanics with drain, bonuses, and altars"
+description: "OSRS-accurate prayer system with drain mechanics and combat bonuses"
 icon: "hands-praying"
 ---
 
 # Prayer System
 
-Hyperscape implements an **OSRS-accurate prayer system** with combat bonuses, prayer point drain, and altar recharging. Prayers provide temporary combat buffs at the cost of draining prayer points over time.
+Hyperscape implements an **OSRS-accurate prayer system** where players can activate prayers to gain temporary combat bonuses at the cost of prayer points. The system features authentic drain mechanics, prayer conflicts, and altar recharging.
 
 <Info>
-Prayer code lives in `packages/shared/src/systems/shared/character/PrayerSystem.ts` with data loaded from `manifests/prayers.json`.
+Prayer code lives in `packages/shared/src/systems/shared/character/PrayerSystem.ts` with data-driven prayer definitions in `manifests/prayers.json`.
 </Info>
 
-## Core Mechanics
+## Core Concepts
 
 ### Prayer Points
 
-Prayer points are a resource that drains while prayers are active:
-
-- **Maximum points** equals your Prayer level (1-99)
-- **Starting points** = 1 (at level 1)
-- **Drain rate** depends on active prayers and prayer bonus from equipment
-- **Recharge** at altars to restore points to maximum
+Prayer points are a resource that drains over time when prayers are active. Players start with prayer points equal to their Prayer level.
 
 ```typescript
-// Prayer points calculation
-maxPrayerPoints = prayerLevel; // 1-99
-currentPoints = 0.0 to maxPoints; // Fractional for precise drain
+// Maximum prayer points = Prayer level
+maxPrayerPoints = prayerLevel;
+
+// Display points use Math.ceil() to prevent showing 0 when 0.98 points remain
+displayPoints = Math.ceil(currentPoints);
 ```
 
-### Prayer Drain Formula
+### Prayer Drain
 
-Prayer drain uses the authentic OSRS formula:
+Prayers drain points based on their `drainEffect` value and the player's Prayer bonus from equipment.
 
 ```typescript
-// OSRS drain formula
+// OSRS-accurate drain formula
 drainResistance = 2 × prayerBonus + 60;
-pointsDrainedPerTick = totalDrainEffect / drainResistance;
 
-// Example: Thick Skin (drain 3) with 0 prayer bonus
-// drainResistance = 2 × 0 + 60 = 60
-// pointsDrained = 3 / 60 = 0.05 per tick (600ms)
-// Time to drain 10 points = 10 / 0.05 = 200 ticks = 120 seconds
+// Points drained per minute
+pointsPerMinute = drainEffect × 60 / drainResistance;
+
+// Points drained per tick (600ms)
+pointsPerTick = pointsPerMinute / 100;
 ```
-
-**Drain Constants:**
-- **Game tick**: 600ms (OSRS standard)
-- **Base resistance**: 60
-- **Prayer bonus multiplier**: 2
 
 <Info>
-Prayer bonus comes from equipment (not yet implemented). Higher prayer bonus = slower drain.
+**OSRS Accuracy**: The drain formula matches Old School RuneScape exactly. Higher Prayer bonus from equipment reduces drain rate.
 </Info>
-
-### Display Points
-
-Prayer points are stored as fractional values for precise drain but displayed as whole numbers:
-
-```typescript
-// Display uses Math.ceil() to prevent showing 0 when 0.98 points remain
-displayPoints = points <= 0 ? 0 : Math.ceil(points);
-```
-
-This matches OSRS behavior where the UI shows the next higher number until truly depleted.
 
 ---
 
 ## Available Prayers
 
-Prayers are defined in `manifests/prayers.json` and loaded by `PrayerDataProvider`.
+Prayers are defined in `manifests/prayers.json` and loaded via `PrayerDataProvider`.
 
 ### Defensive Prayers
 
@@ -86,317 +67,586 @@ Prayers are defined in `manifests/prayers.json` and loaded by `PrayerDataProvide
 | **Superhuman Strength** | 13 | ⚡ | +10% Strength | 6/min |
 
 <Info>
-More prayers can be added by editing `manifests/prayers.json` without code changes.
+Prayer definitions are manifest-driven, allowing easy content updates without code changes. See `packages/server/world/assets/manifests/prayers.json` for the complete list.
 </Info>
 
 ---
 
 ## Prayer Activation
 
-### Requirements
+### Toggle Prayer
 
-To activate a prayer, you must have:
+Players can activate/deactivate prayers through the Skills Panel (Prayer tab):
 
-1. **Sufficient Prayer level** (prayer.level >= required level)
-2. **Prayer points remaining** (points > 0)
-3. **No conflicting prayers** active
-4. **Under max active limit** (5 prayers maximum)
+```typescript
+// Client sends toggle request
+world.network.send("prayerToggle", {
+  prayerId: "thick_skin",
+  timestamp: Date.now(),
+});
+
+// Server validates and processes
+world.emit(EventType.PRAYER_TOGGLE, {
+  playerId,
+  prayerId: "thick_skin",
+});
+```
+
+### Validation Rules
+
+The system validates prayer activation against multiple criteria:
+
+```typescript
+// From PrayerDataProvider.ts
+canActivatePrayer(
+  prayerId: string,
+  prayerLevel: number,
+  currentPoints: number,
+  activePrayers: readonly string[],
+): { valid: boolean; reason?: string } {
+  // 1. Prayer exists
+  if (!prayer) return { valid: false, reason: "Prayer does not exist" };
+
+  // 2. Not already active
+  if (activePrayers.includes(prayerId)) {
+    return { valid: false, reason: "Prayer is already active" };
+  }
+
+  // 3. Level requirement
+  if (prayerLevel < prayer.level) {
+    return { valid: false, reason: `Requires prayer level ${prayer.level}` };
+  }
+
+  // 4. Prayer points
+  if (currentPoints <= 0) {
+    return { valid: false, reason: "No prayer points remaining" };
+  }
+
+  // 5. Max active prayers (6)
+  if (activePrayers.length >= MAX_ACTIVE_PRAYERS) {
+    return { valid: false, reason: "Cannot have more than 6 prayers active" };
+  }
+
+  return { valid: true };
+}
+```
+
+---
+
+## Prayer Conflicts
+
+Some prayers conflict with each other and cannot be active simultaneously.
 
 ### Conflict Resolution
 
-Some prayers conflict with each other (e.g., Thick Skin vs Rock Skin). When activating a prayer:
-
-1. System checks for conflicts via `PrayerDataProvider.getConflictsWithActive()`
-2. Conflicting prayers are automatically deactivated
-3. New prayer activates
-4. Client receives deactivation events for each conflict
+When activating a prayer that conflicts with active prayers, the conflicting prayers are automatically deactivated:
 
 ```typescript
-// Example: Activating Rock Skin while Thick Skin is active
-// 1. Player clicks Rock Skin
-// 2. System detects Thick Skin conflicts with Rock Skin
-// 3. Thick Skin deactivated (PRAYER_DEACTIVATED event)
-// 4. Rock Skin activated (PRAYER_TOGGLED event)
+// From PrayerSystem.ts
+const conflicts = this.prayerDataProvider.getConflictsWithActive(
+  prayerId,
+  activePrayers,
+);
+
+// Deactivate conflicting prayers
+for (const conflictId of conflicts) {
+  this.deactivatePrayer(playerId, conflictId, "conflict");
+}
+
+// Activate new prayer
+this.activatePrayer(playerId, prayerId);
 ```
 
-### Rate Limiting
+### Example Conflicts
 
-Prayer toggles are rate-limited to prevent spam:
+```json
+// From prayers.json
+{
+  "id": "superhuman_strength",
+  "conflicts": ["burst_of_strength"]  // Can't have both active
+}
+```
 
-- **Cooldown**: 100ms between toggles
-- **Rate limit**: 5 toggles per second maximum
-- **Anti-cheat**: Exceeding limits flags suspicious behavior
+<Warning>
+**Conflict Behavior**: Activating a higher-tier prayer automatically deactivates lower-tier prayers in the same category (e.g., Superhuman Strength deactivates Burst of Strength).
+</Warning>
+
+---
+
+## Prayer Drain Mechanics
+
+### Drain Processing
+
+Prayer points drain every game tick (600ms) when prayers are active:
+
+```typescript
+// From PrayerSystem.ts
+processTick(currentTick: number): void {
+  for (const [playerId, state] of this.prayerStates) {
+    if (state.active.length === 0) continue;
+
+    // Calculate total drain from all active prayers
+    let totalDrain = 0;
+    for (const prayerId of state.active) {
+      const prayer = this.prayerDataProvider.getPrayer(prayerId);
+      if (prayer) {
+        totalDrain += this.calculateDrainPerTick(
+          prayer.drainEffect,
+          state.prayerBonus,
+        );
+      }
+    }
+
+    // Drain points
+    const newPoints = Math.max(0, state.points - totalDrain);
+    this.setPrayerPoints(playerId, newPoints);
+
+    // Deactivate all prayers if points reach 0
+    if (newPoints <= 0) {
+      this.deactivateAllPrayers(playerId, "no_points");
+    }
+  }
+}
+```
+
+### Drain Formula
+
+```typescript
+// OSRS-accurate drain calculation
+calculateDrainPerTick(drainEffect: number, prayerBonus: number): number {
+  // Drain resistance = 2 × prayer bonus + 60
+  const drainResistance = 2 * prayerBonus + 60;
+
+  // Points per minute = drain effect × 60 / resistance
+  const pointsPerMinute = (drainEffect * 60) / drainResistance;
+
+  // Points per tick = points per minute / 100 (600ms tick = 1/100 minute)
+  return pointsPerMinute / 100;
+}
+```
+
+### Prayer Bonus
+
+Prayer bonus comes from equipment (not yet implemented in base game):
+
+```typescript
+// Future: Prayer bonus from equipment
+const prayerBonus = equipmentStats?.prayer || 0;
+
+// Example equipment bonuses:
+// - Monk's robes: +6 Prayer bonus
+// - Proselyte armor: +8 Prayer bonus per piece
+// - Dragonbone necklace: +12 Prayer bonus
+```
+
+---
+
+## Recharging Prayer Points
+
+### Prayer Altars
+
+Players can recharge prayer points to maximum by praying at altars:
+
+```typescript
+// Client interaction with altar
+world.network.send("altarPray", {
+  altarId: "altar_lumbridge",
+});
+
+// Server processes recharge
+world.emit(EventType.ALTAR_PRAY, {
+  playerId,
+  altarId,
+});
+
+// PrayerSystem restores points to max
+this.setPrayerPoints(playerId, state.maxPoints);
+```
+
+### Altar Entities
+
+Altars are interactive entities placed in the world:
+
+```typescript
+// From AltarEntity.ts
+const altar = new AltarEntity(world, {
+  id: "altar_lumbridge",
+  name: "Altar",
+  position: { x: 10, y: 0, z: 20 },
+  footprint: "standard",  // 1x1 tile
+});
+
+// Altars have collision and are interactable
+altar.interactionType = InteractionType.ALTAR;
+altar.interactionDistance = 2;  // Can pray from 2 tiles away
+```
+
+<Info>
+**OSRS Context**: In OSRS, gilded altars provide bonus XP when burying bones. This is not yet implemented but the architecture supports it.
+</Info>
+
+---
+
+## Prayer Training
+
+### Bone Burying
+
+Players gain Prayer XP by burying bones:
+
+```typescript
+// Bone types and XP values
+const BONE_XP = {
+  bones: 4.5,           // Regular bones
+  big_bones: 15,        // Big bones
+  dragon_bones: 72,     // Dragon bones
+};
+
+// Burying has a 2-tick (1.2s) delay
+const BURY_DELAY_TICKS = 2;
+```
+
+### Bury Mechanics
+
+```typescript
+// From BuryDelayManager.ts
+canBury(playerId: string, currentTick: number): boolean {
+  const lastTick = this.lastBuryTick.get(playerId) ?? 0;
+  return currentTick - lastTick >= BURY_DELAY_TICKS;
+}
+
+recordBury(playerId: string, currentTick: number): void {
+  this.lastBuryTick.set(playerId, currentTick);
+}
+```
+
+### Burying Flow
+
+1. Player uses "Bury" action on bones in inventory
+2. Server validates:
+   - Item is a bone type
+   - Player not on bury cooldown
+   - Item exists in inventory
+3. Remove bone from inventory
+4. Grant Prayer XP
+5. Record bury timestamp
+6. Show message: "You bury the bones."
+
+```typescript
+// From PlayerSystem.ts
+handleBuryBones(playerId: string, itemId: string): void {
+  // Check bury delay
+  if (!buryDelayManager.canBury(playerId, currentTick)) {
+    return;
+  }
+
+  // Get bone XP from manifest
+  const boneData = getItem(itemId);
+  const xp = boneData?.prayerXp || 0;
+
+  // Remove bone
+  inventorySystem.removeItem(playerId, itemId, 1);
+
+  // Grant XP
+  skillsSystem.grantXP(playerId, "prayer", xp);
+
+  // Record bury
+  buryDelayManager.recordBury(playerId, currentTick);
+
+  // Show message
+  world.emit(EventType.UI_MESSAGE, {
+    playerId,
+    message: "You bury the bones.",
+    type: "info",
+  });
+}
+```
 
 ---
 
 ## Combat Integration
 
-### Prayer Bonuses
+### Prayer Bonuses in Combat
 
-Active prayers provide multipliers to combat stats:
-
-```typescript
-// From DamageCalculator.ts
-const prayerBonuses = prayerSystem.getCombinedBonuses(attackerId);
-
-// Apply to effective levels
-const effectiveAttack = baseAttack × (prayerBonuses.attackMultiplier ?? 1);
-const effectiveStrength = baseStrength × (prayerBonuses.strengthMultiplier ?? 1);
-const effectiveDefense = baseDefense × (prayerBonuses.defenseMultiplier ?? 1);
-```
-
-**Bonus Stacking:**
-- Multiple prayers of the same type do NOT stack additively
-- System takes the **highest multiplier** for each stat
-- Example: Burst of Strength (1.05×) + Superhuman Strength (1.10×) = 1.10× (not 1.15×)
-
-### Prayer Depletion
-
-When prayer points reach 0:
-
-1. All active prayers automatically deactivate
-2. Player receives system message: "You have run out of prayer points."
-3. Combat bonuses removed immediately
-4. Player must recharge at an altar to use prayers again
-
----
-
-## Bone Burying
-
-### Training Prayer
-
-Prayer XP is gained by burying bones:
-
-| Bone Type | XP | Level Required |
-|-----------|-----|----------------|
-| **Bones** | 4.5 | 1 |
-| **Big Bones** | 15 | 1 |
-| **Dragon Bones** | 72 | 1 |
-
-### Bury Mechanics
-
-Burying bones follows OSRS timing:
-
-- **Delay**: 2 ticks (1.2 seconds) between burials
-- **Action**: Right-click bones in inventory → "Bury"
-- **Animation**: 2-tick bury animation
-- **XP granted**: Immediately on successful bury
+Active prayers modify effective combat levels:
 
 ```typescript
-// From BuryDelayManager.ts
-const BURY_DELAY_TICKS = 2; // 1.2 seconds
-
-// Check if player can bury
-canBury(playerId: string, currentTick: number): boolean {
-  const lastTick = this.lastBuryTick.get(playerId) ?? 0;
-  return currentTick - lastTick >= BURY_DELAY_TICKS;
+// From CombatCalculations.ts
+function calculateEffectiveLevel(
+  baseLevel: number,
+  styleBonus: number,
+  prayerMultiplier: number,
+): number {
+  // Effective Level = floor((Base Level + Style Bonus) × Prayer Multiplier)
+  return Math.floor((baseLevel + styleBonus) * prayerMultiplier);
 }
+
+// Example: Burst of Strength (+5% Strength)
+const strengthLevel = 60;
+const styleBonus = 3;  // Aggressive style
+const prayerMultiplier = 1.05;  // +5% from prayer
+
+const effectiveStrength = Math.floor((60 + 3) * 1.05) = 66;
 ```
 
-### Bone Types
-
-Bones are defined in `items/resources.json`:
-
-```json
-{
-  "id": "bones",
-  "name": "Bones",
-  "type": "resource",
-  "stackable": true,
-  "inventoryActions": ["Bury", "Use", "Drop", "Examine"],
-  "prayerXp": 4.5,
-  "examine": "Bury these for Prayer XP."
-}
-```
-
-<Info>
-Bones are consumed when buried. The bury action routes through the `useItem` flow for server-side validation.
-</Info>
-
----
-
-## Altars
-
-### Recharging Prayer
-
-Altars restore prayer points to maximum:
-
-1. **Find an altar** (purple box in world)
-2. **Left-click** or right-click → "Pray Altar"
-3. **Points restored** to maximum instantly
-4. **No cooldown** on altar usage
+### Prayer Multipliers
 
 ```typescript
-// From AltarEntity.ts
-handleAltarPray(playerId: string): void {
-  const state = this.playerStates.get(playerId);
-  
-  // Recharge to full
-  state.points = state.maxPoints;
-  
-  // Emit success message
-  this.world.emit(EventType.UI_TOAST, {
-    playerId,
-    message: "You recharge your prayer points.",
-    type: "success",
-  });
+// From PrayerSystem.ts
+getPrayerCombatBonuses(playerId: string): PrayerCombatBonuses {
+  const state = this.prayerStates.get(playerId);
+  if (!state) return { attack: 1.0, strength: 1.0, defense: 1.0 };
+
+  let attackMult = 1.0;
+  let strengthMult = 1.0;
+  let defenseMult = 1.0;
+
+  for (const prayerId of state.active) {
+    const prayer = this.prayerDataProvider.getPrayer(prayerId);
+    if (!prayer) continue;
+
+    const bonuses = prayer.bonuses;
+    attackMult *= 1 + (bonuses.attackPercent || 0) / 100;
+    strengthMult *= 1 + (bonuses.strengthPercent || 0) / 100;
+    defenseMult *= 1 + (bonuses.defensePercent || 0) / 100;
+  }
+
+  return { attack: attackMult, strength: strengthMult, defense: defenseMult };
 }
 ```
 
-### Altar Entities
+### Stacking Prayers
 
-Altars are `InteractableEntity` instances with:
-
-- **Type**: `altar`
-- **Visual**: Purple box (1 tile, 0.8 units tall)
-- **Interaction range**: 2 tiles
-- **Collision**: Blocks tile (cannot walk through)
-
-<Info>
-Altars use `AltarEntity` class in `packages/shared/src/entities/world/AltarEntity.ts`.
-</Info>
-
----
-
-## Manifest Structure
-
-### prayers.json
-
-Prayers are defined in `manifests/prayers.json`:
-
-```json
-{
-  "prayers": [
-    {
-      "id": "thick_skin",
-      "name": "Thick Skin",
-      "description": "Increases Defense by 5%",
-      "icon": "🛡️",
-      "level": 1,
-      "category": "defensive",
-      "drainEffect": 3,
-      "bonuses": {
-        "defenseMultiplier": 1.05
-      },
-      "conflicts": ["rock_skin", "steel_skin"]
-    },
-    {
-      "id": "burst_of_strength",
-      "name": "Burst of Strength",
-      "description": "Increases Strength by 5%",
-      "icon": "💪",
-      "level": 4,
-      "category": "offensive",
-      "drainEffect": 3,
-      "bonuses": {
-        "strengthMultiplier": 1.05
-      },
-      "conflicts": ["superhuman_strength"]
-    }
-  ]
-}
-```
-
-### Prayer Definition Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Unique prayer ID (lowercase, underscores) |
-| `name` | string | Display name |
-| `description` | string | Effect description |
-| `icon` | string | Emoji icon for UI |
-| `level` | number | Required Prayer level (1-99) |
-| `category` | string | "offensive", "defensive", or "utility" |
-| `drainEffect` | number | Drain rate (higher = faster drain) |
-| `bonuses` | object | Combat stat multipliers |
-| `conflicts` | string[] | Prayer IDs that conflict with this one |
-
-### Bonus Multipliers
+Multiple prayers stack multiplicatively:
 
 ```typescript
-interface PrayerBonuses {
-  attackMultiplier?: number;      // e.g., 1.05 = +5% attack
-  strengthMultiplier?: number;    // e.g., 1.10 = +10% strength
-  defenseMultiplier?: number;     // e.g., 1.05 = +5% defense
-}
+// Example: Clarity of Thought (+5% Attack) + Thick Skin (+5% Defense)
+const attackMult = 1.05;
+const defenseMult = 1.05;
+
+// If base Attack = 60, effective Attack = floor(60 × 1.05) = 63
+// If base Defense = 50, effective Defense = floor(50 × 1.05) = 52
 ```
 
 <Warning>
-Multipliers must be positive numbers between 0 and 10. Values outside this range are rejected during manifest loading.
+**Prayer Stacking**: Prayers in the same category (e.g., two Strength prayers) conflict and cannot be active simultaneously. Only prayers from different categories stack.
 </Warning>
 
 ---
 
-## Database Schema
+## Prayer Events
 
-### Character Table Columns
+The prayer system emits events for UI updates and state synchronization:
 
-Prayer state is persisted in the `characters` table:
+| Event | Data | Description |
+|-------|------|-------------|
+| `PRAYER_STATE_SYNC` | `playerId`, `points`, `maxPoints`, `active[]` | Full prayer state sync |
+| `PRAYER_TOGGLED` | `playerId`, `prayerId`, `active`, `points` | Prayer activated/deactivated |
+| `PRAYER_POINTS_CHANGED` | `playerId`, `points`, `maxPoints`, `reason` | Prayer points changed |
+| `PRAYER_DEACTIVATED` | `playerId`, `prayerId`, `reason` | Prayer deactivated (auto or manual) |
+| `ALTAR_PRAY` | `playerId`, `altarId` | Player prayed at altar |
 
-```sql
--- Prayer skill tracking
-prayerLevel INTEGER DEFAULT 1,
-prayerXp INTEGER DEFAULT 0,
+### Event Flow
 
--- Prayer points (current and max)
-prayerPoints INTEGER DEFAULT 1,
-prayerMaxPoints INTEGER DEFAULT 1,
+```typescript
+// Client → Server: Toggle prayer
+client.send("prayerToggle", { prayerId: "thick_skin" });
 
--- Active prayers (JSON array of prayer IDs)
--- Format: '["thick_skin", "burst_of_strength"]'
--- Empty: '[]'
-activePrayers TEXT DEFAULT '[]'
+// Server → Client: Confirmation
+server.send("prayerToggled", {
+  playerId,
+  prayerId: "thick_skin",
+  active: true,
+  points: 42,
+});
+
+// Server → Client: Periodic drain updates
+server.send("prayerPointsChanged", {
+  playerId,
+  points: 41.8,
+  maxPoints: 43,
+  reason: "drain",
+});
 ```
-
-### Migration
-
-Prayer columns were added in migration `0016_add_prayer_system.sql`:
-
-```sql
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerLevel" integer DEFAULT 1;
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerXp" integer DEFAULT 0;
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerPoints" integer DEFAULT 1;
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerMaxPoints" integer DEFAULT 1;
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "activePrayers" text DEFAULT '[]';
-```
-
-<Info>
-The migration uses `IF NOT EXISTS` for idempotency - safe to run multiple times.
-</Info>
 
 ---
 
-## Network Protocol
+## Security & Validation
 
-### Client → Server Packets
+### Input Validation
 
-| Packet | Payload | Description |
-|--------|---------|-------------|
-| `prayerToggle` | `{ prayerId: string, timestamp?: number }` | Toggle prayer on/off |
-| `prayerDeactivateAll` | `{ timestamp?: number }` | Deactivate all prayers |
-| `altarPray` | `{ altarId: string }` | Pray at altar to recharge |
+All prayer requests are validated server-side:
 
-### Server → Client Packets
+```typescript
+// From handlers/prayer.ts
+export function handlePrayerToggle(
+  socket: ServerSocket,
+  data: unknown,
+  world: World,
+): void {
+  // 1. Rate limiting (5 toggles/sec)
+  if (!rateLimiter.check(playerId)) return;
 
-| Packet | Payload | Description |
-|--------|---------|-------------|
-| `prayerStateSync` | `{ playerId, points, maxPoints, active[] }` | Full state sync |
-| `prayerToggled` | `{ playerId, prayerId, active, points }` | Prayer toggled feedback |
-| `prayerPointsChanged` | `{ playerId, points, maxPoints, reason? }` | Points changed (drain/restore) |
+  // 2. Validate payload structure
+  if (!isValidPrayerTogglePayload(data)) return;
 
-### Security Features
+  // 3. Validate timestamp (prevent replay attacks)
+  if (!validateRequestTimestamp(data.timestamp)) return;
 
-**Input Validation:**
-- Prayer ID format: `/^[a-z][a-z0-9_]{0,63}$/` (max 64 chars)
-- Timestamp validation prevents replay attacks
-- Rate limiting: 5 toggles/sec, 100ms cooldown
+  // 4. Validate prayer ID format
+  if (!isValidPrayerId(data.prayerId)) return;
 
-**Server-Side Validation:**
-- Prayer existence check via `PrayerDataProvider`
-- Level requirement enforcement
-- Prayer point validation
-- Conflict resolution
-- Bounds checking on all numeric inputs
+  // 5. Forward to PrayerSystem for processing
+  world.emit(EventType.PRAYER_TOGGLE, { playerId, prayerId });
+}
+```
+
+### Type Guards
+
+```typescript
+// From prayer-types.ts
+export function isValidPrayerId(id: unknown): id is string {
+  if (typeof id !== "string") return false;
+  if (id.length === 0 || id.length > MAX_PRAYER_ID_LENGTH) return false;
+  return PRAYER_ID_PATTERN.test(id);
+}
+
+export function isValidPrayerTogglePayload(
+  data: unknown,
+): data is PrayerTogglePayload {
+  if (!data || typeof data !== "object") return false;
+  const payload = data as Record<string, unknown>;
+  return typeof payload.prayerId === "string";
+}
+```
+
+### Rate Limiting
+
+```typescript
+// From SlidingWindowRateLimiter.ts
+const prayerLimiter = createRateLimiter({
+  maxPerSecond: 5,
+  name: "prayer-toggle",
+});
+
+// Prevents prayer toggle spam
+if (!prayerLimiter.check(playerId)) {
+  // Silently drop request
+  return;
+}
+```
+
+---
+
+## Database Persistence
+
+### Prayer State Schema
+
+```sql
+-- From 0016_add_prayer_system.sql
+ALTER TABLE "characters" ADD COLUMN "prayerLevel" integer DEFAULT 1;
+ALTER TABLE "characters" ADD COLUMN "prayerXp" integer DEFAULT 0;
+ALTER TABLE "characters" ADD COLUMN "prayerPoints" integer DEFAULT 1;
+ALTER TABLE "characters" ADD COLUMN "prayerMaxPoints" integer DEFAULT 1;
+ALTER TABLE "characters" ADD COLUMN "activePrayers" text DEFAULT '[]';
+```
+
+### Active Prayers Format
+
+```typescript
+/**
+ * Active prayers stored as JSON array of prayer ID strings.
+ * Format: '["thick_skin", "burst_of_strength"]'
+ * IDs must match valid entries in prayers.json manifest.
+ * Empty array '[]' when no prayers are active.
+ */
+activePrayers: text("activePrayers").default("[]");
+```
+
+### Saving Prayer State
+
+```typescript
+// From PlayerRepository.ts
+async savePlayer(playerId: string, data: Partial<PlayerRow>): Promise<void> {
+  const updateData: Partial<PlayerRow> = {};
+
+  if (data.prayerLevel !== undefined) {
+    updateData.prayerLevel = data.prayerLevel;
+  }
+  if (data.prayerXp !== undefined) {
+    updateData.prayerXp = data.prayerXp;
+  }
+  if (data.prayerPoints !== undefined) {
+    updateData.prayerPoints = data.prayerPoints;
+  }
+  if (data.prayerMaxPoints !== undefined) {
+    updateData.prayerMaxPoints = data.prayerMaxPoints;
+  }
+  if (data.activePrayers !== undefined) {
+    updateData.activePrayers = data.activePrayers;
+  }
+
+  await db.update(characters).set(updateData).where(eq(characters.id, playerId));
+}
+```
+
+---
+
+## Client UI
+
+### Prayer Panel
+
+The Skills Panel includes a Prayer tab showing:
+
+- **Prayer Points Bar**: Current/max points with color-coded display
+- **Prayer Cards**: Grid of available prayers
+- **Lock States**: Prayers above player's level are locked
+- **Active States**: Active prayers highlighted in green
+- **Tooltips**: Prayer effects and drain rates
+
+```typescript
+// From SkillsPanel.tsx
+<PrayerCard
+  prayer={prayer}
+  onToggle={togglePrayer}
+  playerLevel={prayerLevel}
+/>
+
+// Prayer card shows:
+// - Icon and name
+// - Level requirement
+// - Description
+// - Drain rate
+// - Lock state (if level too low)
+// - Active state (if currently active)
+```
+
+### Prayer Points Display
+
+```typescript
+// Display points using Math.ceil() to prevent showing 0 prematurely
+const displayPoints = Math.ceil(prayerPoints);
+
+// Color-coded based on remaining points
+const color = prayerPoints > prayerMaxPoints * 0.25
+  ? "#22c55e"  // Green (>25%)
+  : "#ef4444"; // Red (≤25%)
+```
+
+---
+
+## Constants
+
+```typescript
+// From prayer-types.ts
+export const MAX_PRAYER_ID_LENGTH = 64;
+export const MAX_ACTIVE_PRAYERS = 6;
+export const PRAYER_TOGGLE_COOLDOWN_MS = 100;
+export const PRAYER_TOGGLE_RATE_LIMIT = 5;  // per second
+export const PRAYER_ID_PATTERN = /^[a-z0-9_]+$/;
+
+// From PrayerSystem.ts
+const PRAYER_DRAIN_TICK_INTERVAL = 1;  // Drain every tick (600ms)
+```
 
 ---
 
@@ -405,43 +655,32 @@ The migration uses `IF NOT EXISTS` for idempotency - safe to run multiple times.
 ### PrayerSystem Methods
 
 ```typescript
-// Toggle a prayer on/off
-togglePrayer(playerId: string, prayerId: string): PrayerToggleResult;
+// Activate a prayer
+activatePrayer(playerId: string, prayerId: string): boolean;
 
-// Get current prayer points (display value)
-getPrayerPoints(playerId: string): number;
-
-// Get maximum prayer points
-getMaxPrayerPoints(playerId: string): number;
-
-// Restore prayer points (e.g., from potion)
-restorePrayerPoints(playerId: string, amount: number): void;
-
-// Set max points (called when prayer levels up)
-setMaxPrayerPoints(playerId: string, maxPoints: number): void;
-
-// Get active prayer IDs
-getActivePrayers(playerId: string): readonly string[];
-
-// Check if specific prayer is active
-isPrayerActive(playerId: string, prayerId: string): boolean;
-
-// Get combined bonuses from all active prayers
-getCombinedBonuses(playerId: string): PrayerBonuses;
-
-// Get effective levels with prayer bonuses
-getEffectiveAttackLevel(playerId: string, baseLevel: number): number;
-getEffectiveStrengthLevel(playerId: string, baseLevel: number): number;
-getEffectiveDefenseLevel(playerId: string, baseLevel: number): number;
+// Deactivate a prayer
+deactivatePrayer(playerId: string, prayerId: string, reason: string): boolean;
 
 // Deactivate all prayers
-deactivateAllPrayers(playerId: string): void;
+deactivateAllPrayers(playerId: string, reason: string): void;
+
+// Set prayer points
+setPrayerPoints(playerId: string, points: number): void;
+
+// Get prayer state
+getPrayerState(playerId: string): PrayerState | null;
+
+// Get combat bonuses from active prayers
+getPrayerCombatBonuses(playerId: string): PrayerCombatBonuses;
+
+// Check if prayer is active
+isPrayerActive(playerId: string, prayerId: string): boolean;
 ```
 
 ### PrayerDataProvider Methods
 
 ```typescript
-// Get prayer definition by ID
+// Get prayer definition
 getPrayer(prayerId: string): PrayerDefinition | null;
 
 // Check if prayer exists
@@ -450,206 +689,29 @@ prayerExists(prayerId: string): boolean;
 // Get all prayers
 getAllPrayers(): readonly PrayerDefinition[];
 
-// Get prayers available at player's level
+// Get prayers available at level
 getAvailablePrayers(prayerLevel: number): PrayerDefinition[];
 
 // Get prayers by category
 getPrayersByCategory(category: PrayerCategory): readonly PrayerDefinition[];
 
 // Get conflicting prayers
-getConflictingPrayerIds(prayerId: string): readonly string[];
-getConflictsWithActive(newPrayerId: string, activePrayers: readonly string[]): string[];
+getConflictsWithActive(prayerId: string, activePrayers: readonly string[]): string[];
 
 // Validate activation
 canActivatePrayer(
   prayerId: string,
   prayerLevel: number,
   currentPoints: number,
-  activePrayers: readonly string[]
+  activePrayers: readonly string[],
 ): { valid: boolean; reason?: string };
-```
-
----
-
-## Prayer Events
-
-The prayer system emits events for UI updates and integration:
-
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `PRAYER_STATE_SYNC` | `{ playerId, level, xp, points, maxPoints, active[] }` | Full state sync |
-| `PRAYER_TOGGLED` | `{ playerId, prayerId, active, points }` | Prayer activated/deactivated |
-| `PRAYER_POINTS_CHANGED` | `{ playerId, points, maxPoints, reason? }` | Points changed (drain/restore) |
-| `PRAYER_DEACTIVATED` | `{ playerId, prayerId, reason }` | Prayer deactivated (conflict/depleted) |
-| `ALTAR_PRAY` | `{ playerId, altarId }` | Player prayed at altar |
-| `UI_TOAST` | `{ playerId, message, type }` | Toast notification |
-| `UI_MESSAGE` | `{ playerId, message, type }` | Chat message |
-
----
-
-## Client UI
-
-### Skills Panel Prayer Tab
-
-The Skills Panel (`packages/client/src/game/panels/SkillsPanel.tsx`) displays:
-
-- **Prayer points bar** with current/max display
-- **Prayer cards** organized by category (Offensive, Defensive, Utility)
-- **Lock indicators** for prayers above player's level
-- **Active state** with green border and glow
-- **Tooltips** showing level requirement, effect, and drain rate
-
-### Prayer Card States
-
-| State | Visual | Behavior |
-|-------|--------|----------|
-| **Locked** | Grayed out, 🔒 icon | Cannot activate, shows level requirement |
-| **Inactive** | Default border | Click to activate |
-| **Active** | Green border, glow | Click to deactivate |
-| **Depleted** | Red points bar | All prayers auto-deactivate |
-
----
-
-## Implementation Details
-
-### System Architecture
-
-**Separation of Concerns:**
-- `PrayerSystem` — Manages prayer state, drain, activation
-- `SkillsSystem` — Handles prayer XP and leveling
-- `CombatSystem` — Applies prayer bonuses to damage calculations
-- `PrayerDataProvider` — Loads and provides prayer definitions
-
-**Event Flow:**
-```
-Client clicks prayer → prayerToggle packet → Server handler validates →
-PRAYER_TOGGLE event → PrayerSystem.togglePrayer() → Validation + conflict resolution →
-PRAYER_TOGGLED event → EventBridge routes to client → UI updates
-```
-
-### Memory Optimization
-
-PrayerSystem uses pre-allocated buffers for hot paths:
-
-```typescript
-// Reusable buffers (avoid GC pressure)
-private readonly deactivateBuffer: string[] = [];
-private readonly combinedBonusesBuffer: MutablePrayerBonuses = { ... };
-
-// WARNING: Do not store references to these buffers
-// Contents change between calls
-```
-
-### Persistence
-
-Prayer state is persisted to the database:
-
-- **Debounced saves**: 1 second after state changes
-- **Auto-save**: Every 30 seconds for dirty states
-- **Immediate save**: On player disconnect
-- **Validation**: NaN/undefined values rejected before DB write
-
----
-
-## Type Guards
-
-Prayer types include comprehensive runtime validation:
-
-```typescript
-// Validate prayer ID format (security)
-isValidPrayerId(id: unknown): id is string;
-
-// Validate toggle payload from network
-isValidPrayerTogglePayload(data: unknown): data is PrayerTogglePayload;
-
-// Validate prayer bonuses from manifest
-isValidPrayerBonuses(bonuses: unknown): bonuses is PrayerBonuses;
-
-// Bounds checking
-clampPrayerLevel(level: number): number;  // [1, 99]
-clampPrayerPoints(points: number, maxPoints: number): number;  // [0, max]
-```
-
-### Security Constants
-
-```typescript
-// From prayer-types.ts
-MAX_PRAYER_ID_LENGTH = 64;           // Prevent DoS via huge strings
-MAX_ACTIVE_PRAYERS = 5;              // Balance + anti-exploit
-PRAYER_TOGGLE_COOLDOWN_MS = 100;     // Anti-spam
-PRAYER_TOGGLE_RATE_LIMIT = 5;        // Max toggles/sec
-PRAYER_ID_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;  // Valid ID format
-```
-
----
-
-## Adding New Prayers
-
-### Step 1: Edit prayers.json
-
-Add a new prayer definition to `manifests/prayers.json`:
-
-```json
-{
-  "id": "steel_skin",
-  "name": "Steel Skin",
-  "description": "Increases Defense by 15%",
-  "icon": "⚙️",
-  "level": 28,
-  "category": "defensive",
-  "drainEffect": 12,
-  "bonuses": {
-    "defenseMultiplier": 1.15
-  },
-  "conflicts": ["thick_skin", "rock_skin"]
-}
-```
-
-### Step 2: Restart Server
-
-Manifests are loaded at startup:
-
-```bash
-bun run dev
-```
-
-### Step 3: Verify
-
-1. Open Skills panel → Prayer tab
-2. Check prayer appears in Defensive section
-3. Verify level requirement shows correctly
-4. Test activation/deactivation
-5. Verify conflicts work (activating Steel Skin deactivates Thick Skin/Rock Skin)
-
-<Info>
-No code changes required - the system is fully manifest-driven.
-</Info>
-
----
-
-## Testing
-
-Prayer system has 62 unit tests covering:
-
-- Type guard validation (all edge cases)
-- Bounds checking (overflow, underflow, NaN, Infinity)
-- Prayer ID format validation (security)
-- Rate limiting behavior
-- Input validation for all payloads
-- Drain mechanics
-- Conflict resolution
-- Combat bonus calculations
-
-```bash
-# Run prayer tests
-bun test packages/shared/src/systems/shared/character/__tests__/PrayerSystem.test.ts
 ```
 
 ---
 
 ## Related Documentation
 
-- [Skills & Progression](/wiki/game-systems/skills) (Prayer XP and leveling)
-- [Combat System](/wiki/game-systems/combat) (Prayer bonuses in damage calculations)
-- [Manifest-Driven Design](/concepts/manifests) (prayers.json structure)
-- [Database Schema](/devops/database) (Prayer persistence)
+- [Skills & Progression](/wiki/game-systems/skills) (Prayer skill leveling)
+- [Combat System](/wiki/game-systems/combat) (Prayer bonuses in combat)
+- [Data Manifests](/wiki/data/overview) (prayers.json structure)
+- [Database Schema](/wiki/engine/database) (Prayer persistence)

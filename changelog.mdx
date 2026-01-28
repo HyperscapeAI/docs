@@ -23,6 +23,124 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Prayer System & Death Overhaul" description="January 2026" date="2026-01-18">
+
+### 🙏 Prayer System
+
+Complete OSRS-accurate prayer system with drain mechanics and combat bonuses:
+
+- **Prayer Skill**: New combat skill trained by burying bones
+  - Bone types: Regular (4.5 XP), Big (15 XP), Dragon (72 XP)
+  - 2-tick (1.2s) bury delay (OSRS-accurate)
+  - Prayer level = maximum prayer points
+- **Prayer Activation**: Toggle prayers for temporary combat bonuses
+  - 5 initial prayers: Thick Skin, Rock Skin, Burst of Strength, Clarity of Thought, Superhuman Strength
+  - Defensive prayers: +5% to +10% Defense
+  - Offensive prayers: +5% to +10% Attack/Strength
+  - Maximum 6 active prayers simultaneously
+- **Prayer Drain**: OSRS-accurate drain formula
+  - `drainResistance = 2 × prayerBonus + 60`
+  - `pointsPerMinute = drainEffect × 60 / drainResistance`
+  - Drains every game tick (600ms)
+  - All prayers deactivate when points reach 0
+- **Prayer Altars**: Recharge prayer points to maximum
+  - Interactive altar entities placed in world
+  - 2-tile interaction range
+  - Instant recharge on use
+- **Combat Integration**: Prayer bonuses applied as multipliers to effective levels
+  - `effectiveLevel = floor((baseLevel + styleBonus) × prayerMultiplier)`
+  - Multiple prayers stack multiplicatively
+  - Conflicting prayers auto-deactivate (e.g., can't have two Strength prayers)
+- **Database Schema**: New columns in `characters` table
+  - `prayerLevel`, `prayerXp`, `prayerPoints`, `prayerMaxPoints`, `activePrayers`
+  - Active prayers stored as JSON array: `'["thick_skin", "burst_of_strength"]'`
+- **Security Features**:
+  - Rate limiting: 5 toggles/second
+  - Input validation with type guards
+  - Timestamp validation prevents replay attacks
+  - Prayer ID format validation (regex pattern)
+  - Bounds checking for all numeric inputs
+- **UI Components**:
+  - Prayer tab in Skills Panel with prayer points bar
+  - Prayer cards with lock states for level requirements
+  - Active state highlighting (green border)
+  - Tooltips showing effects and drain rates
+  - Color-coded points bar (green >25%, red ≤25%)
+- **Manifest-Driven**: Prayer definitions in `manifests/prayers.json`
+  - Data-driven architecture allows easy content updates
+  - Supports prayer conflicts, categories, and bonuses
+- **Testing**: 62 comprehensive unit tests covering all validation and mechanics
+
+### ⚰️ Death System Overhaul
+
+Major refactor with crash recovery, atomic operations, and combat state cleanup:
+
+- **Crash Recovery System**: Enterprise-grade recovery prevents item loss on server restart
+  - Death locks now store full item data in `items` JSONB column
+  - `recovered` boolean tracks if death was processed during crash recovery
+  - `killedBy` field identifies what killed the player
+  - Server startup queries `WHERE recovered = false` and recreates gravestones/ground items
+  - Atomic `INSERT ... ON CONFLICT DO NOTHING` prevents duplicate death locks
+- **Transaction Safety**: Death processing uses serializable transactions
+  - Death lock created FIRST with full item list (crash-safe)
+  - Inventory/equipment cleared atomically
+  - If crash occurs, items recoverable from death lock
+  - `isolationLevel: "serializable"` prevents all race conditions
+- **Shadow State Loot UI**: Transaction-based loot with automatic rollback
+  - Client optimistically removes items from UI
+  - Transaction IDs track pending loot requests
+  - 3-second timeout triggers automatic rollback if no server response
+  - `LOOT_RESULT` events confirm/reject loot operations
+  - Prevents client/server desync on loot failures
+- **Combat State Cleanup**: Three-layer cleanup on death/respawn
+  - Event-based: `PLAYER_SET_DEAD` and `PLAYER_RESPAWNED` events
+  - Runtime guards: Health checks in aggro/combat loops
+  - Timeout cleanup: Stale states cleaned after timeout
+  - Mobs stop chasing dead players
+  - Combat states cleared when target dies
+- **Input Sanitization**: Comprehensive security for `killedBy` field
+  - Unicode NFKC normalization prevents homograph attacks
+  - Zero-width character removal (U+200B-U+200D, U+FEFF)
+  - BiDi override filtering (U+202A-U+202E)
+  - Control character removal (0x00-0x1F, 0x7F)
+  - HTML character filtering (<, >, ', ", &)
+  - 64 character length limit
+- **Position Validation**: NaN/Infinity checks with world bounds clamping
+  - X/Z: -10000 to 10000
+  - Y: -50 to 500
+  - Prevents Three.js renderer crashes
+- **Integer Overflow Protection**: 32-bit safe tick calculations
+  - `MAX_TICK = 2147483647` (2^31-1)
+  - Prevents MessagePack serialization overflow
+- **Loot Rate Limiting**: 100ms cooldown between loot requests
+- **Death Screen Improvements**:
+  - Countdown timer showing time until items despawn
+  - Respawn button spam prevention
+  - 10-second timeout with retry on failure
+  - Input blocking during death animation
+- **Movement Blocking**: Players cannot move while dying or dead
+  - `DeathState.DYING` and `DeathState.DEAD` block movement requests
+- **Respawn Validation**: Server validates player is actually dead before allowing respawn
+- **OSRS-Accurate Timings**:
+  - Ground item despawn: 6000 ticks (60 minutes, was 300)
+  - Death animation: 7 ticks (was 8)
+  - Stale lock cleanup: 3000 ticks (30 minutes, was 6000)
+- **Database Migration**: `0017_add_death_recovery_columns.sql`
+  - New columns: `items` (JSONB), `killedBy` (TEXT), `recovered` (BOOLEAN)
+  - Indexes: `idx_player_deaths_recovered`, `idx_player_deaths_recovery_lookup`
+  - CHECK constraint for valid `zoneType` values
+- **Code Quality**: Removed internal tracking codes (DS-XXX, Phase X) from comments
+
+### 🐛 Bug Fixes
+
+- **Dead Mob Raycast**: Dead mobs no longer block clicking items underneath (#567)
+  - `isDeadMob()` helper checks `MobAIState.DEAD` or `currentHealth <= 0`
+  - Raycast loop skips dead mobs to check next intersection
+  - Uses `MobAIState` enum for type safety
+- **Firemaking Type Fix**: Aligned `FiremakingMoveRequestPayload` with actual usage (position instead of fromPosition/toPosition)
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System

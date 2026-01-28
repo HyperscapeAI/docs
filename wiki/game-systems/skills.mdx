@@ -23,7 +23,7 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | **Defense** | Damage reduction | Combat (Defensive style) |
 | **Constitution** | Maximum HP | All combat (always granted) |
 | **Ranged** | Ranged combat | Bow/crossbow attacks |
-| **Prayer** | Combat bonuses, protection | Burying bones |
+| **Prayer** | Prayer points & bonuses | Burying bones, using altars |
 
 ### Gathering Skills
 
@@ -153,7 +153,7 @@ public getXPProgress(skill: SkillData): number {
 
 ## Combat Level
 
-Combat level is calculated from combat skills using the OSRS formula.
+Combat level is calculated from combat skills using the OSRS formula. **Prayer contributes to combat level** at half its value.
 
 ```typescript
 // From SkillsSystem.ts
@@ -183,6 +183,11 @@ public getCombatLevel(stats: StatsComponent): number {
 }
 ```
 
+<Info>
+**Prayer Impact**: Prayer level contributes to combat level at half its value (floor(Prayer / 2)). A player with 99 Prayer gains +12 combat levels from Prayer alone.
+</Info>
+```
+
 ### Combat Level Examples
 
 | Stats | Combat Level |
@@ -203,8 +208,8 @@ public getTotalLevel(stats: StatsComponent): number {
   let total = 0;
 
   const skills = [
-    "attack", "strength", "defense", "constitution", "ranged",
-    "woodcutting", "mining", "fishing", "firemaking", "cooking"
+    "attack", "strength", "defense", "constitution", "ranged", "prayer",
+    "woodcutting", "mining", "fishing", "firemaking", "cooking", "smithing"
   ];
 
   for (const skill of skills) {
@@ -218,7 +223,7 @@ public getTotalLevel(stats: StatsComponent): number {
 
 ### Maximum Total Level
 
-With 10 skills at level 99: **990 total level**
+With 12 skills at level 99: **1,188 total level**
 
 ---
 
@@ -319,6 +324,37 @@ This normalization runs once when a model is first loaded, before caching. All c
 | Lobster | 40 | 90 |
 | Swordfish | 50 | 100 |
 | Shark | 76 | 110 |
+
+### Prayer XP
+
+Prayer is trained by burying bones dropped by monsters:
+
+**Bone Types** (defined in item manifests):
+| Bone | Prayer XP | Dropped By |
+|------|-----------|------------|
+| Bones | 4.5 | Most monsters |
+| Big Bones | 15 | Larger monsters |
+| Dragon Bones | 72 | Dragons |
+
+**Burying Mechanics**:
+- 2-tick (1.2 second) delay between burying bones
+- Bones consumed from inventory
+- XP granted immediately
+- Message shown: "You bury the bones."
+
+```typescript
+// From BuryDelayManager.ts
+const BURY_DELAY_TICKS = 2;  // OSRS-accurate
+
+canBury(playerId: string, currentTick: number): boolean {
+  const lastTick = this.lastBuryTick.get(playerId) ?? 0;
+  return currentTick - lastTick >= BURY_DELAY_TICKS;
+}
+```
+
+<Info>
+**Prayer Training**: Burying bones is routed through the `useItem` flow for proper server-side handling. The server detects bone items and processes them as bury actions.
+</Info>
 
 ### Artisan XP
 

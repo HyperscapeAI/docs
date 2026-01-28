@@ -10,7 +10,7 @@ Hyperscape features a RuneScape-inspired skill system with leveling, XP gain, an
 
 ## Available Skills
 
-Hyperscape has **11 skills** total:
+Hyperscape has **12 skills** total:
 
 ### Combat Skills
 
@@ -21,7 +21,7 @@ Hyperscape has **11 skills** total:
 | **Defense** | Damage reduction, armor requirements |
 | **Constitution** | Health points |
 | **Ranged** | Ranged combat accuracy and damage |
-| **Prayer** | Combat bonuses via prayers (trained by burying bones) |
+| **Prayer** | Prayer points and combat bonuses |
 
 ### Gathering Skills
 
@@ -242,32 +242,25 @@ Skill configuration is in `packages/shared/src/data/`:
 | `equipment-requirements.json` | Level requirements for equipment |
 | `equipment-stats.json` | Stat bonuses for equipment |
 
-## Prayer System
+## Prayer Training
 
-Prayer provides combat bonuses at the cost of draining prayer points:
+Prayer is trained by burying bones dropped by monsters:
 
-**Training:**
-- Bury bones for Prayer XP (4.5 XP for regular bones)
-- Right-click bones in inventory → "Bury"
-- 2-tick (1.2s) delay between burials
+| Bone Type | Prayer XP | Source |
+|-----------|-----------|--------|
+| Bones | 4.5 | Most monsters |
+| Big Bones | 15 | Larger monsters |
+| Dragon Bones | 72 | Dragons |
 
-**Prayer Points:**
-- Maximum points = Prayer level (1-99)
-- Drain while prayers are active
-- Recharge at altars (purple boxes in world)
-
-**Available Prayers:**
-- **Thick Skin** (Level 1): +5% Defense
-- **Burst of Strength** (Level 4): +5% Strength
-- **Clarity of Thought** (Level 7): +5% Attack
-- **Rock Skin** (Level 10): +10% Defense
-- **Superhuman Strength** (Level 13): +10% Strength
+**Mechanics:**
+- Use "Bury" action on bones in inventory
+- 2-tick (1.2 second) delay between burying
+- Prayer points can be recharged at altars
+- Prayer level = maximum prayer points
 
 <Info>
-  See [Prayer System](/wiki/game-systems/prayer) for complete mechanics, drain formulas, and combat integration.
+  See the [Prayer System](/wiki/game-systems/prayer) documentation for complete details on prayer mechanics, drain formulas, and combat bonuses.
 </Info>
-
----
 
 ## Default Skill Values
 
