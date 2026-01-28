@@ -698,60 +698,66 @@ function interpolateEntity(state: InterpolationState, alpha: number): void {
 
 ---
 
----
+## Terrain Flattening
 
-## Agility XP Tracking
+Stations and structures can flatten terrain underneath for level building surfaces using the **Flat Zone System**.
 
-The tile movement system tracks distance traveled for Agility skill XP:
+### Flat Zone Interface
 
 ```typescript
-// From TileMovementManager (packages/server/src/systems/ServerNetwork/tile-movement.ts)
-private tilesTraveledForXP: Map<string, number> = new Map();
-
-// Constants
-const AGILITY_TILES_PER_XP_GRANT = 100;  // Tiles needed before XP is granted
-const AGILITY_XP_PER_GRANT = 50;         // XP granted per threshold
-
-// Track tiles moved each tick
-const tilesMoved = Math.abs(state.currentTile.x - prevTile.x) + 
-                   Math.abs(state.currentTile.z - prevTile.z);
-
-if (tilesMoved > 0) {
-  const currentTiles = (this.tilesTraveledForXP.get(playerId) || 0) + tilesMoved;
-  
-  if (currentTiles >= AGILITY_TILES_PER_XP_GRANT) {
-    // Grant XP and preserve overflow
-    const grantsEarned = Math.floor(currentTiles / AGILITY_TILES_PER_XP_GRANT);
-    const xpToGrant = grantsEarned * AGILITY_XP_PER_GRANT;
-    this.tilesTraveledForXP.set(playerId, currentTiles % AGILITY_TILES_PER_XP_GRANT);
-    
-    // Emit XP gain event
-    this.world.emit(EventType.SKILLS_XP_GAINED, {
-      playerId,
-      skill: 'agility',
-      amount: xpToGrant,
-    });
-  } else {
-    // Accumulate tiles silently
-    this.tilesTraveledForXP.set(playerId, currentTiles);
-  }
+// From packages/shared/src/types/world/terrain.ts
+export interface FlatZone {
+  id: string;              // Unique identifier (e.g., "station_furnace_spawn_1")
+  centerX: number;         // Center X position in world coordinates (meters)
+  centerZ: number;         // Center Z position in world coordinates (meters)
+  width: number;           // Width in meters (X axis)
+  depth: number;           // Depth in meters (Z axis)
+  height: number;          // Target height for the flat area (meters)
+  blendRadius: number;     // Blend radius for smooth transition (meters)
 }
 ```
 
-**XP Batching Design:**
-- Prevents visual spam (XP drop every 100 tiles instead of every 2 tiles)
-- Preserves overflow (walking 150 tiles = 50 XP + 50 tiles remaining)
-- Death penalty: resets tile counter to 0 (lose accumulated progress)
-- Logout: tile counter not persisted (resets to 0)
+### TerrainSystem API
 
-**XP Rates:**
-| Movement | Tiles/Tick | Tiles/Second | XP/Minute |
-|----------|------------|--------------|-----------|
-| Walking | 2 | 3.33 | ~100 XP |
-| Running | 4 | 6.67 | ~200 XP |
+```typescript
+// Register a flat zone (for dynamic structures)
+terrainSystem.registerFlatZone({
+  id: "player_house_1",
+  centerX: 50.0,
+  centerZ: 50.0,
+  width: 10.0,
+  depth: 10.0,
+  height: 42.5,
+  blendRadius: 1.0,
+});
+
+// Remove a flat zone
+terrainSystem.unregisterFlatZone("player_house_1");
+
+// Query flat zone at position
+const zone = terrainSystem.getFlatZoneAt(worldX, worldZ);
+if (zone) {
+  console.log(`Standing on flat zone: ${zone.id}`);
+}
+```
+
+### How It Works
+
+1. **Height Calculation Priority**: Flat zones checked before procedural terrain
+2. **Core Flat Area**: Inside the zone, terrain returns exact `height` value
+3. **Blend Area**: Within `blendRadius` of zone edge, smoothstep interpolation blends to procedural terrain
+4. **Spatial Indexing**: Terrain tiles (100m) used for O(1) lookup
+5. **Manifest-Driven**: Stations with `flattenGround: true` automatically create flat zones
+
+**Blend Formula:**
+```typescript
+// Smoothstep interpolation: t² × (3 - 2t)
+const t = blend * blend * (3 - 2 * blend);
+const finalHeight = flatHeight + (proceduralHeight - flatHeight) * t;
+```
 
 <Info>
-Teleportation does not grant Agility XP - only tiles traveled by walking/running count.
+Flat zones are loaded from `world-areas.json` during terrain initialization. Station footprints are calculated from model bounds × scale.
 </Info>
 
 ---
@@ -762,3 +768,4 @@ Teleportation does not grant Agility XP - only tiles traveled by walking/running
 - [Combat System](/wiki/game-systems/combat) - Uses tile range for attacks
 - [NPC Behavior](/wiki/data/npcs) - NPC aggro and pathing
 - [Entity System](/wiki/engine/ecs) - Entity management
+- [Manifests](/concepts/manifests) - Station configuration with terrain flattening

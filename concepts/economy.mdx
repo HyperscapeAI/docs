@@ -173,54 +173,81 @@ flowchart LR
 
 ## Player Trading
 
-### Trading System
+### Overview
 
-Player-to-player trading with OSRS-accurate two-screen confirmation:
+Player-to-player trading uses an OSRS-accurate two-screen confirmation flow to prevent scams:
 
-**Features:**
-- **Two-Screen Confirmation**: Both players must accept on two separate screens
-  - Screen 1: Offer items and review partner's offer
-  - Screen 2: Final confirmation with wealth transfer indicator
-  - Any change resets both players to screen 1
-- **Wealth Transfer Indicator**: Visual warning for unbalanced trades
-  - Shows net value difference with directional arrow
-  - Color-coded: green (receiving), red (giving), gray (balanced)
-- **Proximity Checks**: Players must be within 2 tiles to trade
-  - Auto-walk to player when initiating trade from distance
-  - Trade closes if players move too far apart
-- **Interface Blocking**: Trading locks out other interfaces
-  - Bank, store, dialogue automatically close when trade starts
-  - Prevents item duplication exploits
-- **Click-Based UI**: Improved interaction model
-  - Click items to add/remove from trade offer
-  - Click partner's items to examine
-  - Quantity prompts for stackable items
-  - Partner's free inventory slots displayed
-- **Chat Integration**: Pink-colored trade request messages
-  - \"[Player] wishes to trade with you.\" format
-  - Clickable to accept trade request
-- **Audit Logging**: All completed trades logged for security
+1. **Offer Screen**: Players add/remove items and accept
+2. **Confirmation Screen**: Players review final trade and confirm
+3. **Completion**: Items swapped atomically via database transaction
 
-**Implementation:**
+### Trading Flow
 
-```typescript
-// From packages/server/src/systems/TradingSystem/
-acceptance.ts     // Accept/decline logic
-items.ts          // Add/remove items
-request.ts        // Trade initiation with proximity checks
-swap.ts           // Screen transitions
-helpers.ts        // Shared utilities
-types.ts          // Type definitions
+```mermaid
+sequenceDiagram
+    participant P1 as Player 1
+    participant Server as TradingSystem
+    participant P2 as Player 2
+    
+    P1->>Server: tradeRequest(targetPlayerId)
+    Server->>P2: tradeIncoming (pink chat message)
+    P2->>Server: tradeRequestRespond(accept: true)
+    Server->>P1: tradeStarted
+    Server->>P2: tradeStarted
+    
+    P1->>Server: tradeAddItem(slot, quantity)
+    Server->>P1: tradeUpdated
+    Server->>P2: tradeUpdated
+    
+    P1->>Server: tradeAccept
+    P2->>Server: tradeAccept
+    Server->>P1: tradeConfirmScreen
+    Server->>P2: tradeConfirmScreen
+    
+    P1->>Server: tradeAccept (confirm)
+    P2->>Server: tradeAccept (confirm)
+    Server->>Server: Atomic item swap
+    Server->>P1: tradeCompleted
+    Server->>P2: tradeCompleted
 ```
 
-**Security:**
-- Transaction rollback on failure
-- Inventory synchronization with proper event ordering
-- Server-authoritative validation
-- Distance checks on every action
+### Trade UI Features
 
-## Future Features
+- **Click-Based Interaction**: Left-click to add 1, right-click for context menu
+- **Context Menu Options**: Offer-1, Offer-5, Offer-10, Offer-X, Offer-All, Value, Examine
+- **Anti-Scam Indicators**:
+  - Red flashing exclamation when items removed
+  - Wealth transfer indicator (green = gaining, red = losing)
+  - Warning icon if value difference >50%
+  - Partner's free inventory slots displayed
+- **Proximity System**: Players automatically walk to target if out of range
+- **Interface Blocking**: Can't trade while banking/shopping
+
+### Security
+
+- **Server-Authoritative**: All validation happens server-side
+- **Atomic Swaps**: Database transactions prevent item duplication
+- **Inventory Locks**: Prevent race conditions during swap
+- **Tradeable Flag**: Items with `tradeable: false` cannot be traded
+- **Proximity Validation**: Players must be adjacent (1 tile)
+- **Interface Checks**: Blocks trading during bank/store/dialogue sessions
+
+### Trade Session States
+
+| State | Description |
+|-------|-------------|
+| `pending` | Trade request sent, awaiting response |
+| `active` | Both players in offer screen |
+| `confirming` | Both players in confirmation screen |
+| `completed` | Trade successfully completed |
+| `cancelled` | Trade cancelled by player or timeout |
+
+### Timeouts
+
+- **Request Timeout**: 5 minutes (auto-decline if not responded)
+- **Active Trade Timeout**: 10 minutes (auto-cancel if inactive)
+- **Cleanup Interval**: 60 seconds (removes expired sessions)
 
 <Info>
-  A Grand Exchange (centralized marketplace) is planned for future releases.
+Trading system code is in `packages/server/src/systems/TradingSystem/` and `packages/server/src/systems/ServerNetwork/handlers/trade/`.
 </Info>

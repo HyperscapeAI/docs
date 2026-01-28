@@ -185,24 +185,26 @@ Requires `CLAUDE_CODE_OAUTH_TOKEN` and `MINTLIFY_API_KEY` secrets to be configur
 
 ### Adding UI Components
 
-**Reusable UI Primitive** (goes in `packages/client/src/ui/components/`):
-```typescript
-// Example: Button component
-export function Button({ children, onClick }: ButtonProps) {
-  return (
-    <button onClick={onClick} className="ui-button">
-      {children}
-    </button>
-  );
-}
-```
+1. Create component in `packages/client/src/ui/components/`
+2. Add to barrel export in `index.ts`
+3. Import via `@/ui` alias
+4. Use theme tokens from `useThemeStore`
 
-**Game-Specific Component** (goes in `packages/client/src/game/components/`):
 ```typescript
-// Example: Quest tracker
-export function QuestTracker({ world }: { world: ClientWorld }) {
-  const quests = useQuestStore((state) => state.activeQuests);
-  return <div>{quests.map(renderQuest)}</div>;
+// Example: Creating a new UI component
+import { useThemeStore } from '@/ui';
+
+export function MyComponent() {
+  const theme = useThemeStore((s) => s.theme);
+  
+  return (
+    <div style={{ 
+      background: theme.colors.background.primary,
+      border: `1px solid ${theme.colors.border.default}`,
+    }}>
+      Content
+    </div>
+  );
 }
 ```
 

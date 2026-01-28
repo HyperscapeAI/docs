@@ -54,7 +54,7 @@ flowchart LR
 
 ## Monorepo Structure
 
-Hyperscape is a **Turbo monorepo** with 7 packages:
+Hyperscape is a **Turbo monorepo** with 6 packages:
 
 ```
 hyperscape/
@@ -64,49 +64,15 @@ hyperscape/
 │   ├── client/              # @hyperscape/client - Web client (Vite, React)
 │   ├── plugin-hyperscape/   # @hyperscape/plugin-hyperscape - ElizaOS AI agent plugin
 │   ├── physx-js-webidl/     # @hyperscape/physx-js-webidl - PhysX WASM bindings
-│   ├── asset-forge/         # 3d-asset-forge - AI asset generation (Elysia + React Three Fiber)
-│   └── docs-site/           # Documentation (Docusaurus)
-├── scripts/                 # Build and dev scripts
-├── nixpacks.toml            # Railway build configuration
-├── Dockerfile.server        # Multi-stage Docker build for server
-├── railway.server.json      # Railway service configuration
-└── .railwayignore           # Files excluded from Railway uploads
+│   └── asset-forge/         # 3d-asset-forge - AI asset generation (Elysia + React Three Fiber)
+├── assets/                  # Shared game assets
+├── world/                   # World configuration and manifests
+└── scripts/                 # Build and dev scripts
 ```
 
-## Production Architecture
-
-Hyperscape uses a split deployment model:
-
-```
-┌─────────────────────┐
-│  Cloudflare Pages   │  Frontend (hyperscape.club)
-│  - React client     │
-│  - Static assets    │
-└──────────┬──────────┘
-           │ HTTPS/WSS
-           ▼
-┌─────────────────────┐
-│  Railway            │  Backend (hyperscape-production.up.railway.app)
-│  - Game server      │
-│  - WebSocket API    │
-│  - PostgreSQL       │
-└──────────┬──────────┘
-           │ Fetches manifests
-           ▼
-┌─────────────────────┐
-│  Cloudflare R2      │  CDN (assets.hyperscape.club)
-│  - 3D models        │
-│  - Audio files      │
-│  - Textures         │
-│  - Manifests        │
-└─────────────────────┘
-```
-
-**Key Features:**
-- **Manifest Loading**: Server fetches manifests from CDN at startup (no Git LFS in production)
-- **CORS**: Automatic allowlist for Cloudflare Pages and Railway domains
-- **Frontend Serving**: Server can serve built client from `public/` directory
-- **Asset Routing**: Conditional asset routes based on client build presence
+<Note>
+The `hs-kit` package was removed in January 2026. All UI components were consolidated into `packages/client/src/ui/`.
+</Note>
 
 ## Build Dependency Graph
 
@@ -181,6 +147,8 @@ Web client featuring:
 - **Vite**: Fast development builds with HMR
 - **React 19**: UI framework
 - **Three.js**: 3D rendering
+- **@dnd-kit**: Drag-and-drop system
+- **Zustand**: State management
 - **Capacitor**: iOS/Android mobile builds
 - **Privy**: Authentication
 - **Farcaster**: Miniapp SDK integration
@@ -189,20 +157,18 @@ Web client featuring:
 ```
 packages/client/src/
 ├── auth/           # Privy authentication
-├── ui/             # Pure design system (hooks, stores, base components)
-│   ├── components/ # Reusable UI primitives (Window, TabBar, DragOverlay, etc.)
-│   ├── core/       # Core UI systems (drag, edit, notifications, presets, responsive, tabs, tooltip, virtual, window)
-│   ├── stores/     # UI state management (windowStore, dragStore, editStore, etc.)
-│   └── theme/      # Theme system and animations
-├── game/           # All game-specific code
-│   ├── interface/  # Window management (InterfaceManager, DefaultLayoutFactory)
-│   ├── dashboard/  # Agent dashboard components
-│   ├── character/  # Character preview
-│   ├── hud/        # Minimap, status bars, XP orbs, level-up notifications
-│   ├── panels/     # Game panels (inventory, equipment, combat, skills, etc.)
-│   ├── components/ # Game components (chat, currency, dialog, equipment, map, quest, settings, skilltree)
-│   ├── systems/    # Game systems (chat, currency, dialog, equipment, map, quest, settings, skilltree)
-│   └── chat/       # Chat system
+├── ui/             # UI system (consolidated from hs-kit)
+│   ├── components/ # Window, Tab, Modal, ItemSlot, etc.
+│   ├── controls/   # Form controls (Slider, Toggle, etc.)
+│   ├── core/       # Drag-and-drop, edit mode, presets, responsive
+│   ├── stores/     # Zustand state stores
+│   ├── theme/      # Theme system and animations
+│   └── types.ts    # UI type definitions
+├── game/           # Game loop and logic
+│   ├── components/ # Game-specific components (chat, currency, dialog, etc.)
+│   ├── panels/     # Game panels (inventory, equipment, bank, trade, etc.)
+│   ├── hud/        # HUD elements (status bars, minimap, etc.)
+│   └── interface/  # Interface management
 ├── hooks/          # React hooks
 ├── lib/            # Networking, utilities, error handling
 ├── screens/        # UI screens (login, game, etc.)
@@ -211,9 +177,9 @@ packages/client/src/
 └── index.tsx       # React entry point
 ```
 
-<Info>
-  The architecture makes clear decisions: reusable UI primitives go in `ui/`, game-specific code goes in `game/`.
-</Info>
+<Note>
+The UI system was consolidated from the removed `hs-kit` package in January 2026. All UI components, stores, and utilities are now in `packages/client/src/ui/`.
+</Note>
 
 ### plugin-hyperscape (`@hyperscape/plugin-hyperscape`)
 

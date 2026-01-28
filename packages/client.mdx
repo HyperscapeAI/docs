@@ -107,129 +107,122 @@ GameClient.tsx            // Main 3D gameplay
 | `GameClient` | Main 3D gameplay |
 | `LoadingScreen` | Asset loading state |
 
-## UI Architecture
+## UI System
 
-The client uses a clear separation between reusable UI primitives and game-specific code:
+### UI Package Structure
 
-### UI Design System (`src/ui/`)
+All UI components are located in `src/ui/` (consolidated from the removed `hs-kit` package):
 
-Pure, reusable UI components and systems:
-
-```typescript
-// From packages/client/src/ui/
-components/               // Base UI primitives
-  Window.tsx             // Draggable, resizable windows
-  TabBar.tsx             // Tab navigation
-  DragOverlay.tsx        // Drag preview overlay
-  Portal.tsx             // React portal for overlays
-  MenuButton.tsx         // Menu buttons
-  Slider.tsx             // Range sliders
-  ToggleSwitch.tsx       // Toggle switches
-  ItemSlot.tsx           // Item slot component
-  // ... and more
-
-core/                    // Core UI systems
-  drag/                  // Drag-and-drop system (@dnd-kit integration)
-  edit/                  // Edit mode (L key to unlock)
-  notifications/         // Notification system
-  presets/               // Layout presets and cloud sync
-  responsive/            // Breakpoint and mobile detection
-  tabs/                  // Tab management
-  tooltip/               # Progressive tooltips
-  virtual/               # Virtual scrolling
-  window/                # Window management
-
-stores/                  # UI state management (Zustand)
-  windowStore.ts         # Window positions and state
-  dragStore.ts           # Drag-and-drop state
-  editStore.ts           # Edit mode state
-  anchorUtils.ts         # Anchor-based positioning utilities
-  // ... and more
-
-theme/                   # Theme system
-  themes.ts              # Color themes
-  animations.ts          # Animation presets
+```
+src/ui/
+├── components/         # Core UI components
+│   ├── Window.tsx      # Draggable, resizable windows
+│   ├── Tab.tsx         # Tab component
+│   ├── TabBar.tsx      # Tab container
+│   ├── ModalWindow.tsx # Modal dialogs
+│   ├── DragOverlay.tsx # Drag preview overlay
+│   ├── ItemSlot.tsx    # Inventory/equipment slots
+│   ├── StatusBar.tsx   # HP/Prayer bars
+│   ├── Slider.tsx      # Range input slider
+│   ├── ToggleSwitch.tsx # Toggle control
+│   └── ...
+├── controls/           # Form controls
+│   ├── ColorControl.tsx
+│   ├── KeybindControl.tsx
+│   ├── SelectControl.tsx
+│   ├── SliderControl.tsx
+│   └── ToggleControl.tsx
+├── core/               # Core UI systems
+│   ├── drag/           # Drag-and-drop system
+│   ├── edit/           # Edit mode
+│   ├── presets/        # Layout presets
+│   ├── responsive/     # Responsive utilities
+│   ├── tabs/           # Tab management
+│   ├── tooltip/        # Tooltip system
+│   └── window/         # Window management
+├── stores/             # Zustand state stores
+│   ├── windowStore.ts  # Window positions/state
+│   ├── themeStore.ts   # Theme configuration
+│   ├── dragStore.ts    # Drag state
+│   ├── editStore.ts    # Edit mode state
+│   └── ...
+├── theme/              # Theme system
+│   ├── themes.ts       # Theme definitions
+│   └── animations.ts   # Animation utilities
+└── types.ts            # UI type definitions
 ```
 
-### Game-Specific Code (`src/game/`)
+### Game Components
 
-All game logic and components:
+Game-specific components are in `src/game/components/`:
 
-```typescript
-// From packages/client/src/game/
-interface/               # Window management
-  InterfaceManager.tsx   # Main UI orchestrator
-  DefaultLayoutFactory.ts # Default window layouts
-  useViewportResize.ts   # Responsive window positioning
-  
-dashboard/               # Agent dashboard
-  AgentActivityPanel.tsx
-  AgentChat.tsx
-  DashboardLayout.tsx
-  // ... and more
-
-hud/                     # HUD elements
-  Minimap.tsx
-  MinimapCompass.tsx
-  MinimapStaminaBar.tsx
-  StatusBars.tsx
-  XPProgressOrb.tsx
-  level-up/              # Level-up notifications
-  
-panels/                  # Game panels
-  InventoryPanel.tsx
-  EquipmentPanel.tsx
-  CombatPanel.tsx
-  SkillsPanel.tsx
-  BankPanel/             # Modular bank system
-  TradePanel/            # Modular trade system
-  ActionBarPanel/        # Action bar with drag-drop
-  // ... and more
-
-components/              # Game components
-  chat/                  # Chat system
-  currency/              # Currency display
-  dialog/                # Dialogue system
-  equipment/             # Equipment components
-  map/                   # World map
-  quest/                 # Quest system
-  settings/              # Settings panels
-  skilltree/             # Skill tree
-
-systems/                 # Game systems
-  chat/                  # Chat filters and state
-  currency/              # Currency utilities
-  dialog/                # Dialog parser
-  equipment/             # Equipment utilities
-  map/                   # Map navigation
-  quest/                 # Quest tracking
-  settings/              # Settings schema
-  skilltree/             # Skill tree utilities
+```
+src/game/components/
+├── chat/               # Chat system
+│   ├── ChatBox.tsx
+│   ├── ChatMessage.tsx
+│   ├── ChatInput.tsx
+│   └── ChatTabs.tsx
+├── currency/           # Currency display
+│   ├── CurrencyDisplay.tsx
+│   ├── CurrencyExchange.tsx
+│   └── CurrencyInput.tsx
+├── dialog/             # NPC dialogue
+│   ├── DialogBox.tsx
+│   ├── DialogChoices.tsx
+│   └── DialogHistory.tsx
+├── equipment/          # Equipment panel
+│   ├── EquipmentPanel.tsx
+│   ├── EquipmentSlot.tsx
+│   └── StatsSummary.tsx
+├── map/                # World map
+│   ├── WorldMap.tsx
+│   ├── MapMarker.tsx
+│   └── MapControls.tsx
+├── quest/              # Quest system
+│   ├── QuestLog.tsx
+│   ├── QuestEntry.tsx
+│   └── QuestTracker.tsx
+├── settings/           # Settings panel
+│   ├── SettingsPanel.tsx
+│   ├── SettingsCategory.tsx
+│   └── SettingsControl.tsx
+└── skilltree/          # Skill tree
+    ├── SkillTree.tsx
+    ├── SkillNode.tsx
+    └── SkillTooltip.tsx
 ```
 
-### Anchor-Based UI Positioning
+### Drag-and-Drop System
 
-The UI system uses viewport anchors (Unity/Unreal-style) for responsive window positioning:
+The client uses `@dnd-kit` for drag-and-drop functionality:
 
-**WindowAnchor System:**
-- 9 anchor points: corners, edges, and center
-- Windows maintain offset from anchor instead of absolute positions
-- Automatic repositioning on viewport resize
-- Mobile-to-desktop transitions use default layouts
-
-**Anchor Utilities** (`src/ui/stores/anchorUtils.ts`):
 ```typescript
-getAnchorPosition(anchor, viewport)      // Get anchor coordinates
-calculateOffsetFromAnchor(position, anchor, viewport)  // Calculate offset
-calculatePositionFromAnchor(anchor, offset, viewport)  // Position from anchor
-repositionWindowForViewport(window, oldViewport, newViewport)  // Resize handler
+// From src/ui/core/drag/
+import { useDrag, useDrop, DragContext } from '@/ui/core/drag';
+
+// Draggable item
+const { attributes, listeners, setNodeRef } = useDrag({
+  id: 'item-123',
+  data: { type: 'inventory', slot: 5, itemId: 'bronze_sword' },
+});
+
+// Drop zone
+const { setNodeRef, isOver } = useDrop({
+  id: 'equipment-weapon',
+  accept: ['inventory'],
+  onDrop: (item) => {
+    // Handle drop
+  },
+});
 ```
 
-**Default Anchors:**
-- Chat, Skills/Prayer: `bottom-left`
-- Minimap: `top-right`
-- Inventory, Menubar: `bottom-right`
-- Action bar: `bottom-center`
+**Features:**
+- Keyboard and pointer accessibility
+- Custom collision detection
+- Drag modifiers (snap to grid, restrict axis)
+- Visual feedback (hover states, drop previews)
+- Touch support for mobile
 
 ### HUD Components
 
@@ -367,13 +360,20 @@ bun run cap:sync:android  # Android only
 | `react-dom` | React DOM renderer |
 | `vite` | Build tool |
 | `three` | 3D rendering |
+| `@dnd-kit/core` | Drag-and-drop core |
+| `@dnd-kit/sortable` | Sortable lists |
+| `@dnd-kit/utilities` | DnD utilities |
 | `@capacitor/core` | Mobile builds |
 | `@hyperscape/shared` | Core engine |
 | `@privy-io/react-auth` | Authentication |
 | `@farcaster/miniapp-sdk` | Farcaster integration |
-| `styled-components` | CSS-in-JS |
 | `tailwindcss` | Utility CSS |
 | `livekit-client` | Voice chat |
+| `zustand` | State management |
+
+<Note>
+The `hs-kit` package was removed in January 2026. All UI components were consolidated into `packages/client/src/ui/`. The `styled-components` dependency was also removed in favor of inline styles with theme tokens.
+</Note>
 
 ## Deployment
 

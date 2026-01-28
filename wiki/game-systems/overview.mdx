@@ -100,22 +100,34 @@ Handles all economic interactions:
 - **Inventory** — 28-slot management with stacking
 - **Loot** — Item drops and ground items
 - **Trading** — Player-to-player trading with two-screen confirmation
-  - Proximity checks (2-tile range)
-  - Wealth transfer indicators
-  - Interface blocking during trades
-  - Audit logging for completed trades
 
-### Social Systems
+### Trading System
 
-**Location:** `packages/server/src/systems/` and client handlers
+**Location:** `server/src/systems/TradingSystem/`
 
-Player social interactions:
+OSRS-accurate player-to-player trading with anti-scam features:
 
-- **Friend Management** — Send, accept, decline, remove friend requests
-- **Private Messaging** — Direct player-to-player communication
-- **Online Status** — Friend online/offline notifications
-- **Ignore List** — Block unwanted interactions
-- **Database Schema** — friendships, friend_requests, ignore_lists tables
+- **Two-Screen Flow**: Offer screen → Confirmation screen
+  - Both players must accept on offer screen to move to confirmation
+  - Both players must accept on confirmation screen to complete trade
+  - Acceptance resets if either offer changes
+- **Trade Sessions**: Server-authoritative state management
+  - Request → Active → Confirming → Completed/Cancelled
+  - Timeout handling (5 minutes for requests, 10 minutes for active trades)
+  - Automatic cleanup on disconnect
+- **Proximity Checks**: Players must be adjacent (1 tile) to trade
+  - `PendingTradeManager` handles automatic pathfinding if out of range
+  - Re-paths if target moves during approach
+- **Interface Blocking**: Can't trade while using bank/store/dialogue
+- **Atomic Swaps**: Database transactions prevent item duplication
+  - Inventory locks during swap
+  - Validation of all items before swap
+  - Rollback on failure
+- **Anti-Scam Features**:
+  - Red flashing indicators when items removed
+  - Wealth transfer indicator (value difference)
+  - Partner inventory slots display
+  - Tradeable flag enforcement
 
 ### Movement & Collision System
 

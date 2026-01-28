@@ -6,10 +6,35 @@
   },
   "favicon": "/favicon.svg",
   "colors": {
-    "primary": "#c9b386",
-    "light": "#fbbf24",
-    "dark": "#8b4513"
+    "primary": "#d4a84b",
+    "light": "#ffd866",
+    "dark": "#c49530",
+    "background": {
+      "dark": "#0a0a0c"
+    }
   },
+  "topbarLinks": [
+    {
+      "name": "Play Now",
+      "url": "https://hyperscape.lol"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "GitHub",
+    "url": "https://github.com/HyperscapeAI/hyperscape"
+  },
+  "anchors": [
+    {
+      "name": "Discord",
+      "icon": "discord",
+      "url": "https://discord.gg/JD3MEwNbbX"
+    },
+    {
+      "name": "Twitter",
+      "icon": "twitter",
+      "url": "https://x.com/HyperscapeAI"
+    }
+  ],
   "navigation": {
     "global": {
       "anchors": []
@@ -66,7 +91,9 @@
             "group": "Overview",
             "icon": "layout-grid",
             "expanded": true,
-            "pages": ["packages/overview"]
+            "pages": [
+              "packages/overview"
+            ]
           },
           {
             "group": "Core Packages",
@@ -93,7 +120,9 @@
             "group": "REST API",
             "icon": "plug",
             "expanded": true,
-            "pages": ["api-reference/overview"]
+            "pages": [
+              "api-reference/overview"
+            ]
           }
         ]
       },
@@ -122,7 +151,9 @@
             "group": "Overview",
             "icon": "home",
             "expanded": true,
-            "pages": ["wiki/index"]
+            "pages": [
+              "wiki/index"
+            ]
           },
           {
             "group": "Engine Architecture",
@@ -138,7 +169,10 @@
           {
             "group": "Client Application",
             "icon": "monitor",
-            "pages": ["wiki/client/overview"]
+            "pages": [
+              "wiki/client/overview",
+              "wiki/client/ui-system"
+            ]
           },
           {
             "group": "Game Systems",
@@ -149,10 +183,12 @@
               "wiki/game-systems/skills",
               "wiki/game-systems/quests",
               "wiki/game-systems/movement",
+              "wiki/game-systems/terrain",
               "wiki/game-systems/collision",
               "wiki/game-systems/inventory",
               "wiki/game-systems/bank",
               "wiki/game-systems/trading",
+              "wiki/game-systems/social",
               "wiki/game-systems/death",
               "wiki/game-systems/loot",
               "wiki/game-systems/mob-ai"
@@ -175,10 +211,23 @@
           {
             "group": "Technical Reference",
             "icon": "hashtag",
-            "pages": ["wiki/reference/constants", "wiki/reference/mcp-server"]
+            "pages": [
+              "wiki/reference/constants",
+              "wiki/reference/mcp-server"
+            ]
           }
         ]
       }
     ]
+  },
+  "footerSocials": {
+    "github": "https://github.com/HyperscapeAI/hyperscape",
+    "discord": "https://discord.gg/JD3MEwNbbX",
+    "twitter": "https://x.com/HyperscapeAI"
+  },
+  "feedback": {
+    "thumbsRating": true,
+    "suggestEdit": true,
+    "raiseIssue": true
   }
 }

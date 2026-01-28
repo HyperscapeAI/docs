@@ -1432,7 +1432,10 @@ World stations (anvils, furnaces, ranges, banks) are configured in `stations.jso
       "model": "asset://models/anvil/anvil.glb",
       "modelScale": 0.5,
       "modelYOffset": 0.4,
-      "examine": "An anvil. Used to make things out of metal."
+      "examine": "An anvil. Used to make things out of metal.",
+      "flattenGround": true,
+      "flattenPadding": 0.3,
+      "flattenBlendRadius": 0.5
     },
     {
       "type": "furnace",
@@ -1440,13 +1443,37 @@ World stations (anvils, furnaces, ranges, banks) are configured in `stations.jso
       "model": "asset://models/furnace/furnace.glb",
       "modelScale": 1.5,
       "modelYOffset": 1.0,
-      "examine": "A very hot furnace."
+      "examine": "A very hot furnace.",
+      "flattenGround": true,
+      "flattenPadding": 0.5,
+      "flattenBlendRadius": 0.8
     }
   ]
 }
 ```
 
 This allows 3D models and configurations to be updated without code changes. The `modelScale` and `modelYOffset` properties control the visual appearance of stations in the world.
+
+#### Terrain Flattening
+
+Stations can optionally flatten terrain underneath for level building surfaces:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `flattenGround` | boolean | `false` | Enable terrain flattening under this station |
+| `flattenPadding` | number | `0.3` | Extra meters around footprint to flatten |
+| `flattenBlendRadius` | number | `0.5` | Meters over which to blend from flat to procedural terrain |
+
+**How it works:**
+- Station footprint calculated from model bounds × scale
+- Flat zone created with dimensions: `(footprint + padding × 2)`
+- Terrain height sampled at station center position
+- Smoothstep blending (t² × (3 - 2t)) creates natural transitions
+- Spatial indexing using terrain tiles (100m) for O(1) lookup
+
+<Info>
+Terrain flattening ensures stations sit on level ground even on hills or slopes, improving visual quality and preventing floating/clipping issues.
+</Info>
 
 ### Stations (`stations.json`)
 
