@@ -1,40 +1,67 @@
 ---
-title: "Smithing & Manifest System"
-description: "January 10, 2026 - Complete smithing skill, context menus, and manifest architecture"
+title: "Smithing Skill & Context Menus"
+description: "January 9-10, 2026 - Complete smithing implementation, OSRS-style context menus, and food system"
 ---
 
-## Smithing Skill System
+## Smithing Skill (PR #492)
 
-Complete implementation of the Smithing skill with OSRS-accurate mechanics:
+*Merged: January 9, 2026 | +6,682 / -622 lines | 31 commits | Author: dreaminglucid*
 
-### Smelting
-- Convert ores into bars at furnaces
-- 6 bar types: Bronze, Iron, Steel, Mithril, Adamant, Rune
-- Iron ore has 50% success rate (OSRS-accurate)
-- Coal requirements for higher-tier bars
-- Tick-based timing (4 ticks per bar)
+Complete smithing skill implementation with OSRS-accurate mechanics:
 
-### Smithing
-- Convert bars into equipment at anvils
-- 40+ smithable items across weapons, armor, and tools
-- Requires hammer in inventory
-- Organized by category in UI
-- "Make X" functionality with quantity memory
+### Smelting (Furnaces)
+- Convert ores into bars at FurnaceEntity world objects
+- Tier-specific XP rewards per bar
+- Manifest-driven recipes via ProcessingDataProvider
 
-### Database Changes
-- New `smithingLevel` and `smithingXp` columns
-- New `recipes/smelting.json` and `recipes/smithing.json` manifests
+### Smithing (Anvils)
+- Convert bars into equipment at AnvilEntity world objects
+- Full UI with Make X memory
+- Level requirements display with greyed-out unavailable options
+
+### OSRS-Accurate Timing
+- Tick-based processing system matching OSRS mechanics
+- Timing defined in manifest for easy tuning
+
+### Database Persistence
+- New smithingLevel and smithingXp columns
+- Level/XP saved and loaded on player login
+
+### Architecture
+- SmeltingSystem and SmithingSystem integrated into SystemLoader
+- Furnace/anvil interaction handlers
+- WebSocket handlers for smelting/smithing requests
+
+### Performance
+- Memory leak fixes in playerSkills cache
+- Pre-allocated inventory count buffer to reduce GC pressure
+- Server-only guards to prevent client-side event subscriptions
+- Cleanup of setTimeout references to prevent orphaned callbacks
+
+### Security
+- Input validation and centralized constants
+- Type guards for inventory item validation
+- Rate limiting on network handlers
+
+### Testing
+- ProcessingDataProvider unit tests for smelting/smithing data lookups
+
+### Bonus Fixes
+- Firemaking level requirement validation added
+- Cooking level requirement check before starting action
 
 ---
 
-## OSRS-Style Context Menus
+## Context Menu Colors (PR #497)
 
-Authentic context menu system with colored entity names:
+*Merged: January 10, 2026*
+
+OSRS-style context menus with colored entity names:
 
 ### Color Coding
-- Orange for items (#ff9040)
-- Yellow for NPCs (#ffff00)
-- Cyan for objects (#00ffff)
+- Orange (#ff9040) for items
+- Yellow (#ffff00) for NPCs
+- Cyan (#00ffff) for objects
 
 ### Inventory Actions
 - Manifest-driven actions with heuristic fallback
@@ -43,67 +70,42 @@ Authentic context menu system with colored entity names:
 - Supported: Eat, Drink, Wield, Wear, Bury, Use, Drop, Examine
 
 ### Architecture
-- Centralized `InventoryActionDispatcher` eliminates code duplication
-- Item helper utilities: `isFood`, `isPotion`, `isBone`, `usesWield`, `usesWear`
-- Cancel option always shown last (OSRS standard)
+- Centralized InventoryActionDispatcher
+- Item helper utilities: isFood, isPotion, isBone, usesWield, usesWear
+- Cancel option always shown last
 
 ---
 
-## Manifest Architecture Improvements
+## Food & Eating System (PR #500)
 
-### Items Directory
-- Items split into 5 category files: weapons, tools, resources, food, misc
+*Merged: January 10, 2026*
 
-### Gathering Manifests
-- Separate files for woodcutting, mining, fishing
-- Complete fishing spot definitions with OSRS-accurate catch rates
-- Mining rocks with 3D model paths and depleted states
+OSRS-accurate food consumption with eat delay:
 
-### Recipe Manifests
-- Dedicated files for cooking, firemaking, smelting, smithing
-
-### Station Manifests
-- 3D models and configs for anvils, furnaces, ranges
-- Anvil model with scale 0.5 and yOffset 0.2
-- Furnace model with scale 1.5 and yOffset 1.0
-
-### Other Changes
-- Tier system: Centralized `tier-requirements.json` for equipment levels
-- Skill unlocks: `skill-unlocks.json` defines what unlocks at each level
-- Atomic loading: All category files must exist or system falls back to legacy format
+- 3-tick (1.8s) cooldown between foods
+- Eating during combat adds 3 ticks to attack cooldown
+- Server-authoritative with full validation
+- EatDelayManager for per-player cooldown tracking
+- Food consumed even at full health (OSRS-accurate)
+- Event-driven health bar updates via PLAYER_HEALTH_UPDATED
 
 ---
 
-## New 3D Models
+## Station 3D Models (PR #496)
 
-- **Fishing Tools**: Base and standard fishing rod models with metadata
-- **Mining Rocks**: Copper, mithril, and runite ore rocks with depleted variants
-- **Stations**: Anvil and furnace models for crafting
+*Merged: January 10, 2026*
 
----
+Manifest-driven 3D models for crafting stations:
 
-## Data Providers
-
-New specialized providers for efficient data access:
-
-- **ProcessingDataProvider**: Cooking, firemaking, smelting, smithing recipes
-- **TierDataProvider**: Equipment level requirements by tier
-- **StationDataProvider**: Station models and configurations
-- **Pre-allocated Buffers**: Memory optimization for inventory counting
+- Anvil model with configurable scale and offset
+- Furnace model with configurable scale and offset
+- Station data loaded from manifest
 
 ---
 
 ## Bug Fixes
 
-- **Resource Spam Fix**: Prevent duplicate harvesting on spam-click
-- **Equipment System**: Tools with `equipSlot: "weapon"` can now be equipped
-- **Firemaking**: Level requirement validation added
-- **Cooking**: Level requirement check before starting action
-
----
-
-## Testing
-
-- 843 new test lines for comprehensive coverage
-- Unit Tests: InventoryActionDispatcher (333 lines), item-helpers (510 lines)
-- Integration Tests: ProcessingDataProvider, skill unlocks, data integrity
+- **PR #502**: Two-phase slot update to prevent bank unique constraint violations
+- **PR #494**: Prevent duplicate resource harvesting on spam-click
+- **PR #504**: 100% rock depletion, accurate mining success rates, pickaxe bonuses
+- **PR #505**: F5 keybind to toggle FPS debug panel

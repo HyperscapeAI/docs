@@ -1,68 +1,104 @@
 ---
-title: "Initial Release (v0.1.0)"
-description: "January 1, 2025 - First public release of Hyperscape"
+title: "Project Foundation"
+description: "August - December 2025 - Initial development and core systems"
 ---
 
-## Core Features
+<Info>
+The Hyperscape project began development in August 2025. This entry documents the foundational systems built during the initial development phase.
+</Info>
 
-### Tick-Based Combat
-- Authentic OSRS-style 600ms tick combat system
-- Attack styles, combat stances, and special attacks
-- Damage calculation with attack/defense bonuses
+## Timeline
 
-### AI Agents
-- ElizaOS integration with 17 actions and 6 state providers
-- Autonomous NPC behavior and player assistants
-- Natural language interaction
-
-### Skill System
-11 skills with OSRS-accurate XP curves:
-
-**Combat Skills:**
-- Attack, Strength, Defense, Constitution, Ranged, Prayer
-
-**Gathering Skills:**
-- Woodcutting, Fishing, Mining
-
-**Artisan Skills:**
-- Firemaking, Cooking, Smithing
-
-### Economy
-- Banks with tabs and placeholders
-- Shops with stock and pricing
-- Inventory management (28 slots)
-- Loot drops with rarity tables
+- **August 5, 2025**: Initial commit - project foundation
+- **August 2025**: Refactored RPG into core engine
+- **September 2025**: Terrain snapping, player controller
+- **October 2025**: Skill system, asset-forge integration
+- **October 27, 2025**: First pre-release deployment (asset-forge Vercel test)
 
 ---
 
-## Architecture
+## Core Engine
 
-### Monorepo Structure
-Turbo monorepo with 7 packages for modular development.
+### Entity-Component-System (ECS)
+- Custom ECS architecture for game entities
+- Components: Position, Health, Inventory, Skills, Combat
+- Systems: Movement, Combat, Gathering, Processing
 
-### 3D Engine
-- Three.js for rendering
-- PhysX WASM for physics simulation
-- Custom ECS (Entity-Component-System) architecture
+### 3D Rendering
+- Three.js for WebGL rendering
+- Custom terrain system with tile-based world
+- Entity rendering with animations and emotes
 
-### Multiplayer
+### Physics
+- PhysX WASM bindings for collision detection
+- Terrain snapping for entities
+- Raycast-based interaction system
+
+---
+
+## Multiplayer Architecture
+
+### Server
 - Fastify HTTP server
 - WebSocket real-time communication
 - Server-authoritative game state
+- PostgreSQL database with Drizzle ORM
+
+### Networking
+- Tick-based synchronization (600ms ticks)
+- Entity interpolation for smooth movement
+- Event-driven packet handling
 
 ### Client
-- React 19 with hooks
-- Vite for fast development
+- React 19 with Vite
+- Zustand state management
 - Responsive UI panels
 
 ---
 
-## Packages
+## Skill Systems
 
-| Package | Description |
-|---------|-------------|
-| `@hyperscape/shared` | Core 3D engine (ECS, physics, rendering) |
-| `@hyperscape/server` | Game server (Fastify, WebSockets, PostgreSQL) |
+### Combat
+- Attack, Strength, Defense, Constitution
+- Ranged and Prayer skills
+- OSRS-style damage calculation
+- Auto-retaliate and combat stances
+
+### Gathering
+- Woodcutting, Fishing, Mining
+- Resource nodes with depletion
+- Tool requirements and bonuses
+
+### Artisan
+- Firemaking, Cooking
+- Processing stations (ranges, fires)
+
+---
+
+## Economy
+
+### Inventory
+- 28-slot inventory system
+- Stackable items (coins, resources)
+- Item definitions via manifests
+
+### Banking
+- Bank tabs and placeholders
+- Deposit/withdraw with quantities
+- Note conversion
+
+### Shops
+- NPC shops with stock
+- Buy/sell pricing
+
+---
+
+## Monorepo Structure
+
+| Package | Purpose |
+|---------|---------|
+| `@hyperscape/shared` | Core engine (ECS, physics, rendering) |
+| `@hyperscape/server` | Game server (Fastify, WebSockets) |
 | `@hyperscape/client` | Web client (Vite, React) |
 | `@hyperscape/plugin-hyperscape` | ElizaOS AI agent plugin |
 | `@hyperscape/physx-js-webidl` | PhysX WASM bindings |
@@ -70,4 +106,13 @@ Turbo monorepo with 7 packages for modular development.
 
 ---
 
-[View release on GitHub](https://github.com/HyperscapeAI/hyperscape/releases/tag/v0.1.0)
+## AI Integration
+
+### ElizaOS Plugin
+- Agent actions for game interaction
+- State providers for world awareness
+- Natural language processing for commands
+
+---
+
+[View repository on GitHub](https://github.com/HyperscapeAI/hyperscape)

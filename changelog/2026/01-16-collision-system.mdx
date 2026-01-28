@@ -1,113 +1,116 @@
 ---
-title: "Collision System & UI Improvements"
-description: "January 16, 2026 - OSRS-accurate tile collision, coin pouch, tooltips, and context menus"
+title: "Collision System & Prayer"
+description: "January 14-16, 2026 - Static tile collision, prayer skill, coin pouch, and UI improvements"
 ---
 
-## Static Tile Collision System
+## Static Tile Collision (PR #552)
 
-Production-quality OSRS-accurate collision system for static world objects and entities:
+*Merged: January 15, 2026 | +3,691 lines | Author: dreaminglucid*
+
+Zone-based collision system for static world objects:
 
 ### CollisionMatrix
-- Zone-based collision storage with bitmask flags
-- World divided into 8×8 tile zones (Int32Array[64] = 256 bytes per zone)
-- Lazy allocation: zones created on first write
-- Memory efficient: 1000×1000 tile world = ~4MB
-- O(1) tile lookups with zero allocations in hot paths
+- Bitmask constants for collision flags
+- Zone-based tile storage (8×8 tile zones)
+- Lazy allocation for memory efficiency
+- O(1) tile lookups
 
 ### Collision Flags
-- Static objects: `BLOCKED`, `WATER`, `STEEP_SLOPE`
-- Entity occupancy: `OCCUPIED_PLAYER`, `OCCUPIED_NPC`
-- Directional walls: 8 directions for future dungeons/buildings
-- Combined masks: `BLOCKS_WALK`, `BLOCKS_MOVEMENT`, `BLOCKS_RANGED`
+- Static objects: BLOCKED, WATER, STEEP_SLOPE
+- Entity occupancy: OCCUPIED_PLAYER, OCCUPIED_NPC
+- Directional walls for future dungeons/buildings
 
-### Automatic Footprint Detection
-- Build-time model bounds extraction via `extract-model-bounds.ts`
-- Generates `model-bounds.json` manifest automatically
-- Footprints calculated from model dimensions × scale
-- Turbo caching avoids rebuilding when models unchanged
+### Integration
+- Resources and stations register static collision
+- Mob pathfinding respects CollisionMatrix
+- Unified `isTileWalkable` method in TerrainSystem
+- Network serialization for zone collision sync
 
-### Multi-Tile Entities
-- Stations and large resources occupy multiple tiles
-- Furnaces, anvils, banks support 2×2 footprints
-- Center-based registration (footprint centered on entity position)
-- OSRS-style interaction from any adjacent tile
+### Build System
+- Auto-detect station footprints from model bounds at build time
+- Auto-generate `model-bounds.json` during build/dev
+- Turbo caching for incremental builds
 
-### Pathfinding Integration
-- BFSPathfinder checks `CollisionMatrix` for static objects
-- Safespotting: players can hide behind trees/rocks
-- Depleted resources remain solid (stumps block movement)
+### Multi-Tile Stations
+- Interaction enabled from any side of multi-tile stations
+- Center-based footprint registration for resources
 
 ### Testing
-- 1,118 lines of comprehensive unit tests
-- CollisionMatrix: zone allocation, flag operations, negative coordinates
-- CollisionFlags: bitmask uniqueness, directional walls
-- TileSystem: multi-tile footprint calculations
+- Unit tests for CollisionMatrix, CollisionFlags, and tilesWithinRangeOfFootprint
 
 ---
 
-## Coin Pouch Withdrawal System
+## Prayer System (PR #563)
 
-RS3-style money pouch with secure withdrawal to inventory:
+*Merged: January 16, 2026 | +4,126 lines | Author: dreaminglucid*
+
+Complete prayer skill implementation:
 
 ### Features
-- Protected coin storage (characters.coins column)
-- Doesn't use inventory slots
-- Displayed in inventory panel footer
+- Manifest-driven prayer types with Skills integration
+- Database schema and migration for persistence
+- PrayerDataProvider for manifest data loading
+- Drain mechanics with conflict resolution
+- Prayer bonuses integrated into combat damage calculations
 
-### Withdrawal Flow
+### Bone Burying
+- Regular, big, and dragon bones support
+- 2-tick delay for OSRS accuracy
+- Prayer XP rewards
+
+### Prayer Altars
+- Altar entities for recharging prayer points
+- Client-side handling with visible purple material
+
+### UI
+- Prayer panel with server state sync
+- Real-time prayer point updates via events
+- Chat messages for prayer failures
+
+### Testing
+- 62 unit tests covering all prayer functionality
+
+---
+
+## Coin Pouch Withdrawal (PR #559)
+
+*Merged: January 15, 2026*
+
+RS3-style money pouch with secure withdrawal:
+
 - Click coin pouch to open withdrawal modal
 - Enter amount or use preset buttons
 - Coins added to existing stack or new inventory slot
 - Server-authoritative with atomic database transactions
-
-### Security
-- Rate limiting: 10 requests/second with auto-cleanup
-- Timestamp validation: prevents replay attacks (±30s window)
-- Input validation: positive integers, max 2.1B coins
-- Overflow protection: prevents MAX_COINS stack overflow
-- Row-level locking: `FOR UPDATE` in transactions
-- Audit logging: tracks large withdrawals (≥1M coins)
-
-### Testing
-- 32 comprehensive unit tests covering validation, edge cases, and atomicity
+- Rate limiting, timestamp validation, overflow protection
 
 ---
 
-## Hover Tooltips & Click-to-Unequip
+## Hover Tooltips & Click-to-Unequip (PR #558)
 
-RS3-style hover tooltips and improved equipment interaction:
+*Merged: January 15, 2026*
 
-- Item stats on hover (equipment and inventory)
-- Shows item name, bonuses (attack/defense/strength), and quantity
+- Item stats on hover for equipment and inventory
+- Shows item name, bonuses, and quantity
 - Portal-based rendering avoids z-index issues
-- Click-to-unequip: Direct equipment slot clicks unequip items
+- Direct equipment slot clicks unequip items
 - Smart tooltip suppression when context menu is open
 
 ---
 
-## Walk Here Context Menu
+## Walk Here Context Menu (PR #555)
 
-OSRS-style terrain interaction with right-click menu:
+*Merged: January 15, 2026*
 
 - Right-click empty terrain shows "Walk here"
-- New `ContextMenuTargetType` union for type safety
-- `ContextMenuController.showMenu()` accepts null target for terrain
+- New ContextMenuTargetType union for type safety
 
 ---
 
-## Bug Fixes & Improvements
+## Bug Fixes
 
-- **Fishing Animation**: Restored fishing emote instead of idle placeholder
-- **Store Transactions**: Wrapped with `executeInventoryTransaction` to prevent race conditions
-- **Bank Stacking**: Stackable base items now stack when withdrawing
-- **Mob Combat Animations**: Fixed idle/walk emotes overriding combat animations
-- **Nametag Removal**: Removed overhead nametags for OSRS accuracy
-
----
-
-## Test Suite Maintenance
-
-- Fixed Vitest imports (was incorrectly using `bun:test`)
-- Updated hardcoded counts to match current implementation
-- Adjusted performance thresholds for CI environment variance
-- Added missing `entities.players` to mock worlds
+- **PR #554**: Restored fishing animation instead of idle placeholder
+- **PR #553**: Wrapped store transactions with executeInventoryTransaction
+- **PR #547**: Removed overhead nametags for OSRS accuracy
+- **PR #544**: Fixed mob idle/walk emotes overriding combat animations
+- **PR #560**: Fixed Vitest imports and updated stale test assertions
