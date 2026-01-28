@@ -189,12 +189,31 @@ Web client featuring:
 ```
 packages/client/src/
 ├── auth/           # Privy authentication
-├── components/     # React UI components
-├── game/           # Game loop and logic
+├── ui/             # Pure design system (hooks, stores, base components)
+│   ├── components/ # Reusable UI primitives (Window, TabBar, DragOverlay, etc.)
+│   ├── core/       # Core UI systems (drag, edit, notifications, presets, responsive, tabs, tooltip, virtual, window)
+│   ├── stores/     # UI state management (windowStore, dragStore, editStore, etc.)
+│   └── theme/      # Theme system and animations
+├── game/           # All game-specific code
+│   ├── interface/  # Window management (InterfaceManager, DefaultLayoutFactory)
+│   ├── dashboard/  # Agent dashboard components
+│   ├── character/  # Character preview
+│   ├── hud/        # Minimap, status bars, XP orbs, level-up notifications
+│   ├── panels/     # Game panels (inventory, equipment, combat, skills, etc.)
+│   ├── components/ # Game components (chat, currency, dialog, equipment, map, quest, settings, skilltree)
+│   ├── systems/    # Game systems (chat, currency, dialog, equipment, map, quest, settings, skilltree)
+│   └── chat/       # Chat system
 ├── hooks/          # React hooks
+├── lib/            # Networking, utilities, error handling
 ├── screens/        # UI screens (login, game, etc.)
+├── types/          # TypeScript types
+├── utils/          # Helper functions
 └── index.tsx       # React entry point
 ```
+
+<Info>
+  The architecture makes clear decisions: reusable UI primitives go in `ui/`, game-specific code goes in `game/`.
+</Info>
 
 ### plugin-hyperscape (`@hyperscape/plugin-hyperscape`)
 

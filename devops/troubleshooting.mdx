@@ -291,6 +291,60 @@ CLIENT_URL=https://your-domain.com
 bun run dev:reset
 ```
 
+### UI Windows Not Positioning Correctly
+
+**Symptom**: Windows cluster in corner or overlap after resize
+
+**Causes**:
+- Saved layout from different screen size
+- Missing anchor data in saved layout
+- Mobile-to-desktop transition
+
+**Solution**:
+
+1. Press **L** to enter edit mode
+2. Manually reposition windows
+3. Save new layout
+4. Or reset to default layout:
+
+```typescript
+// In browser console
+localStorage.removeItem('hyperscape-window-layout');
+location.reload();
+```
+
+### Drag-and-Drop Not Working
+
+**Symptom**: Can't drag items or windows
+
+**Causes**:
+- Edit mode not enabled (for windows)
+- Drop zone not registered
+- Race condition in drag state
+
+**Solution**:
+
+- For windows: Press **L** to enable edit mode
+- For items: Ensure inventory panel is open
+- Check browser console for errors
+- Try refreshing the page
+
+### Trade Not Completing
+
+**Symptom**: Trade stuck on confirmation screen
+
+**Causes**:
+- Players moved too far apart
+- Inventory full
+- Items no longer available
+
+**Solution**:
+
+1. Check distance to trade partner (must be within 2 tiles)
+2. Free up inventory space
+3. Verify items still in inventory
+4. Cancel and restart trade if stuck
+
 ## Logs
 
 ### Server Logs

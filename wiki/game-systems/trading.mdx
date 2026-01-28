@@ -1,482 +1,312 @@
 ---
 title: "Trading System"
-description: "Player-to-player trading with OSRS-style two-screen confirmation"
+description: "Player-to-player trading with two-screen confirmation and security features"
 icon: "handshake"
 ---
 
-{/* 
-  Source: packages/server/src/systems/TradingSystem/
-  Source: packages/client/src/game/panels/TradePanel/
-  Verified against PR #641
-*/}
-
 ## Overview
 
-Hyperscape implements a secure, server-authoritative player-to-player trading system inspired by Old School RuneScape. The system features a two-screen confirmation flow, anti-scam protections, and atomic item swaps to prevent duplication exploits.
+The trading system enables secure player-to-player item exchanges with OSRS-accurate two-screen confirmation flow, proximity checks, and comprehensive security features.
 
 <Info>
-  All trade operations are server-authoritative with database transactions to ensure item integrity.
+  Trading code lives in `packages/server/src/systems/TradingSystem/` with modular handlers for each aspect of the trade flow.
 </Info>
 
----
+## Trade Flow
 
-## Trading Flow
+### Initiating a Trade
 
-### 1. Initiating a Trade
+1. **Right-click** on another player
+2. Select **"Trade with [Player]"** from context menu
+3. If out of range, character auto-walks to player
+4. Trade request sent when within 2 tiles
 
-Players can request trades by clicking on another player. If the target is out of range, the initiator automatically walks to them first (OSRS-style behavior).
+### Trade Request
 
-```typescript
-// Client sends trade request
-world.network.send("tradeRequest", {
-  targetPlayerId: "player-uuid"
-});
-```
+The target player receives:
+- Pink chat message: **"[Player] wishes to trade with you."**
+- Clickable message to accept
+- Trade request modal with Accept/Decline buttons
 
-**Server validates:**
-- Both players are online
-- Both players are within interaction range (1 tile)
-- Neither player has an active interface session (bank, shop, dialogue)
-- Request is not rate-limited
+### Screen 1: Offer Items
 
-### 2. Trade Request Notification
+Both players can:
+- Click inventory items to add to offer
+- Click offered items to remove
+- Enter quantities for stackable items
+- View partner's offer in real-time
+- See partner's free inventory slots
+- Click **"Accept"** when satisfied
 
-The target player receives a **pink clickable chat message** (OSRS-style):
+**Interface Blocking:**
+- Bank, store, and dialogue interfaces automatically close
+- Prevents item duplication exploits
+- Trade closes if player opens conflicting interface
 
-```
-"PlayerName wishes to trade with you."
-```
+### Screen 2: Final Confirmation
 
-Clicking the message accepts the trade request.
+After both players accept on Screen 1:
+- **Wealth Transfer Indicator** shows value difference
+  - Green arrow: receiving more value
+  - Red arrow: giving more value
+  - Gray: balanced trade
+- Review final offers (no changes allowed)
+- Both players must click **"Accept"** again
+- Trade completes when both confirm
 
-### 3. Offer Screen
+**Reset Conditions:**
+- Any item change resets both players to Screen 1
+- Moving too far apart cancels trade
+- Closing trade window cancels for both players
 
-Both players see a split-screen interface:
+## Implementation
 
-**Left side:** Your offer (28 slots)
-**Center:** Partner's offer (28 slots)  
-**Right side:** Your inventory (offer screen only)
-
-**Features:**
-- **Left-click inventory item:** Add 1 to trade
-- **Right-click inventory item:** Context menu (Offer-1, Offer-5, Offer-10, Offer-X, Offer-All, Value, Examine)
-- **Click offered item:** Remove from trade
-- **Partner free slots indicator:** Shows if partner has space for your items
-- **Wealth transfer indicator:** Shows net gold value change (green = gaining, red = losing)
-
-```typescript
-// Add item to trade (1 quantity)
-world.network.send("tradeAddItem", {
-  tradeId: "trade-uuid",
-  inventorySlot: 5,
-  quantity: 1
-});
-
-// Remove item from trade
-world.network.send("tradeRemoveItem", {
-  tradeId: "trade-uuid",
-  tradeSlot: 3
-});
-```
-
-**Anti-scam feature:** When items are removed from either offer, a **red flashing exclamation** appears in the empty slot for 5 seconds.
-
-### 4. First Accept
-
-When both players click "Accept Trade":
-- Trade moves to **confirmation screen**
-- Both acceptance states reset
-- Players must accept again on the confirmation screen
-
-### 5. Confirmation Screen
-
-The second screen shows:
-- Final item lists (no inventory panel)
-- Total gold values for each offer
-- Warning message: "⚠️ Please review the trade carefully before accepting"
-- If items were recently removed: "⚠️ Items have been removed from the trade!"
-
-### 6. Final Accept & Completion
-
-When both players accept on the confirmation screen:
-- Server locks both inventories
-- Atomic database transaction swaps items
-- Both inventories reload from database
-- Trade completion packets sent to both players
-
----
-
-## Server Architecture
-
-### TradingSystem
-
-**Location:** `packages/server/src/systems/TradingSystem/`
-
-The `TradingSystem` manages all active trade sessions:
+### Modular Architecture
 
 ```typescript
-interface TradeSession {
-  tradeId: string;
-  status: "pending" | "active" | "confirming" | "completed" | "cancelled";
-  initiator: TradeParticipant;
-  recipient: TradeParticipant;
-  createdAt: number;
-  lastModified: number;
-}
+// From packages/server/src/systems/TradingSystem/
+index.ts          // Main TradingSystem class
+acceptance.ts     // Accept/decline logic
+items.ts          // Add/remove items from offer
+request.ts        // Trade initiation with proximity checks
+swap.ts           // Screen transitions (Screen 1 ↔ Screen 2)
+helpers.ts        // Shared utilities
+types.ts          // Type definitions
+```
 
-interface TradeParticipant {
-  playerId: string;
-  playerName: string;
-  socketId: string;
-  offeredItems: TradeOfferItem[];
-  accepted: boolean;
+### TradingSystem Interface
+
+```typescript
+export interface TradingSystem {
+  // Request handling
+  requestTrade(requesterId: string, targetId: string): void;
+  acceptRequest(playerId: string): void;
+  declineRequest(playerId: string): void;
+  
+  // Item management
+  addItem(playerId: string, slot: number, quantity: number): void;
+  removeItem(playerId: string, slot: number): void;
+  
+  // Screen transitions
+  acceptScreen1(playerId: string): void;
+  acceptScreen2(playerId: string): void;
+  
+  // Trade completion
+  completeTrade(tradeId: string): void;
+  cancelTrade(playerId: string): void;
 }
 ```
-
-**Key methods:**
-- `createTradeRequest()` - Initiate trade
-- `respondToTradeRequest()` - Accept/decline
-- `addItemToTrade()` - Add item to offer
-- `removeItemFromTrade()` - Remove item from offer
-- `setAcceptance()` - Accept/unaccept current state
-- `moveToConfirmation()` - Transition to second screen
-- `completeTrade()` - Mark trade as completed
-- `cancelTrade()` - Cancel trade with reason
-
-### Trade Handlers
-
-**Location:** `packages/server/src/systems/ServerNetwork/handlers/trade/`
-
-The trade handlers are split into focused modules:
-
-| Module | Purpose |
-|--------|---------|
-| `request.ts` | Trade request initiation and response |
-| `items.ts` | Add, remove, set quantity for trade items |
-| `acceptance.ts` | Accept, cancel accept, cancel trade |
-| `swap.ts` | Atomic item swap execution (internal) |
-| `helpers.ts` | Shared utilities |
-| `types.ts` | Handler-specific types |
-
-### PendingTradeManager
-
-**Location:** `packages/server/src/systems/ServerNetwork/PendingTradeManager.ts`
-
-Manages "walk to player before trading" behavior:
-
-```typescript
-class PendingTradeManager {
-  queuePendingTrade(playerId, targetId, onInRange): void
-  processTick(): void  // Re-paths if target moves
-  cancelPendingTrade(playerId): void
-  onPlayerDisconnect(playerId): void
-}
-```
-
-**Behavior:**
-1. Player clicks another player to trade
-2. If not in range, server queues "pending trade" and moves player toward target
-3. Every tick, server re-checks range and re-paths if target moved
-4. When in range, server sends the trade request
-5. New click or disconnect cancels pending trade
-
----
-
-## Client Architecture
-
-### TradePanel Component
-
-**Location:** `packages/client/src/game/panels/TradePanel/`
-
-The trade UI is split into focused modules:
-
-```
-TradePanel/
-├── TradePanel.tsx           # Main panel component
-├── components/
-│   ├── TradeSlot.tsx        # Individual trade slot
-│   ├── InventoryItem.tsx    # Clickable inventory item
-│   └── InventoryMiniPanel.tsx # Inventory grid
-├── modals/
-│   ├── ContextMenu.tsx      # Right-click menu
-│   └── QuantityPrompt.tsx   # "Offer-X" input
-├── hooks/
-│   └── useRemovedItemTracking.ts # Anti-scam tracking
-├── utils.ts                 # Formatting utilities
-├── constants.ts             # Grid layout constants
-└── types.ts                 # Component types
-```
-
-### Trade State Management
-
-```typescript
-interface TradeWindowState {
-  isOpen: boolean;
-  tradeId: string | null;
-  screen: "offer" | "confirm";
-  partner: { id: PlayerID; name: string; level: number } | null;
-  myOffer: TradeOfferItem[];
-  myAccepted: boolean;
-  theirOffer: TradeOfferItem[];
-  theirAccepted: boolean;
-  myOfferValue: number;
-  theirOfferValue: number;
-  partnerFreeSlots: number;
-}
-```
-
-State updates via network packets:
-- `trade` - Trade window opened
-- `tradeUpdate` - Items/acceptance changed
-- `tradeConfirm` - Moved to confirmation screen
-- `tradeClose` - Trade closed
-
----
 
 ## Security Features
 
-### Server-Authoritative Design
-
-All trade operations are validated server-side:
-
-1. **Proximity checks** - Players must be within 1 tile
-2. **Interface blocking** - Can't trade while banking/shopping
-3. **Item validation** - Items verified at add time and completion time
-4. **Tradeable flag** - Items with `tradeable: false` are rejected
-5. **Inventory space** - Checks both players have space for incoming items
-
-### Atomic Item Swap
-
-The trade completion uses a database transaction with inventory locks:
+### Proximity Validation
 
 ```typescript
-// Pseudocode from swap.ts
-async function executeTradeSwap(tradeId, world, db) {
-  // Lock both inventories
-  inventorySystem.lockForTransaction(initiatorId);
-  inventorySystem.lockForTransaction(recipientId);
-  
-  try {
-    // Flush to database
-    await inventorySystem.persistInventoryImmediate(initiatorId);
-    await inventorySystem.persistInventoryImmediate(recipientId);
-    
-    // Execute atomic swap in transaction
-    await db.transaction(async (tx) => {
-      // Lock rows with FOR UPDATE
-      const initiatorInventory = await tx.execute(
-        sql`SELECT * FROM inventory WHERE "playerId" = ${initiatorId} FOR UPDATE`
-      );
-      const recipientInventory = await tx.execute(
-        sql`SELECT * FROM inventory WHERE "playerId" = ${recipientId} FOR UPDATE`
-      );
-      
-      // Validate items still exist with correct quantities
-      validateOfferedItems(session, initiatorInventory, recipientInventory);
-      
-      // Check inventory space
-      validateInventorySpace(session, initiatorInventory, recipientInventory);
-      
-      // Remove offered items from both players
-      await removeOfferedItems(tx, session);
-      
-      // Add traded items to both players
-      await addTradedItems(tx, session);
-    });
-    
-    // Reload inventories from database
-    await inventorySystem.reloadFromDatabase(initiatorId);
-    await inventorySystem.reloadFromDatabase(recipientId);
-    
-    // Complete trade
-    tradingSystem.completeTrade(tradeId);
-  } finally {
-    // Always unlock
-    inventorySystem.unlockTransaction(initiatorId);
-    inventorySystem.unlockTransaction(recipientId);
-  }
+// From request.ts
+const TRADE_RANGE = 2; // tiles
+
+// Validated on:
+// - Trade request initiation
+// - Every item add/remove
+// - Screen transitions
+// - Trade completion
+
+if (distance > TRADE_RANGE) {
+  cancelTrade(playerId);
+  sendMessage(playerId, "You are too far away to trade.");
 }
 ```
 
-### Anti-Scam Protections
+### Transaction Safety
 
-1. **Two-screen confirmation** - Prevents last-second item swaps
-2. **Removed item indicators** - Red flashing exclamation when items removed
-3. **Wealth transfer warning** - Shows if trade is heavily imbalanced
-4. **Partner free slots** - Prevents "inventory full" scams
-5. **Acceptance reset** - Any offer change resets both acceptances
+- **Atomic Operations**: Trade completes or fully rolls back
+- **Inventory Checks**: Validates space before accepting
+- **Item Verification**: Confirms items exist before transfer
+- **Rollback on Failure**: Restores state if any step fails
 
----
+### Audit Logging
+
+All completed trades are logged:
+
+```typescript
+// From helpers.ts
+logTradeCompletion({
+  tradeId: string,
+  player1: { id: string, username: string, items: TradeItem[] },
+  player2: { id: string, username: string, items: TradeItem[] },
+  timestamp: Date,
+  wealthTransfer: number,
+});
+```
+
+## UI Components
+
+### TradePanel
+
+Located in `packages/client/src/game/panels/TradePanel/`:
+
+```typescript
+TradePanel.tsx            // Main trade interface
+TradeRequestModal.tsx     // Accept/decline request modal
+
+components/
+  InventoryItem.tsx       // Draggable inventory items
+  InventoryMiniPanel.tsx  // Mini inventory view
+  TradeSlot.tsx           // Trade offer slots
+  
+modals/
+  ContextMenu.tsx         // Item context menu
+  QuantityPrompt.tsx      // Stackable item quantity input
+  
+hooks/
+  useRemovedItemTracking.ts  // Track removed items for sync
+```
+
+### Trade States
+
+```typescript
+// From types.ts
+export type TradeScreen = 1 | 2;
+
+export interface TradeState {
+  screen: TradeScreen;
+  playerAccepted: boolean;
+  partnerAccepted: boolean;
+  playerOffer: TradeItem[];
+  partnerOffer: TradeItem[];
+  partnerFreeSlots: number;
+  wealthTransfer: number;
+}
+```
+
+## Chat Integration
+
+Trade requests appear as pink-colored messages:
+
+```typescript
+// From packages/server/src/systems/ServerNetwork/handlers/trade/request.ts
+sendChatMessage({
+  playerId: targetId,
+  message: `[${requesterName}] wishes to trade with you.`,
+  color: "pink",
+  clickable: true,
+  action: "accept-trade",
+  actionData: { requesterId },
+});
+```
 
 ## Network Protocol
 
-### Client → Server Packets
-
-| Packet | Payload | Description |
-|--------|---------|-------------|
-| `tradeRequest` | `{ targetPlayerId }` | Request trade with player |
-| `tradeRequestRespond` | `{ tradeId, accept }` | Accept/decline request |
-| `tradeAddItem` | `{ tradeId, inventorySlot, quantity? }` | Add item to offer |
-| `tradeRemoveItem` | `{ tradeId, tradeSlot }` | Remove item from offer |
-| `tradeAccept` | `{ tradeId }` | Accept current state |
-| `tradeCancel` | `{ tradeId }` | Cancel trade |
-
-### Server → Client Packets
-
-| Packet | Payload | Description |
-|--------|---------|-------------|
-| `tradeIncoming` | `{ tradeId, fromPlayerId, fromPlayerName, fromPlayerLevel }` | Trade request received |
-| `tradeStarted` | `{ tradeId, partnerId, partnerName, partnerLevel, partnerFreeSlots }` | Trade accepted, window opens |
-| `tradeUpdated` | `{ tradeId, myOffer, theirOffer, partnerFreeSlots }` | Offer changed |
-| `tradeConfirmScreen` | `{ tradeId, myOffer, theirOffer, myOfferValue, theirOfferValue }` | Moved to confirmation |
-| `tradeCompleted` | `{ tradeId, receivedItems }` | Trade successful |
-| `tradeCancelled` | `{ tradeId, reason, message }` | Trade cancelled |
-| `tradeError` | `{ message, code }` | Trade error |
-
----
-
-## Trade Cleanup
-
-Trades are automatically cancelled when:
-- Either player disconnects
-- Either player moves away (>1 tile)
-- Either player opens another interface (bank, shop)
-- Trade times out (configurable)
-- Server shuts down
-
-The `TradingSystem` runs a cleanup interval to remove stale sessions:
+### Client → Server Events
 
 ```typescript
-// From TradingSystem.ts
-private cleanupInterval = setInterval(() => {
-  this.cleanupStaleSessions();
-}, 60000); // Every 60 seconds
+// Trade request
+{ type: "trade:request", targetId: string }
+
+// Accept/decline request
+{ type: "trade:accept-request" }
+{ type: "trade:decline-request" }
+
+// Item management
+{ type: "trade:add-item", slot: number, quantity: number }
+{ type: "trade:remove-item", slot: number }
+
+// Screen transitions
+{ type: "trade:accept-screen1" }
+{ type: "trade:accept-screen2" }
+
+// Cancel
+{ type: "trade:cancel" }
 ```
 
----
-
-## Rate Limiting
-
-Trade operations are rate-limited to prevent spam:
+### Server → Client Events
 
 ```typescript
-// From handlers/trade/helpers.ts
-const rateLimiter = new RateLimitService();
+// Trade state updates
+{ type: "trade:state-update", state: TradeState }
 
-// In handler
-if (!rateLimiter.tryOperation(playerId)) {
-  sendTradeError(socket, "Too fast", "RATE_LIMITED");
-  return;
+// Trade request received
+{ type: "trade:request-received", requesterId: string, requesterName: string }
+
+// Trade cancelled
+{ type: "trade:cancelled", reason: string }
+
+// Trade completed
+{ type: "trade:completed" }
+```
+
+## Error Handling
+
+### Common Errors
+
+| Error | Cause | Resolution |
+|-------|-------|------------|
+| "Too far away" | Distance > 2 tiles | Move closer to partner |
+| "Not enough space" | Inventory full | Free up inventory slots |
+| "Item no longer available" | Item removed during trade | Re-add item to offer |
+| "Trade cancelled" | Partner declined/moved | Initiate new trade |
+
+### Validation
+
+```typescript
+// From helpers.ts
+export function validateTradeCompletion(trade: Trade): ValidationResult {
+  // Check both players have space
+  if (!hasInventorySpace(trade.player1, trade.player2Offer)) {
+    return { valid: false, reason: "Player 1 inventory full" };
+  }
+  
+  // Verify all items still exist
+  if (!verifyItemsExist(trade.player1, trade.player1Offer)) {
+    return { valid: false, reason: "Items no longer available" };
+  }
+  
+  // Check proximity
+  if (getDistance(trade.player1, trade.player2) > TRADE_RANGE) {
+    return { valid: false, reason: "Players too far apart" };
+  }
+  
+  return { valid: true };
 }
 ```
 
----
-
-## Audit Logging
-
-The trading system logs all trade events for debugging and anti-cheat:
-
-```typescript
-// Trade lifecycle events
-tradingSystem.cancelTrade(tradeId, "cancelled", playerId);
-// Logs: "Trade {tradeId} cancelled by {playerId} - reason: cancelled"
-
-tradingSystem.completeTrade(tradeId);
-// Logs: "Trade {tradeId} completed - {initiator} ↔ {recipient}"
-```
-
----
-
 ## Testing
 
-Integration tests verify trade functionality:
-
-**Location:** `packages/server/tests/integration/trade/trade.integration.test.ts`
-
-Tests cover:
-- Happy path (successful trade)
-- Proximity validation
-- Interface blocking
-- Inventory space validation
-- Item validation
-- Acceptance flow
-- Two-screen confirmation
-- Cancellation scenarios
-- Disconnect handling
-
----
-
-## Configuration
-
-### Trade Constants
+Comprehensive test coverage in `packages/server/tests/integration/trade/`:
 
 ```typescript
-// From handlers/trade/helpers.ts
-const TRADE_PROXIMITY_TILES = 1; // Must be adjacent
-const TRADE_GRID_COLS = 4;
-const TRADE_GRID_ROWS = 7;
-const TRADE_SLOTS = 28; // Matches inventory size
+// trade.integration.test.ts
+describe("Trading System", () => {
+  test("complete trade flow", async () => {
+    // 1. Request trade
+    // 2. Accept request
+    // 3. Add items to offers
+    // 4. Accept screen 1
+    // 5. Accept screen 2
+    // 6. Verify items transferred
+  });
+  
+  test("proximity validation", async () => {
+    // Verify trade cancels when players move apart
+  });
+  
+  test("inventory space validation", async () => {
+    // Verify trade fails if inventory full
+  });
+  
+  test("rollback on failure", async () => {
+    // Verify items restored if trade fails
+  });
+});
 ```
-
-### Removed Item Tracking
-
-```typescript
-// From TradePanel/constants.ts
-const REMOVED_ITEM_DISPLAY_MS = 5000; // Show red exclamation for 5s
-const REMOVED_ITEM_CHECK_INTERVAL_MS = 500; // Check every 500ms
-```
-
----
-
-## Error Codes
-
-| Code | Meaning |
-|------|---------|
-| `NOT_AUTHENTICATED` | Player not logged in |
-| `INVALID_PLAYER` | Target player ID invalid |
-| `PLAYER_OFFLINE` | Target player not online |
-| `PLAYER_BUSY` | Target using another interface |
-| `INTERFACE_OPEN` | Initiator using another interface |
-| `TOO_FAR` | Players not in range |
-| `RATE_LIMITED` | Too many requests |
-| `NOT_IN_TRADE` | Trade session not found |
-| `INVALID_SLOT` | Invalid inventory/trade slot |
-| `INVALID_ITEM` | Item not found or invalid |
-| `UNTRADEABLE_ITEM` | Item cannot be traded |
-| `INVALID_QUANTITY` | Quantity exceeds available |
-| `INVENTORY_FULL` | Not enough inventory space |
-| `TRADE_FAILED` | Generic trade failure |
-| `SERVER_ERROR` | Internal server error |
-
----
-
-## Best Practices
-
-### For Players
-
-1. **Always review the confirmation screen** - Check items and values carefully
-2. **Watch for removed item warnings** - Red exclamations indicate items were removed
-3. **Check partner free slots** - Ensure they have space for your items
-4. **Use "Value" option** - Right-click items to see their gold value
-5. **Don't rush** - Take time to verify the trade is fair
-
-### For Developers
-
-1. **Never modify trade state client-side** - All changes must go through server
-2. **Always validate items** - Check existence, quantity, and tradeable flag
-3. **Use inventory locks** - Prevent race conditions during swap
-4. **Log all trade events** - Essential for debugging and anti-cheat
-5. **Test edge cases** - Disconnects, full inventory, invalid items
-
----
 
 ## Related Systems
 
 <CardGroup cols={2}>
   <Card title="Inventory System" icon="backpack" href="/wiki/game-systems/inventory">
-    28-slot inventory management with stacking and item metadata
+    Item management and stacking
   </Card>
-  <Card title="Economy System" icon="coins" href="/concepts/economy">
-    Banking, shops, and item values
+  <Card title="Economy" icon="coins" href="/concepts/economy">
+    Banking, shops, and currency
   </Card>
 </CardGroup>

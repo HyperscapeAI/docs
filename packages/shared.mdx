@@ -116,20 +116,17 @@ Located in `src/systems/shared/`:
 
 | Category | Systems |
 |----------|---------|
-| `character/` | Character stats, equipment, skills, inventory, prayer, agility |
-| `combat/` | Combat mechanics, damage, death |
-| `death/` | Death handling, respawn |
-| `economy/` | Banks, shops, trading, loot |
-| `entities/` | Entity lifecycle management, spawning |
-| `interaction/` | Player-world interactions, gathering, processing |
-| `movement/` | Tile-based movement, collision, pathfinding, agility XP |
-| `presentation/` | Visual rendering, animations |
-| `world/` | World management, terrain, environment |
-
-**New in Recent Updates**:
-- **Agility System**: Movement-based XP tracking in `movement/TileSystem.ts`
-- **Weight Sync**: Inventory weight calculation and client synchronization
-- **Skill Guide**: Server endpoint for skill unlock data (`/api/data/skill-unlocks`)
+| `character/` | Character stats, equipment, skills, inventory, prayer |
+| `combat/` | Combat mechanics, damage, death, aggro, animations |
+| `death/` | Death handling, respawn, safe zones, wilderness |
+| `economy/` | Banks, shops, trading, loot, ground items |
+| `entities/` | Entity lifecycle, spawning, resource management |
+| `interaction/` | Player-world interactions, cooking, firemaking, smithing |
+| `movement/` | Tile-based movement, collision, pathfinding, chase behavior |
+| `presentation/` | Visual rendering, particles, music, chat |
+| `progression/` | Quest system and progression tracking |
+| `tick/` | NPC tick processing and optimization |
+| `world/` | Terrain, vegetation, sky, water, environment |
 
 ### Collision System
 

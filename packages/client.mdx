@@ -50,18 +50,31 @@ The settings panel displays the active renderer type to users.
 packages/client/
 ├── src/
 │   ├── auth/           # Privy authentication
-│   ├── components/     # React UI components
+│   ├── ui/             # Pure design system
+│   │   ├── components/ # Reusable UI primitives (Window, TabBar, DragOverlay)
+│   │   ├── core/       # Core UI systems (drag, edit, notifications, presets, responsive, tabs, tooltip, virtual, window)
+│   │   ├── stores/     # UI state management (windowStore, dragStore, editStore)
+│   │   └── theme/      # Theme system and animations
+│   ├── game/           # All game-specific code
+│   │   ├── interface/  # Window management (InterfaceManager, DefaultLayoutFactory)
+│   │   ├── dashboard/  # Agent dashboard components
+│   │   ├── character/  # Character preview
+│   │   ├── hud/        # Minimap, status bars, XP orbs, level-up notifications
+│   │   ├── panels/     # Game panels (inventory, equipment, combat, skills, bank, trade, etc.)
+│   │   ├── components/ # Game components (chat, currency, dialog, equipment, map, quest, settings, skilltree)
+│   │   ├── systems/    # Game systems (chat, currency, dialog, equipment, map, quest, settings, skilltree)
+│   │   └── chat/       # Chat system
 │   ├── constants/      # Client constants
-│   ├── game/           # Game loop and logic
 │   ├── hooks/          # React hooks
-│   ├── lib/            # Networking, utilities
-│   ├── public/         # Static assets
+│   ├── lib/            # Networking, utilities, error handling
 │   ├── screens/        # UI screens
 │   ├── types/          # TypeScript types
 │   ├── utils/          # Helper functions
 │   ├── index.tsx       # React entry point
 │   ├── index.html      # HTML template
 │   └── index.css       # Global styles (Tailwind)
+├── public/             # Static assets
+├── tests/              # E2E and unit tests
 ├── ios/                # iOS native project (Capacitor)
 ├── android/            # Android native project (Capacitor)
 ├── capacitor.config.ts # Mobile configuration
@@ -94,27 +107,129 @@ GameClient.tsx            // Main 3D gameplay
 | `GameClient` | Main 3D gameplay |
 | `LoadingScreen` | Asset loading state |
 
-## UI Components
+## UI Architecture
 
-Located in `src/components/`:
+The client uses a clear separation between reusable UI primitives and game-specific code:
+
+### UI Design System (`src/ui/`)
+
+Pure, reusable UI components and systems:
 
 ```typescript
-// From packages/client/src/components/
-CharacterPreview.tsx      // VRM character preview
-DraggableWindow.tsx       // Draggable UI windows
-EmbeddedGameClient.tsx    // Embedded game in dashboard
-GameWindow.tsx            // Main game container
-MinimapCompass.tsx        // Minimap with compass
-MinimapStaminaBar.tsx     // Stamina display
-MenuButton.tsx            // Menu buttons
-Portal.tsx                // React portal for overlays
-Fields.tsx                // Form field components
-Icons.tsx                 // Icon components
+// From packages/client/src/ui/
+components/               // Base UI primitives
+  Window.tsx             // Draggable, resizable windows
+  TabBar.tsx             // Tab navigation
+  DragOverlay.tsx        // Drag preview overlay
+  Portal.tsx             // React portal for overlays
+  MenuButton.tsx         // Menu buttons
+  Slider.tsx             // Range sliders
+  ToggleSwitch.tsx       // Toggle switches
+  ItemSlot.tsx           // Item slot component
+  // ... and more
 
-// Subfolders
-character/                // Character-related components
-dashboard/                // Dashboard components
+core/                    // Core UI systems
+  drag/                  // Drag-and-drop system (@dnd-kit integration)
+  edit/                  // Edit mode (L key to unlock)
+  notifications/         // Notification system
+  presets/               // Layout presets and cloud sync
+  responsive/            // Breakpoint and mobile detection
+  tabs/                  // Tab management
+  tooltip/               # Progressive tooltips
+  virtual/               # Virtual scrolling
+  window/                # Window management
+
+stores/                  # UI state management (Zustand)
+  windowStore.ts         # Window positions and state
+  dragStore.ts           # Drag-and-drop state
+  editStore.ts           # Edit mode state
+  anchorUtils.ts         # Anchor-based positioning utilities
+  // ... and more
+
+theme/                   # Theme system
+  themes.ts              # Color themes
+  animations.ts          # Animation presets
 ```
+
+### Game-Specific Code (`src/game/`)
+
+All game logic and components:
+
+```typescript
+// From packages/client/src/game/
+interface/               # Window management
+  InterfaceManager.tsx   # Main UI orchestrator
+  DefaultLayoutFactory.ts # Default window layouts
+  useViewportResize.ts   # Responsive window positioning
+  
+dashboard/               # Agent dashboard
+  AgentActivityPanel.tsx
+  AgentChat.tsx
+  DashboardLayout.tsx
+  // ... and more
+
+hud/                     # HUD elements
+  Minimap.tsx
+  MinimapCompass.tsx
+  MinimapStaminaBar.tsx
+  StatusBars.tsx
+  XPProgressOrb.tsx
+  level-up/              # Level-up notifications
+  
+panels/                  # Game panels
+  InventoryPanel.tsx
+  EquipmentPanel.tsx
+  CombatPanel.tsx
+  SkillsPanel.tsx
+  BankPanel/             # Modular bank system
+  TradePanel/            # Modular trade system
+  ActionBarPanel/        # Action bar with drag-drop
+  // ... and more
+
+components/              # Game components
+  chat/                  # Chat system
+  currency/              # Currency display
+  dialog/                # Dialogue system
+  equipment/             # Equipment components
+  map/                   # World map
+  quest/                 # Quest system
+  settings/              # Settings panels
+  skilltree/             # Skill tree
+
+systems/                 # Game systems
+  chat/                  # Chat filters and state
+  currency/              # Currency utilities
+  dialog/                # Dialog parser
+  equipment/             # Equipment utilities
+  map/                   # Map navigation
+  quest/                 # Quest tracking
+  settings/              # Settings schema
+  skilltree/             # Skill tree utilities
+```
+
+### Anchor-Based UI Positioning
+
+The UI system uses viewport anchors (Unity/Unreal-style) for responsive window positioning:
+
+**WindowAnchor System:**
+- 9 anchor points: corners, edges, and center
+- Windows maintain offset from anchor instead of absolute positions
+- Automatic repositioning on viewport resize
+- Mobile-to-desktop transitions use default layouts
+
+**Anchor Utilities** (`src/ui/stores/anchorUtils.ts`):
+```typescript
+getAnchorPosition(anchor, viewport)      // Get anchor coordinates
+calculateOffsetFromAnchor(position, anchor, viewport)  // Calculate offset
+calculatePositionFromAnchor(anchor, offset, viewport)  // Position from anchor
+repositionWindowForViewport(window, oldViewport, newViewport)  // Resize handler
+```
+
+**Default Anchors:**
+- Chat, Skills/Prayer: `bottom-left`
+- Minimap: `top-right`
+- Inventory, Menubar: `bottom-right`
+- Action bar: `bottom-center`
 
 ### HUD Components
 
@@ -127,6 +242,7 @@ dashboard/                // Dashboard components
 - Bank interface (unlimited storage)
 - Chat window
 - Minimap with compass
+- Action bar with drag-drop support
 
 ### Game Panels
 
@@ -153,40 +269,8 @@ Located in `src/game/panels/`:
 - Input handler (WASD movement, click actions)
 - Entity renderers (players, mobs, items)
 - VRM avatar display with emotes
-- Skill Guide Panel (OSRS-style unlock progression viewer)
-
-### Game Panels
-
-Located in `src/game/panels/`:
-
-| Panel | File | Description |
-|-------|------|-------------|
-| Inventory | `InventoryPanel.tsx` | 28-slot inventory with drag & drop |
-| Equipment | `EquipmentPanel.tsx` | Equipment slots with stat bonuses |
-| Skills | `SkillsPanel.tsx` | All skills with XP progress bars |
-| Skill Guide | `SkillGuidePanel.tsx` | OSRS-style unlock progression viewer |
-| Combat | `CombatPanel.tsx` | Attack style selection |
-| Bank | `BankPanel.tsx` | Unlimited storage with tabs |
-| Dialogue | `DialoguePanel.tsx` | NPC conversations |
-| Store | `StorePanel.tsx` | Shop interface |
-| Settings | `SettingsPanel.tsx` | Game settings |
-| Loot | `LootWindow.tsx` | Ground item pickup |
-
-**Skill Guide Panel** (`SkillGuidePanel.tsx`):
-
-Opens when clicking any skill in the Skills Panel. Displays all unlocks for that skill with:
-- Current level and progress (X/Y unlocked)
-- Next unlock highlighting with countdown
-- Visual distinction (green checkmark for unlocked, lock icon for locked)
-- Type badges (item/ability)
-- Loading state while fetching from server
-- Smooth animations and OSRS-themed styling
-
-```typescript
-// Data fetched from server on first load
-const response = await fetch(`${GAME_API_URL}/api/data/skill-unlocks`);
-const skillUnlocks = await response.json();
-```
+- Drag-and-drop system (@dnd-kit)
+- Window management with tabs
 
 ## Environment Variables
 

@@ -1,0 +1,359 @@
+---
+title: "Social System"
+description: "Friend management, private messaging, and player interactions"
+icon: "users"
+---
+
+## Overview
+
+The social system enables players to build friend lists, send private messages, and manage social interactions. The system includes friend requests, online status tracking, and ignore list functionality.
+
+<Info>
+  Social features are implemented across client handlers and server database schema with real-time synchronization.
+</Info>
+
+## Friend Management
+
+### Adding Friends
+
+1. **Right-click** on another player
+2. Select **"Add Friend"** from context menu
+3. Friend request sent to target player
+4. Target receives notification and can accept/decline
+
+### Friend Requests
+
+**Sending:**
+- Friend requests stored in database
+- Target player notified immediately if online
+- Pending requests visible in Friends panel
+
+**Receiving:**
+- Notification appears in Friends panel
+- Accept or decline options
+- Accepted requests create bidirectional friendship
+
+### Friend List
+
+The Friends panel displays:
+- **Online friends** (green indicator)
+- **Offline friends** (gray indicator)
+- **Pending requests** (sent and received)
+- **Quick actions** (message, remove, ignore)
+
+### Removing Friends
+
+1. Open **Friends panel**
+2. Right-click on friend
+3. Select **"Remove Friend"**
+4. Friendship removed for both players
+
+## Private Messaging
+
+### Sending Messages
+
+1. Open **Friends panel**
+2. Click on online friend
+3. Select **"Send Message"**
+4. Type message and send
+
+**Features:**
+- Direct player-to-player communication
+- Message history per conversation
+- Online status required (can't message offline friends)
+- Integration with chat system
+
+### Message Notifications
+
+When receiving a private message:
+- Notification badge on Friends panel
+- Message preview in notification
+- Click to open conversation
+
+## Online Status
+
+### Status Tracking
+
+The system tracks and broadcasts online status:
+
+**On Player Login:**
+- All friends notified of online status
+- Friend list synchronized
+- Pending messages delivered
+
+**On Player Logout:**
+- Friends notified of offline status
+- Last seen timestamp updated
+
+### Status Indicators
+
+| Indicator | Status |
+|-----------|--------|
+| 🟢 Green | Online |
+| 🔴 Gray | Offline |
+| 🟡 Yellow | Away (future) |
+
+## Ignore List
+
+### Blocking Players
+
+1. Right-click on player
+2. Select **"Add to Ignore List"**
+3. Player added to ignore list
+
+**Effects:**
+- Blocked player's messages hidden
+- Trade requests blocked
+- Friend requests blocked
+- Can still see player in world
+
+### Managing Ignore List
+
+- View ignored players in Friends panel
+- Remove from ignore list anytime
+- Ignore list persists across sessions
+
+## Database Schema
+
+### Tables
+
+```sql
+-- Friendships (bidirectional)
+CREATE TABLE friendships (
+  id SERIAL PRIMARY KEY,
+  player1_id INTEGER REFERENCES characters(id),
+  player2_id INTEGER REFERENCES characters(id),
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(player1_id, player2_id)
+);
+
+-- Friend Requests (pending)
+CREATE TABLE friend_requests (
+  id SERIAL PRIMARY KEY,
+  sender_id INTEGER REFERENCES characters(id),
+  receiver_id INTEGER REFERENCES characters(id),
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(sender_id, receiver_id)
+);
+
+-- Ignore List
+CREATE TABLE ignore_lists (
+  id SERIAL PRIMARY KEY,
+  player_id INTEGER REFERENCES characters(id),
+  ignored_player_id INTEGER REFERENCES characters(id),
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(player_id, ignored_player_id)
+);
+```
+
+## Implementation
+
+### Server-Side Handlers
+
+Located in `packages/server/src/systems/ServerNetwork/handlers/friends.ts`:
+
+```typescript
+// Friend request handling
+handleFriendRequest(senderId: string, receiverId: string): void;
+handleAcceptFriendRequest(playerId: string, requestId: string): void;
+handleDeclineFriendRequest(playerId: string, requestId: string): void;
+
+// Friend management
+handleRemoveFriend(playerId: string, friendId: string): void;
+handleGetFriendsList(playerId: string): void;
+
+// Private messaging
+handleSendPrivateMessage(senderId: string, receiverId: string, message: string): void;
+
+// Ignore list
+handleAddToIgnoreList(playerId: string, targetId: string): void;
+handleRemoveFromIgnoreList(playerId: string, targetId: string): void;
+```
+
+### Client-Side Components
+
+Located in `packages/client/src/game/panels/FriendsPanel.tsx`:
+
+```typescript
+export function FriendsPanel() {
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [requests, setRequests] = useState<FriendRequest[]>([]);
+  const [ignoreList, setIgnoreList] = useState<IgnoredPlayer[]>([]);
+  
+  // Real-time updates via WebSocket events
+  useEffect(() => {
+    world.on("friend:online", handleFriendOnline);
+    world.on("friend:offline", handleFriendOffline);
+    world.on("friend:request", handleFriendRequest);
+    world.on("private:message", handlePrivateMessage);
+  }, []);
+  
+  return (
+    <Panel title="Friends">
+      <FriendsList friends={friends} />
+      <FriendRequests requests={requests} />
+      <IgnoreList ignored={ignoreList} />
+    </Panel>
+  );
+}
+```
+
+## Network Protocol
+
+### Client → Server Events
+
+```typescript
+// Friend requests
+{ type: "friend:request", targetId: string }
+{ type: "friend:accept", requestId: string }
+{ type: "friend:decline", requestId: string }
+
+// Friend management
+{ type: "friend:remove", friendId: string }
+{ type: "friend:list" }
+
+// Private messaging
+{ type: "private:message", receiverId: string, message: string }
+
+// Ignore list
+{ type: "ignore:add", targetId: string }
+{ type: "ignore:remove", targetId: string }
+{ type: "ignore:list" }
+```
+
+### Server → Client Events
+
+```typescript
+// Friend status updates
+{ type: "friend:online", friendId: string, username: string }
+{ type: "friend:offline", friendId: string }
+
+// Friend requests
+{ type: "friend:request-received", senderId: string, senderName: string }
+{ type: "friend:request-accepted", friendId: string }
+
+// Friend list sync
+{ type: "friend:list-update", friends: Friend[] }
+
+// Private messages
+{ type: "private:message-received", senderId: string, message: string, timestamp: Date }
+```
+
+## Security Features
+
+### Request Validation
+
+- **Rate Limiting**: Max 10 friend requests per minute
+- **Duplicate Prevention**: Can't send multiple requests to same player
+- **Self-Request Block**: Can't send friend request to yourself
+- **Ignore List Check**: Blocked players can't send requests
+
+### Message Filtering
+
+- **Content Validation**: Messages sanitized for XSS
+- **Length Limits**: Max 500 characters per message
+- **Rate Limiting**: Max 20 messages per minute
+- **Spam Detection**: Duplicate message prevention
+
+### Privacy Controls
+
+- **Ignore List**: Complete blocking of interactions
+- **Online Status**: Can be hidden (future feature)
+- **Message History**: Stored locally, not on server
+
+## UI Features
+
+### Friends Panel Tabs
+
+| Tab | Content |
+|-----|---------|
+| **Friends** | Online/offline friend list |
+| **Requests** | Pending sent/received requests |
+| **Ignore** | Blocked players list |
+
+### Context Menu Actions
+
+**On Friend:**
+- Send Message
+- Remove Friend
+- Add to Ignore List
+
+**On Friend Request:**
+- Accept Request
+- Decline Request
+- Add to Ignore List
+
+**On Ignored Player:**
+- Remove from Ignore List
+
+## Integration with Other Systems
+
+### Chat System
+
+Private messages integrate with the chat system:
+- Separate tab for private messages
+- Notification badges for unread messages
+- Message history per conversation
+
+### Trading System
+
+Friend status affects trading:
+- Friends can trade from any distance (future)
+- Trade requests from non-friends require proximity
+- Ignored players can't send trade requests
+
+## Testing
+
+Integration tests in `packages/server/tests/integration/social/`:
+
+```typescript
+// social.integration.test.ts
+describe("Social System", () => {
+  test("send and accept friend request", async () => {
+    // 1. Player 1 sends friend request to Player 2
+    // 2. Player 2 receives notification
+    // 3. Player 2 accepts request
+    // 4. Both players have each other as friends
+  });
+  
+  test("online status notifications", async () => {
+    // 1. Player 1 and Player 2 are friends
+    // 2. Player 2 logs in
+    // 3. Player 1 receives online notification
+  });
+  
+  test("private messaging", async () => {
+    // 1. Player 1 sends message to Player 2
+    // 2. Player 2 receives message
+    // 3. Message appears in chat
+  });
+  
+  test("ignore list blocking", async () => {
+    // 1. Player 1 ignores Player 2
+    // 2. Player 2's messages blocked
+    // 3. Player 2's friend requests blocked
+  });
+});
+```
+
+## Future Enhancements
+
+<Info>
+  Planned features for future releases:
+  - Clan/guild system
+  - Group chat channels
+  - Friend notes and nicknames
+  - Online status privacy settings
+  - Message encryption
+</Info>
+
+## Related Systems
+
+<CardGroup cols={2}>
+  <Card title="Trading System" icon="handshake" href="/wiki/game-systems/trading">
+    Player-to-player item trading
+  </Card>
+  <Card title="Chat System" icon="messages" href="/wiki/game-systems/chat">
+    In-game communication
+  </Card>
+</CardGroup>

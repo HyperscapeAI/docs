@@ -171,8 +171,56 @@ flowchart LR
 | Oak | 10 | Oak Bow |
 | Willow | 20 | Willow Bow |
 
+## Player Trading
+
+### Trading System
+
+Player-to-player trading with OSRS-accurate two-screen confirmation:
+
+**Features:**
+- **Two-Screen Confirmation**: Both players must accept on two separate screens
+  - Screen 1: Offer items and review partner's offer
+  - Screen 2: Final confirmation with wealth transfer indicator
+  - Any change resets both players to screen 1
+- **Wealth Transfer Indicator**: Visual warning for unbalanced trades
+  - Shows net value difference with directional arrow
+  - Color-coded: green (receiving), red (giving), gray (balanced)
+- **Proximity Checks**: Players must be within 2 tiles to trade
+  - Auto-walk to player when initiating trade from distance
+  - Trade closes if players move too far apart
+- **Interface Blocking**: Trading locks out other interfaces
+  - Bank, store, dialogue automatically close when trade starts
+  - Prevents item duplication exploits
+- **Click-Based UI**: Improved interaction model
+  - Click items to add/remove from trade offer
+  - Click partner's items to examine
+  - Quantity prompts for stackable items
+  - Partner's free inventory slots displayed
+- **Chat Integration**: Pink-colored trade request messages
+  - \"[Player] wishes to trade with you.\" format
+  - Clickable to accept trade request
+- **Audit Logging**: All completed trades logged for security
+
+**Implementation:**
+
+```typescript
+// From packages/server/src/systems/TradingSystem/
+acceptance.ts     // Accept/decline logic
+items.ts          // Add/remove items
+request.ts        // Trade initiation with proximity checks
+swap.ts           // Screen transitions
+helpers.ts        // Shared utilities
+types.ts          // Type definitions
+```
+
+**Security:**
+- Transaction rollback on failure
+- Inventory synchronization with proper event ordering
+- Server-authoritative validation
+- Distance checks on every action
+
 ## Future Features
 
 <Info>
-  Player-to-player trading and a Grand Exchange are planned but not in MVP scope.
+  A Grand Exchange (centralized marketplace) is planned for future releases.
 </Info>

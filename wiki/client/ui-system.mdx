@@ -1,0 +1,681 @@
+---
+title: "UI System"
+description: "Anchor-based window positioning, drag-drop, and responsive design"
+icon: "layout-dashboard"
+---
+
+## Overview
+
+The Hyperscape UI system provides a flexible, responsive interface with draggable windows, tab management, and anchor-based positioning. The architecture separates reusable UI primitives from game-specific components.
+
+<Info>
+  UI code lives in `packages/client/src/ui/` (design system) and `packages/client/src/game/` (game-specific).
+</Info>
+
+## Architecture
+
+### Design Principles
+
+1. **Separation of Concerns**: UI primitives (`ui/`) vs game logic (`game/`)
+2. **Anchor-Based Positioning**: Windows maintain position relative to viewport anchors
+3. **Responsive Design**: Automatic repositioning on viewport resize
+4. **Drag-and-Drop**: Unified system for items, windows, and tabs
+5. **State Management**: Zustand stores for UI state
+
+### Directory Structure
+
+```
+packages/client/src/
+├── ui/                  # Pure design system
+│   ├── components/      # Reusable UI primitives
+│   ├── core/            # Core UI systems
+│   ├── stores/          # UI state management
+│   └── theme/           # Theme system
+└── game/                # Game-specific code
+    ├── interface/       # Window management
+    ├── panels/          # Game panels
+    ├── hud/             # HUD elements
+    └── components/      # Game components
+```
+
+## Anchor-Based Positioning
+
+### WindowAnchor System
+
+Windows use viewport anchors (Unity/Unreal-style) for responsive scaling:
+
+```typescript
+// From packages/client/src/ui/stores/anchorUtils.ts
+export type WindowAnchor =
+  | "top-left" | "top-center" | "top-right"
+  | "left-center" | "center" | "right-center"
+  | "bottom-left" | "bottom-center" | "bottom-right";
+
+export interface WindowState {
+  id: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  anchor?: WindowAnchor;  // Viewport anchor point
+  // ... other properties
+}
+```
+
+### Anchor Utilities
+
+```typescript
+// Get anchor position in viewport coordinates
+getAnchorPosition(
+  anchor: WindowAnchor,
+  viewport: { width: number; height: number }
+): { x: number; y: number }
+
+// Calculate window's offset from its anchor
+calculateOffsetFromAnchor(
+  position: { x: number; y: number },
+  anchor: WindowAnchor,
+  viewport: { width: number; height: number }
+): { x: number; y: number }
+
+// Position window from anchor + offset
+calculatePositionFromAnchor(
+  anchor: WindowAnchor,
+  offset: { x: number; y: number },
+  viewport: { width: number; height: number }
+): { x: number; y: number }
+
+// Auto-detect nearest anchor from position
+detectNearestAnchor(
+  position: { x: number; y: number },
+  viewport: { width: number; height: number }
+): WindowAnchor
+
+// Main resize handler
+repositionWindowForViewport(
+  window: WindowState,
+  oldViewport: { width: number; height: number },
+  newViewport: { width: number; height: number }
+): { x: number; y: number }
+```
+
+### Default Anchors
+
+```typescript
+// From packages/client/src/game/interface/DefaultLayoutFactory.ts
+const DEFAULT_ANCHORS = {
+  chat: "bottom-left",
+  skills: "bottom-left",
+  prayer: "bottom-left",
+  minimap: "top-right",
+  inventory: "bottom-right",
+  menubar: "bottom-right",
+  actionBar: "bottom-center",
+};
+```
+
+### Responsive Behavior
+
+**On Viewport Resize:**
+1. Calculate scale factor (new viewport / saved viewport)
+2. Reposition windows using anchor + offset
+3. Maintain edge alignment for edge-positioned windows
+4. Clamp to viewport bounds
+
+**Mobile-to-Desktop Transitions:**
+1. Detect layout mode change (mobile → desktop)
+2. Use default layout positions instead of scaling
+3. Apply stacking offsets for windows sharing same anchor
+4. Prevents window clustering from meaningless mobile positions
+
+## Window Management
+
+### Window Store
+
+```typescript
+// From packages/client/src/ui/stores/windowStore.ts
+interface WindowStore {
+  windows: Map<string, WindowState>;
+  activeWindow: string | null;
+  
+  // Window lifecycle
+  createWindow(config: WindowConfig): void;
+  destroyWindow(id: string): void;
+  
+  // Position and size
+  setPosition(id: string, position: { x: number; y: number }): void;
+  setSize(id: string, size: { width: number; height: number }): void;
+  setAnchor(id: string, anchor: WindowAnchor): void;
+  
+  // State
+  setMinimized(id: string, minimized: boolean): void;
+  setActive(id: string): void;
+  
+  // Tabs
+  addTab(windowId: string, panelId: string): void;
+  removeTab(windowId: string, panelId: string): void;
+  setActiveTab(windowId: string, panelId: string): void;
+  
+  // Persistence
+  saveLayout(name: string): void;
+  loadLayout(name: string): void;
+}
+```
+
+### Window Component
+
+```typescript
+// From packages/client/src/ui/components/Window.tsx
+export function Window({ id, children }: WindowProps) {
+  const window = useWindowStore((state) => state.windows.get(id));
+  const { isDragging } = useDrag({ id, type: "window" });
+  
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: window.position.x,
+        top: window.position.y,
+        width: window.size.width,
+        height: window.size.height,
+      }}
+    >
+      <WindowHeader id={id} />
+      <WindowContent>{children}</WindowContent>
+    </div>
+  );
+}
+```
+
+## Drag-and-Drop System
+
+### DragContext
+
+Global drag-and-drop state using @dnd-kit:
+
+```typescript
+// From packages/client/src/ui/core/drag/DragContext.tsx
+export function DragContext({ children }: { children: React.ReactNode }) {
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor)
+  );
+  
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      {children}
+      <DragOverlay />
+    </DndContext>
+  );
+}
+```
+
+### useDrag Hook
+
+```typescript
+// From packages/client/src/ui/core/drag/useDrag.ts
+export function useDrag({ id, type, data }: UseDragProps) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id,
+    data: { type, ...data },
+  });
+  
+  return {
+    dragRef: setNodeRef,
+    dragProps: { ...attributes, ...listeners },
+    isDragging,
+  };
+}
+```
+
+### useDrop Hook
+
+```typescript
+// From packages/client/src/ui/core/drag/useDrop.ts
+export function useDrop({ id, accept, onDrop }: UseDropProps) {
+  const { setNodeRef, isOver } = useDroppable({
+    id,
+    data: { accept },
+  });
+  
+  // Fixed race condition: save drag state in refs
+  const savedDragItemRef = useRef<DragItem | null>(null);
+  const savedOverTargetsRef = useRef<string[]>([]);
+  
+  useEffect(() => {
+    if (isDragging) {
+      savedDragItemRef.current = dragItem;
+      savedOverTargetsRef.current = overTargets;
+    }
+  }, [isDragging, dragItem, overTargets]);
+  
+  // Use saved refs in drop effect
+  useEffect(() => {
+    if (!isDragging && savedDragItemRef.current) {
+      const wasOver = savedOverTargetsRef.current.includes(id);
+      if (wasOver && onDrop) {
+        onDrop(savedDragItemRef.current);
+      }
+    }
+  }, [isDragging]);
+  
+  return {
+    dropRef: setNodeRef,
+    isOver,
+  };
+}
+```
+
+**Key Fixes:**
+- Race condition resolved: drag state saved in refs before clearing
+- Dynamic disabled registration: drop zones re-register when disabled changes
+- Proper event timing: drop fires before state clears
+
+### Drag Types
+
+```typescript
+export type DragType =
+  | "window"           // Dragging entire window
+  | "tab"              // Dragging tab to combine windows
+  | "item"             // Inventory item
+  | "equipment"        // Equipment slot item
+  | "bank-item"        // Bank item
+  | "trade-item"       // Trade offer item
+  | "action-bar-slot"  // Action bar slot
+  | "combatstyle";     // Combat style button
+```
+
+## Tab System
+
+### Tab Management
+
+```typescript
+// From packages/client/src/ui/core/tabs/useTabs.ts
+export function useTabs(windowId: string) {
+  const tabs = useWindowStore((state) => state.windows.get(windowId)?.tabs);
+  const activeTab = useWindowStore((state) => state.windows.get(windowId)?.activeTab);
+  
+  const addTab = (panelId: string) => {
+    windowStore.addTab(windowId, panelId);
+  };
+  
+  const removeTab = (panelId: string) => {
+    windowStore.removeTab(windowId, panelId);
+  };
+  
+  const setActiveTab = (panelId: string) => {
+    windowStore.setActiveTab(windowId, panelId);
+  };
+  
+  return { tabs, activeTab, addTab, removeTab, setActiveTab };
+}
+```
+
+### Tab Combining
+
+Drag windows onto each other to combine into tabs:
+
+1. Press **L** to enter edit mode
+2. Drag a window by its title bar
+3. Drop on target window (entire window is drop zone)
+4. Windows combine into tabbed interface
+5. Tab preview shows combined result before drop
+
+**Drop Zones:**
+- `tabbar-{windowId}`: Multi-tab windows
+- `window-header-drop-{windowId}`: Single-tab windows
+- `window-content-drop-{windowId}`: Window body
+
+## Edit Mode
+
+### Activation
+
+Press **L** key to toggle edit mode:
+
+```typescript
+// From packages/client/src/ui/core/edit/useEditMode.ts
+export function useEditMode() {
+  const isEditMode = useEditStore((state) => state.isEditMode);
+  const toggleEditMode = useEditStore((state) => state.toggle);
+  
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === "l" || e.key === "L") {
+        toggleEditMode();
+      }
+    };
+    
+    window.addEventListener("keydown", handleKeyPress);
+    return () => window.removeEventListener("keydown", handleKeyPress);
+  }, []);
+  
+  return { isEditMode, toggleEditMode };
+}
+```
+
+### Edit Mode Features
+
+When edit mode is active:
+- Windows become draggable
+- Windows can be resized
+- Windows can be combined into tabs
+- Alignment guides appear
+- Grid snapping enabled (optional)
+
+## Responsive Design
+
+### Breakpoints
+
+```typescript
+// From packages/client/src/ui/core/responsive/useBreakpoint.ts
+export const BREAKPOINTS = {
+  mobile: 768,
+  tablet: 1024,
+  desktop: 1280,
+  wide: 1920,
+} as const;
+
+export function useBreakpoint() {
+  const [breakpoint, setBreakpoint] = useState<Breakpoint>("desktop");
+  
+  useEffect(() => {
+    const updateBreakpoint = () => {
+      const width = window.innerWidth;
+      if (width < BREAKPOINTS.mobile) setBreakpoint("mobile");
+      else if (width < BREAKPOINTS.tablet) setBreakpoint("tablet");
+      else if (width < BREAKPOINTS.desktop) setBreakpoint("desktop");
+      else setBreakpoint("wide");
+    };
+    
+    window.addEventListener("resize", updateBreakpoint);
+    updateBreakpoint();
+    
+    return () => window.removeEventListener("resize", updateBreakpoint);
+  }, []);
+  
+  return breakpoint;
+}
+```
+
+### Mobile Layout
+
+```typescript
+// From packages/client/src/ui/core/responsive/useMobileLayout.ts
+export function useMobileLayout() {
+  const isMobile = useBreakpoint() === "mobile";
+  
+  // Mobile layout uses full-screen panels instead of windows
+  // Panels slide in from bottom/side
+  // No window dragging or resizing
+  
+  return { isMobile };
+}
+```
+
+## Theme System
+
+### Theme Definition
+
+```typescript
+// From packages/client/src/ui/theme/themes.ts
+export interface Theme {
+  colors: {
+    background: {
+      primary: string;
+      secondary: string;
+      tertiary: string;
+    };
+    text: {
+      primary: string;
+      secondary: string;
+      muted: string;
+    };
+    border: {
+      default: string;
+      active: string;
+    };
+    slot: {
+      empty: string;
+      filled: string;
+      hover: string;
+    };
+  };
+  spacing: {
+    xs: number;
+    sm: number;
+    md: number;
+    lg: number;
+    xl: number;
+  };
+  borderRadius: {
+    sm: number;
+    md: number;
+    lg: number;
+  };
+}
+```
+
+### Current Theme
+
+```typescript
+export const darkTheme: Theme = {
+  colors: {
+    background: {
+      primary: "#121214",    // Lightened from #0a0a0c
+      secondary: "#1a1a1e",  // Lightened from #141418
+      tertiary: "#242428",   // Lightened from #1e1e24
+    },
+    // ... rest of theme
+  },
+};
+```
+
+## Accessibility
+
+### Keyboard Navigation
+
+All interactive elements support keyboard:
+
+```typescript
+// From packages/client/src/ui/core/drag/accessibility.ts
+export function makeAccessible(element: HTMLElement, handlers: {
+  onActivate?: () => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+}) {
+  element.setAttribute("role", "button");
+  element.setAttribute("tabIndex", "0");
+  
+  element.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handlers.onActivate?.();
+    }
+  });
+}
+```
+
+### Screen Reader Support
+
+- ARIA labels on all interactive elements
+- Role attributes for semantic meaning
+- Focus management for modals and panels
+- Skip links for navigation
+
+## Performance Optimizations
+
+### Component Memoization
+
+```typescript
+// From packages/client/src/game/components/chat/ChatBox.tsx
+export const ChatBox = memo(function ChatBox({ messages }: ChatBoxProps) {
+  // Component only re-renders when messages change
+  return <div>{messages.map(renderMessage)}</div>;
+});
+```
+
+### Virtual Scrolling
+
+```typescript
+// From packages/client/src/ui/core/virtual/useVirtualList.ts
+export function useVirtualList<T>({
+  items,
+  itemHeight,
+  containerHeight,
+}: VirtualListProps<T>) {
+  const [scrollTop, setScrollTop] = useState(0);
+  
+  const startIndex = Math.floor(scrollTop / itemHeight);
+  const endIndex = Math.ceil((scrollTop + containerHeight) / itemHeight);
+  
+  const visibleItems = items.slice(startIndex, endIndex);
+  
+  return { visibleItems, startIndex, totalHeight: items.length * itemHeight };
+}
+```
+
+### Render Optimization
+
+- `useMemo` for expensive calculations
+- `useCallback` for event handlers
+- Hoisted styles to prevent re-creation
+- Ref-based event dispatch to avoid state setter closures
+
+## State Management
+
+### Window Store
+
+```typescript
+// From packages/client/src/ui/stores/windowStore.ts
+export const useWindowStore = create<WindowStore>((set, get) => ({
+  windows: new Map(),
+  
+  createWindow: (config) => set((state) => {
+    const window = {
+      id: config.id,
+      position: config.position,
+      size: config.size,
+      anchor: config.anchor || detectNearestAnchor(config.position, viewport),
+      tabs: config.tabs || [config.panelId],
+      activeTab: config.panelId,
+      minimized: false,
+      zIndex: getNextZIndex(),
+    };
+    
+    state.windows.set(config.id, window);
+    return { windows: new Map(state.windows) };
+  }),
+  
+  // ... other methods
+}));
+```
+
+### Drag Store
+
+```typescript
+// From packages/client/src/ui/stores/dragStore.ts
+export const useDragStore = create<DragStore>((set) => ({
+  isDragging: false,
+  dragItem: null,
+  overTargets: [],
+  
+  startDrag: (item) => set({ isDragging: true, dragItem: item }),
+  endDrag: () => set({ isDragging: false, dragItem: null, overTargets: [] }),
+  setOverTargets: (targets) => set({ overTargets: targets }),
+}));
+```
+
+## Integration with Game
+
+### InterfaceManager
+
+```typescript
+// From packages/client/src/game/interface/InterfaceManager.tsx
+export function InterfaceManager({ world }: { world: ClientWorld }) {
+  const windows = useWindowStore((state) => state.windows);
+  const { isEditMode } = useEditMode();
+  
+  // Initialize default layout
+  useEffect(() => {
+    const layout = createDefaultWindows();
+    layout.forEach((config) => createWindow(config));
+  }, []);
+  
+  // Handle viewport resize
+  useViewportResize();
+  
+  return (
+    <DragContext>
+      {Array.from(windows.values()).map((window) => (
+        <Window key={window.id} id={window.id}>
+          <PanelRegistry panelId={window.activeTab} world={world} />
+        </Window>
+      ))}
+      {isEditMode && <EditModeOverlay />}
+    </DragContext>
+  );
+}
+```
+
+### PanelRegistry
+
+```typescript
+// From packages/client/src/game/interface/PanelRegistry.tsx
+export function PanelRegistry({ panelId, world }: PanelRegistryProps) {
+  switch (panelId) {
+    case "inventory": return <InventoryPanel world={world} />;
+    case "equipment": return <EquipmentPanel world={world} />;
+    case "skills": return <SkillsPanel world={world} />;
+    case "combat": return <CombatPanel world={world} />;
+    case "bank": return <BankPanel world={world} />;
+    case "trade": return <TradePanel world={world} />;
+    // ... more panels
+    default: return null;
+  }
+}
+```
+
+## Testing
+
+### Unit Tests
+
+```typescript
+// Example: Window positioning tests
+describe("anchorUtils", () => {
+  test("getAnchorPosition calculates correct coordinates", () => {
+    const viewport = { width: 1920, height: 1080 };
+    
+    expect(getAnchorPosition("top-left", viewport)).toEqual({ x: 0, y: 0 });
+    expect(getAnchorPosition("center", viewport)).toEqual({ x: 960, y: 540 });
+    expect(getAnchorPosition("bottom-right", viewport)).toEqual({ x: 1920, y: 1080 });
+  });
+  
+  test("repositionWindowForViewport maintains anchor offset", () => {
+    const window = {
+      position: { x: 100, y: 100 },
+      anchor: "top-left",
+    };
+    const oldViewport = { width: 1920, height: 1080 };
+    const newViewport = { width: 1280, height: 720 };
+    
+    const newPosition = repositionWindowForViewport(window, oldViewport, newViewport);
+    
+    // Offset from anchor should be preserved
+    expect(newPosition).toEqual({ x: 100, y: 100 });
+  });
+});
+```
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Client Overview" icon="monitor" href="/wiki/client/overview">
+    Client application architecture
+  </Card>
+  <Card title="Game Panels" icon="layout-grid" href="/packages/client">
+    Game-specific panel components
+  </Card>
+</CardGroup>

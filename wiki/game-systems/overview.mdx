@@ -99,6 +99,23 @@ Handles all economic interactions:
 - **Trading** — Player-to-player trading with two-screen confirmation
 - **Inventory** — 28-slot management with stacking
 - **Loot** — Item drops and ground items
+- **Trading** — Player-to-player trading with two-screen confirmation
+  - Proximity checks (2-tile range)
+  - Wealth transfer indicators
+  - Interface blocking during trades
+  - Audit logging for completed trades
+
+### Social Systems
+
+**Location:** `packages/server/src/systems/` and client handlers
+
+Player social interactions:
+
+- **Friend Management** — Send, accept, decline, remove friend requests
+- **Private Messaging** — Direct player-to-player communication
+- **Online Status** — Friend online/offline notifications
+- **Ignore List** — Block unwanted interactions
+- **Database Schema** — friendships, friend_requests, ignore_lists tables
 
 ### Movement & Collision System
 
@@ -367,15 +384,21 @@ export enum EventType {
     RuneScape XP curves, leveling, combat level formula, and skill requirements.
   </Card>
   <Card title="Trading System" icon="handshake" href="/wiki/game-systems/trading">
-    Player-to-player trading with OSRS-style two-screen confirmation and anti-scam protections.
+    Player-to-player trading with two-screen confirmation and security features.
+  </Card>
+  <Card title="Social System" icon="users" href="/wiki/game-systems/social">
+    Friend management, private messaging, and player interactions.
   </Card>
   <Card title="Tile Movement" icon="route" href="/wiki/game-systems/movement">
     Discrete tile-based movement, pathfinding, and OSRS melee range rules.
   </Card>
-  <Card title="Lighting & Day/Night" icon="sun" href="/wiki/game-systems/lighting">
-    Dynamic lighting, auto exposure, and atmospheric day/night transitions.
+  <Card title="Inventory System" icon="backpack" href="/wiki/game-systems/inventory">
+    28-slot inventory management with drag-drop and context menus.
   </Card>
-  <Card title="Equipment Visuals" icon="shirt" href="/wiki/game-systems/equipment-visuals">
-    VRM avatar equipment rendering, V2 fitting format, and gathering tool display.
+  <Card title="Bank System" icon="vault" href="/wiki/game-systems/bank">
+    Unlimited storage with tabs and organization features.
+  </Card>
+  <Card title="NPC Data" icon="dragon" href="/wiki/data/npcs">
+    How NPCs and mobs are defined with drop tables and aggro behaviors.
   </Card>
 </CardGroup>

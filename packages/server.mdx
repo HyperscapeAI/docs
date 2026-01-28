@@ -21,11 +21,20 @@ The `@hyperscape/server` package runs the authoritative game server:
 packages/server/
 ├── src/
 │   ├── database/       # Database schema and queries
+│   │   ├── repositories/  # Data access layer
+│   │   ├── migrations/    # Database migrations
+│   │   └── schema.ts      # Drizzle schema definitions
 │   ├── infrastructure/ # Docker, CDN configuration
 │   ├── scripts/        # Utility scripts
 │   ├── shared/         # Shared server utilities
 │   ├── startup/        # Server initialization
+│   │   └── routes/     # API route handlers
 │   ├── systems/        # Server-specific systems
+│   │   ├── ServerNetwork/  # Network handlers
+│   │   │   └── handlers/   # Event handlers (bank, trade, friends, etc.)
+│   │   ├── TradingSystem/  # Player trading system
+│   │   ├── DatabaseSystem/ # Database persistence
+│   │   └── ActivityLoggerSystem/  # Activity logging
 │   ├── types/          # TypeScript types
 │   ├── types.ts        # Core type definitions
 │   └── index.ts        # Entry point
@@ -80,6 +89,47 @@ await fetchManifestsFromCDN(cdnUrl, manifestsDir, nodeEnv);
 
 This eliminates the need for Git LFS in production deployments.
 
+## Server Systems
+
+### TradingSystem
+
+Located in `src/systems/TradingSystem/`:
+
+Modular player-to-player trading system with:
+- **acceptance.ts**: Accept/decline logic
+- **items.ts**: Add/remove items from offers
+- **request.ts**: Trade initiation with proximity checks
+- **swap.ts**: Screen transitions (Screen 1 ↔ Screen 2)
+- **helpers.ts**: Shared utilities and validation
+- **types.ts**: Type definitions
+
+Features:
+- Two-screen confirmation flow (OSRS-accurate)
+- Wealth transfer indicators
+- Proximity validation (2-tile range)
+- Interface blocking (prevents exploits)
+- Audit logging for all trades
+
+### ServerNetwork Handlers
+
+Located in `src/systems/ServerNetwork/handlers/`:
+
+| Handler | Purpose |
+|---------|---------|
+| `bank/` | Banking operations (deposit, withdraw, tabs, coins, equipment) |
+| `trade/` | Trading system handlers |
+| `friends.ts` | Friend management and private messaging |
+| `combat.ts` | Combat actions and validation |
+| `inventory.ts` | Inventory management |
+| `player.ts` | Player state updates |
+| `chat.ts` | Chat message handling |
+| `dialogue.ts` | NPC dialogue |
+| `quest.ts` | Quest progression |
+| `resources.ts` | Resource gathering |
+| `store.ts` | Shop transactions |
+| `prayer.ts` | Prayer system |
+| `home-teleport.ts` | Home teleport functionality |
+
 ## API Routes
 
 ### Core Endpoints
@@ -89,45 +139,10 @@ This eliminates the need for Git LFS in production deployments.
 | `/status` | GET | Health check (used by Railway) |
 | `/health` | GET | Legacy health check |
 | `/ws` | WS | Game WebSocket connection |
-| `/debug/public` | GET | Debug endpoint showing public directory contents |
-
-### Data Endpoints
-
-**New in v1.0:** Server-authoritative game data endpoints.
-
-| Route | Method | Purpose |
-|-------|--------|---------|
-| `/api/data/skill-unlocks` | GET | Get skill unlock definitions for all skills |
-
-**Example:**
-```bash
-curl https://hyperscape-production.up.railway.app/api/data/skill-unlocks
-```
-
-Returns skill progression data used by the Skill Guide Panel UI.
-
-### Player Endpoints
-
-| Route | Method | Purpose |
-|-------|--------|---------|
-| `/api/player` | GET | Get current player data |
-| `/api/player` | POST | Create or update player |
-| `/api/character` | POST | Create new character |
-| `/api/character/:id` | GET | Get character by ID |
-
-### Admin Endpoints
-
-| Route | Method | Purpose |
-|-------|--------|---------|
-| `/api/admin/users` | GET | List all users (requires admin) |
-| `/api/admin/ban` | POST | Ban user (requires admin) |
-
-### Upload Endpoints
-
-| Route | Method | Purpose |
-|-------|--------|---------|
-| `/api/upload/avatar` | POST | Upload VRM avatar |
-| `/api/upload/model` | POST | Upload GLB model |
+| `/api/agent/*` | Various | ElizaOS agent API endpoints |
+| `/api/character/*` | Various | Character management |
+| `/api/player/*` | Various | Player data queries |
+| `/api/template/*` | Various | Character templates |
 
 ## Database
 
@@ -173,6 +188,9 @@ export const characters = pgTable("characters", {
 | `playerSessions` | Login/logout tracking |
 | `playerDeaths` | Death locks to prevent duplication |
 | `npcKills` | Kill statistics per player |
+| `friendships` | Bidirectional friend relationships |
+| `friend_requests` | Pending friend requests |
+| `ignore_lists` | Blocked players per account |
 
 ### Database Commands
 
