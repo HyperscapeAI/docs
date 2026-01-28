@@ -76,10 +76,6 @@ CREATE TABLE characters (
   cookingXp INTEGER DEFAULT 0,
   smithingXp INTEGER DEFAULT 0,
   agilityXp INTEGER DEFAULT 0,
-  -- Prayer
-  prayerPoints INTEGER DEFAULT 1,
-  prayerMaxPoints INTEGER DEFAULT 1,
-  activePrayers TEXT DEFAULT '[]',
   -- Status
   health INTEGER DEFAULT 100,
   maxHealth INTEGER DEFAULT 100,
@@ -179,7 +175,7 @@ Migrations are stored in `packages/server/src/database/migrations/`:
 | Migration | Description |
 |-----------|-------------|
 | `0018_add_agility_skill.sql` | Added agilityLevel and agilityXp columns |
-| `0017_add_death_recovery_columns.sql` | Added death recovery tracking |
+| `0017_add_death_recovery_columns.sql` | Added death recovery system columns |
 | `0016_add_prayer_system.sql` | Added prayer points and active prayers |
 | `0015_add_smithing_skill.sql` | Added smithingLevel and smithingXp columns |
 | `0014_add_mining_skill.sql` | Added miningLevel and miningXp columns |

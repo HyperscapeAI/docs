@@ -43,7 +43,7 @@ Hyperscape has **12 skills** total:
 
 | Skill | Activity |
 |-------|----------|
-| **Agility** | Stamina regeneration and movement efficiency |
+| **Agility** | Traverse the world to improve stamina regeneration |
 
 ## XP and Leveling
 
@@ -210,6 +210,58 @@ Smelt ores into bars at furnaces, then smith bars into equipment at anvils.
   Iron ore has a 50% failure rate when smelting, matching OSRS mechanics.
 </Info>
 
+### Agility
+
+Agility is a unique skill that rewards players for traversing the game world. Unlike traditional RuneScape agility courses, Hyperscape's agility system is integrated with movement and stamina mechanics.
+
+#### Training Agility
+
+**XP Gain**: Earn 1 XP per 2 tiles traveled (walking or running)
+
+**XP Batching**: To prevent visual spam, XP is granted in batches:
+- Every 100 tiles traveled = 50 XP granted
+- Partial progress is preserved between batches
+- Death resets accumulated tiles (not earned XP)
+
+**XP Rates**:
+| Movement Type | Tiles/Second | XP/Minute |
+|---------------|--------------|-----------|
+| Walking | 3.33 | ~100 XP |
+| Running | 6.67 | ~200 XP |
+
+#### Agility Benefits
+
+**Stamina Regeneration Bonus**: +1% stamina regen per agility level
+
+| Agility Level | Regen Multiplier | Idle Regen/Sec | Walk Regen/Sec |
+|---------------|------------------|----------------|----------------|
+| 1 | 1.01x | 4.04 | 2.02 |
+| 25 | 1.25x | 5.00 | 2.50 |
+| 50 | 1.50x | 6.00 | 3.00 |
+| 75 | 1.75x | 7.00 | 3.50 |
+| 99 | 1.99x | 7.96 | 3.98 |
+
+<Info>
+  High agility levels significantly improve stamina sustainability, allowing longer running sessions and faster recovery.
+</Info>
+
+#### Weight and Stamina
+
+Inventory weight affects stamina drain while running:
+
+**Weight Penalty**: +0.5% stamina drain per kg carried
+
+| Weight (kg) | Drain Multiplier | Drain/Second |
+|-------------|------------------|--------------|
+| 0 | 1.0x | 2.0 |
+| 20 | 1.1x | 2.2 |
+| 50 | 1.25x | 2.5 |
+| 100 | 1.5x | 3.0 |
+
+<Warning>
+  Heavy loads significantly increase stamina drain. Manage your inventory weight for optimal running efficiency.
+</Warning>
+
 #### Smithing (at Anvil)
 
 Click an anvil to open the smithing interface. **Requires a hammer in your inventory** (not consumed). Select the item to smith and quantity.
@@ -273,54 +325,20 @@ Skill configuration is in `packages/shared/src/data/`:
 | `equipment-requirements.json` | Level requirements for equipment |
 | `equipment-stats.json` | Stat bonuses for equipment |
 
-## Agility & Weight Mechanics
+## Skill Guide Panel
 
-### Agility Training
+Click any skill in the Skills panel to open its Skill Guide, which shows all unlocks available at each level.
 
-Agility is trained passively by moving through the world:
-
-**XP Rate:**
-- 1 XP per 2 tiles traveled
-- XP batched at 100 tiles (50 XP grant) to prevent visual spam
-- Both walking and running grant XP
-
-**XP Frequency:**
-- Running (4 tiles/tick): XP drop every ~15 seconds
-- Walking (2 tiles/tick): XP drop every ~30 seconds
-
-**Death Penalty:**
-- Accumulated tiles toward next XP grant are reset on death
-- Earned XP is never lost
-
-### Weight-Based Stamina Drain
-
-Inventory weight affects stamina drain while running:
-
-- Base drain: 2 stamina/second
-- Weight modifier: +0.5% drain per kg carried
-- Example: 20kg load = +10% drain = 2.2 stamina/second
-
-### Agility-Based Stamina Regeneration
-
-Higher Agility levels provide faster stamina regeneration:
-
-- Base regen: 2 stamina/second (walking), 4 stamina/second (idle)
-- Agility bonus: +1% regen per level
-- Example: Level 50 Agility = +50% regen = 3 stamina/second (walking)
-
-| Agility Level | Idle Regen/Sec | Walk Regen/Sec |
-|---------------|----------------|----------------|
-| 1 | 4.04 | 2.02 |
-| 25 | 5.00 | 2.50 |
-| 50 | 6.00 | 3.00 |
-| 75 | 7.00 | 3.50 |
-| 99 | 7.96 | 3.98 |
+**Features**:
+- Visual distinction between unlocked (green) and locked (gray) items
+- Next unlock highlighted with progress indicator
+- Scrollable list for skills with many unlocks
+- Type indicators (item vs ability)
+- Shows levels needed to reach next unlock
 
 <Info>
-  Weight is calculated server-side and synced to the client via `PLAYER_WEIGHT_CHANGED` events. Stamina calculations are client-side in `PlayerLocal.ts`.
+  The Skill Guide Panel helps players plan their progression by showing what they'll unlock at future levels.
 </Info>
-
----
 
 ## Default Skill Values
 
