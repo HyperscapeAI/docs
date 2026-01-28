@@ -155,6 +155,10 @@ export enum EventType {
   RESOURCE_PROCESSED = "resource:processed",
   FIRE_LIT = "fire:lit",
   FOOD_COOKED = "food:cooked",
+  
+  // Gathering tool visuals (OSRS-style)
+  GATHERING_TOOL_SHOW = "gathering:tool:show",
+  GATHERING_TOOL_HIDE = "gathering:tool:hide",
 }
 ```
 
@@ -194,63 +198,15 @@ export enum EventType {
 ```typescript
 export enum EventType {
   // Quest lifecycle
+  QUEST_START_CONFIRM = "quest:start_confirm",
   QUEST_STARTED = "quest:started",
   QUEST_PROGRESSED = "quest:progressed",
   QUEST_COMPLETED = "quest:completed",
-  QUEST_START_CONFIRM = "quest:start_confirm",
   
-  // XP lamps
+  // XP Lamp (quest reward item)
   XP_LAMP_USE_REQUEST = "xp_lamp:use_request",
   XP_LAMP_SKILL_SELECTED = "xp_lamp:skill_selected",
   XP_LAMP_APPLIED = "xp_lamp:applied",
-}
-```
-
-**Quest Event Data:**
-
-```typescript
-interface QuestStartedEvent {
-  playerId: string;
-  questId: string;
-  questName: string;
-  initialStage: string;
-}
-
-interface QuestProgressedEvent {
-  playerId: string;
-  questId: string;
-  stage: string;
-  progress: Record<string, number>;
-  description: string;
-}
-
-interface QuestCompletedEvent {
-  playerId: string;
-  questId: string;
-  questName: string;
-  rewards: {
-    questPoints: number;
-    items: Array<{ itemId: string; quantity: number }>;
-    xp: Record<string, number>;
-  };
-}
-
-interface QuestStartConfirmEvent {
-  playerId: string;
-  questId: string;
-  questName: string;
-  description: string;
-  difficulty: string;
-  requirements: {
-    quests: string[];
-    skills: Record<string, number>;
-    items: string[];
-  };
-  rewards: {
-    questPoints: number;
-    items: Array<{ itemId: string; quantity: number }>;
-    xp: Record<string, number>;
-  };
 }
 ```
 

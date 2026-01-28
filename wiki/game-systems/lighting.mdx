@@ -1,0 +1,329 @@
+---
+title: "Lighting & Day/Night Cycle"
+description: "Dynamic lighting, auto exposure, and atmospheric day/night transitions"
+icon: "sun"
+---
+
+# Lighting & Day/Night Cycle
+
+Hyperscape features a dynamic day/night cycle with adaptive lighting and auto exposure that mimics realistic eye adaptation. The lighting system provides atmospheric transitions while maintaining gameplay visibility.
+
+<Info>
+Lighting code lives in `packages/shared/src/systems/shared/world/Environment.ts` with sky system in `SkySystem.ts`.
+</Info>
+
+## Auto Exposure System
+
+The auto exposure system mimics eye adaptation to different light levels, automatically adjusting exposure to keep the game visible during both day and night:
+
+```typescript
+// Environment.ts
+private readonly DAY_EXPOSURE = 0.85;   // Standard exposure for bright daylight
+private readonly NIGHT_EXPOSURE = 1.7;  // Boosted exposure for night visibility
+private currentExposure: number = 0.85; // Smoothed current value
+```
+
+### How It Works
+
+```typescript
+private updateAutoExposure(dayIntensity: number): void {
+  // Calculate target exposure using smoothstep interpolation
+  const t = dayIntensity * dayIntensity * (3 - 2 * dayIntensity);
+  const targetExposure = 
+    this.NIGHT_EXPOSURE + (this.DAY_EXPOSURE - this.NIGHT_EXPOSURE) * t;
+  
+  // Smooth interpolation to prevent jarring changes
+  // Lerp factor of 0.03 = gradual adaptation over ~30 frames
+  this.currentExposure += (targetExposure - this.currentExposure) * 0.03;
+  
+  // Apply to renderer
+  graphics.renderer.toneMappingExposure = this.currentExposure;
+}
+```
+
+**Exposure Values:**
+
+| Time | Exposure | Effect |
+|------|----------|--------|
+| Day | 0.85 | Standard daylight rendering |
+| Dusk/Dawn | 0.85 → 1.7 | Smooth transition |
+| Night | 1.7 | Boosted to maintain visibility |
+
+<Tip>
+Higher exposure at night compensates for lower light levels, keeping the game playable while maintaining the darker atmosphere.
+</Tip>
+
+### Initialization
+
+Exposure is initialized based on current time of day to prevent jarring transitions when players join at night:
+
+```typescript
+// In start() after skySystem is ready
+const initialDayIntensity = this.skySystem?.dayIntensity ?? 1.0;
+const t = initialDayIntensity * initialDayIntensity * (3 - 2 * initialDayIntensity);
+this.currentExposure = this.NIGHT_EXPOSURE + (this.DAY_EXPOSURE - this.NIGHT_EXPOSURE) * t;
+```
+
+---
+
+## Day/Night Lighting
+
+### Sun and Moon
+
+The sun/moon light transitions based on time of day:
+
+```typescript
+// Daytime - warm sunlight
+if (dayIntensity > 0.1) {
+  const sunIntensity = dayIntensity * 1.8 * transitionFade;
+  this.sunLight.intensity = sunIntensity;
+  this.sunLight.color.setRGB(1.0, 0.98, 0.92);
+} else {
+  // Nighttime - cool blue moonlight (stronger for better visibility)
+  const nightIntensity = 1 - dayIntensity;
+  const moonIntensity = nightIntensity * 0.6 * transitionFade;
+  this.sunLight.intensity = moonIntensity;
+  this.sunLight.color.setRGB(0.6, 0.7, 0.9);
+}
+```
+
+**Light Intensity:**
+
+| Time | Intensity | Color |
+|------|-----------|-------|
+| Day | 1.8 | Warm white (1.0, 0.98, 0.92) |
+| Night | 0.6 | Cool blue (0.6, 0.7, 0.9) |
+
+<Note>
+Moon intensity was increased from 0.4 to 0.6 to improve night visibility while maintaining atmospheric darkness.
+</Note>
+
+### Ambient Lighting
+
+Hemisphere and ambient lights provide base visibility:
+
+```typescript
+// Hemisphere light: brighter during day, visible at night
+// Day: 0.9, Night: 0.4 (auto exposure handles the rest)
+this.hemisphereLight.intensity = 0.4 + dayIntensity * 0.5;
+
+// Shift sky color from bright blue (day) to blue-silver (night)
+this.hemisphereLight.color.setRGB(
+  0.53 * dayIntensity + 0.25 * nightIntensity, // R: moonlit sky
+  0.81 * dayIntensity + 0.35 * nightIntensity, // G: moonlit sky
+  0.92 * dayIntensity + 0.5 * nightIntensity,  // B: blue tint at night
+);
+
+// Ambient fill: provides base visibility
+// Day: 0.5, Night: 0.3 (auto exposure handles the rest)
+this.ambientLight.intensity = 0.3 + dayIntensity * 0.2;
+
+// Day: warm neutral white, Night: brighter blue moonlight tint
+this.ambientLight.color.setRGB(
+  0.5 + dayIntensity * 0.5,   // R: 0.5 at night, 1.0 at day
+  0.55 + dayIntensity * 0.4,  // G: 0.55 at night, 0.95 at day
+  0.7 + dayIntensity * 0.25,  // B: 0.7 at night, 0.95 at day (bluer at night)
+);
+```
+
+**Ambient Intensity:**
+
+| Light Type | Day | Night |
+|------------|-----|-------|
+| Hemisphere | 0.9 | 0.4 |
+| Ambient | 0.5 | 0.3 |
+
+---
+
+## Shadow System
+
+### Cascaded Shadow Maps (WebGPU)
+
+WebGPU uses Cascaded Shadow Maps (CSM) for high-quality shadows:
+
+```typescript
+this.csmShadowNode = new CSMShadowNode(this.sunLight, {
+  cascades: csmConfig.cascades,
+  maxFar: csmConfig.maxFar,
+  shadowMapSize: csmConfig.shadowMapSize,
+  shadowBias: csmConfig.shadowBias,
+  shadowNormalBias: csmConfig.shadowNormalBias,
+});
+```
+
+**Shadow Quality Levels:**
+
+| Level | Cascades | Map Size | Max Distance |
+|-------|----------|----------|--------------|
+| Low | 2 | 1024 | 100 tiles |
+| Medium | 3 | 2048 | 150 tiles |
+| High | 4 | 4096 | 200 tiles |
+
+### WebGL Shadow Fallback
+
+WebGL uses simplified single directional light shadows:
+
+```typescript
+if (!useWebGPU) {
+  this.csmShadowNode = null;
+  this.csmNeedsAttach = false;
+  this.needsFrustumUpdate = false;
+  
+  scene.add(this.sunLight);
+  scene.add(this.sunLight.target);
+  
+  console.log(
+    `[Environment] WebGL shadow map enabled (no CSM): mapSize=${csmConfig.shadowMapSize}, frustum=${baseFrustumSize * 2}`
+  );
+  return;
+}
+```
+
+**WebGL Limitations:**
+- No cascaded shadows (single shadow map)
+- Smaller shadow coverage area
+- Lower shadow quality
+- Still provides functional shadows for gameplay
+
+---
+
+## Fog System
+
+Fog color transitions with day/night cycle:
+
+```typescript
+// Day fog color: warm beige
+private readonly dayFogColor = new THREE.Color(0xd4c8b8);
+
+// Night fog color: dark blue to blend with night sky
+private readonly nightFogColor = new THREE.Color(0x1a1f3a);
+
+private updateFogColor(dayIntensity: number): void {
+  if (this.world.scene?.fog) {
+    this.world.scene.fog.color.lerpColors(
+      this.nightFogColor,
+      this.dayFogColor,
+      dayIntensity
+    );
+  }
+}
+```
+
+---
+
+## CSM Frustum Initialization
+
+CSM frustums are initialized during startup to ensure shadows work from the first frame:
+
+```typescript
+private initializeCSMFrustums(): void {
+  if (!this.csmShadowNode || !this.needsFrustumUpdate) return;
+  
+  const camera = this.world.camera;
+  
+  // Validate camera is properly configured
+  if (camera.aspect <= 0 || camera.fov <= 0 || camera.near <= 0) {
+    console.debug("[Environment] CSM init deferred - camera not configured yet");
+    return;
+  }
+  
+  // Ensure CSM has camera reference
+  if (!this.csmShadowNode.camera) {
+    this.csmShadowNode.camera = camera;
+  }
+  
+  // Update camera matrices before frustum calculation
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(true);
+  
+  try {
+    this.csmShadowNode.updateFrustums();
+    this.needsFrustumUpdate = false;
+    
+    // Attach shadowNode to light
+    if (this.csmNeedsAttach && this.sunLight) {
+      this.sunLight.shadow.shadowNode = this.csmShadowNode;
+      this.csmNeedsAttach = false;
+      console.log("[Environment] CSM shadowNode attached to light (init)");
+    }
+  } catch (err) {
+    // Will be retried during update() - expected during startup
+    console.debug("[Environment] CSM init deferred:", err.message);
+  }
+}
+```
+
+This prevents shadow initialization failures that could occur when camera projection isn't ready yet.
+
+---
+
+## Lighting Constants
+
+```typescript
+// From Environment.ts
+const LIGHT_DISTANCE = 400;  // Distance from target to light
+
+// Auto exposure
+const DAY_EXPOSURE = 0.85;
+const NIGHT_EXPOSURE = 1.7;
+
+// Moon intensity (increased for better night visibility)
+const MOON_INTENSITY_MULTIPLIER = 0.6;  // Was 0.4
+
+// Ambient lighting floors
+const HEMISPHERE_NIGHT_INTENSITY = 0.4;  // Was 0.25
+const AMBIENT_NIGHT_INTENSITY = 0.3;     // Was 0.18
+```
+
+---
+
+## Performance Considerations
+
+### Frustum Update Optimization
+
+CSM frustums are only recalculated when needed (expensive operation):
+
+```typescript
+// Frustum recalculation is needed on:
+// - Viewport resize
+// - Camera near/far change
+// Light position updates do NOT require frustum recalculation
+
+if (this.csmShadowNode && this.needsFrustumUpdate) {
+  // Pre-flight checks: ensure camera has valid projection
+  const hasValidAspect = camera.aspect > 0;
+  const hasValidFov = camera.fov > 0;
+  const hasValidNearFar = camera.near > 0 && camera.far > camera.near;
+  
+  if (!hasValidAspect || !hasValidFov || !hasValidNearFar) {
+    // Camera not fully configured yet - skip this frame
+    return;
+  }
+  
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(true);
+  
+  this.csmShadowNode.updateFrustums();
+  this.needsFrustumUpdate = false;
+}
+```
+
+### Smooth Transitions
+
+All lighting transitions use interpolation to prevent jarring changes:
+
+```typescript
+// Smoothstep for natural-feeling transitions
+const t = dayIntensity * dayIntensity * (3 - 2 * dayIntensity);
+
+// Gradual exposure adaptation (0.03 lerp factor = ~30 frames)
+this.currentExposure += (targetExposure - this.currentExposure) * 0.03;
+```
+
+---
+
+## Related Documentation
+
+- [Client Graphics](/wiki/client/overview)
+- [Renderer Factory](/api-reference/renderer-factory)
+- [Environment System](/api-reference/environment-system)

@@ -390,12 +390,65 @@ interface StationData {
 |---------|---------|-------|-------|----------|
 | **Anvil** | Smith bars into equipment | `asset://models/anvil/anvil.glb` | 0.5 | 0.2 |
 | **Furnace** | Smelt ores into bars | `asset://models/furnace/furnace.glb` | 1.5 | 1.0 |
-| **Range** | Cook food with reduced burn chance | `asset://models/range/range.glb` | 1.0 | 0 |
-| **Bank** | Store items | TBD | 1.0 | 0 |
+| **Range** | Cook food with reduced burn chance | Loaded from manifest | 1.0 | 0 |
+| **Bank** | Store items | Loaded from manifest | 1.0 | 0 |
+| **Altar** | Prayer restoration | Loaded from manifest | 1.0 | 0 |
 
-### Station Models
+<Note>
+Station entities (Altar, Bank, Range) now load 3D models from the manifest system with automatic fallback to placeholder geometry if models are unavailable.
+</Note>
 
-3D models for crafting stations in the assets repository:
+### Station Model Loading
+
+Station entities load 3D models from the manifest system using `StationDataProvider`:
+
+```typescript
+// AltarEntity.ts, BankEntity.ts, RangeEntity.ts
+const stationData = stationDataProvider.getStationData("altar");
+const modelPath = stationData?.model ?? null;
+const modelScale = stationData?.modelScale ?? 1.0;
+const modelYOffset = stationData?.modelYOffset ?? 0;
+
+// Try to load 3D model first
+if (modelPath && this.world.loader) {
+  try {
+    const { scene } = await modelCache.loadModel(modelPath, this.world);
+    
+    this.mesh = scene;
+    this.mesh.name = `Altar_${this.id}`;
+    
+    // Scale the model from manifest
+    this.mesh.scale.set(modelScale, modelScale, modelScale);
+    
+    // Offset Y position so model base sits on ground
+    this.mesh.position.y = modelYOffset;
+    
+    // Enable shadows and set layer for raycasting
+    this.mesh.layers.set(1);
+    this.mesh.traverse((child) => {
+      child.layers.set(1);
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    
+    return;
+  } catch (error) {
+    console.warn(`[AltarEntity] Failed to load altar model, using placeholder:`, error);
+  }
+}
+
+// FALLBACK: Create placeholder geometry
+const geometry = new THREE.BoxGeometry(0.9, 0.8, 0.9);
+const material = new THREE.MeshStandardMaterial({
+  color: 0x9932cc, // Purple for altar
+  roughness: 0.5,
+  metalness: 0.3,
+});
+```
+
+**Station Models:**
 
 ```
 models/
@@ -410,6 +463,13 @@ models/
     ├── concept-art.png     # Concept art
     └── metadata.json       # Model metadata
 ```
+
+**Fallback Colors:**
+- Altar: Purple (`0x9932cc`)
+- Bank: Black (`0x111111`)
+- Range: Red (`0xcc3333`)
+
+All fallback materials now use `MeshStandardMaterial` for consistent lighting behavior.
 
 ### Crafting Stations
 

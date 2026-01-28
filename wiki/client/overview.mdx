@@ -235,37 +235,137 @@ Located in `packages/client/src/game/hud/`:
 
 ## 3D Graphics System
 
-### WebGPU Renderer
+### Renderer (WebGPU with WebGL Fallback)
 
-The graphics system uses Three.js with WebGPU for high-performance rendering:
+The graphics system uses Three.js with WebGPU for high-performance rendering, with automatic WebGL fallback for environments that don't support WebGPU (e.g., WKWebView in Tauri, older browsers):
 
 ```typescript
 // systems/client/ClientGraphics.ts
 export class ClientGraphics extends SystemBase {
-  private renderer: WebGPURenderer;
+  private renderer: UniversalRenderer;
   private postProcessing: PostProcessingComposer;
+  isWebGPU: boolean = true;
   
   async init() {
+    // Create renderer (WebGPU preferred, WebGL fallback)
     this.renderer = await createRenderer({
       powerPreference: "high-performance",
       antialias: true,
     });
     
-    // Configure shadows (Cascaded Shadow Maps)
+    this.isWebGPU = isWebGPURenderer(this.renderer);
+    
+    // Log backend capabilities
+    if (this.isWebGPU) {
+      logWebGPUInfo(this.renderer);
+      const caps = getWebGPUCapabilities(this.renderer);
+      console.log("[ClientGraphics] WebGPU features:", caps.features.length);
+    } else {
+      console.warn("[ClientGraphics] WebGPU unavailable (falling back to WebGL renderer)");
+    }
+    
+    // Configure shadows
+    // WebGPU: Cascaded Shadow Maps (CSM)
+    // WebGL: Single directional light shadow
     configureShadowMaps(this.renderer, {
       cascades: 3,
       shadowMapSize: 2048,
     });
     
-    // Post-processing (TSL-based)
-    this.postProcessing = createPostProcessing(this.renderer, {
-      bloom: true,
-      toneMapping: true,
-      colorGrading: true,
-    });
+    // Post-processing (TSL-based, WebGPU only)
+    // WebGL fallback disables post-processing
+    this.usePostprocessing = (this.world.prefs?.postprocessing ?? true) && this.isWebGPU;
+    
+    if (this.usePostprocessing && isWebGPURenderer(this.renderer)) {
+      this.postProcessing = createPostProcessing(this.renderer, {
+        bloom: true,
+        toneMapping: true,
+        colorGrading: true,
+      });
+    }
   }
 }
 ```
+
+### Renderer Backend Detection
+
+```typescript
+// utils/rendering/RendererFactory.ts
+export type RendererBackend = "webgpu" | "webgl";
+export type UniversalRenderer = InstanceType<typeof THREE.WebGPURenderer>;
+
+// Check if WebGPU is available
+export async function isWebGPUAvailable(): Promise<boolean> {
+  if (typeof navigator === "undefined") return false;
+  
+  const gpuApi = (navigator as NavigatorWithGpu).gpu;
+  if (!gpuApi) return false;
+  
+  try {
+    const adapter = await gpuApi.requestAdapter();
+    return adapter !== null;
+  } catch {
+    return false;
+  }
+}
+
+// Check if WebGL is available
+export function isWebGLAvailable(): boolean {
+  if (typeof document === "undefined") return false;
+  
+  const canvas = document.createElement("canvas");
+  const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+  return gl !== null;
+}
+
+// Detect rendering capabilities
+export async function detectRenderingCapabilities(): Promise<RenderingCapabilities> {
+  const supportsWebGPU = await isWebGPUAvailable();
+  if (supportsWebGPU) {
+    return { supportsWebGPU: true, supportsWebGL: true, backend: "webgpu" };
+  }
+  
+  const supportsWebGL = isWebGLAvailable();
+  if (supportsWebGL) {
+    return { supportsWebGPU: false, supportsWebGL: true, backend: "webgl" };
+  }
+  
+  throw new Error(
+    "Neither WebGPU nor WebGL is supported in this environment. " +
+    "Please use a modern browser or a WebView with GPU acceleration enabled."
+  );
+}
+```
+
+### WebGL Fallback Features
+
+When running on WebGL backend:
+
+- **No TSL Post-Processing**: Bloom, tone mapping, and color grading are disabled
+- **Simplified Shadows**: Single directional light instead of Cascaded Shadow Maps (CSM)
+- **Auto Exposure**: Still works (tone mapping exposure is renderer-agnostic)
+- **Settings Panel**: Displays "WebGL" instead of "WebGPU"
+
+```typescript
+// Environment.ts - WebGL shadow fallback
+if (!useWebGPU) {
+  this.csmShadowNode = null;
+  this.csmNeedsAttach = false;
+  this.needsFrustumUpdate = false;
+  
+  scene.add(this.sunLight);
+  scene.add(this.sunLight.target);
+  
+  console.log(
+    `[Environment] WebGL shadow map enabled (no CSM): mapSize=${csmConfig.shadowMapSize}, frustum=${baseFrustumSize * 2}`
+  );
+  return;
+}
+```
+
+<Tip>
+The WebGL fallback uses `THREE.WebGPURenderer` with `forceWebGL: true` instead of switching to `THREE.WebGLRenderer`. This keeps the codebase unified while supporting both backends.
+</Tip>
 
 ### Rendering Pipeline
 

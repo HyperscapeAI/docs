@@ -27,127 +27,114 @@ rss: true
 
 ### 📜 Quest System
 
-Complete OSRS-style quest system with multi-stage progression:
+Complete OSRS-style quest system with manifest-driven definitions:
 
-- **Quest Types**: Kill, gather, interact, and dialogue stages
-- **Quest Points**: Earned on completion, tracked per character
-- **Prerequisites**: Quest, skill, and item requirements
-- **Rewards**: Quest points, items, and skill XP
-- **XP Lamps**: Quest rewards that let players choose which skill receives XP
-  - Right-click lamp → Select "Rub" → Choose skill from modal
-  - Supports all 13 skills (combat, gathering, artisan)
-- **OSRS-Style UI**: Color-coded quest journal (red/yellow/green status)
-  - Quest list with difficulty and quest points
-  - Detailed quest view with strikethrough for completed steps
-  - Real-time progress counters (e.g., "Kill 15 goblins (7/15)")
-  - Quest start confirmation screen
-  - Quest completion celebration screen
-- **Dialogue Integration**: NPCs show different dialogue based on quest status
-  - `not_started` → Show quest offer
-  - `in_progress` → Show progress hints
-  - `ready_to_complete` → Complete quest
-  - `completed` → Show completion dialogue
-- **Database**: New `quest_progress` and `quest_audit_log` tables
-  - Atomic quest completion with quest points award
-  - Immutable audit trail for security and exploit detection
+- **Quest Definitions**: Manifest-driven quests in `quests.json`
+  - Multi-stage quests with dialogue, kill, gather, and interact objectives
+  - Prerequisites (quest completion, skill levels, items)
+  - Rewards (quest points, items, XP)
+  - Difficulty levels (novice, intermediate, experienced, master, grandmaster)
+- **Quest Journal UI**: OSRS-accurate quest tracking interface
+  - Color-coded status (red/yellow/green)
+  - Strikethrough for completed stages
+  - Progress counters (e.g., "7/15 goblins killed")
+  - Quest points display
+- **Quest Flow**: Request → Confirmation → Accept → Progress → Complete
+  - `QuestStartScreen` shows requirements and rewards
+  - `QuestCompleteScreen` celebration with fanfare
+  - Real-time progress tracking via game events
 - **Security Features**:
-  - HMAC-SHA256 kill token validation (prevents spoofed NPC_DIED events)
+  - HMAC kill token validation (prevents spoofed NPC_DIED events)
   - Rate limiting (5/10/3 req/sec for list/detail/accept)
-  - Input validation with strict quest ID pattern matching
-  - Audit logging for all quest state changes
+  - Input validation (`isValidQuestId` with pattern matching)
+  - Quest audit logging (immutable security trail)
 - **Performance Optimizations**:
-  - O(1) stage lookups with pre-allocated caches
+  - O(1) stage lookups with cached Maps
   - Direct mutation in hot paths (eliminates object spread allocations)
-  - Debug-level logging for frequent events
-- **Testing**: 997 lines, 45 comprehensive test cases covering full quest flow
+  - Debug-level logging in hot paths, info-level for milestones
+- **Database**: New `quest_progress` and `quest_audit_log` tables
+- **Testing**: 997 lines with 45 comprehensive test cases
+- **XP Lamp System**: Quest reward items that grant XP to chosen skill
+  - `SkillSelectModal` UI for skill selection
+  - Server-side validation and consumption
+  - Supports any XP amount via `useEffect.xpAmount`
 
-### 🌅 Auto Exposure for Day/Night Cycle
+### 🎨 Rendering & Graphics
 
-Adaptive exposure system that mimics eye adaptation:
+**WebGL Fallback**: Graceful degradation for environments without WebGPU support:
 
-- **Auto Exposure**: Higher exposure at night (1.7) compensates for lower light
-  - Day exposure: 0.85 (standard daylight)
-  - Night exposure: 1.7 (boosted for visibility)
-  - Smooth transitions using smoothstep interpolation
-  - Gradual lerp (0.03 factor, ~30 frames) prevents jarring changes
-- **Enhanced Night Lighting**:
+- **Automatic Detection**: Checks `navigator.gpu` and WebGL context availability
+- **Fallback Renderer**: Uses `THREE.WebGPURenderer` with `forceWebGL: true`
+- **Conditional Post-Processing**: TSL effects disabled on WebGL (bloom, tone mapping, color grading)
+- **Shadow Fallback**: Single directional light instead of Cascaded Shadow Maps (CSM)
+- **Settings Display**: Shows actual renderer type (WebGPU/WebGL) in settings panel
+- **Tauri Support**: Enables Hyperscape to run in WKWebView environments
+
+**Auto Exposure System**: Mimics eye adaptation for day/night cycle:
+
+- **Adaptive Exposure**: Day (0.85) → Night (1.7) with smoothstep interpolation
+- **Improved Night Visibility**: Higher exposure at night compensates for lower light
+- **Smooth Transitions**: 0.03 lerp factor (~30 frames) prevents jarring changes
+- **Initialization Fix**: Exposure initialized based on current time of day
+- **Enhanced Lighting**:
   - Moon intensity increased from 0.4 to 0.6
-  - Brighter ambient colors (blue-silver moonlight tones)
   - Hemisphere light at night: 0.4 (was 0.25)
   - Ambient light at night: 0.3 (was 0.18)
-- **Maintains Atmosphere**: Night still feels darker/cooler than day while staying playable
-- **WebGL Fallback Support**: Proper shadow fallback when WebGPU unavailable
+  - Brighter blue-silver tones for nighttime ambient colors
 
-### 🎨 WebGPU/WebGL Renderer Fallback
+**Station 3D Models**: Altar, Bank, and Range entities now load models from manifest:
 
-Graceful degradation for environments without WebGPU:
+- **Manifest-Driven**: Uses `StationDataProvider` for model paths, scale, and Y-offset
+- **Graceful Fallback**: Placeholder geometry if model loading fails
+- **Consistent Materials**: Fallback uses `MeshStandardMaterial` for proper lighting
+- **Shadow Support**: Models cast and receive shadows
+- **Raycasting**: Proper layer setup for interaction detection
 
-- **WebGPU Preferred**: Uses WebGPU when available (Chrome 113+, Safari 17+)
-- **WebGL Fallback**: Automatically falls back to WebGL in WKWebView (Tauri)
-  - Uses `THREE.WebGPURenderer` with `forceWebGL` flag
-  - Disables TSL post-processing on WebGL (not supported)
-  - Single directional light shadows (no CSM cascades)
-- **Renderer Detection**: Settings panel displays active backend (WebGPU/WebGL)
-- **Type Safety**: New `RendererBackend` type and `getRendererBackend()` utility
-- **Capability Detection**: `isWebGPUAvailable()` and `isWebGLAvailable()` checks
+### 🎮 Equipment & Visuals
 
-### 🛠️ Equipment Fitting & Tool Detection
+**Equipment Fitting V2 Format**: Improved equipment attachment system:
 
-Improved equipment system with better tool detection:
+- **Relative Matrix Approach**: Captures exact visual relationship between bone and equipment
+- **Scale Preservation**: Automatically preserves bone scale compensation
+- **No Scale Hacks**: Eliminates need for `WEAPON_SCALE_MULTIPLIER` workarounds
+- **Avatar Normalization**: Asset Forge normalizes avatars to 1.6m height
+- **Backward Compatible**: V1 format still supported with legacy scale hack
 
-- **Equipment Fitting V2**: New export format preserves scale compensation
-  - Uses relative matrix approach for exact positioning
-  - Eliminates scale hacks from V1 format
-  - Avatar height normalized to 1.6m (matches Hyperscape's VRM factory)
-- **Tool Detection**: Checks both inventory AND equipped items
-  - Mining/woodcutting/fishing tools can be equipped in weapon slot
-  - Gathering system now detects equipped tools
-  - Proper type conversion (number to string) for item IDs
-- **OSRS-Style Fishing Rod Display**: Shows fishing rod in hand during fishing
-  - Temporarily hides equipped weapon while fishing
-  - `GATHERING_TOOL_SHOW` and `GATHERING_TOOL_HIDE` events
-  - Proper state tracking prevents race conditions
-- **Asset Forge**: Added tool category to equipment panel (pickaxe icon)
+**Gathering Tool Display (OSRS-Style)**: Tools shown in hand during gathering:
 
-### 🏠 Spawn & Home Teleport Fixes
+- **Fishing Rod Visual**: Fishing rod appears in hand during fishing (even though it's in inventory)
+- **Weapon Hiding**: Equipped weapon temporarily hidden while gathering tool is shown
+- **Tool Detection**: Checks both inventory AND equipped items for tools
+- **Mining Skill Fix**: Mining skill level now properly cached for equipment checks
+- **Asset Forge Tools**: Tools category added to equipment panel with Pickaxe icon
 
-- **Central Haven Spawn**: Uses manifest-defined Central Haven for spawn/home teleport
-- **Cooldown Reduction**: Home teleport cooldown reduced to 5 seconds (was 30s)
-- **Manifest Integration**: Reads spawn location from `world-areas.json`
+### 🏗️ CDN Architecture
 
-### 🔧 CDN Architecture Improvements
+**Fully CDN-Based Architecture**: Improved manifest fetching with production fallback:
 
-Fully CDN-based architecture with production fallback:
-
-- **CDN Serves from `packages/server/world/assets/`**: Updated path structure
-  - Audio: `/audio/music/{normal|combat}/`
-  - Models: `/models/`
-  - World: `/world/`
-  - Manifests: `/manifests/`
-- **Required Manifest Validation**: Server validates required manifests exist
-  - `npcs.json`, `world-areas.json`, `biomes.json`, `stores.json`
-  - `items.json` OR `items/{weapons,tools,resources,food,misc}.json`
-- **Production CDN Fallback**: Development mode falls back to production CDN if localhost unavailable
-  - Prevents partial-cache startup failures
-  - Bootstraps local manifests from `https://assets.hyperscape.club`
-- **Legacy Manifest Support**: Backwards compatibility for single-file `items.json` and `resources.json`
+- **Required Manifest Validation**: Server validates required manifests on startup
+- **Production CDN Fallback**: Development mode falls back to `https://assets.hyperscape.club` if local CDN incomplete
+- **Asset Detection**: `ensure-assets.mjs` detects full assets vs manifests-only
+- **Git LFS Handling**: Automatically pulls LFS objects for binary assets
 - **Idempotent Migrations**: Database constraints use `IF NOT EXISTS` checks
+- **SQL File Watching**: Dev script watches `.sql` files for migration changes
 
 ### 🐛 Bug Fixes
 
-- **PLAYER_JOINED Event**: Local player now emits `PLAYER_JOINED` (fixes skill updates)
-- **Equipment Scale**: V2 equipment exports preserve compensated scale
-- **Mining Skill Check**: Added missing mining skill to equipment requirements
-- **Cooking Sources**: Support both fires and permanent range entities
-- **Database Deadlocks**: Inventory sync now retries on deadlock (exponential backoff)
-- **CSM Frustum Updates**: Pre-flight camera validation prevents CSM errors
-- **Vite Import Warnings**: Added `@vite-ignore` to PhysXManager dynamic import
+- **Exposure Initialization**: Fixed jarring exposure transitions when joining at night (#622)
+- **Spawn/Home Teleport**: Now uses manifest Central Haven coordinates (#613)
+- **Firemaking Limit**: Removed concurrent fire limit that was blocking skill quests (#605)
+- **Quest Progress Tracking**: Fixed gather/interact progress by item ID for flexible completion order (#605)
+- **Equipment Fitting**: Fixed scale preservation and tool detection for equipped items (#615)
+- **CORS Allowlist**: Added Cloudflare Pages domains and www subdomain (#605)
 
-### 📊 Performance
+### 🔧 Developer Experience
 
-- **Turbo Dev Filter**: Only runs dev for relevant packages (shared, server, client, plugin)
-- **SQL File Watching**: Server dev script now watches `.sql` files for migration changes
-- **Object Spread Elimination**: Quest system uses direct mutation in hot paths
+- **Turbo Dev Filter**: Filtered to relevant packages only (shared, server, client, plugin-hyperscape)
+- **PhysX Import**: Added `@vite-ignore` to suppress dynamic import warnings
+- **Vite Config**: Fixed ElizaOS URL fallback to use `PUBLIC_API_URL`
+- **CI/CD**: Restricted Cloudflare R2 deploy to main branch only
+- **Tauri Dependencies**: Added Linux system dependencies for CI builds
 
 </Update>
 
