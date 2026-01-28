@@ -57,33 +57,11 @@ Smithing is a two-step process: first smelt ores into bars at a furnace, then sm
 
 | Skill | Description | Training Methods |
 |-------|-------------|------------------|
-| **Agility** | Movement efficiency | Walking/running (passive XP gain) |
+| **Agility** | Stamina and movement efficiency | Moving through the world (1 XP per 2 tiles) |
+| **Prayer** | Protection prayers and combat buffs | Burying bones, using prayer at altars |
 
 <Info>
-Agility is trained passively through movement and provides stamina regeneration bonuses.
-</Info>
-
----
-
-## Skill Guide Panel
-
-Players can click any skill in the Skills Panel to open an OSRS-style Skill Guide showing all unlocks at each level.
-
-**Features:**
-- Click-to-view unlock progression for any skill
-- Visual distinction between unlocked (green checkmark) and locked (lock icon) items
-- Next unlock highlighted with progress indicator
-- Scrollable list for skills with many unlocks
-- Type badges (item vs ability)
-- Shows "X of Y unlocks achieved" progress
-
-**Implementation:**
-- Client-side component: `packages/client/src/game/panels/SkillGuidePanel.tsx`
-- Server API endpoint: `GET /api/data/skill-unlocks`
-- Data source: `packages/server/world/assets/manifests/skill-unlocks.json`
-
-<Info>
-The Skill Guide Panel fetches unlock data from the server on first load and caches it for the session. This ensures server-authoritative unlock definitions.
+Agility is a passive skill that trains automatically as you move. XP is granted in batches of 50 XP every 100 tiles to prevent visual spam. Higher agility levels provide faster stamina regeneration (+1% per level).
 </Info>
 
 ---
@@ -226,9 +204,8 @@ public getTotalLevel(stats: StatsComponent): number {
   let total = 0;
 
   const skills = [
-    "attack", "strength", "defense", "constitution", "ranged",
-    "woodcutting", "mining", "fishing", "firemaking", "cooking",
-    "smithing", "agility"
+    "attack", "strength", "defense", "constitution", "ranged", "prayer",
+    "woodcutting", "mining", "fishing", "firemaking", "cooking", "smithing", "agility"
   ];
 
   for (const skill of skills) {
@@ -242,7 +219,7 @@ public getTotalLevel(stats: StatsComponent): number {
 
 ### Maximum Total Level
 
-With 12 skills at level 99: **1,188 total level**
+With 12 skills at level 99 (Constitution starts at 10): **1,197 total level**
 
 ---
 
@@ -520,41 +497,33 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 
 ### Agility XP
 
-Agility is trained passively through movement:
+Agility is a passive skill that trains automatically as you move through the world:
 
-**Movement XP Tracking**:
-- XP granted every 100 tiles traveled
-- 1 XP per tile (100 XP per batch)
-- Distance resets on death
-- Server-authoritative tracking prevents exploits
+**XP Mechanics**:
+- **Rate**: 1 XP per 2 tiles traveled
+- **Batching**: XP is granted in batches of 50 XP every 100 tiles
+- **Frequency**: ~15 seconds running, ~30 seconds walking between XP drops
+- **Death Penalty**: Accumulated tiles toward next XP grant are lost on death (earned XP is kept)
 
-**Stamina System Integration**:
-- **Weight-Based Drain**: Heavier inventory = faster stamina drain
-- **Agility Bonus**: +1% stamina regeneration per Agility level
-- **Server-Client Sync**: Weight updates forwarded via event bridge
+**Stamina Benefits**:
+- **Regeneration Bonus**: +1% stamina regen per agility level
+- **Level 1**: 1% bonus (4.04/sec idle, 2.02/sec walking)
+- **Level 50**: 50% bonus (6.0/sec idle, 3.0/sec walking)
+- **Level 99**: 99% bonus (7.96/sec idle, 3.98/sec walking)
 
-```typescript
-// From AgilitySystem (conceptual - integrated into movement)
-const TILES_PER_XP_BATCH = 100;
-const XP_PER_TILE = 1;
-
-// Grant XP every 100 tiles
-if (tilesTraveled >= TILES_PER_XP_BATCH) {
-  const xp = TILES_PER_XP_BATCH * XP_PER_TILE;
-  skillsSystem.grantXP(playerId, "agility", xp);
-  tilesTraveled = 0;  // Reset counter
-}
-```
-
-**Stamina Regeneration Formula**:
-```typescript
-const agilityBonus = 1 + (agilityLevel * 0.01);  // +1% per level
-const regenRate = baseRegenRate * agilityBonus;
-```
+**Weight-Based Stamina Drain**:
+- **Base Drain**: 2 stamina/second while running
+- **Weight Modifier**: +0.5% drain per kg carried
+- **Example**: 20kg load = +10% drain = 2.2 stamina/second
+- **Heavy Load**: 50kg load = +25% drain = 2.5 stamina/second
 
 <Info>
-Agility XP is batched to reduce network traffic and database writes. The 100-tile threshold ensures XP grants are meaningful while preventing spam.
+Agility does NOT affect combat level. It's purely a support skill for movement efficiency.
 </Info>
+
+<Warning>
+Teleportation does not grant agility XP - only walking and running count toward the tile counter.
+</Warning>
 
 ---
 
@@ -879,91 +848,33 @@ Example unlocks:
 - **Mining 30**: Coal
 - **Cooking 40**: Lobster
 - **Smithing 50**: Mithril bar
-- **Agility 99**: Agility cape, +99% stamina regeneration
+- **Agility 50**: +50% stamina regeneration
 
 <Info>
 See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
 </Info>
 
-## Skill Guide Panel
+### Skill Guide Panel
 
-The Skill Guide Panel is an OSRS-style UI that displays skill unlock progression. Players can click any skill in the Skills Panel to view what they unlock at each level.
+Players can click any skill in the Skills Panel to open an OSRS-style guide showing all unlocks for that skill:
 
-### Features
+**Features**:
+- **Click-to-view**: Click any skill icon to open its guide
+- **Unlock progression**: Shows all unlocks with level requirements
+- **Visual distinction**: Unlocked items shown in green with checkmarks, locked items dimmed with lock icons
+- **Next unlock highlight**: The next unlock you're working toward is highlighted in gold
+- **Progress tracking**: Shows "X of Y unlocks achieved" at the top
+- **Type indicators**: Badges show whether unlocks are items or abilities
+- **Scrollable**: Handles skills with many unlocks (Prayer has 29!)
 
-- **Unlock Progression**: Shows all unlocks from level 1-99
-- **Visual States**: 
-  - ✓ Green = Unlocked (player level ≥ unlock level)
-  - ➤ Yellow = Next unlock (highlighted with "NEXT" badge)
-  - 🔒 Gray = Locked (player level < unlock level)
-- **Progress Tracking**: Shows "X/Y unlocked" and levels to next unlock
-- **Unlock Types**: Items, abilities, areas, quests, activities
+**Implementation**:
+- **Server API**: `GET /api/data/skill-unlocks` provides unlock data
+- **Client Component**: `SkillGuidePanel.tsx` renders the modal
+- **Loading States**: Shows spinner while fetching data
 - **Animations**: Smooth fade-in and slide-up transitions
-- **Keyboard Support**: Press ESC to close
-
-### Usage
-
-```typescript
-// From SkillsPanel.tsx
-const handleSkillClick = (skillKey: string) => {
-  setSelectedSkill(skillKey);
-  setShowGuide(true);
-};
-
-// Render the panel
-<SkillGuidePanel
-  visible={showGuide}
-  skillLabel="Woodcutting"
-  skillIcon="🪓"
-  playerLevel={playerSkills.woodcutting.level}
-  unlocks={skillUnlocks}
-  isLoading={isLoadingUnlocks}
-  onClose={() => setShowGuide(false)}
-/>
-```
-
-### Server API Endpoint
-
-The client fetches skill unlocks from the server:
-
-```typescript
-// GET /api/data/skill-unlocks
-// Returns: Record<string, SkillUnlock[]>
-
-interface SkillUnlock {
-  level: number;
-  description: string;
-  type: "item" | "ability" | "area" | "quest" | "activity";
-}
-```
-
-Example response:
-```json
-{
-  "woodcutting": [
-    { "level": 1, "description": "Normal trees", "type": "item" },
-    { "level": 15, "description": "Oak trees", "type": "item" },
-    { "level": 30, "description": "Willow trees", "type": "item" }
-  ]
-}
-```
-
-### Data Loading
-
-Skill unlocks are loaded from the `skill-unlocks.json` manifest:
-
-```typescript
-// From skill-unlocks.ts
-export function loadSkillUnlocks(manifest: SkillUnlocksManifest): void {
-  // Normalize British/American spelling
-  if (loadedUnlocks["defence"] && !loadedUnlocks["defense"]) {
-    loadedUnlocks["defense"] = loadedUnlocks["defence"];
-  }
-}
-```
 
 <Info>
-The manifest uses OSRS-accurate British spelling ("defence"), but the UI normalizes to American spelling ("defense") for consistency.
+The Skill Guide Panel is purely informational - it doesn't affect gameplay, just helps players understand what they can unlock at each level.
 </Info>
 
 ## Manifest-Driven Design

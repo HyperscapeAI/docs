@@ -61,6 +61,7 @@ CREATE TABLE characters (
   firemakingLevel INTEGER DEFAULT 1,
   cookingLevel INTEGER DEFAULT 1,
   smithingLevel INTEGER DEFAULT 1,
+  agilityLevel INTEGER DEFAULT 1,
   -- Skills (XP)
   attackXp INTEGER DEFAULT 0,
   strengthXp INTEGER DEFAULT 0,
@@ -74,10 +75,11 @@ CREATE TABLE characters (
   firemakingXp INTEGER DEFAULT 0,
   cookingXp INTEGER DEFAULT 0,
   smithingXp INTEGER DEFAULT 0,
-  -- Prayer system
+  agilityXp INTEGER DEFAULT 0,
+  -- Prayer
   prayerPoints INTEGER DEFAULT 1,
   prayerMaxPoints INTEGER DEFAULT 1,
-  activePrayers TEXT DEFAULT '[]',  -- JSON array: '["thick_skin", "burst_of_strength"]'
+  activePrayers TEXT DEFAULT '[]',
   -- Status
   health INTEGER DEFAULT 100,
   maxHealth INTEGER DEFAULT 100,
@@ -176,7 +178,9 @@ Migrations are stored in `packages/server/src/database/migrations/`:
 
 | Migration | Description |
 |-----------|-------------|
-| `0016_add_prayer_system.sql` | Added prayer skill, points, and active prayers tracking |
+| `0018_add_agility_skill.sql` | Added agilityLevel and agilityXp columns |
+| `0017_add_death_recovery_columns.sql` | Added death recovery tracking |
+| `0016_add_prayer_system.sql` | Added prayer points and active prayers |
 | `0015_add_smithing_skill.sql` | Added smithingLevel and smithingXp columns |
 | `0014_add_mining_skill.sql` | Added miningLevel and miningXp columns |
 | `0013_add_auto_retaliate.sql` | Added autoRetaliate preference |
@@ -189,15 +193,34 @@ Migrations are stored in `packages/server/src/database/migrations/`:
 ### Migration Format
 
 ```sql
--- 0016_add_prayer_system.sql
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerLevel" integer DEFAULT 1;
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerXp" integer DEFAULT 0;
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerPoints" integer DEFAULT 1;
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerMaxPoints" integer DEFAULT 1;
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "activePrayers" text DEFAULT '[]';
+-- 0018_add_agility_skill.sql
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "agilityLevel" integer DEFAULT 1;--> statement-breakpoint
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "agilityXp" integer DEFAULT 0;--> statement-breakpoint
 ```
 
-Migrations use `IF NOT EXISTS` to be idempotent and safe to re-run.
+Migrations use `IF NOT EXISTS` to be idempotent and safe to re-run. The `--> statement-breakpoint` comment is used by Drizzle to separate statements.
+
+### Migration Journal
+
+Migrations must be registered in `meta/_journal.json` to run:
+
+```json
+{
+  "entries": [
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1768728921620,
+      "tag": "0018_add_agility_skill",
+      "breakpoints": true
+    }
+  ]
+}
+```
+
+<Warning>
+If you create a migration file but forget to add it to `_journal.json`, it will not run automatically.
+</Warning>
 
 <Info>
 The `activePrayers` column stores a JSON array of prayer IDs. Format: `'["thick_skin", "burst_of_strength"]'`. Empty array when no prayers are active: `'[]'`.

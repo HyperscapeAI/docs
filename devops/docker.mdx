@@ -11,6 +11,7 @@ Hyperscape uses Docker for:
 - **Asset CDN**: nginx serving game assets
 - **PostgreSQL**: Database for player data
 - **Development services**: Local infrastructure
+- **Production deployment**: Multi-stage Docker builds for Railway/cloud hosting
 
 ## Prerequisites
 
@@ -164,3 +165,80 @@ View container logs:
 docker logs hyperscape-postgres
 docker logs hyperscape-cdn
 ```
+
+## Production Docker Build
+
+The repository includes a multi-stage Dockerfile for production deployment.
+
+### Dockerfile.server
+
+**File**: `Dockerfile.server`
+
+**Features**:
+- **Multi-stage build**: Separate builder and runtime stages for smaller images
+- **Native module support**: Includes build dependencies for canvas, better-sqlite3
+- **Asset cloning**: Automatically clones game manifests from assets repository
+- **Build order**: Builds physx-js-webidl → shared → server in correct dependency order
+- **Health check**: Built-in health monitoring on `/status` endpoint
+- **Optimized runtime**: Minimal production image with only runtime dependencies
+
+**Build from repository root**:
+
+```bash
+docker build -f Dockerfile.server -t hyperscape-server .
+```
+
+**Run**:
+
+```bash
+docker run -p 5555:5555 \
+  -e DATABASE_URL=postgresql://... \
+  -e JWT_SECRET=your-secret \
+  -e PRIVY_APP_ID=your-app-id \
+  -e PRIVY_APP_SECRET=your-secret \
+  hyperscape-server
+```
+
+### CI Environment Detection
+
+The `ensure-assets.mjs` script automatically detects CI/production environments and skips asset download:
+
+```javascript
+function isCI() {
+  return !!(
+    process.env.CI ||
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_SERVICE_ID ||
+    process.env.VERCEL ||
+    process.env.NETLIFY ||
+    process.env.GITHUB_ACTIONS ||
+    process.env.SKIP_ASSETS
+  );
+}
+```
+
+**Why**: Assets are served from CDN in production, not bundled with the server. This keeps Docker images small and builds fast.
+
+### Railway-Specific Configuration
+
+When deploying to Railway, assets are cloned during the build phase:
+
+```toml
+# nixpacks.toml
+[phases.assets]
+dependsOn = ["install"]
+cmds = ["git clone --depth 1 https://github.com/HyperscapeAI/assets.git packages/server/world/assets"]
+```
+
+The `.railwayignore` file excludes large directories from upload:
+
+```
+node_modules/
+.git/
+packages/server/world/assets/  # Cloned during build
+packages/client/public/assets/
+```
+
+<Info>
+Railway builds clone the assets repository during the build phase, so they don't need to be uploaded from your local machine.
+</Info>

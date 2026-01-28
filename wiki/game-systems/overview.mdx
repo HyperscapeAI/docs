@@ -127,8 +127,9 @@ Player character management:
 
 - **Stats tracking** — Levels, XP, combat level
 - **Equipment** — Gear slots and bonuses
-- **Skills** — 12 trainable skills (6 combat, 3 gathering, 3 artisan)
-- **Prayer** — Prayer point management, drain mechanics, altar recharging
+- **Skills** — 12 trainable skills (6 combat, 3 gathering, 3 artisan, 1 support)
+- **Inventory** — 28-slot bag with weight tracking
+- **Prayer** — Prayer points and active prayer management
 
 ---
 
@@ -199,7 +200,7 @@ export const LEVEL_CONSTANTS = {
 
 ## Skills System
 
-Hyperscape implements 11 skills with OSRS-accurate mechanics:
+Hyperscape implements 12 skills with OSRS-accurate mechanics:
 
 ### Combat Skills
 
@@ -228,8 +229,14 @@ Hyperscape implements 11 skills with OSRS-accurate mechanics:
 | **Cooking** | Cook raw fish for healing |
 | **Smithing** | Smelt ores into bars and smith equipment |
 
+### Support Skills
+
+| Skill | Purpose |
+|-------|---------|
+| **Agility** | Trains from movement, improves stamina regeneration |
+
 <Info>
-  Each skill has independent XP tracking and levels 1-99 following OSRS XP curves. Prayer is unique: your Prayer level equals your maximum prayer points.
+  Each skill has independent XP tracking and levels 1-99 following OSRS XP curves. Agility trains passively as you move (1 XP per 2 tiles).
 </Info>
 
 ---

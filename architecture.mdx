@@ -227,3 +227,55 @@ bun run extract-bounds
 <Info>
 The bounds extraction is **cached** - it only re-runs when GLB files or the script changes. This keeps builds fast while ensuring collision data stays in sync with models.
 </Info>
+
+## Deployment Architecture
+
+### Railway Deployment
+
+Hyperscape server deploys to Railway with automated CI/CD:
+
+**Configuration Files**:
+- **`nixpacks.toml`**: Nixpacks build configuration (recommended)
+- **`Dockerfile.server`**: Multi-stage Docker build (alternative)
+- **`railway.server.json`**: Railway service configuration
+- **`.railwayignore`**: Excludes large directories from upload
+- **`.github/workflows/deploy-railway.yml`**: Automated deployment workflow
+
+**Build Process**:
+1. Install system dependencies (python3, make, g++, git, cairo, pango)
+2. Install Node dependencies with `bun install --frozen-lockfile`
+3. Clone assets repository (manifests needed by DataManager)
+4. Build packages in order: shared → server
+5. Start server with `bun dist/index.js`
+
+**Asset Handling**:
+- Assets are **not uploaded** to Railway (excluded via `.railwayignore`)
+- Assets are **cloned during build** from GitHub assets repository
+- Assets are **served from CDN** in production (not bundled with server)
+- `ensure-assets.mjs` detects CI environments and skips download
+
+**Environment Detection**:
+```javascript
+function isCI() {
+  return !!(
+    process.env.CI ||
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_SERVICE_ID ||
+    process.env.SKIP_ASSETS
+  );
+}
+```
+
+### Split Deployment Model
+
+Hyperscape supports split deployments:
+
+- **Server**: Railway, Fly.io, or Docker host
+- **Client**: Vercel, Netlify, or static hosting
+- **Database**: PostgreSQL (Neon, Railway, or self-hosted)
+- **Assets**: CDN or object storage (R2, S3)
+
+**Environment Variable Coordination**:
+- `PRIVY_APP_ID` (server) must match `PUBLIC_PRIVY_APP_ID` (client)
+- Client's `PUBLIC_WS_URL` and `PUBLIC_API_URL` must point to server
+- Both must use same `PUBLIC_CDN_URL` for assets

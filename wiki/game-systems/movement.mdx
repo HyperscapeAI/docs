@@ -28,6 +28,58 @@ export const PATHFIND_RADIUS = 128;     // BFS search radius in tiles
 Hyperscape uses **2x OSRS speed** for a snappier modern feel while keeping the tick-based system. OSRS uses 1 tile/tick walk, 2 tiles/tick run.
 </Note>
 
+## Agility XP from Movement
+
+The Agility skill trains automatically as players move through the world:
+
+**XP Mechanics**:
+- **Rate**: 1 XP per 2 tiles traveled
+- **Batching**: XP granted in batches of 50 XP every 100 tiles
+- **Tracking**: Server tracks tiles traveled per player in `TileMovementManager`
+- **Death Penalty**: Accumulated tiles toward next XP grant are lost on death
+- **Logout**: Tile counter resets on disconnect (max ~50 XP lost)
+
+**Implementation**:
+
+```typescript
+// From tile-movement.ts
+const AGILITY_TILES_PER_XP_GRANT = 100;
+const AGILITY_XP_PER_GRANT = 50;
+
+// Track tiles moved this tick
+const tilesMoved = Math.abs(state.currentTile.x - prevTile.x) + 
+                   Math.abs(state.currentTile.z - prevTile.z);
+
+if (tilesMoved > 0) {
+  const currentTiles = (this.tilesTraveledForXP.get(playerId) || 0) + tilesMoved;
+  
+  if (currentTiles >= AGILITY_TILES_PER_XP_GRANT) {
+    // Grant XP and preserve overflow
+    const grantsEarned = Math.floor(currentTiles / AGILITY_TILES_PER_XP_GRANT);
+    const xpToGrant = grantsEarned * AGILITY_XP_PER_GRANT;
+    this.tilesTraveledForXP.set(playerId, currentTiles % AGILITY_TILES_PER_XP_GRANT);
+    
+    // Emit XP gain event
+    this.world.emit(EventType.SKILLS_XP_GAINED, {
+      playerId,
+      skill: "agility",
+      amount: xpToGrant,
+    });
+  }
+}
+```
+
+**XP Rates**:
+
+| Movement | Tiles/Tick | Tiles/Second | XP/Second | XP/Minute |
+|----------|------------|--------------|-----------|-----------|
+| Walking  | 2          | 3.33         | 1.67      | 100       |
+| Running  | 4          | 6.67         | 3.33      | 200       |
+
+<Warning>
+Teleportation does NOT grant agility XP - only walking and running count toward the tile counter.
+</Warning>
+
 ---
 
 ## Tile Coordinates
