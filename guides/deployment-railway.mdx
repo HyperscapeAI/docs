@@ -1,0 +1,408 @@
+---
+title: "Railway Deployment"
+description: "Deploy Hyperscape server to Railway with automated CI/CD"
+icon: "train"
+---
+
+## Overview
+
+Hyperscape uses **Railway** for production server deployment with automated GitHub Actions integration. The server handles both the game API and serves the frontend application.
+
+## Production Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Production Stack                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Frontend (Cloudflare Pages)                                │
+│  ├─ hyperscape.club                                         │
+│  ├─ www.hyperscape.club                                     │
+│  └─ *.hyperscape.pages.dev (preview deployments)           │
+│                                                              │
+│  Server/API (Railway)                                       │
+│  ├─ hyperscape-production.up.railway.app                   │
+│  ├─ Serves frontend at / (SPA routing)                     │
+│  ├─ WebSocket: wss://.../ws                                │
+│  ├─ REST API: /api/*                                        │
+│  └─ Manifests: /manifests/*.json                           │
+│                                                              │
+│  Assets/CDN (Cloudflare R2)                                 │
+│  ├─ assets.hyperscape.club                                  │
+│  ├─ 3D models, textures, audio                             │
+│  └─ Game data manifests (JSON)                             │
+│                                                              │
+│  Database (Railway PostgreSQL)                              │
+│  └─ Player data, inventory, world state                    │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Automated Deployment
+
+### GitHub Actions Workflow
+
+The repository includes automated Railway deployment:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+name: Deploy to Railway
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/shared/**'
+      - 'packages/client/**'
+      - 'packages/server/**'
+      - 'packages/plugin-hyperscape/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'nixpacks.toml'
+      - 'railway.server.json'
+      - 'Dockerfile.server'
+```
+
+**Deployment triggers only when relevant files change** to avoid unnecessary builds.
+
+### Setup GitHub Actions
+
+<Steps>
+  <Step title="Generate Railway API token">
+    1. Go to Railway dashboard → Account Settings → Tokens
+    2. Create new token with deployment permissions
+    3. Copy the token
+  </Step>
+  
+  <Step title="Add GitHub secret">
+    1. Go to GitHub repository → Settings → Secrets and variables → Actions
+    2. Add new repository secret: `RAILWAY_TOKEN`
+    3. Paste the Railway API token
+  </Step>
+  
+  <Step title="Configure project IDs">
+    Update `.github/workflows/deploy-railway.yml` with your Railway IDs:
+    
+    ```yaml
+    env:
+      RAILWAY_PROJECT_ID: your-project-id
+      RAILWAY_SERVICE_ID: your-service-id
+      RAILWAY_ENVIRONMENT_ID: your-environment-id
+    ```
+    
+    Find these in Railway dashboard → Project → Settings → General
+  </Step>
+</Steps>
+
+## Build Configuration
+
+### Nixpacks
+
+Railway uses **Nixpacks** for building. Configuration in `nixpacks.toml`:
+
+```toml
+[phases.setup]
+# Install system dependencies for native modules
+aptPkgs = [
+  "python3", "make", "g++", "pkg-config",
+  "libcairo2-dev", "libpango1.0-dev", "libjpeg-dev",
+  "libgif-dev", "librsvg2-dev", "ca-certificates"
+]
+
+[phases.install]
+cmds = ["bun install"]
+
+[phases.build]
+cmds = [
+  "bun run build:shared",   # Build core engine
+  "bun run build:client",   # Build frontend
+  "bun run build:server",   # Build server
+  "mkdir -p packages/server/world/assets/manifests"
+]
+
+[start]
+cmd = "cd packages/server && bun dist/index.js"
+
+[variables]
+CI = "true"
+SKIP_ASSETS = "true"  # Assets served from CDN
+NODE_ENV = "production"
+```
+
+### Railway Configuration
+
+The `railway.server.json` file configures Railway deployment:
+
+```json
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "nixpacksConfigPath": "nixpacks.toml",
+    "watchPatterns": [
+      "packages/shared/**",
+      "packages/server/**",
+      "packages/plugin-hyperscape/**",
+      "package.json",
+      "bun.lock"
+    ]
+  },
+  "deploy": {
+    "startCommand": "cd packages/server && bun dist/index.js",
+    "healthcheckPath": "/status",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3,
+    "numReplicas": 1
+  }
+}
+```
+
+## Environment Variables
+
+Configure these in Railway dashboard → Variables:
+
+### Required
+
+```bash
+# Authentication
+PRIVY_APP_ID=your-privy-app-id
+PRIVY_APP_SECRET=your-privy-app-secret
+JWT_SECRET=your-jwt-secret
+
+# CDN
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+
+# Database (auto-set by Railway PostgreSQL plugin)
+DATABASE_URL=postgresql://...
+```
+
+### Optional
+
+```bash
+# Admin Access
+ADMIN_CODE=your-admin-code
+
+# Voice Chat
+LIVEKIT_API_KEY=your-livekit-key
+LIVEKIT_API_SECRET=your-livekit-secret
+LIVEKIT_URL=wss://your-livekit-server
+
+# Deployment Tracking
+COMMIT_HASH=abc123  # Auto-populated by CI
+```
+
+## Frontend Integration
+
+The Railway deployment includes the frontend client:
+
+### Build Process
+
+1. **Build shared package** - Core engine with ECS, Three.js, PhysX
+2. **Build client package** - React frontend with Vite
+3. **Build server package** - Fastify server with WebSocket support
+4. **Copy client to server** - `packages/client/dist/` → `packages/server/public/`
+
+### Serving Strategy
+
+The server serves both the API and the frontend:
+
+```typescript
+// From packages/server/src/startup/http-server.ts
+
+// Serve index.html for root path
+fastify.get("/", serveIndexHtml);
+
+// Serve public directory (client assets)
+fastify.register(statics, {
+  root: path.join(config.__dirname, "public"),
+  prefix: "/",
+});
+
+// SPA catch-all - serve index.html for client-side routes
+fastify.setNotFoundHandler(async (request, reply) => {
+  // Don't serve index.html for API routes
+  if (url.startsWith("/api/") || url.startsWith("/ws")) {
+    return reply.status(404).send({ error: "Not found" });
+  }
+  
+  // Serve index.html for SPA routes
+  return reply.send(html);
+});
+```
+
+**Routes:**
+- `/` - Frontend application (index.html)
+- `/api/*` - REST API endpoints
+- `/ws` - WebSocket connection
+- `/manifests/*` - Game data manifests (fetched from CDN)
+- `/assets/*` - Client assets (JS, CSS from built frontend)
+- `/status` - Health check endpoint
+
+## Manifest Fetching
+
+On server startup, manifests are fetched from the CDN:
+
+```typescript
+// Fetched from: PUBLIC_CDN_URL/manifests/*.json
+// Cached to: packages/server/world/assets/manifests/
+
+const MANIFEST_FILES = [
+  "items.json", "npcs.json", "resources.json", "tools.json",
+  "biomes.json", "world-areas.json", "stores.json", "music.json",
+  "vegetation.json", "buildings.json"
+];
+```
+
+**Behavior:**
+- Fetches all manifests from CDN at startup
+- Compares with existing local files
+- Only writes if content changed (avoids unnecessary disk I/O)
+- Falls back to local manifests if CDN fetch fails
+- Logs fetch results: "X fetched, Y updated, Z failed"
+
+**Benefits:**
+- Update game content by deploying new manifests to CDN
+- No server redeployment needed for content changes
+- Server always has latest game data
+- Reduces deployment size
+
+## Deployment Verification
+
+After deployment, verify the server is running:
+
+```bash
+# Check health endpoint
+curl https://hyperscape-production.up.railway.app/status
+
+# Check frontend is serving
+curl https://hyperscape-production.up.railway.app/
+
+# Check manifest availability
+curl https://hyperscape-production.up.railway.app/manifests/items.json
+
+# Test WebSocket connection
+wscat -c wss://hyperscape-production.up.railway.app/ws
+```
+
+Expected responses:
+- `/status` - `{"status": "ok", ...}`
+- `/` - HTML content (frontend)
+- `/manifests/items.json` - JSON manifest data
+- `/ws` - WebSocket upgrade successful
+
+## Troubleshooting
+
+### Build Failures
+
+**Symptom**: Railway build fails during build phase
+
+**Common Causes:**
+- Lockfile out of sync: `bun install && git add bun.lock`
+- Missing environment variables: Check Railway dashboard
+- Build timeout: Optimize build or upgrade Railway plan
+
+**Check logs:**
+- Railway dashboard → Deployments → View logs
+- Look for specific error messages in build phase
+
+### Frontend Not Serving
+
+**Symptom**: Server returns 503 "Frontend not available"
+
+**Cause**: Client build not copied to server's `public/` directory
+
+**Solution**: Verify `nixpacks.toml` includes:
+
+```toml
+[phases.build]
+cmds = [
+  "bun run build:client",  # Must build client
+  "mkdir -p packages/server/public",
+  "cp -r packages/client/dist/* packages/server/public/"
+]
+```
+
+### Manifest Fetch Failures
+
+**Symptom**: Server logs show "Failed to fetch manifests from CDN"
+
+**Solutions:**
+1. Verify `PUBLIC_CDN_URL` is set correctly in Railway variables
+2. Test CDN accessibility: `curl $PUBLIC_CDN_URL/manifests/items.json`
+3. Check Railway logs for specific fetch errors
+4. Ensure manifests are deployed to CDN
+
+**Fallback**: Server will use local manifests if CDN fetch fails.
+
+### CORS Errors
+
+**Symptom**: Browser console shows CORS errors
+
+**Cause**: Frontend domain not in server's CORS allowlist
+
+**Solution**: The server automatically allows:
+- `https://hyperscape.club`
+- `https://www.hyperscape.club`
+- `https://hyperscape.pages.dev`
+- `https://*.hyperscape.pages.dev`
+- `https://*.up.railway.app`
+
+For custom domains, set `PUBLIC_APP_URL` environment variable in Railway.
+
+## Manual Deployment
+
+If not using GitHub Actions, deploy manually:
+
+```bash
+# Install Railway CLI
+npm i -g @railway/cli
+
+# Login
+railway login
+
+# Link project
+railway link
+
+# Deploy
+railway up
+```
+
+## Monitoring
+
+### Railway Dashboard
+
+Monitor deployment health:
+- Deployments → View build logs
+- Metrics → CPU, memory, network usage
+- Logs → Real-time server logs
+
+### Health Checks
+
+Railway automatically monitors `/status` endpoint:
+- Timeout: 300 seconds
+- Restart policy: ON_FAILURE
+- Max retries: 3
+
+## Scaling
+
+Railway supports horizontal scaling:
+
+```json
+// railway.server.json
+{
+  "deploy": {
+    "numReplicas": 1  // Increase for horizontal scaling
+  }
+}
+```
+
+<Warning>
+Horizontal scaling requires session affinity for WebSocket connections. Configure Railway load balancer accordingly.
+</Warning>
+
+## Related Documentation
+
+- [Deployment Overview](/guides/deployment)
+- [Configuration](/devops/configuration)
+- [Troubleshooting](/devops/troubleshooting)
+- [Docker Setup](/devops/docker)

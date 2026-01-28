@@ -56,10 +56,29 @@ packages/server/
 | Route | Method | Purpose |
 |-------|--------|---------|
 | `/health` | GET | Health check |
+| `/status` | GET | Server status (used by Railway healthcheck) |
 | `/auth` | POST | Authentication |
 | `/ws` | WS | Game WebSocket connection |
-| `/api/data/skill-unlocks` | GET | Get skill unlock definitions |
-| `/debug/public` | GET | Inspect public directory contents (debug) |
+| `/api/data/skill-unlocks` | GET | Skill unlock definitions (server-authoritative) |
+| `/manifests/*.json` | GET | Game data manifests (fetched from CDN at startup) |
+| `/debug/public` | GET | Debug endpoint showing public directory contents |
+
+### Data Routes
+
+The server provides static game data endpoints that are server-authoritative:
+
+```typescript
+// packages/server/src/startup/routes/data-routes.ts
+export function registerDataRoutes(fastify: FastifyInstance): void {
+  // Get skill unlock definitions
+  fastify.get("/api/data/skill-unlocks", async (_req, reply) => {
+    const unlocks = getAllSkillUnlocks();
+    return reply.send(unlocks);
+  });
+}
+```
+
+These endpoints serve data that the client needs but shouldn't bundle (to allow server-side updates without client rebuilds).
 
 ## Database
 
@@ -133,10 +152,9 @@ JWT_SECRET=your-jwt-secret
 PORT=5555
 NODE_ENV=development
 
-# CDN & Assets
-PUBLIC_CDN_URL=http://localhost:8080  # CDN base URL for assets and manifests
-SKIP_ASSETS=true  # Skip asset download in CI/production (default: false)
-CI=true  # Indicates CI environment (skips asset download)
+# CDN (required for production)
+PUBLIC_CDN_URL=http://localhost:8080  # Development
+# PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production
 
 # Voice Chat (optional)
 LIVEKIT_API_KEY=your-livekit-key
@@ -150,29 +168,29 @@ ADMIN_CODE=your-admin-code  # For protected admin endpoints
 COMMIT_HASH=git-commit-sha  # Git commit hash for deployment tracking
 ```
 
-### CDN Manifest Fetching
+### Manifest Fetching
 
-The server automatically fetches game manifests from the CDN at startup:
+On server startup, the server fetches game data manifests from the CDN:
 
-**Manifest Files Fetched**:
-- `items.json`, `npcs.json`, `resources.json`, `tools.json`
-- `biomes.json`, `world-areas.json`, `stores.json`, `music.json`
-- `vegetation.json`, `buildings.json`
-
-**Fetch Behavior**:
-- **Production**: Always fetches from `PUBLIC_CDN_URL/manifests/`
-- **Development**: Skips if local manifests exist
-- **CI/CD**: Skips asset download when `CI=true` or `SKIP_ASSETS=true`
-- **Caching**: Compares with cached files, only updates if changed
-- **Fallback**: Uses cached manifests if CDN unreachable
-
-**Configuration** (from `config.ts`):
 ```typescript
-await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+// Fetched from: PUBLIC_CDN_URL/manifests/*.json
+// Cached to: packages/server/world/assets/manifests/
+
+const MANIFEST_FILES = [
+  "items.json", "npcs.json", "resources.json", "tools.json",
+  "biomes.json", "world-areas.json", "stores.json", "music.json",
+  "vegetation.json", "buildings.json"
+];
 ```
 
+**Behavior:**
+- **Production/CI**: Always fetches from CDN to ensure latest data
+- **Development**: Skips fetch if local manifests already exist (allows local development with custom manifests)
+- **Caching**: Compares content before writing to avoid unnecessary disk writes
+- **Fallback**: Uses existing local manifests if CDN fetch fails
+
 <Info>
-This eliminates the need to bundle assets in production deployments. The server fetches fresh manifests from the CDN on each startup, ensuring content stays up-to-date.
+This architecture allows updating game content (items, NPCs, etc.) by deploying new manifests to the CDN without requiring server redeployment.
 </Info>
 
 ## Build Scripts

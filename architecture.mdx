@@ -4,6 +4,43 @@ description: "Monorepo structure and package overview"
 icon: "boxes"
 ---
 
+## Production Architecture
+
+Hyperscape uses a **split deployment model** for optimal performance:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Production Deployment                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Frontend (Cloudflare Pages)                                │
+│  ├─ hyperscape.club                                         │
+│  ├─ www.hyperscape.club                                     │
+│  └─ *.hyperscape.pages.dev (preview deployments)           │
+│                                                              │
+│  Server/API (Railway)                                       │
+│  ├─ hyperscape-production.up.railway.app                   │
+│  ├─ WebSocket: wss://.../ws                                │
+│  ├─ REST API: /api/*                                        │
+│  └─ Serves frontend at / (SPA routing)                     │
+│                                                              │
+│  Assets/CDN (Cloudflare R2)                                 │
+│  ├─ assets.hyperscape.club                                  │
+│  ├─ 3D models, textures, audio                             │
+│  └─ Game data manifests (JSON)                             │
+│                                                              │
+│  Database (Railway PostgreSQL)                              │
+│  └─ Player data, inventory, world state                    │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Features:**
+- Frontend served from Cloudflare's global CDN (low latency)
+- Server handles game logic and WebSocket connections
+- Assets served from R2 (not bundled with frontend)
+- Manifests fetched from CDN at server startup (allows content updates without redeployment)
+
 ## Monorepo Structure
 
 Hyperscape is a **Turbo monorepo** with 7 packages:
@@ -224,6 +261,34 @@ Game content is defined in JSON manifest files in `packages/server/world/assets/
 | `model-bounds.json` | Auto-generated model footprints (build-time) |
 
 Add new content by editing these JSON files—no code changes required.
+
+### Manifest Fetching System
+
+In production, the server fetches manifests from the CDN at startup rather than bundling them:
+
+```typescript
+// From packages/server/src/startup/config.ts
+const MANIFEST_FILES = [
+  "items.json", "npcs.json", "resources.json", "tools.json",
+  "biomes.json", "world-areas.json", "stores.json", "music.json",
+  "vegetation.json", "buildings.json"
+];
+
+// Fetched from: PUBLIC_CDN_URL/manifests/*.json
+// Cached to: packages/server/world/assets/manifests/
+```
+
+**Behavior:**
+- **Production/CI**: Always fetches from CDN to ensure latest data
+- **Development**: Skips fetch if local manifests exist (allows local development)
+- **Caching**: Compares content before writing to avoid unnecessary disk I/O
+- **Fallback**: Uses existing local manifests if CDN fetch fails
+
+**Benefits:**
+- Update game content by deploying new manifests to CDN
+- No server redeployment needed for content changes
+- Server always has latest game data
+- Reduces deployment size (manifests not bundled)
 
 ## Build Pipeline
 

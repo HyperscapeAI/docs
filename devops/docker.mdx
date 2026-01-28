@@ -32,6 +32,12 @@ bun run cdn:up
 
 This starts an nginx container serving assets from `packages/server/world/assets/` on port 8080.
 
+**What the CDN serves:**
+- 3D models (`.glb` files) from `models/`
+- Audio files (`.mp3`, `.ogg`) from `audio/`
+- Textures (`.png`, `.jpg`) from `textures/`
+- Game data manifests (`.json`) from `manifests/`
+
 ### Stop CDN
 
 ```bash
@@ -41,6 +47,17 @@ bun run cdn:down
 ### Automatic Start
 
 The CDN starts automatically with `bun run dev`. Only run manually if using services separately.
+
+### Production CDN
+
+In production, assets are served from Cloudflare R2 instead of Docker:
+
+```bash
+# Production environment variable
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+```
+
+The server fetches manifests from the CDN at startup and caches them locally in `packages/server/world/assets/manifests/`. This allows updating game content without server redeployment.
 
 ## PostgreSQL Container
 

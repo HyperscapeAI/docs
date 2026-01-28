@@ -176,9 +176,9 @@ Located in `packages/client/src/game/panels/`:
 | Panel | Description |
 |-------|-------------|
 | `InventoryPanel.tsx` | 28-slot inventory with drag & drop |
-| `EquipmentPanel.tsx` | Equipment slots with stat display and total weight |
-| `SkillsPanel.tsx` | All 12 skills with XP progress bars and click-to-view guides |
-| `SkillGuidePanel.tsx` | Skill unlock progression viewer (OSRS-style) |
+| `EquipmentPanel.tsx` | Equipment slots with stat display |
+| `SkillsPanel.tsx` | All skills with XP progress bars (clickable to open guide) |
+| `SkillGuidePanel.tsx` | OSRS-style skill unlock progression viewer |
 | `CombatPanel.tsx` | Combat style selection |
 | `BankPanel.tsx` | Bank interface with tabs |
 | `DialoguePanel.tsx` | NPC conversation UI |
@@ -186,43 +186,35 @@ Located in `packages/client/src/game/panels/`:
 | `SettingsPanel.tsx` | Game settings |
 | `LootWindow.tsx` | Ground item pickup interface |
 
-### Skill Guide Panel
+**Skill Guide Panel** (new in PR #601):
 
-The Skill Guide Panel is an OSRS-inspired interface that shows skill unlock progression:
+Displays skill unlock progression when clicking any skill in the Skills Panel:
 
-**Features:**
-- Click any skill in the Skills Panel to open its guide
-- Shows all unlocks with level requirements
-- Visual distinction between unlocked (green checkmark) and locked (lock icon)
-- Next unlock highlighted with progress indicator
-- Type badges for unlock categories (item, ability, area, quest, activity)
-- Scrollable list for skills with many unlocks (Prayer has 29)
-- Loading state with spinner while fetching data
-- Keyboard support (ESC to close)
-- Click outside to dismiss
-
-**Implementation:**
 ```typescript
-// SkillGuidePanel.tsx
-interface SkillGuidePanelProps {
-  visible: boolean;
-  skillLabel: string;
-  skillIcon: string;
-  playerLevel: number;
-  unlocks: readonly SkillUnlock[];
-  isLoading: boolean;
-  onClose: () => void;
-}
+// Opened by clicking skill icons in SkillsPanel
+<SkillGuidePanel
+  visible={isGuideOpen}
+  skillLabel="Attack"
+  skillIcon="⚔️"
+  playerLevel={45}
+  unlocks={skillUnlocks["attack"]}
+  isLoading={isLoadingUnlocks}
+  onClose={handleGuideClose}
+/>
 ```
 
-**Data Source:**
-- Fetches from `/api/data/skill-unlocks` endpoint
-- Server-authoritative unlock definitions
-- Cached for 5 minutes
+**Features:**
+- Shows all unlocks with level requirements
+- Visual states: unlocked (green ✓), next (yellow ➤), locked (gray 🔒)
+- Progress indicator: "12/29 unlocked"
+- Next unlock countdown: "5 more levels to unlock: Dragon weapons"
+- Type badges (item/ability) with color coding
+- Smooth animations (fade-in, slide-up)
+- Loading state with spinner
+- Keyboard controls (ESC to close)
 
-<Info>
-The Skill Guide Panel helps players plan their progression by showing what they'll unlock at each level.
-</Info>
+**Data Source:**
+Fetches from `/api/data/skill-unlocks` endpoint on first load and caches for the session. This ensures unlock data is server-authoritative and can be updated without client rebuilds.
 
 ### HUD Components
 

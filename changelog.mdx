@@ -23,7 +23,110 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label=\"Agility Skill & Skill Guide Panel\" description=\"January 2026\" date=\"2026-01-21\">\n\n### 🏃 Agility Skill System\n\nComplete implementation of the Agility skill with movement-based XP and stamina mechanics:\n\n- **Movement XP**: Gain 1 XP per 2 tiles traveled (walking or running)\n  - XP batched at 100 tiles (50 XP) to prevent visual spam\n  - XP drops every ~15 seconds running, ~30 seconds walking\n  - Death penalty: lose accumulated tiles toward next grant (max ~50 XP)\n  - Logout resets tile counter (not persisted)\n- **Weight-Based Stamina Drain**: Inventory weight affects stamina consumption\n  - Formula: `Drain = Base × (1 + Weight × 0.005)`\n  - 0 kg: 2.0/sec, 50 kg: 2.5/sec, 100 kg: 3.0/sec\n  - Weight synced from server via `PLAYER_WEIGHT_CHANGED` event\n  - Equipment panel displays server-calculated total weight\n- **Agility-Based Stamina Regen**: Higher levels regenerate stamina faster\n  - Formula: `Regen = Base × (1 + Agility Level × 0.01)`\n  - Level 1: 4.04/sec idle, Level 99: 7.96/sec idle\n  - Applies to both walking and idle regeneration\n  - Nearly doubles regen rate at level 99\n- **Database**: New `agilityLevel` and `agilityXp` columns with migration\n- **Testing**: 868 lines of comprehensive tests\n  - `AgilitySystem.test.ts`: Formula validation and edge cases\n  - `AgilityPersistence.test.ts`: Database persistence and death mechanics\n\n### 📊 Skill Guide Panel\n\nOSRS-style skill guide interface showing unlock progression:\n\n- **Click-to-View**: Click any skill in Skills Panel to open its guide\n- **Unlock Display**: Shows all unlocks with level requirements\n  - Green checkmark for unlocked items\n  - Lock icon for locked items\n  - Next unlock highlighted with progress indicator\n- **Type Badges**: Visual indicators for unlock types (item, ability, area, quest, activity)\n- **Scrollable**: Handles skills with many unlocks (Prayer has 29)\n- **Loading State**: Spinner while fetching unlock data from server\n- **Server API**: New `/api/data/skill-unlocks` endpoint\n- **Animations**: Smooth fade-in and slide-up transitions\n- **Keyboard Support**: ESC key to close, click outside to dismiss\n\n### 🚀 Railway Deployment Architecture\n\nProduction deployment infrastructure with split frontend/backend:\n\n- **Frontend**: Cloudflare Pages (hyperscape.pages.dev)\n  - Automatic deployments from main branch\n  - Preview deployments for pull requests\n  - Global CDN distribution\n- **Backend**: Railway (hyperscape-production.up.railway.app)\n  - Nixpacks builder configuration\n  - Automatic deployments via GitHub Actions\n  - PostgreSQL database included\n  - Manifest fetching from CDN at startup\n- **Assets**: Cloudflare R2 CDN\n  - Manifests, 3D models, textures, audio\n  - Automatic uploads via GitHub Actions\n  - 5-minute cache headers for manifests\n- **CORS Configuration**: Cloudflare Pages domains added to allowlist\n  - `hyperscape.pages.dev` (production)\n  - `*.hyperscape.pages.dev` (preview deployments)\n\n### 🔧 CDN Manifest Fetching\n\nServer now fetches manifests from CDN at startup instead of requiring Git LFS:\n\n- **Startup Fetch**: `fetchManifestsFromCDN()` downloads manifests on server start\n- **Development Skip**: Skips CDN fetch if local manifests exist\n- **CI/Production**: Always fetches from CDN (no Git LFS needed)\n- **Conditional Asset Routes**: `/assets/` route only registered if local assets exist\n- **Manifest Cache Headers**: 5-minute cache for manifest JSON files\n- **Environment Detection**: Skips asset download in CI/Railway via `CI` env var\n\n### 🐛 Bug Fixes\n\n- **Build Process**: Split build commands for better Railway debugging\n- **Frontend Serving**: Fixed client build copying to server public directory\n- **Index.html Verification**: Added checks to ensure frontend build succeeded\n- **CORS**: Added Cloudflare Pages domains to CORS allowlist\n- **Lockfile**: Updated bun.lock to sync with package.json dependencies\n- **Defence Spelling**: Normalized British \"defence\" to American \"defense\" in skill unlocks loader\n\n</Update>
+<Update label="Skill Guide Panel & Railway Deployment" description="January 2026" date="2026-01-22">
+
+### 🎯 Skill Guide Panel (PR #601)
+
+OSRS-style skill unlock progression viewer:
+
+- **Interactive Skills Panel**: Click any skill icon to open its guide
+- **Unlock Progression Display**: Shows all unlocks with level requirements
+  - Visual states: unlocked (green ✓), next (yellow ➤), locked (gray 🔒)
+  - Progress indicator: "12/29 unlocked"
+  - Next unlock countdown: "5 more levels to unlock: Dragon weapons"
+- **Type Badges**: Color-coded badges for unlock types (item/ability)
+- **Smooth Animations**: Fade-in backdrop, slide-up panel, custom scrollbar
+- **Loading State**: Spinner while fetching unlock data from server
+- **Keyboard Controls**: ESC to close, click outside to close
+- **Server-Authoritative Data**: Fetches from `/api/data/skill-unlocks` endpoint
+- **Defence/Defense Normalization**: Handles British/American spelling automatically
+
+**New Components:**
+- `SkillGuidePanel.tsx` - Main panel component with portal rendering
+- `UnlockRow` - Individual unlock display with state-based styling
+
+**New API Endpoint:**
+- `GET /api/data/skill-unlocks` - Returns skill unlock definitions for all skills
+
+**Data Provider:**
+- `packages/server/src/startup/routes/data-routes.ts` - Static game data endpoints
+- `packages/shared/src/data/skill-unlocks.ts` - Skill unlock loading and normalization
+
+### 🚂 Railway Deployment Infrastructure
+
+Production deployment configuration with automated CI/CD:
+
+- **Nixpacks Configuration**: `nixpacks.toml` for Railway builds
+  - System dependencies for native modules (canvas, better-sqlite3)
+  - Build phases: install → build shared → build client → build server
+  - Frontend copied to server's `public/` directory
+  - Manifests directory created for CDN-fetched data
+- **Railway Config**: `railway.server.json` with health checks and restart policies
+  - Health check: `/status` endpoint with 300s timeout
+  - Restart policy: ON_FAILURE with 3 max retries
+  - Watch patterns for selective rebuilds
+- **GitHub Actions**: Automated deployment workflow
+  - Triggers on push to main for relevant file changes
+  - Uses Railway GraphQL API for deployment
+  - Monitors deployment status and reports results
+- **Multi-Stage Dockerfile**: `Dockerfile.server` for containerized deployments
+  - Builder stage with all dependencies
+  - Runtime stage with minimal footprint
+  - Health check with curl
+  - Frontend build integration
+
+### 📦 CDN Manifest Fetching
+
+Server now fetches game data manifests from CDN at startup:
+
+- **Automatic Fetching**: Downloads manifests from `PUBLIC_CDN_URL/manifests/*.json`
+- **Local Caching**: Saves to `packages/server/world/assets/manifests/`
+- **Smart Updates**: Compares content before writing (avoids unnecessary disk I/O)
+- **Development Skip**: Skips fetch if local manifests exist (allows local development)
+- **Fallback**: Uses existing local manifests if CDN fetch fails
+- **Manifest List**: items, npcs, resources, tools, biomes, world-areas, stores, music, vegetation, buildings
+
+**Benefits:**
+- Update game content by deploying new manifests to CDN
+- No server redeployment needed for content changes
+- Server always has latest game data
+- Reduces deployment size
+
+### 🌐 CORS Configuration Updates
+
+Expanded CORS allowlist for production domains:
+
+- **Production Domains**: hyperscape.club, www.hyperscape.club
+- **Cloudflare Pages**: hyperscape.pages.dev (HTTPS and HTTP)
+- **Preview Deployments**: `*.hyperscape.pages.dev` (regex pattern)
+- **Railway**: `*.up.railway.app` (regex pattern)
+- **Development**: `localhost:*` (any port, regex pattern)
+
+**Dynamic Patterns:**
+```typescript
+/^https?:\/\/localhost:\d+$/  // Matches any localhost port
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/  // Cloudflare previews
+/^https:\/\/.+\.up\.railway\.app$/  // Railway deployments
+```
+
+### 🔧 Build & Deployment Improvements
+
+- **Asset Download Skip**: `CI=true` and `SKIP_ASSETS=true` skip asset download in CI/production
+- **Manifest Fetching**: Server fetches manifests from CDN instead of bundling
+- **Frontend Integration**: Client built and copied to server's `public/` directory
+- **SPA Routing**: Server serves index.html for client-side routes
+- **Debug Endpoints**: `/debug/public` shows directory contents for troubleshooting
+- **Build Verification**: Timestamp file and index.html checks in Railway start command
+
+### 🐛 Bug Fixes
+
+- **Lockfile Sync**: Updated `bun.lock` to match package.json dependencies
+- **Build Commands**: Split build phases for better debugging
+- **Static File Serving**: Fixed `/assets/` route conflicts between client and world assets
+- **Music Routes**: Manual music route with multiple path fallbacks
+- **Index.html Fallback**: Graceful 503 response when frontend not built
+
+</Update>
 
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 

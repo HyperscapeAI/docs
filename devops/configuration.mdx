@@ -46,37 +46,48 @@ PORT=5555
 NODE_ENV=development
 
 # Assets & CDN
-PUBLIC_CDN_URL=http://localhost:8080
-PUBLIC_API_URL=http://localhost:5555
-PUBLIC_WS_URL=ws://localhost:5555/ws
+PUBLIC_CDN_URL=http://localhost:8080  # Development
+# PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
 
-# CORS (automatically configured for Cloudflare Pages)
-# The server includes these domains in the CORS allowlist:
-# - https://hyperscape.pages.dev (production)
-# - https://*.hyperscape.pages.dev (preview deployments)
+# Admin Access
+ADMIN_CODE=your-admin-code  # Required in production
+
+# CI/Deployment
+CI=true  # Set by Railway/GitHub Actions
+SKIP_ASSETS=true  # Skip asset download in CI
+COMMIT_HASH=abc123  # Auto-populated by CI
 ```
 
 ### CORS Configuration
 
-For production deployments with separate frontend and backend domains, configure CORS in the server:
+The server automatically configures CORS for production and development domains:
 
+**Allowed Origins:**
+- `https://hyperscape.club` (production frontend)
+- `https://www.hyperscape.club` (www subdomain)
+- `https://hyperscape.pages.dev` (Cloudflare Pages)
+- `http://hyperscape.pages.dev` (HTTP fallback for testing)
+- `https://*.hyperscape.pages.dev` (preview deployments)
+- `https://hyperscape-production.up.railway.app` (Railway server)
+- `http://localhost:*` (any localhost port for development)
+
+**Dynamic Patterns:**
 ```typescript
-// packages/server/src/startup/http-server.ts
+// From packages/server/src/startup/http-server.ts
 const allowedOrigins = [
-  'http://localhost:3333',           // Local development
-  'https://hyperscape.pages.dev',    // Cloudflare Pages production
-  'https://*.hyperscape.pages.dev',  // Cloudflare Pages preview deployments
-  // Add your custom domains here
+  /^https?:\/\/localhost:\d+$/,  // Matches any localhost port
+  /^https?:\/\/.+\.hyperscape\.pages\.dev$/,  // Cloudflare preview deployments
+  /^https:\/\/.+\.up\.railway\.app$/,  // Railway deployments
 ];
 ```
 
 <Info>
-Cloudflare Pages preview deployments use subdomains like `abc123.hyperscape.pages.dev`. The wildcard pattern `*.hyperscape.pages.dev` allows all preview deployments to access the API.
+CORS configuration is automatically applied to all API routes. No additional configuration needed for standard deployments.
 </Info>
 
 ## Client Environment

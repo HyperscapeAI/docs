@@ -977,6 +977,49 @@ Click any skill in the Skills panel to open its guide, which shows:
 The Skill Guide Panel provides an OSRS-style interface for viewing skill progression and planning your training goals.
 </Info>
 
+### Skill Guide Panel
+
+Players can click any skill in the Skills Panel to open an OSRS-style Skill Guide that displays all unlocks for that skill:
+
+**Features:**
+- Click any skill icon to open its guide
+- Shows all unlocks with level requirements
+- Visual distinction between unlocked (green checkmark) and locked (lock icon) items
+- Highlights the next unlock the player is working toward
+- Displays progress: "X more levels to unlock: [description]"
+- Scrollable list for skills with many unlocks
+- Type badges (item/ability) for each unlock
+- Loading state while fetching unlock data from server
+
+**Implementation:**
+- Component: `packages/client/src/game/panels/SkillGuidePanel.tsx`
+- Data source: `/api/data/skill-unlocks` endpoint (server-authoritative)
+- Unlock data: `packages/server/world/assets/manifests/skill-unlocks.json`
+
+**User Experience:**
+```
+Skills Panel → Click skill icon → Skill Guide Panel opens
+  ├─ Header: [Icon] Skill Name Guide [X]
+  ├─ Current Level: Your Level: 45
+  ├─ Progress: 12/29 unlocked
+  ├─ Next Unlock: 5 more levels to unlock: Rune weapons
+  └─ Scrollable List:
+      ✓ Lvl 1   Bronze weapons    [item]
+      ✓ Lvl 5   Steel weapons     [item]
+      ✓ Lvl 40  Rune weapons      [item]
+      ➤ Lvl 50  Dragon weapons    [item]  [NEXT]
+      🔒 Lvl 60 Godswords         [item]
+```
+
+**Keyboard Controls:**
+- **ESC** - Close panel
+- **Click outside** - Close panel
+- **Click X button** - Close panel
+
+<Info>
+The Skill Guide Panel fetches unlock data from the server on first load and caches it for the session. This ensures unlock data is always server-authoritative and can be updated without client rebuilds.
+</Info>
+
 ## Manifest-Driven Design
 
 All skill-related data is now defined in JSON manifests:
@@ -988,41 +1031,28 @@ All skill-related data is now defined in JSON manifests:
 
 This allows easy content updates without code changes and enables community modding.
 
-## Prayer System
+### Defence/Defense Spelling Normalization
 
-Prayer is a combat skill that provides temporary buffs at the cost of prayer points. See the dedicated [Prayer System](/wiki/game-systems/prayer) documentation for complete details.
-
-### Prayer Points
-
-Prayer points scale with Prayer level:
+The skill unlocks system handles British/American spelling differences automatically:
 
 ```typescript
-maxPoints = Math.floor(prayerLevel / 2) + Math.floor(prayerLevel / 4) + 10
+// From packages/shared/src/data/skill-unlocks.ts
+// Normalize British/American spelling: "defence" -> "defense"
+// JSON uses OSRS-accurate British spelling, but UI uses American spelling
+if (loadedUnlocks["defence"] && !loadedUnlocks["defense"]) {
+  loadedUnlocks["defense"] = loadedUnlocks["defence"];
+}
 ```
 
-| Prayer Level | Max Points |
-|--------------|------------|
-| 1 | 10 |
-| 50 | 47 |
-| 99 | 84 |
-
-### Available Prayers
-
-Prayers are defined in `manifests/prayers.json`:
-
-| Prayer | Level | Effect | Category |
-|--------|-------|--------|----------|
-| Thick Skin | 1 | +5% Defense | Defensive |
-| Burst of Strength | 4 | +5% Strength | Offensive |
-| Clarity of Thought | 7 | +5% Attack | Offensive |
-| Rock Skin | 10 | +10% Defense | Defensive |
-| Superhuman Strength | 13 | +10% Strength | Offensive |
+**Why this matters:**
+- `skill-unlocks.json` uses British spelling "defence" (OSRS-accurate)
+- Client UI uses American spelling "defense" (consistent with codebase)
+- Normalization ensures both spellings work correctly
+- No duplicate data needed in manifests
 
 <Info>
-Prayers drain points over time based on their drain effect and your prayer bonus from equipment. Recharge at altars or by leveling up Prayer.
+This normalization happens once at manifest load time. Both `defence` and `defense` keys will work in API calls and UI components.
 </Info>
-
----
 
 ## Related Documentation
 
