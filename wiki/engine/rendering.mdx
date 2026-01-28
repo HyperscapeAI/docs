@@ -1,0 +1,288 @@
+---
+title: "Rendering System"
+description: "WebGPU rendering with WebGL fallback and auto exposure"
+icon: "palette"
+---
+
+## Overview
+
+Hyperscape uses **WebGPU** as the primary rendering backend with automatic **WebGL fallback** for environments that don't support WebGPU (e.g., WKWebView in Tauri, older browsers). The rendering system includes advanced features like auto exposure for day/night cycles and cascaded shadow maps.
+
+Rendering code lives in:
+- `packages/shared/src/utils/rendering/RendererFactory.ts` - Renderer creation and backend detection
+- `packages/shared/src/systems/client/ClientGraphics.ts` - Graphics system initialization
+- `packages/shared/src/systems/shared/world/Environment.ts` - Lighting and shadows
+
+## Renderer Backends
+
+### WebGPU (Primary)
+
+Modern GPU API with advanced features:
+
+- **TSL Post-Processing**: Three.js Shading Language for effects
+- **Cascaded Shadow Maps (CSM)**: Multi-cascade shadows for large scenes
+- **Compute Shaders**: GPU-accelerated computations
+- **Better Performance**: Lower overhead than WebGL
+
+**Browser Support**:
+- Chrome 113+
+- Edge 113+
+- Safari 17+
+
+### WebGL (Fallback)
+
+Compatibility mode for older environments:
+
+- **Automatic Fallback**: Detects WebGPU unavailability and falls back
+- **No TSL**: Post-processing disabled (WebGPU-only feature)
+- **Single Shadow Map**: Directional light without cascades
+- **Larger Frustum**: 250m vs 100m to compensate for no CSM
+
+**Use Cases**:
+- WKWebView (Tauri desktop app)
+- Older Safari versions
+- Browsers without WebGPU support
+
+## Renderer Creation
+
+```typescript
+import { createRenderer, isWebGPURenderer } from "@hyperscape/shared";
+
+// Create renderer (WebGPU preferred, WebGL fallback)
+const renderer = await createRenderer({
+  antialias: true,
+  alpha: false,
+  powerPreference: "high-performance",
+});
+
+// Check which backend is active
+const isWebGPU = isWebGPURenderer(renderer);
+console.log(`Renderer: ${isWebGPU ? "WebGPU" : "WebGL"}`);
+```
+
+### Backend Detection
+
+```typescript
+import { getRendererBackend } from "@hyperscape/shared";
+
+const backend = getRendererBackend(renderer);
+// Returns: "webgpu" | "webgl"
+```
+
+## Auto Exposure System
+
+Adaptive exposure mimics eye adaptation to different light levels:
+
+### Exposure Values
+
+```typescript
+const DAY_EXPOSURE = 0.85;    // Standard daylight
+const NIGHT_EXPOSURE = 1.7;   // Boosted for night visibility
+```
+
+Higher exposure at night compensates for lower light, keeping the world visible while maintaining darker atmosphere.
+
+### Smooth Transitions
+
+```typescript
+// Calculate target exposure using smoothstep
+const t = dayIntensity * dayIntensity * (3 - 2 * dayIntensity);
+const targetExposure =
+  NIGHT_EXPOSURE + (DAY_EXPOSURE - NIGHT_EXPOSURE) * t;
+
+// Smooth interpolation (lerp factor 0.03 = ~30 frames)
+currentExposure += (targetExposure - currentExposure) * 0.03;
+
+// Apply to renderer
+renderer.toneMappingExposure = currentExposure;
+```
+
+### Initialization
+
+Exposure is initialized based on current time of day to prevent jarring transitions:
+
+```typescript
+private initializeExposure(): void {
+  const dayIntensity = this.skySystem.dayIntensity;
+  const t = dayIntensity * dayIntensity * (3 - 2 * dayIntensity);
+  this.currentExposure =
+    this.NIGHT_EXPOSURE + (this.DAY_EXPOSURE - this.NIGHT_EXPOSURE) * t;
+  
+  // Apply immediately
+  graphics.renderer.toneMappingExposure = this.currentExposure;
+}
+```
+
+Called during `Environment.start()` after `skySystem` is ready.
+
+## Shadow System
+
+### Cascaded Shadow Maps (WebGPU)
+
+Multi-cascade shadows for large outdoor scenes:
+
+```typescript
+import { CSMShadowNode } from "three/webgpu";
+
+this.csmShadowNode = new CSMShadowNode(this.sunLight, {
+  cascades: 4,
+  maxFar: 200,
+  shadowMapSize: 2048,
+  shadowBias: 0.0001,
+  shadowNormalBias: 0.02,
+});
+```
+
+**Shadow Quality Levels**:
+
+| Level | Cascades | Map Size | Max Far | Bias | Normal Bias |
+|-------|----------|----------|---------|------|-------------|
+| `none` | 0 | 0 | 0 | 0 | 0 |
+| `low` | 3 | 1024 | 150 | 0.0002 | 0.03 |
+| `med` | 4 | 2048 | 200 | 0.0001 | 0.02 |
+| `high` | 4 | 4096 | 250 | 0.00005 | 0.01 |
+
+### WebGL Shadow Fallback
+
+Single directional light shadow map:
+
+```typescript
+// WebGL fallback: single directional light shadows (no cascades)
+if (!useWebGPU) {
+  this.csmShadowNode = null;
+  
+  // Larger frustum to compensate for no CSM
+  const baseFrustumSize = Math.min(250, csmConfig.maxFar);
+  shadowCam.left = -baseFrustumSize;
+  shadowCam.right = baseFrustumSize;
+  shadowCam.top = baseFrustumSize;
+  shadowCam.bottom = -baseFrustumSize;
+  
+  scene.add(this.sunLight);
+  return;
+}
+```
+
+### CSM Initialization
+
+Shadows are initialized during `Environment.start()` to ensure they work from the first frame:
+
+```typescript
+private initializeCSMFrustums(): void {
+  // Validate camera is properly configured
+  if (camera.aspect <= 0 || camera.fov <= 0 || camera.near <= 0) {
+    return; // Skip this frame, retry next frame
+  }
+  
+  // Update camera matrices
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(true);
+  
+  try {
+    this.csmShadowNode.updateFrustums();
+    this.needsFrustumUpdate = false;
+  } catch (err) {
+    // Will retry during update() - expected during startup
+  }
+}
+```
+
+## Night Lighting Enhancements
+
+Enhanced ambient lighting for better night visibility:
+
+### Moon Intensity
+
+```typescript
+// Before: moonIntensity = nightIntensity * 0.4
+// After:  moonIntensity = nightIntensity * 0.6
+```
+
+Stronger moonlight improves night visibility.
+
+### Hemisphere Light
+
+```typescript
+// Day: 0.9, Night: 0.4 (auto exposure handles the rest)
+this.hemisphereLight.intensity = 0.4 + dayIntensity * 0.5;
+
+// Night sky: Blue-silver moonlight
+this.hemisphereLight.color.setRGB(
+  0.53 * dayIntensity + 0.25 * nightIntensity,  // R: moonlit sky
+  0.81 * dayIntensity + 0.35 * nightIntensity,  // G: moonlit sky
+  0.92 * dayIntensity + 0.5 * nightIntensity,   // B: blue tint at night
+);
+```
+
+### Ambient Light
+
+```typescript
+// Day: 0.5, Night: 0.3
+this.ambientLight.intensity = 0.3 + dayIntensity * 0.2;
+
+// Brighter blue moonlight tint at night
+this.ambientLight.color.setRGB(
+  0.5 + dayIntensity * 0.5,    // R: 0.5 at night, 1.0 at day
+  0.55 + dayIntensity * 0.4,   // G: 0.55 at night, 0.95 at day
+  0.7 + dayIntensity * 0.25,   // B: 0.7 at night, 0.95 at day (bluer)
+);
+```
+
+## Post-Processing
+
+TSL post-processing is **WebGPU-only**:
+
+```typescript
+// Post-processing only enabled on WebGPU
+this.usePostprocessing =
+  (this.world.prefs?.postprocessing ?? true) && this.isWebGPU;
+
+if (this.usePostprocessing && isWebGPURenderer(this.renderer)) {
+  this.composer = createPostProcessingComposer(
+    this.renderer,
+    this.world.scene,
+    this.world.camera,
+    {
+      colorGradingLut,
+      colorGradingIntensity,
+      bloomEnabled,
+      bloomIntensity,
+    },
+  );
+}
+```
+
+WebGL fallback runs without post-processing effects.
+
+## Settings Panel Integration
+
+The settings panel displays the actual renderer type:
+
+```typescript
+<div className="text-sm font-bold">
+  {world.graphics?.isWebGPU ? "WebGPU" : "WebGL"}
+</div>
+```
+
+## Performance Considerations
+
+### WebGPU Advantages
+
+- Lower CPU overhead
+- Better multi-threading
+- Compute shader support
+- More efficient state management
+
+### WebGL Compatibility
+
+- Broader browser support
+- Works in WKWebView (Tauri)
+- Fallback for older devices
+- Slightly higher CPU usage
+
+## Related Documentation
+
+- [Environment System](/wiki/game-systems/environment) - Lighting and sky
+- [Shadow System](/wiki/engine/shadows) - Shadow configuration
+- [Post-Processing](/wiki/engine/post-processing) - Visual effects
+- [Settings](/wiki/client/settings) - Graphics settings
