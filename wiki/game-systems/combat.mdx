@@ -535,8 +535,59 @@ The combat system emits events for UI and logging:
 
 ---
 
+---
+
+## Duel Arena Integration
+
+The combat system integrates with the Duel Arena for PvP combat:
+
+### Rule Enforcement
+
+The DuelSystem provides APIs for rule checking:
+
+```typescript
+const duelSystem = world.getSystem("duel");
+
+// Check if player can use specific combat types
+if (duelSystem && !duelSystem.canUseRanged(attackerId)) {
+  return; // Block ranged attack in duel
+}
+
+if (duelSystem && !duelSystem.canUseMelee(attackerId)) {
+  return; // Block melee attack in duel
+}
+
+if (duelSystem && !duelSystem.canEatFood(playerId)) {
+  return; // Block food consumption in duel
+}
+```
+
+### Death Handling
+
+Duel deaths are handled differently than normal deaths:
+
+```typescript
+// From PlayerDeathSystem.ts
+const duelSystem = this.world.getSystem("duel");
+if (duelSystem?.isPlayerInActiveDuel(playerId)) {
+  // Duel death - DuelSystem handles resolution
+  // No items lost, no headstone, winner gets stakes
+  return;
+}
+
+// Normal death - respawn at hospital with item loss
+this.handleNormalDeath(playerId);
+```
+
+<Info>
+  See the [Duel Arena documentation](/wiki/game-systems/duel-arena) for complete PvP mechanics.
+</Info>
+
+---
+
 ## Related Documentation
 
+- [Duel Arena](/wiki/game-systems/duel-arena) (PvP dueling system)
 - [Inventory System](/wiki/game-systems/inventory) (for food consumption)
 - [Tile Movement System](/wiki/game-systems/movement)
 - [Skills & Progression](/wiki/game-systems/skills)
