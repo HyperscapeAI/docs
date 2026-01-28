@@ -72,9 +72,6 @@ hyperscape/
 └── scripts/                 # Build and dev scripts
 ```
 
-<Note>
-The `hs-kit` package was removed in January 2026. All UI components were consolidated into `packages/client/src/ui/`.
-</Note>
 
 ## Build Dependency Graph
 
@@ -189,7 +186,7 @@ packages/client/src/
 ├── hooks/          # React hooks
 ├── lib/            # Networking, utilities, error handling
 ├── screens/        # UI screens (login, game, etc.)
-├── ui/             # Consolidated UI system (from hs-kit)
+├── ui/             # UI system (windows, tabs, drag-and-drop, theming)
 │   ├── components/ # Reusable UI components (Window, TabBar, Portal, etc.)
 │   ├── controls/   # Form controls (Slider, Toggle, Select, etc.)
 │   ├── core/       # Core UI systems (drag-and-drop, window management, presets)
@@ -200,9 +197,6 @@ packages/client/src/
 └── index.tsx       # React entry point
 ```
 
-<Note>
-The UI system was consolidated from the removed `hs-kit` package in January 2026. All UI components, stores, and utilities are now in `packages/client/src/ui/`.
-</Note>
 
 ### plugin-hyperscape (`@hyperscape/plugin-hyperscape`)
 

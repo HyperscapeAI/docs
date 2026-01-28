@@ -11,9 +11,10 @@ The `@hyperscape/client` package is the web game client:
 - Vite for fast builds with HMR
 - React 19 UI framework
 - Three.js 3D rendering (WebGPU with WebGL fallback)
-- Capacitor for iOS/Android mobile builds
 - Privy authentication
 - Farcaster miniapp SDK
+- Tauri desktop app support
+- Solana wallet integration
 
 ## Rendering
 
@@ -52,17 +53,20 @@ packages/client/
 │   ├── auth/           # Privy authentication
 │   ├── constants/      # Client constants
 │   ├── game/           # Game loop and logic
-│   │   ├── components/ # Game-specific components (chat, currency, dialog, equipment, map, quest, settings, skilltree)
+│   │   ├── character/  # Character rendering
+│   │   ├── chat/       # Chat system
+│   │   ├── components/ # Game-specific components
 │   │   ├── dashboard/  # Agent dashboard
 │   │   ├── hud/        # HUD elements
 │   │   ├── interface/  # Interface manager
 │   │   ├── panels/     # Game panels (inventory, bank, combat, etc.)
-│   │   └── systems/    # Client-side game systems
+│   │   ├── systems/    # Client-side game systems
+│   │   └── types/      # Game type definitions
 │   ├── hooks/          # React hooks
 │   ├── lib/            # Networking, utilities, error handling
 │   ├── screens/        # UI screens
 │   ├── types/          # TypeScript types
-│   ├── ui/             # Consolidated UI system (components, controls, core, stores, theme, types)
+│   ├── ui/             # UI system
 │   │   ├── components/ # Reusable UI components (Window, TabBar, Portal, etc.)
 │   │   ├── controls/   # Form controls (Slider, Toggle, Select, etc.)
 │   │   ├── core/       # Core UI systems (drag-and-drop, window management, presets)
@@ -70,15 +74,14 @@ packages/client/
 │   │   ├── theme/      # Theme system
 │   │   └── types/      # UI type definitions
 │   ├── utils/          # Helper functions
-│   ├── index.tsx       # React entry point
-│   ├── index.html      # HTML template
-│   └── index.css       # Global styles (Tailwind)
-├── public/             # Static assets
-├── tests/              # E2E and unit tests
-├── ios/                # iOS native project (Capacitor)
-├── android/            # Android native project (Capacitor)
-├── capacitor.config.ts # Mobile configuration
+│   └── index.tsx       # React entry point
+├── public/             # Static assets (fonts, textures, LUTs)
+├── tests/              # E2E (Playwright) and unit tests (Vitest)
+├── scripts/            # Deployment scripts
 ├── vite.config.ts      # Vite configuration
+├── vitest.config.ts    # Vitest configuration
+├── playwright.config.ts # E2E test configuration
+├── wrangler.toml       # Cloudflare Pages config
 └── .env.example        # Environment template
 ```
 
@@ -95,6 +98,7 @@ CharacterSelectScreen.tsx // Choose character
 CharacterEditorScreen.tsx // Create/edit character with VRM preview
 DashboardScreen.tsx       // Game hub / lobby
 GameClient.tsx            // Main 3D gameplay
+AdminScreen.tsx           // Admin dashboard
 ```
 
 | Screen | Purpose |
@@ -106,22 +110,30 @@ GameClient.tsx            // Main 3D gameplay
 | `DashboardScreen` | Game hub and lobby |
 | `GameClient` | Main 3D gameplay |
 | `LoadingScreen` | Asset loading state |
+| `AdminScreen` | Admin dashboard and tools |
 
 ## UI System Architecture
 
 ### UI System (`src/ui/`)
 
-Consolidated UI system with all components, hooks, and stores:
+Complete UI system with components, hooks, stores, and theming:
 
 ```
 src/ui/
-├── components/        # Core UI components
+├── components/        # UI components (45+ files)
 │   ├── Window.tsx     # Draggable, resizable windows
 │   ├── Tab.tsx        # Tab component
 │   ├── TabBar.tsx     # Tab container
 │   ├── Slider.tsx     # Range slider
 │   ├── Portal.tsx     # React portal
 │   ├── MenuButton.tsx # Menu buttons
+│   ├── ActionBar.tsx  # Action bar
+│   ├── BuffBar.tsx    # Buff display
+│   ├── ItemSlot.tsx   # Inventory slot
+│   ├── Minimap.tsx    # Minimap component
+│   ├── ScrollableArea.tsx # Scrollable containers
+│   ├── VirtualList.tsx    # Virtual scrolling
+│   ├── VirtualGrid.tsx    # Virtual grid
 │   └── ...
 ├── controls/          # Form controls
 │   ├── ColorControl.tsx
@@ -131,19 +143,26 @@ src/ui/
 │   └── ToggleControl.tsx
 ├── core/              # Core UI systems
 │   ├── drag/          # Drag-and-drop (@dnd-kit)
-│   ├── edit/          # Edit mode
+│   ├── edit/          # Edit mode (L key unlock)
 │   ├── notifications/ # Toast notifications
-│   ├── presets/       # Layout presets
-│   ├── responsive/    # Responsive utilities
+│   ├── presets/       # Layout presets and cloud sync
+│   ├── responsive/    # Breakpoints, mobile layout
+│   ├── settings/      # Settings schema
 │   ├── tabs/          # Tab management
-│   ├── tooltip/       # Tooltip system
+│   ├── tooltip/       # Progressive tooltips
 │   ├── virtual/       # Virtual scrolling
 │   └── window/        # Window management
 ├── stores/            # Zustand stores
-│   ├── windowStore.ts # Window state
-│   ├── themeStore.ts  # Theme state
-│   ├── dragStore.ts   # Drag state
-│   └── ...
+│   ├── windowStore.ts       # Window state
+│   ├── themeStore.ts        # Theme state
+│   ├── dragStore.ts         # Drag state
+│   ├── editStore.ts         # Edit mode state
+│   ├── presetStore.ts       # Layout presets
+│   ├── keybindStore.ts      # Keybindings
+│   ├── notificationStore.ts # Notifications
+│   ├── accessibilityStore.ts # Accessibility
+│   ├── complexityStore.ts   # UI complexity
+│   └── questStore.ts        # Quest tracking
 ├── theme/             # Theme system
 │   ├── themes.ts      # Dark theme
 │   └── animations.ts  # CSS animations
@@ -164,23 +183,33 @@ src/game/components/
 ├── currency/          # Currency display
 │   ├── CurrencyDisplay.tsx
 │   ├── CurrencyExchange.tsx
-│   └── CurrencyIcon.tsx
+│   ├── CurrencyIcon.tsx
+│   ├── CurrencyInput.tsx
+│   └── CurrencyTooltip.tsx
 ├── dialog/            # NPC dialogue
 │   ├── DialogBox.tsx
 │   ├── DialogChoices.tsx
-│   └── DialogHistory.tsx
+│   ├── DialogHistory.tsx
+│   ├── DialogPortrait.tsx
+│   └── DialogText.tsx
 ├── equipment/         # Equipment panel
 │   ├── CharacterModel.tsx
 │   ├── EquipmentPanel.tsx
-│   └── EquipmentSlot.tsx
+│   ├── EquipmentSlot.tsx
+│   ├── ItemComparison.tsx
+│   └── StatsSummary.tsx
 ├── map/               # World map
 │   ├── WorldMap.tsx
 │   ├── MapControls.tsx
-│   └── MapMarker.tsx
+│   ├── MapMarker.tsx
+│   ├── MapLegend.tsx
+│   └── MapTooltip.tsx
 ├── quest/             # Quest system
 │   ├── QuestLog.tsx
 │   ├── QuestEntry.tsx
-│   └── QuestObjective.tsx
+│   ├── QuestObjective.tsx
+│   ├── QuestRewards.tsx
+│   └── QuestTracker.tsx
 ├── settings/          # Settings panel
 │   ├── SettingsPanel.tsx
 │   ├── SettingsCategory.tsx
@@ -188,18 +217,39 @@ src/game/components/
 └── skilltree/         # Skill tree
     ├── SkillTree.tsx
     ├── SkillNode.tsx
+    ├── SkillConnection.tsx
     └── SkillTooltip.tsx
 ```
 
 ### HUD Components (`src/game/hud/`)
 
-- Health/Constitution display (StatusBars)
-- Combat status indicators
-- XP progress orbs
-- Action progress bar
-- Minimap with compass
-- Level-up notifications
-- Connection indicator
+```
+src/game/hud/
+├── StatusBars.tsx           # Health/Constitution display
+├── ActionProgressBar.tsx    # Action progress
+├── Minimap.tsx              # World minimap
+├── MinimapCompass.tsx       # Compass overlay
+├── MinimapStaminaBar.tsx    # Stamina indicator
+├── MinimapOverlayControls.tsx
+├── RadialMinimapMenu.tsx    # Radial menu
+├── HomeTeleportButton.tsx   # Teleport home
+├── ContextMenu.tsx          # Right-click menus
+├── EntityContextMenu.tsx    # Entity interactions
+├── EscapeMenu.tsx           # Pause menu
+├── ConnectionIndicator.tsx  # Network status
+├── level-up/                # Level-up system
+│   ├── LevelUpNotification.tsx
+│   ├── LevelUpPopup.tsx
+│   └── UnlocksSection.tsx
+├── overlays/                # Screen overlays
+│   ├── DeathScreen.tsx
+│   ├── DisconnectedOverlay.tsx
+│   └── KickedOverlay.tsx
+└── xp-orb/                  # XP progress orbs
+    ├── XPProgressOrb.tsx
+    ├── XPProgressOrbs.tsx
+    └── FloatingXPDrops.tsx
+```
 
 ### Anchor-Based Positioning
 
@@ -281,57 +331,26 @@ bun run build         # Build to dist/
 bun run preview       # Preview production build
 ```
 
-## Mobile Builds
-
-### iOS
-
-Requires macOS with Xcode installed.
-
-```bash
-bun run ios           # Build and open Xcode
-bun run ios:dev       # Sync and open (no rebuild)
-bun run ios:build     # Production build
-```
-
-### Android
-
-Requires Android Studio installed.
-
-```bash
-bun run android       # Build and open Android Studio
-bun run android:dev   # Sync and open (no rebuild)
-bun run android:build # Production build
-```
-
-### Capacitor Sync
-
-```bash
-bun run cap:sync          # Sync both platforms
-bun run cap:sync:ios      # iOS only
-bun run cap:sync:android  # Android only
-```
-
 ## Dependencies
 
 | Package | Purpose |
 |---------|---------|
 | `react` | UI framework (v19) |
 | `react-dom` | React DOM renderer |
-| `vite` | Build tool |
-| `three` | 3D rendering |
-| `@dnd-kit/core` | Drag-and-drop core |
-| `@dnd-kit/sortable` | Sortable lists |
-| `@dnd-kit/utilities` | DnD utilities |
-| `@capacitor/core` | Mobile builds |
+| `three` | 3D rendering (v0.181) |
 | `@hyperscape/shared` | Core engine |
 | `@privy-io/react-auth` | Authentication |
 | `@farcaster/miniapp-sdk` | Farcaster integration |
 | `@dnd-kit/core` | Drag-and-drop core |
 | `@dnd-kit/sortable` | Sortable lists |
-| `@dnd-kit/utilities` | Drag-and-drop utilities |
-| `tailwindcss` | Utility CSS |
+| `@pixiv/three-vrm` | VRM avatar support |
+| `@solana/wallet-adapter-react` | Solana wallet |
+| `@tauri-apps/api` | Desktop app integration |
 | `livekit-client` | Voice chat |
-| `zustand` | State management |
+| `lucide-react` | Icons |
+| `d3` | Data visualization |
+| `tailwindcss` | Utility CSS |
+| `vite` | Build tool |
 
 ## Deployment
 
@@ -399,6 +418,8 @@ Only `PUBLIC_*` prefixed environment variables are exposed to the client. Never 
 | `src/index.tsx` | React entry point |
 | `src/game/` | Game loop and logic |
 | `src/screens/` | UI screens |
+| `src/ui/` | UI system (windows, drag-drop, stores) |
 | `vite.config.ts` | Vite configuration |
-| `capacitor.config.ts` | Mobile configuration |
+| `vitest.config.ts` | Unit test configuration |
+| `playwright.config.ts` | E2E test configuration |
 | `wrangler.toml` | Cloudflare Pages config |

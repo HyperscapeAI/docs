@@ -23,6 +23,80 @@
   --gold-primary: #D4AF37;
   --gold-light: #B8860B;
   --gold-dark: #F5D061;
+  
+  /* Override Mintlify accent colors */
+  --accent: #D4AF37;
+  --accent-light: #F5D061;
+  --accent-dark: #B8860B;
+  --primary: #D4AF37;
+  --primary-light: #F5D061;
+  --primary-dark: #B8860B;
+  
+  /* Mintlify code block defaults for light mode */
+  --mint-color-text: #1f2937;
+  --mint-color-background: #f9fafb;
+}
+
+/* Dark mode Mintlify code block colors */
+html.dark,
+.dark,
+[data-theme="dark"] {
+  --mint-color-text: #e4e4e7 !important;
+  --mint-color-background: #1a1a1e !important;
+}
+
+/* Dark mode variable overrides */
+.dark,
+html[data-theme="dark"] {
+  --accent: #F5D061;
+  --accent-light: #F5D061;
+  --primary: #F5D061;
+  --primary-light: #F5D061;
+  
+  /* Common Mintlify CSS variables */
+  --color-primary: #F5D061;
+  --color-primary-light: #F5D061;
+  --tw-ring-color: rgba(245, 208, 97, 0.5);
+  
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MINTLIFY CODE BLOCK CSS VARIABLES (--mint- prefix)
+     ═══════════════════════════════════════════════════════════════════════════ */
+  
+  /* Basic colors for code blocks */
+  --mint-color-text: #e4e4e7;
+  --mint-color-background: #1a1a1e;
+  
+  /* Token colors for syntax highlighting */
+  --mint-token-constant: #F5D061;
+  --mint-token-string: #a5d6a7;
+  --mint-token-comment: #6b7280;
+  --mint-token-keyword: #F5D061;
+  --mint-token-parameter: #e4e4e7;
+  --mint-token-function: #93c5fd;
+  --mint-token-string-expression: #a5d6a7;
+  --mint-token-punctuation: #9ca3af;
+  --mint-token-link: #F5D061;
+  
+  /* Override blue colors at root level */
+  --blue-50: rgba(245, 208, 97, 0.05);
+  --blue-100: rgba(245, 208, 97, 0.1);
+  --blue-200: rgba(245, 208, 97, 0.2);
+  --blue-300: rgba(245, 208, 97, 0.3);
+  --blue-400: #F5D061;
+  --blue-500: #F5D061;
+  --blue-600: #D4AF37;
+  --blue-700: #B8860B;
+  --blue-800: #8B6914;
+  --blue-900: #5C4A0F;
+  
+  /* Tailwind sky colors */
+  --sky-50: rgba(245, 208, 97, 0.05);
+  --sky-100: rgba(245, 208, 97, 0.1);
+  --sky-200: rgba(245, 208, 97, 0.2);
+  --sky-300: rgba(245, 208, 97, 0.3);
+  --sky-400: #F5D061;
+  --sky-500: #F5D061;
+  --sky-600: #D4AF37;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -71,10 +145,65 @@ html[data-theme="dark"] code:not([class*="language-"]) {
    CODE BLOCKS - Gold accent styling
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Dark mode - code block outer container border */
+/* Override Mintlify's primary color variable for code blocks */
+.dark,
+html[data-theme="dark"] {
+  --shiki-color-text: #e4e4e7 !important;
+  --shiki-color-background: #1a1a1e !important;
+  --code-block-bg: #1a1a1e !important;
+  --code-border: rgba(245, 208, 97, 0.2) !important;
+}
+
+/* Force code block background in dark mode */
+.dark pre,
+.dark pre code,
+.dark [data-rehype-pretty-code-figure] pre,
+html[data-theme="dark"] pre,
+html[data-theme="dark"] pre code,
+html[data-theme="dark"] [data-rehype-pretty-code-figure] pre {
+  background: #1a1a1e !important;
+  background-color: #1a1a1e !important;
+}
+
+/* Code block container wrapper */
+.dark figure,
+.dark figure > div,
+.dark [data-rehype-pretty-code-figure],
+.dark [data-rehype-pretty-code-figure] > div,
+html[data-theme="dark"] figure,
+html[data-theme="dark"] figure > div,
+html[data-theme="dark"] [data-rehype-pretty-code-figure],
+html[data-theme="dark"] [data-rehype-pretty-code-figure] > div {
+  background: #1a1a1e !important;
+  background-color: #1a1a1e !important;
+}
+
+/* Dark mode - code block outer container */
 .dark .code-block,
-html[data-theme="dark"] .code-block {
+html[data-theme="dark"] .code-block,
+.dark [class*="CodeBlock"],
+html[data-theme="dark"] [class*="CodeBlock"],
+.dark [class*="codeblock"],
+html[data-theme="dark"] [class*="codeblock"],
+.dark [data-code-block],
+html[data-theme="dark"] [data-code-block],
+.dark [data-language],
+html[data-theme="dark"] [data-language] {
   border-color: rgba(245, 208, 97, 0.2) !important;
+  --border-color: rgba(245, 208, 97, 0.2) !important;
+}
+
+/* Target the wrapper div around code blocks */
+.dark div:has(> pre),
+html[data-theme="dark"] div:has(> pre) {
+  border-color: rgba(245, 208, 97, 0.2) !important;
+}
+
+/* Code block header/toolbar area */
+.dark [class*="code"] > div:first-child,
+html[data-theme="dark"] [class*="code"] > div:first-child {
+  border-color: rgba(245, 208, 97, 0.2) !important;
+  background: rgba(245, 208, 97, 0.05) !important;
 }
 
 /* Dark mode - code block inner background */
@@ -87,27 +216,196 @@ html[data-theme="dark"] .code-block-background {
 .dark .shiki,
 .dark pre.shiki,
 html[data-theme="dark"] .shiki {
-  background: transparent !important;
+  background: #1a1a1e !important;
+  background-color: #1a1a1e !important;
 }
 
-/* Copy button - gold accent on hover */
+/* Target ALL pre elements in dark mode */
+.dark pre[class],
+.dark pre[data-language],
+.dark pre[data-theme],
+html[data-theme="dark"] pre[class],
+html[data-theme="dark"] pre[data-language],
+html[data-theme="dark"] pre[data-theme] {
+  background: #1a1a1e !important;
+  background-color: #1a1a1e !important;
+}
+
+/* Target code block containers with any class */
+.dark div[class*="codeblock"],
+.dark div[class*="CodeBlock"],
+.dark div[class*="code-block"],
+.dark div[class*="pre-"],
+html[data-theme="dark"] div[class*="codeblock"],
+html[data-theme="dark"] div[class*="CodeBlock"],
+html[data-theme="dark"] div[class*="code-block"],
+html[data-theme="dark"] div[class*="pre-"] {
+  background: #1a1a1e !important;
+  background-color: #1a1a1e !important;
+}
+
+/* Copy button - gold accent */
 .dark .code-block button,
-html[data-theme="dark"] .code-block button {
-  transition: color 0.15s ease;
+html[data-theme="dark"] .code-block button,
+.dark [class*="copy"] button,
+html[data-theme="dark"] [class*="copy"] button,
+.dark button[class*="copy"],
+html[data-theme="dark"] button[class*="copy"],
+.dark [class*="CodeBlock"] button,
+html[data-theme="dark"] [class*="CodeBlock"] button {
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .dark .code-block button:hover,
-html[data-theme="dark"] .code-block button:hover {
+html[data-theme="dark"] .code-block button:hover,
+.dark [class*="copy"] button:hover,
+html[data-theme="dark"] [class*="copy"] button:hover,
+.dark button[class*="copy"]:hover,
+html[data-theme="dark"] button[class*="copy"]:hover,
+.dark [class*="CodeBlock"] button:hover,
+html[data-theme="dark"] [class*="CodeBlock"] button:hover {
+  color: var(--gold-dark) !important;
+  background: rgba(245, 208, 97, 0.1) !important;
+}
+
+/* Copyable inline code and blocks */
+.dark [data-copyable],
+html[data-theme="dark"] [data-copyable],
+.dark [class*="Copyable"],
+html[data-theme="dark"] [class*="Copyable"] {
+  border-color: rgba(245, 208, 97, 0.2) !important;
+}
+
+.dark [data-copyable]:hover,
+html[data-theme="dark"] [data-copyable]:hover,
+.dark [class*="Copyable"]:hover,
+html[data-theme="dark"] [class*="Copyable"]:hover {
+  border-color: rgba(245, 208, 97, 0.4) !important;
+}
+
+/* Pre blocks with copy functionality */
+.dark pre[class*="copy"],
+html[data-theme="dark"] pre[class*="copy"],
+.dark div[class*="copy"] pre,
+html[data-theme="dark"] div[class*="copy"] pre {
+  border-color: rgba(245, 208, 97, 0.2) !important;
+}
+
+/* Override any blue accents on code blocks */
+.dark pre,
+html[data-theme="dark"] pre {
+  border-color: rgba(245, 208, 97, 0.15) !important;
+}
+
+/* Code block wrapper/container */
+.dark [class*="code-group"],
+html[data-theme="dark"] [class*="code-group"],
+.dark [class*="CodeGroup"],
+html[data-theme="dark"] [class*="CodeGroup"] {
+  border-color: rgba(245, 208, 97, 0.2) !important;
+}
+
+/* Copy button icon - override blue SVG fill/stroke */
+.dark pre button svg,
+html[data-theme="dark"] pre button svg,
+.dark [class*="code"] button svg,
+html[data-theme="dark"] [class*="code"] button svg,
+.dark [class*="Code"] button svg,
+html[data-theme="dark"] [class*="Code"] button svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+}
+
+.dark pre button:hover svg,
+html[data-theme="dark"] pre button:hover svg,
+.dark [class*="code"] button:hover svg,
+html[data-theme="dark"] [class*="code"] button:hover svg {
   color: var(--gold-dark) !important;
 }
 
+/* Any button with copy in the name */
+.dark button[aria-label*="copy" i],
+html[data-theme="dark"] button[aria-label*="copy" i],
+.dark button[aria-label*="Copy" i],
+html[data-theme="dark"] button[aria-label*="Copy" i] {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.dark button[aria-label*="copy" i]:hover,
+html[data-theme="dark"] button[aria-label*="copy" i]:hover,
+.dark button[aria-label*="Copy" i]:hover,
+html[data-theme="dark"] button[aria-label*="Copy" i]:hover {
+  color: var(--gold-dark) !important;
+  background: rgba(245, 208, 97, 0.1) !important;
+}
+
+/* Clipboard/copy success state */
+.dark [data-copied="true"],
+html[data-theme="dark"] [data-copied="true"] {
+  color: var(--gold-dark) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORCE GOLD ON ALL BLUE ACCENTS IN DARK MODE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Target any element with blue-ish background colors */
+.dark [style*="#3b82f6"],
+.dark [style*="#60a5fa"],
+.dark [style*="#2563eb"],
+.dark [style*="#1d4ed8"],
+.dark [style*="rgb(59, 130, 246)"],
+.dark [style*="rgb(96, 165, 250)"],
+html[data-theme="dark"] [style*="#3b82f6"],
+html[data-theme="dark"] [style*="#60a5fa"],
+html[data-theme="dark"] [style*="#2563eb"] {
+  background-color: rgba(245, 208, 97, 0.15) !important;
+  border-color: rgba(245, 208, 97, 0.3) !important;
+  color: var(--gold-dark) !important;
+}
+
+/* Override any inline styles with blue colors */
+.dark [style*="border-color: rgb(59"],
+.dark [style*="border-color: #3b82f6"],
+.dark [style*="border-color: #60a5fa"],
+html[data-theme="dark"] [style*="border-color: rgb(59"],
+html[data-theme="dark"] [style*="border-color: #3b82f6"] {
+  border-color: rgba(245, 208, 97, 0.3) !important;
+}
+
+/* Target Mintlify's specific code block wrapper */
+.dark figure[data-rehype-pretty-code-figure],
+html[data-theme="dark"] figure[data-rehype-pretty-code-figure] {
+  border-color: rgba(245, 208, 97, 0.2) !important;
+}
+
+.dark figure[data-rehype-pretty-code-figure] > div,
+html[data-theme="dark"] figure[data-rehype-pretty-code-figure] > div {
+  border-color: rgba(245, 208, 97, 0.2) !important;
+}
+
+/* Code block copy button container */
+.dark [data-rehype-pretty-code-figure] button,
+html[data-theme="dark"] [data-rehype-pretty-code-figure] button {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.dark [data-rehype-pretty-code-figure] button:hover,
+html[data-theme="dark"] [data-rehype-pretty-code-figure] button:hover {
+  color: var(--gold-dark) !important;
+  background: rgba(245, 208, 97, 0.1) !important;
+}
+
 /* Light mode - code block outer container border */
-.code-block {
+.code-block,
+[class*="CodeBlock"],
+[class*="codeblock"] {
   border-color: rgba(184, 134, 11, 0.2) !important;
 }
 
 /* Light mode - copy button hover */
-.code-block button:hover {
+.code-block button:hover,
+[class*="CodeBlock"] button:hover {
   color: var(--gold-light) !important;
 }
 
@@ -178,6 +476,23 @@ html[data-theme="dark"] [role="tab"][aria-selected="true"] {
   border-bottom-color: var(--gold-dark) !important;
 }
 
+/* Code block tabs (macOS/Linux switcher) */
+.dark [role="tablist"] [role="tab"],
+html[data-theme="dark"] [role="tablist"] [role="tab"] {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.dark [role="tablist"] [role="tab"]:hover,
+html[data-theme="dark"] [role="tablist"] [role="tab"]:hover {
+  color: var(--gold-dark) !important;
+}
+
+.dark [role="tablist"] [role="tab"][aria-selected="true"],
+html[data-theme="dark"] [role="tablist"] [role="tab"][aria-selected="true"] {
+  color: var(--gold-dark) !important;
+  border-color: var(--gold-dark) !important;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    SCROLLBAR - Subtle styling
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -185,6 +500,188 @@ html[data-theme="dark"] [role="tab"][aria-selected="true"] {
 .dark ::-webkit-scrollbar-thumb:hover,
 html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   background: var(--gold-primary);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GLOBAL BLUE -> GOLD OVERRIDES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Override any remaining blue accent colors */
+.dark *,
+html[data-theme="dark"] * {
+  --blue-500: #F5D061;
+  --blue-400: #F5D061;
+  --blue-600: #D4AF37;
+  --sky-500: #F5D061;
+  --sky-400: #F5D061;
+  --cyan-500: #F5D061;
+  --cyan-400: #F5D061;
+  --indigo-500: #F5D061;
+  --indigo-400: #F5D061;
+}
+
+/* Force override any blue backgrounds, borders, text */
+.dark [style*="background"][style*="blue"],
+.dark [style*="background"][style*="#3b82f6"],
+.dark [style*="background"][style*="#60a5fa"],
+.dark [style*="background"][style*="rgb(59, 130, 246)"],
+html[data-theme="dark"] [style*="background"][style*="blue"] {
+  background-color: rgba(245, 208, 97, 0.1) !important;
+}
+
+/* Target specific blue color values in backgrounds */
+.dark [class*="bg-blue"],
+.dark [class*="bg-sky"],
+.dark [class*="bg-cyan"],
+.dark [class*="bg-indigo"],
+html[data-theme="dark"] [class*="bg-blue"],
+html[data-theme="dark"] [class*="bg-sky"],
+html[data-theme="dark"] [class*="bg-cyan"],
+html[data-theme="dark"] [class*="bg-indigo"] {
+  background-color: rgba(245, 208, 97, 0.15) !important;
+}
+
+/* Target blue text colors */
+.dark [class*="text-blue"],
+.dark [class*="text-sky"],
+.dark [class*="text-cyan"],
+.dark [class*="text-indigo"],
+html[data-theme="dark"] [class*="text-blue"],
+html[data-theme="dark"] [class*="text-sky"],
+html[data-theme="dark"] [class*="text-cyan"],
+html[data-theme="dark"] [class*="text-indigo"] {
+  color: var(--gold-dark) !important;
+}
+
+/* Target blue borders */
+.dark [class*="border-blue"],
+.dark [class*="border-sky"],
+.dark [class*="border-cyan"],
+.dark [class*="border-indigo"],
+html[data-theme="dark"] [class*="border-blue"],
+html[data-theme="dark"] [class*="border-sky"],
+html[data-theme="dark"] [class*="border-cyan"],
+html[data-theme="dark"] [class*="border-indigo"] {
+  border-color: rgba(245, 208, 97, 0.3) !important;
+}
+
+/* Ring colors (focus states) */
+.dark [class*="ring-blue"],
+.dark [class*="ring-sky"],
+.dark [class*="ring-cyan"],
+.dark [class*="ring-indigo"],
+html[data-theme="dark"] [class*="ring-blue"],
+html[data-theme="dark"] [class*="ring-sky"],
+html[data-theme="dark"] [class*="ring-cyan"],
+html[data-theme="dark"] [class*="ring-indigo"] {
+  --tw-ring-color: rgba(245, 208, 97, 0.5) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CALLOUT/INFO BOXES - Gold theme
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Info callouts - gold instead of blue */
+.dark [data-callout="info"],
+html[data-theme="dark"] [data-callout="info"],
+.dark .callout-info,
+html[data-theme="dark"] .callout-info {
+  background: rgba(212, 175, 55, 0.1) !important;
+  border-color: rgba(245, 208, 97, 0.3) !important;
+}
+
+.dark [data-callout="info"] svg,
+html[data-theme="dark"] [data-callout="info"] svg,
+.dark .callout-info svg,
+html[data-theme="dark"] .callout-info svg {
+  color: var(--gold-dark) !important;
+}
+
+/* Note callouts */
+.dark [data-callout="note"],
+html[data-theme="dark"] [data-callout="note"],
+.dark .callout-note,
+html[data-theme="dark"] .callout-note {
+  background: rgba(212, 175, 55, 0.08) !important;
+  border-color: rgba(245, 208, 97, 0.25) !important;
+}
+
+.dark [data-callout="note"] svg,
+html[data-theme="dark"] [data-callout="note"] svg {
+  color: var(--gold-dark) !important;
+}
+
+/* Tip callouts */
+.dark [data-callout="tip"],
+html[data-theme="dark"] [data-callout="tip"] {
+  background: rgba(212, 175, 55, 0.1) !important;
+  border-color: rgba(245, 208, 97, 0.3) !important;
+}
+
+.dark [data-callout="tip"] svg,
+html[data-theme="dark"] [data-callout="tip"] svg {
+  color: var(--gold-dark) !important;
+}
+
+/* Generic info/note styling via data attributes or classes */
+.dark [class*="info"],
+.dark [class*="note"],
+.dark [class*="Info"],
+.dark [class*="Note"] {
+  --callout-bg: rgba(212, 175, 55, 0.1);
+  --callout-border: rgba(245, 208, 97, 0.3);
+}
+
+/* Mintlify specific callout styling */
+.dark [data-type="info"],
+html[data-theme="dark"] [data-type="info"] {
+  background: rgba(212, 175, 55, 0.1) !important;
+  border-left-color: var(--gold-dark) !important;
+}
+
+/* Accordion/expandable sections */
+.dark details,
+html[data-theme="dark"] details {
+  border-color: rgba(245, 208, 97, 0.2) !important;
+}
+
+.dark details[open] summary,
+html[data-theme="dark"] details[open] summary {
+  color: var(--gold-dark) !important;
+}
+
+/* Card borders */
+.dark [class*="card"],
+html[data-theme="dark"] [class*="card"] {
+  border-color: rgba(245, 208, 97, 0.15) !important;
+}
+
+.dark [class*="card"]:hover,
+html[data-theme="dark"] [class*="card"]:hover {
+  border-color: rgba(245, 208, 97, 0.3) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CATCH-ALL BLUE OVERRIDE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Override Mintlify's primary color CSS custom properties */
+.dark,
+.dark *,
+html[data-theme="dark"],
+html[data-theme="dark"] * {
+  --primary-50: rgba(245, 208, 97, 0.05) !important;
+  --primary-100: rgba(245, 208, 97, 0.1) !important;
+  --primary-200: rgba(245, 208, 97, 0.2) !important;
+  --primary-300: rgba(245, 208, 97, 0.3) !important;
+  --primary-400: #F5D061 !important;
+  --primary-500: #F5D061 !important;
+  --primary-600: #D4AF37 !important;
+  --primary-700: #B8860B !important;
+  --mint-primary: #F5D061 !important;
+  --accent-color: #F5D061 !important;
+  --brand: #F5D061 !important;
+  --brand-primary: #F5D061 !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
