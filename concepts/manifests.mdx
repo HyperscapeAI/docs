@@ -425,54 +425,55 @@ Station types include:
 - **Range** — Cook food with reduced burn chance
 - **Bank** — Store items
 
-## Manifest Fetching System
+## Manifest Loading
 
-The server fetches manifests from the CDN at startup to ensure content is always up-to-date:
+### Server-Side Loading
 
+The server loads manifests in two ways depending on the environment:
+
+**Production/CI:**
 ```typescript
-// packages/server/src/startup/config.ts
-const MANIFEST_FILES = [
-  // Root-level manifests
-  "biomes.json",
-  "buildings.json",
-  "model-bounds.json",
-  "music.json",
-  "npcs.json",
-  "prayers.json",
-  "skill-unlocks.json",
-  "stations.json",
-  "stores.json",
-  "tier-requirements.json",
-  "tools.json",
-  "vegetation.json",
-  "world-areas.json",
-  // Items directory
-  "items/food.json",
-  "items/misc.json",
-  "items/resources.json",
-  "items/tools.json",
-  "items/weapons.json",
-  // Gathering directory
-  "gathering/fishing.json",
-  "gathering/mining.json",
-  "gathering/woodcutting.json",
-  // Recipes directory
-  "recipes/cooking.json",
-  "recipes/firemaking.json",
-  "recipes/smelting.json",
-  "recipes/smithing.json",
-];
-
-await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+// Fetches from CDN at startup
+await fetchManifestsFromCDN(
+  'https://assets.hyperscape.club',
+  'world/assets/manifests/',
+  'production'
+);
 ```
 
-**Fetch Behavior:**
-- **Production**: Always fetch from CDN, cache locally
-- **Development**: Skip if local manifests exist (allows local modifications)
-- **CI/Test**: Skip if `SKIP_MANIFESTS=true` or `NODE_ENV=test`
+**Development:**
+```typescript
+// Skips CDN fetch if local manifests exist
+// Falls back to local world/assets/manifests/
+```
 
-**Cache Headers:**
-Manifests use `Cache-Control: public, max-age=300, must-revalidate` (5 minute cache) to balance freshness with performance.
+**Manifest Files Fetched:**
+- Root: `biomes.json`, `npcs.json`, `prayers.json`, `stations.json`, etc.
+- Items: `items/food.json`, `items/weapons.json`, `items/tools.json`, etc.
+- Gathering: `gathering/fishing.json`, `gathering/mining.json`, etc.
+- Recipes: `recipes/cooking.json`, `recipes/smithing.json`, etc.
+
+Total: 25+ manifest files fetched and cached at startup.
+
+**Caching:**
+- Manifests cached locally in `world/assets/manifests/`
+- HTTP cache headers: `max-age=300, must-revalidate` (5 minutes)
+- Compares content before writing to avoid unnecessary disk I/O
+
+**Error Handling:**
+- Logs warnings for failed fetches
+- Falls back to existing local manifests if CDN unavailable
+- Throws error only if no manifests exist at all (prevents broken startup)
+
+### Client-Side Loading
+
+The client fetches manifests from CDN via DataManager:
+
+```typescript
+// From packages/shared/src/data/DataManager.ts
+await dataManager.initialize();
+// Fetches from PUBLIC_CDN_URL/manifests/
+```
 
 ## DataManager
 

@@ -82,62 +82,154 @@ on:
 
 ### Manual Setup
 
+Hyperscape includes automated Railway deployment via GitHub Actions. The server is deployed using Nixpacks with automatic manifest fetching from CDN.
+
+### Architecture
+
+The production deployment uses a split architecture:
+
+- **Frontend**: Cloudflare Pages (`hyperscape.club`)
+- **Server/API**: Railway (`hyperscape-production.up.railway.app`)
+- **Assets/CDN**: Cloudflare R2 (`assets.hyperscape.club`)
+- **Database**: Railway PostgreSQL
+
+### Automated Deployment
+
+Deployments trigger automatically on push to `main` when these paths change:
+
+```yaml
+paths:
+  - 'packages/shared/**'
+  - 'packages/client/**'
+  - 'packages/server/**'
+  - 'packages/plugin-hyperscape/**'
+  - 'package.json'
+  - 'bun.lock'
+  - 'nixpacks.toml'
+  - 'railway.server.json'
+  - 'Dockerfile.server'
+```
+
+The GitHub Actions workflow (`.github/workflows/deploy-railway.yml`) uses Railway's GraphQL API to trigger redeployments.
+
+### Manual Deployment
+
 <Steps>
   <Step title="Create Railway project">
-    1. Connect your GitHub repository to Railway
-    2. Select the `hyperscape` repository
-    3. Railway will auto-detect the Nixpacks configuration
+    1. Sign up at [railway.app](https://railway.app)
+    2. Create a new project
+    3. Connect your GitHub repository
+    4. Select the `main` branch
   </Step>
   
-  <Step title="Configure build (automatic)">
-    Railway uses `nixpacks.toml` for build configuration:
-    - Builder: Nixpacks with Bun provider
-    - Build: `bun run build:shared && bun run build:server`
-    - Start: `cd packages/server && bun dist/index.js`
+  <Step title="Configure Nixpacks build">
+    Railway automatically detects `nixpacks.toml` in the repository root.
     
-    No manual configuration needed - Railway reads `nixpacks.toml` automatically.
-  </Step>
-  
-  <Step title="Add PostgreSQL">
-    Add PostgreSQL service from Railway marketplace or use external database (Neon).
+    The build process:
+    1. Installs system dependencies (Python, Cairo, Pango for native modules)
+    2. Runs `bun install`
+    3. Builds `shared` and `server` packages
+    4. Creates manifests directory
+    5. Starts server with `cd packages/server && bun dist/index.js`
     
-    Railway will automatically set `DATABASE_URL` environment variable.
+    <Info>
+      The client is NOT built on Railway - it's deployed separately to Cloudflare Pages.
+    </Info>
   </Step>
   
-  <Step title="Set environment variables">
-    Required variables:
+  <Step title="Add PostgreSQL database">
+    1. Click "New" → "Database" → "Add PostgreSQL"
+    2. Railway automatically sets `DATABASE_URL` environment variable
+    3. Database migrations run automatically on server startup
+  </Step>
+  
+  <Step title="Configure environment variables">
+    Add these in Railway dashboard → Variables:
+    
     ```bash
-    NODE_ENV=production
-    JWT_SECRET=<generate-with-openssl-rand-base64-32>
-    PRIVY_APP_ID=<from-privy-dashboard>
-    PRIVY_APP_SECRET=<from-privy-dashboard>
+    # Required
+    PRIVY_APP_ID=your-privy-app-id
+    PRIVY_APP_SECRET=your-privy-app-secret
+    JWT_SECRET=your-jwt-secret-32-chars
+    
+    # CDN Configuration
     PUBLIC_CDN_URL=https://assets.hyperscape.club
+    
+    # Client URLs (for CORS)
+    CLIENT_URL=https://hyperscape.club
+    PUBLIC_APP_URL=https://hyperscape.club
+    
+    # Optional
+    ADMIN_CODE=your-admin-code
+    NODE_ENV=production
     ```
     
-    Optional variables:
-    ```bash
-    ADMIN_CODE=<your-admin-code>
-    SAVE_INTERVAL=60
-    ```
+    <Warning>
+      Never commit secrets to git. Use Railway's environment variable UI.
+    </Warning>
   </Step>
   
-  <Step title="Configure GitHub Actions">
-    Add Railway secrets to GitHub repository:
+  <Step title="Configure GitHub Actions (optional)">
+    For automated deployments, add Railway credentials to GitHub Secrets:
     
-    1. Go to Settings → Secrets and variables → Actions
-    2. Add `RAILWAY_TOKEN` (from Railway dashboard → Account → Tokens)
+    1. Get Railway token from [railway.app/account/tokens](https://railway.app/account/tokens)
+    2. Add to GitHub repository secrets as `RAILWAY_TOKEN`
     3. Update workflow with your project/service/environment IDs
     
-    Find IDs in Railway dashboard URL or via Railway CLI.
+    The workflow will automatically trigger deployments on push to main.
   </Step>
 </Steps>
 
-### Railway Configuration Files
+### Manifest Loading
 
-**nixpacks.toml** - Build configuration:
+The server fetches game manifests from CDN at startup instead of requiring local assets:
+
+```typescript
+// Automatically fetched from PUBLIC_CDN_URL/manifests/
+const manifests = [
+  'biomes.json',
+  'npcs.json',
+  'items/weapons.json',
+  'recipes/smithing.json',
+  // ... 25+ manifest files
+];
+```
+
+**Benefits:**
+- No Git LFS required in production
+- Faster deployments (no asset cloning)
+- Manifests cached locally for 5 minutes
+- Automatic updates when CDN manifests change
+
+**Development Mode:**
+- Skips CDN fetch if local manifests exist
+- Falls back to local `packages/server/world/assets/manifests/`
+
+### CORS Configuration
+
+The server automatically allows these origins:
+
+```typescript
+// Production domains
+'https://hyperscape.club'
+'https://www.hyperscape.club'
+'https://hyperscape.pages.dev'
+'https://hyperscape-production.up.railway.app'
+
+// Preview deployments
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/
+/^https:\/\/.+\.up\.railway\.app$/
+
+// Development
+/^https?:\/\/localhost:\d+$/
+```
+
+### Build Configuration Files
+
+**nixpacks.toml** - Railway build configuration:
 ```toml
 [phases.setup]
-aptPkgs = ["python3", "make", "g++", "pkg-config", "libcairo2-dev"]
+aptPkgs = ["python3", "make", "g++", "pkg-config", "libcairo2-dev", ...]
 
 [phases.install]
 cmds = ["bun install"]
@@ -169,47 +261,41 @@ NODE_ENV = "production"
     "startCommand": "cd packages/server && bun dist/index.js",
     "healthcheckPath": "/status",
     "healthcheckTimeout": 300,
-    "restartPolicyType": "ON_FAILURE",
-    "numReplicas": 1
+    "restartPolicyType": "ON_FAILURE"
   }
 }
 ```
 
-### Manifest Fetching
-
-In production, the server fetches manifests from the CDN at startup instead of bundling them:
-
-```typescript
-// packages/server/src/startup/config.ts
-await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+**.railwayignore** - Excludes from upload:
+```
+node_modules/
+.git/
+packages/server/world/assets/  # Assets served from CDN
+test-results/
 ```
 
-**Manifest Files Fetched:**
-- Root manifests: `npcs.json`, `stores.json`, `world-areas.json`, etc.
-- Items directory: `items/weapons.json`, `items/tools.json`, etc.
-- Gathering: `gathering/woodcutting.json`, `gathering/mining.json`, etc.
-- Recipes: `recipes/cooking.json`, `recipes/smithing.json`, etc.
+### Troubleshooting Railway
 
-Manifests are cached locally in `packages/server/world/assets/manifests/` and only re-fetched if content changes (ETag validation).
+**Build fails with "lockfile frozen" error:**
+```bash
+# Regenerate lockfile locally
+bun install
+git add bun.lock
+git commit -m "chore: update bun.lock"
+git push
+```
 
-<Info>
-In development, if local manifests exist, CDN fetching is skipped to allow working with local asset modifications.
-</Info>
+**Manifests not loading:**
+- Verify `PUBLIC_CDN_URL` is set correctly
+- Check CDN is serving manifests at `/manifests/*.json`
+- Review Railway logs for fetch errors
 
-## Cloudflare Pages Deployment (Frontend)
+**Frontend not accessible:**
+- Railway serves API only - frontend is on Cloudflare Pages
+- Verify CORS origins include your Cloudflare Pages domain
+- Check `CLIENT_URL` environment variable
 
-Cloudflare Pages hosts the game client with automatic deployments via GitHub integration.
-
-### Automated Deployment
-
-Cloudflare Pages automatically deploys on every push to `main`:
-
-1. **GitHub Integration**: Cloudflare Pages watches the repository
-2. **Build Trigger**: Detects changes to `packages/client/**`
-3. **Build Process**: Runs `bun run build` in `packages/client`
-4. **Deploy**: Publishes to `hyperscape.pages.dev` and `hyperscape.club`
-
-### Manual Setup
+## Vercel Client Deployment
 
 <Steps>
   <Step title="Connect repository">

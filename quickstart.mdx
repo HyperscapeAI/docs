@@ -60,28 +60,34 @@ Before you begin, ensure you have:
     <Info>First build takes 5-10 minutes due to PhysX WASM compilation. Subsequent builds are cached.</Info>
   </Step>
   
-  <Step title="Start the CDN (serves game assets)">
+  <Step title="Start the CDN">
+    The CDN serves game assets (models, textures, audio, manifests):
+    
     ```bash
     bun run cdn:up
     ```
     
-    This starts a Docker nginx container serving assets on port 8080.
+    This starts a Docker nginx container on port 8080. The server will fetch manifests from the CDN at startup.
   </Step>
   
   <Step title="Start the game">
-    **Production mode:**
-    ```bash
-    bun start
-    ```
-    Open [http://localhost:5555](http://localhost:5555) in your browser.
-    
     **Development mode (with hot reload):**
     ```bash
     bun run dev
     ```
     - Client: [http://localhost:3333](http://localhost:3333) (Vite HMR)
     - Server: `ws://localhost:5555/ws`
-    - CDN: `http://localhost:8080` (Docker)
+    - CDN: `http://localhost:8080`
+    
+    **Production mode:**
+    ```bash
+    bun start
+    ```
+    Open [http://localhost:5555](http://localhost:5555) in your browser.
+    
+    <Info>
+      The server fetches manifests from `PUBLIC_CDN_URL` at startup. In development, it skips the fetch if local manifests exist.
+    </Info>
   </Step>
 </Steps>
 
@@ -114,30 +120,16 @@ Access the agent dashboard at `http://localhost:3333` and click the Dashboard ic
 
 ## What Gets Started
 
-When you run `bun run dev`, the following services start:
-
-| Service | Port | Description | Auto-Start |
-|---------|------|-------------|------------|
-| Client | 3333 | Vite dev server with hot reload | ✅ Yes |
-| Server | 5555 | Game server (Fastify + WebSockets) | ✅ Yes |
-| PostgreSQL | 5432 | Database (Docker) | ✅ Yes |
-| CDN | 8080 | Asset server (Docker nginx) | ❌ Manual |
+| Service | Port | Description |
+|---------|------|-------------|
+| Client | 3333 | Vite dev server with hot reload (dev mode) |
+| Server | 5555 | Game server (Fastify + WebSockets) |
+| CDN | 8080 | Asset server (Docker nginx) - serves models, audio, manifests |
+| PostgreSQL | 5432 | Database (Docker, auto-started by server) |
 
 <Info>
-The CDN must be started manually with `bun run cdn:up` before running the game. It serves 3D models, audio, textures, and manifests required by the client and server.
+  The server fetches manifests from the CDN at startup. In production, manifests are served from Cloudflare R2. In development, the local CDN serves them from `packages/server/world/assets/`.
 </Info>
-
-### Service Dependencies
-
-```mermaid
-flowchart TD
-    A[CDN :8080] -->|Manifests| B[Server :5555]
-    A -->|Assets| C[Client :3333]
-    B -->|WebSocket| C
-    D[PostgreSQL :5432] -->|Data| B
-```
-
-The server fetches manifests from the CDN at startup, so the CDN must be running first.
 
 ## Quick Play Guide
 

@@ -112,7 +112,30 @@ This split architecture enables global CDN distribution, independent scaling, an
 
 ## Architecture
 
-Hyperscape is a **Turbo monorepo** with specialized packages:
+Hyperscape uses a **split deployment architecture** for production:
+
+```mermaid
+flowchart TD
+    A[Cloudflare Pages] -->|HTTPS/WSS| B[Railway Server]
+    B -->|Fetches manifests| C[Cloudflare R2 CDN]
+    B --> D[Railway PostgreSQL]
+    E[ElizaOS Agents] -->|WebSocket| B
+    F[Human Players] -->|WebSocket| B
+```
+
+**Production Stack:**
+- **Frontend**: Cloudflare Pages (`hyperscape.club`)
+- **Backend**: Railway (`hyperscape-production.up.railway.app`)
+- **Assets**: Cloudflare R2 CDN (`assets.hyperscape.club`)
+- **Database**: Railway PostgreSQL
+
+**Development Stack:**
+- **Frontend**: Vite dev server (port 3333)
+- **Backend**: Fastify server (port 5555)
+- **Assets**: Docker nginx CDN (port 8080)
+- **Database**: Docker PostgreSQL (port 5432)
+
+### Package Dependencies
 
 ```mermaid
 flowchart TD
@@ -120,11 +143,6 @@ flowchart TD
     B --> C[server]
     B --> D[client]
     B --> E[plugin-hyperscape]
-    
-    C --> F[Game World]
-    D --> F
-    E --> G[ElizaOS]
-    G --> F
 ```
 
 <CardGroup cols={3}>

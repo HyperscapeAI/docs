@@ -27,20 +27,17 @@ PRIVY_APP_SECRET=your-app-secret
 
 **Symptom**: 404 errors for models/avatars
 
-**Causes**:
-1. CDN container not running (development)
-2. Wrong `PUBLIC_CDN_URL` configuration
-3. Manifests not fetched from CDN (production)
+**Cause**: CDN container not running or manifests not fetched
 
 **Solutions**:
 
 **Development:**
 ```bash
-# Start local CDN
+# Start CDN container
 bun run cdn:up
 
-# Or use bun run dev which starts it automatically
-bun run dev
+# Verify CDN is serving manifests
+curl http://localhost:8080/manifests/npcs.json
 ```
 
 **Production:**
@@ -79,6 +76,48 @@ curl -I https://assets.hyperscape.club/models/goblin/goblin.vrm
 - Verify CDN URL is accessible
 - Check CORS headers allow server origin
 - In development, manifests can be local (skips CDN fetch)
+
+### Manifests Not Loading
+
+**Symptom**: Server logs show "Failed to fetch manifests" or "No manifests available"
+
+**Causes**:
+- CDN not accessible at `PUBLIC_CDN_URL`
+- Manifests not deployed to CDN
+- Network connectivity issues
+
+**Solutions**:
+
+**Development:**
+```bash
+# Ensure local manifests exist
+ls packages/server/world/assets/manifests/
+
+# If missing, clone assets repo
+cd packages/server/world
+git clone https://github.com/HyperscapeAI/assets.git
+
+# Or start CDN
+bun run cdn:up
+```
+
+**Production:**
+```bash
+# Verify CDN URL is correct
+echo $PUBLIC_CDN_URL
+
+# Test manifest accessibility
+curl $PUBLIC_CDN_URL/manifests/npcs.json
+
+# Check Railway logs for fetch errors
+railway logs --filter manifest
+```
+
+**Test Environment:**
+```bash
+# Skip manifest loading for tests
+SKIP_MANIFESTS=true bun test
+```
 
 ### Database Schema Errors
 
@@ -170,55 +209,28 @@ npm test
 
 **Causes**:
 - Server not running
-- Wrong `PUBLIC_WS_URL` configuration
-- CORS blocking connection
-- Firewall blocking WebSocket port
+- Wrong port configuration
+- Firewall blocking
+- CORS issues
 
 **Solutions**:
 
-**Development:**
+1. Verify server is running: `lsof -i:5555`
+2. Check client config: `PUBLIC_WS_URL`
+3. Ensure no firewall blocks
+4. Verify CORS configuration includes your client domain
+
+**CORS Debugging:**
 ```bash
-# Verify server is running
-lsof -i:5555
+# Check server logs for CORS errors
+# Server automatically allows:
+# - https://hyperscape.club
+# - https://*.hyperscape.pages.dev
+# - https://*.up.railway.app
+# - http://localhost:*
 
-# Check client config
-cat packages/client/.env | grep PUBLIC_WS_URL
-# Should be: ws://localhost:5555/ws
-
-# Restart server
-bun run dev
-```
-
-**Production:**
-```bash
-# Verify Railway server is running
-curl https://hyperscape-production.up.railway.app/status
-
-# Check client config in Cloudflare Pages
-# PUBLIC_WS_URL should be: wss://hyperscape-production.up.railway.app/ws
-
-# Verify CORS allows your domain
-# Server logs will show CORS configuration at startup
-```
-
-**CORS Issues:**
-
-If you see CORS errors in browser console, verify your domain is in the allowlist:
-
-```typescript
-// packages/server/src/startup/http-server.ts
-const allowedOrigins = [
-  "https://hyperscape.club",
-  "https://www.hyperscape.club",
-  "https://hyperscape.pages.dev",
-  /^https?:\/\/localhost:\d+$/,
-  /^https?:\/\/.+\.hyperscape\.pages\.dev$/,
-];
-```
-
-For custom domains, add to environment variables:
-```bash
-PUBLIC_APP_URL=https://your-custom-domain.com
+# Add custom domain via environment variable
+CLIENT_URL=https://your-domain.com
 ```
 
 ### Hot Reload Not Working

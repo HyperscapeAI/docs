@@ -112,6 +112,24 @@ docker-compose up postgres    # Start
 docker-compose down postgres  # Stop
 ```
 
+### Manifest Loading
+
+The server fetches manifests from the CDN at startup:
+
+**Development:**
+- Skips CDN fetch if local manifests exist in `packages/server/world/assets/manifests/`
+- Falls back to local files for offline development
+
+**Production:**
+- Always fetches from `PUBLIC_CDN_URL/manifests/`
+- Caches locally with 5-minute TTL
+- Logs fetch status and errors
+
+**Manifest Files:**
+- 25+ JSON files including NPCs, items, recipes, gathering data
+- Organized in subdirectories: `items/`, `gathering/`, `recipes/`
+- See [Manifest-Driven Design](/concepts/manifests) for full list
+
 ## Testing
 
 ```bash

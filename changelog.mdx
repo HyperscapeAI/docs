@@ -23,111 +23,110 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Skill Guide Panel & Railway Deployment" description="January 2026" date="2026-01-22">
+<Update label="Railway Deployment & Manifest Loading" description="January 2026" date="2026-01-22">
 
-### 🎯 Skill Guide Panel
+### 🚀 Railway Production Deployment
 
-OSRS-style skill guide interface showing progression unlocks:
+Complete Railway deployment infrastructure with automated CI/CD:
 
-- **Click-to-Open**: Click any skill in Skills Panel to view its guide
-- **Unlock Display**: Shows all unlocks with level requirements
-  - Green checkmarks (✓) for achieved unlocks
-  - Lock icons (🔒) for future unlocks
-  - Next unlock highlighted with "➤" indicator
-- **Progress Tracking**: "X of Y unlocks achieved" counter
-- **Type Badges**: Visual distinction between items and abilities
-- **Smooth UX**: Fade-in/slide-up animations, ESC key support, click-outside-to-close
-- **Loading States**: Spinner during data fetch, proper empty state handling
-- **Server-Authoritative Data**: New `/api/data/skill-unlocks` endpoint
-  - Fetched once at Skills Panel mount
-  - Cached in component state
-  - No authentication required (public data)
+- **Nixpacks Build Configuration**: `nixpacks.toml` defines multi-phase build
+  - Setup phase: Installs system dependencies (Python, Cairo, Pango for native modules)
+  - Install phase: Runs `bun install`
+  - Build phase: Builds `shared` and `server` packages only (client on Cloudflare Pages)
+  - Creates manifests directory for CDN-fetched manifests
+  - Skips asset download (`SKIP_ASSETS=true`) - assets served from CDN
+- **GitHub Actions Workflow**: `.github/workflows/deploy-railway.yml`
+  - Triggers on push to `main` for relevant paths
+  - Uses Railway GraphQL API for deployment
+  - Polls deployment status with 5 retries
+  - Manual trigger via `workflow_dispatch`
+- **Service Configuration**: `railway.server.json`
+  - Nixpacks builder with custom config path
+  - Watch patterns for automatic redeployment
+  - Health check at `/status` endpoint
+  - Restart policy: `ON_FAILURE` with 3 max retries
+- **Railway Ignore**: `.railwayignore` excludes unnecessary files
+  - Skips `node_modules/`, `.git/`, test results
+  - Excludes `packages/server/world/assets/` (served from CDN)
+  - Reduces upload time and deployment size
 
-**Implementation:**
-- Component: `packages/client/src/game/panels/SkillGuidePanel.tsx` (392 lines)
-- Data route: `packages/server/src/startup/routes/data-routes.ts`
-- Data source: `packages/shared/src/data/skill-unlocks.ts`
-- Spelling normalization: British "defence" → American "defense" for UI consistency
+### 📦 CDN Manifest Loading
 
-**Unlock Types:**
-- `item` - Equipment, resources, craftables (blue badge)
-- `ability` - Prayers, passive bonuses (purple badge)
-- `area` - Accessible locations
-- `quest` - Quest requirements
-- `activity` - Minigames
+Server now fetches manifests from CDN at startup instead of requiring local assets:
 
-### 🚀 Railway Deployment Architecture
+- **Automatic Fetching**: `fetchManifestsFromCDN()` in `src/startup/config.ts`
+  - Fetches 25+ manifest files from `PUBLIC_CDN_URL/manifests/`
+  - Includes root files (npcs.json, biomes.json, etc.)
+  - Includes subdirectories (items/, gathering/, recipes/)
+  - Caches locally in `world/assets/manifests/`
+- **Smart Caching**: Compares content before writing to avoid unnecessary disk I/O
+- **Environment-Aware Behavior**:
+  - **Production/CI**: Always fetches from CDN
+  - **Development**: Skips fetch if local manifests exist
+  - **Test**: Can skip with `SKIP_MANIFESTS=true`
+- **Error Handling**: Graceful fallback to existing local manifests
+  - Logs warnings for failed fetches
+  - Continues with cached manifests if CDN unavailable
+  - Only throws error if no manifests exist at all
+- **HTTP Caching**: Manifests served with `max-age=300, must-revalidate` (5 minutes)
 
-Production deployment migrated from AWS to Railway with Cloudflare integration:
+**Benefits:**
+- No Git LFS required in production
+- Faster deployments (no asset cloning)
+- Automatic manifest updates from CDN
+- Reduced deployment size
 
-**Architecture:**
-- **Frontend**: Cloudflare Pages (hyperscape.club)
-- **Game Server**: Railway (hyperscape-production.up.railway.app)
-- **Database**: Railway PostgreSQL (managed)
-- **Assets/CDN**: Cloudflare R2 (assets.hyperscape.club)
+### 🌐 CORS Configuration Updates
 
-**Automated Deployments:**
-- GitHub Actions workflow triggers Railway deployment on push to `main`
-- Cloudflare Pages auto-deploys frontend from GitHub
-- R2 assets uploaded via GitHub Actions on manifest changes
+Expanded CORS allowlist for production domains:
 
-**Build Configuration:**
-- `nixpacks.toml` - Railway Nixpacks builder configuration
-- `railway.server.json` - Service health checks and restart policy
-- `Dockerfile.server` - Multi-stage Docker build (alternative)
-- `.github/workflows/deploy-railway.yml` - Automated deployment workflow
+- **Production Domains**:
+  - `https://hyperscape.club` (main site)
+  - `https://www.hyperscape.club` (www subdomain)
+  - `https://hyperscape.pages.dev` (Cloudflare Pages)
+  - `https://hyperscape-production.up.railway.app` (Railway backend)
+  - `http://hyperscape.pages.dev` (HTTP fallback for testing)
+- **Dynamic Patterns**:
+  - `/^https?:\/\/localhost:\d+$/` - Any localhost port
+  - `/^https?:\/\/.+\.hyperscape\.pages\.dev$/` - Cloudflare preview deployments (HTTP and HTTPS)
+  - `/^https:\/\/.+\.up\.railway\.app$/` - Railway preview deployments
+  - Farcaster, Warpcast, Privy domains
+- **Environment Variables**: Additional origins from `CLIENT_URL`, `PUBLIC_APP_URL`, `ELIZAOS_URL`
 
-**Manifest Fetching System:**
-- Server fetches manifests from CDN at startup
-- Compares content hashes to avoid unnecessary updates
-- Caches locally in `packages/server/world/assets/manifests/`
-- Skips fetch in development if local manifests exist
-- Supports `SKIP_MANIFESTS=true` for CI/test environments
+### 🏗️ Frontend Build Integration
 
-**CORS Updates:**
-- Added `https://www.hyperscape.club` (www subdomain)
-- Added `http://hyperscape.pages.dev` (HTTP fallback)
-- Regex pattern for HTTP preview deployments
-- Automatic allowlist for `PUBLIC_APP_URL` environment variable
+Server can now serve built client from `public/` directory:
 
-**Frontend Build Integration:**
-- Client build copied to server's `public/` directory
-- Server serves frontend at root path (`/`)
-- SPA catch-all routing for client-side navigation
-- Conditional asset route registration (avoids conflicts)
+- **Conditional Asset Routes**: Server checks for client build in `public/assets/`
+  - If client assets exist: Serves from `public/` (production mode)
+  - If no client assets: Registers `/assets/` for world assets (development mode)
+- **SPA Routing**: Catch-all route serves `index.html` for client-side routing
+  - Excludes API routes (`/api/`, `/ws`, `/manifests/`)
+  - Excludes file extensions (static files)
+- **Build Verification**: Debug endpoint `/debug/public` shows directory contents
+- **Cache Headers**: Proper caching for static assets (1 year) and HTML (no-cache)
 
-**Health Monitoring:**
-- `/status` endpoint for Railway health checks
-- `/debug/public` endpoint for deployment debugging
-- Build timestamp file for verification
-- Directory contents logging for troubleshooting
+### 🔧 Build Process Improvements
 
-### 🔧 Infrastructure Improvements
+- **Split Build Commands**: Separate phases for better debugging
+  - `bun run build:shared` → `bun run build:server`
+  - Explicit logging for each phase
+- **Client Build Copy**: Client dist copied to server public directory
+  - `cp -r /app/packages/client/dist/* /app/packages/server/public/`
+  - Enables single-server deployment option
+- **Dockerfile Updates**: Multi-stage Docker build with lean runtime image
+  - Builder stage: Installs dependencies and builds packages
+  - Runtime stage: Minimal image with only production dependencies
+  - Health check with curl
+  - Proper WORKDIR for server execution
 
-**Asset Management:**
-- `ensure-assets.mjs` now detects CI environments and skips Git LFS download
-- Manifests committed to repo (no longer require asset clone in CI)
-- `SKIP_ASSETS=true` environment variable for production builds
+### 🐛 Bug Fixes & Improvements
 
-**Build Optimizations:**
-- Split build commands for better debugging
-- Explicit phase separation in nixpacks
-- Cache bust timestamp for frontend builds
-- Verbose logging for build verification
-
-**Docker Enhancements:**
-- Multi-stage Dockerfile for lean runtime images
-- Runtime dependencies for native modules (canvas, better-sqlite3)
-- Health check with curl
-- Proper WORKDIR and EXPOSE directives
-
-### 🐛 Bug Fixes
-
-- Fixed lockfile frozen errors by regenerating bun.lock
-- Fixed frontend serving by using `cp -r dist/* public/` instead of `cp dist/*`
-- Added index.html verification before server start
-- Improved error messages for missing frontend builds
-- Fixed CORS allowlist to include all required origins
+- **Lockfile Sync**: Updated `bun.lock` to match `package.json` dependencies
+- **Build Timestamps**: Added timestamp file to verify builds are running
+- **Directory Verification**: Index.html existence check before registering routes
+- **Error Logging**: Enhanced error messages with directory contents for debugging
+- **Nixpacks Logging**: Verbose logging for build debugging
 
 </Update>
 
