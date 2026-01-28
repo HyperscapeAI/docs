@@ -1,13 +1,12 @@
 # ============================================================================
-# Webhook Trigger for Changelog Entry Creation
+# Webhook Trigger for Changelog Updates
 # ============================================================================
 #
-# This workflow is triggered by a repository_dispatch event from the 
-# Hyperscape repo when a new release is published.
+# Appends release content to the current month's changelog file.
 #
-# To enable this in the Hyperscape repo, add to release workflow:
+# To enable in Hyperscape repo, add to release workflow:
 #
-#    - name: Trigger docs changelog update
+#    - name: Trigger docs changelog
 #      uses: peter-evans/repository-dispatch@v3
 #      with:
 #        token: ${{ secrets.DOCS_REPO_TOKEN }}
@@ -30,7 +29,7 @@ on:
     types: [release-published]
 
 jobs:
-  create-changelog-entry:
+  update-changelog:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -42,82 +41,64 @@ jobs:
           echo "🚀 Release webhook received!"
           echo "   Name: ${{ github.event.client_payload.release_name }}"
           echo "   Tag: ${{ github.event.client_payload.release_tag }}"
-          echo "   Date: ${{ github.event.client_payload.release_date }}"
 
-      - name: Checkout docs repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Parse release data
-        id: release
+      - name: Add to monthly changelog
         run: |
-          RELEASE_NAME="${{ github.event.client_payload.release_name }}"
-          RELEASE_TAG="${{ github.event.client_payload.release_tag }}"
-          RELEASE_DATE="${{ github.event.client_payload.release_date }}"
+          NAME="${{ github.event.client_payload.release_name }}"
+          TAG="${{ github.event.client_payload.release_tag }}"
+          BODY="${{ github.event.client_payload.release_body }}"
+          DATE="${{ github.event.client_payload.release_date }}"
           
-          # Use tag as title if name is empty
-          if [ -z "$RELEASE_NAME" ] || [ "$RELEASE_NAME" = "null" ]; then
-            RELEASE_NAME="$RELEASE_TAG"
+          # Use tag as name if empty
+          [ -z "$NAME" ] || [ "$NAME" = "null" ] && NAME="$TAG"
+          
+          # Parse date
+          YEAR=$(echo "$DATE" | cut -d'-' -f1)
+          MONTH=$(echo "$DATE" | cut -d'-' -f2)
+          DAY=$(echo "$DATE" | cut -d'T' -f1 | cut -d'-' -f3)
+          
+          FILEPATH="changelog/$YEAR-$MONTH.mdx"
+          
+          # Create file if needed
+          if [ ! -f "$FILEPATH" ]; then
+            MONTH_NAME=$(date -d "$YEAR-$MONTH-01" "+%B" 2>/dev/null || echo "Month $MONTH")
+            cat > "$FILEPATH" << EOF
+          ---
+          title: "$MONTH_NAME $YEAR"
+          description: "Updates and releases for $MONTH_NAME $YEAR"
+          ---
+          EOF
           fi
           
-          # Parse date components
-          YEAR=$(echo "$RELEASE_DATE" | cut -d'-' -f1)
-          MONTH=$(echo "$RELEASE_DATE" | cut -d'-' -f2)
-          DAY=$(echo "$RELEASE_DATE" | cut -d'T' -f1 | cut -d'-' -f3)
-          
-          # Generate slug from title
-          SLUG=$(echo "$RELEASE_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-40)
-          
-          FILENAME="$MONTH-$DAY-$SLUG"
-          
-          echo "title=$RELEASE_NAME" >> $GITHUB_OUTPUT
-          echo "tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
-          echo "year=$YEAR" >> $GITHUB_OUTPUT
-          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
-          echo "display_date=$YEAR-$MONTH-$DAY" >> $GITHUB_OUTPUT
+          # Append release
+          cat >> "$FILEPATH" << EOF
 
-      - name: Ensure year directory exists
-        run: mkdir -p "changelog/${{ steps.release.outputs.year }}"
+          ## $NAME ($TAG)
 
-      - name: Create changelog entry
-        run: |
-          FILEPATH="changelog/${{ steps.release.outputs.year }}/${{ steps.release.outputs.filename }}.mdx"
-          
-          cat > "$FILEPATH" << 'EOF'
+          *Released: $YEAR-$MONTH-$DAY*
+
+          $BODY
+
           ---
-          title: "${{ steps.release.outputs.title }}"
-          description: "${{ steps.release.outputs.display_date }} - Release ${{ steps.release.outputs.tag }}"
-          ---
-          
-          ${{ github.event.client_payload.release_body }}
-          
-          ---
-          
-          [View release on GitHub](https://github.com/HyperscapeAI/hyperscape/releases/tag/${{ steps.release.outputs.tag }})
           EOF
           
-          echo "✅ Created: $FILEPATH"
+          echo "✅ Added to $FILEPATH"
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "docs(changelog): add ${{ steps.release.outputs.title }}"
-          title: "📝 Changelog: ${{ steps.release.outputs.title }}"
+          commit-message: "docs(changelog): add ${{ github.event.client_payload.release_tag }}"
+          title: "📝 Changelog: ${{ github.event.client_payload.release_name }}"
           body: |
-            ## New Changelog Entry
+            Added release **${{ github.event.client_payload.release_tag }}** to changelog.
             
-            Adds changelog for release: **${{ steps.release.outputs.tag }}**
-            
-            ### Manual Steps
-            1. Review the generated content
-            2. Update `changelog/index.mdx` to add a card for this entry
-            3. Merge when ready
-            
-            ---
-            _Auto-generated from GitHub release_
-          branch: auto/changelog-${{ steps.release.outputs.filename }}
+            Review and merge when ready.
+          branch: auto/changelog-${{ github.event.client_payload.release_tag }}
           delete-branch: true
           labels: |
             documentation
-            changelog
             automated

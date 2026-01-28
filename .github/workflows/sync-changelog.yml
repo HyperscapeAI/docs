@@ -2,11 +2,13 @@
 # Sync Changelog from GitHub Releases
 # ============================================================================
 #
-# This workflow fetches new releases from the Hyperscape repo and creates
-# changelog entry files in the changelog/ folder structure.
+# Appends new release content to the monthly changelog file.
+# Creates new monthly file if it doesn't exist.
+#
+# Structure: changelog/YYYY-MM.mdx (one file per month)
 #
 # Triggers:
-#   - Daily at midnight UTC (checks for new releases)
+#   - Daily at midnight UTC
 #   - Manual trigger
 #
 # ============================================================================
@@ -15,10 +17,7 @@ name: Sync Changelog
 
 on:
   schedule:
-    # Run daily at midnight UTC
     - cron: "0 0 * * *"
-  
-  # Manual trigger
   workflow_dispatch:
 
 jobs:
@@ -32,80 +31,74 @@ jobs:
       - name: Checkout docs repository
         uses: actions/checkout@v4
 
-      - name: Fetch recent releases from Hyperscape
-        id: releases
+      - name: Fetch recent releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Fetch the 5 most recent releases
-          RELEASES=$(gh api repos/HyperscapeAI/hyperscape/releases --jq '.[0:5]')
-          echo "Found $(echo "$RELEASES" | jq length) releases"
-          echo "$RELEASES" > /tmp/releases.json
+          gh api repos/HyperscapeAI/hyperscape/releases --jq '.[0:10]' > /tmp/releases.json
+          echo "Found $(jq length /tmp/releases.json) releases"
 
-      - name: Create missing changelog entries
-        id: create
+      - name: Process releases into monthly files
         run: |
-          CREATED_FILES=""
+          CHANGES_MADE=false
           
-          # Process each release
           jq -c '.[]' /tmp/releases.json | while read release; do
             TAG=$(echo "$release" | jq -r '.tag_name')
             NAME=$(echo "$release" | jq -r '.name // .tag_name')
             BODY=$(echo "$release" | jq -r '.body // ""')
             DATE=$(echo "$release" | jq -r '.published_at')
             
-            # Parse date
+            # Parse date for monthly file
             YEAR=$(echo "$DATE" | cut -d'-' -f1)
             MONTH=$(echo "$DATE" | cut -d'-' -f2)
             DAY=$(echo "$DATE" | cut -d'T' -f1 | cut -d'-' -f3)
             
-            # Generate slug
-            SLUG=$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-40)
+            FILEPATH="changelog/$YEAR-$MONTH.mdx"
             
-            FILEPATH="changelog/$YEAR/$MONTH-$DAY-$SLUG.mdx"
-            
-            # Skip if file already exists
-            if [ -f "$FILEPATH" ]; then
-              echo "⏭️  Skipping $TAG (already exists)"
+            # Check if this release is already in the file
+            if [ -f "$FILEPATH" ] && grep -q "$TAG" "$FILEPATH"; then
+              echo "⏭️  Skipping $TAG (already in $FILEPATH)"
               continue
             fi
             
-            # Ensure directory exists
-            mkdir -p "changelog/$YEAR"
+            # Create file if it doesn't exist
+            if [ ! -f "$FILEPATH" ]; then
+              MONTH_NAME=$(date -d "$YEAR-$MONTH-01" "+%B" 2>/dev/null || echo "Month $MONTH")
+              cat > "$FILEPATH" << EOF
+---
+title: "$MONTH_NAME $YEAR"
+description: "Updates and releases for $MONTH_NAME $YEAR"
+---
+
+EOF
+              echo "📁 Created: $FILEPATH"
+            fi
             
-            # Create the file
-            cat > "$FILEPATH" << EOF
-          ---
-          title: "$NAME"
-          description: "$YEAR-$MONTH-$DAY - Release $TAG"
-          ---
-          
-          $BODY
-          
-          ---
-          
-          [View release on GitHub](https://github.com/HyperscapeAI/hyperscape/releases/tag/$TAG)
-          EOF
+            # Append release to file
+            cat >> "$FILEPATH" << EOF
+
+## $NAME ($TAG)
+
+*Released: $YEAR-$MONTH-$DAY*
+
+$BODY
+
+---
+EOF
             
-            echo "✅ Created: $FILEPATH"
-            CREATED_FILES="$CREATED_FILES $FILEPATH"
+            echo "✅ Added $TAG to $FILEPATH"
+            CHANGES_MADE=true
           done
           
-          if [ -z "$CREATED_FILES" ]; then
-            echo "created=false" >> $GITHUB_OUTPUT
-          else
-            echo "created=true" >> $GITHUB_OUTPUT
-          fi
+          echo "changes_made=$CHANGES_MADE" >> $GITHUB_ENV
 
       - name: Check for changes
         id: changes
         run: |
           if git diff --quiet && git diff --cached --quiet; then
             echo "changed=false" >> $GITHUB_OUTPUT
-            echo "📝 No new changelog entries needed"
           else
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "📝 New changelog entries created"
           fi
 
       - name: Create Pull Request
@@ -113,17 +106,16 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "docs(changelog): sync from GitHub releases"
-          title: "📝 Sync Changelog from GitHub Releases"
+          commit-message: "docs(changelog): sync releases"
+          title: "📝 Sync Changelog from Releases"
           body: |
             ## Automatic Changelog Sync
             
-            This PR adds changelog entries for new releases from [HyperscapeAI/hyperscape](https://github.com/HyperscapeAI/hyperscape/releases).
+            Added new releases to monthly changelog files.
             
-            ### Manual Steps
-            1. Review the generated content
-            2. Update `changelog/index.mdx` to add cards for new entries
-            3. Merge when ready
+            **Manual Steps:**
+            1. Update `changelog/index.mdx` if new months were added
+            2. Update `docs.json` navigation if needed
             
             ---
             _Auto-generated by sync-changelog workflow_
@@ -131,5 +123,4 @@ jobs:
           delete-branch: true
           labels: |
             documentation
-            changelog
             automated
