@@ -23,7 +23,7 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | **Defense** | Damage reduction | Combat (Defensive style) |
 | **Constitution** | Maximum HP | All combat (always granted) |
 | **Ranged** | Ranged combat | Bow/crossbow attacks |
-| **Prayer** | Prayer points & bonuses | Burying bones, using altars |
+| **Prayer** | Temporary combat buffs | Burying bones, using altars |
 
 ### Gathering Skills
 
@@ -153,14 +153,14 @@ public getXPProgress(skill: SkillData): number {
 
 ## Combat Level
 
-Combat level is calculated from combat skills using the OSRS formula. **Prayer contributes to combat level** at half its value.
+Combat level is calculated from combat skills using the OSRS formula. Prayer contributes to the base calculation.
 
 ```typescript
 // From SkillsSystem.ts
 public getCombatLevel(stats: StatsComponent): number {
   const defenseLevel = stats.defense?.level ?? 1;
   const hitpointsLevel = stats.constitution?.level ?? 10;
-  const prayerLevel = stats.prayer?.level ?? 1;
+  const prayerLevel = stats.prayer?.level ?? 1;  // Prayer affects combat level
   const attackLevel = stats.attack?.level ?? 1;
   const strengthLevel = stats.strength?.level ?? 1;
   const rangedLevel = stats.ranged?.level ?? 1;
@@ -184,9 +184,8 @@ public getCombatLevel(stats: StatsComponent): number {
 ```
 
 <Info>
-**Prayer Impact**: Prayer level contributes to combat level at half its value (floor(Prayer / 2)). A player with 99 Prayer gains +12 combat levels from Prayer alone.
+Prayer level contributes to combat level via the base calculation. Each Prayer level adds 0.125 to combat level (since it's divided by 2 then multiplied by 0.25).
 </Info>
-```
 
 ### Combat Level Examples
 
@@ -236,6 +235,20 @@ With 12 skills at level 99: **1,188 total level**
 | Main skill (style-dependent) | 4.0 |
 | Constitution (always) | 1.33 |
 | Controlled (per skill) | 1.33 |
+
+### Prayer XP
+
+Prayer XP is gained by burying bones:
+
+| Bone Type | Prayer XP | Source |
+|-----------|-----------|--------|
+| Bones | 4.5 | Most monsters |
+| Big bones | 15 | Large monsters |
+| Dragon bones | 72 | Dragons |
+
+<Info>
+Burying bones has a 2-tick (1.2s) delay. Bone types are defined in `manifests/items.json` with the `prayerXp` property.
+</Info>
 
 ### Gathering XP
 
@@ -765,10 +778,46 @@ All skill-related data is now defined in JSON manifests:
 
 This allows easy content updates without code changes and enables community modding.
 
+## Prayer System
+
+Prayer is a combat skill that provides temporary buffs at the cost of prayer points. See the dedicated [Prayer System](/wiki/game-systems/prayer) documentation for complete details.
+
+### Prayer Points
+
+Prayer points scale with Prayer level:
+
+```typescript
+maxPoints = Math.floor(prayerLevel / 2) + Math.floor(prayerLevel / 4) + 10
+```
+
+| Prayer Level | Max Points |
+|--------------|------------|
+| 1 | 10 |
+| 50 | 47 |
+| 99 | 84 |
+
+### Available Prayers
+
+Prayers are defined in `manifests/prayers.json`:
+
+| Prayer | Level | Effect | Category |
+|--------|-------|--------|----------|
+| Thick Skin | 1 | +5% Defense | Defensive |
+| Burst of Strength | 4 | +5% Strength | Offensive |
+| Clarity of Thought | 7 | +5% Attack | Offensive |
+| Rock Skin | 10 | +10% Defense | Defensive |
+| Superhuman Strength | 13 | +10% Strength | Offensive |
+
+<Info>
+Prayers drain points over time based on their drain effect and your prayer bonus from equipment. Recharge at altars or by leveling up Prayer.
+</Info>
+
+---
+
 ## Related Documentation
 
-- [Prayer System](/wiki/game-systems/prayer) (Prayer mechanics, drain, altars, bone burying)
-- [Combat System](/wiki/game-systems/combat) (Prayer bonuses in combat)
+- [Combat System](/wiki/game-systems/combat)
+- [Prayer System](/wiki/game-systems/prayer)
 - [Data Manifests Overview](/wiki/data/overview)
 - [Item Data Structure](/wiki/data/items)
 - [NPC Data Structure](/wiki/data/npcs)
