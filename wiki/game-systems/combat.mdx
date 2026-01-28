@@ -168,6 +168,8 @@ this.healPlayer(playerId, healAmount);
 
 Combat styles determine which skill gains XP and provide stat bonuses.
 
+### Melee Styles
+
 | Style | XP Distribution | Bonus |
 |-------|-----------------|-------|
 | **Accurate** | Attack only | +3 Attack |
@@ -182,6 +184,40 @@ const STYLE_BONUSES: Record<CombatStyle, StyleBonus> = {
   aggressive: { attack: 0, strength: 3, defense: 0 },
   defensive: { attack: 0, strength: 0, defense: 3 },
   controlled: { attack: 1, strength: 1, defense: 1 },
+};
+```
+
+### Ranged Styles
+
+| Style | Speed | Accuracy | Range | XP Distribution |
+|-------|-------|----------|-------|-----------------|
+| **Accurate** | Base | +3 Ranged | Normal | Ranged + Constitution |
+| **Rapid** | -1 tick | Normal | Normal | Ranged + Constitution |
+| **Longrange** | Base | Normal | +2 tiles | Ranged + Defense + Constitution |
+
+```typescript
+// From WeaponStyleConfig.ts
+export const RANGED_STYLE_BONUSES = {
+  accurate: { attackBonus: 3, speedModifier: 0, rangeModifier: 0, xpSplit: "ranged" },
+  rapid: { attackBonus: 0, speedModifier: -1, rangeModifier: 0, xpSplit: "ranged" },
+  longrange: { attackBonus: 0, speedModifier: 0, rangeModifier: 2, xpSplit: "ranged_defence" },
+};
+```
+
+### Magic Styles
+
+| Style | Accuracy | Range | XP Distribution |
+|-------|----------|-------|-----------------|
+| **Accurate** | +3 Magic | Normal | Magic + Constitution |
+| **Longrange** | +1 Magic | +2 tiles | Magic + Defense + Constitution |
+| **Autocast** | Normal | Normal | Magic + Constitution |
+
+```typescript
+// From WeaponStyleConfig.ts
+export const MAGIC_STYLE_BONUSES = {
+  accurate: { attackBonus: 3, speedModifier: 0, rangeModifier: 0, xpSplit: "magic" },
+  longrange: { attackBonus: 1, speedModifier: 0, rangeModifier: 2, xpSplit: "magic_defence" },
+  autocast: { attackBonus: 0, speedModifier: 0, rangeModifier: 0, xpSplit: "magic" },
 };
 ```
 
