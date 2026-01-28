@@ -173,81 +173,56 @@ flowchart LR
 
 ## Player Trading
 
-### Overview
+### Trade System
 
-Player-to-player trading uses an OSRS-accurate two-screen confirmation flow to prevent scams:
+Players can trade items directly with each other using an OSRS-style two-screen confirmation flow:
 
-1. **Offer Screen**: Players add/remove items and accept
-2. **Confirmation Screen**: Players review final trade and confirm
-3. **Completion**: Items swapped atomically via database transaction
+#### Initiating a Trade
 
-### Trading Flow
+1. Right-click another player
+2. Select "Trade with [Player Name]"
+3. If not adjacent, your character walks to them automatically
+4. Trade request appears as pink clickable chat message
 
-```mermaid
-sequenceDiagram
-    participant P1 as Player 1
-    participant Server as TradingSystem
-    participant P2 as Player 2
-    
-    P1->>Server: tradeRequest(targetPlayerId)
-    Server->>P2: tradeIncoming (pink chat message)
-    P2->>Server: tradeRequestRespond(accept: true)
-    Server->>P1: tradeStarted
-    Server->>P2: tradeStarted
-    
-    P1->>Server: tradeAddItem(slot, quantity)
-    Server->>P1: tradeUpdated
-    Server->>P2: tradeUpdated
-    
-    P1->>Server: tradeAccept
-    P2->>Server: tradeAccept
-    Server->>P1: tradeConfirmScreen
-    Server->>P2: tradeConfirmScreen
-    
-    P1->>Server: tradeAccept (confirm)
-    P2->>Server: tradeAccept (confirm)
-    Server->>Server: Atomic item swap
-    Server->>P1: tradeCompleted
-    Server->>P2: tradeCompleted
-```
+#### Trade Flow
 
-### Trade UI Features
+**Offer Screen:**
+- Add items by left-clicking inventory items (adds 1)
+- Right-click for context menu: Offer-1, Offer-5, Offer-10, Offer-X, Offer-All
+- Remove items by clicking them in your trade offer
+- Both players must accept to proceed
 
-- **Click-Based Interaction**: Left-click to add 1, right-click for context menu
-- **Context Menu Options**: Offer-1, Offer-5, Offer-10, Offer-X, Offer-All, Value, Examine
-- **Anti-Scam Indicators**:
-  - Red flashing exclamation when items removed
-  - Wealth transfer indicator (green = gaining, red = losing)
-  - Warning icon if value difference >50%
-  - Partner's free inventory slots displayed
-- **Proximity System**: Players automatically walk to target if out of range
-- **Interface Blocking**: Can't trade while banking/shopping
+**Confirmation Screen:**
+- Final review of both offers
+- Wealth transfer indicator shows value difference
+- Both players must accept again to complete
+- Trade executes atomically (no item duplication possible)
 
-### Security
+#### Anti-Scam Features
 
-- **Server-Authoritative**: All validation happens server-side
-- **Atomic Swaps**: Database transactions prevent item duplication
-- **Inventory Locks**: Prevent race conditions during swap
-- **Tradeable Flag**: Items with `tradeable: false` cannot be traded
-- **Proximity Validation**: Players must be adjacent (1 tile)
-- **Interface Checks**: Blocks trading during bank/store/dialogue sessions
+| Feature | Description |
+|---------|-------------|
+| **Two-Screen Flow** | Must accept twice (offer + confirm) |
+| **Removal Warning** | Red flashing exclamation when items removed |
+| **Wealth Indicator** | Shows if you're gaining/losing value (green/red) |
+| **Free Slots** | Displays partner's available inventory space |
+| **Value Warning** | ⚠️ if wealth difference >50% of offer |
 
-### Trade Session States
+#### Security
 
-| State | Description |
-|-------|-------------|
-| `pending` | Trade request sent, awaiting response |
-| `active` | Both players in offer screen |
-| `confirming` | Both players in confirmation screen |
-| `completed` | Trade successfully completed |
-| `cancelled` | Trade cancelled by player or timeout |
+- Server-authoritative state management
+- Atomic database transactions
+- Inventory locks during swap
+- Proximity validation (must be adjacent)
+- Rate limiting on requests
+- Tradeable flag enforcement
 
-### Timeouts
+<Tip>
+  Trade requests appear as pink clickable messages in chat. Click to accept instantly.
+</Tip>
 
-- **Request Timeout**: 5 minutes (auto-decline if not responded)
-- **Active Trade Timeout**: 10 minutes (auto-cancel if inactive)
-- **Cleanup Interval**: 60 seconds (removes expired sessions)
+## Future Features
 
 <Info>
-Trading system code is in `packages/server/src/systems/TradingSystem/` and `packages/server/src/systems/ServerNetwork/handlers/trade/`.
+  A Grand Exchange (automated marketplace) is planned for future updates.
 </Info>

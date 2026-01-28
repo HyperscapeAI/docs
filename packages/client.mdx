@@ -109,175 +109,120 @@ GameClient.tsx            // Main 3D gameplay
 
 ## UI System Architecture
 
-<Info>
-**Major Change (PR #638)**: The `hs-kit` package has been removed and all UI components consolidated into `packages/client/src/ui/`. This eliminates the separate package dependency and improves build times.
-</Info>
+### UI System (`src/ui/`)
 
-### UI Package Structure
+Consolidated UI system with all components, hooks, and stores:
 
-Located in `src/ui/`:
-
-```typescript
-// From packages/client/src/ui/
-components/               // Reusable UI components
-├── Window.tsx           // Draggable, resizable windows
-├── TabBar.tsx           // Tab management
-├── Portal.tsx           // React portals
-├── ModalWindow.tsx      // Modal dialogs
-├── Hint.tsx             // Tooltip system
-├── Icons.tsx            // Icon components
-├── MenuButton.tsx       // Menu buttons
-├── Slider.tsx           // Range sliders
-├── ToggleSwitch.tsx     // Toggle controls
-└── NotificationContainer.tsx  // Toast notifications
-
-controls/                 // Form controls
-├── ColorControl.tsx     // Color pickers
-├── KeybindControl.tsx   // Keybind editors
-├── SelectControl.tsx    // Dropdown selects
-├── SliderControl.tsx    // Slider inputs
-└── ToggleControl.tsx    // Toggle switches
-
-core/                     // Core UI systems
-├── drag/                # Drag-and-drop system (@dnd-kit integration)
-├── edit/                # Edit mode and layout tools
-├── notifications/       # Notification system
-├── presets/             # Layout presets and sharing
-├── responsive/          # Responsive breakpoints
-├── tabs/                # Tab management
-├── tooltip/             # Tooltip positioning
-├── virtual/             # Virtual scrolling
-└── window/              # Window management
-
-stores/                   # Zustand state stores
-├── windowStore.ts       # Window positions and state
-├── themeStore.ts        # Theme configuration
-├── dragStore.ts         # Drag-and-drop state
-├── editStore.ts         # Edit mode state
-├── presetStore.ts       # Layout presets
-├── notificationStore.ts # Notifications
-├── anchorUtils.ts       # Anchor-based positioning
-└── index.ts             # Store exports
-
-theme/                    # Theme system
-├── themes.ts            # Theme definitions
-├── animations.ts        # Animation utilities
-└── index.ts             # Theme exports
-
-types/                    # UI type definitions
-├── accessibility.ts     # Accessibility types
-├── complexity.ts        # Complexity mode types
-└── index.ts             # Type exports
 ```
+src/ui/
+├── components/        # Core UI components
+│   ├── Window.tsx     # Draggable, resizable windows
+│   ├── Tab.tsx        # Tab component
+│   ├── TabBar.tsx     # Tab container
+│   ├── Slider.tsx     # Range slider
+│   ├── Portal.tsx     # React portal
+│   ├── MenuButton.tsx # Menu buttons
+│   └── ...
+├── controls/          # Form controls
+│   ├── ColorControl.tsx
+│   ├── KeybindControl.tsx
+│   ├── SelectControl.tsx
+│   ├── SliderControl.tsx
+│   └── ToggleControl.tsx
+├── core/              # Core UI systems
+│   ├── drag/          # Drag-and-drop (@dnd-kit)
+│   ├── edit/          # Edit mode
+│   ├── notifications/ # Toast notifications
+│   ├── presets/       # Layout presets
+│   ├── responsive/    # Responsive utilities
+│   ├── tabs/          # Tab management
+│   ├── tooltip/       # Tooltip system
+│   ├── virtual/       # Virtual scrolling
+│   └── window/        # Window management
+├── stores/            # Zustand stores
+│   ├── windowStore.ts # Window state
+│   ├── themeStore.ts  # Theme state
+│   ├── dragStore.ts   # Drag state
+│   └── ...
+├── theme/             # Theme system
+│   ├── themes.ts      # Dark theme
+│   └── animations.ts  # CSS animations
+└── types/             # TypeScript types
+```
+
+### Game Components (`src/game/components/`)
+
+Domain-organized game UI components:
+
+```
+src/game/components/
+├── chat/              # Chat system
+│   ├── ChatBox.tsx
+│   ├── ChatMessage.tsx
+│   ├── ChatInput.tsx
+│   └── ChatTabs.tsx
+├── currency/          # Currency display
+│   ├── CurrencyDisplay.tsx
+│   ├── CurrencyExchange.tsx
+│   └── CurrencyIcon.tsx
+├── dialog/            # NPC dialogue
+│   ├── DialogBox.tsx
+│   ├── DialogChoices.tsx
+│   └── DialogHistory.tsx
+├── equipment/         # Equipment panel
+│   ├── CharacterModel.tsx
+│   ├── EquipmentPanel.tsx
+│   └── EquipmentSlot.tsx
+├── map/               # World map
+│   ├── WorldMap.tsx
+│   ├── MapControls.tsx
+│   └── MapMarker.tsx
+├── quest/             # Quest system
+│   ├── QuestLog.tsx
+│   ├── QuestEntry.tsx
+│   └── QuestObjective.tsx
+├── settings/          # Settings panel
+│   ├── SettingsPanel.tsx
+│   ├── SettingsCategory.tsx
+│   └── SettingsControl.tsx
+└── skilltree/         # Skill tree
+    ├── SkillTree.tsx
+    ├── SkillNode.tsx
+    └── SkillTooltip.tsx
+```
+
+### HUD Components (`src/game/hud/`)
+
+- Health/Constitution display (StatusBars)
+- Combat status indicators
+- XP progress orbs
+- Action progress bar
+- Minimap with compass
+- Level-up notifications
+- Connection indicator
+
+### Anchor-Based Positioning
+
+Windows use Unity/Unreal-style anchors for responsive scaling:
+
+- **9 anchor points**: corners, edges, center
+- **Offset-based**: Windows store offset from anchor, not absolute position
+- **Responsive**: Preserves anchor relationships on resize
+- **Default anchors**:
+  - Chat, Skills/Prayer: `bottom-left`
+  - Minimap: `top-right`
+  - Inventory, Menubar: `bottom-right`
+  - Action bar: `bottom-center`
 
 ### Drag-and-Drop System
 
-The UI uses `@dnd-kit` for accessible drag-and-drop:
+Powered by `@dnd-kit` with custom enhancements:
 
-```typescript
-// From packages/client/src/ui/core/drag/
-import { DndProvider, useDraggable, useDroppable } from '@/ui';
-
-// Draggable item
-const { attributes, listeners, setNodeRef } = useDraggable({
-  id: 'item-123',
-  data: { type: 'inventory', itemId: 'bronze_sword' },
-});
-
-// Drop zone
-const { setNodeRef: setDropRef, isOver } = useDroppable({
-  id: 'equipment-weapon',
-});
-```
-
-**Features:**
-- Keyboard and pointer support for accessibility
-- Collision detection algorithms
-- Drag modifiers (snap to grid, constrain to axis)
-- Composable drag overlay
-- Touch support for mobile
-
-### Window Management
-
-Windows use anchor-based positioning for responsive scaling:
-
-```typescript
-// From packages/client/src/ui/stores/windowStore.ts
-export type WindowAnchor =
-  | "top-left" | "top-center" | "top-right"
-  | "center-left" | "center" | "center-right"
-  | "bottom-left" | "bottom-center" | "bottom-right";
-
-// Windows maintain position relative to viewport anchor
-// Ensures proper scaling across different screen sizes
-```
-
-**Window Features:**
-- Draggable and resizable
-- Anchor-based positioning (Unity/Unreal-style)
-- Responsive scaling for mobile ↔ desktop transitions
-- Tab combining (drag tabs between windows)
-- Layout presets and sharing
-- Edit mode with alignment guides
-- Collision visualization
-- Grid snapping
-
-### HUD Components
-
-Located in `src/game/hud/`:
-
-- **StatusBars.tsx** — Health/Constitution display
-- **XPProgressOrb.tsx** — XP orb with skill tracking
-- **ActionProgressBar.tsx** — Action progress (gathering, cooking)
-- **Minimap.tsx** — Minimap with compass
-- **ConnectionIndicator.tsx** — Network status
-- **EntityContextMenu.tsx** — Right-click context menus
-- **EscapeMenu.tsx** — Pause menu
-- **LevelUpNotification.tsx** — Level-up popups
-
-### Game Panels
-
-Located in `src/game/panels/`:
-
-- **InventoryPanel.tsx** — 28-slot inventory grid
-- **EquipmentPanel.tsx** — Equipment slots
-- **BankPanel/** — Bank interface (modular structure)
-- **CombatPanel.tsx** — Combat styles and stats
-- **SkillsPanel.tsx** — Skills overview
-- **PrayerPanel.tsx** — Prayer book
-- **ChatPanel.tsx** — Chat window
-- **QuestsPanel.tsx** — Quest journal
-- **TradePanel/** — Player-to-player trading (OSRS-style)
-- **ActionBarPanel/** — Customizable action bar
-
-### Game Components
-
-Located in `src/game/components/`:
-
-```
-chat/                     # Chat system
-├── ChatBox.tsx          # Main chat component
-├── ChatMessage.tsx      # Message rendering
-├── ChatInput.tsx        # Input field
-└── ChatTabs.tsx         # Channel tabs
-
-currency/                 # Currency display
-dialog/                   # NPC dialogue
-equipment/                # Equipment UI
-map/                      # World map
-quest/                    # Quest UI
-settings/                 # Settings panels
-skilltree/                # Skill tree visualization
-```
-
-### Three.js Integration
-
-- Three.js 3D renderer with WebGPU support
-- Camera controller (third-person, click-to-move)
-- Input handler (WASD movement, click actions)
-- Entity renderers (players, mobs, items)
-- VRM avatar display with emotes
-- Post-processing effects
+- **Inventory items**: Drag to move, combine, or drop
+- **Action bar**: Drag skills, prayers, combat styles
+- **Tabs**: Drag to reorder or combine windows
+- **Windows**: Drag headers to move
+- **Context menus**: Right-click for OSRS-style menus
 
 ## Environment Variables
 

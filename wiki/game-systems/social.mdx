@@ -1,443 +1,336 @@
 ---
-title: "Social System"
-description: "Friend management, private messaging, and ignore list"
+title: "Social Features"
+description: "Friend system, private messaging, and ignore list"
 icon: "users"
 ---
 
-# Social System
+## Overview
 
-Hyperscape features a comprehensive social system with friend management, private messaging, online status tracking, and ignore lists.
+Hyperscape includes comprehensive social features for player interaction: friend management, private messaging, and an ignore list for blocking unwanted players.
 
-<Info>
-Social code lives in `packages/server/src/systems/ServerNetwork/handlers/friends.ts` (server) and `packages/client/src/systems/client/SocialSystem.ts` (client).
-</Info>
+**Location:** `packages/shared/src/systems/shared/social/`
 
-## Core Features
+## Friend System
 
-- **Friend Management** — Send, accept, decline, and remove friend requests
-- **Online Status** — Real-time tracking of friend online/offline status
-- **Private Messaging** — Direct messages between players
-- **Ignore List** — Block unwanted players
-- **Friend List Sync** — Automatic synchronization on login
+### Adding Friends
 
----
+1. Right-click another player
+2. Select "Add Friend"
+3. Friend request sent to target player
+4. Target accepts or declines request
+5. If accepted, both players added to each other's friend lists
 
-## Friend Management
+### Friend List
 
-### Friend Request Flow
+The friend list shows:
+- Friend's name
+- Online/offline status (real-time)
+- Combat level
+- Current activity (if online)
 
-1. **Send Request**
+### Managing Friends
 
-```typescript
-// Client sends friend request
-world.network.send("friendRequest", { targetUsername: "PlayerName" });
+| Action | Description |
+|--------|-------------|
+| **Add Friend** | Send friend request to player |
+| **Remove Friend** | Remove player from friend list |
+| **View Friends** | Open friend list panel |
+| **Private Message** | Send direct message to friend |
 
-// Server validates and creates request
-await db.insert(schema.friendRequests).values({
-  senderId: playerId,
-  receiverId: targetId,
-  status: "pending",
-  createdAt: new Date(),
-});
+### Online Status
 
-// Notify recipient if online
-if (recipientSocket) {
-  sendToSocket(recipientSocket, "friendRequestReceived", {
-    requestId,
-    fromPlayerId: playerId,
-    fromUsername: senderName,
-  });
-}
-```
-
-2. **Accept Request**
-
-```typescript
-// Client accepts request
-world.network.send("friendRequestRespond", {
-  requestId: requestId,
-  accept: true,
-});
-
-// Server creates bidirectional friendship
-await db.transaction(async (tx) => {
-  // Update request status
-  await tx.update(schema.friendRequests)
-    .set({ status: "accepted" })
-    .where(eq(schema.friendRequests.id, requestId));
-  
-  // Create friendship entries (bidirectional)
-  await tx.insert(schema.friendships).values([
-    { playerId: senderId, friendId: receiverId },
-    { playerId: receiverId, friendId: senderId },
-  ]);
-});
-
-// Notify both players
-sendToSocket(senderSocket, "friendAdded", { friendId: receiverId, username: receiverName });
-sendToSocket(receiverSocket, "friendAdded", { friendId: senderId, username: senderName });
-```
-
-3. **Decline Request**
-
-```typescript
-// Client declines request
-world.network.send("friendRequestRespond", {
-  requestId: requestId,
-  accept: false,
-});
-
-// Server updates request status
-await db.update(schema.friendRequests)
-  .set({ status: "declined" })
-  .where(eq(schema.friendRequests.id, requestId));
-
-// Notify sender
-sendToSocket(senderSocket, "friendRequestDeclined", {
-  username: receiverName,
-});
-```
-
-### Remove Friend
-
-```typescript
-// Client removes friend
-world.network.send("friendRemove", { friendId: friendId });
-
-// Server deletes both friendship entries
-await db.transaction(async (tx) => {
-  await tx.delete(schema.friendships)
-    .where(
-      or(
-        and(
-          eq(schema.friendships.playerId, playerId),
-          eq(schema.friendships.friendId, friendId)
-        ),
-        and(
-          eq(schema.friendships.playerId, friendId),
-          eq(schema.friendships.friendId, playerId)
-        )
-      )
-    );
-});
-
-// Notify both players
-sendToSocket(playerSocket, "friendRemoved", { friendId });
-sendToSocket(friendSocket, "friendRemoved", { friendId: playerId });
-```
-
----
-
-## Online Status Tracking
-
-### Status Synchronization
-
-When a player connects, the server:
-
-1. Loads friend list from database
-2. Checks which friends are currently online
-3. Sends friend list with online status to player
-4. Notifies online friends that player is now online
-
-```typescript
-// From packages/server/src/systems/ServerNetwork/handlers/friends.ts
-async function syncFriendListOnConnect(playerId: string, socket: ServerSocket): Promise<void> {
-  // Load friendships from database
-  const friendships = await db.query.friendships.findMany({
-    where: eq(schema.friendships.playerId, playerId),
-  });
-  
-  // Check online status for each friend
-  const friendList = friendships.map(friendship => ({
-    friendId: friendship.friendId,
-    username: getFriendUsername(friendship.friendId),
-    isOnline: isPlayerOnline(friendship.friendId),
-  }));
-  
-  // Send friend list to player
-  sendToSocket(socket, "friendListSync", { friends: friendList });
-  
-  // Notify online friends that player is now online
-  for (const friend of friendships) {
-    if (isPlayerOnline(friend.friendId)) {
-      const friendSocket = getSocketByPlayerId(world, friend.friendId);
-      if (friendSocket) {
-        sendToSocket(friendSocket, "friendOnline", {
-          friendId: playerId,
-          username: getPlayerName(world, playerId),
-        });
-      }
-    }
-  }
-}
-```
-
-### Status Change Events
-
-| Event | Trigger | Data |
-|-------|---------|------|
-| `friendOnline` | Friend connects | `friendId`, `username` |
-| `friendOffline` | Friend disconnects | `friendId` |
-| `friendListSync` | Player connects | `friends[]` with online status |
-
----
+Friend online status updates in real-time:
+- **Green dot**: Friend is online
+- **Gray dot**: Friend is offline
+- **Notification**: "Friend [Name] has logged in"
 
 ## Private Messaging
 
-### Send Private Message
+### Sending Messages
 
-```typescript
-// Client sends private message
-world.network.send("privateMessage", {
-  targetPlayerId: friendId,
-  message: "Hello!",
-});
+1. Open friend list
+2. Click friend's name
+3. Type message in chat input
+4. Message appears in private chat tab
 
-// Server validates and delivers
-async function handlePrivateMessage(
-  socket: ServerSocket,
-  data: { targetPlayerId: string; message: string },
-  world: World,
-): Promise<void> {
-  const senderId = getPlayerId(socket);
-  
-  // Validate friendship exists
-  const friendship = await db.query.friendships.findFirst({
-    where: and(
-      eq(schema.friendships.playerId, senderId),
-      eq(schema.friendships.friendId, data.targetPlayerId)
-    ),
-  });
-  
-  if (!friendship) {
-    sendToSocket(socket, "error", { message: "Not friends with that player" });
-    return;
-  }
-  
-  // Check if sender is ignored by recipient
-  const isIgnored = await db.query.ignoredPlayers.findFirst({
-    where: and(
-      eq(schema.ignoredPlayers.playerId, data.targetPlayerId),
-      eq(schema.ignoredPlayers.ignoredPlayerId, senderId)
-    ),
-  });
-  
-  if (isIgnored) {
-    // Silently fail - don't reveal ignore status
-    return;
-  }
-  
-  // Deliver message if recipient is online
-  const recipientSocket = getSocketByPlayerId(world, data.targetPlayerId);
-  if (recipientSocket) {
-    sendToSocket(recipientSocket, "privateMessageReceived", {
-      fromPlayerId: senderId,
-      fromUsername: getPlayerName(world, senderId),
-      message: data.message,
-      timestamp: Date.now(),
-    });
-  }
-  
-  // Confirm delivery to sender
-  sendToSocket(socket, "privateMessageSent", {
-    toPlayerId: data.targetPlayerId,
-    message: data.message,
-  });
-}
-```
+### Message Features
 
----
+- **Direct messages**: Only visible to sender and recipient
+- **Message history**: Conversation history per friend
+- **Notifications**: Alert when new message received
+- **Offline messages**: Messages delivered when friend logs in
+
+### Chat Integration
+
+Private messages appear in dedicated chat tab:
+- Purple color for private messages
+- "From [Friend]:" or "To [Friend]:" prefix
+- Separate from public chat
+- Persistent message history
 
 ## Ignore List
 
-### Add to Ignore List
+### Blocking Players
 
-```typescript
-// Client ignores player
-world.network.send("ignorePlayer", { targetPlayerId: playerId });
+1. Right-click player
+2. Select "Ignore"
+3. Player added to ignore list
+4. Blocked player can't:
+   - Send you private messages
+   - Send you trade requests
+   - Send you friend requests
 
-// Server adds to ignore list
-await db.insert(schema.ignoredPlayers).values({
-  playerId: playerId,
-  ignoredPlayerId: targetId,
-  createdAt: new Date(),
-});
+### Managing Ignore List
 
-// Ignored players:
-// - Cannot send private messages
-// - Cannot send friend requests
-// - Cannot send trade requests
-```
+| Action | Description |
+|--------|-------------|
+| **Add to Ignore** | Block player from contacting you |
+| **Remove from Ignore** | Unblock player |
+| **View Ignore List** | See all blocked players |
 
-### Remove from Ignore List
+### Ignore Behavior
 
-```typescript
-// Client unignores player
-world.network.send("unignorePlayer", { targetPlayerId: playerId });
-
-// Server removes from ignore list
-await db.delete(schema.ignoredPlayers)
-  .where(
-    and(
-      eq(schema.ignoredPlayers.playerId, playerId),
-      eq(schema.ignoredPlayers.ignoredPlayerId, targetId)
-    )
-  );
-```
-
----
+When you ignore a player:
+- Their messages don't appear in your chat
+- Their trade requests are auto-declined
+- Their friend requests are auto-declined
+- They don't know they're ignored (OSRS-style)
 
 ## Database Schema
 
-### Friendships Table
+### Tables
 
+**friendships**
 ```sql
 CREATE TABLE friendships (
   id SERIAL PRIMARY KEY,
-  "playerId" TEXT NOT NULL,
-  "friendId" TEXT NOT NULL,
-  "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
-  UNIQUE("playerId", "friendId")
+  player_id VARCHAR(255) NOT NULL,
+  friend_id VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(player_id, friend_id)
 );
 ```
 
-### Friend Requests Table
-
+**friend_requests**
 ```sql
 CREATE TABLE friend_requests (
   id SERIAL PRIMARY KEY,
-  "senderId" TEXT NOT NULL,
-  "receiverId" TEXT NOT NULL,
-  status TEXT NOT NULL,  -- 'pending', 'accepted', 'declined'
-  "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
-  UNIQUE("senderId", "receiverId")
+  from_player_id VARCHAR(255) NOT NULL,
+  to_player_id VARCHAR(255) NOT NULL,
+  status VARCHAR(50) DEFAULT 'pending',
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(from_player_id, to_player_id)
 );
 ```
 
-### Ignored Players Table
-
+**ignore_list**
 ```sql
-CREATE TABLE ignored_players (
+CREATE TABLE ignore_list (
   id SERIAL PRIMARY KEY,
-  "playerId" TEXT NOT NULL,
-  "ignoredPlayerId" TEXT NOT NULL,
-  "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
-  UNIQUE("playerId", "ignoredPlayerId")
+  player_id VARCHAR(255) NOT NULL,
+  ignored_player_id VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(player_id, ignored_player_id)
 );
 ```
-
----
 
 ## Network Packets
 
 ### Client → Server
 
-| Packet | Data | Description |
-|--------|------|-------------|
-| `friendRequest` | `targetUsername` | Send friend request |
-| `friendRequestRespond` | `requestId`, `accept` | Accept/decline request |
-| `friendRemove` | `friendId` | Remove friend |
-| `privateMessage` | `targetPlayerId`, `message` | Send private message |
-| `ignorePlayer` | `targetPlayerId` | Add to ignore list |
-| `unignorePlayer` | `targetPlayerId` | Remove from ignore list |
+| Packet | Data | Purpose |
+|--------|------|---------|
+| `friendRequest` | `{ targetPlayerId }` | Send friend request |
+| `friendRequestRespond` | `{ requestId, accept }` | Accept/decline request |
+| `friendRemove` | `{ friendId }` | Remove friend |
+| `privateMessage` | `{ recipientId, message }` | Send private message |
+| `ignoreAdd` | `{ playerId }` | Add to ignore list |
+| `ignoreRemove` | `{ playerId }` | Remove from ignore list |
 
 ### Server → Client
 
-| Packet | Data | Description |
-|--------|------|-------------|
-| `friendListSync` | `friends[]` | Full friend list with online status |
-| `friendRequestReceived` | `requestId`, `fromPlayerId`, `fromUsername` | Incoming friend request |
-| `friendAdded` | `friendId`, `username` | Friend added successfully |
-| `friendRemoved` | `friendId` | Friend removed |
-| `friendOnline` | `friendId`, `username` | Friend came online |
-| `friendOffline` | `friendId` | Friend went offline |
-| `privateMessageReceived` | `fromPlayerId`, `fromUsername`, `message`, `timestamp` | Incoming private message |
-| `privateMessageSent` | `toPlayerId`, `message` | Message sent confirmation |
-| `friendRequestDeclined` | `username` | Friend request was declined |
+| Packet | Data | Purpose |
+|--------|------|---------|
+| `friendRequestIncoming` | `{ requestId, fromPlayerId, fromPlayerName }` | Incoming friend request |
+| `friendAdded` | `{ friendId, friendName, online }` | Friend added to list |
+| `friendRemoved` | `{ friendId }` | Friend removed |
+| `friendOnline` | `{ friendId }` | Friend logged in |
+| `friendOffline` | `{ friendId }` | Friend logged out |
+| `privateMessageReceived` | `{ fromId, fromName, message }` | Incoming private message |
+| `friendListSync` | `{ friends }` | Full friend list on login |
 
----
+## Implementation
+
+### SocialSystem
+
+**Location:** `packages/shared/src/systems/client/SocialSystem.ts`
+
+Client-side system managing social UI state:
+
+```typescript
+class SocialSystem extends SystemBase {
+  private friendList: Map<string, Friend>;
+  private ignoreList: Set<string>;
+  private pendingRequests: Map<string, FriendRequest>;
+  
+  // Add friend request
+  sendFriendRequest(targetPlayerId: string): void;
+  
+  // Accept/decline request
+  respondToFriendRequest(requestId: string, accept: boolean): void;
+  
+  // Remove friend
+  removeFriend(friendId: string): void;
+  
+  // Send private message
+  sendPrivateMessage(recipientId: string, message: string): void;
+  
+  // Ignore player
+  addToIgnoreList(playerId: string): void;
+  removeFromIgnoreList(playerId: string): void;
+}
+```
+
+### Server-Side Handlers
+
+**Location:** `packages/server/src/systems/ServerNetwork/handlers/friends.ts`
+
+Server-authoritative friend management:
+
+```typescript
+// Handle friend request
+export function handleFriendRequest(
+  socket: ServerSocket,
+  data: { targetPlayerId: string },
+  world: World,
+  db: DatabaseConnection
+): Promise<void>;
+
+// Handle friend request response
+export function handleFriendRequestRespond(
+  socket: ServerSocket,
+  data: { requestId: string, accept: boolean },
+  world: World,
+  db: DatabaseConnection
+): Promise<void>;
+
+// Handle friend removal
+export function handleFriendRemove(
+  socket: ServerSocket,
+  data: { friendId: string },
+  world: World,
+  db: DatabaseConnection
+): Promise<void>;
+
+// Handle private message
+export function handlePrivateMessage(
+  socket: ServerSocket,
+  data: { recipientId: string, message: string },
+  world: World
+): void;
+```
+
+### Friend List Synchronization
+
+On player login:
+1. Server loads friend list from database
+2. Server checks online status of each friend
+3. Server sends `friendListSync` packet with full list
+4. Server notifies online friends that player logged in
+
+On player logout:
+1. Server broadcasts `friendOffline` to all online friends
+2. Friend list persists in database
 
 ## UI Components
 
-### Friends Panel
+### FriendsPanel
 
-Located in `packages/client/src/game/panels/FriendsPanel.tsx`:
+**Location:** `packages/client/src/game/panels/FriendsPanel.tsx`
 
-**Features:**
-- Friend list with online/offline indicators
-- Pending friend requests section
-- Add friend button
-- Context menu per friend:
-  - Message (if online)
-  - Remove friend
-  - Ignore player
-- Online status indicators (green dot = online, gray dot = offline)
+Main friend list interface:
 
-### Private Message Display
+- **Friend list**: Scrollable list of friends with online status
+- **Add friend button**: Opens player search
+- **Private message**: Click friend to open chat
+- **Remove friend**: Right-click menu option
+- **Ignore list tab**: View and manage ignored players
 
-Private messages appear in the chat window with special formatting:
+### Chat Integration
 
-```typescript
-// From packages/client/src/game/chat/Chat.tsx
-if (message.type === "whisper") {
-  const prefix = message.targetUsername
-    ? `To [${message.targetUsername}]`
-    : `From [${message.username}]`;
-  
-  return (
-    <div style={{ color: "#FF00FF" }}>  {/* Pink/magenta for whispers */}
-      {prefix}: {message.content}
-    </div>
-  );
-}
-```
+Private messages integrate with chat system:
 
----
+- **Private tab**: Dedicated tab for private messages
+- **Color coding**: Purple for private messages
+- **Notifications**: Badge count for unread messages
+- **History**: Persistent conversation history
 
-## Security Features
+## Security & Privacy
 
-### Ignore List Protection
+### Rate Limiting
 
-Ignored players are blocked from:
+- Friend requests: 5 per minute
+- Private messages: 10 per minute
+- Prevents spam and abuse
 
-```typescript
-// Check if sender is ignored before delivering message
-const isIgnored = await db.query.ignoredPlayers.findFirst({
-  where: and(
-    eq(schema.ignoredPlayers.playerId, recipientId),
-    eq(schema.ignoredPlayers.ignoredPlayerId, senderId)
-  ),
-});
+### Validation
 
-if (isIgnored) {
-  // Silently fail - don't reveal ignore status to sender
-  return;
-}
-```
+- **Player existence**: Target player must exist and be online
+- **Duplicate prevention**: Can't send multiple requests to same player
+- **Self-requests**: Can't friend yourself
+- **Ignore check**: Ignored players can't send requests
 
-### Friendship Validation
+### Privacy
 
-All social actions validate friendship status:
+- **Ignore is private**: Ignored players don't know they're ignored
+- **Online status**: Only visible to friends
+- **Message privacy**: Private messages not logged or visible to others
 
-```typescript
-// Private messages require friendship
-const friendship = await db.query.friendships.findFirst({
-  where: and(
-    eq(schema.friendships.playerId, senderId),
-    eq(schema.friendships.friendId, recipientId)
-  ),
-});
+## Common Issues
 
-if (!friendship) {
-  sendToSocket(socket, "error", { message: "Not friends with that player" });
-  return;
-}
-```
+### Friend Request Not Received
 
----
+**Possible causes:**
+- Target player is offline
+- You're on their ignore list
+- Request already pending
+
+### Can't Send Private Message
+
+**Possible causes:**
+- Player is not on your friend list
+- Player is offline
+- You're on their ignore list
+
+### Friend Shows Offline But Is Online
+
+**Cause:** Friend list not synced
+
+**Solution:** Relog to refresh friend list
+
+## Future Enhancements
+
+Planned social features:
+
+- **Clan system**: Player-created groups
+- **Group chat**: Multi-player chat rooms
+- **Friend notes**: Add notes to friends
+- **Last seen**: Show when offline friend was last online
+- **Activity status**: Show what friend is doing (skilling, combat, etc.)
 
 ## Related Documentation
 
-- [Chat System](/wiki/game-systems/chat) (message display)
-- [Database Schema](/wiki/engine/database) (social tables)
-- [Networking](/wiki/engine/networking) (WebSocket packets)
+<CardGroup cols={2}>
+  <Card title="Trading System" icon="handshake" href="/wiki/game-systems/trading">
+    Player-to-player item trading
+  </Card>
+  <Card title="Chat System" icon="message-square" href="/wiki/game-systems/chat">
+    Public and private messaging
+  </Card>
+  <Card title="Context Menus" icon="mouse-pointer-2" href="/wiki/game-systems/context-menus">
+    OSRS-style right-click menus
+  </Card>
+  <Card title="Database Schema" icon="database" href="/wiki/engine/database">
+    Database tables and relationships
+  </Card>
+</CardGroup>
