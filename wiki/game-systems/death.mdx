@@ -262,8 +262,88 @@ UNTRADEABLE_DESPAWN_TICKS: 300,      // 3 minutes for untradeable
 
 ---
 
+---
+
+## Duel Arena Deaths
+
+Deaths in the Duel Arena are handled differently:
+
+### No Item Loss
+
+```typescript
+// From PlayerDeathSystem.ts
+const duelSystem = this.world.getSystem("duel");
+if (duelSystem?.isPlayerInActiveDuel(playerId)) {
+  // Duel death - DuelSystem handles resolution
+  // - No gravestone spawned
+  // - No items lost
+  // - Winner receives staked items only
+  // - Both players restored to full health
+  // - Both teleported to duel arena lobby
+  return;
+}
+
+// Normal death - proceed with gravestone/item drop
+this.handleNormalDeath(playerId);
+```
+
+### Death State Handling
+
+The DuelSystem sets the death state but prevents normal death processing:
+
+```typescript
+// From DuelSystem.handlePlayerDeath()
+if (session.state !== "FIGHTING") {
+  // Ignore deaths outside active combat
+  return;
+}
+
+// Set state to FINISHED immediately to prevent double-processing
+session.state = "FINISHED";
+
+// Delay resolution for death animation (8 ticks = 4.8 seconds)
+setTimeout(() => {
+  this.resolveDuel(session, winnerId, loserId, "death");
+}, ticksToMs(DEATH_RESOLUTION_DELAY_TICKS));
+```
+
+### Health Restoration
+
+After duel resolution, both players are restored to full health:
+
+```typescript
+// From DuelCombatResolver.ts
+private restorePlayerHealth(playerId: string): void {
+  // Clear death state using PlayerEntity helper
+  const playerEntity = this.world.entities.get(playerId);
+  if (playerEntity instanceof PlayerEntity) {
+    playerEntity.resetDeathState();
+  }
+  
+  // Emit respawn event to trigger health restoration
+  this.world.emit(EventType.PLAYER_RESPAWNED, {
+    playerId,
+    spawnPosition: LOBBY_SPAWN_CENTER,
+    townName: "Duel Arena",
+  });
+  
+  // Clear death state on client
+  this.world.emit(EventType.PLAYER_SET_DEAD, {
+    playerId,
+    isDead: false,
+  });
+}
+```
+
+<Tip>
+  Duel deaths use the same death animation (8 ticks) as normal deaths for visual consistency.
+</Tip>
+
+---
+
 ## Related Documentation
 
+- [Duel Arena](/wiki/game-systems/duel-arena) (PvP dueling system)
 - [Combat System](/wiki/game-systems/combat)
 - [Ground Items & Loot](/wiki/game-systems/loot)
 - [Database Schema](/wiki/engine/database)
