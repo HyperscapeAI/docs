@@ -6,13 +6,14 @@ icon: "layout-grid"
 
 ## Monorepo Structure
 
-Hyperscape is organized as a Turbo monorepo with 7 packages:
+Hyperscape is organized as a Turbo monorepo with 8 packages:
 
 ```
 packages/
 ├── shared/              # Core 3D engine (@hyperscape/shared)
 ├── server/              # Game server (@hyperscape/server)
 ├── client/              # Web client (@hyperscape/client)
+├── hs-kit/              # UI toolkit (hs-kit) - NEW
 ├── plugin-hyperscape/   # ElizaOS AI plugin (@hyperscape/plugin-hyperscape)
 ├── physx-js-webidl/     # PhysX WASM bindings (@hyperscape/physx-js-webidl)
 ├── asset-forge/         # AI asset generation (3d-asset-forge)
@@ -45,6 +46,9 @@ flowchart TD
   <Card title="client" icon="browser" href="/packages/client">
     Web client with Vite, React, and 3D rendering
   </Card>
+  <Card title="hs-kit" icon="window" href="/packages/hs-kit">
+    Custom UI toolkit for game interfaces (NEW)
+  </Card>
   <Card title="plugin-hyperscape" icon="robot" href="/packages/plugin-hyperscape">
     ElizaOS integration for AI agents
   </Card>
@@ -70,6 +74,7 @@ Turbo handles this automatically with `dependsOn: ["^build"]`.
 | `@hyperscape/shared` | 0.13.0 | Core engine |
 | `@hyperscape/server` | 0.13.0 | Game server |
 | `@hyperscape/client` | 0.13.0 | Web client |
+| `hs-kit` | 1.0.0 | UI toolkit (NEW) |
 | `@hyperscape/plugin-hyperscape` | 1.0.0 | ElizaOS plugin |
 | `3d-asset-forge` | 1.0.0 | Asset generation |
 

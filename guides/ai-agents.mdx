@@ -32,16 +32,64 @@ Access the agent dashboard at `http://localhost:4000` to monitor and control age
 
 The `dev:ai` command uses `concurrently` to run both services with colored output for easier debugging.
 
+## LLM Autonomy System
+
+<Info>
+  Agents use a **THINKING+ACTION** format that separates reasoning from action selection, making behavior transparent and debuggable.
+</Info>
+
+### THINKING+ACTION Format
+
+Agents respond with structured reasoning:
+
+```
+THINKING: I have 3 goblins attacking me and my health is at 40%. I have food in my inventory.
+I should eat to restore health before continuing combat.
+
+ACTION: EAT_FOOD
+```
+
+This enables:
+- Transparent decision-making (see why the agent chose an action)
+- Better debugging (identify flawed reasoning)
+- Foundation for multi-step planning
+
+### Autonomous Features
+
+**Target Locking** - Agents lock onto combat targets for 30 seconds, preventing target switching mid-fight.
+
+**Force Flee** - If health drops below 25% with threats nearby, agents automatically flee (bypasses LLM).
+
+**Combat Readiness** - Agents assess if they're prepared for combat (weapon, food, health) before engaging.
+
+**Goal Templates** - Structured beginner flows guide agents through OSRS-style progression.
+
+**Guardrails** - Hard and soft constraints prevent dangerous decisions.
+
+---
+
 ## Agent Capabilities
 
 ### Available Actions
 
-AI agents have 24 actions across 9 categories:
+AI agents have 23 actions across 9 categories:
 
 ```typescript
 // From packages/plugin-hyperscape/src/index.ts
 actions: [
-  // Movement (6 actions)
+  // Goal-Oriented (2 actions)
+  setGoalAction,
+  navigateToAction,
+
+  // Autonomous Behavior (5 actions)
+  exploreAction,
+  fleeAction,
+  idleAction,
+  approachEntityAction,
+  attackEntityAction,
+  lootStarterChestAction,
+
+  // Movement (3 actions)
   moveToAction,
   followEntityAction,
   stopMovementAction,
@@ -85,19 +133,26 @@ actions: [
 Agents query world state via 10 providers:
 
 ```typescript
-// From packages/plugin-hyperscape/src/index.ts (lines 148-156)
+// From packages/plugin-hyperscape/src/index.ts
 providers: [
+  goalProvider,             // Current goal and progress
   gameStateProvider,        // Health, stamina, position, combat status
   inventoryProvider,        // Items, coins, free slots
   nearbyEntitiesProvider,   // Players, NPCs, resources nearby
   skillsProvider,           // Skill levels and XP
   equipmentProvider,        // Equipped items
   availableActionsProvider, // Context-aware available actions
-  possibilitiesProvider,    // What actions are currently possible
-  goalTemplatesProvider,    // Structured goal templates for beginners
-  guardrailsProvider,       // Safety constraints and warnings
+  possibilitiesProvider,    // What actions are currently possible (NEW)
+  goalTemplatesProvider,    // Structured goal templates (NEW)
+  guardrailsProvider,       // Safety constraints and warnings (NEW)
 ],
 ```
+
+**New Providers (PR #628):**
+
+- **possibilitiesProvider** - Analyzes inventory and nearby entities to determine what's craftable, gatherable, and trainable
+- **goalTemplatesProvider** - Provides scored goal templates for OSRS beginner flows (woodcutting, mining, combat, etc.)
+- **guardrailsProvider** - Hard/soft constraints and active warnings to prevent dangerous decisions
 
 ## Agent Architecture
 

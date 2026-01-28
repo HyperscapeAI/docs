@@ -71,7 +71,12 @@
           {
             "group": "Core Packages",
             "icon": "cube",
-            "pages": ["packages/shared", "packages/server", "packages/client"]
+            "pages": [
+              "packages/shared",
+              "packages/server",
+              "packages/client",
+              "packages/hs-kit"
+            ]
           },
           {
             "group": "Extensions",
@@ -147,6 +152,7 @@
               "wiki/game-systems/collision",
               "wiki/game-systems/inventory",
               "wiki/game-systems/bank",
+              "wiki/game-systems/trading",
               "wiki/game-systems/death",
               "wiki/game-systems/loot",
               "wiki/game-systems/mob-ai"

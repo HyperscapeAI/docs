@@ -114,20 +114,25 @@ To run the game with ElizaOS AI agents:
 bun run dev:ai
 ```
 
-This starts the game server plus the ElizaOS agent runtime. The AI agent will connect as a player and autonomously play the game.
+This starts both the game and ElizaOS runtime concurrently:
+- Game server on port **5555**
+- Client on port **3333**
+- ElizaOS runtime on port **4001**
+
+The AI agent will connect as a player and autonomously play the game using LLM-driven decision making.
 
 <Info>
   Requires ElizaOS 1.7.0+ with an LLM provider (OpenAI, Anthropic, OpenRouter, or Ollama) configured in your environment variables.
 </Info>
 
-### Agent Dashboard
+### AI Agent Features
 
-Access the agent dashboard at `http://localhost:3333` and click the Dashboard icon to:
-- Monitor agent status, goals, and progress
-- View real-time skills, position, and activity
-- Control agents with Stop/Resume buttons
-- Send commands via Quick Action menu
-- Watch agents play in the viewport
+- **THINKING+ACTION format** - Agents explain their reasoning before acting
+- **Target locking** - Agents finish killing one mob before switching
+- **Force flee** - Auto-flee at <25% health with threats nearby
+- **Combat readiness** - Agents assess if they're prepared for combat
+- **Goal templates** - Structured beginner flows (woodcutting, mining, combat)
+- **Real-time thoughts** - Watch agent decision-making in the dashboard
 
 ## What Gets Started
 
@@ -175,9 +180,10 @@ bun start                 # Start game server (cd packages/server && bun run sta
 
 # Development  
 bun run dev               # All packages with hot reload
-bun run dev:ai            # With AI agents
+bun run dev:ai            # Game + ElizaOS agents (concurrently)
 bun run dev:client        # Client only
 bun run dev:server        # Server only
+bun run dev:app           # Tauri desktop app
 bun run dev:turbo         # Turbo-based dev (excludes asset-forge)
 bun run dev:reset         # Clean rebuild and restart
 

@@ -6,10 +6,10 @@ icon: "play"
 
 # Agent Actions Reference
 
-This page documents all **24 actions** available to ElizaOS agents in Hyperscape. Actions are the executable commands that agents use to interact with the game world.
+This page documents all **23 actions** available to ElizaOS agents in Hyperscape. Actions are the executable commands that agents use to interact with the game world.
 
 <Info>
-Actions are defined in `packages/plugin-hyperscape/src/actions/`.
+Actions are defined in `packages/plugin-hyperscape/src/actions/`. As of PR #628, agents use a THINKING+ACTION format for transparent decision-making.
 </Info>
 
 ## Action Categories
@@ -37,7 +37,7 @@ Actions are defined in `packages/plugin-hyperscape/src/actions/`.
     2 actions for planning
   </Card>
   <Card title="World Interaction" icon="treasure-chest">
-    2 actions for world objects
+    1 action for world objects
   </Card>
 </CardGroup>
 
@@ -264,12 +264,31 @@ export const chopTreeAction: Action = {
 
 **Requirements**: Hatchet in inventory, Woodcutting level.
 
-**Cardinal Positioning**: The server requires players to be on a cardinal adjacent tile (North/South/East/West, not diagonal) to chop trees. The action automatically:
-1. Finds the 4 cardinal adjacent tiles to the tree
-2. Selects the nearest one to the player's current position
-3. Moves to that tile before starting to chop
+**Validation**: Checks for trees within 20m approach range, filters by level requirement, walks to tree if needed.
 
-This ensures OSRS-accurate positioning mechanics.
+---
+
+### `mineRock`
+
+Mine a rock for ore.
+
+```typescript
+export const mineRockAction: Action = {
+  name: "MINE_ROCK",
+  description: "Mine a rock to gather ore",
+  parameters: {
+    rockId: { type: "string", optional: true, description: "Specific rock entity ID" },
+  },
+};
+```
+
+**Requirements**: Pickaxe in inventory, Mining level.
+
+**Validation**: Checks for rocks within 20m approach range, filters by level requirement, walks to cardinal adjacent tile before mining.
+
+<Info>
+  Added in PR #628 to support mining skill training for AI agents.
+</Info>
 
 ---
 
@@ -521,41 +540,56 @@ export const bankWithdrawAction: Action = {
 
 ### `setGoal`
 
-Set a new goal for the agent.
+Set a new goal using LLM with goal templates.
 
 ```typescript
 // From actions/goals.ts
 export const setGoalAction: Action = {
   name: "SET_GOAL",
-  description: "Set a new goal for autonomous behavior",
-  parameters: {
-    goal: {
-      type: "string",
-      description: "Goal description (e.g., 'reach level 10 woodcutting')",
-    },
-    priority: { type: "number", optional: true, description: "Priority (1-10)" },
-  },
+  description: "Choose a new goal using LLM with structured goal templates",
+  parameters: {},
 };
 ```
 
-**Features:**
-- **Autonomous Goal Selection**: Agent chooses goals based on context
-- **Manual Override**: Dashboard can set specific goals
-- **Pause State Blocking**: SET_GOAL is blocked when goals are paused
-  - User clicks "Stop" button → goals paused
-  - Agent forced to IDLE instead of setting new goals
-  - Prevents unwanted autonomous behavior
-- **Locked Goals**: User commands create locked goals that persist
-  - 60-second grace period for multi-step actions
-  - Agent continues executing until action completes or times out
+**How it works (PR #628):**
 
-**Usage**: Direct agent behavior toward objectives.
+1. **Goal Templates Provider** supplies scored goal options:
+   - `woodcutting_basics` - Chop trees for logs
+   - `mining_basics` - Mine rocks for ore
+   - `combat_training_goblins` - Fight goblins
+   - `bronze_gear_chain` - Mine → smelt → smith
+   - `acquire_starter_tools` - Get basic tools
+   - And more...
 
-**Example Goals**:
-- "Reach level 10 Woodcutting"
-- "Collect 100 logs"
-- "Kill 50 goblins"
-- "Earn 10,000 coins"
+2. **LLM selects** best goal based on:
+   - Current skills and levels
+   - Inventory contents
+   - Nearby resources
+   - Combat readiness
+   - Recent goal history (diversity penalty)
+
+3. **Goal is set** with target, progress tracking, and location
+
+**Example LLM Selection:**
+
+```
+THINKING: I have no axe or pickaxe. I should get starter tools first before attempting any gathering skills.
+
+ACTION: SET_GOAL
+
+Selected Goal: acquire_starter_tools
+```
+
+**Goal Types:**
+- `combat_training` - Train combat skills
+- `woodcutting` - Train woodcutting
+- `mining` - Train mining
+- `smithing` - Smelt and smith
+- `fishing` - Catch fish
+- `firemaking` - Burn logs
+- `cooking` - Cook food
+- `exploration` - Discover areas
+- `starter_items` - Get basic tools
 
 <Info>
 When goals are paused (via dashboard Stop button), SET_GOAL is automatically blocked and replaced with IDLE. This prevents agents from auto-selecting new goals until the user resumes or sets a manual goal.
@@ -617,6 +651,38 @@ export const lootStarterChestAction: Action = {
 
 ---
 
+## World Interaction Actions
+
+### `lootStarterChest`
+
+Loot the starter chest for basic tools (one-time per character).
+
+```typescript
+// From actions/autonomous.ts
+export const lootStarterChestAction: Action = {
+  name: "LOOT_STARTER_CHEST",
+  description: "Search the starter chest to get starter equipment (bronze tools, tinderbox, net, food). Only works once per character.",
+  parameters: {},
+};
+```
+
+**Starter Items:**
+- Bronze hatchet (woodcutting)
+- Bronze pickaxe (mining)
+- Tinderbox (firemaking)
+- Small fishing net (fishing)
+- Shrimp x5 (food)
+
+**Location**: Near spawn at coordinates `(5, 0, -20)`
+
+**Behavior**: If chest not nearby, agent walks to known location first.
+
+<Info>
+  Added in PR #628 to help new agents bootstrap their equipment.
+</Info>
+
+---
+
 ## Action Execution
 
 Actions are executed through the HyperscapeService:
@@ -638,40 +704,64 @@ async executeAction(name: string, params: Record<string, unknown>): Promise<bool
 
 ---
 
-## Action Selection
+## Action Selection (THINKING+ACTION Format)
 
-The LLM selects actions based on:
+As of PR #628, agents use a structured decision format:
 
-1. **Providers** - Current game state context
-2. **Evaluators** - Assessment of opportunities
-3. **Goals** - Current objectives
-4. **Available Actions** - Context-aware action list
+```
+THINKING: [Agent's reasoning about the situation]
+
+ACTION: [Action name to execute]
+```
+
+### Selection Pipeline
+
+1. **Providers** - Gather game context (10 providers)
+2. **Compose State** - Merge provider data
+3. **Evaluators** - Assess opportunities (5 evaluators)
+4. **LLM Prompt** - Build action selection prompt with OSRS common sense rules
+5. **LLM Response** - Generate THINKING+ACTION
+6. **Parse** - Extract reasoning and action name
+7. **Validate** - Check if action is possible
+8. **Execute** - Perform action via HyperscapeService
+
+### Survival Override
+
+Before LLM selection, a force flee check runs:
 
 ```typescript
-// Provider supplies available actions
-export const availableActionsProvider: Provider = {
-  name: "availableActions",
-  async get(runtime, state): Promise<string> {
-    const gameState = await getGameState(runtime);
-
-    const actions = [];
-
-    // Combat actions if enemies nearby
-    if (gameState.nearbyEnemies.length > 0) {
-      actions.push("ATTACK_ENTITY", "FLEE");
-    }
-
-    // Skill actions if resources nearby
-    if (gameState.nearbyTrees.length > 0 && hasHatchet(gameState)) {
-      actions.push("CHOP_TREE");
-    }
-
-    // ... more context-aware action filtering
-
-    return formatActionList(actions);
-  },
-};
+// From autonomous-behavior-manager.ts
+if (healthPercent < 25 && threats.length > 0) {
+  // Bypass LLM - execute FLEE immediately
+  await executeAction(fleeAction);
+  return;
+}
 ```
+
+This ensures agents survive even if the LLM makes poor decisions.
+
+### Target Locking
+
+During combat, agents lock onto targets for 30 seconds:
+
+```typescript
+// From autonomous-behavior-manager.ts
+private lockedTargetId: string | null = null;
+private readonly TARGET_LOCK_TIMEOUT = 30000; // 30s
+
+// In ATTACK_ENTITY action
+if (lockedTargetId) {
+  targetMob = attackableMobs.find(mob => mob.id === lockedTargetId);
+  if (targetMob) {
+    // Continue attacking locked target
+  } else {
+    // Target died/despawned, clear lock and find new target
+    clearTargetLock();
+  }
+}
+```
+
+This prevents agents from switching between targets without finishing kills.
 
 ---
 

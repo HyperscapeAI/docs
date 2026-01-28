@@ -74,7 +74,7 @@ export const hyperscapePlugin: Plugin = {
   ],
 
   actions: [
-    // 21 actions listed below
+    // 23 actions listed below
   ],
 };
 ```
@@ -83,74 +83,86 @@ export const hyperscapePlugin: Plugin = {
 
 ## LLM Autonomy System
 
-Hyperscape agents use a **THINKING+ACTION** format that enables genuine LLM reasoning:
+<Info>
+  As of PR #628, agents use a **THINKING+ACTION** format that separates reasoning from action selection, making agent behavior transparent and debuggable.
+</Info>
 
 ### THINKING+ACTION Format
 
-Agents respond with structured reasoning before taking action:
+Agents respond with structured reasoning before taking actions:
 
 ```
-<THINKING>
-I have 3 goblins attacking me and my health is at 40%. I have food in my inventory.
+THINKING: I have 3 goblins attacking me and my health is at 40%. I have food in my inventory.
 I should eat to restore health before continuing combat.
-</THINKING>
 
-<ACTION>
-EAT_FOOD
-</ACTION>
+ACTION: EAT_FOOD
 ```
 
 **Benefits:**
 - Clear separation of reasoning and decision
-- Debuggable agent behavior (see why it chose an action)
+- Debuggable agent behavior (see *why* it chose an action)
 - Better parsing and error handling
 - Foundation for multi-step reasoning
-
-### Agent Thoughts Dashboard
-
-Real-time visualization of agent decision-making:
-
-- **Parchment/scroll visual style** matching game aesthetic
-- **Live sync** of agent thoughts via API
-- **Expandable history** of recent thoughts
-- **Flash animation** when new thoughts arrive
-- **Spectator overlay** for watching agents
-
-Access via `/api/agents/:agentId/thoughts` endpoint.
 
 ### Target Locking
 
 Agents lock onto combat targets for 30 seconds to prevent target switching:
 
-- `lockedTargetId` persists across ticks
-- Lock clears when target dies, despawns, or timeout expires
+```typescript
+// From autonomous-behavior-manager.ts
+private lockedTargetId: string | null = null;
+private readonly TARGET_LOCK_TIMEOUT = 30000; // 30s
+```
+
+**Behavior:**
+- Agent attacks one target until it dies
+- Lock clears when target dies, despawns, or 30s timeout
 - Dramatically improves combat effectiveness
 
 ### Force Flee Mechanism
 
-Pre-emptive survival check runs before LLM selection:
+Pre-emptive survival check runs BEFORE LLM selection:
 
-- If health < 25% AND threats nearby, agent automatically flees
-- Survival instinct overrides LLM decisions
-- Prevents agents from dying due to poor LLM choices
+```typescript
+// If health < 25% AND threats nearby, agent automatically flees
+if (healthPercent < 25 && threats.length > 0) {
+  // Bypass LLM - execute FLEE immediately
+  await executeAction(fleeAction);
+}
+```
+
+Survival instinct overrides LLM decisions to prevent deaths.
 
 ### Combat Readiness Scoring
 
-`getCombatReadiness()` evaluates agent's combat preparedness:
+New `getCombatReadiness()` function evaluates combat preparedness:
 
-- Factors: health level, weapon equipped, food available
-- Combat goals scaled down when readiness is low
-- "NOT RECOMMENDED" warnings added to risky combat options
+```typescript
+interface CombatReadiness {
+  score: number;      // 0-100
+  factors: string[];  // Reasons for deductions
+  ready: boolean;     // score >= 50
+}
+```
+
+**Factors:**
+- Health level (deduct up to 30 points for low health)
+- Weapon equipped (deduct 25 points if no weapon)
+- Food available (deduct 20 points if no food)
+
+Combat goals are scaled down when readiness is low.
+
+---
 
 ## Available Actions
 
-The plugin provides **24 actions** across 9 categories:
+The plugin provides **23 actions** across 9 categories:
 
 ### Goal-Oriented Actions
 
 | Action | Description |
 |--------|-------------|
-| `setGoalAction` | Set a new goal when none exists |
+| `setGoalAction` | Set a new goal using LLM with goal templates |
 | `navigateToAction` | Navigate to goal location |
 
 ### Autonomous Behavior
@@ -162,7 +174,7 @@ The plugin provides **24 actions** across 9 categories:
 | `fleeAction` | Run away from danger (auto-triggered at <25% HP) |
 | `idleAction` | Stand still and observe |
 | `approachEntityAction` | Move towards a specific entity |
-| `lootStarterChestAction` | Loot starter chest for basic tools |
+| `lootStarterChestAction` | Loot starter chest for basic tools (one-time) |
 
 ### Movement Actions
 
@@ -215,9 +227,103 @@ The plugin provides **24 actions** across 9 categories:
 
 ## State Providers
 
-Providers supply game context to the agent's decision-making:
+Providers supply game context to the agent's decision-making. As of PR #628, three new providers enhance LLM decision-making:
 
-### goalProvider
+### New Providers (PR #628)
+
+#### possibilitiesProvider
+
+Tells the LLM what actions are currently possible:
+
+```typescript
+{
+  craftable: {
+    smelting: [{ barName: "Bronze Bar", ingredients: "copper_ore + tin_ore", canMake: 5 }],
+    smithing: [{ itemName: "Bronze Sword", barsNeeded: 1, canMake: 3 }],
+    cooking: [{ rawItem: "Raw Shrimp", cookedItem: "Shrimp", count: 10 }],
+    firemaking: [{ logName: "Normal Logs", count: 15, xp: 40 }]
+  },
+  gatherable: [
+    { type: "tree", name: "Oak Tree", levelRequired: 15, canGather: true, count: 3 }
+  ],
+  combat: {
+    attackableTargets: [{ name: "Goblin", count: 5 }],
+    combatReadiness: { score: 75, issues: [] }
+  },
+  trainableSkills: [
+    { skill: "Woodcutting", currentLevel: 10, canTrain: true, howToTrain: "Chop nearby trees" }
+  ],
+  hasFood: true,
+  inventorySlotsFree: 15
+}
+```
+
+#### goalTemplatesProvider
+
+Provides structured goal templates for OSRS beginner flows:
+
+```typescript
+{
+  templates: [
+    {
+      id: "woodcutting_basics",
+      name: "Learn Woodcutting",
+      type: "woodcutting",
+      description: "Chop trees to gather logs and train woodcutting skill",
+      prerequisites: ["Have an axe equipped or in inventory"],
+      hardRequirements: ["has_axe"],
+      steps: [
+        "Ensure you have an axe (bronze axe works for beginners)",
+        "Travel to an area with trees (forest location)",
+        "Click on a tree to start chopping",
+        "Continue until inventory is full or target level reached"
+      ],
+      successCondition: "Woodcutting level 10+ OR inventory full of logs",
+      score: 85,
+      applicable: true,
+      reason: "Trees nearby, woodcutting level 5 (room to grow)"
+    }
+  ],
+  topTemplates: [...], // Top 5 recommended goals
+  applicableTemplates: [...] // Goals with prerequisites met
+}
+```
+
+**Goal Types:**
+- `woodcutting`, `mining`, `fishing` - Gathering skills
+- `smithing`, `firemaking`, `cooking` - Artisan skills
+- `combat` - Combat training
+- `exploration` - Discover new areas
+- `starter_items` - Acquire basic tools
+
+#### guardrailsProvider
+
+Provides safety constraints and warnings:
+
+```typescript
+{
+  hardConstraints: [
+    "NEVER set combat goals when health is below 30%",
+    "NEVER engage in combat without a weapon equipped",
+    "ALWAYS flee immediately when health drops below 25% during combat"
+  ],
+  softConstraints: [
+    "Prefer goals that utilize current inventory items",
+    "Prefer nearby resources over distant ones",
+    "Balance skill training - don't over-specialize too early"
+  ],
+  activeWarnings: [
+    { level: "critical", message: "Health at 20% - FLEE IMMEDIATELY!", action: "Use FLEE action" }
+  ],
+  blockedActions: [
+    { action: "combat", reason: "No weapon equipped", resolveBy: "Equip a weapon" }
+  ]
+}
+```
+
+### Core Providers
+
+#### goalProvider
 
 Provides current goal and progress tracking.
 
@@ -528,15 +634,34 @@ Watch AI agents play in real-time:
 ## Agent Architecture Flow
 
 ```mermaid
-flowchart LR
-    A[ElizaOS Runtime] --> B[plugin-hyperscape]
-    B --> C[Providers]
-    B --> D[Actions]
-    C --> E[Game State]
-    D --> F[WebSocket → Server]
-    E --> G[LLM Decision]
-    G --> D
+flowchart TB
+    A[ElizaOS Runtime] --> B[Providers]
+    B --> C[Compose State]
+    C --> D[Evaluators]
+    D --> E[LLM Decision]
+    E --> F{Parse THINKING+ACTION}
+    F --> G[Validate Action]
+    G --> H[Execute Action]
+    H --> I[WebSocket → Server]
+    I --> J[Game State Update]
+    J --> B
+    
+    K[Force Flee Check] -.->|health < 25%| H
+    L[Target Lock] -.->|30s lock| H
 ```
+
+### Decision-Making Pipeline
+
+1. **Providers** - Gather game context (10 providers)
+2. **Compose State** - Merge provider data into unified state
+3. **Evaluators** - Assess situation (5 evaluators)
+4. **LLM Decision** - Generate THINKING+ACTION response
+5. **Parse** - Extract reasoning and action name
+6. **Validate** - Check if action is possible
+7. **Execute** - Perform action via HyperscapeService
+8. **Update** - Server sends state changes back
+
+**Survival Override:** If health < 25% with threats, skip LLM and force FLEE.
 
 ---
 
