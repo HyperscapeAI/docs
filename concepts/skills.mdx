@@ -20,7 +20,8 @@ Hyperscape has **11 skills** total:
 | **Strength** | Melee damage |
 | **Defense** | Damage reduction, armor requirements |
 | **Constitution** | Health points |
-| **Prayer** | Protection prayers and combat buffs |
+| **Ranged** | Ranged combat accuracy and damage |
+| **Prayer** | Combat bonuses via prayers (trained by burying bones) |
 
 ### Gathering Skills
 
@@ -29,7 +30,6 @@ Hyperscape has **11 skills** total:
 | **Woodcutting** | Chop trees for logs |
 | **Mining** | Mine rocks for ores |
 | **Fishing** | Catch fish at water spots |
-| **Mining** | Mine ore from rocks |
 
 ### Artisan Skills
 
@@ -242,6 +242,33 @@ Skill configuration is in `packages/shared/src/data/`:
 | `equipment-requirements.json` | Level requirements for equipment |
 | `equipment-stats.json` | Stat bonuses for equipment |
 
+## Prayer System
+
+Prayer provides combat bonuses at the cost of draining prayer points:
+
+**Training:**
+- Bury bones for Prayer XP (4.5 XP for regular bones)
+- Right-click bones in inventory → "Bury"
+- 2-tick (1.2s) delay between burials
+
+**Prayer Points:**
+- Maximum points = Prayer level (1-99)
+- Drain while prayers are active
+- Recharge at altars (purple boxes in world)
+
+**Available Prayers:**
+- **Thick Skin** (Level 1): +5% Defense
+- **Burst of Strength** (Level 4): +5% Strength
+- **Clarity of Thought** (Level 7): +5% Attack
+- **Rock Skin** (Level 10): +10% Defense
+- **Superhuman Strength** (Level 13): +10% Strength
+
+<Info>
+  See [Prayer System](/wiki/game-systems/prayer) for complete mechanics, drain formulas, and combat integration.
+</Info>
+
+---
+
 ## Default Skill Values
 
 Skills start at level 1 with 0 XP, except Constitution which starts at level 10:
@@ -253,11 +280,11 @@ playerData.skills = {
   strength: { level: 1, xp: 0 },
   defense: { level: 1, xp: 0 },
   constitution: { level: 10, xp: 1154 },  // Starts at level 10
+  ranged: { level: 1, xp: 0 },
   prayer: { level: 1, xp: 0 },
   woodcutting: { level: 1, xp: 0 },
   mining: { level: 1, xp: 0 },
   fishing: { level: 1, xp: 0 },
-  mining: { level: 1, xp: 0 },
   firemaking: { level: 1, xp: 0 },
   cooking: { level: 1, xp: 0 },
   smithing: { level: 1, xp: 0 },

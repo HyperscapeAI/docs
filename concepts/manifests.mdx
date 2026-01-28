@@ -422,6 +422,58 @@ Defines level requirements by equipment tier:
 }
 ```
 
+### Prayers (`prayers.json`)
+
+Defines prayer bonuses, drain rates, and conflicts:
+
+```json
+{
+  "prayers": [
+    {
+      "id": "thick_skin",
+      "name": "Thick Skin",
+      "description": "Increases Defense by 5%",
+      "icon": "🛡️",
+      "level": 1,
+      "category": "defensive",
+      "drainEffect": 3,
+      "bonuses": {
+        "defenseMultiplier": 1.05
+      },
+      "conflicts": ["rock_skin", "steel_skin"]
+    },
+    {
+      "id": "burst_of_strength",
+      "name": "Burst of Strength",
+      "description": "Increases Strength by 5%",
+      "icon": "💪",
+      "level": 4,
+      "category": "offensive",
+      "drainEffect": 3,
+      "bonuses": {
+        "strengthMultiplier": 1.05
+      },
+      "conflicts": ["superhuman_strength"]
+    }
+  ]
+}
+```
+
+**Prayer Fields:**
+- `id` — Unique prayer ID (lowercase, underscores, max 64 chars)
+- `name` — Display name
+- `description` — Effect description for tooltip
+- `icon` — Emoji icon for UI
+- `level` — Required Prayer level (1-99)
+- `category` — "offensive", "defensive", or "utility"
+- `drainEffect` — Drain rate (higher = faster drain)
+- `bonuses` — Combat stat multipliers (attackMultiplier, strengthMultiplier, defenseMultiplier)
+- `conflicts` — Array of prayer IDs that conflict with this prayer
+
+<Info>
+Prayer bonuses are multipliers applied to base stats. A value of 1.05 means +5%, 1.10 means +10%.
+</Info>
+
 ### Station Configuration (`stations.json`)
 
 Defines world stations with 3D models:
@@ -450,6 +502,16 @@ Defines world stations with 3D models:
 ```
 
 ## Data Providers
+
+The manifest system uses specialized data providers for efficient lookups:
+
+| Provider | Purpose | Manifest Source |
+|----------|---------|-----------------| 
+| `ProcessingDataProvider` | Cooking, firemaking, smelting, smithing recipes | `recipes/*.json` |
+| `TierDataProvider` | Equipment level requirements by tier | `tier-requirements.json` |
+| `StationDataProvider` | Station models and configurations | `stations.json` |
+| `PrayerDataProvider` | Prayer definitions, bonuses, conflicts | `prayers.json` |
+| `DataManager` | Central loader for all manifests | All manifests |
 
 ### DataManager
 
@@ -542,6 +604,38 @@ The manifest system uses specialized data providers for efficient lookups:
 | `DataManager` | Central loader for all manifests | All manifests |
 
 These providers build optimized lookup tables at startup for fast runtime queries.
+
+### PrayerDataProvider Usage
+
+Access prayer definitions at runtime:
+
+```typescript
+import { prayerDataProvider } from '@hyperscape/shared';
+
+// Get prayer definition
+const prayer = prayerDataProvider.getPrayer("thick_skin");
+// Returns: { id, name, description, icon, level, category, drainEffect, bonuses, conflicts }
+
+// Get all prayers available at player's level
+const available = prayerDataProvider.getAvailablePrayers(prayerLevel);
+
+// Check for conflicts
+const conflicts = prayerDataProvider.getConflictsWithActive("rock_skin", activePrayers);
+
+// Validate activation
+const canActivate = prayerDataProvider.canActivatePrayer(
+  "burst_of_strength",
+  prayerLevel,
+  currentPoints,
+  activePrayers
+);
+```
+
+**Prayer Loading:**
+- Loaded by `DataManager` at startup
+- Validates prayer ID format, bonuses, and conflicts
+- Builds optimized lookup tables by level and category
+- Provides type-safe access methods
 
 ### StationDataProvider Usage
 

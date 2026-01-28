@@ -23,6 +23,7 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | **Defense** | Damage reduction | Combat (Defensive style) |
 | **Constitution** | Maximum HP | All combat (always granted) |
 | **Ranged** | Ranged combat | Bow/crossbow attacks |
+| **Prayer** | Combat bonuses, protection | Burying bones |
 
 ### Gathering Skills
 
@@ -42,6 +43,28 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 
 <Info>
 Smithing is a two-step process: first smelt ores into bars at a furnace, then smith bars into equipment at an anvil.
+</Info>
+
+---
+
+## Prayer Training
+
+Prayer is trained by burying bones dropped from combat:
+
+| Bone Type | XP | Source |
+|-----------|-----|--------|
+| **Bones** | 4.5 | Most monsters |
+| **Big Bones** | 15 | Larger monsters |
+| **Dragon Bones** | 72 | Dragons |
+
+**Bury Mechanics:**
+- Right-click bones in inventory → "Bury"
+- 2-tick (1.2 second) delay between burials
+- XP granted immediately on successful bury
+- Bones consumed after burying
+
+<Info>
+See [Prayer System](/wiki/game-systems/prayer) for complete prayer mechanics, drain formulas, and altar usage.
 </Info>
 
 ---
@@ -708,7 +731,8 @@ This allows easy content updates without code changes and enables community modd
 
 ## Related Documentation
 
-- [Combat System](/wiki/game-systems/combat)
+- [Prayer System](/wiki/game-systems/prayer) (Prayer mechanics, drain, altars, bone burying)
+- [Combat System](/wiki/game-systems/combat) (Prayer bonuses in combat)
 - [Data Manifests Overview](/wiki/data/overview)
 - [Item Data Structure](/wiki/data/items)
 - [NPC Data Structure](/wiki/data/npcs)

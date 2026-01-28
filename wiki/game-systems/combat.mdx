@@ -184,8 +184,14 @@ Damage uses the authentic OSRS formula from [the wiki](https://oldschool.runesca
 ### Maximum Hit Formula
 
 ```typescript
-// Effective Strength = Strength Level + 8 + Style Bonus
-const effectiveStrength = strengthLevel + 8 + styleBonus.strength;
+// Get prayer bonuses (if any prayers active)
+const prayerBonuses = prayerSystem.getCombinedBonuses(attackerId);
+
+// Apply prayer multipliers to base levels
+const prayeredStrength = strengthLevel × (prayerBonuses.strengthMultiplier ?? 1);
+
+// Effective Strength = Prayered Strength + 8 + Style Bonus
+const effectiveStrength = prayeredStrength + 8 + styleBonus.strength;
 
 // Strength Bonus from equipment
 const strengthBonus = equipmentStats?.strength || 0;
@@ -193,6 +199,10 @@ const strengthBonus = equipmentStats?.strength || 0;
 // Max Hit = floor(0.5 + (Effective Strength × (Strength Bonus + 64)) / 640)
 const maxHit = Math.floor(0.5 + (effectiveStrength * (strengthBonus + 64)) / 640);
 ```
+
+<Info>
+Prayer bonuses are applied **before** the effective level calculation, matching OSRS mechanics.
+</Info>
 
 ### Accuracy Formula
 
@@ -205,10 +215,18 @@ function calculateAccuracy(
   targetDefenseBonus: number,
   attackerStyle: CombatStyle = "accurate",
 ): boolean {
-  const effectiveAttack = attackerAttackLevel + 8 + styleBonus.attack;
+  // Get prayer bonuses for attacker and defender
+  const attackerPrayerBonuses = prayerSystem.getCombinedBonuses(attackerId);
+  const defenderPrayerBonuses = prayerSystem.getCombinedBonuses(targetId);
+  
+  // Apply prayer multipliers
+  const prayeredAttack = attackerAttackLevel × (attackerPrayerBonuses.attackMultiplier ?? 1);
+  const prayeredDefense = targetDefenseLevel × (defenderPrayerBonuses.defenseMultiplier ?? 1);
+  
+  const effectiveAttack = prayeredAttack + 8 + styleBonus.attack;
   const attackRoll = effectiveAttack * (attackerAttackBonus + 64);
 
-  const effectiveDefence = targetDefenseLevel + 9 + defenderStyleBonus.defense;
+  const effectiveDefence = prayeredDefense + 9 + defenderStyleBonus.defense;
   const defenceRoll = effectiveDefence * (targetDefenseBonus + 64);
 
   let hitChance: number;
@@ -221,6 +239,10 @@ function calculateAccuracy(
   return random.random() < hitChance;
 }
 ```
+
+<Info>
+Prayer bonuses apply to both attacker and defender, affecting accuracy and defense rolls.
+</Info>
 
 ### Damage Roll
 
@@ -535,8 +557,31 @@ The combat system emits events for UI and logging:
 
 ---
 
+## Prayer Bonuses in Combat
+
+Active prayers provide multipliers to combat stats. See [Prayer System](/wiki/game-systems/prayer) for complete details.
+
+**Example Prayer Effects:**
+- **Clarity of Thought** (Level 7): +5% Attack (1.05× multiplier)
+- **Burst of Strength** (Level 4): +5% Strength (1.05× multiplier)
+- **Thick Skin** (Level 1): +5% Defense (1.05× multiplier)
+
+**Bonus Application:**
+```typescript
+// Prayer bonuses are applied BEFORE effective level calculation
+const prayeredAttack = baseAttack × attackMultiplier;
+const effectiveAttack = prayeredAttack + 8 + styleBonus;
+```
+
+<Warning>
+Multiple prayers of the same type do NOT stack. The system uses the highest multiplier for each stat.
+</Warning>
+
+---
+
 ## Related Documentation
 
+- [Prayer System](/wiki/game-systems/prayer) (Prayer mechanics, drain, altars, bone burying)
 - [Inventory System](/wiki/game-systems/inventory) (for food consumption)
 - [Tile Movement System](/wiki/game-systems/movement)
 - [Skills & Progression](/wiki/game-systems/skills)

@@ -53,6 +53,7 @@ CREATE TABLE characters (
   strengthLevel INTEGER DEFAULT 1,
   defenseLevel INTEGER DEFAULT 1,
   constitutionLevel INTEGER DEFAULT 10,
+  rangedLevel INTEGER DEFAULT 1,
   prayerLevel INTEGER DEFAULT 1,
   woodcuttingLevel INTEGER DEFAULT 1,
   miningLevel INTEGER DEFAULT 1,
@@ -65,6 +66,7 @@ CREATE TABLE characters (
   strengthXp INTEGER DEFAULT 0,
   defenseXp INTEGER DEFAULT 0,
   constitutionXp INTEGER DEFAULT 1154,
+  rangedXp INTEGER DEFAULT 0,
   prayerXp INTEGER DEFAULT 0,
   woodcuttingXp INTEGER DEFAULT 0,
   miningXp INTEGER DEFAULT 0,
@@ -72,6 +74,10 @@ CREATE TABLE characters (
   firemakingXp INTEGER DEFAULT 0,
   cookingXp INTEGER DEFAULT 0,
   smithingXp INTEGER DEFAULT 0,
+  -- Prayer system
+  prayerPoints INTEGER DEFAULT 1,
+  prayerMaxPoints INTEGER DEFAULT 1,
+  activePrayers TEXT DEFAULT '[]',  -- JSON array: '["thick_skin", "burst_of_strength"]'
   -- Status
   health INTEGER DEFAULT 100,
   maxHealth INTEGER DEFAULT 100,
@@ -82,6 +88,16 @@ CREATE TABLE characters (
   updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
 );
 ```
+
+**Prayer Columns:**
+- `prayerLevel` / `prayerXp` — Prayer skill progression
+- `prayerPoints` — Current prayer points (0 to prayerLevel)
+- `prayerMaxPoints` — Maximum prayer points (equals prayerLevel)
+- `activePrayers` — JSON array of active prayer IDs (e.g., `'["thick_skin"]'`)
+
+<Info>
+Prayer points are stored as integers in the database but tracked with fractional precision in-memory for accurate drain calculations.
+</Info>
 
 ## Drizzle Commands
 
@@ -160,6 +176,7 @@ Migrations are stored in `packages/server/src/database/migrations/`:
 
 | Migration | Description |
 |-----------|-------------|
+| `0016_add_prayer_system.sql` | Added prayer skill, points, and active prayers tracking |
 | `0015_add_smithing_skill.sql` | Added smithingLevel and smithingXp columns |
 | `0014_add_mining_skill.sql` | Added miningLevel and miningXp columns |
 | `0013_add_auto_retaliate.sql` | Added autoRetaliate preference |
@@ -172,12 +189,19 @@ Migrations are stored in `packages/server/src/database/migrations/`:
 ### Migration Format
 
 ```sql
--- 0015_add_smithing_skill.sql
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "smithingLevel" integer DEFAULT 1;
-ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "smithingXp" integer DEFAULT 0;
+-- 0016_add_prayer_system.sql
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerLevel" integer DEFAULT 1;
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerXp" integer DEFAULT 0;
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerPoints" integer DEFAULT 1;
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "prayerMaxPoints" integer DEFAULT 1;
+ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "activePrayers" text DEFAULT '[]';
 ```
 
 Migrations use `IF NOT EXISTS` to be idempotent and safe to re-run.
+
+<Info>
+The `activePrayers` column stores a JSON array of prayer IDs. Format: `'["thick_skin", "burst_of_strength"]'`. Empty array when no prayers are active: `'[]'`.
+</Info>
 
 ## Schema Changes
 

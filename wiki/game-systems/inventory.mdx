@@ -565,6 +565,79 @@ All interaction handlers (NPCInteractionHandler, MobInteractionHandler, ItemInte
 
 ---
 
+## UI Features
+
+### Hover Tooltips
+
+Inventory and equipment items show tooltips on hover:
+
+```typescript
+// From InventoryPanel.tsx and EquipmentPanel.tsx
+const [hoveredItem, setHoveredItem] = useState<{ itemId: string; slot: number } | null>(null);
+
+// Tooltip displays:
+// - Item name
+// - Item stats (if equipment)
+// - Examine text
+// - Level requirements (if applicable)
+
+<div
+  onMouseEnter={() => setHoveredItem({ itemId, slot })}
+  onMouseLeave={() => setHoveredItem(null)}
+>
+  {/* Item display */}
+</div>
+
+{hoveredItem && (
+  <Tooltip item={getItem(hoveredItem.itemId)} position={mousePos} />
+)}
+```
+
+**Tooltip Features:**
+- Follows mouse cursor
+- Shows item stats and bonuses
+- Displays level requirements
+- Includes examine text
+- Auto-hides on mouse leave
+
+### Click-to-Unequip
+
+Equipment slots support left-click to unequip (OSRS-style):
+
+```typescript
+// From EquipmentPanel.tsx
+const handleSlotClick = (slot: EquipmentSlot) => {
+  const equippedItem = equipment[slot];
+  if (!equippedItem) return;
+  
+  // Send unequip request to server
+  world.network?.send("unequipItem", {
+    playerId: localPlayer.id,
+    slot,
+  });
+};
+
+// Renders as clickable slot
+<div
+  onClick={() => handleSlotClick("helmet")}
+  style={{ cursor: "pointer" }}
+>
+  {/* Equipment item display */}
+</div>
+```
+
+**Unequip Behavior:**
+- Left-click equipped item to unequip
+- Item moves to first available inventory slot
+- If inventory full, shows "Your inventory is full" message
+- Right-click still shows context menu with "Remove" option
+
+<Info>
+This matches OSRS behavior where left-clicking equipment unequips it directly.
+</Info>
+
+---
+
 ## UI Integration
 
 The client displays the inventory via `InventoryPanel.tsx`:

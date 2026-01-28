@@ -525,6 +525,54 @@ export function getCardinalMeleeTilesInto(
 
 ---
 
+## Context Menu Integration
+
+### Walk Here
+
+Players can right-click terrain to open a context menu with "Walk here":
+
+```typescript
+// From InteractionRouter.ts - terrain context menu
+getContextMenuActions(target: RaycastTarget): ContextMenuAction[] {
+  if (target.type === "terrain") {
+    return [{
+      id: "walk-here",
+      label: "Walk here",
+      enabled: true,
+      priority: 1,
+      handler: () => {
+        // Send movement request to server
+        world.network?.send("moveToPosition", {
+          x: target.hitPoint.x,
+          y: target.hitPoint.y,
+          z: target.hitPoint.z,
+        });
+      },
+    }];
+  }
+}
+```
+
+**Context Menu Types:**
+
+The system distinguishes between entity types and special cases:
+
+```typescript
+// From interaction/types.ts
+export type ContextMenuTargetType =
+  | InteractableEntityType  // npc, mob, player, item, etc.
+  | "terrain";              // Ground/floor (for "Walk here")
+
+// InteractableEntityType includes all entity types
+// ContextMenuTargetType adds terrain for right-click ground
+```
+
+<Info>
+The "Walk here" option only appears when right-clicking terrain. Entity interactions show entity-specific actions instead.
+</Info>
+
+---
+
 ## Client Interpolation
 
 The client smoothly interpolates entity positions between server ticks.
