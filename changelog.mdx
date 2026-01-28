@@ -23,171 +23,34 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="LLM Autonomy & Quest System" description="January 2026" date="2026-01-24">
+<Update label="Asset Repository Updates" description="January 2026" date="2026-01-24">
 
-### 🤖 LLM Autonomy Refactor
+### 📦 New Assets & Models
 
-Major improvements to AI agent decision-making with genuine LLM reasoning:
+Recent additions to the HyperscapeAI/assets repository:
 
-- **THINKING+ACTION Format**: Agents now respond with structured reasoning before taking action
-  - `<THINKING>` section explains the agent's reasoning
-  - `<ACTION>` section specifies the chosen action
-  - Enables debuggable agent behavior (see why it chose an action)
-  - Foundation for multi-step reasoning
-- **Agent Thoughts Dashboard**: Real-time visualization of agent decision-making
-  - RuneScape-themed parchment/scroll visual style
-  - Live sync of agent thoughts via `/api/agents/:agentId/thoughts` API
-  - Expandable history of recent thoughts
-  - Flash animation when new thoughts arrive
-  - Spectator overlay for watching agents
-- **Target Locking**: 30-second lock on combat targets prevents target switching
-  - `lockedTargetId` persists across ticks
-  - Lock clears when target dies, despawns, or timeout expires
-  - Dramatically improves combat effectiveness
-- **Force Flee Mechanism**: Pre-emptive survival check runs before LLM selection
-  - If health < 25% AND threats nearby, agent automatically flees
-  - Survival instinct overrides LLM decisions
-  - Prevents agents from dying due to poor LLM choices
-- **Combat Readiness Scoring**: `getCombatReadiness()` evaluates combat preparedness
-  - Factors: health level, weapon equipped, food available
-  - Combat goals scaled down when readiness is low
-  - "NOT RECOMMENDED" warnings added to risky combat options
-- **New Providers**: 3 additional context providers for better decision-making
-  - `possibilitiesProvider`: What actions are currently possible (crafting, gathering, combat)
-  - `goalTemplatesProvider`: Structured goal templates for OSRS beginner flows
-  - `guardrailsProvider`: Safety constraints and warnings
-- **New Actions**: Additional actions for agent autonomy
-  - `lootStarterChestAction`: Loot starter chest for basic tools
-  - `mineRockAction`: Mine rocks for ore (with level validation)
-- **Item Detection Utilities**: Centralized `item-detection.ts` module
-  - Consistent item checking across the entire plugin
-  - Handles multiple item formats (name, itemId, nested item.name)
-  - Functions: `hasAxe()`, `hasPickaxe()`, `hasFood()`, `hasWeapon()`, etc.
-- **Dev Script Cleanup**: Replaced 223-line `dev-with-ai.mjs` with one-liner using `concurrently`
-  - New `dev:ai` command: `bun run dev:ai`
-  - Runs game and ElizaOS together with colored output
-
-### 📜 Quest System
-
-Complete OSRS-style quest system with multi-stage quests and rewards:
-
-- **Quest Definitions**: JSON manifest-driven quest content
-  - Multi-stage quests (dialogue, kill, gather, interact, craft)
-  - Prerequisites (quests, skills, items)
-  - Rewards (quest points, items, XP)
-  - Difficulty levels (novice, intermediate, experienced, master)
-- **Progress Tracking**: Per-player database persistence
-  - `quest_progress` table with status, current stage, stage progress
-  - Atomic quest completion + quest points award (transaction-wrapped)
-  - Derived `ready_to_complete` status (computed at runtime)
-- **Quest Journal UI**: OSRS-style quest tracking interface
-  - Color-coded status (red/yellow/green)
-  - Strikethrough for completed steps
-  - Dynamic progress counters (e.g., "Kill goblins (7/15)")
-  - Quest points tracking
-- **Quest Screens**: Parchment-themed UI components
-  - Quest Start Screen: Accept/decline with requirements and rewards
-  - Quest Complete Screen: Celebration with rewards summary
-- **Security Features**:
-  - HMAC kill token validation (prevents spoofed NPC_DIED events)
-  - Quest audit logging (immutable trail for fraud detection)
-  - Rate limiting (5/sec list, 10/sec detail, 3/sec accept)
-  - Input validation with `isValidQuestId()` (prevents injection)
-- **Performance Optimizations**:
-  - O(1) stage lookups with pre-allocated Map caches
-  - Object spread elimination in hot paths (direct mutation)
-  - Debug-level logging for frequent events
-- **Network Integration**: Quest handlers in ServerNetwork
-  - `getQuestList`: Fetch all quests for player
-  - `getQuestDetail`: Fetch detailed quest info
-  - `questAccept`: Accept a quest
-- **Testing**: 997 lines of comprehensive integration tests (45 test cases)
-  - Quest lifecycle (request → accept → progress → complete)
-  - Kill tracking with wrong mob filtering
-  - Prerequisites and validation
-  - Database persistence
-  - Event emission verification
-
-### 🎨 Visual & Terrain Improvements
-
-- **Island Terrain**: World transformed into island with natural coastline and pond
-  - Organic coastline generation
-  - Interior pond feature
-  - Natural terrain elevation
-- **Cloud Depth Rendering**: Clouds now render behind closer objects
-  - Enabled depth testing on cloud shader
-  - Fixes clouds appearing in front of nearby terrain
-- **Equipment Visuals**: Tools now show in hand during skilling
-  - Hatchet/pickaxe visible during woodcutting/mining animations
-  - Fishing rod visible during fishing (OSRS-style)
-  - Equipment fitting scale preservation
-  - Tool detection for equipped items
-- **Auto Exposure**: Day/night cycle with adaptive exposure
-  - Day exposure: 0.85 (standard daylight)
-  - Night exposure: 1.7 (boosted for visibility)
-  - Smooth transitions using smoothstep interpolation
-  - Mimics eye adaptation to different light levels
-  - Increased moon intensity (0.4 → 0.6)
-  - Brighter ambient lighting at night
-
-### 🏗️ Data-Driven Station Spawning
-
-Stations now spawn from manifest data instead of hardcoded positions:
-
-- **StationSpawnerSystem**: New system to spawn stations from `world-areas.json`
-  - Reads `stations` field from WorldArea definitions
-  - Spawns altars, banks, ranges at configured positions
-  - Replaces hardcoded station spawning in EntityManager
-- **WorldArea Stations**: New `StationLocation` interface
-  - `type`: Station type (altar, bank, range, furnace, anvil)
-  - `position`: [x, y, z] coordinates
-  - `rotation`: Optional rotation quaternion
-- **Helper Functions**: `getStationsInArea()` for querying stations by area
-
-### 🌐 CDN Architecture & WebGL Fallback
-
-Production-ready CDN architecture with graceful WebGL fallback:
-
-- **CDN Architecture**: Improved manifest fetching with validation
-  - Required manifest validation (npcs.json, world-areas.json, biomes.json, stores.json)
-  - Automatic fallback to production CDN when local/localhost CDN is incomplete
-  - Updated asset paths (audio/music, world/)
-  - LFS handling in ensure-assets.mjs for proper full asset detection
-- **WebGL Fallback**: Graceful degradation from WebGPU to WebGL
-  - `forceWebGL` flag in WebGPURenderer for environments without WebGPU support
-  - Disables TSL post-processing on WebGL
-  - Single directional shadow maps instead of CSM on WebGL
-  - Renderer backend detection: `isWebGPURenderer()`, `getRendererBackend()`
-  - Settings panel displays actual renderer type (WebGPU/WebGL)
-- **Database Migrations**: Idempotent constraint creation
-  - Handles constraint-already-exists errors (42710)
-  - PL/pgSQL blocks with `IF NOT EXISTS` checks
-- **Dev Improvements**:
-  - Watch .sql files in server dev script
-  - `@vite-ignore` for PhysX dynamic import
-  - Vite config URL fallback fix
-
-### 🐛 Bug Fixes
-
-- **Death Lock**: Dead players cannot move until respawn
-  - Added death state check in `tile-movement.ts`
-  - Prevents movement during `DYING` or `DEAD` states
-- **XP Drops for Spectators**: XP drops now visible when spectating an agent
-  - Added `sendToPlayerAndSpectators()` method in broadcast system
-  - Spectators see XP orbs, damage numbers, and other visual feedback
-- **Starter Chest**: One-time lootable chest for new player onboarding
-  - Spawns with basic equipment (bronze gear, food, tools)
-  - `StarterChestEntity` with interaction handler
-  - Server-side loot tracking (one-time per character)
-- **Equipment Sync**: Fixed equipment updates not syncing to client
-  - Added `equipmentUpdated` packet handler
-  - Equipment changes now properly reflected in UI
-- **Health Format Handling**: Normalized health data across different formats
-  - Handles both nested `{ current, max }` and flat `{ health, maxHealth }` formats
-  - Prevents health calculation errors in actions
-- **Spawn/Home Teleport**: Now uses manifest Central Haven coordinates
-  - Reduced cooldown to 5 seconds
-  - Uses `world-areas.json` for spawn location
+- **Aligned Equipment Models**: Equipment models now properly aligned for character attachment
+  - Bronze, steel, and mithril weapons (swords, pickaxes, hatchets) with aligned variants
+  - Fishing rods with aligned models for proper hand positioning
+  - Improved visual consistency when equipped by characters
+- **Bank Chest Model**: New 3D bank chest model added
+  - Model path: `asset://models/bank-chest/bank-chest.glb`
+  - Scale: 0.5, Y-offset: 0.10
+  - Added to stations manifest for bank interactions
+- **Prayer Altar**: Complete altar model for prayer restoration
+  - Model: `prayer-alter.glb` with scale 1.0 and yOffset 0.25
+  - Examine text: "An altar to the gods. Pray here to restore prayer points."
+  - Positioned in Central Haven spawn area
+- **Cooking Range**: Cooking station model added
+  - Model: `cooking-range.glb` with scale 1.0 and yOffset 0.3
+  - Reduces burn chance when cooking food
+  - Placed in Central Haven for easy access
+- **World Areas Expansion**: Central Haven now includes all crafting stations
+  - Bank chest at spawn point (0, 0, 0)
+  - Furnace and anvil positioned together for smithing workflow (-24, 28) and (-21, 28)
+  - Prayer altar at southern area (0, -25)
+  - Cooking range near town center (-26, -4)
+  - Complete station coverage for all core skills
 
 </Update>
 
