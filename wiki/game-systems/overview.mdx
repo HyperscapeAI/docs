@@ -129,6 +129,30 @@ Player character management:
 - **Equipment** — Gear slots and bonuses
 - **Skills** — 11 trainable skills (5 combat, 3 gathering, 3 artisan)
 
+### Duel Arena System
+
+**Location:** `systems/server/DuelSystem/`
+
+Server-authoritative PvP dueling system with OSRS-accurate mechanics:
+
+- **Challenge Management** — 30-second challenge requests with distance validation
+- **Arena Pooling** — 6 dedicated arenas with automatic reservation
+- **Rules Negotiation** — 10 combat rules + 11 equipment restrictions
+- **Stake System** — Item staking with anti-scam protections
+- **Combat Resolution** — Death handling, forfeit mechanics, stake transfers
+- **Audit Logging** — Complete economic tracking for all duel outcomes
+
+**Key Components:**
+- `DuelSystem.ts` — Main orchestrator (1,609 lines)
+- `PendingDuelManager.ts` — Challenge lifecycle management
+- `ArenaPoolManager.ts` — Arena reservation and collision
+- `DuelSessionManager.ts` — Session CRUD operations
+- `DuelCombatResolver.ts` — Outcome resolution and stake transfers
+
+<Tip>
+  See the [Duel Arena documentation](/wiki/game-systems/duel-arena) for complete implementation details.
+</Tip>
+
 ---
 
 ## Combat Constants
