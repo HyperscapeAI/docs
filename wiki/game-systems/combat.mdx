@@ -798,6 +798,8 @@ When a mob dies:
 
 XP is granted based on damage dealt and combat style.
 
+### Melee XP
+
 ```typescript
 // From SkillsSystem.ts
 handleCombatKill(data: CombatKillData): void {
@@ -833,6 +835,47 @@ handleCombatKill(data: CombatKillData): void {
   this.grantXP(attackerId, "constitution", hpXP);
 }
 ```
+
+### Ranged XP
+
+```typescript
+// Ranged XP: 4 per damage
+const rangedXP = damage * 4;
+const constitutionXP = damage * 1.33;
+
+// Longrange style splits XP
+if (style === "longrange") {
+  grantXP(playerId, "ranged", damage * 2);
+  grantXP(playerId, "defense", damage * 2);
+  grantXP(playerId, "constitution", damage * 1.33);
+} else {
+  grantXP(playerId, "ranged", damage * 4);
+  grantXP(playerId, "constitution", damage * 1.33);
+}
+```
+
+### Magic XP
+
+```typescript
+// Magic XP: Base spell XP + (2 × damage dealt)
+const magicXP = spellBaseXP + (damage * 2);
+const constitutionXP = damage * 1.33;
+
+// Example: Fire Strike (11.5 base XP) dealing 6 damage
+// Magic XP: 11.5 + (6 * 2) = 23.5
+// Constitution XP: 6 * 1.33 = 8
+
+// Longrange style splits XP
+if (style === "longrange") {
+  grantXP(playerId, "magic", spellBaseXP + damage);
+  grantXP(playerId, "defense", damage);
+  grantXP(playerId, "constitution", damage * 1.33);
+}
+```
+
+<Info>
+Magic grants XP even on a splash (0 damage). You still get the base spell XP, just no damage bonus.
+</Info>
 
 ---
 
