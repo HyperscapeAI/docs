@@ -197,6 +197,7 @@
             "icon": "puzzle",
             "pages": [
               "packages/plugin-hyperscape",
+              "packages/website",
               "packages/asset-forge"
             ]
           }
