@@ -64,29 +64,22 @@ POSTGRES_DB=hyperscape
 POSTGRES_PORT=5432
 ```
 
-### Production/Railway
+### CORS Configuration
 
-```bash
-# Railway automatically sets DATABASE_URL
-DATABASE_URL=postgresql://...  # Auto-set by Railway
+For production deployments with separate frontend and backend domains, configure CORS in the server:
 
-# Required for production
-NODE_ENV=production
-CI=true                        # Skips local asset download
-SKIP_ASSETS=true              # Skips Git LFS clone
-PUBLIC_CDN_URL=https://your-cdn.com  # Required for manifest fetching
-
-# Security
-JWT_SECRET=your-secure-random-secret
-ADMIN_CODE=your-admin-code
-
-# Privy
-PRIVY_APP_ID=your-privy-app-id
-PRIVY_APP_SECRET=your-privy-app-secret
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  'http://localhost:3333',           // Local development
+  'https://hyperscape.pages.dev',    // Cloudflare Pages production
+  'https://*.hyperscape.pages.dev',  // Cloudflare Pages preview deployments
+  // Add your custom domains here
+];
 ```
 
 <Info>
-**Manifest Fetching**: In production (CI=true), the server fetches manifests from `PUBLIC_CDN_URL` at startup. Manifests are downloaded to `packages/server/world/assets/manifests/` and cached for the server lifetime.
+Cloudflare Pages preview deployments use subdomains like `abc123.hyperscape.pages.dev`. The wildcard pattern `*.hyperscape.pages.dev` allows all preview deployments to access the API.
 </Info>
 
 ## Client Environment

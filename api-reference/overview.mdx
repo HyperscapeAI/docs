@@ -85,8 +85,11 @@ curl https://api.hyperscape.lol/health
   Get skill unlock definitions for all skills
 </ParamField>
 
-Returns a map of skill names to unlock arrays:
+```bash
+curl https://api.hyperscape.lol/api/data/skill-unlocks
+```
 
+<Accordion title="Response">
 ```json
 {
   "attack": [
@@ -106,13 +109,19 @@ Returns a map of skill names to unlock arrays:
       "level": 1,
       "description": "Basic stamina regeneration (+1% per level)",
       "type": "ability"
+    },
+    {
+      "level": 50,
+      "description": "+50% stamina regeneration",
+      "type": "ability"
     }
   ]
 }
 ```
+</Accordion>
 
 <Info>
-This endpoint is used by the Skill Guide Panel to display level-based unlocks. Data is server-authoritative and loaded from `skill-unlocks.json` manifest.
+This endpoint is used by the Skill Guide Panel to display what players unlock at each level. The data is server-authoritative and loaded from `skill-unlocks.json` manifest.
 </Info>
 
 ## WebSocket Events

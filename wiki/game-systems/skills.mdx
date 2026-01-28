@@ -32,7 +32,7 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | **Woodcutting** | Chop trees | Using hatchet on trees |
 | **Mining** | Mine ore | Using pickaxe on rocks |
 | **Fishing** | Catch fish | Using fishing rod at spots |
-| **Agility** | Stamina regeneration | Moving through the world (1 XP per 2 tiles) |
+| **Agility** | Stamina and movement | Walking/running around the world |
 
 ### Artisan Skills
 
@@ -489,21 +489,34 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 | Yew | 60 | 202.5 |
 | Magic | 75 | 303.8 |
 
-### Movement XP (Agility)
+### Agility XP
 
-Agility XP is gained passively by moving through the world:
+Agility is trained passively through movement:
 
-| Movement Type | Tiles/Tick | XP Rate | XP/Minute |
-|---------------|------------|---------|-----------|
-| Walking | 2 | 1 XP per 2 tiles | ~100 XP |
-| Running | 4 | 1 XP per 2 tiles | ~200 XP |
+**XP Formula:**
+- 1 XP per 2 tiles traveled
+- Batched every 100 tiles (50 XP grant) to reduce visual spam
+- Both walking and running grant XP at the same rate per tile
+
+**XP Rates:**
+| Movement Type | Tiles/Second | XP/Minute |
+|---------------|--------------|-----------|
+| Walking | 3.33 | ~100 XP |
+| Running | 6.67 | ~200 XP |
+
+**Progression Examples:**
+| Level | Total XP | Time Running |
+|-------|----------|--------------|
+| 10 | 1,154 | ~6 minutes |
+| 50 | 101,333 | ~8.5 hours |
+| 99 | 13,034,431 | ~1,000+ hours |
 
 <Info>
-**XP Batching**: To prevent visual spam, agility XP is granted in batches of 50 XP every 100 tiles traveled. This creates XP drops approximately every 15 seconds while running or 30 seconds while walking.
+XP drops appear approximately every 15 seconds while running, or every 30 seconds while walking. Partial progress is preserved between XP grants.
 </Info>
 
 <Warning>
-**Death Penalty**: When you die, accumulated tiles toward your next agility XP grant are lost (maximum ~50 XP worth of progress). Already-earned XP is not affected.
+Death resets your accumulated tile progress toward the next XP grant (max 50 XP lost). Earned XP is never lost on death.
 </Warning>
 
 ---
@@ -801,76 +814,46 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
-## Agility & Stamina System
+## Weight and Stamina System
 
-Agility is a unique skill that affects stamina regeneration and is trained through movement.
+Agility interacts with the weight and stamina mechanics:
 
-### How Agility Works
+### Stamina Drain (Weight-Based)
 
-**Training Method**: Move through the world (walking or running)
-- 1 XP per 2 tiles traveled
-- XP granted in batches of 50 XP every 100 tiles
-- Both walking and running grant XP at the same rate per tile
+Carrying heavy items increases stamina drain while running:
 
-**Stamina Regeneration Bonus**:
-- Base regeneration: 2/sec while walking, 4/sec while idle
-- Agility bonus: +1% regeneration per agility level
-- Level 99 agility: Nearly double regeneration speed
-
-| Agility Level | Walking Regen/Sec | Idle Regen/Sec |
-|---------------|-------------------|----------------|
-| 1 | 2.02 | 4.04 |
-| 25 | 2.50 | 5.00 |
-| 50 | 3.00 | 6.00 |
-| 75 | 3.50 | 7.00 |
-| 99 | 3.98 | 7.96 |
-
-### Weight & Stamina Drain
-
-Inventory weight affects stamina drain while running:
-
-**Weight Penalty**: +0.5% stamina drain per kg carried
+**Formula:** `Drain Rate = Base Rate × (1 + Weight × 0.005)`
 
 | Weight (kg) | Drain Multiplier | Drain/Second |
 |-------------|------------------|--------------|
-| 0 | 1.0x | 2.0 |
-| 20 | 1.1x | 2.2 |
-| 50 | 1.25x | 2.5 |
-| 100 | 1.5x | 3.0 |
+| 0 | 1.0× | 2.0 |
+| 10 | 1.05× | 2.1 |
+| 20 | 1.1× | 2.2 |
+| 50 | 1.25× | 2.5 |
+| 100 | 1.5× | 3.0 |
 
 <Info>
-**Weight Display**: Your total inventory weight is shown in the Equipment panel. Weight is calculated server-side and synced to the client for accurate stamina calculations.
+Weight is calculated server-side from your inventory and equipment, then synced to the client for stamina calculations.
 </Info>
 
-<Tip>
-High agility levels help offset the stamina penalty from carrying heavy loads. A level 50 agility player with 50kg of gear will regenerate stamina faster than a level 1 agility player with no gear.
-</Tip>
+### Stamina Regeneration (Agility-Based)
 
----
+Higher agility levels increase stamina regeneration:
 
-## Skill Guide Panel
+**Formula:** `Regen Rate = Base Rate × (1 + Agility Level × 0.01)`
 
-Click any skill in the Skills panel to open its Skill Guide, which shows all unlocks for that skill.
-
-**Features**:
-- Level requirements for each unlock
-- Visual distinction between unlocked (green ✓) and locked (🔒) content
-- Next unlock highlighted with progress indicator
-- Type badges (item/ability) for each unlock
-- Scrollable list for skills with many unlocks
-
-**Example Unlocks**:
-- **Attack 40**: Rune weapons
-- **Attack 60**: Dragon weapons
-- **Agility 50**: +50% stamina regeneration
-- **Woodcutting 75**: Magic trees
-- **Prayer 43**: Protect from Melee
+| Agility Level | Idle Regen/Sec | Walking Regen/Sec |
+|---------------|----------------|-------------------|
+| 1 | 4.04 | 2.02 |
+| 10 | 4.4 | 2.2 |
+| 25 | 5.0 | 2.5 |
+| 50 | 6.0 | 3.0 |
+| 75 | 7.0 | 3.5 |
+| 99 | 7.96 | 3.98 |
 
 <Info>
-The Skill Guide Panel fetches unlock data from the server endpoint `/api/data/skill-unlocks`, ensuring server-authoritative progression information.
+At level 99 agility, stamina regenerates nearly twice as fast as level 1, making it easier to sustain running even with heavy loads.
 </Info>
-
----
 
 ## Skill Unlocks
 
@@ -884,10 +867,21 @@ Example unlocks:
 - **Cooking 40**: Lobster
 - **Smithing 50**: Mithril bar
 - **Agility 50**: +50% stamina regeneration
-- **Prayer 43**: Protect from Melee
 
 <Info>
 See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills. You can also view unlocks in-game by clicking on any skill in the Skills Panel.
+</Info>
+
+### Skill Guide Panel
+
+Click any skill in the Skills panel to open its guide, which shows:
+- All unlocks for that skill with level requirements
+- Visual distinction between unlocked (green checkmark) and locked (lock icon) items
+- Your current level and progress
+- Next unlock highlight with levels remaining
+
+<Info>
+The Skill Guide Panel provides an OSRS-style interface for viewing skill progression and planning your training goals.
 </Info>
 
 ## Manifest-Driven Design

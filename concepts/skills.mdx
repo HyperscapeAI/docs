@@ -10,7 +10,7 @@ Hyperscape features a RuneScape-inspired skill system with leveling, XP gain, an
 
 ## Available Skills
 
-Hyperscape has **13 skills** total:
+Hyperscape has **12 skills** total:
 
 ### Combat Skills
 
@@ -30,7 +30,7 @@ Hyperscape has **13 skills** total:
 | **Woodcutting** | Chop trees for logs |
 | **Mining** | Mine rocks for ores |
 | **Fishing** | Catch fish at water spots |
-| **Agility** | Stamina regeneration (trained by moving) |
+| **Agility** | Traverse the world, affects stamina regeneration |
 
 ### Artisan Skills
 
@@ -139,27 +139,25 @@ Requirements:
 
 ### Agility
 
-Agility is trained passively by moving through the world:
+Agility is trained passively by moving around the world. Unlike traditional RuneScape agility courses, Hyperscape's agility system rewards exploration and travel.
 
-**Training Method**:
-- Walk or run anywhere in the game world
-- XP granted every 100 tiles traveled (50 XP per batch)
-- Effective rate: 1 XP per 2 tiles
-- Death resets progress toward next XP grant
+**Training Method:**
+- Gain 1 XP per 2 tiles traveled (walking or running)
+- XP is batched every 100 tiles (50 XP) to prevent visual spam
+- Death resets accumulated tile progress (not earned XP)
 
-**Benefits**:
-- +1% stamina regeneration per Agility level
-- At level 99: Nearly 2x stamina regeneration
-- Improves both idle and walking regeneration rates
+**Benefits:**
+- **Stamina Regeneration**: +1% stamina regen per agility level
+- **Weight Tolerance**: Higher agility helps offset stamina drain from heavy loads
 
-**Stamina System**:
-- Inventory weight affects stamina drain while running (+0.5% drain per kg)
-- Agility level affects stamina regeneration (+1% regen per level)
-- Heavier loads drain stamina faster
-- Higher Agility recovers stamina faster
+**XP Rates:**
+| Movement | XP per Minute |
+|----------|---------------|
+| Walking | ~100 XP |
+| Running | ~200 XP |
 
 <Info>
-  Agility is the only skill that trains passively through normal gameplay. You don't need to click anything - just explore the world!
+  Agility XP is granted in batches of 50 XP every 100 tiles to reduce visual spam. Running players see XP drops approximately every 15 seconds.
 </Info>
 
 ## Artisan Skills
