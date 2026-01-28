@@ -609,58 +609,60 @@ The combat system emits events for UI and logging:
 
 ---
 
-## Duel Arena (PvP)
+---
 
-Hyperscape features a **player-vs-player dueling system** with customizable rules and stakes:
+## Duel Arena Integration
 
-### Duel Features
+The combat system integrates with the Duel Arena for PvP combat:
 
-- **Customizable Rules**: Toggle 10 combat restrictions (no ranged, no food, no forfeit, etc.)
-- **Equipment Restrictions**: Disable specific equipment slots
-- **Stakes**: Bet inventory items on the outcome
-- **6 Arenas**: Dedicated combat zones with wall collision
-- **Anti-Scam Protection**: Acceptance resets when stakes change
-- **Disconnect Handling**: 30-second grace period during combat
+### Rule Enforcement
 
-### Duel Flow
-
-1. **Challenge** — Player A challenges Player B (must be in Duel Arena zone)
-2. **Rules** — Both players negotiate combat rules and equipment restrictions
-3. **Stakes** — Both players add items to stake
-4. **Confirm** — Read-only review before combat
-5. **Countdown** — 3-2-1-FIGHT! (players frozen and teleported to arena)
-6. **Combat** — Fight until death or forfeit
-7. **Resolution** — Winner receives all stakes, both players restored to full health
-
-<Info>
-See [Duel Arena System](/wiki/game-systems/duel-arena) for complete documentation including network protocol, server architecture, and testing.
-</Info>
-
-### Combat Integration
-
-The DuelSystem integrates with CombatSystem for rule enforcement:
+The DuelSystem provides APIs for rule checking:
 
 ```typescript
-// From packages/server/src/systems/DuelSystem/index.ts
-// Other systems check if player is in active duel
-const isInDuel = duelSystem.isPlayerInActiveDuel(playerId);
+const duelSystem = world.getSystem("duel");
 
-// Check specific rules
-if (!duelSystem.canEatFood(playerId)) {
-  return { success: false, error: "Food is disabled in this duel" };
+// Check if player can use specific combat types
+if (duelSystem && !duelSystem.canUseRanged(attackerId)) {
+  return; // Block ranged attack in duel
 }
 
-if (!duelSystem.canMove(playerId)) {
-  return { success: false, error: "Movement is disabled" };
+if (duelSystem && !duelSystem.canUseMelee(attackerId)) {
+  return; // Block melee attack in duel
+}
+
+if (duelSystem && !duelSystem.canEatFood(playerId)) {
+  return; // Block food consumption in duel
 }
 ```
+
+### Death Handling
+
+Duel deaths are handled differently than normal deaths:
+
+```typescript
+// From PlayerDeathSystem.ts
+const duelSystem = this.world.getSystem("duel");
+if (duelSystem?.isPlayerInActiveDuel(playerId)) {
+  // Duel death - DuelSystem handles resolution
+  // No items lost, no headstone, winner gets stakes
+  return;
+}
+
+// Normal death - respawn at hospital with item loss
+this.handleNormalDeath(playerId);
+```
+
+<Info>
+  See the [Duel Arena documentation](/wiki/game-systems/duel-arena) for complete PvP mechanics.
+</Info>
 
 ---
 
 ## Related Documentation
 
-- [Duel Arena System](/wiki/game-systems/duel-arena) (complete PvP dueling guide)
-- [Inventory System](/wiki/game-systems/inventory) (for food consumption and staking)
+- [Duel Arena](/wiki/game-systems/duel-arena) (PvP dueling system)
+- [Inventory System](/wiki/game-systems/inventory) (for food consumption)
 - [Tile Movement System](/wiki/game-systems/movement)
 - [Skills & Progression](/wiki/game-systems/skills)
 - [NPC Data Structure](/wiki/data/npcs)

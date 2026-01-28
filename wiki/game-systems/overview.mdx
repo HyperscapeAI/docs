@@ -200,6 +200,30 @@ OSRS-style quest system with multi-stage quests:
 - **Security** — HMAC kill token validation, audit logging
 - **Performance** — O(1) stage lookups, object spread elimination
 
+### Duel Arena System
+
+**Location:** `systems/server/DuelSystem/`
+
+Server-authoritative PvP dueling system with OSRS-accurate mechanics:
+
+- **Challenge Management** — 30-second challenge requests with distance validation
+- **Arena Pooling** — 6 dedicated arenas with automatic reservation
+- **Rules Negotiation** — 10 combat rules + 11 equipment restrictions
+- **Stake System** — Item staking with anti-scam protections
+- **Combat Resolution** — Death handling, forfeit mechanics, stake transfers
+- **Audit Logging** — Complete economic tracking for all duel outcomes
+
+**Key Components:**
+- `DuelSystem.ts` — Main orchestrator (1,609 lines)
+- `PendingDuelManager.ts` — Challenge lifecycle management
+- `ArenaPoolManager.ts` — Arena reservation and collision
+- `DuelSessionManager.ts` — Session CRUD operations
+- `DuelCombatResolver.ts` — Outcome resolution and stake transfers
+
+<Tip>
+  See the [Duel Arena documentation](/wiki/game-systems/duel-arena) for complete implementation details.
+</Tip>
+
 ---
 
 ## Combat Constants
@@ -406,8 +430,8 @@ export enum EventType {
   <Card title="Combat System" icon="swords" href="/wiki/game-systems/combat">
     OSRS-accurate damage formulas, attack styles, aggro system, and death mechanics.
   </Card>
-  <Card title="Quest System" icon="scroll" href="/wiki/game-systems/quests">
-    OSRS-style quests with multi-stage objectives, requirements, rewards, and security features.
+  <Card title="Duel Arena" icon="shield-halved" href="/wiki/game-systems/duel-arena">
+    Player-vs-player dueling with rules, stakes, arenas, and anti-scam protections.
   </Card>
   <Card title="Skills & Progression" icon="chart-line" href="/wiki/game-systems/skills">
     RuneScape XP curves, leveling, combat level formula, and skill requirements.
@@ -420,20 +444,5 @@ export enum EventType {
   </Card>
   <Card title="Tile Movement" icon="route" href="/wiki/game-systems/movement">
     Discrete tile-based movement, pathfinding, and OSRS melee range rules.
-  </Card>
-  <Card title="Trading System" icon="handshake" href="/wiki/game-systems/trading">
-    Player-to-player trading with OSRS-style two-screen confirmation and anti-scam protection.
-  </Card>
-  <Card title="Terrain System" icon="mountain" href="/wiki/game-systems/terrain">
-    Procedural terrain generation with flat zones for stations and smooth blending.
-  </Card>
-  <Card title="Social System" icon="users" href="/wiki/game-systems/social">
-    Friend management, private messaging, online status tracking, and ignore lists.
-  </Card>
-  <Card title="Inventory System" icon="briefcase" href="/wiki/game-systems/inventory">
-    28-slot inventory with transaction locks, coin pouch, and OSRS-style context menus.
-  </Card>
-  <Card title="NPC Data" icon="database" href="/wiki/data/npcs">
-    How NPCs and mobs are defined with drop tables and aggro behaviors.
   </Card>
 </CardGroup>

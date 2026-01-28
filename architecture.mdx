@@ -54,7 +54,7 @@ flowchart LR
 
 ## Monorepo Structure
 
-Hyperscape is a **Turbo monorepo** with 6 packages:
+Hyperscape is a **Turbo monorepo** with 8 packages:
 
 ```
 hyperscape/
@@ -64,7 +64,9 @@ hyperscape/
 │   ├── client/              # @hyperscape/client - Web client (Vite, React)
 │   ├── plugin-hyperscape/   # @hyperscape/plugin-hyperscape - ElizaOS AI agent plugin
 │   ├── physx-js-webidl/     # @hyperscape/physx-js-webidl - PhysX WASM bindings
-│   └── asset-forge/         # 3d-asset-forge - AI asset generation (Elysia + React Three Fiber)
+│   ├── asset-forge/         # 3d-asset-forge - AI asset generation (Elysia + React Three Fiber)
+│   ├── website/             # @hyperscape/website - Marketing website (Next.js)
+│   └── docs-site/           # Documentation (Docusaurus)
 ├── assets/                  # Shared game assets
 ├── world/                   # World configuration and manifests
 └── scripts/                 # Build and dev scripts
@@ -229,6 +231,23 @@ The plugin uses **local type definitions** instead of importing from `@hyperscap
 }
 ```
 
+### website (`@hyperscape/website`)
+
+Marketing website built with:
+
+- **Next.js 15**: React framework with static export
+- **React 19**: UI framework
+- **Three.js**: 3D rendering and effects
+- **Tailwind CSS 4**: Utility-first styling
+- **Framer Motion**: Animations
+- **GSAP**: Advanced animations
+
+**Pages:**
+- Landing page with hero, features, and CTA
+- $GOLD token page with scroll design
+
+**Deployment:** Static site export compatible with Vercel, Netlify, Cloudflare Pages
+
 ### asset-forge (`3d-asset-forge`)
 
 AI-powered asset generation using:
@@ -260,6 +279,11 @@ packages/shared/src/systems/shared/
 ├── economy/        # Banks, shops, trading
 ├── entities/       # Entity management
 └── interaction/    # Player interactions
+
+packages/server/src/systems/
+├── DuelSystem/     # PvP duel arena system
+├── ServerNetwork/  # Network and authentication
+└── ...
 ```
 
 ### Manifest-Driven Content

@@ -1,0 +1,708 @@
+---
+title: "website"
+description: "Marketing website with Next.js and Three.js"
+icon: "globe"
+---
+
+{/* 
+  Source: packages/website/
+  Verified against PR #684 (2,723 additions)
+*/}
+
+## Overview
+
+The `@hyperscape/website` package is the official marketing website for Hyperscape, featuring a modern landing page with 3D effects, responsive design, and the $GOLD token page.
+
+**Tech Stack:**
+- **Next.js 15**: React framework with static export
+- **React 19**: UI framework
+- **Three.js**: 3D rendering and effects
+- **React Three Fiber**: Declarative Three.js
+- **Tailwind CSS 4**: Utility-first styling
+- **Framer Motion**: Animations
+- **GSAP**: Advanced animations
+- **Lenis**: Smooth scrolling
+
+---
+
+## Package Structure
+
+```
+packages/website/
+├── src/
+│   ├── app/
+│   │   ├── page.tsx           # Landing page
+│   │   ├── gold/
+│   │   │   └── page.tsx       # $GOLD token page
+│   │   ├── layout.tsx         # Root layout with metadata
+│   │   └── globals.css        # Global styles and theme
+│   ├── components/
+│   │   ├── Header.tsx         # Navigation header
+│   │   ├── Footer.tsx         # Footer with links
+│   │   ├── Background.tsx     # Reusable background component
+│   │   ├── Hero/              # Landing page hero
+│   │   ├── Features/          # Features section
+│   │   ├── CTA/               # Call-to-action section
+│   │   └── GoldToken/         # $GOLD token page
+│   └── lib/
+│       └── fonts.ts           # Font configuration
+├── public/
+│   ├── images/                # Static images
+│   └── fonts/                 # Custom fonts
+├── next.config.ts             # Next.js configuration
+├── tailwind.config.ts         # Tailwind configuration
+└── package.json
+```
+
+---
+
+## Development
+
+### Commands
+
+```bash
+# From packages/website/
+bun run dev        # Start dev server (port 3334)
+bun run build      # Build static site
+bun run start      # Start production server
+bun run lint       # Run ESLint
+bun run typecheck  # TypeScript type checking
+```
+
+### Port Allocation
+
+| Port | Service |
+|------|---------|
+| 3334 | Website dev server |
+
+<Info>
+  The website runs on port 3334 to avoid conflicts with the game client (3333) and other services.
+</Info>
+
+---
+
+## Configuration
+
+### Next.js Config
+
+**Location:** `packages/website/next.config.ts`
+
+```typescript
+const config: NextConfig = {
+  output: "export",              // Static site generation
+  images: {
+    unoptimized: true,           // No image optimization for static export
+  },
+  trailingSlash: true,           // Add trailing slashes to URLs
+  transpilePackages: [
+    "three",
+    "@react-three/fiber",
+    "@react-three/drei",
+    "@react-three/postprocessing",
+  ],
+  typescript: {
+    ignoreBuildErrors: true,     // R3F types don't work with jsx: preserve
+  },
+  eslint: {
+    ignoreDuringBuilds: true,    // Warnings acceptable for initial build
+  },
+};
+```
+
+<Warning>
+  TypeScript build errors are ignored because React Three Fiber types conflict with Next.js's `jsx: preserve` mode. The code works at runtime.
+</Warning>
+
+### Environment Variables
+
+**Location:** `packages/website/.env.example`
+
+```bash
+# External URLs
+NEXT_PUBLIC_DOCS_URL=https://hyperscape-ai.mintlify.app/
+NEXT_PUBLIC_GAME_URL=https://play.hyperscape.club
+NEXT_PUBLIC_DISCORD_URL=https://discord.gg/f4ZwhAbKye
+NEXT_PUBLIC_TWITTER_URL=https://x.com/hyperscapeai
+NEXT_PUBLIC_GITHUB_URL=https://github.com/hyperscape-ai
+```
+
+Copy `.env.example` to `.env.local` and fill in values.
+
+---
+
+## Pages
+
+### Landing Page (`/`)
+
+**Components:**
+- **Header** - Navigation with logo and links
+- **Hero** - Main hero section with logo, tagline, and CTA
+- **Features** - Feature cards with icons
+- **CTA** - Call-to-action banner
+- **Footer** - Links and social media
+- **Background** - Gradient background with image overlay
+
+**Features:**
+- Responsive layout (mobile, tablet, desktop)
+- Staggered animations with Framer Motion
+- Smooth scrolling with Lenis
+- Dark fantasy theme with gold accents
+
+### $GOLD Token Page (`/gold`)
+
+**Components:**
+- **GoldToken** - Complete token page with scroll design
+- **Two-column hero** - Token image and description
+- **Token details** - Contract address with copy-to-clipboard
+- **Features** - Token utility and benefits
+- **How it works** - Token mechanics
+- **CTA** - Call-to-action with banner
+
+**Token Information:**
+- 1 $GOLD = 1 gold in-game
+- Be the richest player at launch
+- Exclusive items for top holders
+
+---
+
+## Styling
+
+### Theme Configuration
+
+**Location:** `packages/website/src/app/globals.css`
+
+Custom CSS variables for consistent theming:
+
+```css
+@theme {
+  /* Typography */
+  --font-display: 'Cinzel', serif;
+  --font-body: 'Rubik', system-ui, sans-serif;
+  
+  /* Gold palette */
+  --gold-essence: #d4a84b;
+  --gold-flame: #ffd866;
+  --gold-dim: #c49530;
+  --gold-ember: #b8860b;
+  
+  /* Background depths */
+  --bg-depth: #0a0a0c;
+  --bg-surface: #141416;
+  --bg-elevated: #1e1e22;
+  
+  /* Glass effects */
+  --glass-surface: rgba(10, 10, 12, 0.85);
+  --glass-border: rgba(45, 40, 32, 0.5);
+  --glass-highlight: rgba(212, 168, 75, 0.1);
+}
+```
+
+### Utility Classes
+
+```css
+.glass                  /* Glass morphism effect */
+.glow-gold              /* Gold glow filter */
+.text-gradient-gold     /* Gold gradient text */
+.border-gradient-gold   /* Gold gradient border */
+.btn-primary            /* Primary button style */
+.btn-secondary          /* Secondary button style */
+.animate-slow-zoom      /* 60s zoom animation */
+.animate-float          /* 6s float animation */
+.animate-glow-pulse     /* 2s glow pulse */
+.container-padding      /* Responsive container padding */
+```
+
+### Responsive Container Padding
+
+```css
+/* Mobile: 12px */
+.container-padding { padding-left: 0.75rem; padding-right: 0.75rem; }
+
+/* Tablet (640px+): 16px */
+@media (min-width: 640px) {
+  .container-padding { padding-left: 1rem; padding-right: 1rem; }
+}
+
+/* Desktop (1024px+): 24px */
+@media (min-width: 1024px) {
+  .container-padding { padding-left: 1.5rem; padding-right: 1.5rem; }
+}
+```
+
+---
+
+## Components
+
+### Background
+
+**Location:** `packages/website/src/components/Background.tsx`
+
+Reusable background with gradient overlay:
+
+```typescript
+<Background 
+  image="/images/app_background.png"  // Default
+  opacity={0.04}                      // Default
+/>
+
+<Background 
+  image="/images/gold_background.png" // Custom for $GOLD page
+  opacity={0.04}
+/>
+```
+
+**Features:**
+- Fixed positioning (stays in place during scroll)
+- Horizontal gradient with dark center, gold-tinted edges
+- Customizable background image
+- Adjustable opacity
+
+### Hero
+
+**Location:** `packages/website/src/components/Hero/Hero.tsx`
+
+Landing page hero section:
+
+**Features:**
+- Responsive layout (stacks on mobile)
+- Logo with glow effect
+- Tagline with gradient text
+- CTA button with hover effects
+- Staggered animations (logo → tagline → button)
+
+### Features
+
+**Location:** `packages/website/src/components/Features/Features.tsx`
+
+Feature cards section:
+
+**Features:**
+- Grid layout (1 column mobile, 2 columns desktop)
+- Icon + title + description
+- Hover effects
+- Responsive sizing
+
+### CTA
+
+**Location:** `packages/website/src/components/CTA/CTA.tsx`
+
+Call-to-action section:
+
+**Features:**
+- Banner background image
+- Gradient overlay
+- Centered text and button
+- Responsive padding
+
+### GoldToken
+
+**Location:** `packages/website/src/components/GoldToken/GoldToken.tsx`
+
+Complete $GOLD token page:
+
+**Sections:**
+- Two-column hero (token image + description)
+- Token details with contract address
+- Features grid
+- How it works
+- CTA section
+
+**Features:**
+- Scroll-style design
+- Copy-to-clipboard for contract address
+- Responsive layout
+- Gold theme throughout
+
+---
+
+## Fonts
+
+### Font Configuration
+
+**Location:** `packages/website/src/lib/fonts.ts`
+
+```typescript
+import { Cinzel } from "next/font/google";
+import localFont from "next/font/local";
+
+export const cinzel = Cinzel({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+export const rubik = localFont({
+  src: "../../public/fonts/rubik.woff2",
+  variable: "--font-body",
+  display: "swap",
+});
+```
+
+**Usage:**
+- **Cinzel**: Display font for headings
+- **Rubik**: Body font for content
+
+---
+
+## SEO & Metadata
+
+### Root Layout Metadata
+
+**Location:** `packages/website/src/app/layout.tsx`
+
+```typescript
+export const metadata: Metadata = {
+  metadataBase: new URL("https://hyperscape.club"),
+  title: "Hyperscape - The First AI-Native MMORPG",
+  description: "Where autonomous agents powered by ElizaOS play alongside humans...",
+  keywords: ["MMORPG", "AI gaming", "RuneScape", "ElizaOS", ...],
+  openGraph: {
+    title: "Hyperscape - The First AI-Native MMORPG",
+    images: [{ url: "/images/og-image.jpg", width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@hyperscapeai",
+  },
+};
+```
+
+### Page-Specific Metadata
+
+```typescript
+// packages/website/src/app/gold/page.tsx
+export const metadata: Metadata = {
+  title: "$GOLD Token - Hyperscape",
+  description: "The official token of Hyperscape. 1 $GOLD = 1 gold in-game.",
+};
+```
+
+---
+
+## Deployment
+
+### Static Export
+
+The website builds to a static site for deployment:
+
+```bash
+bun run build
+# Output: out/ directory
+```
+
+**Build Output:**
+- HTML files for each page
+- Optimized CSS and JavaScript
+- Static assets (images, fonts)
+- No server-side rendering required
+
+### Deployment Targets
+
+Compatible with:
+- **Vercel** (recommended)
+- **Netlify**
+- **Cloudflare Pages**
+- **GitHub Pages**
+- **Any static hosting**
+
+---
+
+## Dependencies
+
+### Core Dependencies
+
+```json
+{
+  "next": "^15.1.0",
+  "react": "^19.0.0",
+  "react-dom": "^19.0.0",
+  "@react-three/fiber": "^9.0.0",
+  "@react-three/drei": "^10.0.0",
+  "@react-three/postprocessing": "^3.0.0",
+  "three": "^0.170.0",
+  "gsap": "^3.12.0",
+  "framer-motion": "^11.15.0",
+  "lenis": "^1.1.0",
+  "detect-gpu": "^5.0.0"
+}
+```
+
+### Dev Dependencies
+
+```json
+{
+  "@types/three": "^0.170.0",
+  "@types/node": "^22.0.0",
+  "@types/react": "^19.0.0",
+  "@types/react-dom": "^19.0.0",
+  "typescript": "^5.9.2",
+  "tailwindcss": "^4.0.0",
+  "@tailwindcss/postcss": "^4.0.0",
+  "postcss": "^8.5.0",
+  "eslint": "^9.0.0",
+  "eslint-config-next": "^15.1.0"
+}
+```
+
+---
+
+## Performance Optimizations
+
+### Image Optimization
+
+Images are unoptimized for static export:
+
+```typescript
+// next.config.ts
+images: {
+  unoptimized: true,
+}
+```
+
+For production, consider:
+- Pre-optimizing images with Sharp
+- Using WebP format
+- Responsive image sizes
+
+### GPU Detection
+
+**Location:** Uses `detect-gpu` package
+
+```typescript
+import { getGPUTier } from "detect-gpu";
+
+const gpuTier = await getGPUTier();
+if (gpuTier.tier < 2) {
+  // Disable heavy 3D effects
+  // Use CSS fallback animations
+}
+```
+
+### Reduced Motion
+
+Respects user preferences:
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+```
+
+---
+
+## Accessibility
+
+### Features
+
+- Semantic HTML structure
+- ARIA labels on interactive elements
+- Keyboard navigation support
+- Focus visible states
+- Reduced motion support
+- High contrast text (WCAG AA compliant)
+
+### Color Contrast
+
+All text meets WCAG AA standards:
+- Primary text: `#f5f0e8` on `#0a0a0c` (17.8:1)
+- Secondary text: `#c4b896` on `#0a0a0c` (10.2:1)
+- Muted text: `#7d7460` on `#0a0a0c` (4.8:1)
+
+---
+
+## Customization
+
+### Adding a New Page
+
+1. Create page file in `src/app/`:
+
+```typescript
+// src/app/about/page.tsx
+import { Metadata } from "next";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
+import { Background } from "@/components/Background";
+
+export const metadata: Metadata = {
+  title: "About - Hyperscape",
+  description: "Learn about Hyperscape",
+};
+
+export default function AboutPage() {
+  return (
+    <>
+      <Background />
+      <main className="relative z-10">
+        <Header />
+        {/* Your content */}
+        <Footer />
+      </main>
+    </>
+  );
+}
+```
+
+2. Add link to Header component
+
+### Customizing Theme
+
+Edit CSS variables in `src/app/globals.css`:
+
+```css
+@theme {
+  --gold-essence: #d4a84b;  /* Change primary gold color */
+  --bg-depth: #0a0a0c;      /* Change background color */
+}
+```
+
+---
+
+## Assets
+
+### Images
+
+**Location:** `packages/website/public/images/`
+
+| Image | Purpose | Dimensions |
+|-------|---------|------------|
+| `hero-image.png` | Landing page hero | Variable |
+| `gold-banner.png` | $GOLD page hero | Variable |
+| `gold-cta.png` | $GOLD CTA section | Variable |
+| `cta-banner.png` | Landing CTA | Variable |
+| `app_background.png` | Default background | Variable |
+| `gold_background.png` | $GOLD page background | Variable |
+| `logo.png` | Hyperscape logo | Variable |
+| `wordmark.png` | Hyperscape wordmark | Variable |
+| `token.png` | $GOLD token icon | Variable |
+| `og-image.jpg` | Open Graph image | 1200×630 |
+
+### Fonts
+
+**Location:** `packages/website/public/fonts/`
+
+- `rubik.woff2` - Body font (self-hosted for performance)
+
+---
+
+## Build Output
+
+### Static Export
+
+```bash
+bun run build
+```
+
+**Output Structure:**
+```
+out/
+├── index.html           # Landing page
+├── gold/
+│   └── index.html       # $GOLD token page
+├── _next/
+│   ├── static/          # CSS, JS bundles
+│   └── ...
+├── images/              # Static images
+└── fonts/               # Font files
+```
+
+### Bundle Size
+
+Optimized for performance:
+- Tailwind CSS purged (only used classes)
+- Three.js tree-shaken
+- Code splitting by route
+- Static generation (no runtime overhead)
+
+---
+
+## Integration with Monorepo
+
+### Workspace Configuration
+
+```json
+// Root package.json
+{
+  "workspaces": [
+    "packages/*"
+  ]
+}
+```
+
+The website package is included in the monorepo but **independent** - it doesn't depend on other Hyperscape packages.
+
+### Turbo Configuration
+
+```json
+// turbo.json
+{
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["out/**", ".next/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
+```
+
+---
+
+## Troubleshooting
+
+### TypeScript Errors
+
+**Issue:** R3F types conflict with Next.js
+
+**Solution:** Build errors are ignored in config. If you need strict type checking:
+
+```typescript
+// Use type assertions for R3F components
+<mesh position={[0, 0, 0] as [number, number, number]}>
+```
+
+### Image Optimization
+
+**Issue:** Images not optimized in static export
+
+**Solution:** Pre-optimize images before adding:
+
+```bash
+# Using Sharp CLI
+npx sharp-cli -i input.png -o output.png --webp
+```
+
+### Font Loading
+
+**Issue:** FOUT (Flash of Unstyled Text)
+
+**Solution:** Fonts use `display: swap` for better UX. Consider preloading:
+
+```typescript
+// In layout.tsx
+<link rel="preload" href="/fonts/rubik.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+```
+
+---
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Package Overview" icon="layout-grid" href="/packages/overview">
+    All packages in the monorepo
+  </Card>
+  <Card title="Development Setup" icon="code" href="/guides/development">
+    Local development workflow
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/guides/deployment">
+    Production deployment guide
+  </Card>
+</CardGroup>

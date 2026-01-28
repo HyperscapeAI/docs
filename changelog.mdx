@@ -23,52 +23,139 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Duel Arena & UI Enhancements" description="January 2026" date="2026-01-27">
+<Update label="Duel Arena, Website, & UI Enhancements" description="January 2026" date="2026-01-28">
 
 ### ⚔️ Duel Arena System (PR #685)
 
-Complete player-vs-player dueling system with OSRS-accurate mechanics (15,066 additions, 85 files changed):
+Complete PvP dueling system with OSRS-accurate mechanics (15,066 additions):
 
-- **Multi-Stage Negotiation**: 6-phase state machine (Challenge → Rules → Stakes → Confirm → Countdown → Fighting → Finished)
-- **10 Combat Rules**: No ranged, no melee, no magic, no food, no forfeit, no movement, etc.
-- **11 Equipment Restrictions**: Disable specific equipment slots before combat
-- **Item Staking**: Bet inventory items with anti-scam protection
-- **6 Dedicated Arenas**: 2×3 grid with wall collision, terrain flattening, forfeit pillars
-- **Server Architecture** (SOLID principles):
-  - `DuelSystem` (1600+ lines), `DuelSessionManager` (290 lines)
-  - `PendingDuelManager` (310 lines), `ArenaPoolManager` (260 lines)
-  - `DuelCombatResolver` (280 lines)
-- **Client UI**: 8 components (DuelPanel, DuelCountdown, DuelHUD, DuelResultModal, etc.)
-- **Testing**: 1,755 lines of unit tests with 100% critical path coverage
-- **Network Protocol**: 21 typed events for client-server communication
-- **Disconnect Handling**: 30s grace period, auto-forfeit, reconnect support
+- **Challenge System**: 30-second challenge requests with distance validation (15 tiles)
+- **Rules Negotiation**: 10 combat rule toggles + 11 equipment slot restrictions
+  - Rules: No Ranged, No Melee, No Magic, No Special Attack, No Prayer, No Potions, No Food, No Movement, No Forfeit, Fun Weapons
+  - Equipment: Head, Cape, Amulet, Weapon, Body, Shield, Legs, Gloves, Boots, Ring, Ammo
+  - Rule validation prevents invalid combinations (e.g., noForfeit + noMovement)
+- **Stake System**: Item staking with anti-scam protections
+  - Left-click to stake 1, right-click for quantity menu
+  - Acceptance resets when stakes modified
+  - Value imbalance warnings (>50% difference, >10k gp)
+  - Opponent modification banners
+- **Arena Pooling**: 6 dedicated arenas with automatic reservation
+  - 2×3 grid layout (20×24 tile arenas)
+  - Collision-based walls prevent escape
+  - North/south spawn points with auto-facing
+- **Combat Phase**: 3-2-1 countdown with rule enforcement
+  - Players frozen during countdown
+  - Server-side rule checking (canUseRanged, canEatFood, canMove, etc.)
+  - Forfeit mechanics with confirmation
+  - Disconnect handling (30-second reconnection timer)
+- **Resolution**: Winner receives all stakes, both players restored to full health
+  - 8-tick death animation delay (4.8 seconds)
+  - Teleport to duel arena lobby (different spawns for winner/loser)
+  - Comprehensive audit logging
+- **Client UI**: Complete duel interface with 8 components
+  - DuelPanel with screen switching (Rules, Stakes, Confirm)
+  - DuelHUD with opponent health and active rules
+  - DuelCountdown with animated 3-2-1-FIGHT overlay
+  - DuelResultModal with victory/defeat display
+  - DuelChallengeModal for incoming challenges
+- **Server Architecture**: SOLID design with 4 manager classes
+  - DuelSystem (1,609 lines) - Main orchestrator
+  - PendingDuelManager - Challenge lifecycle
+  - ArenaPoolManager - Arena reservation and collision
+  - DuelSessionManager - Session CRUD operations
+  - DuelCombatResolver - Outcome resolution and stake transfers
+- **Testing**: 1,755 lines of comprehensive unit tests
+  - DuelSystem.test.ts (1,066 lines) - Full state machine
+  - ArenaPoolManager.test.ts (233 lines) - Arena pooling
+  - PendingDuelManager.test.ts (456 lines) - Challenge management
+
+### 🌐 Website Package (PR #684)
+
+New marketing website with Next.js and Three.js (2,723 additions):
+
+- **New Package**: `@hyperscape/website` with Next.js 15, React 19, Tailwind CSS 4
+- **Landing Page**: Redesigned hero with responsive layout and staggered animations
+  - Hero component with logo, tagline, and CTA button
+  - Features section with larger sizing and better alignment
+  - CTA section with banner image and gradient overlay
+  - Background component for per-page customizable backgrounds
+- **$GOLD Token Page**: New `/gold` route with scroll-style design
+  - Two-column hero layout with token image
+  - Token details with contract address (copy-to-clipboard)
+  - Features grid explaining token utility
+  - How it works section
+  - CTA section with gold-themed banner
+- **Tech Stack**: React Three Fiber, GSAP, Framer Motion, Lenis smooth scrolling
+- **Styling**: Custom theme with gold palette, glass effects, and dark fantasy aesthetic
+- **SEO**: Complete metadata, Open Graph, Twitter cards
+- **Deployment**: Static site export (compatible with Vercel, Netlify, Cloudflare Pages)
+- **Port**: Runs on 3334 (avoids conflict with game client on 3333)
 
 ### 🎨 UI Improvements & Mobile Enhancements (PR #656)
 
-Major UI refactoring with mobile support and accessibility:
+Comprehensive UI improvements with mobile support (1,972 additions):
 
-- **RS3-Style Keyboard Shortcuts**: 5 action bars with modifier keys (Ctrl, Shift, Alt)
-  - 70 total keybinds across all bars
-  - Modifier symbols on slots (^1, ⇧2, ⌥3)
-- **Vertical Action Bars**: Mobile-optimized layout with shared state
-- **Chat Filtering**: Proper tab-based filtering (All/Game/Clan/Private)
-  - Extended message types including `duel_challenge`
-  - Clickable duel challenges (red underlined text)
-- **Edit Mode Refactor**: Hold-to-toggle with progress indicator, Escape to exit
-- **Delete Zone**: Drag panels to trash to remove them
-- **Responsive Menu Bar**: Auto-reflow between 1-5 rows based on container size
-- **Panel Size Increase**: All panels scaled up ~30% for readability
-- **Theme Updates**: New `panelPrimary`/`panelSecondary` colors, improved contrast
-- **Type Safety**: Proper event payload types for ActionBar, Prayer, AttackStyle
-- **Performance**: Memoized styles, race condition fixes, debug log cleanup
-- **Inventory Cross-Tab Isolation**: Fixed updates affecting other browser tabs
+- **RS3-Style Keyboard Shortcuts**: Expanded shortcuts with modifier support
+  - Bar 1: 1-9, 0, -, =, Backspace, Insert (no modifier)
+  - Bar 2: Ctrl+1 through Ctrl+Insert
+  - Bar 3: Shift+1 through Shift+Insert
+  - Bar 4: Alt+1 through Alt+Insert
+  - Bar 5: Q, W, E, R, T, Y, U, I, O, P, [, ], \
+  - Compact display format: ^1, ⇧2, ⌥3
+  - Supports up to 5 action bars (70 total slots)
+- **Mobile Touch Support**: Long-press drag-and-drop for mobile
+  - TouchSensor added to dnd-kit (250ms long-press activation)
+  - Long-press terrain for context menu (500ms)
+  - Works on inventory, equipment, skills, prayer panels
+- **Panel Size Increases**: ~30% larger panels for better readability
+  - Inventory: 240×320 → 320×420
+  - Equipment: 220×320 → 260×360
+  - Skills: 250×310 → 325×400
+  - Combat: 240×280 → 310×360
+  - Chat: 400×450 → 520×585
+  - Minimap: 420×420 → 550×550
+- **Edit Mode Refactor**: Extracted keyboard handling to prevent duplicate listeners
+  - New `useEditModeKeyboard` hook (single instantiation)
+  - Hold L for 1 second to unlock, Escape to lock
+  - Progress bar shows hold duration
+  - Race condition fix in animation loop
+- **Delete Zone**: Drag panels to delete zone to remove them
+  - Visual feedback on hover
+  - Trash icon with label
+  - Only visible when dragging windows
+- **Chat Message Filtering**: Proper tab filtering (all/game/clan/private)
+  - Extended message types: trade, private, clan, guild
+  - Color-coded messages (pink for private, green for clan)
+  - Context-aware empty state messages
+- **Menu Bar Layout**: Responsive grid algorithm
+  - Automatically reflows between 1-5 rows
+  - Buttons scale to fit container (20-32px)
+  - Viewport edge snapping on layout changes
+- **Minimap Fill**: Uses larger dimension to always fill container
+- **Dialogue Panel Fix**: Removed redundant ModalWindow wrapper
+- **Equipment Panel**: Removed character silhouette for cleaner appearance
+- **Theme Colors**: New `panelPrimary` and `panelSecondary` colors for better contrast
+- **Border Radius**: Standardized to squared corners (borderRadius: 0) for OSRS style
+- **Type Safety**: Proper event payload types (no more `unknown` assertions)
+- **Performance**: Memoized style objects in duel panels
 
-### 🔧 Code Quality
+### 🐛 Bug Fixes
 
-- **Law of Demeter**: Helper methods on `PlayerEntity` and `World`
-- **Exhaustive Switches**: `assertNever()` for type-safe state machines
-- **Logger Service**: Structured logging replaces console.log
-- **Memoized Styles**: `useMemo` hooks prevent unnecessary re-renders
+- **Inventory Cross-Tab**: Fixed inventory updates applying to wrong players
+- **Bank Close Event**: Standardized to `bankClose` (was `bank_close`)
+- **Console Logs**: Removed debug logs from InteractionRouter
+- **Unused Imports**: Removed unused `useMemo` import
+- **Death Animation**: Fixed remote player death animation race condition
+- **PvP Combat Rotation**: Improved player rotation during duel combat
+- **Arena Wall Collision**: Aligned collision with visual walls
+- **Duel Inventory Isolation**: Fixed inventory isolation between duel tabs
+- **Movement Blocking**: Resolved movement bugs after countdown and death
+
+### 📚 Documentation
+
+- **New Pages**: Duel Arena system documentation, Website package documentation, UI improvements guide
+- **Updated**: Game systems overview, packages overview, architecture, development guide, combat system, death system
+- **Navigation**: Added duel-arena and ui-improvements to docs navigation
 
 </Update>
 

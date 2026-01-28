@@ -1,955 +1,885 @@
 ---
-title: "Duel Arena System"
-description: "Player-vs-player dueling with stakes, rules, and OSRS-accurate mechanics"
+title: "Duel Arena"
+description: "Player-vs-player dueling system with rules, stakes, and arenas"
 icon: "swords"
 ---
 
-# Duel Arena System
+{/* 
+  Source: packages/server/src/systems/DuelSystem/
+  Verified against PR #685 (15,066 additions)
+*/}
 
-The Duel Arena is a **server-authoritative PvP dueling system** where players can challenge each other to combat with customizable rules and stakes. The system follows OSRS-style mechanics with a multi-stage negotiation process before combat begins.
+## Overview
 
-<Info>
-**Location**: `packages/server/src/systems/DuelSystem/` (server) and `packages/client/src/game/panels/DuelPanel/` (client UI)
-</Info>
+The Duel Arena is a server-authoritative PvP system where players challenge each other to combat with customizable rules and stakes. Inspired by Old School RuneScape's Duel Arena, it provides a safe environment for player-vs-player combat with economic stakes.
+
+**Key Features:**
+- 6 dedicated duel arenas with automatic pooling
+- 10 combat rule toggles (no ranged, no food, etc.)
+- 11 equipment slot restrictions
+- Item staking with anti-scam protections
+- 3-2-1 countdown before combat
+- Forfeit mechanics with rule enforcement
+- Comprehensive audit logging
 
 ---
 
 ## Duel Flow
 
-The duel system uses a **state machine** with 6 distinct phases:
+### 1. Challenge Phase
 
-```mermaid
-stateDiagram-v2
-    [*] --> CHALLENGE: Player A challenges Player B
-    CHALLENGE --> RULES: Player B accepts
-    RULES --> STAKES: Both accept rules
-    STAKES --> CONFIRMING: Both accept stakes
-    CONFIRMING --> COUNTDOWN: Both confirm
-    COUNTDOWN --> FIGHTING: 3-2-1-FIGHT!
-    FIGHTING --> FINISHED: Death or forfeit
-    FINISHED --> [*]: Winner receives stakes
-    
-    CHALLENGE --> [*]: Declined/Expired
-    RULES --> [*]: Cancelled
-    STAKES --> [*]: Cancelled
-    CONFIRMING --> [*]: Cancelled
-```
-
-### Phase Breakdown
-
-| Phase | Description | Can Cancel? |
-|-------|-------------|-------------|
-| **CHALLENGE** | 30-second window for target to accept/decline | Yes (auto-expires) |
-| **RULES** | Both players toggle combat rules and equipment restrictions | Yes |
-| **STAKES** | Both players add items to stake | Yes |
-| **CONFIRMING** | Read-only review of rules and stakes | Yes |
-| **COUNTDOWN** | 3-second countdown, players teleported to arena | No |
-| **FIGHTING** | Combat until death or forfeit | No (unless forfeit allowed) |
-| **FINISHED** | Stakes transferred, players teleported to lobby | No |
-
----
-
-## Duel Rules
-
-Players can toggle **10 combat rules** that restrict actions during the duel:
-
-| Rule | Effect | Incompatible With |
-|------|--------|-------------------|
-| **No Ranged** | Cannot use ranged attacks | — |
-| **No Melee** | Cannot use melee attacks | — |
-| **No Magic** | Cannot use magic attacks | — |
-| **No Special Attack** | Cannot use special attacks | — |
-| **No Prayer** | Prayer points drained | — |
-| **No Potions** | Cannot drink potions | — |
-| **No Food** | Cannot eat food | — |
-| **No Forfeit** | Fight to the death (no surrender) | Fun Weapons |
-| **No Movement** | Frozen at spawn point | — |
-| **Fun Weapons** | Boxing gloves only | No Forfeit |
-
-<Warning>
-**Invalid Combinations**: The server validates rule combinations. For example, "No Forfeit" + "No Movement" is blocked because it could create unwinnable scenarios.
-</Warning>
-
-### Rule Validation
+Players must be in the Duel Arena zone to initiate challenges:
 
 ```typescript
-// From packages/shared/src/types/game/duel-types.ts
-export function validateRuleCombination(rules: DuelRules): string | null {
-  for (const [rule1, rule2, message] of INVALID_RULE_COMBINATIONS) {
-    if (rules[rule1] && rules[rule2]) {
-      return message;
-    }
-  }
-  return null;
-}
+// Player A challenges Player B
+world.network.send("duel:challenge:create", {
+  targetId: "player_b_id",
+  targetName: "PlayerB"
+});
 ```
 
----
+**Requirements:**
+- Both players must be within 15 tiles of each other
+- Neither player can be in an existing duel
+- Challenge expires after 30 seconds (50 ticks)
 
-## Equipment Restrictions
+**Challenge UI:**
+- Challenger: Sees "Challenge sent" notification
+- Target: Receives DuelChallengeModal with Accept/Decline buttons
+- Chat: Red clickable message "PlayerA wishes to duel with you"
 
-Players can disable **11 equipment slots** for the duel:
+### 2. Rules Screen
 
-| Slot | Effect |
-|------|--------|
-| **Head** | Helmets disabled |
-| **Cape** | Capes disabled |
-| **Amulet** | Amulets disabled |
-| **Weapon** | Weapons disabled (fists only) |
-| **Body** | Chest armor disabled |
-| **Shield** | Shields disabled |
-| **Legs** | Leg armor disabled |
-| **Gloves** | Gloves disabled |
-| **Boots** | Boots disabled |
-| **Ring** | Rings disabled |
-| **Ammo** | Ammunition disabled |
+Both players negotiate combat rules and equipment restrictions:
 
-<Info>
-Items in disabled slots are **automatically unequipped** when the countdown begins. They are returned to the player's inventory after the duel.
-</Info>
+**Combat Rules (10 toggles):**
+- No Ranged
+- No Melee
+- No Magic
+- No Special Attack
+- No Prayer
+- No Potions
+- No Food
+- No Movement (freeze at spawn points)
+- No Forfeit (fight to the death)
+- Fun Weapons (cosmetic items allowed)
 
----
+**Equipment Restrictions (11 slots):**
+- Head, Cape, Amulet, Weapon, Body, Shield, Legs, Gloves, Boots, Ring, Ammo
 
-## Stakes System
-
-Players can stake **inventory items** with the following mechanics:
-
-### Staking Items
-
-- **Left-click** inventory item: Stake 1
-- **Right-click** inventory item: Context menu (Stake 1, 5, 10, All)
-- **Click staked item**: Remove from stakes
-- **Maximum stakes**: 28 items (full inventory)
-
-### Anti-Scam Protection
-
-The system includes OSRS-style anti-scam features:
-
-1. **Acceptance Reset**: When either player modifies stakes, both players' acceptance is reset
-2. **Opponent Modified Warning**: Red banner appears when opponent changes their stakes
-3. **Value Imbalance Warning**: Warns if you're risking >50% more than opponent (and >10k gp)
-4. **Final Confirmation Screen**: Read-only review before combat begins
+**Rule Validation:**
+- `noForfeit + noMovement` is invalid (prevents softlocks)
+- Both players must accept before proceeding
 
 ```typescript
-// From packages/client/src/game/panels/DuelPanel/StakesScreen.tsx
-const valueImbalanceWarning = useMemo(() => {
-  if (myTotalValue === 0 && opponentTotalValue === 0) return null;
-  const difference = myTotalValue - opponentTotalValue;
-  const percentDiff = Math.abs(difference) / Math.max(myTotalValue, opponentTotalValue, 1);
-  
-  // Warn if difference is > 50% and > 10k gp
-  if (percentDiff > 0.5 && Math.abs(difference) > 10000) {
-    if (difference > 0) {
-      return `You are risking ${formatGoldValue(difference)} gp more than ${opponentName}!`;
-    }
-  }
-  return null;
-}, [myTotalValue, opponentTotalValue, opponentName]);
+// Toggle a rule
+world.network.send("duel:toggle:rule", {
+  duelId: "duel_123",
+  rule: "noRanged"
+});
+
+// Accept rules
+world.network.send("duel:accept:rules", {
+  duelId: "duel_123"
+});
 ```
 
----
+### 3. Stakes Screen
 
-## Arena System
+Players stake items from their inventory:
 
-The Duel Arena contains **6 rectangular arenas** arranged in a **2×3 grid**.
+**Staking Mechanics:**
+- Left-click inventory item: Stake 1
+- Right-click: Context menu (Stake 1, 5, 10, All)
+- Click staked item: Remove from stakes
+- Maximum 28 staked items per player
 
-### Arena Configuration
+**Anti-Scam Features:**
+- Acceptance resets when either player modifies stakes
+- Warning banner when opponent modifies stakes
+- Value imbalance warning (>50% difference, >10k gp)
+- Staked items are locked (cannot be dropped or traded)
 
 ```typescript
-// From packages/shared/src/data/duel-manifest.ts
-export interface DuelArenaConfig {
-  baseX: number;           // 60 (top-left arena)
-  baseZ: number;           // 80
-  baseY: number;           // 0 (ground level)
-  arenaWidth: number;      // 20 tiles
-  arenaLength: number;     // 24 tiles
-  arenaGap: number;        // 4 tiles between arenas
-  columns: number;         // 2 columns
-  rows: number;            // 3 rows
-  arenaCount: number;      // 6 total arenas
-  spawnOffset: number;     // 8 tiles from center
-  lobbySpawnPoint: { x: number; y: number; z: number };
-}
+// Add stake
+world.network.send("duel:add:stake", {
+  duelId: "duel_123",
+  inventorySlot: 5,
+  quantity: 100
+});
+
+// Remove stake
+world.network.send("duel:remove:stake", {
+  duelId: "duel_123",
+  stakeIndex: 0
+});
+
+// Accept stakes
+world.network.send("duel:accept:stakes", {
+  duelId: "duel_123"
+});
 ```
 
-### Arena Features
+### 4. Confirmation Screen
 
-- **Spawn Points**: Each arena has 2 spawn points (north and south)
-- **Wall Collision**: Invisible walls prevent escape during combat
-- **Terrain Flattening**: Ground is leveled for fair combat
-- **Forfeit Pillars**: Interact to surrender (if allowed by rules)
+Final read-only review before combat:
 
-### Arena Pool Management
+**Displays:**
+- Active rules summary
+- Disabled equipment summary
+- "If you win, you receive:" (opponent's stakes)
+- "If you lose, they receive:" (your stakes)
+- Both players' acceptance status
+
+**Warning Banner:**
+> "This is your final chance to review before the duel begins!"
+
+Both players must accept to proceed to countdown.
+
+### 5. Countdown Phase
+
+**Arena Reservation:**
+- System reserves one of 6 available arenas
+- Returns "No arena available" if all arenas occupied
+
+**Teleportation:**
+- Players teleported to arena spawn points (north/south)
+- Facing each other automatically
+- Disabled equipment slots are unequipped
+
+**Countdown:**
+- 3-2-1-FIGHT overlay with color-coded numbers
+- Players frozen during countdown (cannot move)
+- Countdown runs on server tick (1 second per tick)
 
 ```typescript
-// From packages/server/src/systems/DuelSystem/ArenaPoolManager.ts
-export class ArenaPoolManager {
-  reserveArena(duelId: string): number | null;
-  releaseArena(arenaId: number): boolean;
-  getSpawnPoints(arenaId: number): [ArenaSpawnPoint, ArenaSpawnPoint] | undefined;
-  getArenaBounds(arenaId: number): ArenaBounds | undefined;
-  getAvailableCount(): number;
-}
+// Server emits countdown ticks
+world.emit("duel:countdown:tick", {
+  duelId: "duel_123",
+  count: 3, // 3, 2, 1, 0 (FIGHT!)
+  challengerId: "player_a",
+  targetId: "player_b"
+});
 ```
 
-<Warning>
-If all 6 arenas are in use, new duels cannot start until an arena becomes available. Players receive an error message and must try again.
-</Warning>
+### 6. Fighting Phase
+
+**Combat Begins:**
+- Players can attack each other
+- Rules are enforced server-side
+- Arena walls prevent escape (collision-based)
+- DuelHUD displays opponent health and active rules
+
+**Rule Enforcement:**
+```typescript
+// DuelSystem provides rule checking APIs
+duelSystem.canUseRanged(playerId);      // false if noRanged active
+duelSystem.canEatFood(playerId);        // false if noFood active
+duelSystem.canMove(playerId);           // false if noMovement active
+duelSystem.canForfeit(playerId);        // false if noForfeit active
+```
+
+**Forfeit Mechanics:**
+- Click forfeit pillar in arena (if allowed)
+- Confirmation required (click twice)
+- Instant loss, opponent wins all stakes
+
+**Disconnect Handling:**
+- 30-second reconnection timer (50 ticks)
+- Auto-forfeit if player doesn't reconnect
+- Instant loss if `noForfeit` rule active
+
+### 7. Resolution
+
+**Death:**
+- Loser's health reaches 0
+- 8-tick delay (4.8 seconds) for death animation
+- Winner receives all stakes
+- Both players restored to full health
+- Both teleported to duel arena lobby
+
+**Forfeit:**
+- Forfeiting player loses immediately
+- Same stake transfer and teleportation
+
+**Result Modal:**
+- Victory trophy (🏆) or defeat skull (💀)
+- Items won/lost with gold values
+- Total value summary
 
 ---
 
 ## Server Architecture
 
-The DuelSystem follows **SOLID principles** with separated concerns:
+### DuelSystem
 
-### Core Components
+**Location:** `packages/server/src/systems/DuelSystem/index.ts`
 
-| Component | Responsibility |
-|-----------|----------------|
-| **DuelSystem** | Main orchestrator, state machine, public API |
-| **DuelSessionManager** | Session CRUD operations, player-to-session mapping |
-| **PendingDuelManager** | Challenge lifecycle, timeout handling, distance checks |
-| **ArenaPoolManager** | Arena reservation, spawn points, bounds |
-| **DuelCombatResolver** | Combat resolution, stake transfers, health restoration |
-
-### File Structure
-
-```
-packages/server/src/systems/DuelSystem/
-├── index.ts                    # Main DuelSystem class (1600+ lines)
-├── DuelSessionManager.ts       # Session management (290 lines)
-├── PendingDuelManager.ts       # Challenge tracking (310 lines)
-├── ArenaPoolManager.ts         # Arena pool (260 lines)
-├── DuelCombatResolver.ts       # Combat resolution (280 lines)
-├── config.ts                   # Centralized constants (195 lines)
-├── validation.ts               # Runtime type guards (87 lines)
-└── __tests__/                  # Comprehensive unit tests
-    ├── DuelSystem.test.ts      # 1066 lines
-    ├── ArenaPoolManager.test.ts # 233 lines
-    ├── PendingDuelManager.test.ts # 456 lines
-    └── mocks.ts                # Test utilities
-```
-
----
-
-## Network Protocol
-
-### Client → Server Events
-
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `duel:challenge` | `{ targetPlayerId }` | Challenge another player |
-| `duel:challenge:respond` | `{ challengeId, accept }` | Accept/decline challenge |
-| `duel:toggle:rule` | `{ duelId, rule }` | Toggle a combat rule |
-| `duel:toggle:equipment` | `{ duelId, slot }` | Toggle equipment restriction |
-| `duel:add:stake` | `{ duelId, inventorySlot, quantity }` | Add item to stakes |
-| `duel:remove:stake` | `{ duelId, stakeIndex }` | Remove staked item |
-| `duel:accept:rules` | `{ duelId }` | Accept rules screen |
-| `duel:accept:stakes` | `{ duelId }` | Accept stakes screen |
-| `duel:accept:final` | `{ duelId }` | Accept final confirmation |
-| `duel:forfeit` | `{ duelId }` | Surrender the duel |
-| `duel:cancel` | `{ duelId }` | Cancel before fighting |
-
-### Server → Client Events
-
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `UI_UPDATE` | `{ component: "duel", data }` | Open duel panel |
-| `UI_UPDATE` | `{ component: "duelRulesUpdate" }` | Rules changed |
-| `UI_UPDATE` | `{ component: "duelEquipmentUpdate" }` | Equipment restrictions changed |
-| `UI_UPDATE` | `{ component: "duelStakesUpdate" }` | Stakes changed |
-| `UI_UPDATE` | `{ component: "duelStateChange" }` | State transition |
-| `UI_UPDATE` | `{ component: "duelCompleted" }` | Duel finished |
-| `duel:countdown:tick` | `{ duelId, count }` | Countdown update (3, 2, 1, 0) |
-| `duel:fight:start` | `{ duelId, arenaId, bounds }` | Combat begins |
-| `duel:cancelled` | `{ duelId, reason }` | Duel cancelled |
-| `player:teleport` | `{ playerId, position, rotation }` | Teleport to arena/lobby |
-
----
-
-## Combat Resolution
-
-### Death Handling
-
-When a player dies during a duel:
-
-1. **State set to FINISHED** immediately (prevents double-resolution)
-2. **8-tick delay** (4.8 seconds) for death animation
-3. **Stakes transferred** to winner
-4. **Health restored** to both players (no death penalty in duels)
-5. **Teleport to lobby** (winner and loser to different spawn points)
-6. **Arena released** back to pool
+Main orchestrator for duel sessions (1,609 lines):
 
 ```typescript
-// From packages/server/src/systems/DuelSystem/index.ts
-private handlePlayerDeath(playerId: string): void {
-  const session = this.sessionManager.getPlayerSession(playerId);
-  if (!session || session.state !== "FIGHTING") return;
-
-  // Determine winner
-  const winnerId = playerId === session.challengerId 
-    ? session.targetId 
-    : session.challengerId;
-
-  // Set state to FINISHED to prevent race conditions
-  session.state = "FINISHED";
-
-  // Delay resolution for death animation (OSRS-accurate)
-  setTimeout(() => {
-    this.resolveDuel(session, winnerId, playerId, "death");
-  }, ticksToMs(DEATH_RESOLUTION_DELAY_TICKS)); // 8 ticks = 4.8s
-}
-```
-
-### Forfeit Handling
-
-Players can forfeit via **forfeit pillars** in the arena (if `noForfeit` rule is not active):
-
-```typescript
-// From packages/server/src/systems/DuelSystem/index.ts
-forfeitDuel(playerId: string): DuelOperationResult {
-  const session = this.getPlayerDuel(playerId);
-  
-  // Check if noForfeit rule is active
-  if (session.rules.noForfeit) {
-    return {
-      success: false,
-      error: "You cannot forfeit - this duel is to the death!",
-      errorCode: DuelErrorCode.CANNOT_FORFEIT,
-    };
-  }
-
-  // Opponent wins
-  const winnerId = playerId === session.challengerId 
-    ? session.targetId 
-    : session.challengerId;
-
-  this.resolveDuel(session, winnerId, playerId, "forfeit");
-  return { success: true };
-}
-```
-
-### Stake Transfer
-
-```typescript
-// From packages/server/src/systems/DuelSystem/DuelCombatResolver.ts
-private transferStakes(
-  session: DuelSession,
-  winnerId: string,
-  loserId: string,
-  winnerStakes: StakedItem[],
-  loserStakes: StakedItem[],
-): void {
-  // Combine winner's own stakes AND loser's stakes
-  const allWinnerItems = [...winnerStakes, ...loserStakes];
-
-  // Emit single settlement event to prevent race conditions
-  this.world.emit("duel:stakes:settle", {
-    playerId: winnerId,
-    ownStakes: winnerStakes,
-    wonStakes: loserStakes,
-    fromPlayerId: loserId,
-    reason: "duel_won",
-  });
-}
-```
-
----
-
-## Rule Enforcement
-
-The DuelSystem provides a **public API** for other systems to check active rules:
-
-### Combat Integration
-
-```typescript
-// From packages/server/src/systems/DuelSystem/index.ts
 export class DuelSystem {
-  // Check if player is in active duel
-  isPlayerInActiveDuel(playerId: string): boolean;
+  private readonly pendingDuels: PendingDuelManager;
+  private readonly arenaPool: ArenaPoolManager;
+  private readonly sessionManager: DuelSessionManager;
+  private readonly combatResolver: DuelCombatResolver;
   
-  // Get active rules for a player
-  getPlayerDuelRules(playerId: string): DuelRules | null;
+  // Public API
+  createChallenge(challengerId, challengerName, targetId, targetName);
+  respondToChallenge(challengeId, responderId, accept);
+  toggleRule(duelId, playerId, rule);
+  toggleEquipmentRestriction(duelId, playerId, slot);
+  acceptRules(duelId, playerId);
+  addStake(duelId, playerId, inventorySlot, itemId, quantity, value);
+  removeStake(duelId, playerId, stakeIndex);
+  acceptStakes(duelId, playerId);
+  acceptFinal(duelId, playerId);
+  forfeitDuel(playerId);
   
-  // Rule-specific checks
-  canUseRanged(playerId: string): boolean;
-  canUseMelee(playerId: string): boolean;
-  canUseMagic(playerId: string): boolean;
-  canUseSpecialAttack(playerId: string): boolean;
-  canUsePrayer(playerId: string): boolean;
-  canUsePotions(playerId: string): boolean;
-  canEatFood(playerId: string): boolean;
-  canMove(playerId: string): boolean;
-  canForfeit(playerId: string): boolean;
-  
-  // Get opponent ID
-  getDuelOpponentId(playerId: string): string | null;
+  // Rule Enforcement
+  isPlayerInActiveDuel(playerId): boolean;
+  canUseRanged(playerId): boolean;
+  canUseMelee(playerId): boolean;
+  canUseMagic(playerId): boolean;
+  canUseSpecialAttack(playerId): boolean;
+  canUsePrayer(playerId): boolean;
+  canUsePotions(playerId): boolean;
+  canEatFood(playerId): boolean;
+  canMove(playerId): boolean;
+  canForfeit(playerId): boolean;
+  getDuelOpponentId(playerId): string | null;
 }
 ```
 
-### Movement Restriction
+### PendingDuelManager
+
+**Location:** `packages/server/src/systems/DuelSystem/PendingDuelManager.ts`
+
+Manages challenge requests before duel sessions begin:
+
+- 30-second expiration timer
+- Distance validation (15 tiles max)
+- Disconnect cleanup
+- Prevents duplicate challenges
 
 ```typescript
-// Movement is blocked during COUNTDOWN and if noMovement rule is active
-canMove(playerId: string): boolean {
-  const session = this.getPlayerDuel(playerId);
-  if (!session) return true;
-
-  // Freeze during countdown (OSRS-accurate)
-  if (session.state === "COUNTDOWN") {
-    return false;
-  }
-
-  // Check noMovement rule during fight
-  if (session.state === "FIGHTING" && session.rules.noMovement) {
-    return false;
-  }
-
-  return true;
+export class PendingDuelManager {
+  createChallenge(challengerId, challengerName, targetId, targetName);
+  acceptChallenge(challengeId, acceptingPlayerId);
+  declineChallenge(challengeId, decliningPlayerId);
+  cancelChallenge(challengeId);
+  cancelPlayerChallenges(playerId);
+  processTick(); // Distance checks, expiration
 }
 ```
+
+### ArenaPoolManager
+
+**Location:** `packages/server/src/systems/DuelSystem/ArenaPoolManager.ts`
+
+Manages 6 duel arenas with automatic pooling:
+
+**Arena Layout:**
+- 2×3 grid of rectangular arenas
+- Each arena: 20 tiles wide × 24 tiles long
+- 4-tile gap between arenas
+- Base coordinates: (70, 0, 90)
+
+**Arena Configuration:**
+```typescript
+interface Arena {
+  arenaId: number;              // 1-6
+  inUse: boolean;
+  currentDuelId: string | null;
+  spawnPoints: [ArenaSpawnPoint, ArenaSpawnPoint]; // North, South
+  bounds: ArenaBounds;
+  center: { x: number; z: number };
+}
+```
+
+**Collision System:**
+- Registers wall collision on initialization
+- Blocks perimeter ring OUTSIDE arena bounds
+- Players can walk to visual wall but not through it
+- Uses `CollisionFlag.BLOCKED` in collision matrix
+
+```typescript
+export class ArenaPoolManager {
+  reserveArena(duelId): number | null;
+  releaseArena(arenaId): boolean;
+  releaseArenaByDuelId(duelId): boolean;
+  getSpawnPoints(arenaId);
+  getArenaBounds(arenaId);
+  getArenaCenter(arenaId);
+  registerArenaWallCollision(collision);
+}
+```
+
+### DuelSessionManager
+
+**Location:** `packages/server/src/systems/DuelSystem/DuelSessionManager.ts`
+
+CRUD operations for duel sessions:
+
+```typescript
+export interface DuelSession {
+  duelId: string;
+  state: DuelState; // RULES | STAKES | CONFIRMING | COUNTDOWN | FIGHTING | FINISHED
+  
+  // Participants
+  challengerId: string;
+  challengerName: string;
+  targetId: string;
+  targetName: string;
+  
+  // Rules & Restrictions
+  rules: DuelRules;
+  equipmentRestrictions: EquipmentRestrictions;
+  
+  // Stakes
+  challengerStakes: StakedItem[];
+  targetStakes: StakedItem[];
+  
+  // Acceptance (per screen)
+  challengerAccepted: boolean;
+  targetAccepted: boolean;
+  
+  // Arena
+  arenaId: number | null;
+  
+  // Timestamps
+  createdAt: number;
+  countdownStartedAt?: number;
+  fightStartedAt?: number;
+  finishedAt?: number;
+  
+  // Result
+  winnerId?: string;
+  forfeitedBy?: string;
+}
+```
+
+### DuelCombatResolver
+
+**Location:** `packages/server/src/systems/DuelSystem/DuelCombatResolver.ts`
+
+Handles duel outcomes and stake transfers:
+
+```typescript
+export class DuelCombatResolver {
+  resolveDuel(session, winnerId, loserId, reason);
+  returnStakedItems(session);
+  
+  private transferStakes(session, winnerId, loserId, winnerStakes, loserStakes);
+  private restorePlayerHealth(playerId);
+  private teleportToLobby(playerId, isWinner);
+}
+```
+
+**Resolution Process:**
+1. Set session state to FINISHED
+2. Transfer loser's stakes to winner
+3. Restore both players to full health
+4. Teleport to lobby (different spawn points for winner/loser)
+5. Emit `duel:completed` event
+6. Audit log for economic tracking
+7. Clean up session and release arena
 
 ---
 
 ## Client UI Components
 
-The client implements a **multi-screen modal system** with state synchronization:
+### DuelPanel
 
-### UI Components
+**Location:** `packages/client/src/game/panels/DuelPanel/`
 
-| Component | Purpose |
-|-----------|---------|
-| **DuelChallengeModal** | Incoming challenge popup with accept/decline |
-| **DuelPanel** | Main interface with screen switching |
-| **RulesScreen** | Rule and equipment negotiation |
-| **StakesScreen** | Item staking with inventory integration |
-| **ConfirmScreen** | Read-only final review |
-| **DuelCountdown** | Full-screen 3-2-1-FIGHT overlay |
-| **DuelHUD** | In-combat overlay with opponent health |
-| **DuelResultModal** | Victory/defeat screen with items won/lost |
+Main duel interface with screen switching:
 
-### State Management
+**Screens:**
+- `RulesScreen.tsx` - Rules and equipment negotiation
+- `StakesScreen.tsx` - Item staking with inventory
+- `ConfirmScreen.tsx` - Final read-only review
+
+**Modal Dimensions:**
+- Rules screen: 450px width
+- Stakes screen: 650px width (3 panels)
+- Confirm screen: 520px width (2 columns)
+
+### DuelHUD
+
+**Location:** `packages/client/src/game/panels/DuelPanel/DuelHUD.tsx`
+
+In-combat overlay showing:
+- Opponent health bar (large, prominent)
+- Active rule indicators with icons
+- Forfeit button (if allowed)
+- Disconnect status with countdown
+
+**Positioning:** Fixed at top center, z-index 9000
+
+### DuelCountdown
+
+**Location:** `packages/client/src/game/panels/DuelPanel/DuelCountdown.tsx`
+
+Full-screen countdown overlay:
+- Large centered number (200px font)
+- Color-coded: 3=red, 2=orange, 1=yellow, 0=green
+- Expanding ring pulse effect
+- "FIGHT!" display on 0
+- Auto-hides after fight starts
+
+### DuelResultModal
+
+**Location:** `packages/client/src/game/panels/DuelPanel/DuelResultModal.tsx`
+
+Post-duel result display:
+- Victory trophy (🏆) or defeat skull (💀)
+- Animated entrance (icon pop, title slide)
+- Items won/lost with gold values
+- Total value summary
+- Forfeit indicator
+
+---
+
+## Configuration
+
+### Timing Constants
+
+**Location:** `packages/server/src/systems/DuelSystem/config.ts`
+
+All timing values in game ticks (600ms each):
 
 ```typescript
-// From packages/client/src/hooks/useModalPanels.ts
-export interface DuelData {
-  visible: boolean;
-  duelId: string;
-  opponentId: string;
-  opponentName: string;
-  isChallenger: boolean;
-  screenState: "RULES" | "STAKES" | "CONFIRMING";
-  rules: DuelRules;
-  equipmentRestrictions: EquipmentRestrictions;
-  myAccepted: boolean;
-  opponentAccepted: boolean;
-  myStakes: StakedItem[];
-  opponentStakes: StakedItem[];
-  opponentModifiedStakes: boolean;
-}
+export const CHALLENGE_TIMEOUT_TICKS = 50;           // 30 seconds
+export const DISCONNECT_TIMEOUT_TICKS = 50;          // 30 seconds
+export const SESSION_MAX_AGE_TICKS = 3000;           // 30 minutes
+export const DEATH_RESOLUTION_DELAY_TICKS = 8;       // 4.8 seconds
+export const CLEANUP_INTERVAL_TICKS = 17;            // 10.2 seconds
+export const CHALLENGE_CLEANUP_INTERVAL_TICKS = 8;   // 4.8 seconds
 ```
 
-### UI Update Events
-
-The server sends `UI_UPDATE` events to synchronize state:
+### Distance Constants
 
 ```typescript
-// From packages/client/src/hooks/useModalPanels.ts
-world.on(EventType.UI_UPDATE, (data: unknown) => {
-  const d = data as { component: string; data: Record<string, unknown> };
+export const CHALLENGE_DISTANCE_TILES = 15;  // Max distance for challenges
+```
 
-  switch (d.component) {
-    case "duel":
-      // Open duel panel
-      setDuelData({ visible: true, ...d.data });
-      break;
-    
-    case "duelRulesUpdate":
-      // Update rules and acceptance state
-      setDuelData(prev => ({ ...prev, rules: d.data.rules }));
-      break;
-    
-    case "duelStakesUpdate":
-      // Update stakes and reset acceptance
-      setDuelData(prev => ({ 
-        ...prev, 
-        myStakes: d.data.myStakes,
-        opponentStakes: d.data.opponentStakes,
-        opponentModifiedStakes: true,
-      }));
-      break;
-    
-    case "duelCompleted":
-      // Show result modal
-      setDuelResultData({ visible: true, ...d.data });
-      break;
-  }
-});
+### Arena Configuration
+
+```typescript
+export const ARENA_COUNT = 6;
+export const ARENA_GRID_COLS = 2;
+export const ARENA_GRID_ROWS = 3;
+
+export const ARENA_BASE_X = 70;
+export const ARENA_BASE_Z = 90;
+export const ARENA_Y = 0;
+
+export const ARENA_WIDTH = 20;   // X dimension
+export const ARENA_LENGTH = 24;  // Z dimension
+export const ARENA_GAP_X = 4;
+export const ARENA_GAP_Z = 4;
+
+export const SPAWN_OFFSET_Z = 8; // Distance from center to spawn points
+```
+
+### Spawn Locations
+
+```typescript
+export const LOBBY_SPAWN_WINNER = { x: 102, y: 0, z: 60 };
+export const LOBBY_SPAWN_LOSER = { x: 108, y: 0, z: 60 };
+export const LOBBY_SPAWN_CENTER = { x: 105, y: 0, z: 60 };
 ```
 
 ---
 
-## Countdown System
+## State Machine
 
-The countdown uses **tick-based timing** with visual and audio feedback:
-
-### Countdown Phases
-
-| Count | Duration | Visual |
-|-------|----------|--------|
-| **3** | 0-1s | Red number with expanding ring |
-| **2** | 1-2s | Orange number |
-| **1** | 2-3s | Yellow number |
-| **0** | 3s+ | Green "FIGHT!" text |
-
-### 3D Countdown Splats
-
-The client renders **3D countdown numbers** on the arena floor:
+The duel system uses an exhaustive state machine:
 
 ```typescript
-// From packages/shared/src/systems/client/DuelCountdownSplatSystem.ts
-export class DuelCountdownSplatSystem extends SystemBase {
-  // Creates 3D text meshes at player positions
-  // Countdown numbers appear on the ground
-  // Fade out after each tick
-}
+export type DuelState = 
+  | "RULES"       // Negotiating rules and equipment
+  | "STAKES"      // Adding/removing staked items
+  | "CONFIRMING"  // Final read-only review
+  | "COUNTDOWN"   // 3-2-1 countdown (players frozen)
+  | "FIGHTING"    // Active combat
+  | "FINISHED";   // Resolution in progress
 ```
 
-### Movement Freeze
+**State Transitions:**
 
-Players are **frozen during countdown** to prevent positioning advantages:
+```
+RULES → STAKES → CONFIRMING → COUNTDOWN → FIGHTING → FINISHED
+  ↓       ↓          ↓            ↓          ↓
+Cancel  Cancel    Cancel      Cancel     Death/Forfeit
+```
 
+**Exhaustive Switch:**
 ```typescript
-// From packages/server/src/systems/DuelSystem/index.ts
-canMove(playerId: string): boolean {
-  const session = this.getPlayerDuel(playerId);
-  if (!session) return true;
-
-  // Freeze during countdown (OSRS-accurate)
-  if (session.state === "COUNTDOWN") {
-    return false;
-  }
-
-  return true;
+// From DuelSystem.processTick()
+switch (session.state) {
+  case "RULES":
+  case "STAKES":
+  case "CONFIRMING":
+    // Setup states - no tick processing
+    break;
+  case "COUNTDOWN":
+    this.processCountdown(session);
+    break;
+  case "FIGHTING":
+    this.processActiveDuel(session);
+    break;
+  case "FINISHED":
+    // Resolution in progress
+    break;
+  default:
+    assertNever(session.state); // TypeScript exhaustiveness check
 }
 ```
 
 ---
 
-## Disconnect Handling
+## Network Events
 
-The system handles disconnects gracefully with different behavior based on duel state:
-
-### Setup States (RULES, STAKES, CONFIRMING, COUNTDOWN)
-
-**Immediate cancellation** — Duel is cancelled and stakes are returned to both players.
+### Server → Client
 
 ```typescript
-// From packages/server/src/systems/DuelSystem/index.ts
-onPlayerDisconnect(playerId: string): void {
-  const session = this.sessionManager.getPlayerSession(playerId);
-  if (!session) return;
+// Challenge events
+"duel:challenge:received"    // Target receives challenge
+"duel:challenge:declined"    // Challenge declined
+"duel:challenge:expired"     // Challenge timed out
+"duel:challenge:cancelled"   // Challenge cancelled (distance/disconnect)
 
-  // For setup states, cancel immediately
-  if (session.state !== "FIGHTING") {
-    this.cancelDuel(session.duelId, "player_disconnected", playerId);
-    return;
-  }
+// Session events
+"duel:session:created"       // Duel session started
+"duel:rules:updated"         // Rules changed
+"duel:equipment:updated"     // Equipment restrictions changed
+"duel:acceptance:updated"    // Player accepted current screen
+"duel:state:changed"         // State transition (RULES → STAKES, etc.)
+"duel:stakes:updated"        // Stakes modified
 
-  // For FIGHTING state, start disconnect timer
-  this.startDisconnectTimer(playerId, session);
-}
+// Combat events
+"duel:countdown:start"       // Countdown begins
+"duel:countdown:tick"        // Countdown number (3, 2, 1, 0)
+"duel:fight:start"           // Combat begins
+"duel:player:disconnected"   // Opponent disconnected
+"duel:player:reconnected"    // Opponent reconnected
+"duel:completed"             // Duel finished (winner determined)
+
+// Cleanup events
+"duel:cancelled"             // Duel cancelled
+"duel:arena:released"        // Arena returned to pool
 ```
 
-### Fighting State
-
-**30-second grace period** — Opponent is notified, and a timer starts:
-
-- If player **reconnects** within 30 seconds: Duel continues
-- If player **doesn't reconnect**: Auto-forfeit (opponent wins)
-- If **noForfeit rule** is active: Instant loss (no grace period)
+### Client → Server
 
 ```typescript
-private startDisconnectTimer(playerId: string, session: DuelSession): void {
-  // Notify opponent
-  this.world.emit("duel:player:disconnected", {
-    duelId: session.duelId,
-    playerId,
-    timeoutMs: 30000,
-  });
+// Challenge
+"duel:challenge:create"      // Send challenge
+"duel:challenge:respond"     // Accept/decline challenge
 
-  // If noForfeit rule, instant loss
-  if (session.rules.noForfeit) {
-    const winnerId = playerId === session.challengerId 
-      ? session.targetId 
-      : session.challengerId;
-    this.resolveDuel(session, winnerId, playerId, "forfeit");
-    return;
-  }
+// Rules
+"duel:toggle:rule"           // Toggle combat rule
+"duel:toggle:equipment"      // Toggle equipment restriction
+"duel:accept:rules"          // Accept rules screen
 
-  // Start 30-second timer
-  const timer = setTimeout(() => {
-    this.resolveDuel(session, winnerId, playerId, "forfeit");
-  }, 30000);
+// Stakes
+"duel:add:stake"             // Add item to stakes
+"duel:remove:stake"          // Remove item from stakes
+"duel:accept:stakes"         // Accept stakes screen
 
-  this.disconnectTimers.set(playerId, timer);
-}
+// Confirmation
+"duel:accept:final"          // Accept final confirmation
+
+// Combat
+"duel:forfeit"               // Forfeit the duel
+"duel:cancel"                // Cancel duel (any phase)
+```
+
+---
+
+## Security Features
+
+### Server-Authoritative
+
+All duel logic runs on the server:
+- Client cannot modify rules, stakes, or outcomes
+- Arena bounds enforced via collision matrix
+- Stake transfers use database transactions
+- Rate limiting on all duel operations
+
+### Anti-Scam Protections
+
+1. **Acceptance Reset:** Any modification resets both players' acceptance
+2. **Opponent Modified Banner:** Warning when opponent changes stakes
+3. **Value Imbalance Warning:** Alert when risking >50% more than opponent
+4. **Duplicate Slot Prevention:** Cannot stake same inventory slot twice
+5. **Read-Only Confirmation:** Final screen is non-editable
+
+### Audit Logging
+
+**Location:** `packages/server/src/systems/ServerNetwork/services/AuditLogger.ts`
+
+All duel events are logged:
+
+```typescript
+AuditLogger.getInstance().logDuelComplete(
+  duelId,
+  winnerId,
+  loserId,
+  loserStakes,
+  winnerStakes,
+  winnerReceivesValue,
+  reason
+);
+
+AuditLogger.getInstance().logDuelCancelled(
+  duelId,
+  cancelledBy,
+  reason,
+  challengerId,
+  targetId,
+  challengerStakes,
+  targetStakes
+);
 ```
 
 ---
 
 ## Testing
 
-The DuelSystem has **comprehensive unit tests** with 100% coverage of critical paths:
+### Unit Tests
 
-### Test Coverage
+**Location:** `packages/server/src/systems/DuelSystem/__tests__/`
 
-| Test Suite | Lines | Coverage |
-|------------|-------|----------|
-| **DuelSystem.test.ts** | 1066 | State machine, rules, stakes, combat |
-| **ArenaPoolManager.test.ts** | 233 | Arena reservation, bounds, spawn points |
-| **PendingDuelManager.test.ts** | 456 | Challenges, timeouts, distance checks |
+Comprehensive test coverage:
 
-### Test Utilities
+- **DuelSystem.test.ts** (1,066 lines) - Full state machine testing
+- **ArenaPoolManager.test.ts** (233 lines) - Arena pooling
+- **PendingDuelManager.test.ts** (456 lines) - Challenge management
 
+**Test Utilities:**
 ```typescript
-// From packages/server/src/systems/DuelSystem/__tests__/mocks.ts
+// From __tests__/mocks.ts
 export function createMockWorld(): MockWorld;
-export function createMockPlayer(id: string, overrides?: Partial<MockPlayer>): MockPlayer;
+export function createMockPlayer(id, overrides): MockPlayer;
 export function createDuelPlayers(): [MockPlayer, MockPlayer];
 ```
 
-### Example Test
-
+**Example Test:**
 ```typescript
-// From DuelSystem.test.ts
-describe("acceptFinal", () => {
-  it("transitions to COUNTDOWN when both accept", () => {
-    // Progress through screens
-    duelSystem.acceptRules(duelId, "player1");
-    duelSystem.acceptRules(duelId, "player2");
-    duelSystem.acceptStakes(duelId, "player1");
-    duelSystem.acceptStakes(duelId, "player2");
-    
-    // Both accept final confirmation
-    duelSystem.acceptFinal(duelId, "player1");
-    duelSystem.acceptFinal(duelId, "player2");
-
-    const session = duelSystem.getDuelSession(duelId)!;
-    expect(session.state).toBe("COUNTDOWN");
-    expect(session.arenaId).toBeDefined();
-  });
-
-  it("reserves arena on confirmation", () => {
-    duelSystem.acceptFinal(duelId, "player1");
-    duelSystem.acceptFinal(duelId, "player2");
-
-    const session = duelSystem.getDuelSession(duelId)!;
-    expect(duelSystem.arenaPool.isArenaAvailable(session.arenaId!)).toBe(false);
-  });
+it("transitions to FIGHTING after countdown completes", () => {
+  // Progress to COUNTDOWN
+  duelSystem.acceptRules(duelId, "player1");
+  duelSystem.acceptRules(duelId, "player2");
+  duelSystem.acceptStakes(duelId, "player1");
+  duelSystem.acceptStakes(duelId, "player2");
+  duelSystem.acceptFinal(duelId, "player1");
+  duelSystem.acceptFinal(duelId, "player2");
+  
+  // Advance time past countdown (3 seconds)
+  vi.advanceTimersByTime(3500);
+  duelSystem.processTick();
+  
+  const session = duelSystem.getDuelSession(duelId);
+  expect(session.state).toBe("FIGHTING");
 });
 ```
 
 ---
 
-## Audit Logging
+## Integration with Other Systems
 
-All duel operations are logged for economic tracking and anti-cheat:
+### Combat System
+
+**Location:** `packages/shared/src/systems/shared/combat/CombatSystem.ts`
+
+The combat system checks duel rules before allowing actions:
 
 ```typescript
-// From packages/server/src/systems/ServerNetwork/services/AuditLogger.ts
-export class AuditLogger {
-  logDuelComplete(
-    duelId: string,
-    winnerId: string,
-    loserId: string,
-    loserStakes: StakedItem[],
-    winnerStakes: StakedItem[],
-    totalValue: number,
-    reason: "death" | "forfeit",
-  ): void;
-
-  logDuelCancelled(
-    duelId: string,
-    cancelledBy: string | undefined,
-    reason: string,
-    challengerId: string,
-    targetId: string,
-    challengerStakes: StakedItem[],
-    targetStakes: StakedItem[],
-  ): void;
+// Check if player can attack with ranged
+const duelSystem = this.world.getSystem("duel");
+if (duelSystem && !duelSystem.canUseRanged(attackerId)) {
+  return; // Block ranged attack
 }
 ```
 
----
+### Death System
 
-## Configuration
+**Location:** `packages/shared/src/systems/shared/death/PlayerDeathSystem.ts`
 
-All timing and distance values are centralized in `config.ts`:
-
-```typescript
-// From packages/server/src/systems/DuelSystem/config.ts
-export const CHALLENGE_TIMEOUT_TICKS = 50;           // 30 seconds
-export const DISCONNECT_TIMEOUT_TICKS = 50;          // 30 seconds
-export const SESSION_MAX_AGE_TICKS = 3000;           // 30 minutes
-export const DEATH_RESOLUTION_DELAY_TICKS = 8;       // 4.8 seconds
-export const CLEANUP_INTERVAL_TICKS = 17;            // 10.2 seconds
-export const CHALLENGE_DISTANCE_TILES = 15;          // Max challenge distance
-
-// Spawn locations
-export const LOBBY_SPAWN_WINNER = { x: 102, y: 0, z: 60 };
-export const LOBBY_SPAWN_LOSER = { x: 108, y: 0, z: 60 };
-export const LOBBY_SPAWN_CENTER = { x: 105, y: 0, z: 60 };
-
-// Helper to convert ticks to milliseconds
-export const ticksToMs = (ticks: number): number => ticks * 600;
-```
-
-<Info>
-All timing values use **game ticks** (600ms each) for OSRS accuracy. Use `ticksToMs()` helper for `setTimeout`/`setInterval`.
-</Info>
-
----
-
-## Security Features
-
-### Server-Authoritative Design
-
-- **All state on server** — Client cannot manipulate duel state
-- **Validation on every action** — Rules, stakes, and state transitions validated
-- **Transaction wrapping** — Stake operations use database transactions
-- **Rate limiting** — Prevents spam challenges and rapid-fire actions
-- **Idempotency** — Duplicate requests are ignored
-
-### Anti-Cheat Measures
+Death handling differs for duel deaths:
 
 ```typescript
-// From packages/server/src/systems/DuelSystem/index.ts
-addStake(duelId: string, playerId: string, inventorySlot: number, ...): DuelOperationResult {
-  // SECURITY: Reject duplicate slots to prevent item duplication
-  const existingIndex = stakes.findIndex(s => s.inventorySlot === inventorySlot);
-  if (existingIndex >= 0) {
-    return {
-      success: false,
-      error: "Item from this slot is already staked.",
-      errorCode: DuelErrorCode.ALREADY_STAKED,
-    };
-  }
-  
-  // Add stake
-  stakes.push({ inventorySlot, itemId, quantity, value });
+const duelSystem = this.world.getSystem("duel");
+if (duelSystem?.isPlayerInActiveDuel(playerId)) {
+  // Duel death - DuelSystem handles resolution
+  return;
 }
+// Normal death - respawn at hospital
 ```
 
-### Arena Bounds Enforcement
+### Inventory System
 
-Arena walls use **collision flags** to prevent escape:
+Staked items are locked during duels:
 
 ```typescript
-// From packages/server/src/systems/DuelSystem/ArenaPoolManager.ts
-registerArenaWallCollision(collision: ICollisionMatrix): void {
-  for (const [_arenaId, state] of this.arenas) {
-    const bounds = state.arena.bounds;
-    
-    // Block perimeter ring OUTSIDE the arena
-    // Players can walk up to the wall but not through it
-    
-    // North wall: one row north (z = minZ - 1)
-    for (let x = minX - 1; x <= maxX + 1; x++) {
-      collision.addFlags(x, minZ - 1, CollisionFlag.BLOCKED);
-    }
-    
-    // South, East, West walls...
+// Check if item is staked
+const duelSystem = this.world.getSystem("duel");
+const session = duelSystem?.getPlayerDuel(playerId);
+if (session && session.state !== "FINISHED") {
+  const stakes = session.challengerStakes.concat(session.targetStakes);
+  const isStaked = stakes.some(s => s.inventorySlot === slot);
+  if (isStaked) {
+    return { success: false, error: "Item is staked in duel" };
   }
 }
 ```
 
 ---
 
-## Manifest-Driven Configuration
+## Manifest Configuration
 
-Arena layout is defined in `world-areas.ts` manifest:
+### Duel Arena Config
+
+**Location:** `packages/shared/src/data/duel-manifest.ts`
+
+Centralized configuration for arena layout:
 
 ```typescript
-// From packages/shared/src/data/world-areas.ts
-export const ALL_WORLD_AREAS = {
-  duel_arena: {
-    name: "Duel Arena",
-    bounds: { minX: 50, maxX: 120, minZ: 50, maxZ: 150 },
-    subZones: {
-      lobby: {
-        name: "Duel Arena Lobby",
-        bounds: { minX: 95, maxX: 115, minZ: 50, maxZ: 70 },
-        spawnPoint: { x: 105, y: 0, z: 60 },
-      },
-      arenas: {
-        name: "Combat Arenas",
-        bounds: { minX: 60, maxX: 110, minZ: 80, maxZ: 140 },
-        arenaLayout: "2x3",
-        arenaCount: 6,
-        arenaSize: { width: 20, length: 24 },
-        arenaGap: 4,
-      },
-    },
+export function getDuelArenaConfig() {
+  return {
+    arenaCount: 6,
+    columns: 2,
+    rows: 3,
+    baseX: 70,
+    baseZ: 90,
+    baseY: 0,
+    arenaWidth: 20,
+    arenaLength: 24,
+    arenaGap: 4,
+    spawnOffset: 8,
+  };
+}
+```
+
+### Rule Definitions
+
+```typescript
+export const DUEL_RULE_DEFINITIONS: Record<keyof DuelRules, RuleDefinition> = {
+  noRanged: {
+    label: "No Ranged",
+    description: "Ranged attacks are disabled"
   },
+  noMelee: {
+    label: "No Melee",
+    description: "Melee attacks are disabled"
+  },
+  // ... 8 more rules
+};
+
+export const DUEL_RULE_LABELS: Record<keyof DuelRules, string> = {
+  noRanged: "No Ranged",
+  noMelee: "No Melee",
+  // ... extracted from definitions
 };
 ```
 
-### Manifest Helpers
+### Equipment Slot Labels
 
 ```typescript
-// From packages/shared/src/data/duel-manifest.ts
-export function getDuelArenaConfig(): DuelArenaConfig;
-export function isPositionInsideCombatArena(x: number, z: number): boolean;
+export const EQUIPMENT_SLOT_LABELS: Record<EquipmentSlot, string> = {
+  head: "Head",
+  cape: "Cape",
+  amulet: "Amulet",
+  weapon: "Weapon",
+  body: "Body",
+  shield: "Shield",
+  legs: "Legs",
+  gloves: "Gloves",
+  boots: "Boots",
+  ring: "Ring",
+  ammo: "Ammo",
+};
 ```
 
 ---
 
-## Error Handling
-
-The system uses **typed error codes** for client handling:
+## Error Codes
 
 ```typescript
-// From packages/shared/src/types/game/duel-types.ts
 export enum DuelErrorCode {
-  // Challenge errors
-  PLAYER_NOT_FOUND = "PLAYER_NOT_FOUND",
+  INVALID_TARGET = "INVALID_TARGET",
   ALREADY_IN_DUEL = "ALREADY_IN_DUEL",
   TARGET_BUSY = "TARGET_BUSY",
-  CHALLENGE_EXPIRED = "CHALLENGE_EXPIRED",
-  
-  // Session errors
+  CHALLENGE_PENDING = "CHALLENGE_PENDING",
+  CHALLENGE_NOT_FOUND = "CHALLENGE_NOT_FOUND",
   DUEL_NOT_FOUND = "DUEL_NOT_FOUND",
-  NOT_IN_DUEL = "NOT_IN_DUEL",
+  NOT_PARTICIPANT = "NOT_PARTICIPANT",
   INVALID_STATE = "INVALID_STATE",
-  NO_ARENA_AVAILABLE = "NO_ARENA_AVAILABLE",
-  
-  // Rule errors
   INVALID_RULE_COMBINATION = "INVALID_RULE_COMBINATION",
-  
-  // Stake errors
   ALREADY_STAKED = "ALREADY_STAKED",
   STAKE_NOT_FOUND = "STAKE_NOT_FOUND",
-  
-  // Forfeit errors
+  NO_ARENA_AVAILABLE = "NO_ARENA_AVAILABLE",
   CANNOT_FORFEIT = "CANNOT_FORFEIT",
+  NOT_IN_DUEL = "NOT_IN_DUEL",
 }
 ```
 
 ---
 
-## Performance Optimizations
+## Performance Considerations
 
-### Memoized Styles
+### Arena Pooling
 
-UI components use `useMemo` to prevent unnecessary re-renders:
+- 6 arenas support up to 6 concurrent duels
+- Arena reservation is O(n) where n=6 (negligible)
+- Arena release is O(1) by arena ID or O(n) by duel ID
 
-```typescript
-// From packages/client/src/game/panels/DuelPanel/RulesScreen.tsx
-function useRulesScreenStyles(theme: Theme, myAccepted: boolean) {
-  return useMemo(() => {
-    // Style objects only recalculated when theme or myAccepted changes
-    return { containerStyle, sectionStyle, gridStyle, ... };
-  }, [theme, myAccepted]);
-}
-```
+### Session Management
 
-### Tick-Based Processing
+- Player-to-session mapping uses `Map<string, string>` for O(1) lookups
+- Session cleanup runs every 17 ticks (~10 seconds)
+- Expired sessions (>30 minutes in setup) are auto-cancelled
 
-The DuelSystem processes all active duels in a single tick:
+### Collision Matrix
 
-```typescript
-// From packages/server/src/systems/DuelSystem/index.ts
-processTick(): void {
-  // Process pending challenges (distance checks, timeouts)
-  this.pendingDuels.processTick();
-
-  // Process active duels
-  for (const [_duelId, session] of this.sessionManager.getAllSessions()) {
-    switch (session.state) {
-      case "COUNTDOWN":
-        this.processCountdown(session);
-        break;
-      case "FIGHTING":
-        this.processActiveDuel(session);
-        break;
-      // Other states don't need tick processing
-    }
-  }
-}
-```
+- Arena walls registered once on initialization
+- Uses existing collision system (no performance overhead)
+- Wall collision is bitmask-based (very fast)
 
 ---
 
-## Related Systems
+## OSRS Accuracy
 
-The Duel Arena integrates with multiple game systems:
+The duel system faithfully recreates OSRS mechanics:
 
-| System | Integration |
-|--------|-------------|
-| **CombatSystem** | Checks `isPlayerInActiveDuel()` to prevent normal combat |
-| **PlayerDeathSystem** | Calls `DuelSystem.handlePlayerDeath()` for duel deaths |
-| **InventorySystem** | Validates staked items and handles stake transfers |
-| **TeleportSystem** | Teleports players to arena and lobby |
-| **ChatSystem** | Displays duel challenge messages (clickable red text) |
-| **InteractionRouter** | Handles forfeit pillar interactions |
+| Feature | OSRS Behavior | Hyperscape Implementation |
+|---------|---------------|---------------------------|
+| **Tick Rate** | 600ms (0.6s) | ✅ Matches exactly |
+| **Challenge Timeout** | 30 seconds | ✅ 50 ticks = 30s |
+| **Countdown** | 3-2-1-FIGHT | ✅ 1 second per tick |
+| **Death Animation** | ~5 seconds | ✅ 8 ticks = 4.8s |
+| **Arena Walls** | Collision-based | ✅ CollisionMatrix |
+| **Forfeit Pillars** | Clickable objects | ✅ Implemented |
+| **Stake Locking** | Items locked | ✅ Server-enforced |
+| **Health Restoration** | Full HP after duel | ✅ Both players |
+| **No Death Penalty** | No items lost | ✅ Stakes only |
 
 ---
 
-## API Reference
+## Future Enhancements
 
-### DuelSystem Public Methods
+Potential additions (not yet implemented):
 
-```typescript
-// Challenge management
-createChallenge(challengerId, challengerName, targetId, targetName): DuelOperationResult;
-respondToChallenge(challengeId, responderId, accept): DuelOperationResult;
-
-// Session queries
-getDuelSession(duelId): DuelSession | undefined;
-getPlayerDuel(playerId): DuelSession | undefined;
-isPlayerInDuel(playerId): boolean;
-
-// Rule management
-toggleRule(duelId, playerId, rule): DuelOperationResult;
-toggleEquipmentRestriction(duelId, playerId, slot): DuelOperationResult;
-acceptRules(duelId, playerId): DuelOperationResult;
-
-// Stake management
-addStake(duelId, playerId, inventorySlot, itemId, quantity, value): DuelOperationResult;
-removeStake(duelId, playerId, stakeIndex): DuelOperationResult;
-acceptStakes(duelId, playerId): DuelOperationResult;
-
-// Confirmation
-acceptFinal(duelId, playerId): DuelOperationResult & { arenaId?: number };
-
-// Combat
-forfeitDuel(playerId): DuelOperationResult;
-cancelDuel(duelId, reason, cancelledBy?): DuelOperationResult;
-
-// Rule enforcement (for other systems)
-isPlayerInActiveDuel(playerId): boolean;
-canUseRanged(playerId): boolean;
-canUseMelee(playerId): boolean;
-canUseMagic(playerId): boolean;
-canEatFood(playerId): boolean;
-canMove(playerId): boolean;
-canForfeit(playerId): boolean;
-getDuelOpponentId(playerId): string | null;
-
-// Arena management
-reserveArena(duelId): number | null;
-releaseArena(arenaId): void;
-getArenaSpawnPoints(arenaId): [ArenaSpawnPoint, ArenaSpawnPoint] | undefined;
-getArenaBounds(arenaId): ArenaBounds | undefined;
-
-// Lifecycle
-init(): void;
-destroy(): void;
-processTick(): void;
-onPlayerDisconnect(playerId): void;
-onPlayerReconnect(playerId): void;
-```
+- **Ranked Duels:** ELO rating system
+- **Tournament Mode:** Bracket-style competitions
+- **Spectator Mode:** Watch ongoing duels
+- **Duel History:** Track wins/losses
+- **Leaderboards:** Top duelists
+- **Custom Arenas:** Player-created arena layouts
+- **Obstacles:** Arena hazards (OSRS had this)
 
 ---
 
@@ -957,15 +887,15 @@ onPlayerReconnect(playerId): void;
 
 <CardGroup cols={2}>
   <Card title="Combat System" icon="swords" href="/wiki/game-systems/combat">
-    OSRS-accurate combat mechanics and damage formulas
-  </Card>
-  <Card title="Inventory System" icon="backpack" href="/wiki/game-systems/inventory">
-    Item management and staking mechanics
-  </Card>
-  <Card title="Movement System" icon="route" href="/wiki/game-systems/movement">
-    Tile-based movement and collision
+    Core combat mechanics used in duels
   </Card>
   <Card title="Death System" icon="skull" href="/wiki/game-systems/death">
-    Death handling and respawn mechanics
+    How death is handled differently in duels
+  </Card>
+  <Card title="Inventory System" icon="backpack" href="/wiki/game-systems/inventory">
+    Item staking and inventory locking
+  </Card>
+  <Card title="Collision System" icon="border-all" href="/wiki/game-systems/collision">
+    Arena wall collision implementation
   </Card>
 </CardGroup>

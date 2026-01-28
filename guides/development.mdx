@@ -27,9 +27,11 @@ bun run dev:shared    # Shared package with watch mode
 bun run dev:turbo     # Turbo-based dev (excludes asset-forge)
 bun run dev:reset     # Clean + rebuild + dev (nuclear option)
 
-# AI Agent Development
-bun run dev:ai        # Game + ElizaOS with concurrently (simplified)
-                      # Runs: game (bun run dev) + ElizaOS (PORT=4001 elizaos start)
+# Website (in packages/website/)
+cd packages/website
+bun run dev           # Next.js dev server (port 3334)
+bun run build         # Build static site
+bun run start         # Start production server
 
 # Server build tasks
 cd packages/server
@@ -64,6 +66,7 @@ This scans `world/assets/models/**/*.glb` and generates `world/assets/manifests/
 | Port | Service | Started By |
 |------|---------|------------|
 | 3333 | Game Client | `bun run dev` |
+| 3334 | Website | `bun run dev:website` |
 | 5555 | Game Server | `bun run dev` |
 | 8080 | Asset CDN | `bun run dev` |
 | 5432 | PostgreSQL | Docker (auto) |
