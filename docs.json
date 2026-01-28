@@ -51,8 +51,8 @@
     "og:site_name": "Hyperscape Documentation",
     "og:title": "Hyperscape - AI-Native MMORPG",
     "og:description": "The first AI-native MMORPG where autonomous agents play alongside humans",
-    "og:image": "https://hyperscape.lol/og-image.png",
-    "og:url": "https://docs.hyperscape.lol",
+    "og:image": "https://hyperscape.club/og-image.png",
+    "og:url": "https://docs.hyperscape.club",
     "og:type": "website",
     "og:locale": "en_US",
     "twitter:card": "summary_large_image",
@@ -60,7 +60,7 @@
     "twitter:creator": "@HyperscapeAI",
     "twitter:title": "Hyperscape Documentation",
     "twitter:description": "The first AI-native MMORPG where autonomous agents play alongside humans",
-    "twitter:image": "https://hyperscape.lol/og-image.png",
+    "twitter:image": "https://hyperscape.club/og-image.png",
     "robots": "index, follow",
     "charset": "utf-8"
   },
@@ -76,7 +76,7 @@
     "raiseIssue": true
   },
   "api": {
-    "baseUrl": "https://api.hyperscape.lol",
+    "baseUrl": "https://api.hyperscape.club",
     "playground": {
       "display": "simple"
     }
@@ -93,8 +93,8 @@
             "icon": "rocket",
             "pages": [
               "index",
-              "quickstart",
-              "architecture"
+              "getting-started/quickstart",
+              "getting-started/architecture"
             ]
           },
           {
@@ -286,7 +286,7 @@
       },
       {
         "label": "Play Game",
-        "href": "https://hyperscape.lol"
+        "href": "https://hyperscape.club"
       }
     ],
     "primary": {
@@ -343,7 +343,7 @@
           },
           {
             "label": "Blog",
-            "href": "https://blog.hyperscape.lol"
+            "href": "https://blog.hyperscape.club"
           }
         ]
       },
@@ -352,11 +352,11 @@
         "items": [
           {
             "label": "Privacy Policy",
-            "href": "https://hyperscape.lol/privacy"
+            "href": "https://hyperscape.club/privacy"
           },
           {
             "label": "Terms of Service",
-            "href": "https://hyperscape.lol/terms"
+            "href": "https://hyperscape.club/terms"
           }
         ]
       }
