@@ -10,10 +10,39 @@ The `@hyperscape/client` package is the web game client:
 
 - Vite for fast builds with HMR
 - React 19 UI framework
-- Three.js 3D rendering
+- Three.js 3D rendering (WebGPU with WebGL fallback)
 - Capacitor for iOS/Android mobile builds
 - Privy authentication
 - Farcaster miniapp SDK
+
+## Rendering
+
+### WebGPU with WebGL Fallback
+
+The client uses `THREE.WebGPURenderer` with automatic fallback to WebGL for compatibility:
+
+**WebGPU (Preferred):**
+- Modern high-performance rendering
+- TSL post-processing effects
+- Cascaded shadow maps (CSM)
+- Requires Chrome 113+, Edge 113+, or Safari 17+
+
+**WebGL (Fallback):**
+- Graceful degradation for older browsers and WebViews
+- Single directional shadow maps (no CSM)
+- Disabled TSL post-processing
+- Works in WKWebView (Tauri), older Safari, and browsers without WebGPU
+
+**Backend Detection:**
+```typescript
+import { isWebGPURenderer, getRendererBackend } from "@hyperscape/shared";
+
+const renderer = await createRenderer();
+const isWebGPU = isWebGPURenderer(renderer);  // true or false
+const backend = getRendererBackend(renderer); // "webgpu" or "webgl"
+```
+
+The settings panel displays the active renderer type to users.
 
 ## Package Location
 

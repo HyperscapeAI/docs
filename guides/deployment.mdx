@@ -415,7 +415,43 @@ bun run cdn:down  # Stop CDN container
 
 ## Cloudflare R2 Asset Deployment
 
-Assets are automatically deployed to Cloudflare R2 via GitHub Actions.
+### CDN Architecture
+
+Hyperscape uses a CDN-based architecture for serving game assets (models, textures, audio, manifests):
+
+**Required Manifests:**
+- `npcs.json` - NPC and mob definitions
+- `world-areas.json` - Zone configuration with station spawns
+- `biomes.json` - Biome definitions
+- `stores.json` - Shop inventories
+- `items.json` OR `items/{weapons,tools,resources,food,misc}.json` - Item definitions
+
+**Asset Structure:**
+```
+assets/
+├── manifests/          # JSON game data
+├── world/              # Environment models and textures
+├── models/             # 3D models (GLB)
+├── audio/              # Sound effects and music
+└── web/                # PhysX WASM runtime
+```
+
+### Development CDN Fallback
+
+In development, if local CDN is incomplete, the server automatically falls back to production CDN:
+
+```typescript
+// From packages/server/src/startup/config.ts
+// If localhost CDN is missing required manifests, fall back to production
+if (isLocalhostUrl(cdnUrl) && missingRequired.length > 0) {
+  const fallbackCdnUrl = "https://assets.hyperscape.club";
+  await fetchFrom(fallbackCdnUrl);
+}
+```
+
+This allows local development without cloning the full assets repository.
+
+### Option 1: Self-Hosted
 
 ### Automatic Upload
 
@@ -507,40 +543,39 @@ bun run cdn:down        # Stop CDN container
 bun run cdn:restart     # Force restart
 ```
 
-This serves assets from `packages/server/world/assets/` on port 8080.
+The CDN serves from `packages/server/world/assets` by default.
 
-## CI/CD
+Configure `PUBLIC_CDN_URL` to point to your CDN host.
 
-### GitHub Actions
+### Option 2: Cloud Storage (Cloudflare R2)
 
-Hyperscape includes automated CI/CD workflows:
+Upload assets to Cloudflare R2 or similar:
 
-**Continuous Integration** (`.github/workflows/ci.yml`):
-- Lint, typecheck, and test on every push
-- Builds all packages to verify compilation
-- Installs Tauri system dependencies for Linux builds
-  - GTK 3, WebKitGTK 4.1, AppIndicator, librsvg, patchelf
-  - Rust stable toolchain via `dtolnay/rust-toolchain@stable`
+1. Ensure assets are present: `bun run ensure-assets`
+2. Upload `packages/server/world/assets/` to R2 bucket
+3. Set `PUBLIC_CDN_URL` to bucket URL (e.g., `https://assets.hyperscape.club`)
 
-**Deployment Workflows**:
-- `deploy-railway.yml`: Deploy server to Railway on main/staging push
-- `deploy-cloudflare.yml`: Deploy client to Cloudflare Pages
-- `build-app.yml`: Build Tauri desktop app for Linux/macOS/Windows
+**Cloudflare R2 Deployment:**
+- Automated via `.github/workflows/deploy-r2.yml`
+- Triggers on push to `main` branch
+- Uses `wrangler` to sync assets to R2
 
-**Staging Branch**:
-- All deploy workflows trigger on both `main` and `staging` branches
-- Environment-specific URLs for staging builds
-- Separate Railway/Cloudflare environments
+### Asset Management
 
-### Cloudflare Pages
+```bash
+# Download full assets (models, audio, textures)
+bun run ensure-assets
 
-Client automatically deploys to Cloudflare Pages:
+# Sync assets from git repository
+bun run assets:sync
 
-- **Production**: `https://hyperscape.pages.dev` (main branch)
-- **Preview**: `https://<commit>.hyperscape.pages.dev` (PRs)
-- **Custom Domain**: `https://www.hyperscape.club`
+# Verify CDN is serving correctly
+bun run cdn:verify
+```
 
-CORS is configured to allow all Cloudflare Pages domains.
+<Info>
+The `ensure-assets` script detects if you have manifests-only vs full assets and automatically downloads missing content via Git LFS.
+</Info>
 
 ## Production Checklist
 

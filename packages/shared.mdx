@@ -45,6 +45,39 @@ packages/shared/
 └── index.client.ts     # Client exports
 ```
 
+## Rendering
+
+### WebGPU with WebGL Fallback
+
+The shared package includes renderer factory utilities for creating renderers with automatic fallback:
+
+```typescript
+// From src/utils/rendering/RendererFactory.ts
+import { createRenderer, isWebGPURenderer, getRendererBackend } from '@hyperscape/shared';
+
+// Create renderer (WebGPU preferred, WebGL fallback)
+const renderer = await createRenderer({
+  antialias: true,
+  powerPreference: "high-performance",
+});
+
+// Check backend
+const isWebGPU = isWebGPURenderer(renderer);  // true or false
+const backend = getRendererBackend(renderer); // "webgpu" or "webgl"
+```
+
+**Renderer Features:**
+- Automatic WebGPU detection and fallback to WebGL
+- Works in WKWebView (Tauri), older Safari, and browsers without WebGPU
+- Configurable shadow maps and post-processing
+- Max anisotropy detection
+
+**Environment System:**
+- Auto exposure for day/night cycle (mimics eye adaptation)
+- Cascaded shadow maps (WebGPU) or single directional shadows (WebGL)
+- Dynamic ambient lighting based on time of day
+- Fog color transitions
+
 ## Key Exports
 
 ### Entity Hierarchy

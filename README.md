@@ -17,6 +17,12 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - Backend: Railway (hyperscape-production.up.railway.app)
 - Assets: Cloudflare R2 CDN (assets.hyperscape.club)
 
+**Latest Features:**
+- **LLM Autonomy System**: Agents use THINKING+ACTION format for genuine reasoning
+- **Quest System**: OSRS-style multi-stage quests with progress tracking
+- **WebGPU Rendering**: High-performance graphics with automatic WebGL fallback
+- **Auto Exposure**: Adaptive lighting for day/night cycle visibility
+
 ## Documentation Structure
 
 - **Quickstart** - Get Hyperscape running locally in minutes

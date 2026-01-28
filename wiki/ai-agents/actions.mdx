@@ -6,11 +6,7 @@ icon: "play"
 
 # Agent Actions Reference
 
-This page documents all **22 actions** available to ElizaOS agents in Hyperscape. Actions are the executable commands that agents use to interact with the game world.
-
-<Note>
-**ElizaOS 1.7.0 Compatibility**: All actions are compatible with ElizaOS 1.7.0+. The plugin uses backwards-compatible shims for cross-version support.
-</Note>
+This page documents all **24 actions** available to ElizaOS agents in Hyperscape. Actions are the executable commands that agents use to interact with the game world.
 
 <Info>
 Actions are defined in `packages/plugin-hyperscape/src/actions/`.
@@ -26,7 +22,7 @@ Actions are defined in `packages/plugin-hyperscape/src/actions/`.
     3 actions for fighting
   </Card>
   <Card title="Skills" icon="hammer">
-    4 actions for gathering/crafting
+    5 actions for gathering/crafting
   </Card>
   <Card title="Inventory" icon="box">
     4 actions for item management
@@ -39,6 +35,9 @@ Actions are defined in `packages/plugin-hyperscape/src/actions/`.
   </Card>
   <Card title="Goals" icon="bullseye">
     2 actions for planning
+  </Card>
+  <Card title="World Interaction" icon="treasure-chest">
+    2 actions for world objects
   </Card>
 </CardGroup>
 
@@ -329,6 +328,31 @@ export const cookFoodAction: Action = {
 
 ---
 
+### `mineRock`
+
+Mine a rock to gather ore.
+
+```typescript
+// From actions/skills.ts
+export const mineRockAction: Action = {
+  name: "MINE_ROCK",
+  description: "Mine a rock to gather ore. Requires a pickaxe.",
+  parameters: {
+    rockId: { type: "string", optional: true, description: "Specific rock entity ID" },
+  },
+};
+```
+
+**Requirements**: Pickaxe in inventory, Mining level.
+
+**Features:**
+- Automatically walks to nearest cardinal-adjacent tile
+- Validates Mining level requirements for rock type
+- Filters out depleted rocks
+- Handles copper, tin, iron, coal, mithril, adamant, rune ores
+
+---
+
 ## Inventory Actions
 
 ### `equipItem`
@@ -560,6 +584,36 @@ export const idleAction: Action = {
 - **Observation Mode**: Agent stands still and observes surroundings
 
 **Usage**: Wait for events, conserve resources, or when goals are paused.
+
+---
+
+## World Interaction Actions
+
+### `lootStarterChest`
+
+Interact with the starter chest to get starter equipment.
+
+```typescript
+// From actions/autonomous.ts
+export const lootStarterChestAction: Action = {
+  name: "LOOT_STARTER_CHEST",
+  description: "Search the starter chest to get starter equipment (bronze tools, tinderbox, net, food). Only works once per character.",
+  parameters: {},
+};
+```
+
+**Usage**: New players/agents should use this to acquire basic tools and food.
+
+**Starter Items:**
+- Bronze hatchet (woodcutting)
+- Bronze pickaxe (mining)
+- Tinderbox (firemaking)
+- Small fishing net (fishing)
+- Bread x5 (food)
+
+**Location**: Near spawn at coordinates (5, 0, -20)
+
+**Restrictions**: Only works once per character
 
 ---
 

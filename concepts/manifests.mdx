@@ -1162,6 +1162,7 @@ All manifests are in `world/assets/manifests/`:
 | `recipes/` | Processing recipes (cooking, firemaking, smelting, smithing) |
 | `stations.json` | World station configurations (anvils, furnaces, ranges) |
 | `prayers.json` | Prayer definitions with bonuses and drain rates |
+| `quests.json` | Quest definitions with stages and rewards |
 | `model-bounds.json` | Auto-generated model footprints (build-time only) |
 
 ## Manifest Structure
@@ -1599,6 +1600,58 @@ The loading is **atomic** for directory-based manifests - all required files mus
 
 ## Adding Content
 
+### World Areas with Station Spawns (`world-areas.json`)
+
+World areas now support data-driven station spawning:
+
+```json
+{
+  "areas": [
+    {
+      "id": "central_haven",
+      "name": "Central Haven",
+      "description": "The starting town for new adventurers",
+      "bounds": {
+        "minX": -100,
+        "maxX": 100,
+        "minZ": -100,
+        "maxZ": 100
+      },
+      "stations": [
+        {
+          "type": "bank",
+          "position": [10, 0, -15],
+          "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 }
+        },
+        {
+          "type": "anvil",
+          "position": [15, 0, -10]
+        },
+        {
+          "type": "furnace",
+          "position": [18, 0, -10]
+        },
+        {
+          "type": "range",
+          "position": [12, 0, -8]
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Station Location Properties:**
+- `type` — Station type (bank, anvil, furnace, range, altar)
+- `position` — [x, y, z] coordinates in world space
+- `rotation` — Optional quaternion rotation { x, y, z, w }
+
+**StationSpawnerSystem:**
+- Reads `stations` field from WorldArea definitions
+- Spawns station entities at configured positions
+- Replaces hardcoded station spawning in EntityManager
+- Uses `getStationsInArea()` helper for querying
+
 ### Step 1: Choose the Right Manifest
 
 Determine which manifest file to edit based on content type:
@@ -1607,8 +1660,9 @@ Determine which manifest file to edit based on content type:
 - **NPCs/Mobs**: `manifests/npcs.json`
 - **Gathering Resources**: `manifests/gathering/woodcutting.json`, `mining.json`, or `fishing.json`
 - **Processing Recipes**: `manifests/recipes/cooking.json`, `firemaking.json`, `smelting.json`, or `smithing.json`
-- **Stations**: `manifests/stations.json`
-- **World Areas**: `manifests/world-areas.json`
+- **Stations**: `manifests/stations.json` (station types and models)
+- **World Areas**: `manifests/world-areas.json` (station spawn locations)
+- **Quests**: `manifests/quests.json` (quest definitions)
 
 ### Step 2: Edit Manifest
 
@@ -1864,3 +1918,75 @@ bun run extract-bounds
 <Warning>
 Do not edit `model-bounds.json` manually. It is regenerated on every build when GLB files change.
 </Warning>
+
+### Quests (`quests.json`)
+
+Defines multi-stage quests with requirements and rewards:
+
+```json
+{
+  "goblin_slayer": {
+    "id": "goblin_slayer",
+    "name": "Goblin Slayer",
+    "description": "Kill 15 goblins to prove your worth.",
+    "difficulty": "novice",
+    "questPoints": 1,
+    "replayable": false,
+    "requirements": {
+      "quests": [],
+      "skills": {},
+      "items": []
+    },
+    "startNpc": "cook",
+    "stages": [
+      {
+        "id": "talk_to_cook",
+        "type": "dialogue",
+        "description": "Talk to the Cook to start the quest."
+      },
+      {
+        "id": "kill_goblins",
+        "type": "kill",
+        "description": "Kill 15 goblins.",
+        "target": "goblin",
+        "count": 15
+      },
+      {
+        "id": "return_to_cook",
+        "type": "dialogue",
+        "description": "Return to the Cook."
+      }
+    ],
+    "onStart": {
+      "items": [
+        { "itemId": "bronze_sword", "quantity": 1 }
+      ]
+    },
+    "rewards": {
+      "questPoints": 1,
+      "items": [
+        { "itemId": "xp_lamp_1000", "quantity": 1 }
+      ],
+      "xp": {
+        "attack": 500,
+        "strength": 500
+      }
+    }
+  }
+}
+```
+
+**Stage Types:**
+- `dialogue` — Talk to an NPC
+- `kill` — Kill specific mobs (with count)
+- `gather` — Gather resources (with count)
+- `interact` — Interact with objects (with count)
+- `craft` — Craft items (with count)
+
+**Difficulty Levels:**
+- `novice` — Beginner quests
+- `intermediate` — Medium difficulty
+- `experienced` — Advanced quests
+- `master` — Expert-level quests
+
+See [Quest System](/wiki/game-systems/quests) for full documentation.

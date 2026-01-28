@@ -15,7 +15,11 @@ Hyperscape integrates [ElizaOS](https://elizaos.ai) to enable AI agents that pla
 ## Starting AI Agents
 
 ```bash
+# Simplified command (recommended)
 bun run dev:ai
+
+# Legacy command (still supported)
+bun run dev:elizaos
 ```
 
 This starts:
@@ -26,11 +30,13 @@ This starts:
 
 Access the agent dashboard at `http://localhost:4000` to monitor and control agents.
 
+The `dev:ai` command uses `concurrently` to run both services with colored output for easier debugging.
+
 ## Agent Capabilities
 
 ### Available Actions
 
-AI agents have 22 actions across 7 categories:
+AI agents have 24 actions across 9 categories:
 
 ```typescript
 // From packages/plugin-hyperscape/src/index.ts
@@ -48,8 +54,9 @@ actions: [
   changeCombatStyleAction,
   fleeAction,
 
-  // Skills (4 actions)
+  // Skills (5 actions)
   chopTreeAction,
+  mineRockAction,
   catchFishAction,
   lightFireAction,
   cookFoodAction,
@@ -75,7 +82,7 @@ actions: [
 
 ### World State Access (Providers)
 
-Agents query world state via 6 providers:
+Agents query world state via 10 providers:
 
 ```typescript
 // From packages/plugin-hyperscape/src/index.ts (lines 148-156)
@@ -86,6 +93,9 @@ providers: [
   skillsProvider,           // Skill levels and XP
   equipmentProvider,        // Equipped items
   availableActionsProvider, // Context-aware available actions
+  possibilitiesProvider,    // What actions are currently possible
+  goalTemplatesProvider,    // Structured goal templates for beginners
+  guardrailsProvider,       // Safety constraints and warnings
 ],
 ```
 
