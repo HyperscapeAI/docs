@@ -131,14 +131,47 @@ JWT_SECRET=your-jwt-secret
 PORT=5555
 NODE_ENV=development
 
-# CDN (optional)
-PUBLIC_CDN_URL=http://localhost:8080
+# CDN & Assets
+PUBLIC_CDN_URL=http://localhost:8080  # CDN base URL for assets and manifests
+SKIP_ASSETS=true  # Skip asset download in CI/production (default: false)
+CI=true  # Indicates CI environment (skips asset download)
 
 # Voice Chat (optional)
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-url
+
+# Admin
+ADMIN_CODE=your-admin-code  # For protected admin endpoints
+
+# Deployment Tracking
+COMMIT_HASH=git-commit-sha  # Git commit hash for deployment tracking
 ```
+
+### CDN Manifest Fetching
+
+The server automatically fetches game manifests from the CDN at startup:
+
+**Manifest Files Fetched**:
+- `items.json`, `npcs.json`, `resources.json`, `tools.json`
+- `biomes.json`, `world-areas.json`, `stores.json`, `music.json`
+- `vegetation.json`, `buildings.json`
+
+**Fetch Behavior**:
+- **Production**: Always fetches from `PUBLIC_CDN_URL/manifests/`
+- **Development**: Skips if local manifests exist
+- **CI/CD**: Skips asset download when `CI=true` or `SKIP_ASSETS=true`
+- **Caching**: Compares with cached files, only updates if changed
+- **Fallback**: Uses cached manifests if CDN unreachable
+
+**Configuration** (from `config.ts`):
+```typescript
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+<Info>
+This eliminates the need to bundle assets in production deployments. The server fetches fresh manifests from the CDN on each startup, ensuring content stays up-to-date.
+</Info>
 
 ## Build Scripts
 

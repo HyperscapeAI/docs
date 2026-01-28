@@ -28,8 +28,9 @@ Hyperscape has **12 skills** total:
 | Skill | Activity |
 |-------|----------|
 | **Woodcutting** | Chop trees for logs |
-| **Mining** | Mine rocks for ores |
+| **Mining** | Mine ore from rocks |
 | **Fishing** | Catch fish at water spots |
+| **Agility** | Improves stamina regeneration through movement |
 
 ### Artisan Skills
 
@@ -138,28 +139,27 @@ Requirements:
 
 ### Agility
 
-Agility is a unique skill that rewards exploration and movement:
+Agility is trained passively by moving through the world:
 
-**Training Method:**
-- Gain XP by moving through the world
-- 1 XP per 2 tiles traveled (batched at 100 tiles = 50 XP)
-- Both walking and running grant XP
+**Training Method**:
+- Walk or run anywhere in the game world
+- XP granted every 100 tiles traveled (50 XP per batch)
+- Effective rate: 1 XP per 2 tiles
+- Death resets progress toward next XP grant
 
-**Benefits:**
-- **Stamina Regeneration**: +1% regen per Agility level
-  - Level 1: 1% bonus
-  - Level 50: 50% bonus (1.5x regen)
-  - Level 99: 99% bonus (nearly 2x regen)
-- Faster stamina recovery while walking and idle
+**Benefits**:
+- +1% stamina regeneration per Agility level
+- At level 99: Nearly 2x stamina regeneration
+- Improves both idle and walking regeneration rates
 
-**XP Rates:**
-| Movement | XP/Minute | Time to Level 50 |
-|----------|-----------|------------------|
-| Walking | ~100 XP | ~17 hours |
-| Running | ~200 XP | ~8.5 hours |
+**Stamina System**:
+- Inventory weight affects stamina drain while running (+0.5% drain per kg)
+- Agility level affects stamina regeneration (+1% regen per level)
+- Heavier loads drain stamina faster
+- Higher Agility recovers stamina faster
 
 <Info>
-  XP is batched every 100 tiles to prevent visual spam. Death resets your tile counter (lose accumulated progress toward next XP grant).
+  Agility is the only skill that trains passively through normal gameplay. You don't need to click anything - just explore the world!
 </Info>
 
 ## Artisan Skills

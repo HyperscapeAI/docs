@@ -83,15 +83,20 @@ Located in `src/systems/shared/`:
 
 | Category | Systems |
 |----------|---------|
-| `character/` | Character stats, equipment, skills |
+| `character/` | Character stats, equipment, skills, inventory, prayer, agility |
 | `combat/` | Combat mechanics, damage, death |
 | `death/` | Death handling, respawn |
-| `economy/` | Banks, shops, trading |
-| `entities/` | Entity lifecycle management |
-| `interaction/` | Player-world interactions |
-| `movement/` | Tile-based movement, collision, pathfinding |
-| `presentation/` | Visual rendering |
-| `world/` | World management |
+| `economy/` | Banks, shops, trading, loot |
+| `entities/` | Entity lifecycle management, spawning |
+| `interaction/` | Player-world interactions, gathering, processing |
+| `movement/` | Tile-based movement, collision, pathfinding, agility XP |
+| `presentation/` | Visual rendering, animations |
+| `world/` | World management, terrain, environment |
+
+**New in Recent Updates**:
+- **Agility System**: Movement-based XP tracking in `movement/TileSystem.ts`
+- **Weight Sync**: Inventory weight calculation and client synchronization
+- **Skill Guide**: Server endpoint for skill unlock data (`/api/data/skill-unlocks`)
 
 ### Collision System
 

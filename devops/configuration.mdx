@@ -43,18 +43,23 @@ PRIVY_APP_SECRET=your-privy-app-secret
 ```bash
 # Server
 PORT=5555
+NODE_ENV=production
 
-# Assets
+# Assets & CDN
 PUBLIC_CDN_URL=http://localhost:8080
+SKIP_ASSETS=true  # Skip asset download in CI/production (assets served from CDN)
+CI=true  # Indicates CI environment (skips asset download)
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
 
-# CI/Production (skip asset download)
-CI=true
-SKIP_ASSETS=true
+# Admin
+ADMIN_CODE=your-admin-code
+
+# Deployment
+COMMIT_HASH=git-commit-sha  # For deployment tracking
 ```
 
 ### CI/Production Environment Variables
@@ -174,6 +179,60 @@ The debug panel shows:
 
 <Info>
 The F5 keybind was added to match Minecraft's familiar debug screen shortcut.
+</Info>
+
+## CDN Manifest System
+
+Hyperscape fetches game manifests from the CDN at server startup instead of bundling them in the deployment:
+
+### Manifest Files
+
+The following manifests are fetched from `PUBLIC_CDN_URL/manifests/`:
+
+- `items.json` - Item definitions
+- `npcs.json` - NPC and mob data
+- `resources.json` - Gathering resources
+- `tools.json` - Tool definitions
+- `biomes.json` - Biome configurations
+- `world-areas.json` - World area definitions
+- `stores.json` - Shop inventories
+- `music.json` - Music track metadata
+- `vegetation.json` - Vegetation spawning
+- `buildings.json` - Building placements
+
+### Fetch Behavior
+
+**Production** (`NODE_ENV=production`):
+- Always fetches manifests from CDN
+- Compares with cached versions
+- Only updates files that changed
+- Falls back to cache if CDN unreachable
+
+**Development** (`NODE_ENV=development`):
+- Skips fetch if local manifests already exist
+- Allows working with local asset repository
+- Fetches from CDN if no local manifests found
+
+**CI/CD** (`CI=true` or `SKIP_ASSETS=true`):
+- Skips asset download during build
+- Relies on CDN for all assets and manifests
+- Faster builds and smaller deployment size
+
+### Configuration
+
+```typescript
+// From packages/server/src/startup/config.ts
+const MANIFEST_FILES = [
+  "items.json", "npcs.json", "resources.json", "tools.json",
+  "biomes.json", "world-areas.json", "stores.json", "music.json",
+  "vegetation.json", "buildings.json"
+];
+
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+<Info>
+Manifests are cached in `packages/server/world/assets/manifests/` and served to clients via `/manifests/` route with 5-minute cache headers.
 </Info>
 
 ## Privy Configuration
