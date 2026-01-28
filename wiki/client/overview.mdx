@@ -176,9 +176,9 @@ Located in `packages/client/src/game/panels/`:
 | Panel | Description |
 |-------|-------------|
 | `InventoryPanel.tsx` | 28-slot inventory with drag & drop |
-| `EquipmentPanel.tsx` | Equipment slots with stat display |
-| `SkillsPanel.tsx` | All skills with XP progress bars and clickable skill icons |
-| `SkillGuidePanel.tsx` | OSRS-style skill guide showing unlocks at each level |
+| `EquipmentPanel.tsx` | Equipment slots with stat display and weight tracking |
+| `SkillsPanel.tsx` | All skills with XP progress bars and clickable skill guides |
+| `SkillGuidePanel.tsx` | OSRS-style skill unlock viewer (click any skill to open) |
 | `CombatPanel.tsx` | Combat style selection |
 | `BankPanel.tsx` | Bank interface with tabs |
 | `DialoguePanel.tsx` | NPC conversation UI |
@@ -188,47 +188,37 @@ Located in `packages/client/src/game/panels/`:
 
 ### Skill Guide Panel
 
-The Skill Guide Panel is an OSRS-style popup that displays what players unlock at each level for a skill:
+Click any skill in the Skills Panel to view its unlock progression:
 
-**Features:**
-- Click any skill icon in Skills Panel to open
-- Shows all unlocks with level requirements
-- Visual distinction: unlocked (green ✓) vs locked (🔒)
-- Next unlock highlighted with progress indicator
-- Scrollable list for skills with many unlocks (Prayer has 29!)
-- Type badges (item/ability) with color coding
-- ESC key or click outside to close
-- Loading state while fetching data from server
-
-**Data source:**
 ```typescript
-// Fetches from server API
-const response = await fetch(`${GAME_API_URL}/api/data/skill-unlocks`);
-const unlocks = await response.json();
-```
-
-**Implementation:**
-```typescript
-// packages/client/src/game/panels/SkillGuidePanel.tsx
+// SkillGuidePanel.tsx
 interface SkillGuidePanelProps {
   visible: boolean;
-  skillLabel: string;      // "Attack", "Mining", etc.
-  skillIcon: string;       // "⚔️", "⛏️", etc.
-  playerLevel: number;     // Current player level
+  skillLabel: string;
+  skillIcon: string;
+  playerLevel: number;
   unlocks: readonly SkillUnlock[];
   isLoading: boolean;
   onClose: () => void;
 }
 ```
 
-**Visual states:**
-- **Unlocked**: Green background, checkmark, full opacity
-- **Next unlock**: Gold highlight, arrow icon, "X more levels" indicator
-- **Locked**: Dimmed, lock icon, gray text
+**Features**:
+- Shows all unlocks with level requirements
+- Visual distinction between unlocked (green) and locked (gray) items
+- Next unlock highlighted with "NEXT" badge
+- Scrollable list for skills with many unlocks (Prayer has 29!)
+- Type indicators (item vs ability)
+- Close with ESC, X button, or click outside
 
-<Info>
-The guide panel handles British/American spelling differences automatically (defence → defense) for consistent display.
-</Info>
+**Data Source**: Fetched from `/api/data/skill-unlocks` endpoint
+
+**Example Unlocks**:
+- Attack 40: Rune weapons
+- Attack 60: Dragon weapons
+- Woodcutting 15: Oak trees
+- Mining 30: Coal
+- Agility 50: +50% stamina regeneration
 
 ### HUD Components
 

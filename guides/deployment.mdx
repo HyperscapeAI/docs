@@ -114,6 +114,8 @@ The GitHub Actions workflow (`.github/workflows/deploy-railway.yml`) uses Railwa
 
 ### Manual Deployment
 
+Railway deployment is automated via GitHub Actions (`.github/workflows/deploy-railway.yml`).
+
 <Steps>
   <Step title="Create Railway project">
     1. Sign up at [railway.app](https://railway.app)
@@ -122,178 +124,93 @@ The GitHub Actions workflow (`.github/workflows/deploy-railway.yml`) uses Railwa
     4. Select the `main` branch
   </Step>
   
-  <Step title="Configure Nixpacks build">
-    Railway automatically detects `nixpacks.toml` in the repository root.
+  <Step title="Configure build">
+    Railway uses `nixpacks.toml` for build configuration:
     
-    The build process:
-    1. Installs system dependencies (Python, Cairo, Pango for native modules)
-    2. Runs `bun install`
-    3. Builds `shared` and `server` packages
-    4. Creates manifests directory
-    5. Starts server with `cd packages/server && bun dist/index.js`
+    ```toml
+    [phases.setup]
+    nixPkgs = ["bun"]
     
-    <Info>
-      The client is NOT built on Railway - it's deployed separately to Cloudflare Pages.
-    </Info>
+    [phases.build]
+    cmds = [
+      "bun install --frozen-lockfile",
+      "bun run build:shared",
+      "bun run build:client",
+      "bun run build:server"
+    ]
+    
+    [start]
+    cmd = "cd packages/server && bun run start:railway"
+    ```
   </Step>
   
-  <Step title="Add PostgreSQL database">
-    1. Click "New" → "Database" → "Add PostgreSQL"
-    2. Railway automatically sets `DATABASE_URL` environment variable
-    3. Database migrations run automatically on server startup
+  <Step title="Add PostgreSQL">
+    Add PostgreSQL service from Railway marketplace.
+    Railway automatically sets `DATABASE_URL`.
   </Step>
   
-  <Step title="Configure environment variables">
-    Add these in Railway dashboard → Variables:
-    
+  <Step title="Set environment variables">
+    Required variables:
     ```bash
-    # Required
-    PRIVY_APP_ID=your-privy-app-id
-    PRIVY_APP_SECRET=your-privy-app-secret
-    JWT_SECRET=your-jwt-secret-32-chars
+    PRIVY_APP_ID=your-app-id
+    PRIVY_APP_SECRET=your-app-secret
+    JWT_SECRET=your-secret-key
+    PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+    ```
+  </Step>
+  
+  <Step title="Configure manifest loading">
+    Railway deployment fetches manifests from CDN at startup:
     
-    # CDN Configuration
-    PUBLIC_CDN_URL=https://assets.hyperscape.club
-    
-    # Client URLs (for CORS)
-    CLIENT_URL=https://hyperscape.club
-    PUBLIC_APP_URL=https://hyperscape.club
-    
-    # Optional
-    ADMIN_CODE=your-admin-code
-    NODE_ENV=production
+    ```typescript
+    // From http-server.ts
+    if (process.env.NODE_ENV === "production") {
+      await fetchManifestsFromCDN(config.manifestsDir);
+    }
     ```
     
-    <Warning>
-      Never commit secrets to git. Use Railway's environment variable UI.
-    </Warning>
-  </Step>
-  
-  <Step title="Configure GitHub Actions (optional)">
-    For automated deployments, add Railway credentials to GitHub Secrets:
-    
-    1. Get Railway token from [railway.app/account/tokens](https://railway.app/account/tokens)
-    2. Add to GitHub repository secrets as `RAILWAY_TOKEN`
-    3. Update workflow with your project/service/environment IDs
-    
-    The workflow will automatically trigger deployments on push to main.
+    Manifests are downloaded from `PUBLIC_CDN_URL/manifests/` to avoid bundling large asset files.
   </Step>
 </Steps>
 
-### Manifest Loading
+### Railway GitHub Actions
 
-The server fetches game manifests from CDN at startup instead of requiring local assets:
+The repository includes automated Railway deployment:
 
-```typescript
-// Automatically fetched from PUBLIC_CDN_URL/manifests/
-const manifests = [
-  'biomes.json',
-  'npcs.json',
-  'items/weapons.json',
-  'recipes/smithing.json',
-  // ... 25+ manifest files
-];
+```yaml
+# .github/workflows/deploy-railway.yml
+name: Deploy to Railway
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/server/**'
+      - 'packages/shared/**'
+      - 'packages/client/**'
 ```
 
-**Benefits:**
-- No Git LFS required in production
-- Faster deployments (no asset cloning)
-- Manifests cached locally for 5 minutes
-- Automatic updates when CDN manifests change
-
-**Development Mode:**
-- Skips CDN fetch if local manifests exist
-- Falls back to local `packages/server/world/assets/manifests/`
+**Features**:
+- Automatic deployment on push to main
+- Builds client and server
+- Fetches manifests from CDN (not from assets repo)
+- Uses Railway GraphQL API for deployment
 
 ### CORS Configuration
 
-The server automatically allows these origins:
+Railway deployment requires CORS configuration for Cloudflare Pages frontend:
 
 ```typescript
-// Production domains
-'https://hyperscape.club'
-'https://www.hyperscape.club'
-'https://hyperscape.pages.dev'
-'https://hyperscape-production.up.railway.app'
-
-// Preview deployments
-/^https?:\/\/.+\.hyperscape\.pages\.dev$/
-/^https:\/\/.+\.up\.railway\.app$/
-
-// Development
-/^https?:\/\/localhost:\d+$/
+// From http-server.ts
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  "http://hyperscape.pages.dev",
+  /^https:\/\/[a-z0-9-]+\.hyperscape\.pages\.dev$/,  // Preview deployments
+  /^http:\/\/[a-z0-9-]+\.hyperscape\.pages\.dev$/,   // HTTP fallback
+  /^http:\/\/localhost:\d+$/,                         // Local development
+];
 ```
-
-### Build Configuration Files
-
-**nixpacks.toml** - Railway build configuration:
-```toml
-[phases.setup]
-aptPkgs = ["python3", "make", "g++", "pkg-config", "libcairo2-dev", ...]
-
-[phases.install]
-cmds = ["bun install"]
-
-[phases.build]
-cmds = [
-  "bun run build:shared",
-  "bun run build:server",
-  "mkdir -p packages/server/world/assets/manifests"
-]
-
-[start]
-cmd = "cd packages/server && bun dist/index.js"
-
-[variables]
-CI = "true"
-SKIP_ASSETS = "true"
-NODE_ENV = "production"
-```
-
-**railway.server.json** - Service configuration:
-```json
-{
-  "build": {
-    "builder": "NIXPACKS",
-    "nixpacksConfigPath": "nixpacks.toml"
-  },
-  "deploy": {
-    "startCommand": "cd packages/server && bun dist/index.js",
-    "healthcheckPath": "/status",
-    "healthcheckTimeout": 300,
-    "restartPolicyType": "ON_FAILURE"
-  }
-}
-```
-
-**.railwayignore** - Excludes from upload:
-```
-node_modules/
-.git/
-packages/server/world/assets/  # Assets served from CDN
-test-results/
-```
-
-### Troubleshooting Railway
-
-**Build fails with "lockfile frozen" error:**
-```bash
-# Regenerate lockfile locally
-bun install
-git add bun.lock
-git commit -m "chore: update bun.lock"
-git push
-```
-
-**Manifests not loading:**
-- Verify `PUBLIC_CDN_URL` is set correctly
-- Check CDN is serving manifests at `/manifests/*.json`
-- Review Railway logs for fetch errors
-
-**Frontend not accessible:**
-- Railway serves API only - frontend is on Cloudflare Pages
-- Verify CORS origins include your Cloudflare Pages domain
-- Check `CLIENT_URL` environment variable
 
 ## Vercel Client Deployment
 

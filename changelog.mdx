@@ -23,110 +23,139 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Railway Deployment & Manifest Loading" description="January 2026" date="2026-01-22">
+<Update label="Agility Skill & ElizaOS 1.7 Upgrade" description="January 2026" date="2026-01-21">
 
-### 🚀 Railway Production Deployment
+### 🏃 Agility Skill System
 
-Complete Railway deployment infrastructure with automated CI/CD:
+New support skill that trains through movement and affects stamina mechanics:
 
-- **Nixpacks Build Configuration**: `nixpacks.toml` defines multi-phase build
-  - Setup phase: Installs system dependencies (Python, Cairo, Pango for native modules)
-  - Install phase: Runs `bun install`
-  - Build phase: Builds `shared` and `server` packages only (client on Cloudflare Pages)
-  - Creates manifests directory for CDN-fetched manifests
-  - Skips asset download (`SKIP_ASSETS=true`) - assets served from CDN
-- **GitHub Actions Workflow**: `.github/workflows/deploy-railway.yml`
-  - Triggers on push to `main` for relevant paths
-  - Uses Railway GraphQL API for deployment
-  - Polls deployment status with 5 retries
-  - Manual trigger via `workflow_dispatch`
-- **Service Configuration**: `railway.server.json`
-  - Nixpacks builder with custom config path
-  - Watch patterns for automatic redeployment
-  - Health check at `/status` endpoint
-  - Restart policy: `ON_FAILURE` with 3 max retries
-- **Railway Ignore**: `.railwayignore` excludes unnecessary files
-  - Skips `node_modules/`, `.git/`, test results
-  - Excludes `packages/server/world/assets/` (served from CDN)
-  - Reduces upload time and deployment size
+- **Movement XP**: Gain 1 XP per 2 tiles traveled (batched at 100 tiles = 50 XP)
+  - Walking: ~100 XP/min
+  - Running: ~200 XP/min
+  - XP drops every ~15s running, ~30s walking (prevents visual spam)
+  - Death resets accumulated tiles (not earned XP)
+- **Weight-Based Stamina Drain**: Carrying weight increases stamina drain while running
+  - +0.5% drain per kg carried
+  - 50kg load = +25% drain (2.5 stamina/sec instead of 2.0)
+  - Weight synced from server via `PLAYER_WEIGHT_CHANGED` events
+- **Agility-Based Stamina Regen**: Higher agility level = faster stamina recovery
+  - +1% regen per agility level
+  - Level 99 = +99% regen (nearly double base rate)
+  - Affects both walking and idle regeneration
+- **Database**: New `agilityLevel` and `agilityXp` columns in characters table
+- **Testing**: 868 lines of comprehensive tests (AgilitySystem.test.ts, AgilityPersistence.test.ts)
 
-### 📦 CDN Manifest Loading
+### 📖 Skill Guide Panel
 
-Server now fetches manifests from CDN at startup instead of requiring local assets:
+OSRS-style skill unlock viewer accessible from Skills Panel:
 
-- **Automatic Fetching**: `fetchManifestsFromCDN()` in `src/startup/config.ts`
-  - Fetches 25+ manifest files from `PUBLIC_CDN_URL/manifests/`
-  - Includes root files (npcs.json, biomes.json, etc.)
-  - Includes subdirectories (items/, gathering/, recipes/)
-  - Caches locally in `world/assets/manifests/`
-- **Smart Caching**: Compares content before writing to avoid unnecessary disk I/O
-- **Environment-Aware Behavior**:
-  - **Production/CI**: Always fetches from CDN
-  - **Development**: Skips fetch if local manifests exist
-  - **Test**: Can skip with `SKIP_MANIFESTS=true`
-- **Error Handling**: Graceful fallback to existing local manifests
-  - Logs warnings for failed fetches
-  - Continues with cached manifests if CDN unavailable
-  - Only throws error if no manifests exist at all
-- **HTTP Caching**: Manifests served with `max-age=300, must-revalidate` (5 minutes)
+- **Click to Open**: Click any skill in Skills Panel to view its unlock progression
+- **Unlock Display**: Shows all unlocks with level requirements
+  - Green checkmark for unlocked items
+  - Lock icon for locked items
+  - "NEXT" badge highlights next unlock
+- **Progress Tracking**: Shows "X of Y unlocks achieved"
+- **Type Indicators**: Item vs ability badges
+- **Scrollable**: Handles skills with many unlocks (Prayer has 29!)
+- **Data Source**: Fetches from `/api/data/skill-unlocks` endpoint
+- **Spelling Normalization**: Handles British "defence" vs American "defense"
 
-**Benefits:**
-- No Git LFS required in production
-- Faster deployments (no asset cloning)
-- Automatic manifest updates from CDN
-- Reduced deployment size
+### 🤖 ElizaOS 1.7.0 Upgrade
 
-### 🌐 CORS Configuration Updates
+Major upgrade to ElizaOS framework with dashboard improvements:
 
-Expanded CORS allowlist for production domains:
+**Dependency Updates**:
+- `@elizaos/core`: 1.2.9 → 1.7.0
+- `@elizaos/plugin-openai`: 1.5.16 → 1.6.0
+- `@elizaos/plugin-openrouter`: 1.5.15 → 1.5.17
+- `@elizaos/plugin-sql`: 1.6.4 → 1.7.0
+- **New**: `@elizaos/plugin-ollama` 1.2.4 for local LLM inference
 
-- **Production Domains**:
-  - `https://hyperscape.club` (main site)
-  - `https://www.hyperscape.club` (www subdomain)
-  - `https://hyperscape.pages.dev` (Cloudflare Pages)
-  - `https://hyperscape-production.up.railway.app` (Railway backend)
-  - `http://hyperscape.pages.dev` (HTTP fallback for testing)
-- **Dynamic Patterns**:
-  - `/^https?:\/\/localhost:\d+$/` - Any localhost port
-  - `/^https?:\/\/.+\.hyperscape\.pages\.dev$/` - Cloudflare preview deployments (HTTP and HTTPS)
-  - `/^https:\/\/.+\.up\.railway\.app$/` - Railway preview deployments
-  - Farcaster, Warpcast, Privy domains
-- **Environment Variables**: Additional origins from `CLIENT_URL`, `PUBLIC_APP_URL`, `ELIZAOS_URL`
+**Backwards Compatibility**:
+- Shims for API changes (`max_tokens` → `maxTokens`)
+- Cross-version compatibility maintained
 
-### 🏗️ Frontend Build Integration
+### 🎮 Agent Dashboard Improvements
 
-Server can now serve built client from `public/` directory:
+**Quick Action Menu**: One-click commands next to chat input
+- 🪓 Woodcutting, ⛏️ Mining, 🎣 Fishing, ⚔️ Combat
+- 📦 Pick Up, 🏦 Bank, ⏹️ Stop, ⏸️ Idle
+- Context-aware availability (grayed out when unavailable)
 
-- **Conditional Asset Routes**: Server checks for client build in `public/assets/`
-  - If client assets exist: Serves from `public/` (production mode)
-  - If no client assets: Registers `/assets/` for world assets (development mode)
-- **SPA Routing**: Catch-all route serves `index.html` for client-side routing
-  - Excludes API routes (`/api/`, `/ws`, `/manifests/`)
-  - Excludes file extensions (static files)
-- **Build Verification**: Debug endpoint `/debug/public` shows directory contents
-- **Cache Headers**: Proper caching for static assets (1 year) and HTML (no-cache)
+**Stop/Resume Goal Controls**: Robust agent control system
+- **Stop Button**: Halts agent and prevents auto-goal setting
+  - Immediate movement cancellation
+  - "Goals Paused" state UI
+  - Blocks SET_GOAL actions while paused
+  - Chat commands still work
+- **Resume Button**: Resumes autonomous goal selection
+- **Pause State Persistence**: Syncs across reconnections
+- **API Endpoints**: `/api/agents/:agentId/goal/stop` and `/resume`
 
-### 🔧 Build Process Improvements
+**Dashboard Panels**:
+- **AgentSummaryCard**: Quick overview with combat level, total level, current goal
+- **AgentGoalPanel**: Goal progress with time estimates and XP rates
+- **AgentSkillsPanel**: Skill levels with session XP tracking
+- **AgentActivityPanel**: Recent actions and session stats
+- **AgentPositionPanel**: Location with nearby POIs and zone detection
 
-- **Split Build Commands**: Separate phases for better debugging
-  - `bun run build:shared` → `bun run build:server`
-  - Explicit logging for each phase
-- **Client Build Copy**: Client dist copied to server public directory
-  - `cp -r /app/packages/client/dist/* /app/packages/server/public/`
-  - Enables single-server deployment option
-- **Dockerfile Updates**: Multi-stage Docker build with lean runtime image
-  - Builder stage: Installs dependencies and builds packages
-  - Runtime stage: Minimal image with only production dependencies
-  - Health check with curl
-  - Proper WORKDIR for server execution
+**Settings Tab Fixes**:
+- Tabs now switch correctly (Basic, Content, Style, API Keys)
+- API key configuration UI with show/hide toggles
+- Proper ElizaOS API integration
 
-### 🐛 Bug Fixes & Improvements
+**Chat Routing Fixes**:
+- Messages reach agent correctly
+- In-game chat opens automatically when sending from dashboard
+- PostMessage integration between iframe and parent
 
-- **Lockfile Sync**: Updated `bun.lock` to match `package.json` dependencies
-- **Build Timestamps**: Added timestamp file to verify builds are running
-- **Directory Verification**: Index.html existence check before registering routes
-- **Error Logging**: Enhanced error messages with directory contents for debugging
-- **Nixpacks Logging**: Verbose logging for build debugging
+### 📦 PICKUP_ITEM & DROP_ITEM Enhancements
+
+**PICKUP_ITEM** (new action):
+- Smart item matching with word-boundary scoring
+- Prevents "bronze pickaxe" matching "bronze hatchet"
+- Auto-walks to items beyond pickup range (4m)
+- Handles server's 200-tile movement limit with stepping
+
+**DROP_ITEM** improvements:
+- "Drop all" support for entire inventory
+- "Drop all \<type\>" for specific item types (e.g., "drop all logs")
+- Safety limits (max 50 items per operation)
+- Consecutive failure protection (stops after 3 failures)
+- Word-boundary matching for accurate item selection
+
+### 🐛 Bug Fixes
+
+- **CHOP_TREE**: Now positions on cardinal adjacent tiles (N/S/E/W, not diagonal)
+- **NAVIGATE_TO**: Handles 200-tile server limit with stepping
+- **Multi-step Commands**: Grace period prevents goal clearing mid-walk
+- **Item Icon Deduplication**: Consolidated duplicate `getItemIcon()` functions
+- **Dev Script Cleanup**: Improved process cleanup on Ctrl+C
+
+### ⚡ Rate Limiting Improvements
+
+Dashboard polling intervals increased to prevent 429 errors:
+- AgentSummaryCard: 2s → 10s
+- AgentGoalPanel: 2s → 10s
+- AgentSkillsPanel: 2-5s → 10s
+- AgentActivityPanel: 3s → 10s
+- AgentPositionPanel: 1-3s → 5-10s
+
+All API calls include retry logic with exponential backoff (1s → 2s → 4s).
+
+### 🚀 Deployment Updates
+
+**Railway Deployment**:
+- Automated deployment via GitHub Actions
+- Manifest fetching from CDN at startup (not from assets repo)
+- CORS configuration for Cloudflare Pages frontend
+- Improved build process with split phases
+
+**CORS Allowlist**:
+- `https://hyperscape.club` and `https://www.hyperscape.club`
+- `https://hyperscape.pages.dev` and preview deployments
+- HTTP fallback for development
+- Regex patterns for dynamic subdomains
 
 </Update>
 

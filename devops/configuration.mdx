@@ -164,7 +164,15 @@ ELIZAOS_PORT=4001
 # LLM Providers (at least one required)
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
+OPENROUTER_API_KEY=your-openrouter-key
+
+# Local LLM (optional - ElizaOS 1.7+)
+OLLAMA_API_URL=http://localhost:11434
 ```
+
+<Info>
+**ElizaOS 1.7.0**: Now supports Ollama for local LLM inference. Configure `OLLAMA_API_URL` to use local models.
+</Info>
 
 ## AssetForge Environment
 
@@ -376,58 +384,51 @@ Manifests are cached in `packages/server/world/assets/manifests/` and served to 
   Without Privy, the game runs in anonymous mode with temporary identities.
 </Info>
 
-## CORS Configuration
+## New API Endpoints (ElizaOS 1.7)
 
-The server automatically configures CORS for development and production environments.
+### Agent Management
 
-### Allowed Origins
-
-**Production domains:**
-```typescript
-// packages/server/src/startup/http-server.ts
-const allowedOrigins = [
-  "https://hyperscape.club",
-  "https://www.hyperscape.club",
-  "https://hyperscape.pages.dev",
-  "https://hyperscape-production.up.railway.app",
-  "http://hyperscape.pages.dev",  // HTTP fallback for testing
-];
+```
+GET  /api/agents/:agentId/goal           # Get current goal and progress
+POST /api/agents/:agentId/goal           # Set new goal
+POST /api/agents/:agentId/goal/stop      # Stop goal and pause autonomous behavior
+POST /api/agents/:agentId/goal/resume    # Resume autonomous goal selection
+POST /api/agents/:agentId/message        # Send message to agent
+GET  /api/agents/:agentId/quick-actions  # Get quick action menu data
+GET  /api/agents/mapping/:agentId        # Get agent-to-character mapping
 ```
 
-**Dynamic patterns:**
-```typescript
-/^https?:\/\/localhost:\d+$/,                    // localhost:3000, 3333, 5555, etc.
-/^https?:\/\/.+\.hyperscape\.pages\.dev$/,      // Cloudflare preview deployments
-/^https:\/\/.+\.farcaster\.xyz$/,               // Farcaster frames
-/^https:\/\/.+\.warpcast\.com$/,                // Warpcast integration
-/^https:\/\/.+\.privy\.io$/,                    // Privy authentication
-/^https:\/\/.+\.up\.railway\.app$/,             // Railway deployments
+### Data Endpoints
+
+```
+GET /api/data/skill-unlocks              # Get skill unlock definitions for all skills
+GET /api/characters/:characterId/skills  # Get character skill levels and XP
+GET /api/characters/:characterId/position # Get character position and online status
 ```
 
-**Environment-based origins:**
-- `ELIZAOS_API_URL` (default: http://localhost:4001)
-- `CLIENT_URL` or `PUBLIC_APP_URL` (default: http://localhost:3333)
-- `SERVER_URL` (default: http://localhost:5555)
+### Goal Control
 
-### Adding Custom Domains
+The stop/resume endpoints enable dashboard control of agent behavior:
 
-To add a custom domain, set the `PUBLIC_APP_URL` environment variable:
+**Stop Goal** (`POST /api/agents/:agentId/goal/stop`):
+- Cancels current movement path
+- Sets `goalsPaused` flag to prevent auto-goal setting
+- Agent enters idle state
+- Chat commands still work
 
-```bash
-# In packages/server/.env
-PUBLIC_APP_URL=https://yourdomain.com
-```
+**Resume Goal** (`POST /api/agents/:agentId/goal/resume`):
+- Clears `goalsPaused` flag
+- Agent resumes autonomous goal selection
+- Returns to normal behavior
 
-The server automatically adds this to the CORS allowlist.
-
-### CORS Headers
-
-All CORS responses include:
-```
-Access-Control-Allow-Origin: <origin>
-Access-Control-Allow-Credentials: true
-Access-Control-Allow-Methods: GET, PUT, POST, DELETE, OPTIONS, PATCH
-Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With
+**Response Format**:
+```json
+{
+  "success": true,
+  "goal": null,
+  "goalsPaused": true,
+  "availableGoals": [...]
+}
 ```
 
 ## GitHub Actions

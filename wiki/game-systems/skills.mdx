@@ -56,7 +56,12 @@ Smithing is a two-step process: first smelt ores into bars at a furnace, then sm
 
 | Skill | Description | Training Methods |
 |-------|-------------|------------------|
-| **Agility** | Stamina regeneration | Walking and running across the world |
+| **Prayer** | Activate prayers for combat bonuses | Burying bones, using prayer at altars |
+| **Agility** | Stamina regeneration | Moving through the world (1 XP per 2 tiles) |
+
+<Info>
+Agility is unique - it trains passively as you move. Every 100 tiles traveled grants 50 XP (batched to prevent visual spam).
+</Info>
 
 ---
 
@@ -213,7 +218,11 @@ public getTotalLevel(stats: StatsComponent): number {
 
 ### Maximum Total Level
 
-With 12 skills at level 99: **1,188 total level**
+With 13 skills at level 99: **1,287 total level**
+
+<Info>
+Total level calculation includes: Attack, Strength, Defense, Constitution, Ranged, Prayer, Woodcutting, Mining, Fishing, Firemaking, Cooking, Smithing, and Agility.
+</Info>
 
 ---
 
@@ -582,35 +591,15 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 | Yew | 60 | 202.5 |
 | Magic | 75 | 303.8 |
 
-### Agility XP
-
-Agility is trained passively through movement:
-
-**XP Formula:**
-- 1 XP per 2 tiles traveled
-- Batched every 100 tiles (50 XP grant) to reduce visual spam
-- Both walking and running grant XP at the same rate per tile
-
-**XP Rates:**
-| Movement Type | Tiles/Second | XP/Minute |
-|---------------|--------------|-----------|
-| Walking | 3.33 | ~100 XP |
-| Running | 6.67 | ~200 XP |
-
-**Progression Examples:**
-| Level | Total XP | Time Running |
-|-------|----------|--------------|
-| 10 | 1,154 | ~6 minutes |
-| 50 | 101,333 | ~8.5 hours |
-| 99 | 13,034,431 | ~1,000+ hours |
+**Agility** (Movement-based):
+| Activity | XP Rate | Notes |
+|----------|---------|-------|
+| Walking | ~100 XP/min | 2 tiles/tick × 1 XP per 2 tiles |
+| Running | ~200 XP/min | 4 tiles/tick × 1 XP per 2 tiles |
 
 <Info>
-XP drops appear approximately every 15 seconds while running, or every 30 seconds while walking. Partial progress is preserved between XP grants.
+Agility XP is batched at 100 tiles = 50 XP to prevent visual spam. Death resets accumulated tiles (not earned XP).
 </Info>
-
-<Warning>
-Death resets your accumulated tile progress toward the next XP grant (max 50 XP lost). Earned XP is never lost on death.
-</Warning>
 
 ---
 
@@ -750,6 +739,16 @@ Defined in `recipes/*.json`:
 | Rune Equipment | 85 | 3-5 rune bars |
 
 ---
+
+## Agility System
+
+Agility is a unique skill that trains passively through movement and affects stamina mechanics.
+
+### Movement XP
+
+Agility XP is granted based on tiles traveled:
+
+```typescript\n// From TileMovementManager.ts\nconst AGILITY_TILES_PER_XP_GRANT = 100;  // Tiles needed before XP is granted\nconst AGILITY_XP_PER_GRANT = 50;         // XP granted per threshold\n\n// Effective rate: 1 XP per 2 tiles traveled\n```\n\n**XP Rates**:\n| Movement Type | Tiles/Tick | Tiles/Second | XP/Minute |\n|---------------|------------|--------------|------------|\n| Walking | 2 | 3.33 | ~100 XP |\n| Running | 4 | 6.67 | ~200 XP |\n\n**Batching System**:\n- XP is granted every 100 tiles (50 XP)\n- Prevents visual spam (XP drop every ~15s running, ~30s walking)\n- Overflow is preserved (walking 150 tiles = 50 XP + 50 tiles remaining)\n- Death resets tile counter to 0 (small penalty)\n- Logout/disconnect clears tile counter (max ~50 XP lost)\n\n<Warning>\nTeleportation does NOT grant Agility XP - only walking/running movement counts.\n</Warning>\n\n### Weight-Based Stamina Drain\n\nCarrying weight affects stamina drain while running:\n\n```typescript\n// From PlayerLocal.ts\nconst WEIGHT_DRAIN_MODIFIER = 0.005;  // +0.5% drain per kg carried\n\nconst weightMultiplier = 1 + totalWeight * WEIGHT_DRAIN_MODIFIER;\nconst drainRate = BASE_STAMINA_DRAIN * weightMultiplier;\n```\n\n**Weight Impact Table**:\n| Weight (kg) | Drain Multiplier | Drain/Second |\n|-------------|------------------|--------------|\n| 0 | 1.0x | 2.0 |\n| 10 | 1.05x | 2.1 |\n| 20 | 1.1x | 2.2 |\n| 40 | 1.2x | 2.4 |\n| 60 | 1.3x | 2.6 |\n| 100 | 1.5x | 3.0 |\n\n<Info>\nWeight is calculated server-side from inventory items and synced to the client via `PLAYER_WEIGHT_CHANGED` events.\n</Info>\n\n### Agility-Based Stamina Regeneration\n\nAgility level increases stamina regeneration:\n\n```typescript\n// From PlayerLocal.ts\nconst AGILITY_REGEN_MODIFIER = 0.01;  // +1% regen per agility level\n\nconst agilityMultiplier = 1 + agilityLevel * AGILITY_REGEN_MODIFIER;\nconst regenRate = BASE_STAMINA_REGEN * agilityMultiplier;\n```\n\n**Agility Regen Bonus Table**:\n| Agility Level | Regen Multiplier | Idle Regen/Sec | Walk Regen/Sec |\n|---------------|------------------|----------------|----------------|\n| 1 | 1.01x | 4.04 | 2.02 |\n| 10 | 1.10x | 4.40 | 2.20 |\n| 25 | 1.25x | 5.00 | 2.50 |\n| 50 | 1.50x | 6.00 | 3.00 |\n| 75 | 1.75x | 7.00 | 3.50 |\n| 99 | 1.99x | 7.96 | 3.98 |\n\n**Base Stamina Rates**:\n- Running: -2.0 stamina/second (affected by weight)\n- Walking: +2.0 stamina/second (affected by agility)\n- Idle: +4.0 stamina/second (affected by agility)\n\n### Agility Unlocks\n\nFrom `skill-unlocks.json`:\n\n| Level | Unlock |\n|-------|--------|\n| 1 | Basic stamina regeneration (+1% per level) |\n| 10 | +10% stamina regeneration |\n| 25 | +25% stamina regeneration |\n| 50 | +50% stamina regeneration |\n| 75 | +75% stamina regeneration |\n| 99 | Agility cape, +99% stamina regeneration |\n\n### Progression Example\n\nAt running speed (200 XP/min):\n- **Level 2** (83 XP): ~25 seconds\n- **Level 10** (1,154 XP): ~6 minutes\n- **Level 50** (101,333 XP): ~8.5 hours\n- **Level 99** (13M XP): ~1,000+ hours\n\n---
 
 ## Anti-Exploit Protections
 
