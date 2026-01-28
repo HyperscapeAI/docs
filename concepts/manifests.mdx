@@ -96,6 +96,7 @@ All manifests are in `world/assets/manifests/`:
 | `banks-stores.json` | Shop inventories |
 | `world-areas.json` | Zones and regions |
 | `avatars.json` | Character models |
+| `quests.json` | Quest definitions with stages, requirements, and rewards |
 | `tier-requirements.json` | Equipment level requirements by tier |
 | `skill-unlocks.json` | What unlocks at each skill level (served via `/api/data/skill-unlocks`) |
 | `gathering/` | Resource gathering data (woodcutting, mining, fishing) |
@@ -896,6 +897,85 @@ const yOffset = stationDataProvider.getModelYOffset("furnace");
 - Graceful fallback to blue box placeholder if model fails
 - Shadows and raycasting layers configured automatically
 
+### Quests (`quests.json`)
+
+The `quests.json` manifest defines OSRS-style quests with multi-stage objectives, requirements, and rewards:
+
+```json
+{
+  "goblin_slayer": {
+    "id": "goblin_slayer",
+    "name": "Goblin Slayer",
+    "description": "Kill 15 goblins to prove your worth.",
+    "difficulty": "novice",
+    "questPoints": 1,
+    "replayable": false,
+    "requirements": {
+      "quests": [],
+      "skills": {},
+      "items": []
+    },
+    "startNpc": "cook",
+    "stages": [
+      {
+        "id": "talk_to_cook",
+        "type": "dialogue",
+        "description": "Talk to the Cook to start the quest."
+      },
+      {
+        "id": "kill_goblins",
+        "type": "kill",
+        "description": "Kill 15 goblins.",
+        "target": "goblin",
+        "count": 15
+      },
+      {
+        "id": "return_to_cook",
+        "type": "dialogue",
+        "description": "Return to the Cook."
+      }
+    ],
+    "onStart": {
+      "items": [{ "itemId": "bronze_sword", "quantity": 1 }]
+    },
+    "rewards": {
+      "questPoints": 1,
+      "items": [{ "itemId": "xp_lamp_1000", "quantity": 1 }],
+      "xp": { "attack": 500, "strength": 500 }
+    }
+  }
+}
+```
+
+**Quest Properties:**
+- `id` — Unique quest identifier (snake_case, max 64 chars)
+- `name` — Display name in quest journal
+- `description` — Quest summary
+- `difficulty` — `novice`, `intermediate`, `experienced`, `master`
+- `questPoints` — Quest points awarded on completion
+- `replayable` — Whether quest can be repeated (typically false)
+- `requirements` — Prerequisites (quests, skills, items)
+- `startNpc` — NPC ID that starts the quest
+- `stages` — Array of quest objectives
+- `onStart` — Items granted when quest starts (optional)
+- `rewards` — Quest points, items, and XP granted on completion
+
+**Stage Types:**
+- `dialogue` — Talk to NPC (no additional properties)
+- `kill` — Kill mobs (`target`: mob type, `count`: number to kill)
+- `gather` — Gather items (`target`: item ID, `count`: number to gather)
+- `interact` — Interact with objects (`target`: entity type, `count`: number of interactions)
+
+**Quest Status:**
+- `not_started` — Quest not yet accepted
+- `in_progress` — Quest active, objectives incomplete
+- `ready_to_complete` — All objectives done (derived status, not stored)
+- `completed` — Quest finished
+
+<Info>
+Quests integrate with the dialogue system via `questOverrides` in NPC definitions. See [Quest System](/wiki/game-systems/quests) for complete documentation.
+</Info>
+
 ### Prayers (`prayers.json`)
 
 The `prayers.json` manifest defines OSRS-accurate prayer abilities with stat bonuses and drain mechanics:
@@ -1108,7 +1188,7 @@ DataManager loads manifests in this order:
 6. **Recipe manifests** (`recipes/*.json`)
 7. **Skill unlocks** (`skill-unlocks.json`)
 8. **Prayers** (`prayers.json`)
-9. **Quests** (`quests.json`)
+9. **Quests** (`quests.json`) - Loaded by QuestSystem separately
 10. **Stations** (`stations.json`) - Uses model bounds for footprints
 11. **World areas** (`world-areas.json`)
 12. **Stores** (`stores.json`)

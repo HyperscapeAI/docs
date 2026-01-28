@@ -23,57 +23,111 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Quest System & Skill Enhancements" description="January 2026" date="2026-01-23">
+<Update label="Quest System & Equipment Fitting" description="January 2026" date="2026-01-23">
 
-### 🗺️ Quest System
+### 📜 Quest System (PR #605)
 
-Complete quest system with 4 starter quests:
+Complete OSRS-style quest system with multi-stage objectives, rewards, and quest points:
 
-- **Quest Manifest**: New `quests.json` with structured quest definitions
-  - **Goblin Slayer**: Kill 15 goblins for Captain Rowan (rewards bronze sword and XP lamp)
-  - **Lumberjack's First Lesson**: Chop and burn 6 logs for Forester Wilma (rewards bronze hatchet, tinderbox, and XP lamp)
-  - **Fresh Catch**: Catch and cook 6 shrimp for Fisherman Pete (rewards small fishing net and XP lamp)
-  - **Torvin's Tools**: Mine ores, smelt bronze bars, and smith tools for Torvin (rewards bronze pickaxe, hammer, and XP lamp)
-- **Quest Structure**: Multi-stage quests with dialogue, kill, gather, and interact objectives
-  - Requirements system (quests, skills, items)
-  - Difficulty ratings (novice, intermediate, experienced, master, grandmaster)
-  - Quest points and XP rewards
-  - Starting items provided on quest acceptance
-  - Replayable flag for repeatable content
-- **Quest Types**: Support for dialogue, kill, gather, and interact stage types
-  - Target tracking with count requirements
-  - NPC-based quest givers and completion
-  - Item rewards and XP lamps
+- **Quest Progression**: Multi-stage quests with dialogue, kill, gather, and interact objectives
+  - Quest journal UI with color-coded status (red/yellow/green)
+  - Quest start confirmation screen with requirements and rewards
+  - Quest completion screen with fanfare
+  - Strikethrough for completed stages
+  - Progress counters for kill/gather/interact stages
+- **Quest Points**: Permanent progression tracking displayed in journal
+- **Prerequisites**: Quest chains with skill, quest, and item requirements
+- **Rewards**: Quest points, items, and XP granted on completion
+- **XP Lamps**: Special reward items that let players choose which skill receives XP
+  - Skill selection modal with all trainable skills
+  - Server-validated XP amounts
+  - Rate limited (3 requests/sec)
+- **Dialogue Integration**: Quest overrides in NPC dialogue
+  - Priority: `ready_to_complete` > `in_progress` > `completed` > `default`
+  - Dialogue effects: `startQuest`, `completeQuest`
+  - Terminal node handling for quest completion
+- **Database Schema**: New `quest_progress` and `quest_audit_log` tables
+  - Atomic transactions for quest completion + quest points
+  - Audit logging for all quest state changes
+  - Indexed for efficient queries
+- **Security Features**:
+  - HMAC-SHA256 kill token validation (prevents spoofed NPC_DIED events)
+  - Rate limiting (5/10/3 req/sec for list/detail/accept)
+  - Input validation with `isValidQuestId()` (max 64 chars, alphanumeric + underscore)
+  - Quest audit logging for exploit detection
+- **Performance Optimizations**:
+  - O(1) stage lookup caches (replaces O(n) find() calls)
+  - Direct mutation instead of object spreads (reduces GC pressure)
+  - Debug-level logging in hot paths (NPC kills)
+- **Testing**: 45 comprehensive integration tests (997 lines)
+  - Full quest flow: request → accept → kill 15 goblins → complete
+  - Kill tracking, progress updates, rewards
+  - Prerequisites, validation, edge cases
+  - Database persistence and atomicity
 
-### 🏃 Agility Skill Unlocks
+### 🎣 Equipment Fitting & Tool Detection (PR #615)
 
-New agility skill progression with stamina regeneration bonuses:
+Equipment visual system improvements and OSRS-style gathering tool display:
 
-- **Stamina Scaling**: Stamina regeneration increases by 1% per agility level
-- **Milestone Bonuses**:
-  - Level 10: +10% stamina regen
-  - Level 25: +25% stamina regen
-  - Level 50: +50% stamina regen
-  - Level 75: +75% stamina regen
-  - Level 99: +99% stamina regen (mastery)
-- **Skill Unlocks Manifest**: Updated `skill-unlocks.json` with complete agility progression
+- **V2 Equipment Export Format**: Relative matrix approach for accurate positioning
+  - Uses world-space relative matrix between hand bone and weapon
+  - Preserves equipment scale compensation (e.g., 3.3x for bone world scale)
+  - No scale hacks needed in Hyperscape
+  - Backward compatible with V1 exports (legacy scale multiplier fallback)
+  - Avatar height normalization to 1.6m (matches Hyperscape)
+- **Tool Detection**: Equipped tools now detected for gathering
+  - Checks both inventory AND equipped items (tools in weapon slot)
+  - Proper type conversion (number to string)
+  - Uses `itemMatchesToolCategory` utility
+- **OSRS-Style Fishing Rod Display**: Tool appears in hand during gathering
+  - Fishing rod shows in hand during fishing (even though it's in inventory)
+  - Temporarily hides equipped weapon while gathering tool is shown
+  - Restores weapon when gathering stops
+  - Prevents race conditions with `hiddenWeapons` tracking
+- **Asset Forge Equipment Panel**: Tools added to equipment panel
+  - Pickaxes, hatchets, fishing rods now available for fitting
+  - Tool icon (Pickaxe) added to asset selection
+  - Filters include `type === "tool"`
+- **Type Safety**: Comprehensive validation for relativeMatrix
+  - Validates all 16 matrix elements are valid numbers
+  - Prevents NaN and invalid matrix data
 
-### 🙏 Prayer System Expansion
+### 🏠 Spawn & Home Teleport (PR #613)
 
-Enhanced prayer manifest with OSRS-accurate prayers:
+Manifest-driven spawn system with simplified configuration:
 
-- **Basic Prayers**: Thick Skin, Burst of Strength, Clarity of Thought
-  - Level 1-7 prayers with 5% stat boosts
-  - Drain effect: 1 (slowest drain rate)
-- **Intermediate Prayers**: Rock Skin, Superhuman Strength
-  - Level 10-13 prayers with 10% stat boosts
-  - Drain effect: 6 (moderate drain rate)
-- **Prayer Conflicts**: Prayers properly conflict with higher-tier versions
-  - Thick Skin conflicts with Rock Skin, Steel Skin, Chivalry, Piety
-  - Burst of Strength conflicts with Superhuman Strength, Ultimate Strength, Chivalry, Piety
-  - Clarity of Thought conflicts with Improved Reflexes, Incredible Reflexes, Chivalry, Piety
-- **Prayer Categories**: Offensive and defensive prayer types
-- **Bonus System**: Multipliers for attack, strength, and defense stats
+- **Manifest-Driven Spawn**: Uses `STARTER_TOWNS["central_haven"]` from manifest
+  - Removed dependency on TownSystem
+  - Consistent spawn location for server init and player death
+  - Calculates center of town bounds for spawn position
+- **Home Teleport Cooldown**: Reduced from 15 minutes to 5 seconds
+  - Faster testing and development iteration
+  - Cast time remains 10 seconds (can be interrupted)
+- **Code Simplification**: Removed database-based spawn configuration
+  - Net deletion of 58 lines
+  - Cleaner initialization logic
+
+### 🍳 Cooking Range Entity
+
+Permanent cooking stations with reduced burn chance:
+
+- **RangeEntity**: New entity type for cooking stations
+  - Extends `InteractableEntity`
+  - Supports cooking with reduced burn rates
+  - Uses `stopBurnLevel.range` from cooking recipes
+- **Cooking Sources**: Unified handling for fires and ranges
+  - `PendingCookManager` supports both source types
+  - `sourceType: "fire" | "range"` parameter
+  - Proper event routing via EventBus
+
+### 🔧 Bug Fixes & Improvements
+
+- **PLAYER_JOINED Event**: Fixed local player not emitting event (broke skill updates)
+- **Inventory Deadlock Retry**: Added exponential backoff for PostgreSQL deadlocks
+  - 3 retries with 50ms/100ms/200ms delays
+  - Handles concurrent inventory updates gracefully
+- **Equipment Fitting Scale**: Preserved scale compensation in V2 exports
+- **Mining Skill Check**: Fixed skill requirement validation for equipped pickaxes
 
 </Update>
 

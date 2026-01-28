@@ -142,6 +142,20 @@ Quest and achievement tracking:
 - **Quest Points** — Track quest completion and unlock advanced quests
 - **XP Lamps** — Skill selection for quest XP rewards
 
+### Quest System
+
+**Location:** `systems/shared/progression/`
+
+OSRS-style quest progression with objectives and rewards:
+
+- **QuestSystem.ts** — Quest lifecycle management (~1100 lines)
+- **Multi-stage quests** — Dialogue, kill, gather, interact objectives
+- **Quest points** — Permanent progression tracking
+- **Prerequisites** — Quest chains with skill/quest/item requirements
+- **Rewards** — Items, XP, and quest points
+- **Security** — HMAC kill token validation, rate limiting, audit logging
+- **Database** — PostgreSQL persistence with atomic transactions
+
 ---
 
 ## Combat Constants
@@ -323,7 +337,7 @@ export enum EventType {
     RuneScape XP curves, leveling, combat level formula, and skill requirements.
   </Card>
   <Card title="Quest System" icon="scroll" href="/wiki/game-systems/quests">
-    OSRS-style quests with kill tracking, dialogue integration, and XP lamp rewards.
+    Multi-stage quests with objectives, rewards, quest points, and dialogue integration.
   </Card>
   <Card title="Tile Movement" icon="route" href="/wiki/game-systems/movement">
     Discrete tile-based movement, pathfinding, and OSRS melee range rules.

@@ -236,18 +236,37 @@ Total level calculation includes: Attack, Strength, Defense, Constitution, Range
 | Constitution (always) | 1.33 |
 | Controlled (per skill) | 1.33 |
 
-### Prayer XP
+### XP Lamps
 
-Prayer XP is gained by burying bones:
+XP lamps are consumable items that grant XP to a skill of your choice:
 
-| Bone Type | Prayer XP | Source |
-|-----------|-----------|--------|
-| Bones | 4.5 | Most monsters |
-| Big bones | 15 | Large monsters |
-| Dragon bones | 72 | Dragons |
+```json
+{
+  "id": "xp_lamp_1000",
+  "name": "XP Lamp (1000 XP)",
+  "type": "consumable",
+  "useEffect": {
+    "type": "xp_lamp",
+    "xpAmount": 1000
+  },
+  "inventoryActions": ["Rub", "Drop", "Examine"]
+}
+```
+
+**Usage:**
+1. Right-click lamp in inventory → select "Rub"
+2. Skill selection modal appears showing all skills with current levels
+3. Select skill to receive XP
+4. Lamp is consumed and XP is granted
+
+**Security:**
+- Server validates lamp exists at specified slot
+- Server validates XP amount matches manifest definition
+- Server validates skill ID is valid
+- Rate limited to 3 requests/sec (shared with consume limiter)
 
 <Info>
-Burying bones has a 2-tick (1.2s) delay. Bone types are defined in `manifests/items.json` with the `prayerXp` property.
+XP lamps are commonly awarded as quest rewards, allowing players to choose which skill benefits from the quest.
 </Info>
 
 ### Gathering XP

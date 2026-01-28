@@ -1,35 +1,39 @@
 ---
 title: "Quest System"
-description: "OSRS-style quest system with kill tracking, dialogue integration, and rewards"
+description: "OSRS-style quest progression with objectives, rewards, and quest points"
 icon: "scroll"
 ---
 
 # Quest System
 
-Hyperscape features a complete OSRS-style quest system with kill tracking, skill requirements, dialogue integration, and quest rewards including XP lamps and quest points.
+Hyperscape features a **quest system** inspired by Old School RuneScape, where players complete multi-stage objectives to earn quest points, items, and XP rewards. Quests are defined in JSON manifests and tracked server-side with full audit logging.
 
 <Info>
-Quest system code: `packages/shared/src/systems/shared/progression/QuestSystem.ts` (1091 lines)
+The quest system is managed by `QuestSystem` in `packages/shared/src/systems/shared/progression/QuestSystem.ts`.
 </Info>
 
----
+## Features
 
-## Overview
-
-The quest system provides:
-
-- **Quest Journal** — Track active and completed quests with progress indicators
-- **Kill Tracking** — Automatic progress for kill objectives with HMAC validation
-- **Skill Quests** — Gather, interact, and skill-based objectives (cooking, smithing, firemaking)
-- **Dialogue Integration** — Quest start/complete through NPC conversations
-- **Quest Rewards** — Quest points, items, and XP lamps
-- **Security** — HMAC kill token validation, rate limiting, audit logging
+<CardGroup cols={2}>
+  <Card title="Multi-Stage Quests" icon="list-checks">
+    Quests with multiple objectives: dialogue, kill, gather, interact
+  </Card>
+  <Card title="Quest Points" icon="trophy">
+    Earn quest points for completing quests, tracked permanently
+  </Card>
+  <Card title="Prerequisites" icon="lock">
+    Quest chains with skill, quest, and item requirements
+  </Card>
+  <Card title="Rewards" icon="gift">
+    Items, XP, and quest points awarded on completion
+  </Card>
+</CardGroup>
 
 ---
 
 ## Quest Structure
 
-Quests are defined in JSON manifests at `packages/server/world/assets/manifests/quests.json`:
+Quests are defined in `world/assets/manifests/quests.json`:
 
 ```json
 {
@@ -77,22 +81,38 @@ Quests are defined in JSON manifests at `packages/server/world/assets/manifests/
 }
 ```
 
+### Quest Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | string | Unique quest identifier (snake_case) |
+| `name` | string | Display name shown in quest journal |
+| `description` | string | Quest summary |
+| `difficulty` | string | `novice`, `intermediate`, `experienced`, `master` |
+| `questPoints` | number | Quest points awarded on completion |
+| `replayable` | boolean | Whether quest can be repeated |
+| `requirements` | object | Prerequisites to start quest |
+| `startNpc` | string | NPC ID that starts the quest |
+| `stages` | array | Quest objectives in order |
+| `onStart` | object | Items granted when quest starts |
+| `rewards` | object | Rewards granted on completion |
+
 ---
 
 ## Quest Stages
 
-Quests consist of sequential stages that players must complete in order:
+Quests consist of multiple stages that must be completed in order:
 
 ### Stage Types
 
-| Type | Description | Example |
-|------|-------------|---------|
-| `dialogue` | Talk to an NPC | "Talk to the Cook" |
-| `kill` | Kill specific NPCs | "Kill 15 goblins" |
-| `gather` | Gather resources | "Mine 10 copper ore" |
-| `interact` | Interact with objects | "Light 5 fires" |
+| Type | Description | Properties |
+|------|-------------|------------|
+| `dialogue` | Talk to an NPC | None |
+| `kill` | Kill specific mobs | `target` (mob type), `count` |
+| `gather` | Gather resources | `target` (item ID), `count` |
+| `interact` | Interact with objects | `target` (entity type), `count` |
 
-### Kill Stages
+### Kill Stage
 
 ```json
 {
@@ -104,13 +124,13 @@ Quests consist of sequential stages that players must complete in order:
 }
 ```
 
-**Features:**
-- Automatic progress tracking via `NPC_DIED` events
-- HMAC kill token validation prevents spoofing
-- Progress persists to database on each kill
-- Chat notifications at milestones (5, 10, 15 kills)
+**Progress Tracking:**
+- Listens to `NPC_DIED` events
+- Validates kill token (HMAC-SHA256) to prevent spoofing
+- Increments `stageProgress.kills` counter
+- Marks stage complete when `kills >= count`
 
-### Gather Stages
+### Gather Stage
 
 ```json
 {
@@ -122,12 +142,13 @@ Quests consist of sequential stages that players must complete in order:
 }
 ```
 
-**Features:**
-- Tracks via `INVENTORY_ITEM_ADDED` events
-- Flexible completion order (can gather multiple items in any order)
-- Progress tracked by item ID, not stage index
+**Progress Tracking:**
+- Listens to `INVENTORY_ITEM_ADDED` events
+- Tracks progress by item ID (flexible completion order)
+- Increments `stageProgress[itemId]` counter
+- Supports multiple items in one stage
 
-### Interact Stages
+### Interact Stage
 
 ```json
 {
@@ -139,33 +160,35 @@ Quests consist of sequential stages that players must complete in order:
 }
 ```
 
-**Supported Interactions:**
-- `FIRE_CREATED` — Firemaking
-- `COOKING_COMPLETED` — Cooking
-- `SMITHING_COMPLETE` — Smithing
+**Progress Tracking:**
+- Listens to skill completion events (`FIRE_CREATED`, `COOKING_COMPLETED`, `SMITHING_COMPLETE`)
+- Tracks progress by interaction type
+- Increments `stageProgress[target]` counter
+
+---
+
+## Quest Status
+
+Quests have four possible statuses:
+
+| Status | Description | Color |
+|--------|-------------|-------|
+| `not_started` | Quest not yet accepted | Red |
+| `in_progress` | Quest active, objectives incomplete | Yellow |
+| `ready_to_complete` | All objectives done, return to NPC | Yellow |
+| `completed` | Quest finished | Green |
+
+<Info>
+`ready_to_complete` is a **derived status** computed at runtime when `status === "in_progress"` AND the current stage objective is met. It is not stored in the database.
+</Info>
 
 ---
 
 ## Quest Flow
 
-### 1. Quest Request
+### 1. Request Quest Start
 
-Player talks to quest NPC. Dialogue system checks quest status and shows appropriate dialogue:
-
-```typescript
-// DialogueSystem checks quest overrides
-const questSystem = world.getSystem("quest") as QuestSystem;
-const status = questSystem.getQuestStatus(playerId, questId);
-
-if (status === "not_started") {
-  // Show quest start dialogue
-  questSystem.requestQuestStart(playerId, questId);
-}
-```
-
-### 2. Quest Start Confirmation
-
-Server emits `QUEST_START_CONFIRM` event with quest details:
+Player talks to quest NPC. If quest is available, server emits `QUEST_START_CONFIRM` event:
 
 ```typescript
 world.emit(EventType.QUEST_START_CONFIRM, {
@@ -174,24 +197,16 @@ world.emit(EventType.QUEST_START_CONFIRM, {
   questName,
   description,
   difficulty,
-  requirements: {
-    quests: [],
-    skills: { attack: 10 },
-    items: []
-  },
-  rewards: {
-    questPoints: 1,
-    items: [{ itemId: "xp_lamp_1000", quantity: 1 }],
-    xp: { attack: 500 }
-  }
+  requirements,
+  rewards,
 });
 ```
 
-Client displays **Quest Start Screen** with Accept/Decline buttons.
+Client displays quest start screen with Accept/Decline buttons.
 
-### 3. Quest Acceptance
+### 2. Accept Quest
 
-Player clicks "Accept Quest". Client sends `questAccept` packet:
+Player clicks Accept. Client sends `questAccept` packet:
 
 ```typescript
 world.network.send("questAccept", { questId });
@@ -207,88 +222,90 @@ const success = await questSystem.startQuest(playerId, questId);
 - Quest status set to `in_progress`
 - Starting items granted (if defined in `onStart`)
 - `QUEST_STARTED` event emitted
-- Progress saved to database
+- Database updated with quest progress row
 
-### 4. Quest Progress
+### 3. Complete Objectives
 
-As player completes objectives, progress is tracked automatically:
+Player completes stage objectives. Progress is tracked automatically:
 
-```typescript
-// Kill tracking (via NPC_DIED event)
-world.on(EventType.NPC_DIED, (data) => {
-  if (data.mobType === stage.target) {
-    progress.stageProgress.kills = (progress.stageProgress.kills || 0) + 1;
-    
-    // Emit progress event
-    world.emit(EventType.QUEST_PROGRESSED, {
-      playerId,
-      questId,
-      stage: currentStage,
-      progress: progress.stageProgress
-    });
-  }
-});
+- **Kill stages**: Listen to `NPC_DIED` events
+- **Gather stages**: Listen to `INVENTORY_ITEM_ADDED` events
+- **Interact stages**: Listen to skill completion events
+
+**Progress Updates:**
+- `QUEST_PROGRESSED` event emitted on each increment
+- Database updated with `stageProgress`
+- Chat message sent when objective complete
+
+### 4. Complete Quest
+
+When all stages are done, player returns to quest NPC. Dialogue effect triggers:
+
+```json
+{
+  "effect": "completeQuest",
+  "params": ["goblin_slayer"]
+}
 ```
 
-**Progress Tracking:**
-- Kill stages: `{ kills: 7 }`
-- Gather stages: `{ copper_ore: 5, tin_ore: 3 }`
-- Interact stages: `{ fire: 2 }`
-
-### 5. Quest Completion
-
-When all objectives are met, quest status becomes `ready_to_complete`. Player returns to quest NPC and dialogue triggers completion:
+Server completes quest atomically:
 
 ```typescript
-// Dialogue effect: completeQuest
 await questSystem.completeQuest(playerId, questId);
 ```
 
-**Completion Flow:**
-1. Validate quest is `ready_to_complete`
-2. Award quest points (atomic transaction)
-3. Grant reward items
-4. Grant XP rewards
-5. Emit `QUEST_COMPLETED` event
-6. Show completion screen
-
----
-
-## Quest Status
-
-Quests have 4 possible statuses:
-
-| Status | Description |
-|--------|-------------|
-| `not_started` | Player hasn't started the quest |
-| `in_progress` | Quest active, objectives incomplete |
-| `ready_to_complete` | All objectives met, return to NPC |
-| `completed` | Quest finished, rewards claimed |
-
-<Info>
-`ready_to_complete` is a **derived status** computed at runtime when `status === "in_progress"` AND the current stage objective is met. It's not stored in the database.
-</Info>
+**On Completion:**
+- Quest status set to `completed`
+- Quest points awarded
+- Reward items granted
+- Reward XP granted
+- `QUEST_COMPLETED` event emitted
+- Database updated atomically (transaction)
 
 ---
 
 ## Quest Requirements
 
-Quests can have prerequisites:
+Quests can require:
+
+### Quest Prerequisites
 
 ```json
 {
   "requirements": {
-    "quests": ["goblin_slayer"],
-    "skills": { "attack": 10, "defense": 5 },
-    "items": ["bronze_sword"]
+    "quests": ["goblin_slayer", "tutorial_island"]
   }
 }
 ```
 
-**Validation:**
-- Quest requirements checked on quest start
-- Skill requirements checked against current levels
-- Item requirements checked in inventory
+Player must have completed all listed quests.
+
+### Skill Requirements
+
+```json
+{
+  "requirements": {
+    "skills": {
+      "attack": 10,
+      "mining": 30
+    }
+  }
+}
+```
+
+Player must have the specified skill levels.
+
+### Item Requirements
+
+```json
+{
+  "requirements": {
+    "items": ["bronze_sword", "tinderbox"]
+  }
+}
+```
+
+Player must have the items in inventory (not consumed).
 
 ---
 
@@ -296,21 +313,17 @@ Quests can have prerequisites:
 
 ### Quest Points
 
-Quest points are awarded on completion and tracked per player:
-
-```typescript
-const questPoints = questSystem.getQuestPoints(playerId);
+```json
+{
+  "rewards": {
+    "questPoints": 2
+  }
+}
 ```
 
-Quest points are stored in the `characters` table:
+Quest points are tracked permanently and displayed in the quest journal.
 
-```sql
-ALTER TABLE characters ADD COLUMN questPoints INTEGER DEFAULT 0 NOT NULL;
-```
-
-### Item Rewards
-
-Items are granted via `INVENTORY_ITEM_ADDED` events:
+### Items
 
 ```json
 {
@@ -323,9 +336,9 @@ Items are granted via `INVENTORY_ITEM_ADDED` events:
 }
 ```
 
-### XP Rewards
+Items are added to player inventory on completion.
 
-XP is granted to specific skills:
+### XP Rewards
 
 ```json
 {
@@ -339,50 +352,116 @@ XP is granted to specific skills:
 }
 ```
 
-### XP Lamps
+XP is granted to specified skills on completion.
 
-XP lamps allow players to choose which skill receives XP:
+---
+
+## XP Lamps
+
+XP lamps are special reward items that let players choose which skill receives XP:
 
 ```json
 {
-  "itemId": "xp_lamp_1000",
+  "id": "xp_lamp_1000",
   "name": "XP Lamp (1000 XP)",
+  "type": "consumable",
   "useEffect": {
     "type": "xp_lamp",
     "xpAmount": 1000
-  }
+  },
+  "inventoryActions": ["Rub", "Drop", "Examine"]
 }
 ```
 
 **Usage Flow:**
-1. Player right-clicks lamp → "Rub"
+1. Player right-clicks lamp → selects "Rub"
 2. Skill selection modal appears
 3. Player selects skill
-4. Lamp consumed, XP granted
+4. Server validates and grants XP
+5. Lamp consumed from inventory
+
+**Security:**
+- Rate limited (3 requests/sec)
+- Server validates item exists at slot
+- Server validates XP amount matches manifest
+- Server validates skill ID is valid
+
+---
+
+## Dialogue Integration
+
+Quests integrate with the dialogue system through **quest overrides**:
+
+```json
+{
+  "id": "cook",
+  "name": "Cook",
+  "dialogue": {
+    "default": "cook_default",
+    "questOverrides": {
+      "goblin_slayer": {
+        "not_started": "cook_quest_start",
+        "in_progress": "cook_quest_progress",
+        "ready_to_complete": "cook_quest_complete",
+        "completed": "cook_quest_done"
+      }
+    }
+  }
+}
+```
+
+**Priority:** `ready_to_complete` > `in_progress` > `completed` > `default`
+
+### Dialogue Effects
+
+Dialogue nodes can trigger quest actions:
+
+**Start Quest:**
+```json
+{
+  "id": "cook_quest_start_accept",
+  "text": "I'll help you with those goblins!",
+  "effect": "startQuest",
+  "params": ["goblin_slayer"]
+}
+```
+
+**Complete Quest:**
+```json
+{
+  "id": "cook_quest_complete_finish",
+  "text": "I've killed all the goblins!",
+  "effect": "completeQuest",
+  "params": ["goblin_slayer"]
+}
+```
+
+<Warning>
+Quest effects execute when the player clicks "Continue" on a terminal dialogue node. This ensures the player sees the final dialogue text before rewards are granted.
+</Warning>
 
 ---
 
 ## Quest Journal UI
 
-The Quest Journal (`QuestJournal.tsx`) displays:
+The quest journal displays all quests with color-coded status:
 
-- **Quest List** — Color-coded by status (red/yellow/green)
-- **Quest Points** — Total quest points earned
-- **Quest Details** — Stages with strikethrough for completed steps
-- **Progress Counters** — Live progress for kill/gather/interact stages
+**Features:**
+- Quest list sorted by status (in progress → not started → completed)
+- Quest points total displayed
+- Quest detail view with stage progress
+- Strikethrough for completed stages
+- Progress counters for kill/gather/interact stages
 
-**Color Coding:**
-- 🔴 Red: `not_started`
-- 🟡 Yellow: `in_progress` or `ready_to_complete`
-- 🟢 Green: `completed`
+**Opening the Journal:**
+- Click the 📜 Quests button in the sidebar
+- Keyboard shortcut: (configurable)
 
 ---
 
 ## Database Schema
 
 ### quest_progress Table
-
-Tracks player quest state:
 
 ```sql
 CREATE TABLE quest_progress (
@@ -401,18 +480,9 @@ CREATE INDEX idx_quest_progress_player ON quest_progress(playerId);
 CREATE INDEX idx_quest_progress_status ON quest_progress(playerId, status);
 ```
 
-**Columns:**
-- `playerId` — Character ID (foreign key)
-- `questId` — Quest identifier from manifest
-- `status` — `not_started`, `in_progress`, or `completed`
-- `currentStage` — Current stage ID
-- `stageProgress` — JSON object with progress data (e.g., `{"kills": 7}`)
-- `startedAt` — Unix timestamp (ms)
-- `completedAt` — Unix timestamp (ms)
-
 ### quest_audit_log Table
 
-Immutable audit trail for security and debugging:
+All quest actions are logged for security auditing:
 
 ```sql
 CREATE TABLE quest_audit_log (
@@ -432,39 +502,39 @@ CREATE INDEX idx_quest_audit_log_quest ON quest_audit_log(questId);
 CREATE INDEX idx_quest_audit_log_timestamp ON quest_audit_log(timestamp);
 ```
 
-**Actions:**
-- `started` — Quest started
-- `progressed` — Stage progress updated
-- `completed` — Quest completed with rewards
+**Audit Actions:**
+- `started` - Quest accepted
+- `progressed` - Stage objective incremented
+- `completed` - Quest finished
 
 ---
 
 ## Security Features
 
-### HMAC Kill Token Validation
+### Kill Token Validation
 
-Prevents spoofed `NPC_DIED` events:
+Quest kill progress uses HMAC-SHA256 tokens to prevent spoofing:
 
 ```typescript
-// Server generates kill token when mob dies
+// Server generates token when mob dies
 const killToken = generateKillToken(mobId, killedBy, timestamp);
 
-// QuestSystem validates token before counting kill
+// Quest system validates token before granting progress
 if (!validateKillToken(mobId, killedBy, timestamp, killToken)) {
   logger.warn("Invalid kill token - possible spoof attempt");
   return;
 }
 ```
 
-**Implementation:**
-- Uses HMAC-SHA256 with server-side secret
-- Tokens include: `mobId`, `killedBy`, `timestamp`
+**Token Properties:**
+- Uses server-side secret key
+- Includes mob ID, killer ID, and timestamp
 - 5-second validity window
-- Server-only (uses Node.js crypto module)
+- Prevents client-side event spoofing
 
 ### Rate Limiting
 
-Quest network handlers are rate-limited:
+Quest network handlers are rate limited:
 
 | Handler | Limit | Purpose |
 |---------|-------|---------|
@@ -474,7 +544,7 @@ Quest network handlers are rate-limited:
 
 ### Input Validation
 
-All quest IDs are validated:
+All quest IDs are validated using `isValidQuestId()`:
 
 ```typescript
 export const MAX_QUEST_ID_LENGTH = 64;
@@ -490,35 +560,33 @@ export function isValidQuestId(id: unknown): id is string {
 }
 ```
 
+This prevents:
+- Log injection attacks
+- DoS via huge strings
+- Invalid character exploits
+
 ---
 
 ## Performance Optimizations
 
 ### O(1) Stage Lookups
 
-Stage lookups use pre-computed Map caches instead of O(n) array searches:
+Quest stages are cached in Maps for fast lookups:
 
 ```typescript
-// Pre-allocated stage lookup caches (per quest)
-private _stageCaches: Map<string, Map<string, QuestStage>> = new Map();
+// Before: O(n) linear search
+const stage = definition.stages.find(s => s.id === stageId);
 
-// Build cache on first access
-private getStageCache(questId: string): Map<string, QuestStage> {
-  let cache = this._stageCaches.get(questId);
-  if (!cache) {
-    const definition = this.questDefinitions.get(questId);
-    cache = new Map(definition.stages.map(s => [s.id, s]));
-    this._stageCaches.set(questId, cache);
-  }
-  return cache;
-}
+// After: O(1) Map lookup
+const stageCache = this.getStageCache(questId);
+const stage = stageCache.get(stageId);
 ```
 
-**Impact:** O(n) → O(1) for stage lookups in hot paths (NPC kill events)
+Critical for hot paths (NPC kill events fire frequently).
 
 ### Direct Mutation
 
-Object spreads eliminated in hot paths:
+Progress updates use direct mutation instead of object spreads:
 
 ```typescript
 // Before: Allocates new object on every kill
@@ -527,21 +595,72 @@ progress.stageProgress = {
   kills: currentKills
 };
 
-// After: Direct mutation (zero allocation)
+// After: Reuses existing object (zero allocation)
 progress.stageProgress.kills = currentKills;
 ```
 
-### Smart Logging
+Reduces GC pressure in hot paths.
 
-Log levels optimized for production:
+### Log Verbosity Reduction
+
+Frequent events use debug-level logging:
 
 ```typescript
-// Debug-level for frequent events (every mob kill)
+// Debug-level for every mob kill
 this.logger.debug(`NPC_DIED: killedBy=${killedBy}, mobType=${mobType}`);
 
 // Info-level only for milestones
-this.logger.info(`Quest ${questId} completed by ${playerId}`);
+this.logger.info(`Quest completed: ${questName}`);
 ```
+
+---
+
+## API Reference
+
+### QuestSystem Methods
+
+```typescript
+// Get quest status for a player
+getQuestStatus(playerId: string, questId: string): QuestStatus
+
+// Get all active quests for a player
+getActiveQuests(playerId: string): ActiveQuest[]
+
+// Get quest points for a player
+getQuestPoints(playerId: string): number
+
+// Check if player completed a quest
+hasCompletedQuest(playerId: string, questId: string): boolean
+
+// Get quest definition
+getQuestDefinition(questId: string): QuestDefinition | undefined
+
+// Get all quest definitions
+getAllQuestDefinitions(): QuestDefinition[]
+
+// Request quest start (shows confirmation screen)
+requestQuestStart(playerId: string, questId: string): boolean
+
+// Start quest (after player accepts)
+async startQuest(playerId: string, questId: string): Promise<boolean>
+
+// Complete quest (called by dialogue effect)
+async completeQuest(playerId: string, questId: string): Promise<boolean>
+```
+
+### Network Packets
+
+**Client → Server:**
+- `getQuestList` - Request all quests for player
+- `getQuestDetail` - Request detail for specific quest
+- `questAccept` - Accept quest from confirmation screen
+
+**Server → Client:**
+- `questList` - Quest list with status
+- `questDetail` - Quest detail with progress
+- `questStartConfirm` - Show quest start screen
+- `questProgressed` - Progress update
+- `questCompleted` - Quest completion screen
 
 ---
 
@@ -549,7 +668,7 @@ this.logger.info(`Quest ${questId} completed by ${playerId}`);
 
 ### QUEST_STARTED
 
-Emitted when a player starts a quest:
+Emitted when a player accepts a quest:
 
 ```typescript
 {
@@ -562,7 +681,7 @@ Emitted when a player starts a quest:
 
 ### QUEST_PROGRESSED
 
-Emitted when quest progress updates:
+Emitted when stage progress increments:
 
 ```typescript
 {
@@ -576,7 +695,7 @@ Emitted when quest progress updates:
 
 ### QUEST_COMPLETED
 
-Emitted when a quest is completed:
+Emitted when a quest is finished:
 
 ```typescript
 {
@@ -593,7 +712,7 @@ Emitted when a quest is completed:
 
 ### QUEST_START_CONFIRM
 
-Emitted to show quest accept screen:
+Emitted to show quest start screen:
 
 ```typescript
 {
@@ -617,245 +736,143 @@ Emitted to show quest accept screen:
 
 ---
 
-## Network Handlers
+## Adding Quests
 
-### getQuestList
+### Step 1: Define Quest
 
-Fetch all quests for a player:
-
-```typescript
-// Client request
-world.network.send("getQuestList", {});
-
-// Server response (questList packet)
-{
-  quests: [
-    {
-      id: "goblin_slayer",
-      name: "Goblin Slayer",
-      status: "in_progress",
-      difficulty: "novice",
-      questPoints: 1
-    }
-  ],
-  questPoints: 5
-}
-```
-
-### getQuestDetail
-
-Fetch detailed info for a specific quest:
-
-```typescript
-// Client request
-world.network.send("getQuestDetail", { questId: "goblin_slayer" });
-
-// Server response (questDetail packet)
-{
-  id: "goblin_slayer",
-  name: "Goblin Slayer",
-  description: "Kill 15 goblins to prove your worth.",
-  status: "in_progress",
-  difficulty: "novice",
-  questPoints: 1,
-  currentStage: "kill_goblins",
-  stageProgress: { kills: 7 },
-  stages: [
-    {
-      id: "talk_to_cook",
-      description: "Talk to the Cook to start the quest.",
-      type: "dialogue"
-    },
-    {
-      id: "kill_goblins",
-      description: "Kill 15 goblins.",
-      type: "kill",
-      target: "goblin",
-      count: 15
-    }
-  ]
-}
-```
-
-### questAccept
-
-Accept a quest after seeing the confirmation screen:
-
-```typescript
-// Client request
-world.network.send("questAccept", { questId: "goblin_slayer" });
-
-// Server validates and starts quest
-const success = await questSystem.startQuest(playerId, questId);
-```
-
----
-
-## API Reference
-
-### QuestSystem Methods
-
-```typescript
-class QuestSystem extends SystemBase {
-  // Quest lifecycle
-  requestQuestStart(playerId: string, questId: string): boolean;
-  async startQuest(playerId: string, questId: string): Promise<boolean>;
-  async completeQuest(playerId: string, questId: string): Promise<boolean>;
-  
-  // Quest queries
-  getQuestStatus(playerId: string, questId: string): QuestStatus;
-  getQuestDefinition(questId: string): QuestDefinition | undefined;
-  getAllQuestDefinitions(): QuestDefinition[];
-  getActiveQuests(playerId: string): ActiveQuest[];
-  hasCompletedQuest(playerId: string, questId: string): boolean;
-  getQuestPoints(playerId: string): number;
-}
-```
-
-### QuestRepository Methods
-
-```typescript
-class QuestRepository extends BaseRepository {
-  // Progress management
-  async getQuestProgress(playerId: string, questId: string): Promise<QuestProgressRow | null>;
-  async getAllPlayerQuests(playerId: string): Promise<QuestProgressRow[]>;
-  async getCompletedQuests(playerId: string): Promise<string[]>;
-  async startQuest(playerId: string, questId: string, initialStage: string): Promise<void>;
-  async updateProgress(playerId: string, questId: string, stage: string, progress: StageProgress): Promise<void>;
-  async completeQuestWithPoints(playerId: string, questId: string, questPoints: number): Promise<void>;
-  
-  // Quest points
-  async getQuestPoints(playerId: string): Promise<number>;
-  async addQuestPoints(playerId: string, points: number): Promise<void>;
-  
-  // Audit logging
-  async logAuditEvent(playerId: string, questId: string, action: QuestAuditAction, options?: {...}): Promise<void>;
-  async getPlayerAuditLog(playerId: string, limit?: number): Promise<AuditLogEntry[]>;
-  async getQuestAuditLog(questId: string, limit?: number): Promise<AuditLogEntry[]>;
-}
-```
-
----
-
-## Dialogue Integration
-
-Quests integrate with the dialogue system via **dialogue overrides**:
+Add quest to `world/assets/manifests/quests.json`:
 
 ```json
 {
-  "cook": {
-    "id": "cook",
-    "name": "Cook",
-    "dialogue": {
-      "default": "cook_default",
-      "questOverrides": {
-        "goblin_slayer": {
-          "not_started": "cook_quest_offer",
-          "in_progress": "cook_quest_progress",
-          "ready_to_complete": "cook_quest_complete",
-          "completed": "cook_quest_done"
-        }
+  "my_quest": {
+    "id": "my_quest",
+    "name": "My Quest",
+    "description": "A custom quest.",
+    "difficulty": "novice",
+    "questPoints": 1,
+    "replayable": false,
+    "requirements": {
+      "quests": [],
+      "skills": {},
+      "items": []
+    },
+    "startNpc": "guard",
+    "stages": [
+      {
+        "id": "talk_to_guard",
+        "type": "dialogue",
+        "description": "Talk to the Guard."
+      },
+      {
+        "id": "kill_orcs",
+        "type": "kill",
+        "description": "Kill 10 orcs.",
+        "target": "orc",
+        "count": 10
+      }
+    ],
+    "rewards": {
+      "questPoints": 1,
+      "items": [],
+      "xp": { "attack": 1000 }
+    }
+  }
+}
+```
+
+### Step 2: Add Dialogue
+
+Update NPC dialogue in `npcs.json` with quest overrides:
+
+```json
+{
+  "id": "guard",
+  "dialogue": {
+    "default": "guard_default",
+    "questOverrides": {
+      "my_quest": {
+        "not_started": "guard_quest_start",
+        "in_progress": "guard_quest_progress",
+        "ready_to_complete": "guard_quest_complete",
+        "completed": "guard_quest_done"
       }
     }
   }
 }
 ```
 
-**Priority:** `ready_to_complete` > `in_progress` > `completed` > `default`
+### Step 3: Create Dialogue Nodes
 
-### Dialogue Effects
-
-Dialogue nodes can trigger quest actions:
+Add dialogue nodes to `dialogue.json`:
 
 ```json
 {
-  "id": "cook_quest_offer",
-  "text": "Would you like to help me with the goblin problem?",
-  "responses": [
-    {
-      "text": "Yes, I'll help!",
-      "next": "cook_quest_accept",
-      "effect": {
-        "type": "startQuest",
-        "params": ["goblin_slayer"]
+  "guard_quest_start": {
+    "id": "guard_quest_start",
+    "text": "Will you help me with the orcs?",
+    "responses": [
+      {
+        "text": "Yes, I'll help!",
+        "next": "guard_quest_start_accept"
+      },
+      {
+        "text": "Not right now.",
+        "next": null
       }
-    },
-    {
-      "text": "Not right now.",
-      "next": null
-    }
-  ]
+    ]
+  },
+  "guard_quest_start_accept": {
+    "id": "guard_quest_start_accept",
+    "text": "Thank you! Kill 10 orcs and return to me.",
+    "effect": "startQuest",
+    "params": ["my_quest"],
+    "responses": []
+  },
+  "guard_quest_complete": {
+    "id": "guard_quest_complete",
+    "text": "You've killed all the orcs! Here's your reward.",
+    "effect": "completeQuest",
+    "params": ["my_quest"],
+    "responses": []
+  }
 }
 ```
 
-**Available Effects:**
-- `startQuest` — Show quest accept screen
-- `completeQuest` — Complete quest and show rewards
+### Step 4: Restart Server
+
+Manifests are loaded at startup:
+
+```bash
+bun run dev
+```
 
 ---
 
-## Testing
+## Best Practices
 
-Quest system has comprehensive test coverage (45 test cases, 997 lines):
-
-```typescript
-// From packages/server/tests/integration/quest/quest.integration.test.ts
-
-describe("Quest System Integration Tests", () => {
-  describe("Quest Status", () => {
-    it("returns not_started for unstarted quest");
-    it("returns in_progress for active quest");
-    it("returns completed for finished quest");
-    it("returns ready_to_complete when objective is done");
-  });
-
-  describe("Quest Start", () => {
-    it("starts quest successfully");
-    it("emits QUEST_STARTED event on start");
-    it("grants starting items");
-    it("rejects starting already active quest");
-    it("rejects quest when prerequisites not met");
-    it("saves quest to database on start");
-  });
-
-  describe("Kill Tracking", () => {
-    it("tracks kill progress");
-    it("emits QUEST_PROGRESSED event on kill");
-    it("tracks multiple kills correctly");
-    it("marks quest ready_to_complete when objective met");
-    it("ignores kills of wrong mob type");
-    it("updates database on kill progress");
-  });
-
-  describe("Quest Completion", () => {
-    it("completes quest successfully");
-    it("emits QUEST_COMPLETED event");
-    it("awards quest points");
-    it("grants reward items");
-    it("saves completion to database atomically");
-  });
-
-  describe("Full Quest Flow", () => {
-    it("complete quest flow: request → accept → kill → complete");
-  });
-});
-```
+1. **Use descriptive IDs**: `goblin_slayer` not `quest1`
+2. **Follow naming conventions**: snake_case for quest IDs
+3. **Test progression**: Verify all stages work in-game
+4. **Validate JSON**: Use a JSON validator before committing
+5. **Document requirements**: Clearly state prerequisites
+6. **Balance rewards**: Match difficulty with quest points/XP
+7. **Use dialogue effects**: Trigger quest actions via dialogue, not code
 
 ---
 
 ## Related Documentation
 
 <CardGroup cols={2}>
-  <Card title="Dialogue System" icon="comments" href="/wiki/game-systems/dialogue">
-    NPC conversations and quest dialogue integration
+  <Card title="Dialogue System" icon="message-square" href="/wiki/game-systems/dialogue">
+    How dialogue integrates with quests
   </Card>
   <Card title="Skills System" icon="chart-line" href="/wiki/game-systems/skills">
     XP rewards and skill requirements
   </Card>
-  <Card title="Event System" icon="bolt" href="/wiki/engine/events">
-    Quest events and event-driven architecture
+  <Card title="Manifests" icon="file-json" href="/concepts/manifests">
+    Manifest file structure
   </Card>
-  <Card title="Database Schema" icon="database" href="/wiki/engine/database">
-    Quest progress and audit log tables
+  <Card title="Events" icon="zap" href="/wiki/engine/events">
+    Quest event types
   </Card>
 </CardGroup>
