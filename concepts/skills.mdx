@@ -39,6 +39,13 @@ Hyperscape has **12 skills** total:
 | **Cooking** | Prepare food from raw fish |
 | **Smithing** | Smelt ores into bars and smith equipment |
 
+### Support Skills
+
+| Skill | Activity |
+|-------|----------|
+| **Agility** | Passive training through movement (1 XP per 2 tiles) |
+| **Prayer** | Protection prayers and combat buffs |
+
 ## XP and Leveling
 
 ### XP Formula
@@ -242,25 +249,54 @@ Skill configuration is in `packages/shared/src/data/`:
 | `equipment-requirements.json` | Level requirements for equipment |
 | `equipment-stats.json` | Stat bonuses for equipment |
 
-## Prayer Training
+## Agility & Weight Mechanics
 
-Prayer is trained by burying bones dropped by monsters:
+### Agility Training
 
-| Bone Type | Prayer XP | Source |
-|-----------|-----------|--------|
-| Bones | 4.5 | Most monsters |
-| Big Bones | 15 | Larger monsters |
-| Dragon Bones | 72 | Dragons |
+Agility is trained passively by moving through the world:
 
-**Mechanics:**
-- Use "Bury" action on bones in inventory
-- 2-tick (1.2 second) delay between burying
-- Prayer points can be recharged at altars
-- Prayer level = maximum prayer points
+**XP Rate:**
+- 1 XP per 2 tiles traveled
+- XP batched at 100 tiles (50 XP grant) to prevent visual spam
+- Both walking and running grant XP
+
+**XP Frequency:**
+- Running (4 tiles/tick): XP drop every ~15 seconds
+- Walking (2 tiles/tick): XP drop every ~30 seconds
+
+**Death Penalty:**
+- Accumulated tiles toward next XP grant are reset on death
+- Earned XP is never lost
+
+### Weight-Based Stamina Drain
+
+Inventory weight affects stamina drain while running:
+
+- Base drain: 2 stamina/second
+- Weight modifier: +0.5% drain per kg carried
+- Example: 20kg load = +10% drain = 2.2 stamina/second
+
+### Agility-Based Stamina Regeneration
+
+Higher Agility levels provide faster stamina regeneration:
+
+- Base regen: 2 stamina/second (walking), 4 stamina/second (idle)
+- Agility bonus: +1% regen per level
+- Example: Level 50 Agility = +50% regen = 3 stamina/second (walking)
+
+| Agility Level | Idle Regen/Sec | Walk Regen/Sec |
+|---------------|----------------|----------------|
+| 1 | 4.04 | 2.02 |
+| 25 | 5.00 | 2.50 |
+| 50 | 6.00 | 3.00 |
+| 75 | 7.00 | 3.50 |
+| 99 | 7.96 | 3.98 |
 
 <Info>
-  See the [Prayer System](/wiki/game-systems/prayer) documentation for complete details on prayer mechanics, drain formulas, and combat bonuses.
+  Weight is calculated server-side and synced to the client via `PLAYER_WEIGHT_CHANGED` events. Stamina calculations are client-side in `PlayerLocal.ts`.
 </Info>
+
+---
 
 ## Default Skill Values
 
@@ -281,6 +317,7 @@ playerData.skills = {
   firemaking: { level: 1, xp: 0 },
   cooking: { level: 1, xp: 0 },
   smithing: { level: 1, xp: 0 },
+  agility: { level: 1, xp: 0 },
 };
 ```
 

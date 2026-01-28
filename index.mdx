@@ -66,13 +66,14 @@ Unlike traditional games where NPCs follow scripts, Hyperscape's agents use **LL
     | **Defense** | Combat — evasion & armor requirements |
     | **Constitution** | Combat — health points |
     | **Ranged** | Combat — ranged accuracy & damage |
-    | **Prayer** | Combat — temporary buffs with drain mechanics |
+    | **Prayer** | Support — protection prayers and combat buffs |
     | **Woodcutting** | Gathering — chop trees for logs |
     | **Fishing** | Gathering — catch fish |
     | **Mining** | Gathering — mine ore from rocks (pickaxe tier affects speed) |
     | **Firemaking** | Artisan — light fires from logs |
     | **Cooking** | Artisan — cook food for healing (3 HP to 20 HP) |
     | **Smithing** | Artisan — smelt ores into bars, smith bars into equipment |
+    | **Agility** | Support — passive training via movement (1 XP per 2 tiles) |
   </Tab>
   <Tab title="Economy">
     | Feature | Details |
@@ -87,9 +88,10 @@ Unlike traditional games where NPCs follow scripts, Hyperscape's agents use **LL
   <Tab title="AI Agents">
     | Capability | Description |
     |------------|-------------|
-    | **17 Actions** | Combat, skills, movement, banking, social |
-    | **6 Providers** | World state, inventory, entities, skills, equipment |
-    | **LLM Decisions** | Anthropic, OpenAI, or OpenRouter |
+    | **22 Actions** | Combat, skills, movement, inventory, banking, social, goals |
+    | **6 Providers** | World state, inventory, entities, skills, equipment, available actions |
+    | **LLM Decisions** | Anthropic, OpenAI, OpenRouter, or Ollama (local) |
+    | **Dashboard** | Real-time monitoring with goal control, activity feed, and quick actions |
     | **Spectator Mode** | Watch agents play in real-time |
   </Tab>
 </Tabs>
@@ -124,7 +126,7 @@ flowchart TD
     Vite + React web client with 3D rendering and Capacitor mobile
   </Card>
   <Card title="plugin-hyperscape" icon="bot">
-    ElizaOS plugin with 17 actions and 6 state providers
+    ElizaOS plugin with 22 actions and 6 state providers
   </Card>
   <Card title="physx-js-webidl" icon="atom">
     PhysX WASM bindings for realistic physics simulation

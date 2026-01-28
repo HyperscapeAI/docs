@@ -41,30 +41,38 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | **Cooking** | Cook food | Using raw food on fires/ranges |
 | **Smithing** | Smelt bars and smith equipment | Smelting ores at furnaces, smithing bars at anvils |
 
+### Support Skills
+
+| Skill | Description | Training Methods |
+|-------|-------------|------------------|
+| **Agility** | Stamina regeneration | Moving through the world (1 XP per 2 tiles) |
+| **Prayer** | Protection prayers and combat buffs | Burying bones, using prayer at altars |
+
 <Info>
 Smithing is a two-step process: first smelt ores into bars at a furnace, then smith bars into equipment at an anvil.
 </Info>
 
 ---
 
-## Prayer Training
+## Skill Guide Panel
 
-Prayer is trained by burying bones dropped from combat:
+Players can click any skill in the Skills Panel to open an OSRS-style Skill Guide showing all unlocks at each level.
 
-| Bone Type | XP | Source |
-|-----------|-----|--------|
-| **Bones** | 4.5 | Most monsters |
-| **Big Bones** | 15 | Larger monsters |
-| **Dragon Bones** | 72 | Dragons |
+**Features:**
+- Click-to-view unlock progression for any skill
+- Visual distinction between unlocked (green checkmark) and locked (lock icon) items
+- Next unlock highlighted with progress indicator
+- Scrollable list for skills with many unlocks
+- Type badges (item vs ability)
+- Shows "X of Y unlocks achieved" progress
 
-**Bury Mechanics:**
-- Right-click bones in inventory → "Bury"
-- 2-tick (1.2 second) delay between burials
-- XP granted immediately on successful bury
-- Bones consumed after burying
+**Implementation:**
+- Client-side component: `packages/client/src/game/panels/SkillGuidePanel.tsx`
+- Server API endpoint: `GET /api/data/skill-unlocks`
+- Data source: `packages/server/world/assets/manifests/skill-unlocks.json`
 
 <Info>
-See [Prayer System](/wiki/game-systems/prayer) for complete prayer mechanics, drain formulas, and altar usage.
+The Skill Guide Panel fetches unlock data from the server on first load and caches it for the session. This ensures server-authoritative unlock definitions.
 </Info>
 
 ---
@@ -338,35 +346,29 @@ This normalization runs once when a model is first loaded, before caching. All c
 | Swordfish | 50 | 100 |
 | Shark | 76 | 110 |
 
-### Prayer XP
+### Support Skill XP
 
-Prayer is trained by burying bones dropped by monsters:
+**Agility** (passive training):
 
-**Bone Types** (defined in item manifests):
-| Bone | Prayer XP | Dropped By |
-|------|-----------|------------|
-| Bones | 4.5 | Most monsters |
-| Big Bones | 15 | Larger monsters |
-| Dragon Bones | 72 | Dragons |
+Agility is trained by moving through the world:
 
-**Burying Mechanics**:
-- 2-tick (1.2 second) delay between burying bones
-- Bones consumed from inventory
-- XP granted immediately
-- Message shown: "You bury the bones."
+| Movement Type | Tiles/Tick | XP/Minute | XP Frequency |
+|---------------|------------|-----------|--------------|
+| Walking | 2 | ~100 XP | Every ~30 seconds |
+| Running | 4 | ~200 XP | Every ~15 seconds |
 
-```typescript
-// From BuryDelayManager.ts
-const BURY_DELAY_TICKS = 2;  // OSRS-accurate
+**Mechanics:**
+- 1 XP per 2 tiles traveled
+- XP batched at 100 tiles (50 XP grant) to prevent visual spam
+- Death resets accumulated tiles (not earned XP)
+- Teleportation does not grant XP
 
-canBury(playerId: string, currentTick: number): boolean {
-  const lastTick = this.lastBuryTick.get(playerId) ?? 0;
-  return currentTick - lastTick >= BURY_DELAY_TICKS;
-}
-```
+**Benefits:**
+- +1% stamina regeneration per Agility level
+- Level 99: ~2x stamina regeneration (99% bonus)
 
 <Info>
-**Prayer Training**: Burying bones is routed through the `useItem` flow for proper server-side handling. The server detects bone items and processes them as bury actions.
+Agility XP is tracked server-side in `TileMovementManager` and granted when the 100-tile threshold is reached.
 </Info>
 
 ### Artisan XP
@@ -751,6 +753,48 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
+## Weight and Stamina System
+
+Inventory weight affects stamina drain while running:
+
+**Weight-Based Stamina Drain:**
+- Base drain: 2 stamina/second while running
+- Weight modifier: +0.5% drain per kg carried
+- Example: 20kg load = +10% drain = 2.2 stamina/second
+
+**Agility-Based Stamina Regeneration:**
+- Base regen: 2 stamina/second while walking, 4 stamina/second while idle
+- Agility bonus: +1% regen per Agility level
+- Example: Level 50 Agility = +50% regen = 3 stamina/second while walking
+
+**Weight Impact Table:**
+
+| Weight (kg) | Drain Multiplier | Drain/Second |
+|-------------|------------------|--------------|
+| 0 | 1.0x | 2.0 |
+| 10 | 1.05x | 2.1 |
+| 20 | 1.1x | 2.2 |
+| 40 | 1.2x | 2.4 |
+| 60 | 1.3x | 2.6 |
+| 100 | 1.5x | 3.0 |
+
+**Agility Regen Bonus Table:**
+
+| Agility Level | Regen Multiplier | Idle Regen/Sec | Walk Regen/Sec |
+|---------------|------------------|----------------|----------------|
+| 1 | 1.01x | 4.04 | 2.02 |
+| 10 | 1.10x | 4.40 | 2.20 |
+| 25 | 1.25x | 5.00 | 2.50 |
+| 50 | 1.50x | 6.00 | 3.00 |
+| 75 | 1.75x | 7.00 | 3.50 |
+| 99 | 1.99x | 7.96 | 3.98 |
+
+<Info>
+Weight is calculated server-side and synced to the client via `PLAYER_WEIGHT_CHANGED` events when inventory changes. Stamina calculations are client-side in `PlayerLocal.ts`.
+</Info>
+
+---
+
 ## Skill Unlocks
 
 The `skill-unlocks.json` manifest documents what players unlock at each level. This is used for UI display and progression tracking.
@@ -762,6 +806,7 @@ Example unlocks:
 - **Mining 30**: Coal
 - **Cooking 40**: Lobster
 - **Smithing 50**: Mithril bar
+- **Agility 99**: Agility cape, +99% stamina regeneration
 
 <Info>
 See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills.
