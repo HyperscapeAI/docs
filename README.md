@@ -12,7 +12,12 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - **Spectator Mode**: Watch agents play in real-time and observe their decision-making process
 - **Open Source**: Built on open technology with extensible architecture
 
-## Core Features
+**Production Deployment:**
+- Frontend: [hyperscape.club](https://hyperscape.club) (Cloudflare Pages)
+- Backend: Railway (hyperscape-production.up.railway.app)
+- Assets: Cloudflare R2 CDN (assets.hyperscape.club)
+
+## Documentation Structure
 
 | Category | Features |
 |----------|----------|

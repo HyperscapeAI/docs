@@ -266,22 +266,15 @@ bun run cap:sync:android  # Android only
 
 ### Cloudflare Pages (Production)
 
-The client is deployed to Cloudflare Pages with automatic GitHub integration.
+The client deploys to Cloudflare Pages with automatic GitHub integration:
 
-**Production domains:**
-- Primary: https://hyperscape.club
-- Pages: https://hyperscape.pages.dev
-- Preview: `<branch>.hyperscape.pages.dev`
+**Configuration:**
+- **Build command**: `cd packages/client && bun install && bun run build`
+- **Build output**: `packages/client/dist`
+- **Root directory**: `/` (monorepo root)
+- **Node version**: 22
 
-**Build configuration:**
-```
-Framework preset: None (Vite)
-Build command: cd packages/client && bun run build
-Build output: packages/client/dist
-Root directory: / (repository root)
-```
-
-**Environment variables** (set in Pages dashboard):
+**Environment Variables (Cloudflare Pages):**
 ```bash
 PUBLIC_PRIVY_APP_ID=<from-privy-dashboard>
 PUBLIC_API_URL=https://hyperscape-production.up.railway.app
@@ -290,22 +283,43 @@ PUBLIC_CDN_URL=https://assets.hyperscape.club
 PUBLIC_APP_URL=https://hyperscape.club
 ```
 
-**Manual deployment:**
-```bash
-# Via Cloudflare Pages dashboard
-# Or via wrangler CLI:
-cd packages/client
-bunx wrangler pages deploy dist
+**Deployment Process:**
+1. Push to `main` branch
+2. Cloudflare Pages detects changes to `packages/client/**`
+3. Builds client with Vite
+4. Deploys to `hyperscape.pages.dev` and `hyperscape.club`
+5. Creates preview deployments for pull requests
+
+**Preview Deployments:**
+- URL pattern: `https://<branch>-<hash>.hyperscape.pages.dev`
+- Automatic for every PR
+- Uses production environment variables
+- CORS automatically allows `*.hyperscape.pages.dev` origins
+
+### Vite Configuration
+
+```typescript
+// packages/client/vite.config.ts
+export default defineConfig({
+  envPrefix: 'PUBLIC_',  // Expose PUBLIC_* vars to client
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'three': ['three'],
+          'react': ['react', 'react-dom']
+        }
+      }
+    }
+  }
+});
 ```
 
-### Alternative: Vercel
-
-```bash
-# Import packages/client directory to Vercel
-# Set build command: bun run build
-# Set output directory: dist
-# Add PUBLIC_* environment variables
-```
+<Warning>
+Only `PUBLIC_*` prefixed environment variables are exposed to the client. Never put secrets in client environment variables.
+</Warning>
 
 ## Key Files
 

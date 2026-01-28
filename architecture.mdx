@@ -6,34 +6,33 @@ icon: "boxes"
 
 ## Production Architecture
 
-Hyperscape uses a **split deployment model** for optimal performance:
+Hyperscape uses a split deployment model for optimal performance:
 
 ```mermaid
 flowchart LR
     A[Player Browser] -->|HTTPS| B[Cloudflare Pages]
     A -->|WSS| C[Railway Server]
-    A -->|HTTPS| D[Cloudflare R2 CDN]
-    C -->|SQL| E[Neon PostgreSQL]
-    C -->|Fetch Manifests| D
+    B -->|Assets| D[Cloudflare R2 CDN]
+    C -->|Manifests| D
+    C -->|Data| E[PostgreSQL]
     
-    B -.->|Static HTML/JS/CSS| A
-    D -.->|Models/Audio/Textures| A
-    C -.->|Game State| A
+    B[Frontend<br/>hyperscape.club]
+    C[Backend/API<br/>Railway]
+    D[Assets/CDN<br/>R2]
+    E[Database<br/>Railway/Neon]
 ```
 
-| Component | Platform | Purpose |
-|-----------|----------|---------|
-| **Frontend** | Cloudflare Pages | Static site hosting with global CDN |
-| **Backend** | Railway | Game server with WebSocket support |
-| **Database** | Neon PostgreSQL | Serverless PostgreSQL with autoscaling |
-| **Assets** | Cloudflare R2 | Object storage for game assets |
+**Components:**
+- **Frontend**: Static React app on Cloudflare Pages with global edge caching
+- **Backend**: Game server on Railway with WebSocket support
+- **CDN**: Cloudflare R2 for 3D models, audio, textures, and manifests
+- **Database**: PostgreSQL on Railway or Neon for player data persistence
 
 **Benefits:**
-- Global CDN distribution for frontend and assets
-- Dedicated compute for game server
-- Independent scaling of components
-- Automatic deployments via GitHub Actions
-- Manifest fetching from CDN at server startup
+- Global edge caching for static assets
+- Low-latency WebSocket connections to game server
+- Automatic scaling and DDoS protection
+- Separation of concerns (static vs. dynamic content)
 
 ## Monorepo Structure
 

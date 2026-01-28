@@ -315,61 +315,58 @@ bun run assets:deploy # Deploy to R2 (production)
 
 ### Railway (Production)
 
-The server is deployed to Railway with automatic builds from GitHub.
+The server deploys to Railway using Nixpacks for automatic builds:
 
-**Configuration files:**
-- `nixpacks.toml` - Build configuration (Nixpacks builder)
-- `railway.server.json` - Service configuration
+**Configuration Files:**
+- `nixpacks.toml` - Build configuration (Bun provider, build commands)
+- `railway.server.json` - Service configuration (health checks, restart policy)
 - `Dockerfile.server` - Multi-stage Docker build (alternative to Nixpacks)
 
-**Build process:**
-1. Install dependencies with Bun
-2. Build `shared` package (core engine)
-3. Build `server` package (game server)
-4. Build `client` package (frontend)
-5. Copy client build to `server/public/` directory
-6. Create manifests directory
-7. Start server with `bun dist/index.js`
+**Deployment Process:**
+1. Push to `main` branch triggers GitHub Actions
+2. Workflow calls Railway GraphQL API to trigger deployment
+3. Railway builds using Nixpacks configuration
+4. Server starts with `cd packages/server && bun dist/index.js`
+5. Manifests fetched from Cloudflare R2 CDN at startup
 
-**Manifest fetching:**
-At server startup, manifests are automatically fetched from `PUBLIC_CDN_URL` and cached locally. This ensures the server always has the latest game data without bundling large JSON files.
-
-**Environment variables:**
+**Environment Variables (Railway):**
 ```bash
-# Required
-DATABASE_URL=postgresql://...  # Auto-set by Railway PostgreSQL
-PRIVY_APP_ID=your-app-id
-PRIVY_APP_SECRET=your-app-secret
-JWT_SECRET=your-secret-32-chars
-PUBLIC_CDN_URL=https://assets.hyperscape.club
 NODE_ENV=production
-
-# Optional
-ADMIN_CODE=your-admin-code
-SAVE_INTERVAL=60
+DATABASE_URL=<auto-set-by-railway-postgres>
+JWT_SECRET=<generate-with-openssl>
+PRIVY_APP_ID=<from-privy-dashboard>
+PRIVY_APP_SECRET=<from-privy-dashboard>
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+CI=true
+SKIP_ASSETS=true
 ```
 
-**Health checks:**
-Railway monitors the `/status` endpoint to verify server health.
+**Health Check:**
+Railway monitors `/status` endpoint every 30 seconds. Server must respond within 3 seconds or it will be restarted.
 
-### Local Docker
+### Manifest Fetching at Startup
 
-For local testing with Docker:
+In production, the server fetches manifests from the CDN instead of bundling them:
 
-```bash
-# Build Docker image
-docker build -f Dockerfile.server -t hyperscape-server .
-
-# Run container
-docker run -p 5555:5555 \
-  -e DATABASE_URL=postgresql://... \
-  -e JWT_SECRET=your-secret \
-  hyperscape-server
+```typescript
+// packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
 ```
 
-### Cloudflare Workers (Deprecated)
+**Fetched Manifests:**
+- Root: `npcs.json`, `stores.json`, `world-areas.json`, etc.
+- Items: `items/weapons.json`, `items/tools.json`, etc.
+- Gathering: `gathering/woodcutting.json`, `gathering/mining.json`, etc.
+- Recipes: `recipes/cooking.json`, `recipes/smithing.json`, etc.
 
-The server previously supported Cloudflare Workers deployment but has migrated to Railway for better WebSocket support and PostgreSQL integration.
+**Caching:**
+- Manifests cached locally in `packages/server/world/assets/manifests/`
+- Only re-fetched if content changes (HTTP ETag validation)
+- 5-minute cache headers (`Cache-Control: public, max-age=300, must-revalidate`)
+
+<Info>
+This allows updating game content (items, NPCs, recipes) without redeploying the server—just upload new manifests to R2.
+</Info>
 
 ## Key Files
 

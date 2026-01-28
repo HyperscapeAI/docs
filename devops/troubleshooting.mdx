@@ -28,18 +28,39 @@ PRIVY_APP_SECRET=your-app-secret
 **Symptom**: 404 errors for models/avatars
 
 **Causes**:
-1. CDN container not running (local development)
-2. Manifests not fetched from CDN (production)
-3. Wrong CDN URL configured
+1. CDN container not running (development)
+2. Wrong `PUBLIC_CDN_URL` configuration
+3. Manifests not fetched from CDN (production)
 
 **Solutions**:
 
-**Local development:**
+**Development:**
 ```bash
+# Start local CDN
 bun run cdn:up
+
+# Or use bun run dev which starts it automatically
+bun run dev
 ```
 
-Or ensure you're using `bun run dev` which starts it automatically.
+**Production:**
+```bash
+# Verify CDN URL is correct
+echo $PUBLIC_CDN_URL
+# Should be: https://assets.hyperscape.club
+
+# Check server logs for manifest fetch errors
+# Server fetches manifests at startup from CDN
+```
+
+**Verify CDN is accessible:**
+```bash
+# Test manifest fetch
+curl https://assets.hyperscape.club/manifests/npcs.json
+
+# Test model fetch
+curl -I https://assets.hyperscape.club/models/goblin/goblin.vrm
+```
 
 **Production:**
 1. Verify `PUBLIC_CDN_URL` is set correctly in server environment
@@ -149,57 +170,55 @@ npm test
 
 **Causes**:
 - Server not running
-- Wrong port configuration
-- Firewall blocking
-- CORS origin not allowed
+- Wrong `PUBLIC_WS_URL` configuration
+- CORS blocking connection
+- Firewall blocking WebSocket port
 
 **Solutions**:
 
-1. **Verify server is running:**
-   ```bash
-   lsof -i:5555
-   ```
-
-2. **Check client configuration:**
-   ```bash
-   # packages/client/.env
-   PUBLIC_WS_URL=ws://localhost:5555/ws  # Development
-   PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws  # Production
-   ```
-
-3. **Check CORS configuration:**
-   - Verify your origin is in the allowlist (see `packages/server/src/startup/http-server.ts`)
-   - For custom domains, set `PUBLIC_APP_URL` in server environment
-
-4. **Check browser console:**
-   - Look for CORS errors
-   - Verify WebSocket URL is correct
-   - Check for SSL/TLS certificate issues (wss:// requires valid cert)
-
-### CORS Errors
-
-**Symptom**: Browser console shows "CORS policy" errors
-
-**Cause**: Client origin not in server's CORS allowlist
-
-**Solution**:
-
-**For Cloudflare Pages preview deployments:**
-- Automatically allowed via regex: `/^https?:\/\/.+\.hyperscape\.pages\.dev$/`
-
-**For custom domains:**
+**Development:**
 ```bash
-# In packages/server/.env
-PUBLIC_APP_URL=https://yourdomain.com
+# Verify server is running
+lsof -i:5555
+
+# Check client config
+cat packages/client/.env | grep PUBLIC_WS_URL
+# Should be: ws://localhost:5555/ws
+
+# Restart server
+bun run dev
 ```
 
-**For localhost with custom port:**
-- Automatically allowed via regex: `/^https?:\/\/localhost:\d+$/`
+**Production:**
+```bash
+# Verify Railway server is running
+curl https://hyperscape-production.up.railway.app/status
 
-**Verify allowed origins:**
-Check server logs on startup:
+# Check client config in Cloudflare Pages
+# PUBLIC_WS_URL should be: wss://hyperscape-production.up.railway.app/ws
+
+# Verify CORS allows your domain
+# Server logs will show CORS configuration at startup
 ```
-[HTTP] ✅ CORS configured for: https://hyperscape.club, https://www.hyperscape.club, ...
+
+**CORS Issues:**
+
+If you see CORS errors in browser console, verify your domain is in the allowlist:
+
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  /^https?:\/\/localhost:\d+$/,
+  /^https?:\/\/.+\.hyperscape\.pages\.dev$/,
+];
+```
+
+For custom domains, add to environment variables:
+```bash
+PUBLIC_APP_URL=https://your-custom-domain.com
 ```
 
 ### Hot Reload Not Working
@@ -235,86 +254,128 @@ docker logs hyperscape-postgres
 docker logs hyperscape-cdn
 ```
 
-## Railway Deployment Issues
+## Deployment Issues
 
-### Build Fails with "Lockfile Frozen"
+### Railway Build Failing
 
-**Symptom**: Railway build fails with "lockfile had changes, but lockfile is frozen"
+**Symptom**: Railway deployment fails during build
 
-**Cause**: `bun.lock` out of sync with `package.json`
+**Common Causes:**
 
-**Solution**:
+1. **Lockfile frozen error**:
+   ```
+   lockfile had changes, but lockfile is frozen
+   ```
+   
+   **Solution**: Regenerate lockfile locally and commit:
+   ```bash
+   bun install
+   git add bun.lock
+   git commit -m "fix: update bun.lock"
+   git push
+   ```
+
+2. **Out of memory during build**:
+   
+   **Solution**: Railway provides 8GB RAM for builds. If exceeded, optimize build:
+   ```bash
+   # Reduce concurrent builds in turbo.json
+   "pipeline": {
+     "build": {
+       "dependsOn": ["^build"],
+       "outputs": ["dist/**", "build/**"]
+     }
+   }
+   ```
+
+3. **Missing environment variables**:
+   
+   **Solution**: Verify all required vars are set in Railway dashboard:
+   - `DATABASE_URL` (auto-set if using Railway PostgreSQL)
+   - `PRIVY_APP_ID` and `PRIVY_APP_SECRET`
+   - `PUBLIC_CDN_URL`
+
+### Cloudflare Pages Build Failing
+
+**Symptom**: Pages deployment fails
+
+**Common Causes:**
+
+1. **Build command not found**:
+   
+   **Solution**: Ensure build command includes `cd packages/client`:
+   ```bash
+   cd packages/client && bun install && bun run build
+   ```
+
+2. **Environment variables not set**:
+   
+   **Solution**: Add in Pages dashboard → Settings → Environment variables:
+   - `PUBLIC_PRIVY_APP_ID`
+   - `PUBLIC_API_URL`
+   - `PUBLIC_WS_URL`
+   - `PUBLIC_CDN_URL`
+
+3. **Build output directory wrong**:
+   
+   **Solution**: Set to `packages/client/dist` in Pages settings
+
+### Manifest Fetch Errors
+
+**Symptom**: Server logs show manifest fetch failures
+
+**Causes**:
+- CDN URL incorrect
+- R2 bucket not public
+- Manifests not uploaded to R2
+
+**Solutions**:
+
 ```bash
-# Regenerate lockfile locally
-bun install
-git add bun.lock
-git commit -m "chore: update bun.lock"
-git push
+# Verify CDN URL
+curl $PUBLIC_CDN_URL/manifests/npcs.json
+
+# Check R2 bucket permissions
+# Bucket must allow public reads
+
+# Re-upload manifests
+wrangler r2 object put hyperscape-assets/manifests/npcs.json \
+  --file=packages/server/world/assets/manifests/npcs.json
 ```
 
-### Frontend Not Loading (404 on index.html)
+### Frontend Can't Connect to Backend
 
-**Symptom**: Railway deployment succeeds but frontend returns 404
-
-**Causes**:
-- Client build failed during deployment
-- Files not copied to `public/` directory
-- Build output directory incorrect
-
-**Solution**:
-1. Check Railway build logs for client build step
-2. Verify `cp -r dist/* public/` command succeeded
-3. Check `/debug/public` endpoint to see directory contents:
-   ```bash
-   curl https://your-app.up.railway.app/debug/public
-   ```
-4. Verify `nixpacks.toml` includes client build step
-
-### Manifests Not Loading
-
-**Symptom**: Server starts but game data is missing
-
-**Cause**: CDN manifest fetch failed
-
-**Solution**:
-1. Check server logs for manifest fetch errors
-2. Verify `PUBLIC_CDN_URL` is set correctly
-3. Test CDN accessibility:
-   ```bash
-   curl https://assets.hyperscape.club/manifests/items.json
-   ```
-4. For development, ensure local manifests exist in `packages/server/world/assets/manifests/`
-
-### WebSocket Connection Fails in Production
-
-**Symptom**: Frontend loads but can't connect to game server
+**Symptom**: Client shows "Connecting..." indefinitely
 
 **Causes**:
-- `PUBLIC_WS_URL` incorrect in client environment
-- CORS not allowing frontend domain
-- Railway not exposing WebSocket port
+- Wrong `PUBLIC_API_URL` or `PUBLIC_WS_URL`
+- CORS blocking requests
+- Railway server not running
 
-**Solution**:
-1. Verify client `PUBLIC_WS_URL` uses `wss://` (not `ws://`)
-2. Check CORS allowlist includes your frontend domain
-3. Test WebSocket endpoint:
+**Solutions**:
+
+1. **Verify environment variables** in Cloudflare Pages:
    ```bash
-   wscat -c wss://hyperscape-production.up.railway.app/ws
+   PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+   PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
    ```
-4. Verify Railway exposes port 5555
 
-### CORS Errors
+2. **Check Railway server status**:
+   ```bash
+   curl https://hyperscape-production.up.railway.app/status
+   ```
 
-**Symptom**: "CORS policy: No 'Access-Control-Allow-Origin' header"
+3. **Verify CORS configuration** in server logs:
+   ```
+   [HTTP] ✅ CORS configured for: https://hyperscape.club, https://www.hyperscape.club, ...
+   ```
 
-**Cause**: Frontend domain not in server's CORS allowlist
-
-**Solution**:
-1. Add domain to `allowedOrigins` in `packages/server/src/startup/http-server.ts`
-2. Or set `PUBLIC_APP_URL` environment variable in Railway
-3. For preview deployments, verify regex pattern matches:
-   ```typescript
-   /^https?:\/\/.+\.hyperscape\.pages\.dev$/
+4. **Test WebSocket connection**:
+   ```javascript
+   // Browser console
+   const ws = new WebSocket('wss://hyperscape-production.up.railway.app/ws');
+   ws.onopen = () => console.log('Connected!');
+   ws.onerror = (e) => console.error('Error:', e);
    ```
 
 ## Getting Help
@@ -326,4 +387,4 @@ git push
    - Error message (full stack trace)
    - Steps to reproduce
    - Environment details (OS, Node version, Bun version)
-   - Deployment platform (Railway, Cloudflare, local)
+   - Deployment platform (Railway, Cloudflare Pages, local)

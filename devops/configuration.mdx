@@ -49,35 +49,38 @@ PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
 ```bash
 # Server
 PORT=5555
-NODE_ENV=production
-ADMIN_CODE=your-admin-code
+SAVE_INTERVAL=60
 
-# Assets & CDN
+# Assets and CDN
 PUBLIC_CDN_URL=http://localhost:8080
-PUBLIC_API_URL=http://localhost:5555
 PUBLIC_WS_URL=ws://localhost:5555/ws
+PUBLIC_API_URL=http://localhost:5555
 
-# Database (if not using Railway's auto-configured DATABASE_URL)
-USE_LOCAL_POSTGRES=true
-POSTGRES_CONTAINER=hyperscape-postgres
-POSTGRES_USER=hyperscape
-POSTGRES_PASSWORD=hyperscape_dev
-POSTGRES_DB=hyperscape
+# Admin Access
+ADMIN_CODE=your-secret-admin-code
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
 
-# Asset Management
-SKIP_ASSETS=false          # Set to true in CI/production
-SKIP_MANIFESTS=false       # Set to true to skip manifest fetching
+# ElizaOS Integration
+ELIZAOS_API_URL=http://localhost:4001
+```
 
-# Auto-save
-SAVE_INTERVAL=60           # Seconds between auto-saves
+### Production-Specific
 
-# Deployment
-COMMIT_HASH=abc123         # Auto-populated by CI/CD
+```bash
+# Node environment (affects logging and security)
+NODE_ENV=production
+
+# Skip asset download in CI/production
+# Manifests are fetched from CDN at startup
+CI=true
+SKIP_ASSETS=true
+
+# Deployment tracking
+COMMIT_HASH=<git-commit-sha>
 ```
 
 ### CI/Production Variables
@@ -106,25 +109,45 @@ PUBLIC_PRIVY_APP_ID=your-privy-app-id         # Must match server
 ```
 
 <Warning>
-  `PUBLIC_PRIVY_APP_ID` must match between client and server for authentication to work.
+  `PUBLIC_PRIVY_APP_ID` must match `PRIVY_APP_ID` on the server.
 </Warning>
 
 ### Production (Cloudflare Pages)
 
 ```bash
-# Server connection (Railway)
+# Authentication (must match server)
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
+
+# Server connection (Railway backend)
 PUBLIC_API_URL=https://hyperscape-production.up.railway.app
 PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
 
 # Assets (Cloudflare R2)
 PUBLIC_CDN_URL=https://assets.hyperscape.club
 
-# App URL (Cloudflare Pages)
+# App URL (for Farcaster frames)
 PUBLIC_APP_URL=https://hyperscape.club
 ```
 
+### Development
+
+```bash
+# Authentication (optional for local dev)
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
+
+# Local server connection (defaults)
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5555/ws
+
+# Local CDN (Docker)
+PUBLIC_CDN_URL=http://localhost:8080
+
+# Local app URL
+PUBLIC_APP_URL=http://localhost:3333
+```
+
 <Info>
-  These URLs are for the official production deployment. For your own deployment, replace with your Railway and Cloudflare domains.
+In development, if `PUBLIC_PRIVY_APP_ID` is not set, the game runs in anonymous mode where users get a new identity on every page refresh.
 </Info>
 
 ## AI Agent Environment

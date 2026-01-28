@@ -6,29 +6,14 @@ icon: "rocket"
 
 ## Deployment Overview
 
-Hyperscape uses a split deployment architecture optimized for scalability and performance:
+Hyperscape uses a split deployment architecture optimized for performance and scalability:
 
 - **Frontend**: Cloudflare Pages (hyperscape.club)
-- **Game Server**: Railway (hyperscape-production.up.railway.app)
+- **Backend/API**: Railway (hyperscape-production.up.railway.app)
 - **Database**: PostgreSQL via Railway or Neon
 - **Assets/CDN**: Cloudflare R2 (assets.hyperscape.club)
 
-This architecture separates static content (frontend) from dynamic game logic (server) and leverages CDN edge caching for assets.
-
-### Production URLs
-
-| Component | URL | Purpose |
-|-----------|-----|---------|
-| Frontend | https://hyperscape.club | Client application (Cloudflare Pages) |
-| Game Server | https://hyperscape-production.up.railway.app | WebSocket + HTTP API (Railway) |
-| Assets CDN | https://assets.hyperscape.club | Game assets (Cloudflare R2) |
-
-### Architecture Benefits
-
-- **Global CDN**: Assets served from edge locations worldwide
-- **Auto-scaling**: Railway handles server scaling automatically
-- **Zero-downtime deploys**: Cloudflare Pages atomic deployments
-- **Cost-effective**: R2 has no egress fees
+This architecture separates static frontend delivery from dynamic game server operations, enabling global edge caching for the client while maintaining low-latency WebSocket connections to the game server.
 
 ## Environment Variables
 
@@ -67,9 +52,9 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.club
   `PUBLIC_PRIVY_APP_ID` must match between client and server for authentication to work.
 </Warning>
 
-## Railway Deployment (Game Server)
+## Railway Deployment (Backend/API)
 
-Railway hosts the game server with automatic deployments from GitHub.
+Railway hosts the game server with automatic deployments via GitHub Actions.
 
 ### Automated Deployment
 
@@ -77,66 +62,73 @@ The repository includes a GitHub Actions workflow that automatically deploys to 
 
 ```yaml
 # .github/workflows/deploy-railway.yml
-# Triggers on changes to server, shared, or client packages
+name: Deploy to Railway
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/shared/**'
+      - 'packages/server/**'
+      - 'packages/client/**'
+      - 'packages/plugin-hyperscape/**'
 ```
 
-**What happens on push:**
-1. GitHub Actions triggers Railway deployment via GraphQL API
-2. Railway builds using Nixpacks configuration
-3. Builds shared package → server package → client package
-4. Copies client build to server's `public/` directory
-5. Fetches manifests from CDN at startup
-6. Deploys to production with health checks
+**Deployment Process:**
+1. Push to `main` branch triggers workflow
+2. GitHub Actions calls Railway GraphQL API
+3. Railway rebuilds using Nixpacks configuration
+4. Server restarts with new code
+5. Manifests fetched from CDN at startup
 
-### Manual Railway Setup
+### Manual Setup
 
 <Steps>
   <Step title="Create Railway project">
-    1. Go to [railway.app](https://railway.app)
-    2. Create new project from GitHub repo
-    3. Select `HyperscapeAI/hyperscape`
+    1. Connect your GitHub repository to Railway
+    2. Select the `hyperscape` repository
+    3. Railway will auto-detect the Nixpacks configuration
   </Step>
   
-  <Step title="Configure build settings">
-    Railway uses `nixpacks.toml` and `railway.server.json` for configuration:
+  <Step title="Configure build (automatic)">
+    Railway uses `nixpacks.toml` for build configuration:
+    - Builder: Nixpacks with Bun provider
+    - Build: `bun run build:shared && bun run build:server`
+    - Start: `cd packages/server && bun dist/index.js`
     
-    - **Builder**: Nixpacks (auto-detected)
-    - **Start command**: `cd packages/server && bun dist/index.js`
-    - **Health check**: `/status` endpoint
-    - **Watch patterns**: `packages/shared/**`, `packages/server/**`, `packages/client/**`
+    No manual configuration needed - Railway reads `nixpacks.toml` automatically.
   </Step>
   
-  <Step title="Add PostgreSQL database">
-    1. In Railway dashboard, click "New" → "Database" → "PostgreSQL"
-    2. Railway automatically sets `DATABASE_URL` environment variable
-    3. No manual configuration needed
+  <Step title="Add PostgreSQL">
+    Add PostgreSQL service from Railway marketplace or use external database (Neon).
+    
+    Railway will automatically set `DATABASE_URL` environment variable.
   </Step>
   
   <Step title="Set environment variables">
     Required variables:
     ```bash
-    PRIVY_APP_ID=your-app-id
-    PRIVY_APP_SECRET=your-app-secret
-    PUBLIC_CDN_URL=https://assets.hyperscape.club
-    JWT_SECRET=your-random-secret-32-chars
     NODE_ENV=production
+    JWT_SECRET=<generate-with-openssl-rand-base64-32>
+    PRIVY_APP_ID=<from-privy-dashboard>
+    PRIVY_APP_SECRET=<from-privy-dashboard>
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
     ```
     
     Optional variables:
     ```bash
-    ADMIN_CODE=your-admin-code
-    LIVEKIT_API_KEY=your-livekit-key
-    LIVEKIT_API_SECRET=your-livekit-secret
+    ADMIN_CODE=<your-admin-code>
+    SAVE_INTERVAL=60
     ```
   </Step>
   
-  <Step title="Deploy">
-    Push to `main` branch or click "Deploy" in Railway dashboard.
+  <Step title="Configure GitHub Actions">
+    Add Railway secrets to GitHub repository:
     
-    Monitor deployment:
-    - Build logs show package compilation
-    - Health check validates `/status` endpoint
-    - WebSocket connections tested automatically
+    1. Go to Settings → Secrets and variables → Actions
+    2. Add `RAILWAY_TOKEN` (from Railway dashboard → Account → Tokens)
+    3. Update workflow with your project/service/environment IDs
+    
+    Find IDs in Railway dashboard URL or via Railway CLI.
   </Step>
 </Steps>
 
@@ -146,6 +138,9 @@ The repository includes a GitHub Actions workflow that automatically deploys to 
 ```toml
 [phases.setup]
 aptPkgs = ["python3", "make", "g++", "pkg-config", "libcairo2-dev"]
+
+[phases.install]
+cmds = ["bun install"]
 
 [phases.build]
 cmds = [
@@ -173,57 +168,58 @@ NODE_ENV = "production"
   "deploy": {
     "startCommand": "cd packages/server && bun dist/index.js",
     "healthcheckPath": "/status",
-    "restartPolicyType": "ON_FAILURE"
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "numReplicas": 1
   }
 }
 ```
 
-### Troubleshooting Railway Deployments
+### Manifest Fetching
 
-**Build fails with "lockfile frozen" error:**
-```bash
-# Regenerate lockfile locally
-bun install
-git add bun.lock
-git commit -m "chore: update bun.lock"
-git push
+In production, the server fetches manifests from the CDN at startup instead of bundling them:
+
+```typescript
+// packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
 ```
 
-**Frontend not loading (404 on index.html):**
-- Check build logs for client build step
-- Verify `cp -r dist/* public/` command succeeded
-- Check `/debug/public` endpoint to see directory contents
+**Manifest Files Fetched:**
+- Root manifests: `npcs.json`, `stores.json`, `world-areas.json`, etc.
+- Items directory: `items/weapons.json`, `items/tools.json`, etc.
+- Gathering: `gathering/woodcutting.json`, `gathering/mining.json`, etc.
+- Recipes: `recipes/cooking.json`, `recipes/smithing.json`, etc.
 
-**WebSocket connection fails:**
-- Verify `PUBLIC_WS_URL` in client points to Railway domain
-- Check CORS allowlist includes your frontend domain
-- Ensure Railway exposes WebSocket port (default: 5555)
+Manifests are cached locally in `packages/server/world/assets/manifests/` and only re-fetched if content changes (ETag validation).
+
+<Info>
+In development, if local manifests exist, CDN fetching is skipped to allow working with local asset modifications.
+</Info>
 
 ## Cloudflare Pages Deployment (Frontend)
 
-Cloudflare Pages hosts the game client with automatic deployments from GitHub.
+Cloudflare Pages hosts the game client with automatic deployments via GitHub integration.
 
-### Automatic Deployment
+### Automated Deployment
 
-Cloudflare Pages is connected directly to the GitHub repository:
+Cloudflare Pages automatically deploys on every push to `main`:
 
-1. **Push to `main`** → Automatic production deployment
-2. **Open PR** → Automatic preview deployment at `*.hyperscape.pages.dev`
-3. **Merge PR** → Preview becomes production
+1. **GitHub Integration**: Cloudflare Pages watches the repository
+2. **Build Trigger**: Detects changes to `packages/client/**`
+3. **Build Process**: Runs `bun run build` in `packages/client`
+4. **Deploy**: Publishes to `hyperscape.pages.dev` and `hyperscape.club`
 
-**No manual deployment needed** - Cloudflare handles everything via GitHub integration.
-
-### Manual Cloudflare Pages Setup
+### Manual Setup
 
 <Steps>
-  <Step title="Create Cloudflare Pages project">
-    1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com) → Pages
-    2. Click "Create a project" → "Connect to Git"
-    3. Select `HyperscapeAI/hyperscape` repository
+  <Step title="Connect repository">
+    1. Go to Cloudflare Dashboard → Pages
+    2. Create a new project
+    3. Connect to GitHub repository: `HyperscapeAI/hyperscape`
+    4. Select production branch: `main`
   </Step>
   
-  <Step title="Configure build settings">
-    - **Framework preset**: None (custom Vite build)
+  <Step title="Configure build">
     - **Build command**: `cd packages/client && bun install && bun run build`
     - **Build output directory**: `packages/client/dist`
     - **Root directory**: `/` (monorepo root)
@@ -231,80 +227,58 @@ Cloudflare Pages is connected directly to the GitHub repository:
   </Step>
   
   <Step title="Set environment variables">
-    In Pages dashboard → Settings → Environment variables:
+    Add in Pages dashboard → Settings → Environment variables:
     
-    **Production:**
     ```bash
-    PUBLIC_PRIVY_APP_ID=your-app-id
+    PUBLIC_PRIVY_APP_ID=<from-privy-dashboard>
     PUBLIC_API_URL=https://hyperscape-production.up.railway.app
     PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
     PUBLIC_CDN_URL=https://assets.hyperscape.club
     PUBLIC_APP_URL=https://hyperscape.club
     ```
-    
-    **Preview (optional):**
-    Same as production, or use preview-specific values for testing.
   </Step>
   
   <Step title="Configure custom domain">
-    1. Pages → Custom domains → Add domain
-    2. Add `hyperscape.club` and `www.hyperscape.club`
-    3. Update DNS records as instructed
-    4. SSL certificates are provisioned automatically
+    1. Add custom domain: `hyperscape.club`
+    2. Add DNS records as instructed by Cloudflare
+    3. Enable automatic HTTPS
   </Step>
 </Steps>
 
-### CORS Configuration
+### Preview Deployments
 
-The server automatically allows Cloudflare Pages domains:
+Cloudflare Pages creates preview deployments for every pull request:
+
+- **URL Pattern**: `https://<branch>-<hash>.hyperscape.pages.dev`
+- **CORS**: Server automatically allows `*.hyperscape.pages.dev` origins
+- **Environment**: Uses production environment variables
+
+### Build Configuration
+
+The client uses Vite with environment variable injection:
 
 ```typescript
-// packages/server/src/startup/http-server.ts
-const allowedOrigins = [
-  "https://hyperscape.club",
-  "https://www.hyperscape.club",
-  "https://hyperscape.pages.dev",
-  /^https?:\\/\\/.+\\.hyperscape\\.pages\\.dev$/,  // Preview deployments
-];
+// packages/client/vite.config.ts
+export default defineConfig({
+  envPrefix: 'PUBLIC_',  // Expose PUBLIC_* vars to client
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'three': ['three'],
+          'react': ['react', 'react-dom']
+        }
+      }
+    }
+  }
+});
 ```
 
-Preview deployments (e.g., `abc123.hyperscape.pages.dev`) are automatically allowed via regex pattern.
-
-### Alternative: Vercel Deployment
-
-If you prefer Vercel over Cloudflare Pages:
-
-<Steps>
-  <Step title="Connect repository">
-    Connect your GitHub repository to Cloudflare Pages.
-  </Step>
-  
-  <Step title="Configure build">
-    - **Root directory**: `packages/client`
-    - **Build command**: `bun run build`
-    - **Output directory**: `dist`
-    - **Install command**: `bun install`
-  </Step>
-  
-  <Step title="Set environment variables">
-    Add all `PUBLIC_*` environment variables from `.env.example`.
-  </Step>
-</Steps>
-
-### Automated Deployment
-
-The repository includes GitHub Actions for automatic deployment:
-
-```yaml
-# .github/workflows/deploy-cloudflare.yml
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'packages/client/**'
-```
-
-Pushes to main automatically deploy to production. Pull requests create preview deployments.
+<Warning>
+After changing environment variables in Cloudflare Pages, trigger a new deployment for changes to take effect.
+</Warning>
 
 ## Database Setup
 
@@ -381,39 +355,91 @@ bun run cdn:up    # Start nginx CDN container
 bun run cdn:down  # Stop CDN container
 ```
 
-## CDN Setup (Assets)
+## Cloudflare R2 Asset CDN
 
-### Production: Cloudflare R2
+Cloudflare R2 hosts all game assets (3D models, textures, audio, manifests) with global edge caching.
 
-Hyperscape uses Cloudflare R2 for asset storage with automatic uploads via GitHub Actions.
+### Automated Asset Deployment
 
-**Automatic Asset Deployment:**
+Assets are automatically uploaded to R2 via GitHub Actions:
 
-The `.github/workflows/deploy-cloudflare.yml` workflow automatically uploads assets to R2 when:
-- Manifests change in `packages/server/world/assets/manifests/**`
-- Asset files change in `assets/**`
-
-**What gets uploaded:**
-- **Manifests** (JSON files) → `manifests/*.json`
-- **Models** (GLB/GLTF) → `models/**/*.glb`
-- **Audio** (MP3/OGG) → `audio/**/*.mp3`
-- **Textures** (PNG/JPG) → `textures/**/*.png`
-- **WASM binaries** → `*.wasm`
-
-**R2 Configuration:**
-```bash
-# In Cloudflare Dashboard → R2
-Bucket name: hyperscape-assets
-Public access: Enabled via custom domain
-Custom domain: assets.hyperscape.club
+```yaml
+# .github/workflows/deploy-cloudflare.yml
+name: Deploy Assets to Cloudflare R2
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/server/world/assets/manifests/**'
+      - 'assets/**'
 ```
 
-**Required GitHub Secrets:**
-- `CLOUDFLARE_API_TOKEN` - API token with R2 write permissions
+**Upload Process:**
+1. Detects changes to manifests or assets
+2. Uploads manifests to `manifests/` prefix
+3. Uploads 3D models, audio, textures to root
+4. Sets proper MIME types and cache headers
 
-### Development: Local Docker CDN
+### Manual R2 Setup
 
-For local development, use the included nginx CDN:
+<Steps>
+  <Step title="Create R2 bucket">
+    1. Go to Cloudflare Dashboard → R2
+    2. Create bucket: `hyperscape-assets`
+    3. Enable public access
+  </Step>
+  
+  <Step title="Configure custom domain">
+    1. Add custom domain: `assets.hyperscape.club`
+    2. Point to R2 bucket
+    3. Enable caching rules
+  </Step>
+  
+  <Step title="Upload assets">
+    Use Wrangler CLI to upload assets:
+    
+    ```bash
+    # Install Wrangler
+    npm install -g wrangler
+    
+    # Upload manifests
+    wrangler r2 object put hyperscape-assets/manifests/npcs.json \
+      --file=packages/server/world/assets/manifests/npcs.json \
+      --content-type=application/json
+    
+    # Upload models (if using local assets)
+    wrangler r2 object put hyperscape-assets/models/goblin/goblin.vrm \
+      --file=assets/models/goblin/goblin.vrm \
+      --content-type=model/gltf-binary
+    ```
+  </Step>
+  
+  <Step title="Configure GitHub Actions">
+    Add Cloudflare secrets to GitHub repository:
+    
+    1. Go to Settings → Secrets and variables → Actions
+    2. Add `CLOUDFLARE_API_TOKEN` (from Cloudflare → API Tokens)
+    3. Workflow will automatically upload on manifest changes
+  </Step>
+</Steps>
+
+### Cache Configuration
+
+R2 assets use aggressive caching for performance:
+
+| Asset Type | Cache-Control | Max Age |
+|------------|---------------|---------|
+| Models (.glb, .vrm) | `public, max-age=31536000, immutable` | 1 year |
+| Audio (.mp3, .ogg) | `public, max-age=31536000, immutable` | 1 year |
+| Textures (.png, .jpg) | `public, max-age=31536000, immutable` | 1 year |
+| Manifests (.json) | `public, max-age=300, must-revalidate` | 5 minutes |
+| WASM (.wasm) | `public, max-age=3600` | 1 hour |
+
+Manifests use shorter cache times to allow content updates without cache invalidation.
+
+### Local CDN (Development)
+
+For local development, use the included Docker CDN:
 
 ```bash
 bun run cdn:up          # Start CDN container
@@ -421,124 +447,73 @@ bun run cdn:down        # Stop CDN container
 bun run cdn:restart     # Force restart
 ```
 
-This starts a Docker container serving assets from `packages/server/world/assets/` on port 8080.
+This starts an nginx container serving assets from `packages/server/world/assets/` at `http://localhost:8080`.
 
-**CDN Commands:**
-```bash
-bun run cdn:up        # Start CDN container
-bun run cdn:down      # Stop CDN container
-bun run cdn:restart   # Force restart (rebuild container)
-bun run cdn:watch     # Start with file watching
-```
+## CORS Configuration
 
-### Manifest Fetching System
+The server automatically allows requests from production and development origins:
 
-**New in v1.0:** The server automatically fetches manifests from the CDN at startup instead of bundling them.
+**Production Domains:**
+- `https://hyperscape.club` (main site)
+- `https://www.hyperscape.club` (www subdomain)
+- `https://hyperscape.pages.dev` (Cloudflare Pages)
+- `https://hyperscape-production.up.railway.app` (Railway backend)
 
-**How it works:**
-1. Server starts and checks `packages/server/world/assets/manifests/` directory
-2. If in production or manifests are missing, fetches from `PUBLIC_CDN_URL`
-3. Downloads all manifest JSON files (items, npcs, resources, etc.)
-4. Caches locally for faster subsequent starts
-5. Compares content hashes to avoid unnecessary updates
+**Development Patterns:**
+- `http://localhost:<any-port>` (local development)
+- `https://*.hyperscape.pages.dev` (preview deployments)
+- `https://*.up.railway.app` (Railway preview environments)
 
-**Manifest files fetched:**
-- `items.json` - Item definitions
-- `npcs.json` - NPC and mob data
-- `resources.json` - Gathering resources
-- `tools.json` - Tool definitions
-- `biomes.json` - Biome configurations
-- `world-areas.json` - World zones
-- `stores.json` - Shop inventories
-- `music.json` - Music track metadata
-- `vegetation.json` - Vegetation placement
-- `buildings.json` - Building definitions
-
-**Configuration:**
+**Configuration** (`packages/server/src/startup/http-server.ts`):
 ```typescript
-// packages/server/src/startup/config.ts
-await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  "http://hyperscape.pages.dev",  // HTTP fallback
+  /^https?:\/\/localhost:\d+$/,
+  /^https?:\/\/.+\.hyperscape\.pages\.dev$/,
+  /^https:\/\/.+\.up\.railway\.app$/,
+];
 ```
 
-**Behavior:**
-- **Development**: Skips fetch if local manifests exist (uses Git LFS assets)
-- **Production**: Always fetches from CDN to ensure latest data
-- **CI/Test**: Skips fetch if `SKIP_MANIFESTS=true` is set
-
-### Alternative: Self-Hosted CDN
-
-For self-hosted deployments, you can use any static file server:
-
-**Option 1: nginx**
-```nginx
-server {
-  listen 8080;
-  root /var/www/hyperscape-assets;
-  
-  location /manifests/ {
-    add_header Cache-Control "public, max-age=300, must-revalidate";
-  }
-  
-  location /models/ {
-    add_header Cache-Control "public, max-age=31536000, immutable";
-  }
-}
-```
-
-**Option 2: AWS S3**
-1. Create S3 bucket with public read access
-2. Upload `packages/server/world/assets/` contents
-3. Set `PUBLIC_CDN_URL=https://your-bucket.s3.amazonaws.com`
-
-**Option 3: Other providers**
-- DigitalOcean Spaces
-- Backblaze B2
-- Wasabi
-- Any CDN with object storage
+<Info>
+The server automatically adds `PUBLIC_APP_URL` from environment variables to the CORS allowlist if set.
+</Info>
 
 ## Production Checklist
 
-### Server (Railway)
+### Infrastructure
+- [ ] Railway project created and connected to GitHub
+- [ ] Cloudflare Pages project created and connected to GitHub
+- [ ] Cloudflare R2 bucket created for assets
 - [ ] PostgreSQL database provisioned (Railway or Neon)
-- [ ] Environment variables configured in Railway dashboard
-- [ ] `PRIVY_APP_ID` and `PRIVY_APP_SECRET` set
-- [ ] `JWT_SECRET` generated (32+ characters)
-- [ ] `PUBLIC_CDN_URL` points to R2 or CDN
-- [ ] `NODE_ENV=production` set
-- [ ] Health check endpoint `/status` responding
-- [ ] WebSocket connections working on port 5555
-
-### Frontend (Cloudflare Pages)
-- [ ] GitHub integration connected
-- [ ] Build command configured: `cd packages/client && bun install && bun run build`
-- [ ] `PUBLIC_PRIVY_APP_ID` matches server's `PRIVY_APP_ID`
-- [ ] `PUBLIC_API_URL` points to Railway server
-- [ ] `PUBLIC_WS_URL` points to Railway WebSocket (wss://)
-- [ ] `PUBLIC_CDN_URL` points to R2 assets
-- [ ] Custom domain configured (hyperscape.club)
+- [ ] Custom domains configured (hyperscape.club, assets.hyperscape.club)
 - [ ] SSL/TLS enabled (automatic with Cloudflare)
 
-### Assets (Cloudflare R2)
-- [ ] R2 bucket created (`hyperscape-assets`)
-- [ ] Public access enabled via custom domain
-- [ ] Custom domain configured (assets.hyperscape.club)
-- [ ] GitHub Actions workflow has `CLOUDFLARE_API_TOKEN` secret
-- [ ] Manifests uploaded to `manifests/` prefix
-- [ ] WASM files uploaded with correct MIME type
-- [ ] CORS headers configured for cross-origin access
+### Environment Variables
+- [ ] Server: `DATABASE_URL`, `JWT_SECRET`, `PRIVY_APP_ID`, `PRIVY_APP_SECRET`
+- [ ] Server: `PUBLIC_CDN_URL` pointing to R2 bucket
+- [ ] Client: `PUBLIC_PRIVY_APP_ID` matching server
+- [ ] Client: `PUBLIC_API_URL` and `PUBLIC_WS_URL` pointing to Railway
+- [ ] Client: `PUBLIC_CDN_URL` pointing to R2 bucket
 
-### CORS Verification
-- [ ] Server allows frontend domain in CORS allowlist
-- [ ] Preview deployments (`*.hyperscape.pages.dev`) allowed
-- [ ] WebSocket upgrade requests working
-- [ ] Asset requests from CDN working cross-origin
+### GitHub Actions
+- [ ] `RAILWAY_TOKEN` secret configured
+- [ ] `CLOUDFLARE_API_TOKEN` secret configured
+- [ ] Railway project/service/environment IDs updated in workflow
+- [ ] Cloudflare account ID updated in workflow
 
-### Post-Deployment Testing
-- [ ] Visit frontend URL and verify it loads
-- [ ] Create character and verify database persistence
-- [ ] Test WebSocket connection (check browser console)
-- [ ] Verify assets load from CDN (check Network tab)
-- [ ] Test authentication flow with Privy
-- [ ] Verify manifest fetching in server logs
-- [ ] Test gameplay (movement, combat, skills)
-- [ ] Check health endpoint: `https://your-server.up.railway.app/status`
+### Security
+- [ ] `ADMIN_CODE` set to prevent unauthorized admin access
+- [ ] JWT secret generated with `openssl rand -base64 32`
+- [ ] Privy app configured with production domains
+- [ ] Rate limiting enabled (`DISABLE_RATE_LIMIT` not set)
+
+### Verification
+- [ ] Server health check responds at `/status`
+- [ ] WebSocket connection succeeds
+- [ ] Assets load from CDN
+- [ ] Manifests fetch successfully at startup
+- [ ] Database migrations applied
+- [ ] Authentication works with Privy
