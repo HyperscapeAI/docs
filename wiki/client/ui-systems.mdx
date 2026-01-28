@@ -1,0 +1,752 @@
+---
+title: "UI Systems"
+description: "Client-side interface systems including action bars, chat, and edit mode"
+icon: "window"
+---
+
+# UI Systems
+
+Hyperscape's client UI features a **customizable interface system** with draggable windows, action bars, chat filtering, and mobile support. Recent updates include RS3-style keyboard shortcuts, vertical action bars for mobile, and enhanced edit mode.
+
+<Info>
+**Location**: `packages/client/src/game/interface/` and `packages/client/src/ui/`
+</Info>
+
+---
+
+## Action Bar System
+
+The Action Bar provides **quick access to items and skills** with RS3-style keyboard shortcuts supporting up to 5 bars.
+
+### Features
+
+- **5 Action Bars**: Each with 14 slots (1-9, 0, -, =, Backspace, Insert)
+- **Modifier Keys**: Ctrl, Shift, Alt for bars 2-4
+- **Bar 5**: Q, W, E, R, T, Y, U, I, O, P, [, ], \
+- **Drag & Drop**: Drag items/skills from inventory/skills panel
+- **Context Menu**: Right-click to remove or configure slots
+- **Mobile Support**: Vertical layout for touch devices
+
+### Keyboard Shortcuts
+
+```typescript
+// From packages/client/src/game/panels/ActionBarPanel/utils.ts
+export const ACTION_BAR_KEYBINDS: Record<number, string[]> = {
+  1: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "Backspace", "Insert"],
+  2: ["Ctrl+1", "Ctrl+2", ..., "Ctrl+Insert"],
+  3: ["Shift+1", "Shift+2", ..., "Shift+Insert"],
+  4: ["Alt+1", "Alt+2", ..., "Alt+Insert"],
+  5: ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]", "\\"],
+};
+```
+
+### Keybind Display
+
+Shortcuts are displayed on slots with modifier symbols:
+
+- **^1** — Ctrl+1 (Bar 2)
+- **⇧2** — Shift+2 (Bar 3)
+- **⌥3** — Alt+3 (Bar 4)
+- **Q** — Q key (Bar 5)
+
+```typescript
+// From packages/client/src/game/panels/ActionBarPanel/utils.ts
+export function formatKeybindForDisplay(keybind: string): string {
+  if (keybind.startsWith("Ctrl+")) return `^${keybind.slice(5)}`;
+  if (keybind.startsWith("Shift+")) return `⇧${keybind.slice(6)}`;
+  if (keybind.startsWith("Alt+")) return `⌥${keybind.slice(4)}`;
+  return keybind;
+}
+```
+
+### Mobile Layout
+
+Action bars support **vertical orientation** for mobile devices:
+
+```typescript
+// From packages/client/src/game/panels/ActionBarPanel/index.tsx
+interface ActionBarPanelProps {
+  orientation?: "horizontal" | "vertical";  // Default: horizontal
+  showShortcuts?: boolean;                  // Hide keyboard hints on mobile
+  showControls?: boolean;                   // Hide +/- and lock buttons on mobile
+}
+
+// Mobile usage
+<ActionBarPanel
+  orientation="vertical"
+  showShortcuts={false}
+  showControls={false}
+/>
+```
+
+### Drag & Drop
+
+Action bars use the centralized drag system:
+
+```typescript
+// From packages/client/src/game/panels/ActionBarPanel/useActionBarDragDrop.ts
+export function useActionBarDragDrop(barNumber: number) {
+  const { draggedItem, setDraggedItem } = useDragStore();
+
+  const handleDrop = useCallback((slotIndex: number, item: DraggedItem) => {
+    if (item.type === "item") {
+      // Add item to action bar
+      world.network?.send("actionBar:setSlot", {
+        barNumber,
+        slotIndex,
+        itemId: item.itemId,
+        quantity: 1,
+      });
+    } else if (item.type === "skill") {
+      // Add skill to action bar
+      world.network?.send("actionBar:setSlot", {
+        barNumber,
+        slotIndex,
+        skillId: item.skillId,
+      });
+    }
+  }, [barNumber, world]);
+
+  return { handleDrop };
+}
+```
+
+---
+
+## Chat System
+
+The chat system supports **multiple channels** with filtering and clickable messages.
+
+### Chat Channels
+
+| Tab | Messages Shown |
+|-----|----------------|
+| **All** | All messages (game, trade, clan, private) |
+| **Game** | System messages, combat, skills, loot |
+| **Clan** | Clan chat messages |
+| **Private** | Private messages and whispers |
+
+### Message Types
+
+```typescript
+// From packages/client/src/game/panels/ChatPanel.tsx
+interface ChatMessage {
+  id: string;
+  from?: string;
+  body: string;
+  createdAt: string;
+  type?: 
+    | "chat"              // Normal chat
+    | "system"            // System messages
+    | "combat"            // Combat notifications
+    | "loot"              // Loot drops
+    | "skill"             // Skill XP/level ups
+    | "trade_request"     // Clickable trade request
+    | "duel_challenge"    // Clickable duel challenge
+    | "private"           // Private messages
+    | "clan"              // Clan chat
+    | "guild";            // Guild chat
+  tradeId?: string;       // For trade_request messages
+  challengeId?: string;   // For duel_challenge messages
+  channel?: string;       // For filtering (clan, private, etc.)
+}
+```
+
+### Message Colors
+
+```typescript
+// From packages/client/src/game/panels/ChatPanel.tsx
+const MESSAGE_COLORS = {
+  chat: "#FFFFFF",              // White for normal chat
+  system: "#00FFFF",            // Cyan for system
+  combat: "#FF6B6B",            // Red for combat
+  loot: "#FFD700",              // Gold for loot
+  skill: "#00FF00",             // Green for skills
+  trade_request: "#FF00FF",     // Pink for trade requests
+  duel_challenge: "#FF4444",    // Red for duel challenges
+  private: "#ff66ff",           // Pink for private messages
+  clan: "#00ff00",              // Green for clan
+  guild: "#00ff00",             // Green for guild
+};
+```
+
+### Clickable Messages
+
+Trade requests and duel challenges are **clickable** to accept:
+
+```typescript
+// From packages/client/src/game/panels/ChatPanel.tsx
+const handleDuelChallengeClick = useCallback((challengeId: string) => {
+  if (chatWorld.network?.send) {
+    chatWorld.network.send("duel:challenge:respond", {
+      challengeId,
+      accept: true,
+    });
+  }
+}, [chatWorld]);
+
+// Render clickable message
+<div
+  onClick={isDuelChallenge ? () => handleDuelChallengeClick(msg.challengeId!) : undefined}
+  style={{
+    cursor: isClickable ? "pointer" : "default",
+    textDecoration: isClickable ? "underline" : "none",
+    color: msgColor,
+  }}
+  title={isDuelChallenge ? "Click to accept duel challenge" : undefined}
+>
+  {msg.body}
+</div>
+```
+
+### Message Filtering
+
+```typescript
+// From packages/client/src/game/panels/ChatPanel.tsx
+function filterMessagesByTab(
+  messages: ChatMessage[],
+  tab: "all" | "game" | "clan" | "private",
+): ChatMessage[] {
+  if (tab === "all") return messages;
+
+  return messages.filter((msg) => {
+    switch (tab) {
+      case "game":
+        return ["system", "combat", "loot", "skill", "trade_request", "duel_challenge"].includes(msg.type || "chat");
+      case "clan":
+        return msg.type === "clan" || msg.type === "guild" || msg.channel === "clan";
+      case "private":
+        return msg.type === "private" || msg.channel === "private";
+      default:
+        return true;
+    }
+  });
+}
+```
+
+---
+
+## Edit Mode
+
+Edit mode allows players to **customize their UI layout** with drag-and-drop window positioning.
+
+### Features
+
+- **Hold-to-Toggle**: Hold Ctrl key to enter edit mode (with progress indicator)
+- **Escape to Exit**: Press Escape to exit edit mode
+- **Drag Windows**: Reposition any panel
+- **Delete Zone**: Drag panels to trash icon to remove them
+- **Alignment Guides**: Visual guides for snapping windows
+- **Grid Snapping**: Windows snap to grid for clean layouts
+
+### Edit Mode Keyboard
+
+```typescript
+// From packages/client/src/ui/core/edit/useEditModeKeyboard.ts
+export function useEditModeKeyboard() {
+  const { isEditMode, setEditMode, isHolding, setIsHolding, holdProgress, setHoldProgress } = useEditStore();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Hold Ctrl to enter edit mode
+      if (e.key === "Control" && !isEditMode && !isHolding) {
+        setIsHolding(true);
+        // Start progress animation
+        const startTime = Date.now();
+        const interval = setInterval(() => {
+          const elapsed = Date.now() - startTime;
+          const progress = Math.min(elapsed / 500, 1); // 500ms hold duration
+          setHoldProgress(progress);
+          
+          if (progress >= 1) {
+            setEditMode(true);
+            setIsHolding(false);
+            setHoldProgress(0);
+            clearInterval(interval);
+          }
+        }, 16);
+      }
+
+      // Escape to exit edit mode
+      if (e.key === "Escape" && isEditMode) {
+        setEditMode(false);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Control" && isHolding) {
+        setIsHolding(false);
+        setHoldProgress(0);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [isEditMode, isHolding]);
+}
+```
+
+### Delete Zone
+
+```typescript
+// From packages/client/src/game/interface/InterfaceManager.tsx
+<DeleteZone
+  visible={isEditMode && isDraggingWindow}
+  onDrop={(windowId) => {
+    // Remove window from layout
+    removeWindow(windowId);
+  }}
+/>
+```
+
+---
+
+## Menu Bar Panel
+
+The menu bar features **responsive layout** that adapts to container size.
+
+### Dynamic Layout
+
+```typescript
+// From packages/client/src/game/panels/MenuBarPanel/index.tsx
+function calculateMenuBarLayout(
+  containerWidth: number,
+  containerHeight: number,
+  buttonCount: number,
+): { rows: number; cols: number; buttonSize: number } {
+  // Try different row counts (1-5) and find optimal layout
+  for (let rows = 1; rows <= 5; rows++) {
+    const cols = Math.ceil(buttonCount / rows);
+    const buttonWidth = containerWidth / cols;
+    const buttonHeight = containerHeight / rows;
+    const buttonSize = Math.min(buttonWidth, buttonHeight);
+
+    // Check if buttons fit
+    if (buttonSize >= MIN_BUTTON_SIZE && buttonSize <= MAX_BUTTON_SIZE) {
+      return { rows, cols, buttonSize };
+    }
+  }
+
+  // Fallback to single row
+  return { rows: 1, cols: buttonCount, buttonSize: MIN_BUTTON_SIZE };
+}
+```
+
+### Responsive Behavior
+
+- **1 row**: Wide containers (desktop)
+- **2-3 rows**: Medium containers
+- **4-5 rows**: Narrow containers (mobile portrait)
+- **Auto-reflow**: Uses ResizeObserver to detect container changes
+
+---
+
+## Panel Sizing
+
+Recent updates increased panel sizes by **~30%** for better readability:
+
+| Panel | Old Size | New Size | Increase |
+|-------|----------|----------|----------|
+| **Inventory** | 240×320 | 320×420 | +33% |
+| **Equipment** | 200×280 | 260×360 | +30% |
+| **Stats** | 210×285 | 275×370 | +31% |
+| **Skills** | 250×310 | 325×400 | +30% |
+| **Combat** | 240×280 | 310×360 | +29% |
+| **Chat** | 400×450 | 520×585 | +30% |
+| **Minimap** | 420×420 | 550×550 | +31% |
+
+```typescript
+// From packages/client/src/game/panels/InventoryPanel.tsx
+export const INVENTORY_PANEL_CONFIG = {
+  minWidth: 260,
+  minHeight: 340,
+  preferredWidth: 320,
+  preferredHeight: 420,
+  maxWidth: 400,
+  maxHeight: 520,
+};
+```
+
+---
+
+## Theme System
+
+The theme system provides **consistent colors** across all UI components.
+
+### Theme Colors
+
+```typescript
+// From packages/client/src/ui/theme/themes.ts
+export const hyperscapeTheme: Theme = {
+  colors: {
+    background: {
+      primary: "#1a1a1a",
+      secondary: "#2a2a2a",
+      tertiary: "#3a3a3a",
+    },
+    panelPrimary: "#2a2a2a",      // Panel backgrounds
+    panelSecondary: "#3a3a3a",    // Nested panel backgrounds
+    border: {
+      default: "#4a4a4a",
+      hover: "#5a5a5a",
+      active: "#6a6a6a",
+    },
+    text: {
+      primary: "#ffffff",
+      secondary: "#cccccc",
+      muted: "#999999",
+    },
+    state: {
+      success: "#22c55e",
+      warning: "#f59e0b",
+      danger: "#ef4444",
+      info: "#3b82f6",
+    },
+    accent: {
+      primary: "#8b5cf6",
+      gold: "#ffd700",
+    },
+  },
+};
+```
+
+### Panel Background Updates
+
+All panels now use theme colors for consistency:
+
+```typescript
+// From packages/client/src/game/panels/InventoryPanel.tsx
+const panelStyle: CSSProperties = {
+  background: theme.colors.panelPrimary,
+  border: `1px solid ${theme.colors.border.default}`,
+  borderRadius: theme.borderRadius.md,
+};
+```
+
+---
+
+## Inventory Cross-Tab Isolation
+
+Recent fixes prevent **inventory updates from affecting other tabs**:
+
+### Problem
+
+When multiple browser tabs were open, inventory updates in one tab would trigger updates in all tabs, causing items to appear/disappear incorrectly.
+
+### Solution
+
+```typescript
+// From packages/client/src/hooks/usePlayerData.ts
+const handleInventory = (data: unknown) => {
+  const invData = data as {
+    playerId: string;
+    items: InventorySlotViewItem[];
+    coins: number;
+  };
+  
+  // Only update if this inventory belongs to the local player
+  if (playerId && invData.playerId && invData.playerId !== playerId) {
+    return; // Ignore updates for other players
+  }
+  
+  setInventory(invData.items || []);
+  if (typeof invData.coins === "number") {
+    setCoins(invData.coins);
+  }
+};
+```
+
+---
+
+## Window Management
+
+The window system provides **draggable, resizable panels** with snapping and constraints.
+
+### Window Features
+
+- **Drag & Drop**: Move windows anywhere on screen
+- **Resize**: Drag edges/corners to resize
+- **Snap to Edges**: Windows snap to viewport edges
+- **Constraints**: Min/max width/height per panel
+- **Z-Index Management**: Clicked windows come to front
+- **Viewport Clamping**: Windows stay on screen during resize
+
+### Window Store
+
+```typescript
+// From packages/client/src/ui/stores/windowStore.ts
+export interface WindowState {
+  id: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  zIndex: number;
+  minimized: boolean;
+  locked: boolean;
+}
+
+export const useWindowStore = create<WindowStore>((set) => ({
+  windows: new Map<string, WindowState>(),
+  
+  updateWindow(id: string, updates: Partial<WindowState>): void {
+    set((state) => {
+      const window = state.windows.get(id);
+      if (!window) return state;
+      
+      state.windows.set(id, { ...window, ...updates });
+      return { windows: new Map(state.windows) };
+    });
+  },
+  
+  bringToFront(id: string): void {
+    set((state) => {
+      const maxZ = Math.max(...Array.from(state.windows.values()).map(w => w.zIndex));
+      const window = state.windows.get(id);
+      if (!window) return state;
+      
+      state.windows.set(id, { ...window, zIndex: maxZ + 1 });
+      return { windows: new Map(state.windows) };
+    });
+  },
+}));
+```
+
+---
+
+## Responsive Design
+
+The UI adapts to different screen sizes and orientations.
+
+### Breakpoints
+
+```typescript
+// From packages/client/src/ui/core/responsive/useBreakpoint.ts
+export const BREAKPOINTS = {
+  mobile: 768,
+  tablet: 1024,
+  desktop: 1280,
+  wide: 1920,
+};
+
+export function useBreakpoint() {
+  const [breakpoint, setBreakpoint] = useState<"mobile" | "tablet" | "desktop" | "wide">("desktop");
+
+  useEffect(() => {
+    const updateBreakpoint = () => {
+      const width = window.innerWidth;
+      if (width < BREAKPOINTS.mobile) setBreakpoint("mobile");
+      else if (width < BREAKPOINTS.tablet) setBreakpoint("tablet");
+      else if (width < BREAKPOINTS.desktop) setBreakpoint("desktop");
+      else setBreakpoint("wide");
+    };
+
+    updateBreakpoint();
+    window.addEventListener("resize", updateBreakpoint);
+    return () => window.removeEventListener("resize", updateBreakpoint);
+  }, []);
+
+  return breakpoint;
+}
+```
+
+### Mobile Interface Manager
+
+```typescript
+// From packages/client/src/game/interface/MobileInterfaceManager.tsx
+export function MobileInterfaceManager({ world }: InterfaceManagerProps) {
+  const breakpoint = useBreakpoint();
+  const isMobile = breakpoint === "mobile";
+
+  return (
+    <>
+      {/* Compact status HUD */}
+      <CompactStatusHUD world={world} />
+
+      {/* Vertical action bar */}
+      <ActionBarPanel
+        orientation="vertical"
+        showShortcuts={false}
+        showControls={false}
+      />
+
+      {/* Mobile drawer for panels */}
+      <MobileDrawer>
+        <InventoryPanel world={world} />
+        <EquipmentPanel world={world} />
+        <SkillsPanel world={world} />
+      </MobileDrawer>
+    </>
+  );
+}
+```
+
+---
+
+## Type Safety Improvements
+
+Recent updates added **strong typing** for event payloads:
+
+### Action Bar Event Types
+
+```typescript
+// From packages/client/src/game/panels/ActionBarPanel/types.ts
+export interface PrayerStateSyncEventPayload {
+  activePrayers: string[];
+}
+
+export interface PrayerToggledEventPayload {
+  prayerId: string;
+  active: boolean;
+}
+
+export interface AttackStyleUpdateEventPayload {
+  style: string;
+}
+
+export interface ActionBarStatePayload {
+  bars: Record<number, ActionBarSlot[]>;
+}
+
+export interface ActionBarSlotSwapPayload {
+  barNumber: number;
+  fromIndex: number;
+  toIndex: number;
+}
+```
+
+### Network Cache Extensions
+
+```typescript
+// From packages/client/src/game/panels/ActionBarPanel/types.ts
+export interface ActionBarNetworkExtensions {
+  actionBars?: Record<number, ActionBarSlot[]>;
+  activePrayers?: string[];
+  attackStyle?: string;
+}
+```
+
+---
+
+## Performance Optimizations
+
+### Memoized Styles
+
+UI components use `useMemo` to prevent unnecessary style recalculations:
+
+```typescript
+// From packages/client/src/game/panels/DuelPanel/RulesScreen.tsx
+function useRulesScreenStyles(theme: Theme, myAccepted: boolean) {
+  return useMemo(() => {
+    const containerStyle: CSSProperties = {
+      display: "flex",
+      flexDirection: "column",
+      gap: theme.spacing.md,
+    };
+
+    const acceptButtonStyle: CSSProperties = {
+      background: myAccepted 
+        ? `${theme.colors.state.success}88` 
+        : theme.colors.state.success,
+      opacity: myAccepted ? 0.7 : 1,
+    };
+
+    return { containerStyle, acceptButtonStyle, ... };
+  }, [theme, myAccepted]); // Only recalculate when dependencies change
+}
+```
+
+### Race Condition Fixes
+
+```typescript
+// From packages/client/src/game/panels/ActionBarPanel/ActionBarSlot.tsx
+// BEFORE: Race condition between null check and usage
+if (holdStartTimeRef.current !== null) {
+  const elapsed = now - holdStartTimeRef.current; // holdStartTimeRef.current could be null here!
+}
+
+// AFTER: Capture value in local variable
+const holdStartTime = holdStartTimeRef.current;
+if (holdStartTime !== null) {
+  const elapsed = now - holdStartTime; // Safe - holdStartTime is captured
+}
+```
+
+---
+
+## Accessibility
+
+### Title Attributes
+
+All interactive elements have descriptive titles:
+
+```typescript
+// From packages/client/src/game/panels/ChatPanel.tsx
+<div
+  onClick={handleClick}
+  title={
+    isTradeRequest 
+      ? "Click to accept trade request" 
+      : isDuelChallenge 
+        ? "Click to accept duel challenge" 
+        : undefined
+  }
+>
+  {msg.body}
+</div>
+```
+
+### Keyboard Navigation
+
+- **Tab**: Navigate between focusable elements
+- **Enter**: Activate buttons
+- **Escape**: Close modals and exit edit mode
+- **Arrow Keys**: Navigate context menus
+
+---
+
+## Debug Logging Cleanup
+
+Recent commits removed debug `console.log` statements in favor of structured logging:
+
+```typescript
+// BEFORE
+console.log("[InteractionRouter] Entering targeting mode:", mode);
+
+// AFTER
+Logger.debug("InteractionRouter", "Entering targeting mode", { mode });
+```
+
+### Logger Service
+
+```typescript
+// From packages/server/src/systems/ServerNetwork/services/Logger.ts
+export class Logger {
+  static debug(system: string, message: string, data?: Record<string, unknown>): void;
+  static info(system: string, message: string, data?: Record<string, unknown>): void;
+  static warn(system: string, message: string, data?: Record<string, unknown>): void;
+  static error(system: string, message: string, error?: Error, data?: Record<string, unknown>): void;
+}
+```
+
+---
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Client Overview" icon="monitor" href="/wiki/client/overview">
+    Client architecture and rendering systems
+  </Card>
+  <Card title="Inventory System" icon="backpack" href="/wiki/game-systems/inventory">
+    Item management and drag-and-drop
+  </Card>
+  <Card title="Combat System" icon="swords" href="/wiki/game-systems/combat">
+    Combat mechanics and action bar integration
+  </Card>
+  <Card title="Mobile Guide" icon="mobile" href="/guides/mobile">
+    Mobile-specific UI and controls
+  </Card>
+</CardGroup>

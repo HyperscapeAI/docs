@@ -23,292 +23,52 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Trading System, Terrain Flattening & UI Overhaul" description="January 2026" date="2026-01-26">
+<Update label="Duel Arena & UI Enhancements" description="January 2026" date="2026-01-27">
 
-### 🤝 Player-to-Player Trading System
+### ⚔️ Duel Arena System (PR #685)
 
-Complete OSRS-style trading system with two-screen confirmation flow and anti-scam features:
+Complete player-vs-player dueling system with OSRS-accurate mechanics (15,066 additions, 85 files changed):
 
-- **Trade Request Flow**: Click-based trade initiation with proximity checks
-  - Players must be adjacent (1 tile) to trade
-  - Auto-walk to target if out of range (OSRS-style)
-  - Pink clickable chat messages for trade requests
-  - Interface blocking: can't trade while banking/shopping
-- **Two-Screen Confirmation**: OSRS-accurate anti-scam flow
-  - **Offer Screen**: Add/remove items, see partner's offer
-  - **Confirmation Screen**: Final review with wealth transfer indicator
-  - Both players must accept on each screen
-  - Acceptance resets if either offer changes
-- **Anti-Scam Features**:
-  - Red flashing exclamation when items removed from trade
-  - Wealth transfer indicator shows value difference (green = gaining, red = losing)
-  - Partner's free inventory slots displayed
-  - Warning if wealth difference >50% of offer value
-- **Click-Based UI**: OSRS-style item management
-  - Left-click inventory item: add 1 to trade
-  - Right-click inventory item: context menu (Offer-1, Offer-5, Offer-10, Offer-X, Offer-All, Value, Examine)
-  - Click trade slot to remove item
-  - Quantity prompt with K/M notation support (e.g., "10k", "1.5m")
-- **Security & Validation**:
-  - Server-authoritative state management
-  - Atomic database transactions prevent item duplication
-  - Inventory locks during swap operations
-  - Tradeable flag enforcement
-  - Rate limiting on trade requests
-  - Proximity validation on every action
-- **Modular Architecture**: Refactored from 1,105-line monolith into focused modules
-  - `request.ts`: Trade initiation and response
-  - `items.ts`: Add, remove, set quantity
-  - `acceptance.ts`: Accept, cancel, two-screen flow
-  - `swap.ts`: Atomic item swap execution
-  - `helpers.ts`: Shared utilities
-- **PendingTradeManager**: Server-authoritative walk-to-trade system
-  - Zero-allocation hot path with pre-allocated buffers
-  - Intelligent re-pathing when target moves
-  - Proper cleanup on disconnect
-- **Testing**: 291 lines of integration tests with real TradingSystem instances
+- **Multi-Stage Negotiation**: 6-phase state machine (Challenge → Rules → Stakes → Confirm → Countdown → Fighting → Finished)
+- **10 Combat Rules**: No ranged, no melee, no magic, no food, no forfeit, no movement, etc.
+- **11 Equipment Restrictions**: Disable specific equipment slots before combat
+- **Item Staking**: Bet inventory items with anti-scam protection
+- **6 Dedicated Arenas**: 2×3 grid with wall collision, terrain flattening, forfeit pillars
+- **Server Architecture** (SOLID principles):
+  - `DuelSystem` (1600+ lines), `DuelSessionManager` (290 lines)
+  - `PendingDuelManager` (310 lines), `ArenaPoolManager` (260 lines)
+  - `DuelCombatResolver` (280 lines)
+- **Client UI**: 8 components (DuelPanel, DuelCountdown, DuelHUD, DuelResultModal, etc.)
+- **Testing**: 1,755 lines of unit tests with 100% critical path coverage
+- **Network Protocol**: 21 typed events for client-server communication
+- **Disconnect Handling**: 30s grace period, auto-forfeit, reconnect support
 
-### 🗺️ Terrain Flattening System
+### 🎨 UI Improvements & Mobile Enhancements (PR #656)
 
-Automatic terrain flattening under stations for professional world building:
+Major UI refactoring with mobile support and accessibility:
 
-- **Flat Zones**: Rectangular areas with level ground
-  - Defined per-station in `stations.json` manifest
-  - `flattenGround: true` enables flattening
-  - `flattenPadding`: extra meters around footprint (default: 0.3m)
-  - `flattenBlendRadius`: smooth transition distance (default: 0.5m)
-- **Spatial Indexing**: Efficient O(1) flat zone lookup
-  - Terrain tiles (100m) used for spatial index
-  - Multiple zones can overlap same terrain tile
-  - Pre-calculated affected tiles on registration
-- **Smooth Blending**: Natural transitions to procedural terrain
-  - Smoothstep interpolation: t² × (3 - 2t)
-  - Rectangular blend zones (not circular)
-  - Blends from flat height to procedural height
-- **Manifest-Driven**: Configured in station manifests
-  - Banks, furnaces, anvils, altars, ranges support flattening
-  - Auto-calculated from station footprint + padding
-  - Height sampled from procedural terrain at station center
-- **TerrainSystem API**: Public methods for dynamic flat zones
-  - `registerFlatZone(zone)`: Add flat zone
-  - `unregisterFlatZone(id)`: Remove flat zone
-  - `getFlatZoneAt(x, z)`: Check if position is in flat zone
-- **Increased Terrain Bumpiness**: Made terrain more varied to showcase flat zones
-  - MAX_HEIGHT: 30m → 50m
-  - Hill noise increased for more pronounced hills
-  - Flat zones now visibly contrast with bumpy surroundings
+- **RS3-Style Keyboard Shortcuts**: 5 action bars with modifier keys (Ctrl, Shift, Alt)
+  - 70 total keybinds across all bars
+  - Modifier symbols on slots (^1, ⇧2, ⌥3)
+- **Vertical Action Bars**: Mobile-optimized layout with shared state
+- **Chat Filtering**: Proper tab-based filtering (All/Game/Clan/Private)
+  - Extended message types including `duel_challenge`
+  - Clickable duel challenges (red underlined text)
+- **Edit Mode Refactor**: Hold-to-toggle with progress indicator, Escape to exit
+- **Delete Zone**: Drag panels to trash to remove them
+- **Responsive Menu Bar**: Auto-reflow between 1-5 rows based on container size
+- **Panel Size Increase**: All panels scaled up ~30% for readability
+- **Theme Updates**: New `panelPrimary`/`panelSecondary` colors, improved contrast
+- **Type Safety**: Proper event payload types for ActionBar, Prayer, AttackStyle
+- **Performance**: Memoized styles, race condition fixes, debug log cleanup
+- **Inventory Cross-Tab Isolation**: Fixed updates affecting other browser tabs
 
-### 🎨 UI System Consolidation
+### 🔧 Code Quality
 
-Removed `hs-kit` package and consolidated all UI into client:
-
-- **Package Removal**: Deleted `packages/hs-kit/` entirely (80+ files, ~18k lines)
-- **UI Migration**: All components moved to `packages/client/src/ui/`
-  - `ui/components/`: Window, Tab, Slider, Portal, etc.
-  - `ui/controls/`: Color, Keybind, Select, Slider, Toggle
-  - `ui/core/`: Drag, edit, notifications, presets, responsive, tabs, tooltip, virtual, window
-  - `ui/stores/`: Accessibility, complexity, drag, edit, keybind, notification, player, preset, quest, theme, window
-  - `ui/theme/`: Animations, themes, dark theme tokens
-  - `ui/types/`: Accessibility, complexity, UI types
-- **Game Components**: Organized into domain folders
-  - `game/components/chat/`: ChatBox, ChatMessage, ChatInput, ChatTabs
-  - `game/components/currency/`: CurrencyDisplay, CurrencyExchange, CurrencyIcon
-  - `game/components/dialog/`: DialogBox, DialogChoices, DialogHistory
-  - `game/components/equipment/`: CharacterModel, EquipmentPanel, EquipmentSlot
-  - `game/components/map/`: WorldMap, MapControls, MapMarker
-  - `game/components/quest/`: QuestLog, QuestEntry, QuestObjective
-  - `game/components/settings/`: SettingsPanel, SettingsCategory, SettingsControl
-  - `game/components/skilltree/`: SkillTree, SkillNode, SkillTooltip
-- **Drag & Drop Improvements**: Fixed race conditions and added features
-  - Fixed timing bugs preventing `onDrop` from firing
-  - Dynamic drop zone registration
-  - Tab/window combining with visual previews
-  - Header drop zones for better UX
-- **Dark Theme Alignment**: Consistent colors across all panels
-  - Inventory slots use theme colors
-  - Equipment panel aligned with theme
-  - Panel backgrounds use dark theme tokens
-- **Build System**: Removed hs-kit build steps from CI workflows
-- **Dependencies**: Added `@dnd-kit` packages for drag-and-drop
-  - `@dnd-kit/core`: Core drag-and-drop functionality
-  - `@dnd-kit/sortable`: Sortable lists
-  - `@dnd-kit/utilities`: Utility functions
-
-### 🎮 Anchor-Based UI Positioning
-
-Unity/Unreal-style anchor system for responsive UI scaling:
-
-- **WindowAnchor System**: Windows maintain position relative to viewport anchors
-  - 9 anchor points: corners, edges, center
-  - Windows store offset from anchor, not absolute position
-  - Responsive scaling preserves anchor relationships
-- **Anchor Points**:
-  - `top-left`, `top-center`, `top-right`
-  - `center-left`, `center`, `center-right`
-  - `bottom-left`, `bottom-center`, `bottom-right`
-- **Default Anchors**: Sensible defaults for each window
-  - Chat, Skills/Prayer: `bottom-left`
-  - Minimap: `top-right`
-  - Inventory, Menubar: `bottom-right`
-  - Action bar: `bottom-center`
-- **Viewport Resize**: Windows reposition based on anchor
-  - Mobile → Desktop transitions use default layout
-  - Desktop resizes preserve anchor offsets
-  - Prevents windows clustering in corners
-- **Migration**: v13 migration sets anchors on existing windows
-- **Anchor Utilities**: Helper functions in `anchorUtils.ts`
-  - `getAnchorPosition()`: Get viewport coordinates for anchor
-  - `calculateOffsetFromAnchor()`: Window offset from anchor
-  - `calculatePositionFromAnchor()`: Position from anchor + offset
-  - `detectNearestAnchor()`: Auto-detect anchor from position
-  - `repositionWindowForViewport()`: Main resize handler
-
-### 👥 Social Features
-
-Comprehensive friend management and private messaging:
-
-- **Friend System**: Add, remove, and manage friends
-  - Send friend requests to other players
-  - Accept or decline incoming requests
-  - Remove friends from list
-  - Online status tracking
-- **Friend List UI**: Real-time friend status display
-  - Shows online/offline status
-  - Friend count display
-  - Notifications for friend requests
-- **Private Messaging**: Direct messages between players
-  - Send private messages to friends
-  - Message history per conversation
-  - Notification system for new messages
-- **Ignore List**: Block unwanted players
-  - Add players to ignore list
-  - Blocked players can't send messages or trade requests
-- **Database Schema**: New tables for social features
-  - `friendships`: Tracks friend relationships
-  - `friend_requests`: Pending friend requests
-  - `ignore_list`: Blocked players
-- **Synchronization**: Friend lists sync on player connection
-  - Online status broadcast to friends
-  - Friend list updates on login/logout
-
-### ⚔️ Combat Style Action Bar
-
-Drag combat styles to action bar for quick switching:
-
-- **Draggable Combat Styles**: All 4 styles can be dragged to action bar
-  - Accurate (🎯): Red when active
-  - Aggressive (⚔️): Green when active
-  - Defensive (🛡️): Blue when active
-  - Controlled (⚖️): Purple when active
-- **SVG Icons**: Distinct icons for each combat style
-  - Accurate: Target/bullseye with concentric circles
-  - Aggressive: Double chevrons crossing
-  - Defensive: Shield shape
-  - Controlled: Balance/currency symbol
-- **Active State Tracking**: Visual highlight when style is active
-  - Listens to `UI_ATTACK_STYLE_UPDATE` and `UI_ATTACK_STYLE_CHANGED` events
-  - Glowing border on active style slot
-  - Color-coded by style type
-- **Action Bar Integration**: Combat styles work like any other action bar item
-  - Click to activate style
-  - Drag from combat panel to action bar
-  - Remove by dragging off action bar
-- **Action Bar Expansion**: Increased max slots from 9 to 12 (RS3-style)
-
-### 🐛 Equipment System Fixes
-
-Critical bug fixes preventing item duplication:
-
-- **Transaction Locks**: Prevent race conditions during equip/unequip
-  - Added locks to EquipmentSystem operations
-  - Prevents concurrent equip/unequip on same player
-- **Order of Operations**: Atomic equip/unequip flow
-  - **equipItem**: Remove from inventory FIRST, then equip
-    - If removal fails, abort equip (prevents duplication)
-    - Verify item exists at specified inventory slot
-  - **unequipItem**: Clear equipment slot FIRST, then add to inventory
-    - Check inventory has space before unequipping
-    - If add fails, restore equipment slot (prevents item loss)
-- **New InventorySystem Methods**: Synchronous operations with return values
-  - `hasSpace(playerId, slotsNeeded)`: Check if inventory has room
-  - `hasItemAtSlot(playerId, itemId, slot)`: Verify item at specific slot
-  - `removeItemDirect(playerId, params)`: Synchronous removal with return value
-  - `addItemDirect(playerId, params)`: Synchronous add with return value
-
-### 🔧 Health Bar Improvements
-
-Fixed health bar atlas slot cleanup and mob respawn health:
-
-- **Atlas Slot Cleanup**: Clear atlas slot on health bar destroy
-  - Prevents stale health bar images
-  - Swap operation now clears both old and new slots
-- **Mob Respawn Health**: Reset mob health to full on respawn
-  - Server sends correct health value
-  - Client resets `currentHealth` and `_lastKnownHealth` to max
-  - Health bar visibility timeout reset
-- **System Lookup**: Simplified health bar system lookup
-  - Use `world.getSystem("healthbars")` instead of array search
-  - Consistent across all entity types
-
-### 🎨 UI Polish & Accessibility
-
-Numerous UI improvements and accessibility enhancements:
-
-- **Auto-Reconnect**: Disconnection screen with countdown timer
-  - 5-second countdown before auto-reconnect
-  - Manual reconnect button
-  - Cancel auto-reconnect option
-  - Pulsing connection indicator
-- **Error Boundaries**: Wrapped screens in ErrorBoundary
-  - LoginScreen, UsernameSelectionScreen, CharacterSelectScreen, GameClient
-  - Prevents white screen crashes
-  - Graceful error recovery
-- **Accessibility Features**: Keyboard navigation and ARIA labels
-  - Skip links for screen readers
-  - `role="button"` and `tabIndex={0}` for interactive elements
-  - Enter/Space key activation
-  - Descriptive `aria-label` attributes
-  - `role="main"` for main content area
-- **Security Improvements**: XSS prevention in chat
-  - HTML sanitization for chat messages
-  - URL validation (blocks `javascript:` and dangerous protocols)
-  - Username sanitization
-  - Safe JSON parsing with error handling
-- **Mobile Responsiveness**: Improved touch target sizes
-  - QuestLog and StatusBars optimized for mobile
-  - Adaptive padding and font sizes
-  - Touch-friendly button sizes
-- **Connection Indicator**: Visual connection status
-  - Shows connection state (connected, disconnected, reconnecting)
-  - Pulsing animation for active states
-- **Notification System**: Toast notifications for user feedback
-  - Success, error, warning, info types
-  - Auto-dismiss after timeout
-  - Stacking notifications
-
-### 🔄 Session Storage Fix
-
-Fixed multi-tab character selection bug:
-
-- **sessionStorage**: Use per-tab storage instead of localStorage
-  - Prevents Tab B from overwriting Tab A's selected character
-  - Each tab maintains independent character selection
-  - Fixes character vanishing when opening multiple tabs
-- **Character Selection**: Improved character selection flow
-  - Named event handlers for proper cleanup
-  - Prevents memory leaks from anonymous functions
-
-### 🔧 Plugin Type Fixes
-
-Fixed TypeScript build errors in plugin-hyperscape:
-
-- **Type Exports**: Resolved 70 TypeScript build errors
-  - Added missing `Player` type export
-  - Removed duplicate type declarations
-  - Fixed import paths for shared types
-- **Build System**: Improved type checking
-  - Proper type resolution across packages
-  - No more `any` type fallbacks
+- **Law of Demeter**: Helper methods on `PlayerEntity` and `World`
+- **Exhaustive Switches**: `assertNever()` for type-safe state machines
+- **Logger Service**: Structured logging replaces console.log
+- **Memoized Styles**: `useMemo` hooks prevent unnecessary re-renders
 
 </Update>
 

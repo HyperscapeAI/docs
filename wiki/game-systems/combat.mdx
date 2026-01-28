@@ -609,50 +609,58 @@ The combat system emits events for UI and logging:
 
 ---
 
-## Prayer Integration
+## Duel Arena (PvP)
 
-Prayers provide temporary combat bonuses that modify effective levels. See the [Prayer System](/wiki/game-systems/prayer) documentation for complete details.
+Hyperscape features a **player-vs-player dueling system** with customizable rules and stakes:
 
-### Prayer Bonuses in Combat
+### Duel Features
+
+- **Customizable Rules**: Toggle 10 combat restrictions (no ranged, no food, no forfeit, etc.)
+- **Equipment Restrictions**: Disable specific equipment slots
+- **Stakes**: Bet inventory items on the outcome
+- **6 Arenas**: Dedicated combat zones with wall collision
+- **Anti-Scam Protection**: Acceptance resets when stakes change
+- **Disconnect Handling**: 30-second grace period during combat
+
+### Duel Flow
+
+1. **Challenge** — Player A challenges Player B (must be in Duel Arena zone)
+2. **Rules** — Both players negotiate combat rules and equipment restrictions
+3. **Stakes** — Both players add items to stake
+4. **Confirm** — Read-only review before combat
+5. **Countdown** — 3-2-1-FIGHT! (players frozen and teleported to arena)
+6. **Combat** — Fight until death or forfeit
+7. **Resolution** — Winner receives all stakes, both players restored to full health
+
+<Info>
+See [Duel Arena System](/wiki/game-systems/duel-arena) for complete documentation including network protocol, server architecture, and testing.
+</Info>
+
+### Combat Integration
+
+The DuelSystem integrates with CombatSystem for rule enforcement:
 
 ```typescript
-// From CombatCalculations.ts
-interface PrayerBonuses {
-  attack?: number;      // Attack level multiplier (e.g., 1.05 = +5%)
-  strength?: number;    // Strength level multiplier
-  defense?: number;     // Defense level multiplier
-  ranged?: number;      // Ranged level multiplier
-  magic?: number;       // Magic level multiplier
+// From packages/server/src/systems/DuelSystem/index.ts
+// Other systems check if player is in active duel
+const isInDuel = duelSystem.isPlayerInActiveDuel(playerId);
+
+// Check specific rules
+if (!duelSystem.canEatFood(playerId)) {
+  return { success: false, error: "Food is disabled in this duel" };
 }
 
-// Get combined bonuses from all active prayers
-const prayerBonuses = prayerSystem.getCombinedBonuses(playerId);
-
-// Apply to effective levels
-effectiveAttack = Math.floor(effectiveAttack * (prayerBonuses.attack ?? 1));
-effectiveStrength = Math.floor(effectiveStrength * (prayerBonuses.strength ?? 1));
-effectiveDefense = Math.floor(effectiveDefense * (prayerBonuses.defense ?? 1));
+if (!duelSystem.canMove(playerId)) {
+  return { success: false, error: "Movement is disabled" };
+}
 ```
-
-### Example: Burst of Strength
-
-**Without prayer**:
-- Strength level: 70
-- Effective strength: 70 + 8 + 3 = 81
-- Max hit: 18
-
-**With Burst of Strength (+5%)**:
-- Strength level: 70
-- Effective strength: (70 + 8 + 3) × 1.05 = 85
-- Max hit: 19
 
 ---
 
 ## Related Documentation
 
-- [Prayer System](/wiki/game-systems/prayer)
-- [Death & Respawn](/wiki/game-systems/death)
-- [Inventory System](/wiki/game-systems/inventory)
+- [Duel Arena System](/wiki/game-systems/duel-arena) (complete PvP dueling guide)
+- [Inventory System](/wiki/game-systems/inventory) (for food consumption and staking)
 - [Tile Movement System](/wiki/game-systems/movement)
 - [Skills & Progression](/wiki/game-systems/skills)
 - [NPC Data Structure](/wiki/data/npcs)
