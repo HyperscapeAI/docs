@@ -182,12 +182,14 @@ playerData.skills = {
   defense: { level: 1, xp: 0 },
   constitution: { level: 10, xp: 1154 },  // Starts at level 10
   ranged: { level: 1, xp: 0 },
+  prayer: { level: 1, xp: 0 },
   woodcutting: { level: 1, xp: 0 },
   fishing: { level: 1, xp: 0 },
   mining: { level: 1, xp: 0 },
   firemaking: { level: 1, xp: 0 },
   cooking: { level: 1, xp: 0 },
   smithing: { level: 1, xp: 0 },
+  agility: { level: 1, xp: 0 },
 };
 ```
 
@@ -199,8 +201,12 @@ this.addComponent("stamina", { current: 100, max: 100, drainRate: 20.0, regenRat
 this.addComponent("movement", { isMoving: false, isRunning: false, speed: 3.0, runSpeed: 6.0 });
 this.addComponent("inventory", { items: [], capacity: 28, coins: 0 });
 this.addComponent("equipment", { weapon: null, shield: null, helmet: null, body: null, legs: null, arrows: null });
-this.addComponent("stats", { attack, strength, defense, constitution, ranged, woodcutting, fishing, mining, firemaking, cooking, smithing });
+this.addComponent("stats", { attack, strength, defense, constitution, ranged, prayer, woodcutting, fishing, mining, firemaking, cooking, smithing, agility });
 ```
+
+<Info>
+  The stamina system is affected by both weight (inventory load) and agility level. Heavier loads increase stamina drain, while higher agility increases regeneration.
+</Info>
 
 ## MobEntity
 

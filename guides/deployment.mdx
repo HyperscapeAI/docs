@@ -46,58 +46,19 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
-Railway deployment is automated via GitHub Actions and uses Nixpacks for building.
+Railway deployment is automated via GitHub Actions (`.github/workflows/deploy-railway.yml`). The workflow triggers on pushes to `main` that affect server or client files.
 
 ### Automated Deployment
 
-The repository includes a GitHub Actions workflow (`.github/workflows/deploy-railway.yml`) that automatically deploys to Railway when changes are pushed to `main`:
+The deployment workflow:
+1. Builds the client frontend (`bun run build:client`)
+2. Copies client dist to server's `public/` directory
+3. Deploys to Railway using the GraphQL API
+4. Server fetches game manifests from CDN at startup
 
-**Trigger Paths**:
-- `packages/shared/**`
-- `packages/client/**`
-- `packages/server/**`
-- `packages/plugin-hyperscape/**`
-- `package.json`, `bun.lock`
-- `nixpacks.toml`, `railway.server.json`, `Dockerfile.server`
-
-**Deployment Process**:
-1. GitHub Actions triggers on push to main
-2. Workflow calls Railway GraphQL API to trigger redeployment
-3. Railway builds using Nixpacks configuration
-4. Client is built and copied to server's `public/` directory
-5. Manifests are fetched from CDN at server startup
-6. Server starts and serves both API and frontend
-
-### Nixpacks Configuration
-
-The `nixpacks.toml` file configures the Railway build process:
-
-```toml
-[phases.setup]
-# Install system dependencies for native modules
-aptPkgs = ["python3", "make", "g++", "pkg-config", "libcairo2-dev", ...]
-
-[phases.install]
-cmds = ["bun install"]
-
-[phases.build]
-# Build packages in order: shared -> client -> server
-cmds = [
-  "bun run build:shared",
-  "bun run build:client",
-  "bun run build:server",
-  "mkdir -p packages/server/public",
-  "cp -r packages/client/dist/* packages/server/public/",
-]
-
-[start]
-cmd = "cd packages/server && bun dist/index.js"
-
-[variables]
-CI = "true"
-SKIP_ASSETS = "true"  # Assets served from CDN
-NODE_ENV = "production"
-```
+<Info>
+  Manifests are fetched from `https://d20g7vd4m53hpb.cloudfront.net` at server startup. No need to clone the assets repository in production.
+</Info>
 
 ### Manual Railway Setup
 
@@ -106,10 +67,11 @@ NODE_ENV = "production"
     Connect your GitHub repository to Railway.
   </Step>
   
-  <Step title="Configure service">
-    - Builder: Nixpacks (automatic)
-    - Root directory: `/` (monorepo root)
-    - Start command: Defined in `nixpacks.toml`
+  <Step title="Configure build">
+    Railway uses `nixpacks.toml` for build configuration:
+    - Build command: `bun run build`
+    - Start command: `cd packages/server && bun run start:railway`
+    - Frontend is built and copied to `public/` during build
   </Step>
   
   <Step title="Add PostgreSQL">
@@ -134,53 +96,12 @@ NODE_ENV = "production"
   </Step>
 </Steps>
 
-### Railway Environment Variables
+### Railway Configuration Files
 
-```bash
-# Required
-PUBLIC_PRIVY_APP_ID=your-app-id
-PRIVY_APP_SECRET=your-app-secret
-JWT_SECRET=your-jwt-secret
-PUBLIC_CDN_URL=https://d20g7vd4m53hpb.cloudfront.net
-
-# Optional
-PORT=5555  # Railway sets this automatically
-DATABASE_URL=postgresql://...  # Set by Railway PostgreSQL service
-ADMIN_CODE=your-admin-code
-```
-
-### CDN Manifest Fetching
-
-In production, the server fetches game manifests from the CDN at startup instead of bundling them:
-
-**Manifest Files Fetched**:
-- `items.json` - Item definitions
-- `npcs.json` - NPC and mob data
-- `resources.json` - Gathering resources
-- `tools.json` - Tool definitions
-- `biomes.json` - Biome configurations
-- `world-areas.json` - World area definitions
-- `stores.json` - Shop inventories
-- `music.json` - Music track metadata
-- `vegetation.json` - Vegetation spawning
-- `buildings.json` - Building placements
-
-**Fetch Process** (from `config.ts`):
-1. Server starts and checks for local manifests
-2. If in production or manifests missing, fetches from `PUBLIC_CDN_URL/manifests/`
-3. Compares with existing cached files
-4. Only updates files that changed (avoids unnecessary disk writes)
-5. Falls back to cached manifests if CDN is unreachable
-
-**Benefits**:
-- Smaller deployment size (no bundled assets)
-- Faster builds (no asset copying)
-- Easier content updates (update CDN, restart server)
-- Reduced Git LFS usage in CI/CD
-
-<Info>
-In development, manifest fetching is skipped if local manifests already exist. This allows developers to work with local asset repositories.
-</Info>
+- **`nixpacks.toml`**: Nixpacks builder configuration with Bun provider
+- **`railway.server.json`**: Railway service configuration
+- **`.railwayignore`**: Files to exclude from deployment
+- **`Dockerfile.server`**: Multi-stage Docker build (alternative to Nixpacks)
 
 ## Vercel Client Deployment
 
@@ -218,41 +139,21 @@ bunx drizzle-kit migrate   # Run migrations
 
 ## CDN Setup
 
-### CDN Manifest System
+### Production CDN
 
-Hyperscape uses a CDN-first approach for game assets and manifests:
+In production, the server automatically fetches manifests from the CDN at startup:
 
-**Manifest Files** (fetched from CDN at server startup):
-- `items.json` - Item definitions
-- `npcs.json` - NPC and mob data
-- `resources.json` - Gathering resources
-- `tools.json` - Tool definitions
-- `biomes.json` - Biome configurations
-- `world-areas.json` - World area definitions
-- `stores.json` - Shop inventories
-- `music.json` - Music track metadata
-- `vegetation.json` - Vegetation spawning
-- `buildings.json` - Building placements
-
-**Fetch Process**:
-1. Server starts and checks `manifestsDir` for cached manifests
-2. Fetches each manifest from `PUBLIC_CDN_URL/manifests/`
-3. Compares with cached version (only updates if changed)
-4. Falls back to cached manifests if CDN is unreachable
-5. In development, skips fetch if local manifests exist
-
-**Configuration** (in `config.ts`):
 ```typescript
-const MANIFEST_FILES = [
-  "items.json", "npcs.json", "resources.json", "tools.json",
-  "biomes.json", "world-areas.json", "stores.json", "music.json",
-  "vegetation.json", "buildings.json"
-];
-
-await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+// Server fetches manifests from CDN on boot
+const CDN_URL = "https://d20g7vd4m53hpb.cloudfront.net";
+await fetchManifestsFromCDN(CDN_URL, manifestsDir);
 ```
 
-### Option 1: Self-Hosted CDN
+<Info>
+  The server only needs manifest JSON files in production. 3D models, textures, and audio are served directly from the CDN to clients.
+</Info>
+
+### Local Development CDN
 
 Use the included Docker CDN for local development:
 
@@ -260,27 +161,15 @@ Use the included Docker CDN for local development:
 bun run cdn:up
 ```
 
-Configure `PUBLIC_CDN_URL` to point to your CDN host.
+This serves assets from the local `assets/` directory cloned via Git LFS.
 
-### Option 2: Cloud Storage (Production)
+### Custom CDN Setup
 
-Upload assets to S3, R2, CloudFront, or similar:
+To use your own CDN:
 
-1. Upload assets from [HyperscapeAI/assets](https://github.com/HyperscapeAI/assets) repository
-2. Ensure manifests are in `/manifests/` directory
-3. Set `PUBLIC_CDN_URL` environment variable:
-   ```bash
-   PUBLIC_CDN_URL=https://d20g7vd4m53hpb.cloudfront.net
-   ```
-
-**Production CDN** (current):
-- URL: `https://d20g7vd4m53hpb.cloudfront.net`
-- Source: AWS CloudFront + S3
-- Assets: ~200MB of 3D models, textures, audio
-
-<Info>
-The server automatically fetches manifests from the CDN at startup. No local asset repository is needed in production deployments.
-</Info>
+1. Upload assets to S3, R2, or similar
+2. Set `PUBLIC_CDN_URL` environment variable
+3. Ensure manifests are accessible at `${CDN_URL}/manifests/`
 
 ## Production Checklist
 

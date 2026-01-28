@@ -23,54 +23,92 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Asset Repository Updates" description="January 2026" date="2026-01-22">
+<Update label="Agility Skill & UI Enhancements" description="January 2026" date="2026-01-21">
 
-### 📦 Quest System Manifest
+### 🏃 Agility Skill System
 
-New quest manifest added to the assets repository:
+Complete implementation of the Agility skill with movement-based XP and stamina mechanics:
 
-- **Quest Manifest** (`quests.json`) - Defines quest content with stages, requirements, and rewards
-  - Quest structure: ID, name, description, difficulty, quest points
-  - Requirements: prerequisite quests, skill levels, required items
-  - Stages: dialogue, kill, gather, and deliver objectives
-  - Rewards: quest points, items, and XP
-  - Example quest: "Goblin Slayer" - novice difficulty quest to defeat 15 goblins
-  - Supports replayable quests and branching dialogues
+- **Movement XP Tracking**: Earn 1 XP per 2 tiles traveled
+  - XP batched at 100 tiles (50 XP) to prevent visual spam
+  - XP drops appear every ~15 seconds while running, ~30 seconds while walking
+  - Walking: ~100 XP/min, Running: ~200 XP/min
+  - Death resets accumulated tile progress (small penalty)
+  - Teleportation does not grant agility XP
+- **Weight-Based Stamina Drain**: +0.5% drain per kg carried
+  - 0 kg: 2.0 stamina/sec drain (base rate)
+  - 20 kg: 2.2 stamina/sec drain (+10%)
+  - 50 kg: 2.5 stamina/sec drain (+25%)
+  - 100 kg: 3.0 stamina/sec drain (+50%)
+  - Server-authoritative weight calculation synced to client
+- **Agility-Based Stamina Regeneration**: +1% regen per agility level
+  - Level 1: 4.04 idle / 2.02 walking (base +1%)
+  - Level 50: 6.00 idle / 3.00 walking (+50%)
+  - Level 99: 7.96 idle / 3.98 walking (+99%, nearly double)
+  - Applies to both idle and walking regeneration
+- **Database Schema**: New `agilityLevel` and `agilityXp` columns with migration
+- **Weight Sync System**: Server calculates total inventory weight and syncs to client
+  - `PLAYER_WEIGHT_CHANGED` event emitted on inventory changes
+  - Event bridge forwards weight updates to specific players
+  - Equipment panel displays server-synced weight (single source of truth)
+  - Initial weight emitted on inventory load (fixes login state)
+- **UI Integration**: Agility appears in Skills Panel and Agent Skills Panel
+- **Testing**: 868 lines of comprehensive tests
+  - `AgilitySystem.test.ts` - XP batching, stamina formulas
+  - `AgilityPersistence.test.ts` - Database persistence, death reset
 
-### 🏃 Agility Skill Unlocks
+### 📖 Skill Guide Panel
 
-Expanded skill unlocks manifest with Agility progression:
+OSRS-style skill guide interface showing unlock progression:
 
-- **Agility Unlocks** - Stamina regeneration scales with level
-  - Level 1: +1% stamina regen per level
-  - Level 10: +10% faster stamina regeneration
-  - Level 25: +25% faster stamina regeneration
-  - Level 50: +50% faster stamina regeneration
-  - Level 75: +75% faster stamina regeneration
-  - Level 99: +99% faster stamina regeneration (mastery)
-  - Linear scaling provides consistent progression throughout leveling
+- **Click-to-View**: Click any skill in Skills Panel to open its guide
+  - Shows all unlocks with level requirements
+  - Visual distinction between unlocked (green checkmark) and locked (lock icon)
+  - Next unlock highlighted with gold accent and "NEXT" badge
+  - Progress indicator: "X of Y unlocks achieved"
+- **Unlock Data**: Server-authoritative skill unlocks from `skill-unlocks.json`
+  - New `/api/data/skill-unlocks` endpoint
+  - Type badges (item vs ability) with color coding
+  - Scrollable list for skills with many unlocks (Prayer has 29!)
+- **Animations**: Smooth fade-in/slide-up animations with custom scrollbar styling
+- **Keyboard Support**: ESC key and click-outside-to-close
+- **Loading States**: Spinner during data fetch, graceful empty state handling
+- **Defence/Defense Normalization**: Handles British/American spelling differences
 
-### 🙏 Prayer System Expansion
+### 🔧 Railway Deployment Infrastructure
 
-Updated prayers manifest with additional prayer definitions:
+Production deployment improvements with CDN manifest fetching:
 
-- **Prayer Manifest** (`prayers.json`) - OSRS-accurate prayer system
-  - 5 prayers currently defined: Thick Skin, Burst of Strength, Clarity of Thought, Rock Skin, Superhuman Strength
-  - Stat multipliers: attack, strength, and defense bonuses
-  - Drain mechanics: higher drainEffect = faster prayer point drain
-  - Conflict system: prayers in same category cannot be active simultaneously
-  - Categories: offensive, defensive, utility
+- **Manifest CDN Fetching**: Server downloads manifests from CDN at startup
+  - `fetchManifestsFromCDN()` function downloads manifests on boot
+  - Skips CDN fetch in development if local manifests exist
+  - Eliminates need to clone assets repo in CI/production
+  - Manifests cached locally after first fetch
+- **Nixpacks Configuration**: `nixpacks.toml` for Railway builder
+  - Explicit Bun provider configuration
+  - Split build phases for better debugging
+  - Frontend build integrated into server deployment
+- **Frontend Serving**: Server now builds and serves client in production
+  - Client built during deployment process
+  - Static files served from `public/` directory
+  - Fallback route for SPA routing
+  - Cache headers for manifests (5 min cache)
+- **Docker Improvements**: Multi-stage Dockerfile with curl for healthchecks
+- **GitHub Actions**: Updated `deploy-railway.yml` workflow
+  - Triggers on client file changes
+  - Uses Railway GraphQL API for deployments
+  - Fetches manifests from CDN instead of cloning assets repo
+- **Build Verification**: Debug logging and build timestamp files
+  - Verifies `public/index.html` exists before starting server
+  - Build timestamp file for deployment verification
+  - Verbose logging for troubleshooting
 
-### 🗺️ Model Bounds Update
+### 🐛 Bug Fixes
 
-Regenerated model bounds manifest with latest 3D models:
-
-- **Model Bounds** (`model-bounds.json`) - Auto-generated at build time
-  - Updated timestamp: 2026-01-22T00:16:26.843Z
-  - Covers 50+ models including weapons, tools, armor, resources, NPCs, and stations
-  - Bounding box data: min/max coordinates, dimensions (x/y/z), tile footprints
-  - Used for collision detection, placement validation, and spatial queries
-  - Includes new fishing rod models and updated rock models
+- **Lockfile Sync**: Regenerated `bun.lock` to fix Railway deployment errors
+- **Build Commands**: Split build phases with `set -ex` for error detection
+- **Asset Routes**: Conditionally register asset routes based on manifest directory
+- **Frontend Fallback**: Improved error messages with directory contents logging
 
 </Update>
 
@@ -447,7 +485,7 @@ New specialized providers for efficient data access:
 ### 🎮 Core Features
 - **Tick-based Combat** — Authentic OSRS-style 600ms tick combat system
 - **AI Agents** — ElizaOS integration with 17 actions and 6 state providers
-- **Skill System** — 11 skills: Combat (Attack, Strength, Defense, Constitution, Ranged, Prayer), Gathering (Woodcutting, Fishing, Mining), Artisan (Firemaking, Cooking, Smithing)
+- **Skill System** — 12 skills: Combat (Attack, Strength, Defense, Constitution, Ranged, Prayer), Gathering (Woodcutting, Fishing, Mining), Artisan (Firemaking, Cooking, Smithing), Support (Agility)
 - **Economy** — Banks, shops, inventory, and loot system
 
 ### 🏗️ Architecture

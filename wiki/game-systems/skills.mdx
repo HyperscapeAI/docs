@@ -47,7 +47,7 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | Skill | Description | Training Methods |
 |-------|-------------|------------------|
 | **Agility** | Stamina regeneration | Moving through the world (1 XP per 2 tiles) |
-| **Prayer** | Protection prayers and combat buffs | Burying bones, using prayer at altars |
+| **Prayer** | Protection prayers | Burying bones, using altars |
 
 <Info>
 Smithing is a two-step process: first smelt ores into bars at a furnace, then smith bars into equipment at an anvil.
@@ -497,42 +497,14 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 
 ### Agility XP
 
-Agility is trained passively by moving through the world:
-
-**Movement XP** (`tile-movement.ts`):
-- XP is granted in batches to prevent visual spam
-- 100 tiles traveled = 50 XP (effectively 1 XP per 2 tiles)
-- Both walking and running grant XP
-- Teleportation does NOT grant XP
-
-**XP Rates**:
-| Movement Type | Tiles/Second | XP/Minute |
-|---------------|--------------|-----------|
-| Walking | 3.33 | ~100 XP |
-| Running | 6.67 | ~200 XP |
-
-**Death Penalty**:
-- Accumulated tiles toward next XP grant are lost on death
-- Already-earned XP is preserved
-- Maximum loss: ~50 XP worth of progress
+**Agility** (movement-based):
+| Activity | XP Rate | Notes |
+|----------|---------|-------|
+| Walking | ~100 XP/min | 1 XP per 2 tiles, batched at 100 tiles |
+| Running | ~200 XP/min | Same rate, faster movement |
 
 <Info>
-Agility XP is batched at 100-tile intervals to prevent XP drops from appearing every few seconds. This creates a more pleasant visual experience while maintaining the same effective XP rate.
-</Info>
-
-### Prayer XP
-
-Prayer is trained by burying bones or using them on altars:
-
-**Bone Types**:
-| Bone | XP (Bury) | XP (Altar) |
-|------|-----------|------------|
-| Bones | 4.5 | 15.75 |
-| Big bones | 15 | 52.5 |
-| Dragon bones | 72 | 252 |
-
-<Info>
-Using bones on an altar grants 3.5x the XP compared to burying them. Altars are found in churches and temples.
+Agility XP is batched to prevent visual spam. You earn 50 XP every 100 tiles traveled, which appears as an XP drop every ~15 seconds while running or ~30 seconds while walking.
 </Info>
 
 ---
@@ -731,6 +703,31 @@ Noted items must be un-noted at a bank before they can be equipped or used for s
 </Warning>
 
 ---
+
+## Skill Guide Panel
+
+The Skill Guide Panel is an OSRS-style interface that shows what you unlock at each level for any skill.
+
+### Opening the Guide
+
+Click any skill in the Skills Panel to open its guide. The panel displays:
+
+- **All unlocks** with level requirements
+- **Visual indicators** for unlocked (green checkmark) vs locked (lock icon) items
+- **Next unlock** highlighted with gold accent and "NEXT" badge
+- **Progress tracking**: "X of Y unlocks achieved"
+- **Type badges**: Item vs ability unlocks with color coding
+
+### Features
+
+- **Scrollable list** for skills with many unlocks (Prayer has 29!)
+- **Keyboard support**: ESC key or click outside to close
+- **Loading states**: Spinner during data fetch
+- **Server-authoritative**: Unlock data fetched from `/api/data/skill-unlocks`
+
+<Info>
+  The guide helps you plan your progression by showing exactly what you'll unlock at each level milestone.
+</Info>
 
 ## Skill Events
 

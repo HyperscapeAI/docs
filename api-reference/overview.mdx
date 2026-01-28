@@ -85,10 +85,6 @@ curl https://api.hyperscape.lol/health
   Get skill unlock definitions for all skills
 </ParamField>
 
-```bash
-curl https://api.hyperscape.lol/api/data/skill-unlocks
-```
-
 <Accordion title="Response">
 ```json
 {
@@ -99,16 +95,11 @@ curl https://api.hyperscape.lol/api/data/skill-unlocks
   ],
   "agility": [
     { "level": 1, "description": "Basic stamina regeneration (+1% per level)", "type": "ability" },
-    { "level": 50, "description": "+50% stamina regeneration", "type": "ability" },
-    { "level": 99, "description": "Agility cape, +99% stamina regeneration", "type": "item" }
+    { "level": 50, "description": "+50% stamina regeneration", "type": "ability" }
   ]
 }
 ```
 </Accordion>
-
-<Info>
-This endpoint is used by the Skill Guide Panel to display unlock progression. Data is cached client-side after the initial fetch.
-</Info>
 
 ## WebSocket Events
 

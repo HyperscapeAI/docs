@@ -282,7 +282,19 @@ bun run deploy:prod   # Deploy to production
 
 ### Railway
 
-The `railway.server.json` in the project root configures Railway deployment.
+Railway deployment is automated via GitHub Actions (`.github/workflows/deploy-railway.yml`):
+
+- **Nixpacks Builder**: Uses `nixpacks.toml` for build configuration
+- **Frontend Integration**: Client is built and served from server's `public/` directory
+- **Manifest Fetching**: Server downloads manifests from CDN at startup (no assets repo clone needed)
+- **Multi-stage Build**: Separate build phases for debugging
+- **GraphQL API**: Deployment triggered via Railway GraphQL API
+
+Configuration files:
+- `nixpacks.toml` - Nixpacks builder settings
+- `railway.server.json` - Railway service configuration
+- `.railwayignore` - Files excluded from deployment
+- `Dockerfile.server` - Alternative Docker build
 
 ## Key Files
 
