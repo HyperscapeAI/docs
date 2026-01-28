@@ -30,7 +30,7 @@ Hyperscape has **12 skills** total:
 | **Woodcutting** | Chop trees for logs |
 | **Mining** | Mine rocks for ores |
 | **Fishing** | Catch fish at water spots |
-| **Agility** | Traverse the world, affects stamina regeneration |
+| **Agility** | Traverse the world, stamina regeneration |
 
 ### Artisan Skills
 
@@ -139,25 +139,25 @@ Requirements:
 
 ### Agility
 
-Agility is trained passively by moving around the world. Unlike traditional RuneScape agility courses, Hyperscape's agility system rewards exploration and travel.
+Agility is trained passively by moving through the world. Unlike traditional RuneScape agility courses, Hyperscape's Agility system rewards exploration and travel.
 
 **Training Method:**
 - Gain 1 XP per 2 tiles traveled (walking or running)
-- XP is batched every 100 tiles (50 XP) to prevent visual spam
-- Death resets accumulated tile progress (not earned XP)
+- XP is batched at 100 tiles (50 XP) to prevent visual spam
+- XP drops appear every ~15 seconds while running, ~30 seconds while walking
 
 **Benefits:**
-- **Stamina Regeneration**: +1% stamina regen per agility level
-- **Weight Tolerance**: Higher agility helps offset stamina drain from heavy loads
+- **Stamina Regeneration**: +1% stamina regen per Agility level
+  - Level 1: 1% bonus (4.04/sec idle, 2.02/sec walking)
+  - Level 50: 50% bonus (6.0/sec idle, 3.0/sec walking)
+  - Level 99: 99% bonus (7.96/sec idle, 3.98/sec walking)
 
-**XP Rates:**
-| Movement | XP per Minute |
-|----------|---------------|
-| Walking | ~100 XP |
-| Running | ~200 XP |
+**Death Penalty:**
+- Accumulated tiles toward next XP grant are lost on death
+- Earned XP is never lost
 
 <Info>
-  Agility XP is granted in batches of 50 XP every 100 tiles to reduce visual spam. Running players see XP drops approximately every 15 seconds.
+  Agility does not affect combat level, matching OSRS design.
 </Info>
 
 ## Artisan Skills
@@ -369,22 +369,14 @@ playerData.skills = {
 
 ## Skill Guide Panel
 
-Click any skill in the Skills panel to view its Skill Guide - an OSRS-style interface showing all unlocks for that skill.
+Click any skill in the Skills Panel to view its unlock progression. The Skill Guide Panel shows:
 
-**Features**:
-- Shows all level-based unlocks with requirements
-- Green checkmarks (✓) for unlocked content
-- Lock icons (🔒) for locked content
-- Highlights your next unlock with progress indicator
-- Type badges distinguish items from abilities
-- Scrollable for skills with many unlocks (Prayer has 29!)
-
-**How to Use**:
-1. Open the Skills panel (default keybind: Skills icon in sidebar)
-2. Click on any skill icon
-3. View all unlocks for that skill
-4. Close with ESC, X button, or click outside
+- All unlocks available at each level
+- Visual distinction between unlocked (green checkmark) and locked (lock icon) items
+- Next unlock highlighted with progress indicator
+- Unlock types (item, ability, area, quest, activity)
+- Scrollable list for skills with many unlocks
 
 <Info>
-The Skill Guide fetches data from `/api/data/skill-unlocks` to ensure server-authoritative unlock information.
+  The Skill Guide Panel is OSRS-inspired and helps players plan their progression.
 </Info>

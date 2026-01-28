@@ -111,9 +111,9 @@ curl https://api.hyperscape.lol/api/data/skill-unlocks
       "type": "ability"
     },
     {
-      "level": 50,
-      "description": "+50% stamina regeneration",
-      "type": "ability"
+      "level": 99,
+      "description": "Agility cape, +99% stamina regeneration",
+      "type": "item"
     }
   ]
 }
@@ -121,7 +121,7 @@ curl https://api.hyperscape.lol/api/data/skill-unlocks
 </Accordion>
 
 <Info>
-This endpoint is used by the Skill Guide Panel to display what players unlock at each level. The data is server-authoritative and loaded from `skill-unlocks.json` manifest.
+This endpoint is used by the Skill Guide Panel to display unlock progression. The data is server-authoritative and cached for 5 minutes.
 </Info>
 
 ## WebSocket Events

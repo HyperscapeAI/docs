@@ -698,8 +698,67 @@ function interpolateEntity(state: InterpolationState, alpha: number): void {
 
 ---
 
+---
+
+## Agility XP Tracking
+
+The tile movement system tracks distance traveled for Agility skill XP:
+
+```typescript
+// From TileMovementManager (packages/server/src/systems/ServerNetwork/tile-movement.ts)
+private tilesTraveledForXP: Map<string, number> = new Map();
+
+// Constants
+const AGILITY_TILES_PER_XP_GRANT = 100;  // Tiles needed before XP is granted
+const AGILITY_XP_PER_GRANT = 50;         // XP granted per threshold
+
+// Track tiles moved each tick
+const tilesMoved = Math.abs(state.currentTile.x - prevTile.x) + 
+                   Math.abs(state.currentTile.z - prevTile.z);
+
+if (tilesMoved > 0) {
+  const currentTiles = (this.tilesTraveledForXP.get(playerId) || 0) + tilesMoved;
+  
+  if (currentTiles >= AGILITY_TILES_PER_XP_GRANT) {
+    // Grant XP and preserve overflow
+    const grantsEarned = Math.floor(currentTiles / AGILITY_TILES_PER_XP_GRANT);
+    const xpToGrant = grantsEarned * AGILITY_XP_PER_GRANT;
+    this.tilesTraveledForXP.set(playerId, currentTiles % AGILITY_TILES_PER_XP_GRANT);
+    
+    // Emit XP gain event
+    this.world.emit(EventType.SKILLS_XP_GAINED, {
+      playerId,
+      skill: 'agility',
+      amount: xpToGrant,
+    });
+  } else {
+    // Accumulate tiles silently
+    this.tilesTraveledForXP.set(playerId, currentTiles);
+  }
+}
+```
+
+**XP Batching Design:**
+- Prevents visual spam (XP drop every 100 tiles instead of every 2 tiles)
+- Preserves overflow (walking 150 tiles = 50 XP + 50 tiles remaining)
+- Death penalty: resets tile counter to 0 (lose accumulated progress)
+- Logout: tile counter not persisted (resets to 0)
+
+**XP Rates:**
+| Movement | Tiles/Tick | Tiles/Second | XP/Minute |
+|----------|------------|--------------|-----------|
+| Walking | 2 | 3.33 | ~100 XP |
+| Running | 4 | 6.67 | ~200 XP |
+
+<Info>
+Teleportation does not grant Agility XP - only tiles traveled by walking/running count.
+</Info>
+
+---
+
 ## Related Documentation
 
+- [Skills System](/wiki/game-systems/skills) - Agility skill mechanics
 - [Combat System](/wiki/game-systems/combat) - Uses tile range for attacks
 - [NPC Behavior](/wiki/data/npcs) - NPC aggro and pathing
 - [Entity System](/wiki/engine/ecs) - Entity management

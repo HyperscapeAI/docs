@@ -139,6 +139,45 @@ export const PLAYER_CONSTANTS = {
 } as const;
 ```
 
+### Stamina Mechanics (Client-Side)
+
+Stamina is calculated client-side in `PlayerLocal.ts` with the following rates:
+
+```typescript
+// Base rates (per second)
+staminaDrainPerSecond = 2;              // While running
+staminaRegenWhileWalkingPerSecond = 2;  // While walking
+staminaRegenPerSecond = 4;              // While idle
+
+// Weight modifier (affects drain)
+weightDrainModifier = 0.005;            // +0.5% drain per kg carried
+
+// Agility modifier (affects regen)
+agilityRegenModifier = 0.01;            // +1% regen per agility level
+```
+
+**Drain Formula:**
+```typescript
+drainRate = staminaDrainPerSecond × (1 + totalWeight × 0.005)
+```
+
+**Regen Formula:**
+```typescript
+regenRate = baseRegenRate × (1 + agilityLevel × 0.01)
+```
+
+**Examples:**
+| Weight | Agility | Running Drain | Idle Regen | Walking Regen |
+|--------|---------|---------------|------------|---------------|
+| 0 kg | 1 | 2.0/sec | 4.04/sec | 2.02/sec |
+| 20 kg | 1 | 2.2/sec | 4.04/sec | 2.02/sec |
+| 50 kg | 50 | 2.5/sec | 6.0/sec | 3.0/sec |
+| 100 kg | 99 | 3.0/sec | 7.96/sec | 3.98/sec |
+
+<Info>
+Weight is calculated server-side and synced to the client via `PLAYER_WEIGHT_CHANGED` events. This ensures stamina calculations use accurate, server-authoritative weight values.
+</Info>
+
 ---
 
 ## Inventory Constants

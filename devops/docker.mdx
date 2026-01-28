@@ -6,12 +6,16 @@ icon: "container"
 
 ## Overview
 
-Hyperscape uses Docker for:
+Hyperscape uses Docker for local development:
 
-- **Asset CDN**: nginx serving game assets
-- **PostgreSQL**: Database for player data
+- **Asset CDN**: nginx serving game assets (development only)
+- **PostgreSQL**: Database for player data (development only)
 - **Development services**: Local infrastructure
 - **Production deployment**: Multi-stage Docker builds for Railway/cloud hosting
+
+<Info>
+In production, Hyperscape uses Railway for the server/database and Cloudflare R2 for assets. Docker is only needed for local development.
+</Info>
 
 ## Prerequisites
 
@@ -140,6 +144,10 @@ Host assets on cloud storage:
 # packages/server/.env and packages/client/.env
 PUBLIC_CDN_URL=https://your-cdn.example.com
 ```
+
+<Info>
+In production, the server fetches manifests from the CDN at startup using `fetchManifestsFromCDN()`. This eliminates the need for Git LFS in CI/production environments.
+</Info>
 
 ## Container Status
 

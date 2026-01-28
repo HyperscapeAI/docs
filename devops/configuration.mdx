@@ -55,13 +55,10 @@ LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
 
-# Database (local development)
-USE_LOCAL_POSTGRES=true
-POSTGRES_CONTAINER=hyperscape-postgres
-POSTGRES_USER=hyperscape
-POSTGRES_PASSWORD=hyperscape_dev
-POSTGRES_DB=hyperscape
-POSTGRES_PORT=5432
+# CORS (automatically configured for Cloudflare Pages)
+# The server includes these domains in the CORS allowlist:
+# - https://hyperscape.pages.dev (production)
+# - https://*.hyperscape.pages.dev (preview deployments)
 ```
 
 ### CORS Configuration
@@ -97,10 +94,19 @@ PUBLIC_PRIVY_APP_ID=your-privy-app-id
 ### Production
 
 ```bash
-PUBLIC_API_URL=https://api.hyperscape.lol
-PUBLIC_WS_URL=wss://api.hyperscape.lol
-PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+# Cloudflare Pages deployment
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+
+# Custom domain (optional)
+PUBLIC_APP_URL=https://hyperscape.club
 ```
+
+<Info>
+  For Cloudflare Pages, set these variables in the Pages dashboard under Settings → Environment variables.
+</Info>
 
 ## AI Agent Environment
 
