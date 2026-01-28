@@ -79,67 +79,57 @@ curl https://api.hyperscape.lol/health
   List all world areas
 </ParamField>
 
-### Agent Management
-
-<ParamField path="GET /api/agents/mapping/:agentId" type="endpoint">
-  Get character ID for an AI agent
-</ParamField>
-
-<ParamField path="GET /api/agents/:agentId/goal" type="endpoint">
-  Get current goal and available goals for an agent
-</ParamField>
-
-<ParamField path="POST /api/agents/:agentId/goal" type="endpoint">
-  Set a new goal for an agent
-</ParamField>
-
-<ParamField path="POST /api/agents/:agentId/goal/stop" type="endpoint">
-  Stop current goal and pause autonomous behavior
-</ParamField>
-
-<ParamField path="POST /api/agents/:agentId/goal/resume" type="endpoint">
-  Resume autonomous goal selection
-</ParamField>
-
-<ParamField path="POST /api/agents/:agentId/message" type="endpoint">
-  Send a chat message to an agent
-</ParamField>
-
-<ParamField path="GET /api/agents/:agentId/quick-actions" type="endpoint">
-  Get quick action menu data (nearby locations, goals, inventory)
-</ParamField>
-
-### Character Data
-
-<ParamField path="GET /api/characters/:characterId/skills" type="endpoint">
-  Get character skill levels and XP
-</ParamField>
-
-<ParamField path="GET /api/characters/:characterId/position" type="endpoint">
-  Get character position and online status
-</ParamField>
-
 ### Game Data
 
 <ParamField path="GET /api/data/skill-unlocks" type="endpoint">
-  Get skill unlock definitions from manifest
+  Get skill unlock definitions for all skills
 </ParamField>
+
+Returns a mapping of skill names to their unlock progression:
+
+```bash
+curl https://api.hyperscape.lol/api/data/skill-unlocks
+```
 
 <Accordion title="Response">
 ```json
 {
   "attack": [
-    { "level": 1, "description": "Bronze weapons", "type": "item" },
-    { "level": 40, "description": "Rune weapons", "type": "item" },
-    { "level": 60, "description": "Dragon weapons", "type": "item" }
+    {
+      "level": 1,
+      "description": "Bronze weapons, Iron weapons",
+      "type": "item"
+    },
+    {
+      "level": 5,
+      "description": "Steel weapons",
+      "type": "item"
+    },
+    {
+      "level": 40,
+      "description": "Rune weapons",
+      "type": "item"
+    }
   ],
   "woodcutting": [
-    { "level": 1, "description": "Normal trees", "type": "item" },
-    { "level": 15, "description": "Oak trees", "type": "item" }
+    {
+      "level": 1,
+      "description": "Normal trees",
+      "type": "item"
+    },
+    {
+      "level": 15,
+      "description": "Oak trees",
+      "type": "item"
+    }
   ]
 }
 ```
 </Accordion>
+
+<Info>
+This endpoint is used by the Skill Guide Panel to display unlock progression. Data is cached client-side after first fetch.
+</Info>
 
 ## WebSocket Events
 

@@ -585,9 +585,41 @@ const npc = ALL_NPCS.get("goblin");
 DataManager supports two loading modes:
 
 1. **Filesystem** (server-side): Loads from `packages/server/world/assets/manifests/`
-2. **CDN** (client-side): Fetches from `http://localhost:8080/assets/manifests/`
+2. **CDN** (client-side): Fetches from `http://localhost:8080/manifests/` or production CDN
 
 The loading is **atomic** for directory-based manifests - all required files must exist or it falls back to legacy single-file format.
+
+### CDN Manifest Fetching
+
+In production and CI environments, the server **fetches manifests from CDN at startup** instead of bundling them in the deployment:
+
+```typescript
+// From packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Behavior**:
+- **Production/CI**: Always fetches manifests from `PUBLIC_CDN_URL`
+- **Development**: Skips fetch if local manifests already exist (allows local development)
+- **Fallback**: Uses existing local manifests if CDN fetch fails
+
+**Fetched Manifests**:
+- `items.json`
+- `npcs.json`
+- `resources.json`
+- `tools.json`
+- `biomes.json`
+- `world-areas.json`
+- `stores.json`
+- `music.json`
+- `vegetation.json`
+- `buildings.json`
+
+Manifests are cached in `packages/server/world/assets/manifests/` and served to clients via `/manifests/` route with 5-minute cache headers.
+
+<Info>
+This approach reduces deployment size and ensures manifests stay synchronized with CDN assets without requiring full asset downloads.
+</Info>
 
 ## Adding Content
 

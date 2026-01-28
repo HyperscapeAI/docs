@@ -51,44 +51,40 @@ PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
 PORT=5555                                      # Railway auto-assigns if not set
 NODE_ENV=production                            # Set automatically by Railway
 
-# Voice Chat (LiveKit)
+# Assets & CDN
+PUBLIC_CDN_URL=http://localhost:8080
+
+# Deployment
+NODE_ENV=production
+COMMIT_HASH=abc123def456  # Git commit hash for tracking
+SKIP_ASSETS=true           # Skip asset download in CI/Railway
+
+# Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
 
 # ElizaOS Integration
+ELIZAOS_URL=http://localhost:4001
 ELIZAOS_API_URL=http://localhost:4001
-
-# Development
-DISABLE_RATE_LIMIT=false                       # NEVER set to true in production
 ```
 
-### CORS Configuration
+### CI/Production Variables
 
-The server automatically configures CORS for production and development domains:
+These variables control build and deployment behavior:
 
-**Allowed Origins:**
-- `https://hyperscape.club` (production frontend)
-- `https://www.hyperscape.club` (www subdomain)
-- `https://hyperscape.pages.dev` (Cloudflare Pages)
-- `http://hyperscape.pages.dev` (HTTP fallback for testing)
-- `https://*.hyperscape.pages.dev` (preview deployments)
-- `https://hyperscape-production.up.railway.app` (Railway server)
-- `http://localhost:*` (any localhost port for development)
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `CI` | Detected CI environment, skips asset download | `false` |
+| `SKIP_ASSETS` | Explicitly skip asset download | `false` |
+| `NODE_ENV` | Environment mode (development/production) | `development` |
+| `RAILWAY_ENVIRONMENT` | Railway deployment environment | - |
+| `TURBO_FORCE` | Force fresh Turbo builds (no cache) | `false` |
 
-**Dynamic Patterns:**
-```typescript
-// From packages/server/src/startup/http-server.ts
-const allowedOrigins = [
-  /^https?:\/\/localhost:\d+$/,  // Matches any localhost port
-  /^https?:\/\/.+\.hyperscape\.pages\.dev$/,  // Cloudflare preview deployments
-  /^https:\/\/.+\.up\.railway\.app$/,  // Railway deployments
-];
-```
-
-<Info>
-CORS configuration is automatically applied to all API routes. No additional configuration needed for standard deployments.
-</Info>
+**Asset Download Behavior**:
+- **Local Development**: Assets downloaded via Git LFS during `bun install`
+- **CI/Railway**: Assets skipped, manifests fetched from CDN at runtime
+- **Production**: Manifests fetched from `PUBLIC_CDN_URL` at server startup
 
 ## Client Environment
 
@@ -106,23 +102,39 @@ PUBLIC_PRIVY_APP_ID=your-privy-app-id         # Must match server
 
 ```bash
 PUBLIC_API_URL=https://hyperscape-production.up.railway.app
-PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
-PUBLIC_CDN_URL=https://assets.hyperscape.club
-PUBLIC_APP_URL=https://hyperscape.club
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app
+PUBLIC_CDN_URL=https://cdn.hyperscape.club
 ```
 
-### Development
+## CORS Configuration
+
+The server accepts requests from multiple origins for development and production:
+
+### Allowed Origins
+
+**Production Domains**:
+- `https://hyperscape.club` - Main production site
+- `https://www.hyperscape.club` - WWW subdomain
+- `https://hyperscape.pages.dev` - Cloudflare Pages (HTTPS)
+- `http://hyperscape.pages.dev` - Cloudflare Pages (HTTP fallback)
+- `https://hyperscape-production.up.railway.app` - Railway backend
+
+**Dynamic Patterns**:
+- `http://localhost:*` - Any localhost port (development)
+- `https://*.hyperscape.pages.dev` - Cloudflare preview deployments
+- `https://*.up.railway.app` - Railway preview deployments
+
+**Configuration Location**: `packages/server/src/startup/http-server.ts`
+
+### Custom Domains
+
+Add custom domains via environment variable:
 
 ```bash
-PUBLIC_API_URL=http://localhost:5555
-PUBLIC_WS_URL=ws://localhost:5555/ws
-PUBLIC_CDN_URL=http://localhost:8080
-PUBLIC_APP_URL=http://localhost:3333
+PUBLIC_APP_URL=https://custom.example.com
 ```
 
-<Info>
-  For Cloudflare Pages, set these variables in the Pages dashboard under Settings → Environment variables.
-</Info>
+This automatically adds the domain to the CORS allowlist.
 
 ## AI Agent Environment
 

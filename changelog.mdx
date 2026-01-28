@@ -23,118 +23,78 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Agility Skill & Agent Dashboard" description="January 2026" date="2026-01-22">
+<Update label="Railway Deployment & Skill Guide Panel" description="January 2026" date="2026-01-22">
 
-### 🏃 Agility Skill System
+### 🚀 Railway Production Deployment
 
-New skill that trains through movement and affects stamina mechanics:
+Automated deployment pipeline for Railway with unified server + client builds:
 
-- **Movement XP**: 1 XP per 2 tiles traveled (batched at 100 tiles = 50 XP)
-  - Running: ~200 XP/minute
-  - Walking: ~100 XP/minute
-  - XP drops every ~15 seconds (running) or ~30 seconds (walking)
-- **Weight-Based Stamina Drain**: Carrying heavy items increases stamina drain
-  - Formula: `Drain Rate = Base × (1 + Weight × 0.005)`
-  - 50kg load = +25% drain (2.5 stamina/second vs 2.0 base)
-  - Weight calculated server-side and synced to client
-- **Agility-Based Stamina Regen**: Higher agility = faster stamina recovery
-  - Formula: `Regen Rate = Base × (1 + Agility Level × 0.01)`
-  - Level 99 = +99% regen (nearly double base rate)
-  - Affects both idle (4/sec) and walking (2/sec) regen
-- **Death Penalty**: Accumulated tiles toward next XP grant are lost (max 50 XP)
-- **Database**: New `agilityLevel` and `agilityXp` columns with migration
-- **Testing**: 868 lines of unit and integration tests
+- **Automated Deployment**: GitHub Actions workflow triggers Railway deployments on push to main
+  - Uses Railway GraphQL API for deployment control
+  - Monitors deployment status and reports success/failure
+  - Triggers on changes to packages, configs, or deployment files
+- **Nixpacks Build**: Optimized build configuration in `nixpacks.toml`
+  - Installs system dependencies for native modules (canvas, better-sqlite3)
+  - Builds shared, server, AND client packages in single deployment
+  - Copies client build to `packages/server/public/` for unified serving
+  - Skips asset download in CI (manifests fetched from CDN at runtime)
+- **Multi-Stage Docker**: Alternative `Dockerfile.server` for Docker deployments
+  - Builder stage: Installs deps, builds all packages
+  - Runtime stage: Minimal production image with only necessary files
+  - Includes curl for healthchecks
+  - Exposes port 5555 with health check endpoint
+- **Manifest Fetching**: Server fetches manifests from CDN at startup
+  - Production: Always fetches from `PUBLIC_CDN_URL`
+  - Development: Skips if local manifests exist
+  - Fallback: Uses existing local manifests if CDN fetch fails
+  - Reduces deployment size and ensures manifest/asset sync
+- **Asset Serving**: Conditional `/assets/` route registration
+  - Checks if client assets exist in `public/assets/`
+  - Only registers `/assets/` for world assets if no client assets found
+  - Prevents route conflicts between client and world assets
 
 ### 🎯 Skill Guide Panel
 
-OSRS-style skill guide showing unlocks at each level:
+OSRS-style skill progression viewer with unlock tracking:
 
 - **Click-to-View**: Click any skill in Skills Panel to open its guide
-- **Unlock Display**: Shows all unlocks with level requirements
-- **Visual States**: Green checkmark (unlocked), lock icon (locked), gold arrow (next unlock)
-- **Progress Tracking**: "X of Y unlocks achieved" counter
-- **Scrollable**: Handles skills with many unlocks (Prayer has 29!)
-- **Type Indicators**: Item vs ability badges
-- **Server Endpoint**: `/api/data/skill-unlocks` serves manifest data
-- **Loading State**: Spinner during data fetch
-- **Animations**: Fade-in/slide-up with custom scrollbar styling
+- **Unlock Progression**: Shows all unlocks with level requirements
+  - Green checkmarks for achieved unlocks
+  - Lock icons for future unlocks
+  - Next unlock highlighted with progress indicator
+- **Visual Design**: Matches OSRS theme with dark brown backgrounds and gold accents
+- **Animations**: Smooth fade-in and slide-up animations
+- **Data Source**: New `/api/data/skill-unlocks` endpoint
+  - Fetched once at Skills Panel mount and cached
+  - Returns all skill unlocks from `skill-unlocks.json` manifest
+- **Loading State**: Spinner shown during initial fetch
+- **Keyboard Support**: Close with ESC key, X button, or click outside
+- **Spelling Normalization**: Handles British "defence" vs American "defense" automatically
 
-### 🤖 Agent Dashboard Improvements
+### 🌐 CORS Expansion
 
-Major enhancements to AI agent monitoring and control:
+Enhanced CORS configuration for production domains and preview deployments:
 
-**ElizaOS 1.7 Upgrade**:
-- Updated to ElizaOS 1.7.0 with backwards-compatible shims
-- `max_tokens` → `maxTokens` (with fallback)
-- Added `@elizaos/plugin-ollama` for local LLM support
-- Updated dependencies: `@elizaos/core`, `@elizaos/plugin-sql`, `@elizaos/server`
-
-**Stop/Resume Goal Control**:
-- **Stop Button**: Immediately halts agent and cancels movement
-- **Paused State**: Shows "Goals Paused" with Resume Auto button
-- **Blocks Auto-Goals**: `SET_GOAL` actions blocked while paused
-- **Chat Commands Work**: User can send manual commands while paused
-- **Pause Persists**: State synced across reconnections
-- **Movement Cancel**: Properly clears server-side path (fixes walking-in-place bug)
-
-**Quick Action Menu**:
-- One-click commands: Woodcutting, Mining, Fishing, Combat, Pick Up, Bank, Stop, Idle
-- Nearby locations with distances
-- Available goals
-- Inventory actions (equip, use, drop)
-- Collapsible sections with expand/collapse
-
-**New Dashboard Panels**:
-- **Agent Summary Card**: Online status, uptime, combat/total level, current goal
-- **Activity Panel**: Recent actions feed, session stats (kills, deaths, gold, resources)
-- **Enhanced Position Panel**: Zone names, nearby POIs with distances
-- **Enhanced Skills Panel**: Session XP gains tracking, improved layout
-
-**Rate Limiting Fixes**:
-- Increased polling intervals: 2s → 10s (most panels)
-- Retry logic with exponential backoff (1s → 2s → 4s)
-- Prevents 429 (Too Many Requests) errors
-
-**Item Pickup Improvements**:
-- **Word Boundary Matching**: Prevents "bronze pickaxe" matching "bronze hatchet"
-- **Scoring System**: Counts matching words for better accuracy
-- **Drop All Support**: "drop all logs", "drop everything" commands
-- **Safety Limits**: Max 50 items per drop-all, stops after 3 consecutive failures
-
-**Bug Fixes**:
-- Fixed dashboard settings tabs (tabs now switch correctly)
-- Fixed dashboard chat routing (messages reach agent, in-game chat opens)
-- Fixed CHOP_TREE to position on cardinal adjacent tiles
-- Fixed NAVIGATE_TO to handle 200-tile server limit with stepping
-- Fixed multi-step commands (grace period prevents goal clearing mid-walk)
-- Consolidated duplicate `getItemIcon()` functions into shared utility
-
-### 🚀 Railway Deployment
-
-Production deployment infrastructure with automated CI/CD:
-
-- **Nixpacks Configuration**: `nixpacks.toml` for Railway builds
-  - Installs system dependencies (Python, Cairo, Pango for native modules)
-  - Builds only shared and server packages (frontend on Cloudflare Pages)
-  - Creates manifests directory
-  - Skips asset download in CI (served from CDN)
-- **GitHub Actions**: Automated deployment on push to main
-  - Triggers Railway deployment via GraphQL API
-  - Monitors deployment status
-  - Configured for specific file paths
-- **CDN Manifest Fetching**: Server fetches manifests from CDN at startup
-  - Reduces deployment size
-  - Allows manifest updates without redeployment
-  - Skipped in development if local manifests exist
-- **CORS Configuration**: Automatic allowlist for production domains
-  - `https://hyperscape.club` (production)
+- **Production Domains**:
+  - `https://hyperscape.club` (main site)
   - `https://www.hyperscape.club` (www subdomain)
+  - `https://hyperscape.pages.dev` (Cloudflare Pages HTTPS)
+  - `http://hyperscape.pages.dev` (HTTP fallback)
+  - `https://hyperscape-production.up.railway.app` (Railway backend)
+- **Dynamic Patterns**:
+  - `http://localhost:*` (any localhost port)
   - `https://*.hyperscape.pages.dev` (Cloudflare preview deployments)
-  - `http://localhost:*` (local development, any port)
-- **Architecture**: Split deployment model
-  - Frontend: Cloudflare Pages
-  - Server/API: Railway
-  - Assets/CDN: Cloudflare R2
+  - `http://*.hyperscape.pages.dev` (HTTP preview deployments)
+  - `https://*.up.railway.app` (Railway preview deployments)
+- **Custom Domains**: `PUBLIC_APP_URL` env var automatically added to allowlist
+
+### 🐛 Bug Fixes & Improvements
+
+- **Build Stability**: Split build commands and added cache bust timestamp
+- **Index.html Verification**: Debug logging to verify client build exists before starting server
+- **Frontend Fallback**: Helpful error message when client build is missing (503 with debug info)
+- **Debug Endpoint**: `/debug/public` shows directory contents for troubleshooting
+- **Lockfile Sync**: Updated `bun.lock` to match `package.json` dependencies
 
 </Update>
 

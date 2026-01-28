@@ -27,7 +27,7 @@ PRIVY_APP_SECRET=your-app-secret
 
 **Symptom**: 404 errors for models/avatars
 
-**Cause**: CDN container not running
+**Cause**: CDN container not running or manifests not fetched
 
 **Solution**:
 
@@ -36,6 +36,33 @@ bun run cdn:up
 ```
 
 Or ensure you're using `bun run dev` which starts it automatically.
+
+**Debug endpoint**: Check what files are available:
+
+```bash
+curl http://localhost:5555/debug/public
+```
+
+This shows the contents of the `public/` directory and helps diagnose missing files.
+
+### Frontend Not Available (503 Error)
+
+**Symptom**: Accessing `http://localhost:5555/` returns "Frontend not available"
+
+**Cause**: Client build not copied to server's `public/` directory
+
+**Solution**:
+
+```bash
+# Build client and copy to server
+bun run build:client
+cp -r packages/client/dist/* packages/server/public/
+
+# Or use production start which handles this
+bun start
+```
+
+**Railway/Production**: The build process automatically copies client build to server public directory via `nixpacks.toml`.
 
 ### Database Schema Errors
 
