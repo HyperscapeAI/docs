@@ -51,7 +51,43 @@ PUBLIC_CDN_URL=http://localhost:8080
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
+
+# CI/Production (skip asset download)
+CI=true
+SKIP_ASSETS=true
 ```
+
+### CI/Production Environment Variables
+
+When deploying to Railway, Vercel, or other platforms, set these variables to skip local asset downloads:
+
+```bash
+CI=true                    # Detected by ensure-assets.mjs
+SKIP_ASSETS=true          # Explicit skip flag
+```
+
+The `ensure-assets.mjs` script automatically detects CI environments:
+
+```javascript
+function isCI() {
+  return !!(
+    process.env.CI ||
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_SERVICE_ID ||
+    process.env.VERCEL ||
+    process.env.NETLIFY ||
+    process.env.GITHUB_ACTIONS ||
+    process.env.GITLAB_CI ||
+    process.env.CIRCLECI ||
+    process.env.DOCKER_BUILD ||
+    process.env.SKIP_ASSETS
+  );
+}
+```
+
+<Info>
+In production, assets are served from CDN instead of being bundled with the server. Set `PUBLIC_CDN_URL` to your asset hosting URL.
+</Info>
 
 ## Client Environment
 

@@ -26,7 +26,7 @@ Database schema is defined in `packages/server/src/database/schema.ts`.
 | `world_chunks` | Persistent world modifications | WorldRepository |
 | `player_sessions` | Login/logout tracking | SessionRepository |
 | `npc_kills` | Kill statistics | StatsRepository |
-| `player_deaths` | Death locks with crash recovery | DeathRepository |
+| `player_deaths` | Death locks for crash recovery | DeathStateManager |
 
 ---
 
@@ -85,6 +85,7 @@ export const characters = pgTable('characters', {
   firemakingLevel: integer('firemakingLevel').default(1),
   cookingLevel: integer('cookingLevel').default(1),
   smithingLevel: integer('smithingLevel').default(1),
+  agilityLevel: integer('agilityLevel').default(1),
 
   // Combat skill XP
   attackXp: integer('attackXp').default(0),
@@ -105,18 +106,7 @@ export const characters = pgTable('characters', {
   firemakingXp: integer('firemakingXp').default(0),
   cookingXp: integer('cookingXp').default(0),
   smithingXp: integer('smithingXp').default(0),
-  
-  // Prayer points (added in PR #563)
-  prayerPoints: integer('prayerPoints').default(1),
-  prayerMaxPoints: integer('prayerMaxPoints').default(1),
-  
-  /**
-   * Active prayers stored as JSON array of prayer ID strings.
-   * Format: '["thick_skin", "burst_of_strength"]'
-   * IDs must match valid entries in prayers.json manifest.
-   * Empty array '[]' when no prayers are active.
-   */
-  activePrayers: text('activePrayers').default('[]'),
+  agilityXp: integer('agilityXp').default(0),
 
   // Combat state
   health: integer('health').default(100),
@@ -413,8 +403,9 @@ bunx drizzle-kit push
 
 | Migration | Description |
 |-----------|-------------|
-| `0017_add_death_recovery_columns.sql` | Added crash recovery columns to `player_deaths` (PR #566) |
-| `0016_add_prayer_system.sql` | Added Prayer skill and prayer points (PR #563) |
+| `0018_add_agility_skill.sql` | Added `agilityLevel` and `agilityXp` columns |
+| `0017_add_death_recovery_columns.sql` | Added crash recovery fields to `player_deaths` |
+| `0016_add_prayer_system.sql` | Added Prayer skill and prayer points |
 | `0015_add_smithing_skill.sql` | Added `smithingLevel` and `smithingXp` columns |
 | `0014_add_mining_skill.sql` | Added `miningLevel` and `miningXp` columns |
 | `0013_add_auto_retaliate.sql` | Added auto-retaliate preference |
@@ -426,61 +417,48 @@ Migrations are located in `packages/server/src/database/migrations/`.
 
 ---
 
-## Player Deaths Table
+## Death System Tables
 
-The `player_deaths` table tracks active deaths with crash recovery support (added in PR #566):
+### Player Deaths
 
-```sql
-CREATE TABLE player_deaths (
-  playerId TEXT PRIMARY KEY,
-  gravestoneId TEXT,
-  groundItemIds TEXT,                    -- JSON array of ground item entity IDs
-  position TEXT NOT NULL,                -- JSON: {x, y, z}
-  timestamp BIGINT NOT NULL,
-  zoneType TEXT NOT NULL,                -- 'safe_area', 'wilderness', 'pvp_zone', 'unknown'
-  itemCount INTEGER DEFAULT 0 NOT NULL,
-  
-  -- Crash recovery columns (PR #566)
-  items JSONB DEFAULT '[]'::jsonb NOT NULL,  -- Array of {itemId, quantity}
-  killedBy TEXT DEFAULT 'unknown' NOT NULL,
-  recovered BOOLEAN DEFAULT false NOT NULL,
-  
-  createdAt BIGINT NOT NULL,
-  updatedAt BIGINT NOT NULL,
-  
-  -- Constraints
-  CONSTRAINT player_deaths_zoneType_check 
-    CHECK (zoneType IN ('safe_area', 'wilderness', 'pvp_zone', 'unknown'))
-);
-
--- Indexes for crash recovery queries
-CREATE INDEX idx_player_deaths_recovered ON player_deaths (recovered);
-CREATE INDEX idx_player_deaths_recovery_lookup ON player_deaths (recovered, timestamp);
-```
-
-### Crash Recovery Fields
-
-| Column | Type | Purpose |
-|--------|------|---------|
-| `items` | JSONB | Full item data for recreating gravestones/ground items after crash |
-| `killedBy` | TEXT | What killed the player (for loot mechanics) |
-| `recovered` | BOOLEAN | Whether death was processed during crash recovery (prevents duplicates) |
-
-<Info>
-The `items` JSONB column stores the actual item data (not just IDs), enabling the server to recreate gravestones with correct items after a crash.
-</Info>
-
-### Recovery Query
+The `player_deaths` table tracks active player deaths for crash recovery:
 
 ```typescript
-// From DeathRepository.ts
-async getUnrecoveredDeathsAsync(): Promise<DeathLockData[]> {
-  return this.db
-    .select()
-    .from(schema.playerDeaths)
-    .where(eq(schema.playerDeaths.recovered, false));
-}
+export const playerDeaths = pgTable('player_deaths', {\n  playerId: text('player_id').primaryKey(),
+  gravestoneId: text('gravestone_id'),
+  groundItemIds: text('ground_item_ids').array(),  // Array of entity IDs
+  positionX: real('position_x').notNull(),
+  positionY: real('position_y').notNull(),
+  positionZ: real('position_z').notNull(),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+  zoneType: text('zone_type').notNull(),           // safe, dangerous, pvp
+  itemCount: integer('item_count').notNull(),
+  
+  // Crash recovery fields (added in migration 0017)
+  items: jsonb('items').$type<Array<{ itemId: string; quantity: number }>>(),
+  killedBy: text('killed_by'),                     // Killer name for gravestone
+  recovered: boolean('recovered').default(false),  // Has been processed
+  
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+});
 ```
+
+**Purpose:**
+- Prevents item duplication if server crashes during death handling
+- Stores item data for gravestone recreation after crash
+- Tracks recovery status to prevent duplicate processing
+- Displays killer name on gravestone
+
+**Lifecycle:**
+1. Created when player dies (atomic acquisition)
+2. Updated when items are looted (`onItemLooted`)
+3. Updated when gravestone expires (`onGravestoneExpired`)
+4. Deleted when all items recovered (`clearDeathLock`)
+5. Recovered on server restart if `recovered = false`
+
+<Warning>
+Death locks persist until items are fully looted. This is critical for preventing item duplication on server crashes.
+</Warning>
 
 ---
 

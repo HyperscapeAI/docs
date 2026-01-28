@@ -783,11 +783,136 @@ export function dispatchInventoryAction(
 
 ---
 
+---
+
+## Equipment System Integration
+
+The inventory system works closely with the equipment system for equip/unequip operations.
+
+### Equipment Loading - Single Source of Truth Pattern
+
+To prevent race conditions where equipment disappears on login, the system uses a **single source of truth pattern**:
+
+```typescript
+// From character-selection.ts (ServerNetwork)
+// 1. Load equipment from database ONCE
+const equipment = await equipmentRepo.getByCharacterId(characterId);
+
+// 2. Pass equipment data in PLAYER_JOINED event payload
+world.emit(EventType.PLAYER_JOINED, {
+  playerId,
+  equipment: equipment.map(e => ({
+    slotType: e.slotType,
+    itemId: e.itemId,
+    quantity: 1,
+  })),
+});
+
+// 3. EquipmentSystem receives equipment from payload (not DB query)
+this.subscribe(EventType.PLAYER_JOINED, async (data) => {
+  if (data.equipment && data.equipment.length > 0) {
+    await this.loadEquipmentFromPayload(data.playerId, data.equipment);
+  }
+});
+```
+
+**Why This Matters:**
+- Eliminates race condition where two systems query DB independently
+- Ensures equipment state is consistent across all systems
+- Prevents "equipment disappearing on login" bug
+- Single database query instead of multiple
+
+### Equipment Sync Data Type
+
+```typescript
+// From packages/shared/src/types/events/event-payloads.ts
+export interface EquipmentSyncData {
+  slotType: string;
+  itemId: string;
+  quantity: number;
+}
+```
+
+This type is used for:
+- Event payload data (PLAYER_JOINED)
+- Network messages (equipmentUpdated)
+- Database serialization
+
+### Equipment Persistence
+
+Equipment is saved to database:
+- **Auto-save**: Every 30 seconds
+- **On equip/unequip**: Immediately after changes
+- **On logout**: Final save before disconnect
+- **Async destroy**: Awaits all saves before shutdown
+
+```typescript
+// From EquipmentSystem.ts
+async destroyAsync(): Promise<void> {
+  // Stop auto-save interval
+  if (this.saveInterval) {
+    clearInterval(this.saveInterval);
+  }
+  
+  // Await all final saves
+  const savePromises = [];
+  for (const playerId of this.playerEquipment.keys()) {
+    savePromises.push(this.saveEquipmentToDatabase(playerId));
+  }
+  await Promise.allSettled(savePromises);
+  
+  // Clear data
+  this.playerEquipment.clear();
+}
+```
+
+### Equipment Clearing (Death System)
+
+The equipment system provides atomic clear operations for the death system:
+
+```typescript
+// Clear all equipment and return items (for gravestone spawning)
+async clearEquipmentAndReturn(
+  playerId: string,
+  tx?: TransactionContext,
+): Promise<Array<{ itemId: string; slot: string; quantity: number }>> {
+  const equipment = this.playerEquipment.get(playerId);
+  const clearedItems = [];
+  
+  // Atomically collect AND clear all equipped items
+  for (const slotName of EQUIPMENT_SLOT_NAMES) {
+    const slot = equipment[slotName];
+    if (slot?.itemId) {
+      clearedItems.push({
+        itemId: String(slot.itemId),
+        slot: slotName,
+        quantity: 1,
+      });
+      
+      // Clear slot
+      slot.itemId = null;
+      slot.item = null;
+    }
+  }
+  
+  // Save with transaction context for atomicity
+  await this.saveEquipmentToDatabase(playerId, tx);
+  
+  return clearedItems;
+}
+```
+
+<Warning>
+The `clearEquipmentAndReturn()` method is critical for death system security. It atomically reads AND clears equipment in one operation, preventing item duplication if the server crashes mid-death.
+</Warning>
+
+---
+
 ## Related Documentation
 
 - [Context Menu System](/wiki/game-systems/context-menus)
-- [Equipment System](/wiki/game-systems/equipment)
 - [Bank System](/wiki/game-systems/bank)
 - [Ground Items & Loot](/wiki/game-systems/loot)
 - [Item Data Structure](/wiki/data/items)
 - [Combat System](/wiki/game-systems/combat) (for eat delay mechanics)
+- [Death System](/wiki/game-systems/death) (for equipment clearing)

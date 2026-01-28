@@ -96,9 +96,7 @@ Crash recovery ensures that if the server crashes during death processing, items
 
 ## Death Lock System
 
-Death locks prevent item duplication and track death state across server restarts.
-
-### Death Lock Structure
+To prevent item duplication on server restart/crash, deaths are tracked with **dual persistence** (memory + database):
 
 ```typescript
 interface DeathLockData {
@@ -109,53 +107,16 @@ interface DeathLockData {
   timestamp: number;
   zoneType: string;
   itemCount: number;               // Total items dropped
-  
-  // Crash recovery fields (added in PR #566)
-  items: DeathItemData[];          // Full item data for recovery
-  killedBy: string;                // What killed the player
-  recovered: boolean;              // Whether death was processed during recovery
-}
-
-interface DeathItemData {
-  itemId: string;
-  quantity: number;
+  // Crash recovery fields
+  items?: Array<{ itemId: string; quantity: number }>;
+  killedBy?: string;
+  recovered?: boolean;
 }
 ```
 
-### Atomic Death Lock Acquisition
+### Creating a Death Lock (Atomic Acquisition)
 
-Death locks use atomic database operations to prevent race conditions:
-
-```typescript
-// From DeathRepository.ts
-async acquireDeathLockAsync(
-  data: DeathLockData,
-  tx?: Transaction
-): Promise<boolean> {
-  // Use INSERT ... ON CONFLICT DO NOTHING for atomic check-and-create
-  const result = await db
-    .insert(schema.playerDeaths)
-    .values({
-      playerId: data.playerId,
-      items: data.items,  // Full item data for crash recovery
-      killedBy: data.killedBy,
-      recovered: false,
-      // ...
-    })
-    .onConflictDoNothing({ target: schema.playerDeaths.playerId })
-    .returning({ playerId: schema.playerDeaths.playerId });
-  
-  // If result has a row, insert succeeded (lock acquired)
-  // If result is empty, conflict occurred (player already has lock)
-  return result.length > 0;
-}
-```
-
-<Warning>
-The atomic acquisition prevents duplicate deaths if a player receives multiple death events simultaneously (e.g., from multiple mobs attacking on the same tick).
-</Warning>
-
-### Creating a Death Lock
+The system uses **atomic acquisition** to prevent race conditions:
 
 ```typescript
 async createDeathLock(
@@ -166,45 +127,114 @@ async createDeathLock(
     position: { x: number; y: number; z: number };
     zoneType: string;
     itemCount: number;
-    items: DeathItemData[];      // NEW: Full item data
-    killedBy: string;            // NEW: Killer identification
-    recovered?: boolean;         // NEW: Recovery tracking
+    items?: Array<{ itemId: string; quantity: number }>;
+    killedBy?: string;
   },
   tx?: TransactionContext,
 ): Promise<boolean> {
   // Server authority check
   if (!this.world.isServer) {
-    console.error(`[DeathStateManager] Client attempted death lock creation - BLOCKED`);
+    console.error(`Client attempted death lock creation - BLOCKED`);
     return false;
   }
   
-  // Atomic acquisition (prevents duplicate deaths)
-  const acquired = await this.databaseSystem.acquireDeathLockAsync(
-    {
-      playerId,
-      gravestoneId: options.gravestoneId ?? null,
-      groundItemIds: options.groundItemIds ?? [],
-      position: options.position,
-      timestamp: Date.now(),
-      zoneType: options.zoneType,
-      itemCount: options.itemCount,
-      items: options.items,
-      killedBy: options.killedBy,
-      recovered: options.recovered ?? false,
-    },
-    tx
-  );
-  
-  if (!acquired) {
-    console.warn(`[DeathStateManager] Player ${playerId} already has death lock`);
+  // Fast path - check memory first
+  if (this.activeDeaths.has(playerId)) {
+    console.warn(`Death lock already exists for ${playerId} - rejecting duplicate`);
     return false;
   }
   
-  // Store in memory cache
-  this.activeDeaths.set(playerId, deathData);
+  const deathLockData = {
+    playerId,
+    gravestoneId: options.gravestoneId,
+    groundItemIds: options.groundItemIds || [],
+    position: options.position,
+    timestamp: Date.now(),
+    zoneType: options.zoneType,
+    itemCount: options.itemCount,
+    items: options.items || [],
+    killedBy: options.killedBy || "unknown",
+    recovered: false,
+  };
+  
+  // ATOMIC acquisition using INSERT ... ON CONFLICT DO NOTHING
+  if (this.databaseSystem) {
+    const acquired = await this.databaseSystem.acquireDeathLockAsync(
+      deathLockData,
+      tx
+    );
+    
+    if (!acquired) {
+      // Another request already created a death lock
+      console.warn(`Death lock already exists in database for ${playerId}`);
+      return false;
+    }
+  }
+  
+  // Update memory AFTER successful database write
+  this.activeDeaths.set(playerId, deathLockData);
+  
   return true;
 }
 ```
+
+<Info>
+Atomic acquisition prevents duplicate death processing when multiple requests arrive simultaneously (e.g., client retry + server timeout).
+</Info>
+
+### Crash Recovery
+
+When the server restarts, the `DeathStateManager` automatically recovers unfinished deaths:
+
+```typescript
+// Called during system start()
+async recoverUnfinishedDeaths(): Promise<void> {
+  const unrecoveredDeaths = await this.databaseSystem.getUnrecoveredDeathsAsync();
+  
+  for (const death of unrecoveredDeaths) {
+    // Check if gravestone/ground items still exist
+    const gravestoneExists = !!this.world.entities?.get(death.gravestoneId);
+    const existingGroundItems = death.groundItemIds.filter(id => 
+      !!this.world.entities?.get(id)
+    );
+    
+    if (gravestoneExists || existingGroundItems.length > 0) {
+      // Entities exist - restore to memory cache
+      this.activeDeaths.set(death.playerId, death);
+    } else if (death.items && death.items.length > 0) {
+      // Items stored but entities don't exist - recreate them
+      const inventoryItems = death.items.map((item, index) => ({
+        id: `recovery_${death.playerId}_${Date.now()}_${index}`,
+        itemId: item.itemId,
+        quantity: item.quantity,
+        slot: -1,
+        metadata: null,
+      }));
+      
+      // Emit DEATH_RECOVERED event to recreate gravestone/ground items
+      this.world.emit(EventType.DEATH_RECOVERED, {
+        playerId: death.playerId,
+        position: death.position,
+        items: inventoryItems,
+        killedBy: death.killedBy,
+        zoneType: death.zoneType,
+      });
+    }
+    
+    // Mark as recovered in database
+    await this.databaseSystem.markDeathRecoveredAsync(death.playerId);
+  }
+}
+```
+
+**Recovery Scenarios:**
+1. **Entities exist**: Restore death lock to memory (items already in world)
+2. **Entities missing**: Recreate gravestone/ground items from stored item data
+3. **No items**: Mark as recovered and clean up
+
+<Warning>
+Death locks persist until items are fully looted. This prevents item duplication if the server crashes before cleanup completes.
+</Warning>
 
 ---
 
@@ -519,6 +549,53 @@ private async processLootAllRequest(data: {
 }
 ```
 
+### Item Looting Tracking
+
+When items are looted from gravestones or ground, the death lock is updated:
+
+```typescript
+async onItemLooted(
+  playerId: string,
+  itemId: string,
+  quantity: number = 1,
+): Promise<void> {
+  const deathData = this.activeDeaths.get(playerId);
+  if (!deathData) return;
+  
+  // Remove from ground item list
+  if (deathData.groundItemIds) {
+    const index = deathData.groundItemIds.indexOf(itemId);
+    if (index !== -1) {
+      deathData.groundItemIds.splice(index, 1);
+    }
+  }
+  
+  // Update items array (crash recovery tracking)
+  if (deathData.items) {
+    const itemIndex = deathData.items.findIndex(i => i.itemId === itemId);
+    if (itemIndex !== -1) {
+      const item = deathData.items[itemIndex];
+      if (item.quantity <= quantity) {
+        // Remove entire item and decrement count
+        deathData.items.splice(itemIndex, 1);
+        deathData.itemCount = Math.max(0, deathData.itemCount - 1);
+      } else {
+        // Reduce quantity but keep item (don't decrement itemCount)
+        item.quantity -= quantity;
+      }
+    }
+  }
+  
+  // If all items looted, clear death lock
+  if (deathData.itemCount === 0) {
+    await this.clearDeathLock(playerId);
+  } else {
+    // Update database with new state
+    await this.databaseSystem.saveDeathLockAsync(deathData);
+  }
+}
+```
+
 ### Clearing Death Lock
 
 Death locks persist until all items are looted or despawn:
@@ -552,15 +629,27 @@ When a player reconnects, the system checks for active deaths:
 
 ```typescript
 async hasActiveDeathLock(playerId: string): Promise<boolean> {
-  // Check memory cache first
+  // Check memory cache first (fast path)
   if (this.activeDeaths.has(playerId)) return true;
 
   // Fallback to database (critical for crash recovery)
   if (this.databaseSystem) {
     const dbData = await this.databaseSystem.getDeathLockAsync(playerId);
     if (dbData) {
-      // Restore to memory cache
-      this.activeDeaths.set(playerId, dbData);
+      // Restore to memory cache INCLUDING crash recovery fields
+      const deathLock: DeathLock = {
+        playerId: dbData.playerId,
+        gravestoneId: dbData.gravestoneId,
+        groundItemIds: dbData.groundItemIds,
+        position: dbData.position,
+        timestamp: dbData.timestamp,
+        zoneType: dbData.zoneType,
+        itemCount: dbData.itemCount,
+        items: dbData.items,
+        killedBy: dbData.killedBy,
+        recovered: dbData.recovered,
+      };
+      this.activeDeaths.set(playerId, deathLock);
       return true;
     }
   }
@@ -573,6 +662,32 @@ This prevents:
 - Item duplication if server crashes mid-death
 - Double death processing on reconnect
 - Gravestone re-creation exploits
+- Item loss when player disconnects during death
+
+### Player Disconnect Handling
+
+When a player disconnects mid-death, the death lock is preserved:
+
+```typescript
+private async handlePlayerDisconnect(playerId: string): Promise<void> {
+  const deathData = this.activeDeaths.get(playerId);
+  if (!deathData) return;
+  
+  // Clear from memory but keep in database for reconnect validation
+  this.activeDeaths.delete(playerId);
+  
+  console.log(
+    `Cleared death lock from memory for disconnected player ${playerId}` +
+    ` (preserved in database for reconnect)`
+  );
+}
+```
+
+**Why This Matters:**
+- Gravestone/ground items persist for other players to see
+- Player can recover items when they reconnect
+- Memory is freed for disconnected players
+- Database ensures no item duplication on reconnect
 
 ---
 
@@ -731,120 +846,9 @@ if (playerHealth?.current !== undefined && playerHealth.current <= 0) {
 | `PLAYER_SET_DEAD` | `playerId`, `isDead` | Player death state changed |
 | `PLAYER_RESPAWNED` | `playerId`, `spawnPosition` | Player respawned |
 | `GRAVESTONE_SPAWNED` | `gravestoneId`, `playerId`, `position` | Gravestone created |
-| `DEATH_HEADSTONE_EXPIRED` | `gravestoneId`, `playerId`, `groundItemIds` | Gravestone timed out |
-| `CORPSE_LOOT_REQUEST` | `corpseId`, `playerId`, `itemId`, `quantity`, `transactionId` | Loot item request |
-| `CORPSE_LOOT_ALL_REQUEST` | `corpseId`, `playerId`, `transactionId` | Loot all items request |
-| `LOOT_RESULT` | `transactionId`, `success`, `reason?` | Loot request result |
-| `CORPSE_EMPTY` | `corpseId`, `playerId` | All items looted |
-| `AUDIT_LOG` | `action`, `playerId`, `items`, `success`, `transactionId` | Audit trail for loot operations |
-
----
-
-## Crash Recovery System
-
-The death system includes **enterprise-grade crash recovery** to prevent item loss when the server restarts mid-death.
-
-### Recovery on Server Startup
-
-```typescript
-// From DeathStateManager.ts
-async recoverUnfinishedDeaths(): Promise<void> {
-  // Query all unrecovered deaths from database
-  const unrecoveredDeaths = await this.databaseSystem.getUnrecoveredDeathsAsync();
-
-  for (const death of unrecoveredDeaths) {
-    // Recreate gravestones/ground items from death.items
-    if (death.zoneType === "safe_area") {
-      await this.spawnGravestoneForRecovery(death);
-    } else {
-      await this.spawnGroundItemsForRecovery(death);
-    }
-
-    // Mark as recovered to prevent duplicate recovery
-    await this.databaseSystem.markDeathRecoveredAsync(death.playerId);
-  }
-}
-```
-
-### Recovery Database Queries
-
-```sql
--- Get all unrecovered deaths (called on server startup)
-SELECT * FROM player_deaths WHERE recovered = false;
-
--- Mark death as recovered after processing
-UPDATE player_deaths SET recovered = true WHERE playerId = ?;
-```
-
-<Info>
-**Crash Safety**: The death lock is created with full item data BEFORE clearing inventory. If the server crashes after clearing inventory but before spawning the gravestone, the items can be recovered from the death lock on restart.
-</Info>
-
-### Transaction Isolation
-
-Critical death operations use **serializable transactions** to prevent race conditions:
-
-```typescript
-// From DatabaseSystem.ts
-await dbSystem.executeInTransaction(async (tx) => {
-  // 1. Create death lock with full item list (crash recovery data)
-  await deathStateManager.createDeathLock(playerId, {
-    items: itemsToDrop,  // Full item data
-    killedBy,
-    // ... other fields
-  }, tx);
-
-  // 2. Clear inventory/equipment atomically
-  await inventorySystem.clearInventoryImmediate(playerId);
-  await equipmentSystem.clearEquipmentAndReturn(playerId, tx);
-
-  // If crash happens here, items are recoverable from death lock
-}, { isolationLevel: "serializable" });
-```
-
----
-
-## Input Sanitization
-
-The death system sanitizes all player-provided input to prevent injection attacks:
-
-```typescript
-// From PlayerDeathSystem.ts
-function sanitizeKilledBy(killedBy: unknown): string {
-  if (typeof killedBy !== "string" || !killedBy) {
-    return "unknown";
-  }
-
-  // Normalize Unicode to NFKC form to prevent homograph attacks
-  let normalized = killedBy.normalize("NFKC");
-
-  let sanitized = "";
-  for (const char of normalized) {
-    const code = char.charCodeAt(0);
-
-    // Skip zero-width characters (U+200B-U+200D, U+FEFF)
-    if (code >= 0x200b && code <= 0x200d) continue;
-    if (code === 0xfeff) continue;
-
-    // Skip BiDi override characters (U+202A-U+202E)
-    if (code >= 0x202a && code <= 0x202e) continue;
-
-    // Skip control characters (0x00-0x1F and 0x7F)
-    if (code < 32 || code === 127) continue;
-
-    // Skip dangerous HTML characters
-    if ("<>'\"&".includes(char)) continue;
-
-    sanitized += char;
-  }
-
-  return sanitized.trim().substring(0, 64) || "unknown";
-}
-```
-
-<Warning>
-**Security**: The `killedBy` field is sanitized to prevent Unicode attacks, BiDi override exploits, and HTML injection.
-</Warning>
+| `GRAVESTONE_EXPIRED` | `gravestoneId`, `playerId`, `groundItemIds` | Gravestone timed out |
+| `DEATH_RECOVERED` | `playerId`, `position`, `items`, `killedBy`, `zoneType` | Death recovered after crash |
+| `PLAYER_UNREGISTERED` | `id` | Player disconnected (triggers death lock cleanup) |
 
 ---
 
@@ -921,6 +925,57 @@ private isPlayerInDeathState(playerId: string): boolean {
 <Info>
 **OSRS Accuracy**: Ground item despawn time was updated from 3 minutes to 60 minutes to match OSRS behavior.
 </Info>
+
+---
+
+## Database Schema
+
+Death locks are stored in the `player_deaths` table:
+
+```sql
+CREATE TABLE player_deaths (
+  player_id TEXT PRIMARY KEY,
+  gravestone_id TEXT,
+  ground_item_ids TEXT[],           -- Array of entity IDs
+  position_x REAL NOT NULL,
+  position_y REAL NOT NULL,
+  position_z REAL NOT NULL,
+  timestamp BIGINT NOT NULL,
+  zone_type TEXT NOT NULL,
+  item_count INTEGER NOT NULL,
+  items JSONB,                      -- Crash recovery: [{itemId, quantity}]
+  killed_by TEXT,                   -- Crash recovery: killer name
+  recovered BOOLEAN DEFAULT FALSE,  -- Crash recovery: has been processed
+  created_at BIGINT NOT NULL
+);
+```
+
+**Key Fields:**
+- `items`: Stores item data for crash recovery (recreate gravestone if entities lost)
+- `killed_by`: Displays on gravestone ("Here lies X, killed by Y")
+- `recovered`: Prevents duplicate recovery on multiple restarts
+
+### Gravestone Display
+
+Gravestones now show the player's name instead of their ID:
+
+```typescript
+// From HeadstoneEntity.ts
+const playerName = this.getPlayerName(ownerId);
+const killedByText = killedBy ? ` killed by ${killedBy}` : "";
+
+contextMenu.addOption({
+  id: "loot",
+  label: `Loot ${playerName}'s gravestone${killedByText}`,
+  enabled: true,
+  priority: 1,
+});
+```
+
+**Name Resolution:**
+- Queries `characters` table for player's username
+- Falls back to player ID if name not found
+- Sanitizes names with Unicode normalization (security)
 
 ---
 

@@ -23,102 +23,131 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Agility Skill & Agent Dashboard" description="January 2026" date="2026-01-21">
+<Update label="Railway Deployment & Skill Systems" description="January 2026" date="2026-01-21">
+
+### 🚀 Railway Deployment Infrastructure
+
+Automated deployment to Railway with GitHub Actions:
+
+- **Railway GraphQL API**: Workflow uses Railway's GraphQL API for reliable deployments
+  - Triggers deployment via `serviceInstanceRedeploy` mutation
+  - Monitors deployment status with polling
+  - Reports success/failure in GitHub Actions logs
+- **Nixpacks Configuration**: `nixpacks.toml` for Railway Nixpacks builder
+  - Installs system dependencies (Python, Make, G++, Cairo for native modules)
+  - Clones game assets from GitHub during build
+  - Builds packages in correct order (PhysX → Shared → Server)
+  - Sets CI environment variables to skip local asset downloads
+- **Docker Support**: Multi-stage `Dockerfile.server` for Docker deployments
+  - Stage 1: Builder with all dependencies and asset cloning
+  - Stage 2: Minimal runtime image with only production dependencies
+  - Includes health check on port 5555
+- **Asset Handling**: CI environment detection in `ensure-assets.mjs`
+  - Detects Railway, Vercel, Netlify, GitHub Actions, and other CI platforms
+  - Skips asset download when `CI=true` or `SKIP_ASSETS=true`
+  - Assets served from CDN in production
+- **Workflow Triggers**: Deploys on push to main when server-related files change
+
+### 📊 Skill Guide Panel
+
+OSRS-style UI for viewing skill unlock progression:
+
+- **Click-to-View**: Click any skill in Skills Panel to view unlock progression
+- **Visual States**: 
+  - ✓ Green = Unlocked (player level ≥ unlock level)
+  - ➤ Yellow = Next unlock (highlighted with "NEXT" badge)
+  - 🔒 Gray = Locked (player level < unlock level)
+- **Progress Tracking**: Shows "X/Y unlocked" and levels to next unlock
+- **Unlock Types**: Items, abilities, areas, quests, activities
+- **Server API**: New `/api/data/skill-unlocks` endpoint serves unlock data
+- **Animations**: Smooth fade-in and slide-up transitions
+- **Keyboard Support**: Press ESC to close
+- **Data Loading**: Loads from `skill-unlocks.json` manifest with British/American spelling normalization
 
 ### 🏃 Agility Skill System
 
-Complete implementation of the Agility skill with movement-based XP and stamina benefits:
+New support skill trained passively through movement:
 
-- **Movement XP Tracking**: Gain 1 XP per 2 tiles traveled
-  - XP batched at 100 tiles (50 XP) to prevent visual spam
-  - Walking: ~100 XP/min, Running: ~200 XP/min
-  - Death penalty: Resets tile counter (lose accumulated progress)
-- **Weight-Based Stamina Drain**: Carrying heavy items increases stamina drain
-  - +0.5% drain per kg carried
-  - 50kg load = +25% drain (2.5/sec instead of 2.0/sec)
-  - Weight synced from server via `PLAYER_WEIGHT_CHANGED` events
-- **Agility-Based Stamina Regen**: Higher Agility = faster stamina recovery
-  - +1% regen per Agility level
-  - Level 99: Nearly 2x regen (7.96/sec idle, 3.98/sec walking)
-- **Database Migration**: New `agilityLevel` and `agilityXp` columns (migration 0018)
-- **UI Integration**: Agility appears in Skills Panel and Agent Dashboard
-- **Testing**: 868 lines of comprehensive unit and integration tests
+- **Movement XP Tracking**: 1 XP per tile, granted in 100-tile batches
+  - Batching reduces network traffic and database writes
+  - Distance counter resets on death
+  - Server-authoritative tracking prevents exploits
+- **Weight-Based Stamina Drain**: Heavier inventory = faster stamina consumption
+  - Server-client weight synchronization via event bridge
+  - Weight updates forwarded from InventorySystem to client
+- **Stamina Regeneration Bonus**: +1% stamina regen per Agility level
+  - Formula: `regenRate = baseRegenRate * (1 + agilityLevel * 0.01)`
+  - Stacks with other bonuses
+- **Database Schema**: New `agilityLevel` and `agilityXp` columns in `characters` table
+- **UI Integration**: Agility skill added to Skills Panel with icon
+- **Testing**: Comprehensive unit and integration tests for XP batching, stamina formulas, and persistence
 
-### 🎮 Agent Dashboard Improvements
+### 🎒 Equipment System Improvements
 
-Major UX improvements for agent control and monitoring:
+Fixed equipment disappearing on login via single source of truth pattern:
 
-- **ElizaOS 1.7.0 Upgrade**: Updated all ElizaOS dependencies with backwards-compatible shims
-- **Stop/Resume Goal Controls**: Robust pause state management
-  - Stop button halts agent and sets paused state
-  - Resume button re-enables autonomous goal selection
-  - Paused state persists across reconnections
-  - Movement cancellation with `cancel: true` flag fixes walking-in-place bug
-  - 100ms acknowledgment delay prevents race conditions
-- **Quick Action Menu**: One-click commands for common tasks
-  - Woodcutting, Mining, Fishing, Combat actions
-  - Pick Up, Bank, Stop, Idle commands
-  - Contextual availability based on nearby entities
-  - Collapsible sections with item counts
-- **Improved Item Pickup**: Word boundary regex scoring system
-  - "bronze pickaxe" correctly picks pickaxe, not hatchet
-  - Scores items by word match count (prevents false matches)
-  - Auto-walks to items beyond pickup range
-- **Rate Limiting Fixes**: Reduced dashboard polling to prevent 429 errors
-  - Increased intervals: 2s → 10s for most panels
-  - Exponential backoff retry logic (1s → 2s → 4s)
-  - Global 100 req/min limit provides protection
-- **Dashboard Settings Tab**: Fixed tab switching and API key configuration
-  - Tabs now switch correctly (Basic, Content, Style, API Keys)
-  - API keys can be configured and saved
-  - Secrets properly masked in UI
-- **Chat Routing**: Messages from dashboard now reach agent
-  - In-game chat opens automatically when sending messages
-  - PostMessage integration between iframe and parent
+- **Single Source of Truth**: Equipment loaded once in `character-selection.ts` and passed via event payload
+  - Eliminates race condition where EquipmentSystem and character-selection both query DB
+  - Equipment data included in `PLAYER_JOINED` event payload
+  - `EquipmentSystem` receives equipment from payload instead of querying DB
+- **EquipmentSyncData Type**: New type for equipment serialization
+  - Used for event payloads, network messages, and database serialization
+  - Ensures type consistency across all systems
+- **Atomic Equipment Clearing**: `clearEquipmentAndReturn()` for death system
+  - Atomically reads AND clears equipment in one operation
+  - Prevents item duplication if server crashes mid-death
+  - Returns cleared items for gravestone spawning
+  - Supports transaction context for database atomicity
+- **Async Destroy**: `destroyAsync()` awaits all saves before shutdown
+  - Prevents data loss on server shutdown
+  - Uses `Promise.allSettled()` for graceful error handling
 
-### 🎨 Skill Guide Panel
+### 💀 Death System Enhancements
 
-OSRS-style skill guide showing unlocks at each level:
+Crash recovery and improved gravestone display:
 
-- **Click-to-View**: Click any skill in Skills Panel to open guide
-- **Unlock Progression**: Shows all unlocks with level requirements
-  - Green checkmarks for achieved unlocks
-  - Lock icons for future unlocks
-  - Next unlock highlighted with progress indicator
-- **Server API**: New `/api/data/skill-unlocks` endpoint
-  - Server-authoritative unlock data
-  - Defence/Defense spelling normalization
-- **Loading States**: Spinner during data fetch, empty state handling
-- **Animations**: Smooth fade-in and slide-up transitions
-- **Scrollable**: Handles skills with many unlocks (Prayer has 29)
-
-### 🚀 Railway Deployment
-
-Production deployment configuration for Railway platform:
-
-- **Nixpacks Configuration**: `nixpacks.toml` for Railway Nixpacks builder
-  - Bun runtime with frozen lockfile installs
-  - Optimized build and start commands
-- **Docker Support**: `Dockerfile.server` for multi-stage builds
-  - Builder stage with full dependencies
-  - Slim production image
-  - Proper layer caching
-- **CI Asset Handling**: `ensure-assets.mjs` detects CI/Railway environments
-  - Skips Git LFS downloads in production
-  - Assets served from CDN instead
-  - Reduces build time and image size
-- **Railway Config**: `railway.server.json` with restart policies
-  - ON_FAILURE restart with 10 max retries
-  - Proper health check configuration
+- **Death Lock Persistence**: Death locks persist until items fully looted
+  - Stores item data in database for crash recovery
+  - Includes `killedBy` field for gravestone display
+  - `recovered` flag prevents duplicate recovery on multiple restarts
+- **Atomic Acquisition**: `acquireDeathLockAsync()` prevents race conditions
+  - Uses `INSERT ... ON CONFLICT DO NOTHING WITH RETURNING`
+  - Returns false if death lock already exists
+  - Prevents duplicate death processing on simultaneous requests
+- **Crash Recovery**: `recoverUnfinishedDeaths()` runs on server start
+  - Queries all `player_deaths` where `recovered = false`
+  - Checks if gravestone/ground items still exist
+  - Recreates missing entities from stored item data
+  - Emits `DEATH_RECOVERED` event for handlers
+- **Player Name Display**: Gravestones show player name instead of ID
+  - Queries `characters` table for username
+  - Falls back to player ID if name not found
+  - Unicode normalization for security (prevents homograph attacks)
+- **Disconnect Handling**: Death locks preserved when player disconnects
+  - Cleared from memory but kept in database
+  - Allows other players to see gravestone
+  - Player can recover items on reconnect
+- **Item Looting Tracking**: `onItemLooted()` updates death lock state
+  - Decrements `itemCount` only when item fully removed
+  - Partial loot reduces quantity but keeps item in array
+  - Auto-clears death lock when all items looted
 
 ### 🐛 Bug Fixes
 
-- **Equipment Panel Weight**: Now displays server-synced weight instead of client calculation
-- **Death System**: Fixed race conditions and combat state cleanup
-- **Interaction System**: Dead mobs no longer block item pickup (raycast skip)
-- **Prayer System**: Fixed persistence by adding missing type definitions
+- **Dead Mob Raycast**: Dead mobs now skipped in raycast to allow picking up items underneath (#567)
+- **Combat State Cleanup**: Proper cleanup on death/respawn (#566)
+- **Equipment Sync**: Fixed equipment disappearing on login (#568)
+- **Weight Sync**: Added event bridge for weight updates to client for stamina drain
+
+### 🧪 Testing
+
+- **Agility Tests**: Unit and integration tests for XP batching, stamina formulas, persistence
+- **Death System Tests**: Crash recovery, atomic acquisition, item tracking
+- **Equipment Tests**: Single source of truth pattern, async destroy
 
 </Update>
+
+<Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 

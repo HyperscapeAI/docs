@@ -46,104 +46,189 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
-Railway deployment is configured via `railway.server.json` and supports both Docker and Nixpacks builders.
+Railway deployment is fully automated via GitHub Actions. The workflow uses Railway's GraphQL API for deployments and supports both Nixpacks and Docker build methods.
+
+### Automated Deployment
+
+The repository includes a GitHub Actions workflow that automatically deploys to Railway on every push to `main`:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+name: Deploy to Railway
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/shared/**'
+      - 'packages/server/**'
+      - 'packages/plugin-hyperscape/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'nixpacks.toml'
+      - 'railway.server.json'
+      - 'Dockerfile.server'
+```
+
+The workflow triggers deployments using Railway's GraphQL API and monitors deployment status.
+
+### Setup Steps
 
 <Steps>
   <Step title="Create Railway project">
-    Connect your GitHub repository to Railway.
+    1. Create a new project at [railway.app](https://railway.app)
+    2. Connect your GitHub repository
+    3. Note your Project ID, Service ID, and Environment ID
+  </Step>
+  
+  <Step title="Configure GitHub secrets">
+    Add to your repository secrets:
+    - `RAILWAY_TOKEN`: Your Railway API token
+    
+    Update workflow environment variables:
+    ```yaml
+    env:
+      RAILWAY_PROJECT_ID: your-project-id
+      RAILWAY_SERVICE_ID: your-service-id
+      RAILWAY_ENVIRONMENT_ID: your-environment-id
+    ```
   </Step>
   
   <Step title="Choose build method">
+    Railway supports two build methods:
+    
     **Option 1: Nixpacks (Recommended)**
     - Uses `nixpacks.toml` configuration
     - Faster builds with caching
-    - Start command: `bun run start`
+    - Automatic dependency detection
     
     **Option 2: Docker**
-    - Uses `Dockerfile.server` multi-stage build
+    - Uses `Dockerfile.server`
+    - Multi-stage builds for smaller images
     - More control over build process
-    - Includes production optimizations
   </Step>
   
   <Step title="Add PostgreSQL">
     Add PostgreSQL service from Railway marketplace.
-    Copy the `DATABASE_URL` connection string.
+    Railway will automatically set `DATABASE_URL`.
   </Step>
   
   <Step title="Set environment variables">
+    Configure in Railway dashboard:
     ```bash
     # Required
-    DATABASE_URL=postgresql://...  # From Railway PostgreSQL service
-    JWT_SECRET=your-secret-key
-    PRIVY_APP_ID=your-app-id
-    PRIVY_APP_SECRET=your-app-secret
-    PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+    PRIVY_APP_ID=your-privy-app-id
+    PRIVY_APP_SECRET=your-privy-app-secret
+    JWT_SECRET=your-random-secret
+    
+    # Build configuration
+    CI=true
+    SKIP_ASSETS=true
+    NODE_ENV=production
     
     # Optional
-    PORT=5555
-    NODE_ENV=production
+    PUBLIC_CDN_URL=https://cdn.hyperscape.lol
     ```
-  </Step>
-  
-  <Step title="Configure asset handling">
-    Assets are served from CDN in production. The `ensure-assets.mjs` script automatically skips Git LFS downloads in CI/Railway environments.
-    
-    Set `PUBLIC_CDN_URL` to your asset CDN (Cloudflare R2, AWS S3, etc.).
   </Step>
 </Steps>
 
-### Railway Configuration Files
+### Nixpacks Configuration
 
-**`railway.server.json`:**
-```json
-{
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "builder": "NIXPACKS",
-    "nixpacksConfigPath": "nixpacks.toml"
-  },
-  "deploy": {
-    "startCommand": "bun run start",
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
-  }
-}
-```
+The `nixpacks.toml` file configures Railway's Nixpacks builder:
 
-**`nixpacks.toml`:**
 ```toml
+# nixpacks.toml
 [phases.setup]
-nixPkgs = ["bun"]
+aptPkgs = [
+  "python3", "make", "g++", "git",
+  "pkg-config", "libcairo2-dev", "libpango1.0-dev",
+  "libjpeg-dev", "libgif-dev", "librsvg2-dev"
+]
 
 [phases.install]
 cmds = ["bun install --frozen-lockfile"]
 
+[phases.assets]
+dependsOn = ["install"]
+cmds = ["git clone --depth 1 https://github.com/HyperscapeAI/assets.git packages/server/world/assets"]
+
 [phases.build]
-cmds = ["bun run build"]
+dependsOn = ["assets"]
+cmds = [
+  "bun run build:shared",
+  "bun run build:server"
+]
 
 [start]
-cmd = "bun run start"
+cmd = "bun dist/index.js"
+
+[variables]
+CI = "true"
+SKIP_ASSETS = "true"
+NODE_ENV = "production"
 ```
 
-**`Dockerfile.server`** (alternative to Nixpacks):
-```dockerfile
-# Multi-stage build for production
-FROM oven/bun:1.1.38 AS builder
-WORKDIR /app
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
-COPY . .
-RUN bun run build
+### Docker Configuration
 
-FROM oven/bun:1.1.38-slim
-WORKDIR /app
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
+The `Dockerfile.server` provides a multi-stage build:
+
+**Stage 1: Builder**
+- Installs build dependencies (Python, Make, G++, Cairo)
+- Clones game assets from GitHub
+- Builds packages in correct order (PhysX → Shared → Server)
+
+**Stage 2: Runtime**
+- Minimal production image with only runtime dependencies
+- Copies built artifacts from builder stage
+- Includes game manifests for DataManager
+- Exposes port 5555 with health check
+
+```dockerfile
+# Multi-stage build
+FROM oven/bun:1.1.38-debian AS builder
+# ... build steps ...
+
+FROM oven/bun:1.1.38-debian AS runtime
+# ... runtime setup ...
 CMD ["bun", "run", "start"]
 ```
 
+### Asset Handling in Production
+
+In production/CI environments, assets are served from CDN instead of being bundled:
+
+```javascript
+// scripts/ensure-assets.mjs
+function isCI() {
+  return !!(
+    process.env.CI ||
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_SERVICE_ID ||
+    process.env.VERCEL ||
+    process.env.NETLIFY ||
+    process.env.GITHUB_ACTIONS
+  );
+}
+
+if (isCI()) {
+  console.log("⏭️  Skipping asset download (CI/production environment detected)");
+  console.log("   Assets are served from CDN in production");
+  return;
+}
+```
+
+Set `PUBLIC_CDN_URL` to your asset hosting URL in Railway environment variables.
+
+### Deployment Workflow
+
+The GitHub Actions workflow:
+
+1. **Triggers** on push to main (when server-related files change)
+2. **Deploys** via Railway GraphQL API mutation
+3. **Monitors** deployment status with polling
+4. **Reports** success/failure in GitHub Actions logs
+
 <Info>
-The `ensure-assets.mjs` script detects CI environments (`CI=true` or `RAILWAY_ENVIRONMENT`) and skips Git LFS asset downloads since assets are served from CDN in production.
+The workflow uses Railway's GraphQL API instead of the CLI for more reliable deployments and better status monitoring.
 </Info>
 
 ## Vercel Client Deployment
