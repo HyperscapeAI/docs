@@ -525,53 +525,98 @@ export function getCardinalMeleeTilesInto(
 
 ---
 
-## Context Menu Integration
+## Stamina System
 
-### Walk Here
+Hyperscape features a stamina system that affects running ability. Stamina is client-side only for UI display.
 
-Players can right-click terrain to open a context menu with "Walk here":
-
-```typescript
-// From InteractionRouter.ts - terrain context menu
-getContextMenuActions(target: RaycastTarget): ContextMenuAction[] {
-  if (target.type === "terrain") {
-    return [{
-      id: "walk-here",
-      label: "Walk here",
-      enabled: true,
-      priority: 1,
-      handler: () => {
-        // Send movement request to server
-        world.network?.send("moveToPosition", {
-          x: target.hitPoint.x,
-          y: target.hitPoint.y,
-          z: target.hitPoint.z,
-        });
-      },
-    }];
-  }
-}
-```
-
-**Context Menu Types:**
-
-The system distinguishes between entity types and special cases:
+### Stamina Mechanics
 
 ```typescript
-// From interaction/types.ts
-export type ContextMenuTargetType =
-  | InteractableEntityType  // npc, mob, player, item, etc.
-  | "terrain";              // Ground/floor (for "Walk here")
+// From PlayerLocal.ts
+public stamina: number = 100;  // Current stamina (0-100)
 
-// InteractableEntityType includes all entity types
-// ContextMenuTargetType adds terrain for right-click ground
+// Base rates (per second)
+private readonly staminaDrainPerSecond: number = 2;              // While running
+private readonly staminaRegenWhileWalkingPerSecond: number = 2;  // While walking
+private readonly staminaRegenPerSecond: number = 4;              // While idle
 ```
+
+### Weight-Based Stamina Drain
+
+Carrying heavy items increases stamina drain while running:
+
+```typescript
+// Weight modifier: +0.5% drain per kg carried
+private readonly weightDrainModifier: number = 0.005;
+
+// Calculate drain rate
+const weightMultiplier = 1 + this.totalWeight * this.weightDrainModifier;
+const drainRate = this.staminaDrainPerSecond * weightMultiplier;
+```
+
+**Weight Impact Table:**
+
+| Weight (kg) | Drain Multiplier | Drain/Second |
+|-------------|------------------|--------------|
+| 0 | 1.0x | 2.0 |
+| 10 | 1.05x | 2.1 |
+| 20 | 1.1x | 2.2 |
+| 40 | 1.2x | 2.4 |
+| 60 | 1.3x | 2.6 |
+| 100 | 1.5x | 3.0 |
 
 <Info>
-The "Walk here" option only appears when right-clicking terrain. Entity interactions show entity-specific actions instead.
+Weight is calculated server-side from inventory items and synced to the client via `PLAYER_WEIGHT_CHANGED` events.
 </Info>
 
----
+### Agility-Based Stamina Regeneration
+
+Higher Agility levels increase stamina regeneration:
+
+```typescript
+// Agility modifier: +1% regen per level
+private readonly agilityRegenModifier: number = 0.01;
+
+// Calculate regen rate
+const agilityMultiplier = 1 + this.skills.agility.level * this.agilityRegenModifier;
+const regenRate = baseRegenRate * agilityMultiplier;
+```
+
+**Agility Regen Bonus Table:**
+
+| Agility Level | Regen Multiplier | Idle Regen/Sec | Walk Regen/Sec |
+|---------------|------------------|----------------|----------------|
+| 1 | 1.01x | 4.04 | 2.02 |
+| 10 | 1.10x | 4.40 | 2.20 |
+| 25 | 1.25x | 5.00 | 2.50 |
+| 50 | 1.50x | 6.00 | 3.00 |
+| 75 | 1.75x | 7.00 | 3.50 |
+| 99 | 1.99x | 7.96 | 3.98 |
+
+<Warning>
+When stamina reaches 0, the player is forced to walk until stamina regenerates above 1.
+</Warning>
+
+### Weight Synchronization
+
+Weight is calculated server-side and synced to clients:
+
+```typescript
+// Server: InventorySystem emits weight changes
+const totalWeight = this.getTotalWeight(playerId);
+this.emitTypedEvent(EventType.PLAYER_WEIGHT_CHANGED, {
+  playerId,
+  weight: totalWeight,
+});
+
+// Client: PlayerLocal receives weight updates
+onPlayerWeightUpdated = (data: { playerId: string; weight: number }) => {
+  const localPlayer = this.world.getPlayer?.();
+  if (localPlayer instanceof PlayerLocal) {
+    localPlayer.totalWeight = data.weight;
+  }
+};
+```
 
 ## Client Interpolation
 

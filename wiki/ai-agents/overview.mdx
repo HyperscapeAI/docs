@@ -14,7 +14,7 @@ icon: "bot"
 Hyperscape integrates [ElizaOS](https://elizaos.ai) to enable AI agents that play the game autonomously. Unlike scripted NPCs, these agents use LLMs to make decisions, set goals, and interact with the world just like human players.
 
 <Info>
-  AI agents connect via the same WebSocket protocol as human players and have full access to all game mechanics.
+  **ElizaOS 1.7.0**: Hyperscape is compatible with ElizaOS 1.7.0+ with backwards-compatible shims for cross-version support. AI agents connect via the same WebSocket protocol as human players and have full access to all game mechanics.
 </Info>
 
 ---
@@ -129,7 +129,7 @@ The plugin provides **22 actions** across 8 categories:
 | `equipItemAction` | `actions/inventory.ts` | Equip an item |
 | `useItemAction` | `actions/inventory.ts` | Use/consume an item |
 | `dropItemAction` | `actions/inventory.ts` | Drop an item (supports "drop all") |
-| `pickupItemAction` | `actions/inventory.ts` | Pick up ground items with auto-pathfinding |
+| `pickupItemAction` | `actions/inventory.ts` | Pick up items from ground |
 
 ### Social Actions
 
@@ -207,10 +207,14 @@ Provides current goal and progress tracking.
   defense: { level: 5, xp: 388 },
   constitution: { level: 12, xp: 1623 },
   ranged: { level: 1, xp: 0 },
+  prayer: { level: 1, xp: 0 },
   woodcutting: { level: 15, xp: 2411 },
+  mining: { level: 10, xp: 1154 },
   fishing: { level: 10, xp: 1154 },
   firemaking: { level: 5, xp: 388 },
   cooking: { level: 8, xp: 737 },
+  smithing: { level: 1, xp: 0 },
+  agility: { level: 25, xp: 8740 },
 }
 ```
 
@@ -288,6 +292,7 @@ const configSchema = z.object({
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
 OPENROUTER_API_KEY=your-openrouter-key
+OLLAMA_SERVER_URL=http://localhost:11434  # For local Ollama models
 
 # Hyperscape Connection
 HYPERSCAPE_SERVER_URL=ws://localhost:5555/ws
@@ -296,19 +301,42 @@ HYPERSCAPE_AUTH_TOKEN=optional-privy-token
 HYPERSCAPE_PRIVY_USER_ID=optional-privy-user-id
 ```
 
+<Note>
+**ElizaOS 1.7.0**: Added support for Ollama plugin (`@elizaos/plugin-ollama`) for local LLM inference.
+</Note>
+
 ---
 
 ## Running AI Agents
 
 ```bash
 # Start game with AI agents
-bun run dev:elizaos
+bun run dev:ai
 ```
 
 This starts:
 - Game server on port **5555**
 - Client on port **3333**
 - ElizaOS runtime on port **4001**
+- ElizaOS dashboard on port **4000**
+
+### Agent Dashboard
+
+Access the agent dashboard at `http://localhost:4000` to:
+- View agent status and goals
+- Monitor skill progression and XP gains
+- See current position and nearby locations
+- Control agent behavior (stop/resume goals)
+- Send messages and quick commands
+- Configure API keys and settings
+
+**Dashboard Features:**
+- **Summary Card**: Online status, combat level, total level, current goal
+- **Goal Panel**: Current objective, progress, time estimates, stop/resume controls
+- **Skills Panel**: All skill levels with XP progress bars and session gains
+- **Activity Panel**: Recent actions, kills, deaths, gold earned
+- **Position Panel**: Current zone, nearby POIs, coordinates
+- **Quick Action Menu**: One-click commands (woodcutting, mining, fishing, combat, pickup, bank, stop, idle)
 
 ---
 
@@ -366,7 +394,7 @@ events: {
 
 <CardGroup cols={2}>
   <Card title="Actions Reference" icon="play" href="/wiki/ai-agents/actions">
-    Complete reference for all 21 agent actions including movement, combat, skills, inventory, and goals.
+    Complete reference for all 22 agent actions including movement, combat, skills, inventory, and goals.
   </Card>
   <Card title="Providers Reference" icon="database" href="/wiki/ai-agents/providers">
     All 7 context providers that supply game state to the LLM for decision-making.

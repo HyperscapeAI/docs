@@ -8,6 +8,10 @@ icon: "play"
 
 This page documents all **22 actions** available to ElizaOS agents in Hyperscape. Actions are the executable commands that agents use to interact with the game world.
 
+<Note>
+**ElizaOS 1.7.0 Compatibility**: All actions are compatible with ElizaOS 1.7.0+. The plugin uses backwards-compatible shims for cross-version support.
+</Note>
+
 <Info>
 Actions are defined in `packages/plugin-hyperscape/src/actions/`.
 </Info>
@@ -92,6 +96,11 @@ export const stopMovementAction: Action = {
 };
 ```
 
+**Features:**
+- **Movement Cancellation**: Sends `cancel: true` flag to clear server-side path
+- **Immediate Stop**: Prevents "walking in place" bug
+- **Path Clearing**: Removes queued movement commands
+
 **Usage**: Halt when reaching destination or when threatened.
 
 ---
@@ -149,7 +158,18 @@ export const navigateToAction: Action = {
 };
 ```
 
+**Features:**
+- **Named Locations**: Use location names instead of coordinates
+- **Distance Stepping**: Automatically handles server's 200-tile movement limit
+  - Moves in 150-tile steps for safety margin
+  - Shows progress: "Moving towards bank (50 units remaining)"
+- **Multi-Step Navigation**: Continues moving until destination reached
+
 **Usage**: Navigate using location names instead of coordinates.
+
+<Info>
+The server enforces a 200-tile maximum movement distance per command. NAVIGATE_TO automatically breaks long journeys into multiple steps.
+</Info>
 
 ---
 
@@ -240,6 +260,15 @@ export const chopTreeAction: Action = {
 ```
 
 **Requirements**: Hatchet in inventory, Woodcutting level.
+
+**Positioning:**
+- Server requires player to be on a **cardinal adjacent tile** (N/S/E/W, not diagonal)
+- Action automatically finds nearest cardinal tile and walks there
+- Ensures proper face direction for gathering animation
+
+<Info>
+The cardinal positioning requirement ensures consistent face direction during woodcutting, matching OSRS behavior.
+</Info>
 
 ---
 
@@ -344,6 +373,7 @@ Drop an item on the ground.
 ```typescript
 export const dropItemAction: Action = {
   name: "DROP_ITEM",
+  similes: ["DROP", "DISCARD", "THROW_AWAY", "TRASH", "REMOVE"],
   description: "Drop an item from inventory onto the ground",
   parameters: {
     itemId: { type: "string", description: "Item ID to drop" },
@@ -352,13 +382,23 @@ export const dropItemAction: Action = {
 };
 ```
 
-**Usage**: Make room in inventory, drop unwanted items.
+**Features:**
+- **Single Item**: Drop specific items by name
+- **Drop All**: "drop all logs" or "drop everything"
+- **Smart Matching**: Word boundary regex prevents false matches
+- **Safety Limits**: Maximum 50 items per drop-all operation
+- **Error Recovery**: Stops after 3 consecutive failures
 
-**Special Features:**
-- Supports "drop all" commands (e.g., "drop all logs", "drop everything")
-- Word boundary matching prevents false matches (e.g., "bronze pickaxe" won't match "bronze hatchet")
-- Limited to 50 items per drop-all operation to prevent memory leaks
-- Consecutive failure tracking stops operation after 3 failures
+**Examples:**
+```
+"Drop the bronze hatchet"
+"Drop all logs"
+"Drop everything"
+```
+
+<Warning>
+Drop-all operations are limited to 50 items to prevent memory leaks and DoS attacks.
+</Warning>
 
 ---
 
@@ -369,20 +409,32 @@ Pick up an item from the ground.
 ```typescript
 export const pickupItemAction: Action = {
   name: "PICKUP_ITEM",
+  similes: ["PICKUP", "PICK_UP", "GRAB", "TAKE", "LOOT", "GET"],
   description: "Pick up an item from the ground nearby",
   parameters: {
-    itemId: { type: "string", optional: true, description: "Specific item ID" },
+    itemId: { type: "string", optional: true, description: "Specific item to pick up" },
   },
 };
 ```
 
-**Usage**: Loot drops, collect resources.
-
 **Features:**
-- Automatically walks to items beyond pickup range (4m)
-- Scoring system matches best item when multiple items nearby
-- Word boundary matching for accurate item selection
-- Handles server's 200-tile movement limit with stepping
+- **Smart Matching**: Scoring system matches items by word count
+  - "bronze pickaxe" scores 20 points (2 words match)
+  - "bronze hatchet" scores 10 points (1 word matches)
+  - Picks highest scoring item
+- **Auto-Walk**: Walks to items beyond pickup range (4m)
+- **Distance Stepping**: Handles server's 200-tile movement limit
+
+**Examples:**
+```
+"Pick up the bronze pickaxe"
+"Grab that sword"
+"Loot the coins"
+```
+
+<Info>
+The scoring system uses word boundary regex to prevent false matches. "pick up axe" won't match "Bronze Hatchet" (contains "axe" substring) - it requires exact word matches.
+</Info>
 
 ---
 
@@ -469,6 +521,17 @@ export const setGoalAction: Action = {
 };
 ```
 
+**Features:**
+- **Autonomous Goal Selection**: Agent chooses goals based on context
+- **Manual Override**: Dashboard can set specific goals
+- **Pause State Blocking**: SET_GOAL is blocked when goals are paused
+  - User clicks "Stop" button → goals paused
+  - Agent forced to IDLE instead of setting new goals
+  - Prevents unwanted autonomous behavior
+- **Locked Goals**: User commands create locked goals that persist
+  - 60-second grace period for multi-step actions
+  - Agent continues executing until action completes or times out
+
 **Usage**: Direct agent behavior toward objectives.
 
 **Example Goals**:
@@ -476,6 +539,10 @@ export const setGoalAction: Action = {
 - "Collect 100 logs"
 - "Kill 50 goblins"
 - "Earn 10,000 coins"
+
+<Info>
+When goals are paused (via dashboard Stop button), SET_GOAL is automatically blocked and replaced with IDLE. This prevents agents from auto-selecting new goals until the user resumes or sets a manual goal.
+</Info>
 
 ---
 
@@ -494,7 +561,12 @@ export const idleAction: Action = {
 };
 ```
 
-**Usage**: Wait for events, conserve resources.
+**Features:**
+- **Movement Cancellation**: Stops current movement with `cancel: true` flag
+- **Pause State**: Used when goals are paused by user
+- **Observation Mode**: Agent stands still and observes surroundings
+
+**Usage**: Wait for events, conserve resources, or when goals are paused.
 
 ---
 

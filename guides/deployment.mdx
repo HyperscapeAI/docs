@@ -46,24 +46,105 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
+Railway deployment is configured via `railway.server.json` and supports both Docker and Nixpacks builders.
+
 <Steps>
   <Step title="Create Railway project">
     Connect your GitHub repository to Railway.
   </Step>
   
-  <Step title="Configure build">
-    Set build command: `bun run build`
-    Set start command: `bun start`
+  <Step title="Choose build method">
+    **Option 1: Nixpacks (Recommended)**
+    - Uses `nixpacks.toml` configuration
+    - Faster builds with caching
+    - Start command: `bun run start`
+    
+    **Option 2: Docker**
+    - Uses `Dockerfile.server` multi-stage build
+    - More control over build process
+    - Includes production optimizations
   </Step>
   
   <Step title="Add PostgreSQL">
     Add PostgreSQL service from Railway marketplace.
+    Copy the `DATABASE_URL` connection string.
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables.
+    ```bash
+    # Required
+    DATABASE_URL=postgresql://...  # From Railway PostgreSQL service
+    JWT_SECRET=your-secret-key
+    PRIVY_APP_ID=your-app-id
+    PRIVY_APP_SECRET=your-app-secret
+    PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+    
+    # Optional
+    PORT=5555
+    NODE_ENV=production
+    ```
+  </Step>
+  
+  <Step title="Configure asset handling">
+    Assets are served from CDN in production. The `ensure-assets.mjs` script automatically skips Git LFS downloads in CI/Railway environments.
+    
+    Set `PUBLIC_CDN_URL` to your asset CDN (Cloudflare R2, AWS S3, etc.).
   </Step>
 </Steps>
+
+### Railway Configuration Files
+
+**`railway.server.json`:**
+```json
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "nixpacksConfigPath": "nixpacks.toml"
+  },
+  "deploy": {
+    "startCommand": "bun run start",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
+```
+
+**`nixpacks.toml`:**
+```toml
+[phases.setup]
+nixPkgs = ["bun"]
+
+[phases.install]
+cmds = ["bun install --frozen-lockfile"]
+
+[phases.build]
+cmds = ["bun run build"]
+
+[start]
+cmd = "bun run start"
+```
+
+**`Dockerfile.server`** (alternative to Nixpacks):
+```dockerfile
+# Multi-stage build for production
+FROM oven/bun:1.1.38 AS builder
+WORKDIR /app
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+COPY . .
+RUN bun run build
+
+FROM oven/bun:1.1.38-slim
+WORKDIR /app
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+CMD ["bun", "run", "start"]
+```
+
+<Info>
+The `ensure-assets.mjs` script detects CI environments (`CI=true` or `RAILWAY_ENVIRONMENT`) and skips Git LFS asset downloads since assets are served from CDN in production.
+</Info>
 
 ## Vercel Client Deployment
 

@@ -23,47 +23,100 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Agility Skill & Dashboard Improvements" description="January 2026" date="2026-01-21">
+<Update label="Agility Skill & Agent Dashboard" description="January 2026" date="2026-01-21">
 
 ### 🏃 Agility Skill System
 
-Complete implementation of the Agility skill with passive training and stamina mechanics:
+Complete implementation of the Agility skill with movement-based XP and stamina benefits:
 
-- **Passive Training**: Gain 1 XP per 2 tiles traveled (walking or running)
-- **XP Batching**: 100 tiles = 50 XP grant (prevents visual spam)
-- **Weight-Based Stamina**: +0.5% drain per kg carried while running
-- **Agility Regen Bonus**: +1% stamina regen per Agility level (up to 99% at L99)
-- **Database Migration**: New `agilityLevel` and `agilityXp` columns
-- **Testing**: 868 lines of comprehensive tests
+- **Movement XP Tracking**: Gain 1 XP per 2 tiles traveled
+  - XP batched at 100 tiles (50 XP) to prevent visual spam
+  - Walking: ~100 XP/min, Running: ~200 XP/min
+  - Death penalty: Resets tile counter (lose accumulated progress)
+- **Weight-Based Stamina Drain**: Carrying heavy items increases stamina drain
+  - +0.5% drain per kg carried
+  - 50kg load = +25% drain (2.5/sec instead of 2.0/sec)
+  - Weight synced from server via `PLAYER_WEIGHT_CHANGED` events
+- **Agility-Based Stamina Regen**: Higher Agility = faster stamina recovery
+  - +1% regen per Agility level
+  - Level 99: Nearly 2x regen (7.96/sec idle, 3.98/sec walking)
+- **Database Migration**: New `agilityLevel` and `agilityXp` columns (migration 0018)
+- **UI Integration**: Agility appears in Skills Panel and Agent Dashboard
+- **Testing**: 868 lines of comprehensive unit and integration tests
 
-### 📊 Skill Guide Panel
+### 🎮 Agent Dashboard Improvements
 
-OSRS-style skill guide showing unlock progression:
+Major UX improvements for agent control and monitoring:
 
-- Click any skill to view unlocks at each level
-- Visual states: unlocked (green), locked (gray), next (highlighted)
-- Server API: `GET /api/data/skill-unlocks`
-- Animations and custom scrollbar styling
-
-### 🎛️ Agent Dashboard Improvements
-
-- **New Panels**: Summary Card, Activity Panel, Enhanced Position Panel
-- **Goal Control**: Stop/Resume buttons with pause state persistence
+- **ElizaOS 1.7.0 Upgrade**: Updated all ElizaOS dependencies with backwards-compatible shims
+- **Stop/Resume Goal Controls**: Robust pause state management
+  - Stop button halts agent and sets paused state
+  - Resume button re-enables autonomous goal selection
+  - Paused state persists across reconnections
+  - Movement cancellation with `cancel: true` flag fixes walking-in-place bug
+  - 100ms acknowledgment delay prevents race conditions
 - **Quick Action Menu**: One-click commands for common tasks
-- **Rate Limiting**: Polling intervals increased to 10s, retry logic added
+  - Woodcutting, Mining, Fishing, Combat actions
+  - Pick Up, Bank, Stop, Idle commands
+  - Contextual availability based on nearby entities
+  - Collapsible sections with item counts
+- **Improved Item Pickup**: Word boundary regex scoring system
+  - "bronze pickaxe" correctly picks pickaxe, not hatchet
+  - Scores items by word match count (prevents false matches)
+  - Auto-walks to items beyond pickup range
+- **Rate Limiting Fixes**: Reduced dashboard polling to prevent 429 errors
+  - Increased intervals: 2s → 10s for most panels
+  - Exponential backoff retry logic (1s → 2s → 4s)
+  - Global 100 req/min limit provides protection
+- **Dashboard Settings Tab**: Fixed tab switching and API key configuration
+  - Tabs now switch correctly (Basic, Content, Style, API Keys)
+  - API keys can be configured and saved
+  - Secrets properly masked in UI
+- **Chat Routing**: Messages from dashboard now reach agent
+  - In-game chat opens automatically when sending messages
+  - PostMessage integration between iframe and parent
 
-### 🤖 ElizaOS 1.7.0 Upgrade
+### 🎨 Skill Guide Panel
 
-- Upgraded to ElizaOS 1.7.0 with backwards-compatible shims
-- New Ollama plugin for local LLM support
-- Fixed dashboard settings tab and API key configuration
+OSRS-style skill guide showing unlocks at each level:
 
-### 🎯 Agent Actions
+- **Click-to-View**: Click any skill in Skills Panel to open guide
+- **Unlock Progression**: Shows all unlocks with level requirements
+  - Green checkmarks for achieved unlocks
+  - Lock icons for future unlocks
+  - Next unlock highlighted with progress indicator
+- **Server API**: New `/api/data/skill-unlocks` endpoint
+  - Server-authoritative unlock data
+  - Defence/Defense spelling normalization
+- **Loading States**: Spinner during data fetch, empty state handling
+- **Animations**: Smooth fade-in and slide-up transitions
+- **Scrollable**: Handles skills with many unlocks (Prayer has 29)
 
-- **PICKUP_ITEM** (NEW): Pick up ground items with auto-pathfinding
-- **DROP_ITEM** (Enhanced): "Drop all" support, word boundary matching
-- **CHOP_TREE** (Fixed): Cardinal tile positioning
-- **NAVIGATE_TO** (Fixed): 200-tile limit handling with waypoints
+### 🚀 Railway Deployment
+
+Production deployment configuration for Railway platform:
+
+- **Nixpacks Configuration**: `nixpacks.toml` for Railway Nixpacks builder
+  - Bun runtime with frozen lockfile installs
+  - Optimized build and start commands
+- **Docker Support**: `Dockerfile.server` for multi-stage builds
+  - Builder stage with full dependencies
+  - Slim production image
+  - Proper layer caching
+- **CI Asset Handling**: `ensure-assets.mjs` detects CI/Railway environments
+  - Skips Git LFS downloads in production
+  - Assets served from CDN instead
+  - Reduces build time and image size
+- **Railway Config**: `railway.server.json` with restart policies
+  - ON_FAILURE restart with 10 max retries
+  - Proper health check configuration
+
+### 🐛 Bug Fixes
+
+- **Equipment Panel Weight**: Now displays server-synced weight instead of client calculation
+- **Death System**: Fixed race conditions and combat state cleanup
+- **Interaction System**: Dead mobs no longer block item pickup (raycast skip)
+- **Prayer System**: Fixed persistence by adding missing type definitions
 
 </Update>
 

@@ -8,16 +8,23 @@ icon: "bot"
 
 Hyperscape integrates [ElizaOS](https://elizaos.ai) to enable AI agents that play the game autonomously. Unlike scripted NPCs, these agents use LLMs to make decisions, set goals, and interact with the world just like human players.
 
+<Note>
+**ElizaOS 1.7.0**: Hyperscape is compatible with ElizaOS 1.7.0+ with backwards-compatible shims. Supports OpenAI, Anthropic, OpenRouter, and Ollama (local) LLM providers.
+</Note>
+
 ## Starting AI Agents
 
 ```bash
-bun run dev:elizaos
+bun run dev:ai
 ```
 
 This starts:
 - Game server on port 5555
 - Client on port 3333
 - ElizaOS runtime on port 4001
+- ElizaOS dashboard on port 4000
+
+Access the agent dashboard at `http://localhost:4000` to monitor and control agents.
 
 ## Agent Capabilities
 
@@ -51,7 +58,7 @@ actions: [
   equipItemAction,
   useItemAction,
   dropItemAction,
-  pickupItemAction,  // NEW in PR #569
+  pickupItemAction,
 
   // Social (1 action)
   chatMessageAction,
@@ -217,7 +224,7 @@ const configSchema = z.object({
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
 OPENROUTER_API_KEY=your-openrouter-key
-OLLAMA_API_URL=http://localhost:11434  # Optional: Local Ollama
+OLLAMA_SERVER_URL=http://localhost:11434  # For local Ollama models
 
 # Hyperscape Connection
 HYPERSCAPE_SERVER_URL=ws://localhost:5555/ws
@@ -226,25 +233,9 @@ HYPERSCAPE_AUTH_TOKEN=optional-privy-token
 HYPERSCAPE_PRIVY_USER_ID=optional-privy-user-id
 ```
 
-## ElizaOS Version
-
-Hyperscape uses **ElizaOS 1.7.0** with backwards-compatible shims for cross-version compatibility.
-
-**Key Dependencies:**
-- `@elizaos/core`: ^1.7.0
-- `@elizaos/plugin-sql`: ^1.7.0
-- `@elizaos/plugin-openai`: ^1.6.0
-- `@elizaos/plugin-openrouter`: ^1.5.17
-- `@elizaos/plugin-ollama`: ^1.2.4 (NEW)
-
-**Compatibility Notes:**
-- LLM API calls use both `maxTokens` (1.7.x) and `max_tokens` (1.6.x) for cross-version compatibility
-- Type assertions handle interface changes between versions
-- All ElizaOS dependencies are pinned in `package.json` overrides
-
-<Warning>
-When upgrading ElizaOS versions, test all agent actions thoroughly as the ElizaOS API surface may change between versions.
-</Warning>
+<Info>
+**ElizaOS 1.7.0**: Added Ollama plugin support for local LLM inference. Configure `OLLAMA_SERVER_URL` to use local models.
+</Info>
 
 ## Agent Actions Reference
 
@@ -270,5 +261,16 @@ When upgrading ElizaOS versions, test all agent actions thoroughly as the ElizaO
 ### Inventory Actions
 
 - `equipItem(itemId)`: Wear equipment
-- `dropItem(itemId)`: Drop from inventory
+- `dropItem(itemId)`: Drop from inventory (supports "drop all")
+- `pickupItem(itemId)`: Pick up items from ground
 - `useItem(itemId)`: Consume or use
+
+### Goal Management
+
+- `setGoal(description)`: Set autonomous goal
+- `navigateTo(location)`: Navigate to named location
+- `idle()`: Wait and observe
+
+<Info>
+**Goal Pause State**: The dashboard Stop button pauses autonomous goal selection. When paused, SET_GOAL is blocked and the agent stays idle until resumed or given a manual command.
+</Info>

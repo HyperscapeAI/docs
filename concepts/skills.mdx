@@ -30,6 +30,7 @@ Hyperscape has **12 skills** total:
 | **Woodcutting** | Chop trees for logs |
 | **Mining** | Mine rocks for ores |
 | **Fishing** | Catch fish at water spots |
+| **Agility** | Traverse the world, affects stamina |
 
 ### Artisan Skills
 
@@ -136,6 +137,32 @@ Requirements:
 | Lobster | 40 | 90 |
 | Swordfish | 50 | 100 |
 | Shark | 76 | 110 |
+
+### Agility
+
+Agility is a unique skill that rewards exploration and movement:
+
+**Training Method:**
+- Gain XP by moving through the world
+- 1 XP per 2 tiles traveled (batched at 100 tiles = 50 XP)
+- Both walking and running grant XP
+
+**Benefits:**
+- **Stamina Regeneration**: +1% regen per Agility level
+  - Level 1: 1% bonus
+  - Level 50: 50% bonus (1.5x regen)
+  - Level 99: 99% bonus (nearly 2x regen)
+- Faster stamina recovery while walking and idle
+
+**XP Rates:**
+| Movement | XP/Minute | Time to Level 50 |
+|----------|-----------|------------------|
+| Walking | ~100 XP | ~17 hours |
+| Running | ~200 XP | ~8.5 hours |
+
+<Info>
+  XP is batched every 100 tiles to prevent visual spam. Death resets your tile counter (lose accumulated progress toward next XP grant).
+</Info>
 
 ## Artisan Skills
 

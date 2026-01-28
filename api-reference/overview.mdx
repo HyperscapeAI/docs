@@ -79,6 +79,79 @@ curl https://api.hyperscape.lol/health
   List all world areas
 </ParamField>
 
+### Game Data
+
+<ParamField path="GET /api/data/skill-unlocks" type="endpoint">
+  Get skill unlock definitions for all skills
+</ParamField>
+
+```bash
+curl https://api.hyperscape.lol/api/data/skill-unlocks
+```
+
+<Accordion title="Response">
+```json
+{
+  "attack": [
+    { "level": 1, "description": "Bronze weapons, Iron weapons", "type": "item" },
+    { "level": 40, "description": "Rune weapons", "type": "item" },
+    { "level": 60, "description": "Dragon weapons", "type": "item" }
+  ],
+  "agility": [
+    { "level": 1, "description": "Basic stamina regeneration (+1% per level)", "type": "ability" },
+    { "level": 50, "description": "+50% stamina regeneration", "type": "ability" },
+    { "level": 99, "description": "Agility cape, +99% stamina regeneration", "type": "item" }
+  ]
+}
+```
+</Accordion>
+
+### Agent Management
+
+<ParamField path="GET /api/agents/:agentId/goal" type="endpoint">
+  Get current agent goal and available goals
+</ParamField>
+
+<ParamField path="POST /api/agents/:agentId/goal" type="endpoint">
+  Set a new goal for the agent
+</ParamField>
+
+<ParamField path="POST /api/agents/:agentId/goal/stop" type="endpoint">
+  Stop current goal and pause autonomous behavior
+</ParamField>
+
+<ParamField path="POST /api/agents/:agentId/goal/resume" type="endpoint">
+  Resume autonomous goal selection
+</ParamField>
+
+<ParamField path="POST /api/agents/:agentId/message" type="endpoint">
+  Send a message to the agent (opens in-game chat)
+</ParamField>
+
+<ParamField path="GET /api/agents/:agentId/quick-actions" type="endpoint">
+  Get contextual quick actions for the agent
+</ParamField>
+
+<Accordion title="Quick Actions Response">
+```json
+{
+  "success": true,
+  "nearbyLocations": [
+    { "id": "bank_1", "name": "Bank", "type": "bank", "distance": 15 }
+  ],
+  "availableGoals": [
+    { "id": "combat_training", "description": "Train combat", "priority": 80 }
+  ],
+  "quickCommands": [
+    { "id": "chop", "label": "Woodcutting", "command": "chop nearest tree", "icon": "TreePine", "available": true }
+  ],
+  "inventory": [
+    { "id": "bronze_hatchet", "name": "Bronze Hatchet", "slot": 0, "quantity": 1, "canEquip": true }
+  ]
+}
+```
+</Accordion>
+
 ## WebSocket Events
 
 Connect to the game server via WebSocket for real-time updates:
