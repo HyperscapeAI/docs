@@ -1,5 +1,7 @@
 {
+  "$schema": "https://mintlify.com/schema.json",
   "name": "Hyperscape",
+  "theme": "willow",
   "logo": {
     "light": "/logo/light.svg",
     "dark": "/logo/dark.svg",
@@ -21,431 +23,160 @@
       "url": "https://hyperscape.lol"
     }
   ],
-  "navigation": {
-    "tabs": [
-      {
-        "tab": "Documentation",
-        "icon": "book-open",
-        "groups": [
-          {
-            "group": "Get Started",
-            "icon": "rocket",
-            "expanded": true,
-            "pages": [
-              "index",
-              "quickstart",
-              "architecture",
-              {
-                "group": "Changelog",
-                "icon": "scroll",
-                "pages": [
-                  "changelog/index",
-                  "changelog/2026-01",
-                  "changelog/2025"
-                ]
-              }
-            ]
-          },
-          {
-            "group": "Guides",
-            "icon": "compass",
-            "pages": [
-              "guides/playing",
-              "guides/development",
-              "guides/adding-content",
-              "guides/ai-agents",
-              "guides/deployment",
-              "guides/mobile",
-              "guides/mcp-server"
-            ]
-          },
-          {
-            "group": "Core Concepts",
-            "icon": "lightbulb",
-            "pages": [
-              {
-                "group": "Architecture",
-                "icon": "layers",
-                "pages": [
-                  "concepts/ecs",
-                  "concepts/entities",
-                  "concepts/multiplayer"
-                ]
-              },
-              {
-                "group": "Game Systems",
-                "icon": "swords",
-                "pages": [
-                  "concepts/combat",
-                  "concepts/skills",
-                  "concepts/economy"
-                ]
-              },
-              "concepts/manifests"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Packages",
-        "icon": "package",
-        "groups": [
-          {
-            "group": "Overview",
-            "icon": "layout-grid",
-            "expanded": true,
-            "pages": ["packages/overview"]
-          },
-          {
-            "group": "Core Packages",
-            "icon": "cube",
-            "pages": [
-              "packages/shared",
-              "packages/server",
-              "packages/client"
-            ]
-          },
-          {
-            "group": "Extensions",
-            "icon": "puzzle",
-            "pages": [
-              "packages/plugin-hyperscape",
-              "packages/website",
-              "packages/asset-forge"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API Reference",
-        "icon": "code",
-        "groups": [
-          {
-            "group": "REST API",
-            "icon": "plug",
-            "expanded": true,
-            "pages": ["api-reference/overview"]
-          }
-        ]
-      },
-      {
-        "tab": "DevOps",
-        "icon": "server",
-        "groups": [
-          {
-            "group": "Configuration",
-            "icon": "settings",
-            "expanded": true,
-            "pages": [
-              "devops/configuration",
-              "devops/docker"
-            ]
-          },
-          {
-            "group": "Operations",
-            "icon": "wrench",
-            "pages": [
-              "devops/database",
-              "devops/troubleshooting"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Wiki",
-        "icon": "book-open-text",
-        "groups": [
-          {
-            "group": "Overview",
-            "icon": "home",
-            "expanded": true,
-            "pages": ["wiki/index"]
-          },
-          {
-            "group": "Engine Architecture",
-            "icon": "cube",
-            "pages": [
-              "wiki/engine/overview",
-              "wiki/engine/ecs",
-              "wiki/engine/networking",
-              "wiki/engine/database",
-              "wiki/engine/events"
-            ]
-          },
-          {
-            "group": "Client Application",
-            "icon": "monitor",
-            "pages": [
-              "wiki/client/overview",
-              "wiki/client/ui-improvements"
-            ]
-          },
-          {
-            "group": "Game Systems",
-            "icon": "swords",
-            "pages": [
-              "wiki/game-systems/overview",
-              "wiki/game-systems/combat",
-              "wiki/game-systems/duel-arena",
-              "wiki/game-systems/skills",
-              "wiki/game-systems/movement",
-              "wiki/game-systems/collision",
-              "wiki/game-systems/inventory",
-              "wiki/game-systems/bank",
-              "wiki/game-systems/death",
-              "wiki/game-systems/loot",
-              "wiki/game-systems/mob-ai"
-            ]
-          },
-          {
-            "group": "AI Agents",
-            "icon": "bot",
-            "pages": [
-              "wiki/ai-agents/overview",
-              "wiki/ai-agents/actions",
-              "wiki/ai-agents/providers"
-            ]
-          },
-          {
-            "group": "Data Manifests",
-            "icon": "database",
-            "pages": [
-              "wiki/data/overview",
-              "wiki/data/npcs",
-              "wiki/data/items"
-            ]
-          },
-          {
-            "group": "Technical Reference",
-            "icon": "hashtag",
-            "pages": [
-              "wiki/reference/constants",
-              "wiki/reference/mcp-server"
-            ]
-          }
-        ]
-      }
-    ],
-    "global": {
-      "anchors": []
-    }
-  },
-  "global": {
-    "anchors": []
-  },
   "tabs": [
     {
-      "tab": "Documentation",
-      "icon": "book-open",
-      "groups": [
-        {
-          "group": "Get Started",
-          "icon": "rocket",
-          "expanded": true,
-          "pages": [
-            "index",
-            "quickstart",
-            "architecture",
-            {
-              "group": "Changelog",
-              "icon": "scroll",
-              "pages": [
-                "changelog/index",
-                "changelog/2026-01",
-                "changelog/2025"
-              ]
-            }
-          ]
-        },
-        {
-          "group": "Guides",
-          "icon": "compass",
-          "pages": [
-            "guides/playing",
-            "guides/development",
-            "guides/adding-content",
-            "guides/ai-agents",
-            "guides/deployment",
-            "guides/mobile",
-            "guides/mcp-server"
-          ]
-        },
-        {
-          "group": "Core Concepts",
-          "icon": "lightbulb",
-          "pages": [
-            {
-              "group": "Architecture",
-              "icon": "layers",
-              "pages": [
-                "concepts/ecs",
-                "concepts/entities",
-                "concepts/multiplayer"
-              ]
-            },
-            {
-              "group": "Game Systems",
-              "icon": "swords",
-              "pages": [
-                "concepts/combat",
-                "concepts/skills",
-                "concepts/economy"
-              ]
-            },
-            "concepts/manifests"
-          ]
-        }
+      "name": "Documentation",
+      "url": "/"
+    },
+    {
+      "name": "Packages",
+      "url": "/packages"
+    },
+    {
+      "name": "API Reference",
+      "url": "/api-reference"
+    },
+    {
+      "name": "DevOps",
+      "url": "/devops"
+    },
+    {
+      "name": "Wiki",
+      "url": "/wiki"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": [
+        "index",
+        "quickstart",
+        "architecture"
       ]
     },
     {
-      "tab": "Packages",
-      "icon": "package",
-      "groups": [
-        {
-          "group": "Overview",
-          "icon": "layout-grid",
-          "expanded": true,
-          "pages": [
-            "packages/overview"
-          ]
-        },
-        {
-          "group": "Core Packages",
-          "icon": "cube",
-          "pages": [
-            "packages/shared",
-            "packages/server",
-            "packages/client"
-          ]
-        },
-        {
-          "group": "Extensions",
-          "icon": "puzzle",
-          "pages": [
-            "packages/plugin-hyperscape",
-            "packages/asset-forge"
-          ]
-        }
+      "group": "Changelog",
+      "pages": [
+        "changelog/index",
+        "changelog/2026-01",
+        "changelog/2025"
       ]
     },
     {
-      "tab": "API Reference",
-      "icon": "code",
-      "groups": [
-        {
-          "group": "REST API",
-          "icon": "plug",
-          "expanded": true,
-          "pages": [
-            "api-reference/overview"
-          ]
-        }
+      "group": "Guides",
+      "pages": [
+        "guides/playing",
+        "guides/development",
+        "guides/adding-content",
+        "guides/ai-agents",
+        "guides/deployment",
+        "guides/mobile",
+        "guides/mcp-server"
       ]
     },
     {
-      "tab": "DevOps",
-      "icon": "server",
-      "groups": [
-        {
-          "group": "Configuration",
-          "icon": "settings",
-          "expanded": true,
-          "pages": [
-            "devops/configuration",
-            "devops/docker"
-          ]
-        },
-        {
-          "group": "Operations",
-          "icon": "wrench",
-          "pages": [
-            "devops/database",
-            "devops/troubleshooting"
-          ]
-        }
+      "group": "Core Concepts",
+      "pages": [
+        "concepts/ecs",
+        "concepts/entities",
+        "concepts/multiplayer",
+        "concepts/combat",
+        "concepts/skills",
+        "concepts/economy",
+        "concepts/manifests"
       ]
     },
     {
-      "tab": "Wiki",
-      "icon": "book-open-text",
-      "groups": [
-        {
-          "group": "Overview",
-          "icon": "home",
-          "expanded": true,
-          "pages": [
-            "wiki/index"
-          ]
-        },
-        {
-          "group": "Engine Architecture",
-          "icon": "cube",
-          "pages": [
-            "wiki/engine/overview",
-            "wiki/engine/ecs",
-            "wiki/engine/networking",
-            "wiki/engine/database",
-            "wiki/engine/events"
-          ]
-        },
-        {
-          "group": "Client Application",
-          "icon": "monitor",
-          "pages": [
-            "wiki/client/overview",
-            "wiki/client/ui-systems"
-          ]
-        },
-        {
-          "group": "Game Systems",
-          "icon": "swords",
-          "pages": [
-            "wiki/game-systems/overview",
-            "wiki/game-systems/combat",
-            "wiki/game-systems/duel-arena",
-            "wiki/game-systems/skills",
-            "wiki/game-systems/movement",
-            "wiki/game-systems/collision",
-            "wiki/game-systems/inventory",
-            "wiki/game-systems/bank",
-            "wiki/game-systems/death",
-            "wiki/game-systems/loot",
-            "wiki/game-systems/mob-ai"
-          ]
-        },
-        {
-          "group": "AI Agents",
-          "icon": "bot",
-          "pages": [
-            "wiki/ai-agents/overview",
-            "wiki/ai-agents/actions",
-            "wiki/ai-agents/providers"
-          ]
-        },
-        {
-          "group": "Data Manifests",
-          "icon": "database",
-          "pages": [
-            "wiki/data/overview",
-            "wiki/data/npcs",
-            "wiki/data/items"
-          ]
-        },
-        {
-          "group": "Technical Reference",
-          "icon": "hashtag",
-          "pages": [
-            "wiki/reference/constants",
-            "wiki/reference/mcp-server"
-          ]
-        }
+      "group": "Packages",
+      "pages": [
+        "packages/overview",
+        "packages/shared",
+        "packages/server",
+        "packages/client",
+        "packages/plugin-hyperscape",
+        "packages/asset-forge"
+      ]
+    },
+    {
+      "group": "API Reference",
+      "pages": [
+        "api-reference/overview"
+      ]
+    },
+    {
+      "group": "DevOps",
+      "pages": [
+        "devops/configuration",
+        "devops/docker",
+        "devops/database",
+        "devops/troubleshooting"
+      ]
+    },
+    {
+      "group": "Wiki",
+      "pages": [
+        "wiki/index"
+      ]
+    },
+    {
+      "group": "Engine",
+      "pages": [
+        "wiki/engine/overview",
+        "wiki/engine/ecs",
+        "wiki/engine/networking",
+        "wiki/engine/database",
+        "wiki/engine/events"
+      ]
+    },
+    {
+      "group": "Client",
+      "pages": [
+        "wiki/client/overview"
+      ]
+    },
+    {
+      "group": "Game Systems",
+      "pages": [
+        "wiki/game-systems/overview",
+        "wiki/game-systems/combat",
+        "wiki/game-systems/skills",
+        "wiki/game-systems/movement",
+        "wiki/game-systems/collision",
+        "wiki/game-systems/inventory",
+        "wiki/game-systems/bank",
+        "wiki/game-systems/death",
+        "wiki/game-systems/loot",
+        "wiki/game-systems/mob-ai"
+      ]
+    },
+    {
+      "group": "AI Agents",
+      "pages": [
+        "wiki/ai-agents/overview",
+        "wiki/ai-agents/actions",
+        "wiki/ai-agents/providers"
+      ]
+    },
+    {
+      "group": "Data",
+      "pages": [
+        "wiki/data/overview",
+        "wiki/data/npcs",
+        "wiki/data/items"
+      ]
+    },
+    {
+      "group": "Reference",
+      "pages": [
+        "wiki/reference/constants",
+        "wiki/reference/mcp-server"
       ]
     }
   ],
   "footerSocials": {
     "github": "https://github.com/HyperscapeAI/hyperscape",
     "discord": "https://discord.gg/JD3MEwNbbX",
-    "twitter": "https://x.com/HyperscapeAI"
+    "x": "https://x.com/HyperscapeAI"
   },
   "analytics": {
     "posthog": {
