@@ -168,6 +168,24 @@ OSRS-style quest progression with multi-stage tracking:
 - **Security** — HMAC kill token validation, rate limiting, audit logging
 - **Database** — `quest_progress` and `quest_audit_log` tables
 
+### Quest System
+
+**Location:** `systems/shared/progression/`
+
+OSRS-style quest progression with multi-stage quests:
+
+- **QuestSystem.ts** — Quest orchestration and progress tracking
+- **Multi-stage quests** — Kill, gather, interact, and dialogue stages
+- **Quest points** — Earned on completion, tracked per character
+- **Prerequisites** — Quest, skill, and item requirements
+- **Rewards** — Quest points, items, and skill XP
+- **Security** — HMAC kill token validation, rate limiting, audit logging
+- **Database** — `quest_progress` and `quest_audit_log` tables
+
+<Tip>
+  Quest progress is tracked in real-time with counters (e.g., "Kill 15 goblins (7/15)").
+</Tip>
+
 ---
 
 ## Combat Constants
@@ -349,7 +367,7 @@ export enum EventType {
     RuneScape XP curves, leveling, combat level formula, and skill requirements.
   </Card>
   <Card title="Quest System" icon="scroll" href="/wiki/game-systems/quests">
-    Multi-stage quest progression with kill tracking, gather objectives, and quest points.
+    Multi-stage quests with kill, gather, and interact objectives. Quest points and rewards.
   </Card>
   <Card title="Tile Movement" icon="route" href="/wiki/game-systems/movement">
     Discrete tile-based movement, pathfinding, and OSRS melee range rules.

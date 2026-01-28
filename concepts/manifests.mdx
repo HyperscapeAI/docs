@@ -101,6 +101,7 @@ All manifests are in `world/assets/manifests/`:
 | `skill-unlocks.json` | What unlocks at each skill level (served via `/api/data/skill-unlocks`) |
 | `gathering/` | Resource gathering data (woodcutting, mining, fishing) |
 | `recipes/` | Processing recipes (cooking, firemaking, smelting, smithing) |
+| `quests.json` | Quest definitions with stages, requirements, and rewards |
 | `stations.json` | World station configurations (anvils, furnaces, ranges) |
 | `prayers.json` | Prayer definitions with bonuses and drain rates |
 | `quests.json` | Quest definitions with stages, requirements, and rewards |
@@ -899,68 +900,68 @@ const yOffset = stationDataProvider.getModelYOffset("furnace");
 
 ### Quests (`quests.json`)
 
-The `quests.json` manifest defines OSRS-style quests with multi-stage progression:
+The `quests.json` manifest defines multi-stage quests with requirements and rewards:
 
 ```json
 {
-  "goblin_slayer": {
-    "id": "goblin_slayer",
-    "name": "Goblin Slayer",
-    "description": "Kill 15 goblins to prove your worth.",
-    "difficulty": "novice",
-    "questPoints": 1,
-    "replayable": false,
-    "requirements": {
-      "quests": [],
-      "skills": {},
-      "items": []
+  \"goblin_slayer\": {
+    \"id\": \"goblin_slayer\",
+    \"name\": \"Goblin Slayer\",
+    \"description\": \"Kill 15 goblins to prove your worth.\",
+    \"difficulty\": \"novice\",
+    \"questPoints\": 1,
+    \"replayable\": false,
+    \"requirements\": {
+      \"quests\": [],
+      \"skills\": {},
+      \"items\": []
     },
-    "startNpc": "cook",
-    "stages": [
+    \"startNpc\": \"cook\",
+    \"stages\": [
       {
-        "id": "talk_to_cook",
-        "type": "dialogue",
-        "description": "Talk to the Cook to start the quest."
+        \"id\": \"talk_to_cook\",
+        \"type\": \"dialogue\",
+        \"description\": \"Talk to the Cook to start the quest.\"
       },
       {
-        "id": "kill_goblins",
-        "type": "kill",
-        "description": "Kill 15 goblins.",
-        "target": "goblin",
-        "count": 15
+        \"id\": \"kill_goblins\",
+        \"type\": \"kill\",
+        \"description\": \"Kill 15 goblins.\",
+        \"target\": \"goblin\",
+        \"count\": 15
       },
       {
-        "id": "return_to_cook",
-        "type": "dialogue",
-        "description": "Return to the Cook."
+        \"id\": \"return_to_cook\",
+        \"type\": \"dialogue\",
+        \"description\": \"Return to the Cook.\"
       }
     ],
-    "onStart": {
-      "items": [{ "itemId": "bronze_sword", "quantity": 1 }]
+    \"onStart\": {
+      \"items\": [{ \"itemId\": \"bronze_sword\", \"quantity\": 1 }]
     },
-    "rewards": {
-      "questPoints": 1,
-      "items": [{ "itemId": "xp_lamp_1000", "quantity": 1 }],
-      "xp": { "attack": 500, "strength": 500 }
+    \"rewards\": {
+      \"questPoints\": 1,
+      \"items\": [{ \"itemId\": \"xp_lamp_1000\", \"quantity\": 1 }],
+      \"xp\": { \"attack\": 500, \"strength\": 500 }
     }
   }
 }
 ```
 
 **Stage Types**:
-- `dialogue` — Talk to NPC to progress
-- `kill` — Kill specific number of mobs
-- `gather` — Collect items through gathering skills
-- `interact` — Complete skill actions (cooking, smithing, etc.)
+- `dialogue` — Talk to an NPC
+- `kill` — Kill specific NPCs (with HMAC validation)
+- `gather` — Collect items via gathering skills
+- `interact` — Use objects/stations (fires, cooking, smithing)
 
-**Quest Integration**:
-- Quests start through NPC dialogue with `questOverrides`
-- Dialogue nodes can have `effect: "startQuest:quest_id"` or `effect: "completeQuest:quest_id"`
-- Progress tracked automatically via game events (NPC_DIED, INVENTORY_ITEM_ADDED, etc.)
-- Quest points stored in `characters.questPoints` column
+**Security Features**:
+- Quest IDs validated with strict pattern (`/^[a-z][a-z0-9_]{0,63}$/`)
+- HMAC-SHA256 kill tokens prevent event spoofing
+- Rate limiting on quest network handlers
+- Audit logging for all quest state changes
 
 <Info>
-Quest progress is tracked in the `quest_progress` database table with flexible JSON progress data. See [Quest System](/wiki/game-systems/quests) for full documentation.
+See [Quest System](/wiki/game-systems/quests) for complete documentation on quest mechanics and API reference.
 </Info>
 
 ### Prayers (`prayers.json`)

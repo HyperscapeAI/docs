@@ -65,6 +65,11 @@ PUBLIC_WS_URL=ws://localhost:5555/ws
 # In production, manifests are always fetched from CDN at startup
 # Set SKIP_MANIFESTS=true to bypass manifest fetching in test environments
 
+# CDN Fallback (development only)
+# If localhost CDN is unavailable and required manifests are missing,
+# the server will automatically fall back to production CDN to bootstrap
+# local development. Set SKIP_MANIFESTS=true to bypass manifest checks in tests.
+
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
@@ -192,92 +197,60 @@ All services have unique default ports:
 | 3400 | AssetForge UI | `ASSET_FORGE_PORT` | `bun run dev:forge` |
 | 3401 | AssetForge API | `ASSET_FORGE_API_PORT` | `bun run dev:forge` |
 
-## Manifest Fetching
+## CDN Configuration
 
-The server automatically fetches game data manifests from the CDN at startup.
+### Development CDN
 
-### How It Works
+The local CDN serves assets from `packages/server/world/assets/`:
 
-```typescript
-// From packages/server/src/startup/config.ts
-await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```bash
+bun run cdn:up   # Start CDN container (nginx on port 8080)
 ```
 
-**Manifest files fetched** (30+ files):
-- Root: `npcs.json`, `stores.json`, `world-areas.json`, `prayers.json`, etc.
-- Items: `items/weapons.json`, `items/tools.json`, `items/resources.json`, `items/food.json`, `items/misc.json`
-- Gathering: `gathering/woodcutting.json`, `gathering/mining.json`, `gathering/fishing.json`
-- Recipes: `recipes/cooking.json`, `recipes/firemaking.json`, `recipes/smelting.json`, `recipes/smithing.json`
-
-### Behavior by Environment
-
-| Environment | Behavior |
-|-------------|----------|
-| **Development** | Skips fetch if local manifests exist (allows local editing) |
-| **Production** | Always fetches latest from CDN (ensures consistency) |
-| **Staging** | Always fetches from staging CDN bucket |
-| **Test** | Skips fetch if `SKIP_MANIFESTS=true` or `NODE_ENV=test` |
-
-### Caching
-
-- Manifests cached in `packages/server/world/assets/manifests/`
-- Content comparison: Only changed files are written
-- HTTP cache headers: 5-minute cache with revalidation
-- Startup logs show: `X fetched, Y updated, Z failed`
-
-<Info>
-  This allows updating game content by uploading new manifests to R2 without redeploying the server.
-</Info>
-
-## CORS Configuration
-
-The server automatically configures CORS for all deployment environments.
-
-### Allowed Origins
-
-**Production domains:**
-- `https://hyperscape.club`
-- `https://www.hyperscape.club`
-- `https://hyperscape.pages.dev`
-- `http://hyperscape.pages.dev`
-- `https://hyperscape-production.up.railway.app`
-
-**Dynamic patterns:**
-- `http://localhost:*` (any port)
-- `https://*.hyperscape.pages.dev` (Cloudflare preview deployments)
-- `https://*.up.railway.app` (Railway deployments)
-- `https://*.farcaster.xyz`, `https://*.warpcast.com`
-- `https://*.privy.io`
-
-**Custom domains:**
-- Any domain set in `PUBLIC_APP_URL` environment variable
-
-### Configuration Location
-
-CORS is configured in `packages/server/src/startup/http-server.ts`:
-
-```typescript
-const allowedOrigins = [
-  "https://hyperscape.club",
-  "https://www.hyperscape.club",
-  "https://hyperscape.pages.dev",
-  "http://hyperscape.pages.dev",
-  /^https?:\/\/localhost:\d+$/,
-  /^https?:\/\/.+\.hyperscape\.pages\.dev$/,
-  // ... more patterns
-];
-
-await fastify.register(cors, {
-  origin: allowedOrigins,
-  credentials: true,
-  methods: ["GET", "PUT", "POST", "DELETE", "OPTIONS", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-});
+**Asset Structure:**
+```
+packages/server/world/assets/
+├── manifests/          # JSON manifests (npcs, items, quests, etc.)
+├── models/             # 3D models (.glb files)
+├── audio/              # Sound effects and music
+│   └── music/
+│       ├── normal/     # Ambient music
+│       └── combat/     # Combat music
+└── world/              # Environment assets
+    ├── base-environment.glb
+    └── day2-2k.jpg
 ```
 
-<Warning>
-  If you deploy to a custom domain, add it to `PUBLIC_APP_URL` in your server environment variables.
-</Warning>
+### CDN Fallback (Development)
+
+If the local CDN is unavailable and required manifests are missing, the server automatically falls back to the production CDN (`https://assets.hyperscape.club`) to bootstrap local development.
+
+**Required Manifests:**
+- `npcs.json`
+- `world-areas.json`
+- `biomes.json`
+- `stores.json`
+- `items.json` OR `items/{weapons,tools,resources,food,misc}.json`
+
+**Bypass in Tests:**
+```bash
+SKIP_MANIFESTS=true  # Skip manifest validation (test environments only)
+```
+
+### Production CDN
+
+Set `PUBLIC_CDN_URL` to your asset hosting URL:
+
+```bash
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+```
+
+**Supported Paths:**
+- `/manifests/{file}.json` — Game data manifests
+- `/models/{file}.glb` — 3D models
+- `/audio/music/{normal|combat}/{file}.mp3` — Music tracks
+- `/world/{file}` — Environment assets
+- `/health` — Health check endpoint
 
 ## Zero-Config Development
 

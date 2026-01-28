@@ -131,11 +131,17 @@ flowchart TD
 The core Hyperscape 3D engine containing:
 
 - **Entity Component System (ECS)**: Game object architecture
-- **Three.js integration**: 3D rendering (v0.180.0)
+- **Three.js integration**: 3D rendering (v0.180.0) with WebGPU/WebGL support
 - **PhysX bindings**: Physics simulation via WASM
 - **Networking**: Real-time multiplayer sync via WebSockets
 - **React UI components**: In-game interface with styled-components
 - **Game data**: Manifests for NPCs, items, world areas
+
+**Rendering Backend:**
+- **WebGPU** (preferred): Modern GPU API with TSL post-processing
+- **WebGL fallback**: For environments without WebGPU (e.g., WKWebView in Tauri)
+- Automatic detection and graceful degradation
+- Settings panel displays active backend (WebGPU/WebGL)
 
 **Key directories:**
 ```
@@ -263,6 +269,7 @@ Game content is defined in JSON manifest files. In production, manifests are fet
 | `recipes/smelting.json` | Furnace recipes |
 | `recipes/smithing.json` | Anvil recipes |
 | `recipes/cooking.json` | Cooking recipes |
+| `quests.json` | Quest definitions with stages and rewards |
 | `tier-requirements.json` | Centralized level requirements |
 | `skill-unlocks.json` | Skill progression milestones |
 | `stores.json` | Shop inventories |

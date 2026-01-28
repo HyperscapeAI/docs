@@ -381,16 +381,25 @@ playerData.skills = {
   Player health equals their Constitution level.
 </Info>
 
----
-
 ## XP Lamps
 
-XP lamps are quest rewards that allow players to choose which skill receives XP:
+XP lamps are quest rewards that let you choose which skill receives XP:
+
+### Using XP Lamps
+
+1. Receive XP lamp as quest reward
+2. Right-click lamp in inventory
+3. Select "Rub" action
+4. Choose skill from modal
+5. XP granted immediately
+
+### Item Definition
 
 ```json
 {
-  "itemId": "xp_lamp_1000",
+  "id": "xp_lamp_1000",
   "name": "XP Lamp (1000 XP)",
+  "inventoryActions": ["rub", "examine"],
   "useEffect": {
     "type": "xp_lamp",
     "xpAmount": 1000
@@ -398,17 +407,12 @@ XP lamps are quest rewards that allow players to choose which skill receives XP:
 }
 ```
 
-**Usage:**
-1. Right-click lamp in inventory → "Rub"
-2. Skill selection modal appears showing all 11 skills
-3. Select skill to receive XP
-4. Lamp consumed, XP granted
+**Available Skills:**
+- Attack, Strength, Defense, Constitution
+- Ranged, Prayer
+- Mining, Smithing, Fishing, Cooking, Firemaking, Woodcutting
+- Agility
 
-**Available Lamps:**
-- `xp_lamp_100` — 100 XP
-- `xp_lamp_1000` — 1,000 XP
-- `xp_lamp_5000` — 5,000 XP
-
-<Tip>
-XP lamps are commonly awarded as quest rewards, allowing players to boost their preferred skill.
-</Tip>
+<Info>
+  XP lamps are commonly awarded as quest rewards, allowing you to boost the skill of your choice.
+</Info>
