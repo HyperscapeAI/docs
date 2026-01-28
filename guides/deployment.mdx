@@ -509,100 +509,45 @@ bun run cdn:restart     # Force restart
 
 This serves assets from `packages/server/world/assets/` on port 8080.
 
-## Production Checklist
-
-### Infrastructure
-
-- [ ] Railway project created with production and staging environments
-- [ ] PostgreSQL databases provisioned (separate for prod/staging)
-- [ ] Cloudflare Pages connected to GitHub repository
-- [ ] Cloudflare R2 buckets created (`hyperscape-assets`, `hyperscape-assets-staging`)
-- [ ] Custom domains configured (hyperscape.club, staging.hyperscape.club, etc.)
-
-### Environment Variables
-
-- [ ] Server environment variables set in Railway (both environments)
-- [ ] Client environment variables set in Cloudflare Pages (both branches)
-- [ ] `PUBLIC_PRIVY_APP_ID` matches between client and server
-- [ ] `PUBLIC_CDN_URL` points to correct R2 bucket URL
-- [ ] `DATABASE_URL` configured for each environment
+## CI/CD
 
 ### GitHub Actions
 
-- [ ] `RAILWAY_TOKEN` secret added to repository
-- [ ] `RAILWAY_STAGING_SERVICE_ID` variable added
-- [ ] `RAILWAY_STAGING_ENVIRONMENT_ID` variable added
-- [ ] `CLOUDFLARE_API_TOKEN` secret added
-- [ ] `PUBLIC_PRIVY_APP_ID` secret added
+Hyperscape includes automated CI/CD workflows:
 
-### Security
+**Continuous Integration** (`.github/workflows/ci.yml`):
+- Lint, typecheck, and test on every push
+- Builds all packages to verify compilation
+- Installs Tauri system dependencies for Linux builds
+  - GTK 3, WebKitGTK 4.1, AppIndicator, librsvg, patchelf
+  - Rust stable toolchain via `dtolnay/rust-toolchain@stable`
 
-- [ ] JWT_SECRET generated (32+ characters)
-- [ ] ADMIN_CODE set for production
-- [ ] SSL/TLS enabled (automatic with Railway and Cloudflare)
-- [ ] CORS origins configured correctly
+**Deployment Workflows**:
+- `deploy-railway.yml`: Deploy server to Railway on main/staging push
+- `deploy-cloudflare.yml`: Deploy client to Cloudflare Pages
+- `build-app.yml`: Build Tauri desktop app for Linux/macOS/Windows
 
-### Testing
+**Staging Branch**:
+- All deploy workflows trigger on both `main` and `staging` branches
+- Environment-specific URLs for staging builds
+- Separate Railway/Cloudflare environments
 
-- [ ] Staging environment tested end-to-end
-- [ ] Manifest updates verified via R2
-- [ ] WebSocket connections working
-- [ ] Database migrations applied
+### Cloudflare Pages
 
-## CORS Configuration
+Client automatically deploys to Cloudflare Pages:
 
-The server automatically allows these origins (from `packages/server/src/startup/http-server.ts`):
+- **Production**: `https://hyperscape.pages.dev` (main branch)
+- **Preview**: `https://<commit>.hyperscape.pages.dev` (PRs)
+- **Custom Domain**: `https://www.hyperscape.club`
 
-**Production domains:**
-- `https://hyperscape.club`
-- `https://www.hyperscape.club`
-- `https://hyperscape.pages.dev`
-- `http://hyperscape.pages.dev`
-- `https://hyperscape-production.up.railway.app`
+CORS is configured to allow all Cloudflare Pages domains.
 
-**Dynamic patterns:**
-- `http://localhost:*` (any port for local development)
-- `https://*.hyperscape.pages.dev` (Cloudflare preview deployments)
-- `https://*.up.railway.app` (Railway preview deployments)
-- `https://*.farcaster.xyz`, `https://*.warpcast.com` (Farcaster integration)
-- `https://*.privy.io` (Privy authentication)
+## Production Checklist
 
-<Info>
-  CORS configuration is automatic - no manual setup required. The server detects the environment and configures appropriate origins.
-</Info>
-
-## Deployment Workflow
-
-### Production Deployment
-
-1. Merge PR to `main` branch
-2. GitHub Actions triggers three workflows:
-   - **deploy-railway.yml**: Deploys server to Railway production
-   - **deploy-cloudflare.yml**: Uploads assets to R2 production bucket
-   - **Cloudflare Pages**: Auto-deploys frontend (via Pages GitHub integration)
-3. Railway builds using nixpacks
-4. Server starts and fetches manifests from R2
-5. Frontend loads from Cloudflare Pages CDN
-
-### Staging Deployment
-
-1. Push to `staging` branch
-2. Same workflow as production but targets staging environment
-3. Isolated database and R2 bucket
-4. Test changes before promoting to production
-
-### Rollback
-
-**Server rollback:**
-```bash
-# Via Railway dashboard or CLI
-railway rollback
-```
-
-**Frontend rollback:**
-- Cloudflare Pages: Revert to previous deployment in dashboard
-- Or: Revert git commit and push
-
-**Assets rollback:**
-- Re-upload previous manifest versions to R2
-- Server will fetch updated manifests on next restart
+- [ ] PostgreSQL database provisioned
+- [ ] Environment variables configured
+- [ ] Privy credentials set (both client and server)
+- [ ] CDN serving assets
+- [ ] WebSocket URL configured
+- [ ] SSL/TLS enabled
+- [ ] CORS allowlist includes production domains

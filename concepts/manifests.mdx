@@ -96,7 +96,7 @@ All manifests are in `world/assets/manifests/`:
 | `banks-stores.json` | Shop inventories |
 | `world-areas.json` | Zones and regions |
 | `avatars.json` | Character models |
-| `quests.json` | Quest definitions with stages, requirements, and rewards |
+| `quests.json` | Quest definitions with stages and rewards |
 | `tier-requirements.json` | Equipment level requirements by tier |
 | `skill-unlocks.json` | What unlocks at each skill level (served via `/api/data/skill-unlocks`) |
 | `gathering/` | Resource gathering data (woodcutting, mining, fishing) |
@@ -899,7 +899,7 @@ const yOffset = stationDataProvider.getModelYOffset("furnace");
 
 ### Quests (`quests.json`)
 
-The `quests.json` manifest defines OSRS-style quests with multi-stage objectives, requirements, and rewards:
+The `quests.json` manifest defines OSRS-style quests with multi-stage progression:
 
 ```json
 {
@@ -947,33 +947,20 @@ The `quests.json` manifest defines OSRS-style quests with multi-stage objectives
 }
 ```
 
-**Quest Properties:**
-- `id` — Unique quest identifier (snake_case, max 64 chars)
-- `name` — Display name in quest journal
-- `description` — Quest summary
-- `difficulty` — `novice`, `intermediate`, `experienced`, `master`
-- `questPoints` — Quest points awarded on completion
-- `replayable` — Whether quest can be repeated (typically false)
-- `requirements` — Prerequisites (quests, skills, items)
-- `startNpc` — NPC ID that starts the quest
-- `stages` — Array of quest objectives
-- `onStart` — Items granted when quest starts (optional)
-- `rewards` — Quest points, items, and XP granted on completion
+**Stage Types**:
+- `dialogue` — Talk to NPC to progress
+- `kill` — Kill specific number of mobs
+- `gather` — Collect items through gathering skills
+- `interact` — Complete skill actions (cooking, smithing, etc.)
 
-**Stage Types:**
-- `dialogue` — Talk to NPC (no additional properties)
-- `kill` — Kill mobs (`target`: mob type, `count`: number to kill)
-- `gather` — Gather items (`target`: item ID, `count`: number to gather)
-- `interact` — Interact with objects (`target`: entity type, `count`: number of interactions)
-
-**Quest Status:**
-- `not_started` — Quest not yet accepted
-- `in_progress` — Quest active, objectives incomplete
-- `ready_to_complete` — All objectives done (derived status, not stored)
-- `completed` — Quest finished
+**Quest Integration**:
+- Quests start through NPC dialogue with `questOverrides`
+- Dialogue nodes can have `effect: "startQuest:quest_id"` or `effect: "completeQuest:quest_id"`
+- Progress tracked automatically via game events (NPC_DIED, INVENTORY_ITEM_ADDED, etc.)
+- Quest points stored in `characters.questPoints` column
 
 <Info>
-Quests integrate with the dialogue system via `questOverrides` in NPC definitions. See [Quest System](/wiki/game-systems/quests) for complete documentation.
+Quest progress is tracked in the `quest_progress` database table with flexible JSON progress data. See [Quest System](/wiki/game-systems/quests) for full documentation.
 </Info>
 
 ### Prayers (`prayers.json`)

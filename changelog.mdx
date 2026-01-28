@@ -23,111 +23,150 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Quest System & Equipment Fitting" description="January 2026" date="2026-01-23">
+<Update label="Quest System & Equipment Improvements" description="January 2026" date="2026-01-23">
 
 ### 📜 Quest System (PR #605)
 
-Complete OSRS-style quest system with multi-stage objectives, rewards, and quest points:
+Production-ready quest system with OSRS-style progression tracking, security features, and comprehensive UI:
 
-- **Quest Progression**: Multi-stage quests with dialogue, kill, gather, and interact objectives
-  - Quest journal UI with color-coded status (red/yellow/green)
-  - Quest start confirmation screen with requirements and rewards
-  - Quest completion screen with fanfare
-  - Strikethrough for completed stages
-  - Progress counters for kill/gather/interact stages
-- **Quest Points**: Permanent progression tracking displayed in journal
-- **Prerequisites**: Quest chains with skill, quest, and item requirements
-- **Rewards**: Quest points, items, and XP granted on completion
-- **XP Lamps**: Special reward items that let players choose which skill receives XP
-  - Skill selection modal with all trainable skills
-  - Server-validated XP amounts
-  - Rate limited (3 requests/sec)
-- **Dialogue Integration**: Quest overrides in NPC dialogue
-  - Priority: `ready_to_complete` > `in_progress` > `completed` > `default`
-  - Dialogue effects: `startQuest`, `completeQuest`
-  - Terminal node handling for quest completion
-- **Database Schema**: New `quest_progress` and `quest_audit_log` tables
-  - Atomic transactions for quest completion + quest points
-  - Audit logging for all quest state changes
-  - Indexed for efficient queries
-- **Security Features**:
-  - HMAC-SHA256 kill token validation (prevents spoofed NPC_DIED events)
-  - Rate limiting (5/10/3 req/sec for list/detail/accept)
-  - Input validation with `isValidQuestId()` (max 64 chars, alphanumeric + underscore)
-  - Quest audit logging for exploit detection
+- **Quest Progression**: Multi-stage quest system with flexible completion tracking
+  - Quest definitions in JSON manifest (`quests.json`)
+  - Stage types: `dialogue`, `kill`, `gather`, `interact`
+  - Flexible progress tracking by item ID (gather copper and tin in any order)
+  - Quest status: `not_started`, `in_progress`, `ready_to_complete`, `completed`
+  - Quest points system with character-level tracking
+- **Kill Tracking**: OSRS-accurate mob kill counting with security
+  - HMAC-SHA256 kill token validation prevents spoofed NPC_DIED events
+  - 5-second timestamp window prevents replay attacks
+  - Server-authoritative kill validation
+  - Progress tracked per quest stage with atomic database updates
+- **Gather & Interact Stages**: Skill-based quest objectives
+  - Gather stages: Track items collected (woodcutting, mining, fishing)
+  - Interact stages: Track interactions with entities (cooking, firemaking, smithing)
+  - Progress counters displayed in quest journal
+  - Flexible completion order (any order for multi-item requirements)
+- **Quest UI Components**: OSRS-style parchment/scroll aesthetic
+  - **QuestJournal**: Quest list with color-coded status (red/yellow/green)
+  - **QuestStartScreen**: Confirmation dialog with requirements and rewards
+  - **QuestCompleteScreen**: Celebration screen with reward display
+  - Strikethrough for completed steps
+  - Real-time progress counters (e.g., "Kill 15 goblins (7/15)")
+- **Database Schema**: Two new tables with proper indexing
+  - `quest_progress`: Player quest state (status, stage, progress JSON)
+  - `quest_audit_log`: Immutable audit trail for security/analytics
+  - Atomic transactions for quest completion + quest points award
+  - CASCADE DELETE on character removal
+- **Network Integration**: Rate-limited quest handlers
+  - `getQuestList`: 5 requests/second
+  - `getQuestDetail`: 10 requests/second
+  - `questAccept`: 3 requests/second
+  - Sliding window rate limiters with auto-cleanup
 - **Performance Optimizations**:
-  - O(1) stage lookup caches (replaces O(n) find() calls)
-  - Direct mutation instead of object spreads (reduces GC pressure)
-  - Debug-level logging in hot paths (NPC kills)
-- **Testing**: 45 comprehensive integration tests (997 lines)
-  - Full quest flow: request → accept → kill 15 goblins → complete
-  - Kill tracking, progress updates, rewards
-  - Prerequisites, validation, edge cases
-  - Database persistence and atomicity
+  - O(1) stage lookup caches (replaced O(n) find() calls)
+  - Object spread elimination in hot paths (direct mutation)
+  - Debug-level logging for frequent events
+  - Pre-allocated event payloads
+- **XP Lamp System**: Reward items that grant XP to chosen skill
+  - `SkillSelectModal` UI for skill selection
+  - Server-authoritative XP grant with validation
+  - Supports quest rewards and future treasure trails
+- **Security Features**:
+  - Quest ID validation (alphanumeric + underscore, max 64 chars)
+  - HMAC kill token validation (prevents quest progress spoofing)
+  - Rate limiting on all quest endpoints
+  - Audit logging for all quest state changes
+  - Input validation with `isValidQuestId()` type guard
+- **Testing**: 997 lines of comprehensive integration tests
+  - 45 test cases covering full quest lifecycle
+  - Real QuestSystem with minimal mocks
+  - Kill tracking, prerequisites, rewards, validation
+  - Database persistence and atomicity tests
 
-### 🎣 Equipment Fitting & Tool Detection (PR #615)
+### 🛠️ Equipment Fitting V2 Format (PR #615)
 
-Equipment visual system improvements and OSRS-style gathering tool display:
+Major improvements to equipment export and tool detection:
 
-- **V2 Equipment Export Format**: Relative matrix approach for accurate positioning
-  - Uses world-space relative matrix between hand bone and weapon
-  - Preserves equipment scale compensation (e.g., 3.3x for bone world scale)
-  - No scale hacks needed in Hyperscape
-  - Backward compatible with V1 exports (legacy scale multiplier fallback)
-  - Avatar height normalization to 1.6m (matches Hyperscape)
+- **V2 Equipment Export**: Relative matrix approach for accurate positioning
+  - Exports world-space relative transform between hand bone and weapon
+  - Captures position, rotation, and scale in single matrix
+  - Eliminates scale hacks and coordinate space conversions
+  - Backward compatible with V1 format (legacy support maintained)
+  - Metadata includes version number, avatar info, and usage instructions
+- **Scale Preservation**: Equipment scale correctly preserved during export
+  - Compensated scale (e.g., 3.3x) counteracts bone world scale
+  - Fixes "tiny weapon" bug in Hyperscape
+  - Avatar height normalized to 1.6m (matches Hyperscape's createVRMFactory)
 - **Tool Detection**: Equipped tools now detected for gathering
-  - Checks both inventory AND equipped items (tools in weapon slot)
-  - Proper type conversion (number to string)
-  - Uses `itemMatchesToolCategory` utility
-- **OSRS-Style Fishing Rod Display**: Tool appears in hand during gathering
-  - Fishing rod shows in hand during fishing (even though it's in inventory)
-  - Temporarily hides equipped weapon while gathering tool is shown
-  - Restores weapon when gathering stops
-  - Prevents race conditions with `hiddenWeapons` tracking
-- **Asset Forge Equipment Panel**: Tools added to equipment panel
-  - Pickaxes, hatchets, fishing rods now available for fitting
-  - Tool icon (Pickaxe) added to asset selection
-  - Filters include `type === "tool"`
-- **Type Safety**: Comprehensive validation for relativeMatrix
-  - Validates all 16 matrix elements are valid numbers
-  - Prevents NaN and invalid matrix data
+  - Checks both inventory AND equipped weapon slot
+  - Fixes mining/woodcutting with equipped pickaxe/hatchet
+  - Type-safe equipment system queries
+- **OSRS-Style Gathering Visuals**: Tools shown in hand during gathering
+  - Fishing rod appears in hand during fishing (even if in inventory)
+  - Temporarily hides equipped weapon while gathering
+  - New events: `GATHERING_TOOL_SHOW`, `GATHERING_TOOL_HIDE`
+  - Proper state tracking prevents race conditions
+- **AssetForge Improvements**:
+  - Tools category added to equipment panel (pickaxe icon)
+  - Position control range expanded (-0.8 to 0.8 for better fitting)
+  - Equipment wrapper validation with fallback logic
 
-### 🏠 Spawn & Home Teleport (PR #613)
+### 🏗️ CI/Build Improvements (PR #610)
 
-Manifest-driven spawn system with simplified configuration:
+Linux build support for Tauri desktop app:
 
-- **Manifest-Driven Spawn**: Uses `STARTER_TOWNS["central_haven"]` from manifest
-  - Removed dependency on TownSystem
-  - Consistent spawn location for server init and player death
-  - Calculates center of town bounds for spawn position
-- **Home Teleport Cooldown**: Reduced from 15 minutes to 5 seconds
+- **Tauri Dependencies**: Install GTK, WebKitGTK, and system libraries on Linux CI
+  - `libgtk-3-dev`, `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`
+  - `librsvg2-dev`, `patchelf`, `libglib2.0-dev`
+  - Rust stable toolchain via `dtolnay/rust-toolchain@stable`
+- **Staging Branch Support**: Deploy workflows now trigger on staging branch
+  - Environment-specific URLs for staging builds
+  - Railway staging environment configuration
+  - Cloudflare R2 staging bucket support
+  - Docker image environment tags
+
+### 🍳 Cooking System Enhancement
+
+Range entity support for cooking skill quests:
+
+- **Range Entity**: Permanent cooking stations (not just fires)
+  - `RangeEntity` class with cooking support
+  - Cooking source detection handles both fires and ranges
+  - Quest system can track cooking at ranges for quest objectives
+- **Unified Cooking**: `PendingCookManager` supports both source types
+  - Source type tracking (`fire` | `range`)
+  - Flexible cooking location validation
+  - EventBus integration for ProcessingSystem
+
+### 🏠 Spawn & Teleport Fixes
+
+Improved spawn location and home teleport mechanics:
+
+- **Central Haven Spawn**: Use manifest-defined spawn location
+  - Reads from world area manifest instead of hardcoded origin
+  - Consistent spawn point for new players and home teleport
+- **Reduced Cooldown**: Home teleport cooldown reduced to 5 seconds
   - Faster testing and development iteration
-  - Cast time remains 10 seconds (can be interrupted)
-- **Code Simplification**: Removed database-based spawn configuration
-  - Net deletion of 58 lines
-  - Cleaner initialization logic
+  - More forgiving for new players
 
-### 🍳 Cooking Range Entity
+### 🌐 CORS Configuration Updates
 
-Permanent cooking stations with reduced burn chance:
+Production deployment support for Cloudflare Pages:
 
-- **RangeEntity**: New entity type for cooking stations
-  - Extends `InteractableEntity`
-  - Supports cooking with reduced burn rates
-  - Uses `stopBurnLevel.range` from cooking recipes
-- **Cooking Sources**: Unified handling for fires and ranges
-  - `PendingCookManager` supports both source types
-  - `sourceType: "fire" | "range"` parameter
-  - Proper event routing via EventBus
+- **Expanded Allowlist**: Added Cloudflare Pages domains
+  - `https://hyperscape.pages.dev`
+  - `https://www.hyperscape.club`
+  - HTTP fallback for preview deployments
+  - Regex pattern for preview subdomains (`*.hyperscape.pages.dev`)
+- **Localhost Support**: All ports supported via regex
+  - `http://localhost:*` (any port)
 
-### 🔧 Bug Fixes & Improvements
+### 🐛 Bug Fixes
 
-- **PLAYER_JOINED Event**: Fixed local player not emitting event (broke skill updates)
-- **Inventory Deadlock Retry**: Added exponential backoff for PostgreSQL deadlocks
-  - 3 retries with 50ms/100ms/200ms delays
-  - Handles concurrent inventory updates gracefully
-- **Equipment Fitting Scale**: Preserved scale compensation in V2 exports
-- **Mining Skill Check**: Fixed skill requirement validation for equipped pickaxes
+- **Equipment Visuals**: Fixed non-null assertions for validated attachmentData
+- **Smithing Events**: Use correct `itemId` property in SMITHING_COMPLETE event
+- **Firemaking Limit**: Removed concurrent fire limit blocking skill quests
+- **Quest Progress**: Track gather/interact progress by item ID for flexible order
+- **Mining Skill Check**: Fixed skill level validation in mining system
 
 </Update>
 

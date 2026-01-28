@@ -23,15 +23,15 @@ Database schema is defined in `packages/server/src/database/schema.ts`.
 | `equipment` | Equipped items | EquipmentRepository |
 | `bank_storage` | Bank storage (480 slots) | BankRepository |
 | `bank_tabs` | Custom bank tab configuration | BankRepository |
+| `quest_progress` | Player quest state tracking | QuestRepository |
+| `quest_audit_log` | Quest action audit trail | QuestRepository |
 | `world_chunks` | Persistent world modifications | WorldRepository |
 | `player_sessions` | Login/logout tracking | SessionRepository |
 | `npc_kills` | Kill statistics | StatsRepository |
 | `death_locks` | Death state for reconnects | PlayerDeathSystem |
-| `quest_progress` | Player quest state tracking | QuestRepository |
-| `quest_audit_log` | Quest action audit trail | QuestRepository |
 | `activity_log` | Player activity logging | ActivityLogRepository |
 | `trades` | Trade history | TradingSystem |
-| `user_bans` | Moderation ban records | ModerationSystem |
+| `user_bans` | Moderation bans | AdminSystem |
 
 ---
 
@@ -356,6 +356,73 @@ export const npcKillsIndexes = {
 
 ---
 
+## Quest System Tables
+
+### quest_progress
+
+Tracks player quest state:
+
+```typescript
+export const questProgress = pgTable('quest_progress', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),
+  status: text('status').default('not_started').notNull(),
+  currentStage: text('currentStage'),
+  stageProgress: jsonb('stageProgress').default({}),
+  startedAt: bigint('startedAt', { mode: 'number' }),
+  completedAt: bigint('completedAt', { mode: 'number' }),
+}, (table) => ({
+  uniquePlayerQuest: unique().on(table.playerId, table.questId),
+  playerIdx: index('idx_quest_progress_player').on(table.playerId),
+  statusIdx: index('idx_quest_progress_status').on(table.playerId, table.status),
+}));
+```
+
+**Key Features**:
+- UNIQUE constraint on `(playerId, questId)` prevents duplicate progress entries
+- CASCADE DELETE cleans up on character deletion
+- `stageProgress` JSONB stores flexible progress data (e.g., `{"kills": 7, "copper_ore": 3}`)
+- `status` values: `not_started`, `in_progress`, `completed`
+
+<Info>
+  `ready_to_complete` is a **derived status** computed by QuestSystem when `status === "in_progress"` AND the current stage objective is met. It's not stored in the database.
+</Info>
+
+### quest_audit_log
+
+Immutable audit trail for security and analytics:
+
+```typescript
+export const questAuditLog = pgTable('quest_audit_log', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),
+  action: text('action').notNull(),  // "started", "progressed", "completed"
+  questPointsAwarded: integer('questPointsAwarded').default(0),
+  stageId: text('stageId'),
+  stageProgress: jsonb('stageProgress').default({}),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+  metadata: jsonb('metadata').default({}),
+}, (table) => ({
+  playerIdx: index('idx_quest_audit_log_player').on(table.playerId),
+  questIdx: index('idx_quest_audit_log_quest').on(table.questId),
+  playerQuestIdx: index('idx_quest_audit_log_player_quest').on(table.playerId, table.questId),
+  timestampIdx: index('idx_quest_audit_log_timestamp').on(table.timestamp),
+  actionIdx: index('idx_quest_audit_log_action').on(table.action),
+}));
+```
+
+**Use Cases**:
+- Fraud detection and investigation
+- Debugging quest progression bugs
+- Analytics for game design
+- Customer support inquiries
+
+---
+
 ## Repository Pattern
 
 All database access goes through typed repositories:
@@ -477,10 +544,12 @@ bunx drizzle-kit push
 |-----------|-------------|
 | `0021_add_quest_audit_log.sql` | Added quest audit logging table |
 | `0020_add_trading_activity_bans.sql` | Added trading, activity log, and user bans tables |
-| `0019_add_quest_progress.sql` | Added quest progress tracking and quest points |
-| `0018_add_agility_skill.sql` | Added agility skill columns |
-| `0015_add_smithing_skill.sql` | Added smithing skill columns |
-| `0014_add_mining_skill.sql` | Added mining skill columns |
+| `0019_add_quest_progress.sql` | Added quest progress table and questPoints column |
+| `0018_add_agility_skill.sql` | Added `agilityLevel` and `agilityXp` columns |
+| `0017_add_death_recovery_columns.sql` | Added death recovery tracking |
+| `0016_add_prayer_system.sql` | Added prayer points and active prayers |
+| `0015_add_smithing_skill.sql` | Added `smithingLevel` and `smithingXp` columns |
+| `0014_add_mining_skill.sql` | Added `miningLevel` and `miningXp` columns |
 | `0013_add_auto_retaliate.sql` | Added auto-retaliate preference |
 | `0012_add_bank_placeholders.sql` | Added bank placeholder system |
 | `0011_add_bank_tabs.sql` | Added custom bank tabs |
