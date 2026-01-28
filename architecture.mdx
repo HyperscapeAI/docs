@@ -4,35 +4,53 @@ description: "Monorepo structure and package overview"
 icon: "boxes"
 ---
 
-## Production Architecture
+## Deployment Architecture
 
-Hyperscape uses a split deployment model for optimal performance:
+Hyperscape uses a modern cloud-native architecture with separate services:
 
 ```mermaid
 flowchart LR
-    A[Player Browser] -->|HTTPS| B[Cloudflare Pages]
-    A -->|WSS| C[Railway Server]
-    B -->|Assets| D[Cloudflare R2 CDN]
-    C -->|Manifests| D
-    C -->|Data| E[PostgreSQL]
+    A[Client Browser] -->|HTTPS| B[Cloudflare Pages]
+    A -->|WSS| C[Railway API]
+    A -->|HTTPS| D[Cloudflare R2 CDN]
+    C -->|Fetches manifests| D
+    C -->|Queries| E[PostgreSQL]
     
-    B[Frontend<br/>hyperscape.club]
-    C[Backend/API<br/>Railway]
-    D[Assets/CDN<br/>R2]
-    E[Database<br/>Railway/Neon]
+    subgraph "Frontend"
+        B[Cloudflare Pages<br/>hyperscape.club]
+    end
+    
+    subgraph "Backend"
+        C[Railway<br/>api.hyperscape.club]
+        E[PostgreSQL<br/>Railway]
+    end
+    
+    subgraph "Assets"
+        D[Cloudflare R2<br/>assets.hyperscape.club]
+    end
 ```
 
-**Components:**
-- **Frontend**: Static React app on Cloudflare Pages with global edge caching
-- **Backend**: Game server on Railway with WebSocket support
-- **CDN**: Cloudflare R2 for 3D models, audio, textures, and manifests
-- **Database**: PostgreSQL on Railway or Neon for player data persistence
+### Production Stack
 
-**Benefits:**
-- Global edge caching for static assets
-- Low-latency WebSocket connections to game server
-- Automatic scaling and DDoS protection
-- Separation of concerns (static vs. dynamic content)
+| Component | Service | URL | Purpose |
+|-----------|---------|-----|---------|
+| **Frontend** | Cloudflare Pages | hyperscape.club | React SPA, static assets |
+| **API/WebSocket** | Railway | api.hyperscape.club | Game server, real-time sync |
+| **Database** | Railway PostgreSQL | (internal) | Player data, world state |
+| **Assets/CDN** | Cloudflare R2 | assets.hyperscape.club | 3D models, manifests, audio |
+
+### Staging Stack
+
+| Component | Service | URL | Purpose |
+|-----------|---------|-----|---------|
+| **Frontend** | Cloudflare Pages | staging.hyperscape.club | Staging frontend |
+| **API/WebSocket** | Railway | staging-api.hyperscape.club | Staging server |
+| **Database** | Railway PostgreSQL | (internal) | Staging database |
+| **Assets/CDN** | Cloudflare R2 | staging-assets.hyperscape.club | Staging assets |
+
+<Info>
+  The staging environment is a complete isolated instance for testing changes before production deployment.
+</Info>
 
 ## Monorepo Structure
 
@@ -256,36 +274,51 @@ Game content is defined in JSON manifest files. In production, manifests are fet
 
 Add new content by editing these JSON files—no code changes required.
 
-### Manifest Loading System
+## Asset Serving Architecture
 
-**Development:**
-- Manifests loaded from local `packages/server/world/assets/manifests/`
-- If directory is empty, server fetches from `PUBLIC_CDN_URL`
-- Assets cloned via Git LFS during `bun install` (see `scripts/ensure-assets.mjs`)
+### Development
 
-**Production/CI:**
-- Manifests fetched from CDN at server startup
-- Cached locally with 5-minute revalidation headers
-- Asset download skipped (CI=true, SKIP_ASSETS=true)
-- All assets served directly from Cloudflare R2
+In development, assets are served from a local Docker CDN:
 
-**Fetch behavior** (`packages/server/src/startup/config.ts`):
+```bash
+bun run cdn:up  # Starts nginx on port 8080
+```
+
+**Asset flow:**
+1. Client requests asset: `http://localhost:8080/models/goblin/goblin.vrm`
+2. nginx serves from `packages/server/world/assets/`
+3. Manifests loaded from local filesystem
+
+### Production
+
+In production, assets are served from Cloudflare R2:
+
+```bash
+# Automatic upload via GitHub Actions
+# .github/workflows/deploy-cloudflare.yml
+```
+
+**Asset flow:**
+1. Client requests asset: `https://assets.hyperscape.club/models/goblin/goblin.vrm`
+2. Cloudflare R2 serves with global CDN caching
+3. Server fetches manifests from R2 at startup
+4. Manifests cached locally in `packages/server/world/assets/manifests/`
+
+**Manifest fetching:**
 ```typescript
+// From packages/server/src/startup/config.ts
 await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
 ```
 
-**Fetched files:**
-```typescript
-const MANIFEST_FILES = [
-  "items.json", "npcs.json", "resources.json", "tools.json",
-  "biomes.json", "world-areas.json", "stores.json",
-  "music.json", "vegetation.json", "buildings.json"
-];
-```
+**Files fetched** (30+ manifests):
+- `npcs.json`, `stores.json`, `world-areas.json`, `prayers.json`
+- `items/*.json` (weapons, tools, resources, food, misc)
+- `gathering/*.json` (woodcutting, mining, fishing)
+- `recipes/*.json` (cooking, firemaking, smelting, smithing)
 
-<Info>
-The server compares fetched manifests with local cache and only writes if content changed, minimizing disk I/O.
-</Info>
+### Staging
+
+Staging uses a separate R2 bucket (`hyperscape-assets-staging`) to isolate test content from production.
 
 ## Build Pipeline
 

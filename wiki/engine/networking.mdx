@@ -16,12 +16,42 @@ Network code lives in `packages/shared/src/systems/client/ClientNetwork.ts` (264
 
 ```mermaid
 flowchart LR
-    A[Client 60 FPS] -->|moveRequest| B[Server 600ms Ticks]
-    B -->|entityModified| A
-    B -->|snapshot| A
-    A -->|attackEntity| B
-    B -->|damageDealt| A
+    A[Client Browser] -->|WSS| B[Railway Server]
+    A -->|HTTPS| C[Cloudflare Pages]
+    A -->|HTTPS| D[Cloudflare R2]
+    B -->|Fetches| D
+    
+    subgraph "Client 60 FPS"
+        A
+    end
+    
+    subgraph "Server 600ms Ticks"
+        B
+    end
+    
+    subgraph "Assets"
+        D[CDN<br/>Manifests + Models]
+    end
 ```
+
+### Connection URLs
+
+| Environment | WebSocket URL | HTTP API URL |
+|-------------|---------------|--------------|
+| **Development** | `ws://localhost:5555/ws` | `http://localhost:5555` |
+| **Production** | `wss://api.hyperscape.club/ws` | `https://api.hyperscape.club` |
+| **Staging** | `wss://staging-api.hyperscape.club/ws` | `https://staging-api.hyperscape.club` |
+
+### CORS Configuration
+
+The server automatically allows connections from:
+
+- Production: `https://hyperscape.club`, `https://www.hyperscape.club`
+- Staging: `https://staging.hyperscape.club`
+- Preview: `https://*.hyperscape.pages.dev`
+- Development: `http://localhost:*` (any port)
+
+See [Configuration](/devops/configuration#cors-configuration) for full CORS details.
 
 | Layer | Rate | Purpose |
 |-------|------|---------|
