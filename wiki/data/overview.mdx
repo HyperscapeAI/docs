@@ -98,7 +98,7 @@ Each NPC has these properties (from `types/entities/npc-mob-types.ts`):
 ├── furnace/furnace.glb          → Smelting station
 ├── cooking-range/cooking-range.glb → Cooking station
 ├── bank-chest/bank-chest.glb    → Bank storage
-├── prayer-alter/prayer-alter.glb → Prayer altar
+└── prayer-alter/prayer-alter.glb → Prayer restoration
 ```
 
 **Fishing Tools**:
@@ -408,8 +408,8 @@ interface StationData {
 |---------|---------|-------|-------|----------|
 | **Anvil** | Smith bars into equipment | `asset://models/anvil/anvil.glb` | 0.5 | 0.2 |
 | **Furnace** | Smelt ores into bars | `asset://models/furnace/furnace.glb` | 1.5 | 1.0 |
-| **Cooking Range** | Cook food with reduced burn chance | `asset://models/cooking-range/cooking-range.glb` | 1.0 | 0.5 |
-| **Bank Chest** | Store items | `asset://models/bank-chest/bank-chest.glb` | 0.5 | 0.75 |
+| **Range** | Cook food with reduced burn chance | `asset://models/cooking-range/cooking-range.glb` | 1.0 | 0.3 |
+| **Bank** | Store items | `asset://models/bank-chest/bank-chest.glb` | 0.5 | 0.10 |
 | **Altar** | Restore prayer points | `asset://models/prayer-alter/prayer-alter.glb` | 1.0 | 0.25 |
 
 <Note>
@@ -481,9 +481,9 @@ models/
 │   ├── concept-art.png     # Concept art
 │   └── metadata.json       # Model metadata
 ├── cooking-range/
-│   └── cooking-range.glb   # Optimized model (scale: 1.0, yOffset: 0.5)
+│   └── cooking-range.glb   # Optimized model (scale: 1.0, yOffset: 0.3)
 ├── bank-chest/
-│   └── bank-chest.glb      # Optimized model (scale: 0.5, yOffset: 0.75)
+│   └── bank-chest.glb      # Optimized model (scale: 0.5, yOffset: 0.10)
 └── prayer-alter/
     ├── prayer-alter.glb    # Optimized model (scale: 1.0, yOffset: 0.25)
     └── prayer-alter_raw.glb # Raw model

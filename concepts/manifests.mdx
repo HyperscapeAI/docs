@@ -1162,7 +1162,7 @@ All manifests are in `world/assets/manifests/`:
 | `recipes/` | Processing recipes (cooking, firemaking, smelting, smithing) |
 | `stations.json` | World station configurations (anvils, furnaces, ranges) |
 | `prayers.json` | Prayer definitions with bonuses and drain rates |
-| `quests.json` | Quest definitions with stages and rewards |
+| `quests.json` | Quest definitions with stages, requirements, and rewards |
 | `model-bounds.json` | Auto-generated model footprints (build-time only) |
 
 ## Manifest Structure
@@ -1488,7 +1488,10 @@ Defines crafting stations and interactive objects in the world:
       "model": "asset://models/anvil/anvil.glb",
       "modelScale": 0.5,
       "modelYOffset": 0.2,
-      "examine": "An anvil for smithing metal bars into weapons and tools."
+      "examine": "An anvil for smithing metal bars into weapons and tools.",
+      "flattenGround": true,
+      "flattenPadding": 2.0,
+      "flattenBlendRadius": 2.0
     },
     {
       "type": "furnace",
@@ -1496,17 +1499,65 @@ Defines crafting stations and interactive objects in the world:
       "model": "asset://models/furnace/furnace.glb",
       "modelScale": 1.5,
       "modelYOffset": 1.0,
-      "examine": "A furnace for smelting ores into metal bars."
+      "examine": "A furnace for smelting ores into metal bars.",
+      "flattenGround": true,
+      "flattenPadding": 2.5,
+      "flattenBlendRadius": 2.5
+    },
+    {
+      "type": "range",
+      "name": "Cooking Range",
+      "model": "asset://models/cooking-range/cooking-range.glb",
+      "modelScale": 1.0,
+      "modelYOffset": 0.3,
+      "examine": "A range for cooking food. Reduces burn chance.",
+      "flattenGround": true,
+      "flattenPadding": 2.0,
+      "flattenBlendRadius": 2.0
+    },
+    {
+      "type": "bank",
+      "name": "Bank Chest",
+      "model": "asset://models/bank-chest/bank-chest.glb",
+      "modelScale": 0.5,
+      "modelYOffset": 0.10,
+      "examine": "A bank chest for storing items.",
+      "flattenGround": true,
+      "flattenPadding": 2.0,
+      "flattenBlendRadius": 2.0
+    },
+    {
+      "type": "altar",
+      "name": "Altar",
+      "model": "asset://models/prayer-alter/prayer-alter.glb",
+      "modelScale": 1.0,
+      "modelYOffset": 0.25,
+      "examine": "An altar to the gods. Pray here to restore prayer points.",
+      "flattenGround": true,
+      "flattenPadding": 2.5,
+      "flattenBlendRadius": 2.5
     }
   ]
 }
 ```
 
-Station types include:
+**Station Properties:**
+- `type` — Station identifier (anvil, furnace, range, bank, altar)
+- `name` — Display name
+- `model` — Path to 3D model asset
+- `modelScale` — Scale multiplier for the model
+- `modelYOffset` — Vertical position offset
+- `examine` — Text shown when examining the station
+- `flattenGround` — Whether to flatten terrain under the station
+- `flattenPadding` — Radius of flattened area around station
+- `flattenBlendRadius` — Blend radius for smooth terrain transition
+
+**Station Types:**
 - **Anvil** — Smith bars into equipment
 - **Furnace** — Smelt ores into bars
 - **Range** — Cook food with reduced burn chance
 - **Bank** — Store items
+- **Altar** — Restore prayer points
 
 ## DataManager
 
@@ -1770,6 +1821,95 @@ const yOffset = stationDataProvider.getModelYOffset("furnace");
 - `modelYOffset` raises model so base sits on ground
 - Graceful fallback to blue box placeholder if model fails
 - Shadows and raycasting layers configured automatically
+
+### Quests (`quests.json`)
+
+The `quests.json` manifest defines quest content with multi-stage progression, requirements, and rewards:
+
+```json
+{
+  "goblin_slayer": {
+    "id": "goblin_slayer",
+    "name": "Goblin Slayer",
+    "description": "Captain Rowan needs help dealing with the goblin threat.",
+    "difficulty": "novice",
+    "questPoints": 1,
+    "replayable": false,
+    "requirements": {
+      "quests": [],
+      "skills": {},
+      "items": []
+    },
+    "startNpc": "captain_rowan",
+    "stages": [
+      {
+        "id": "start",
+        "type": "dialogue",
+        "description": "Speak to Captain Rowan in Central Haven",
+        "npcId": "captain_rowan"
+      },
+      {
+        "id": "kill_goblins",
+        "type": "kill",
+        "description": "Kill 15 goblins",
+        "target": "goblin",
+        "count": 15
+      },
+      {
+        "id": "return",
+        "type": "dialogue",
+        "description": "Return to Captain Rowan",
+        "npcId": "captain_rowan"
+      }
+    ],
+    "onStart": {
+      "items": [
+        { "itemId": "bronze_sword", "quantity": 1 }
+      ],
+      "dialogue": "quest_accepted"
+    },
+    "rewards": {
+      "questPoints": 1,
+      "items": [
+        { "itemId": "xp_lamp_100", "quantity": 1 }
+      ],
+      "xp": {}
+    }
+  }
+}
+```
+
+**Quest Properties:**
+- `id` — Unique quest identifier
+- `name` — Display name shown in quest journal
+- `description` — Brief quest summary
+- `difficulty` — Quest difficulty (novice, intermediate, experienced, master, grandmaster)
+- `questPoints` — Quest points awarded on completion
+- `replayable` — Whether quest can be repeated after completion
+- `requirements` — Prerequisites to start the quest
+  - `quests` — Required completed quests
+  - `skills` — Required skill levels (e.g., `{"woodcutting": 15}`)
+  - `items` — Required items in inventory
+- `startNpc` — NPC ID that starts the quest
+- `stages` — Array of quest stages in order
+- `onStart` — Items given and dialogue triggered when quest starts
+- `rewards` — Items, XP, and quest points awarded on completion
+
+**Stage Types:**
+- `dialogue` — Talk to an NPC
+- `kill` — Kill a specific number of NPCs/mobs
+- `gather` — Collect items through gathering skills
+- `interact` — Interact with objects or process items
+
+**Available Quests:**
+- **Goblin Slayer** — Combat tutorial (kill 15 goblins)
+- **Lumberjack's First Lesson** — Woodcutting and firemaking tutorial
+- **Fresh Catch** — Fishing and cooking tutorial
+- **Torvin's Tools** — Mining, smelting, and smithing tutorial
+
+<Info>
+Quest progress is tracked server-side. Each stage must be completed in order before advancing to the next stage.
+</Info>
 
 ### Prayers (`prayers.json`)
 
