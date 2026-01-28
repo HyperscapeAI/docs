@@ -54,47 +54,61 @@ hyperscape/
 │   ├── plugin-hyperscape/   # @hyperscape/plugin-hyperscape - ElizaOS AI agent plugin
 │   ├── physx-js-webidl/     # @hyperscape/physx-js-webidl - PhysX WASM bindings
 │   ├── asset-forge/         # 3d-asset-forge - AI asset generation (Elysia + React Three Fiber)
-│   └── docs-site/           # Documentation (Docusaurus)
-├── assets/                  # Shared game assets (Git LFS, dev only)
-├── world/                   # World configuration and manifests
-└── scripts/                 # Build and dev scripts
+│   └── docs-site/           # Documentation (Mintlify)
+├── scripts/                 # Build and dev scripts
+├── .github/workflows/       # CI/CD automation
+├── nixpacks.toml           # Railway Nixpacks configuration
+└── Dockerfile.server       # Production Docker build
 ```
 
 ## Production Architecture
 
-Hyperscape uses a split deployment model with specialized infrastructure:
+Hyperscape uses a distributed deployment model:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Cloudflare Pages                         │
-│              Frontend (hyperscape.pages.dev)                │
-│         React + Vite + Three.js Client                      │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     │ HTTPS/WSS
-                     │
-        ┌────────────┴────────────┐
-        │                         │
-        ▼                         ▼
-┌──────────────────┐    ┌──────────────────────┐
-│     Railway      │    │   Cloudflare R2      │
-│   Game Server    │    │    Asset CDN         │
-│  + PostgreSQL    │    │  Manifests, Models   │
-└──────────────────┘    └──────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                    Cloudflare Network                    │
+├─────────────────────────────────────────────────────────┤
+│                                                           │
+│  ┌──────────────────┐         ┌──────────────────┐      │
+│  │ Cloudflare Pages │         │  Cloudflare R2   │      │
+│  │  (Edge Caching)  │         │   (CDN/Storage)  │      │
+│  │                  │         │                  │      │
+│  │ hyperscape.club  │         │ assets.hyperscape│      │
+│  │                  │         │      .club       │      │
+│  └────────┬─────────┘         └──────────────────┘      │
+│           │                                              │
+└───────────┼──────────────────────────────────────────────┘
+            │
+            │ API/WebSocket
+            ↓
+┌─────────────────────────────────────────────────────────┐
+│                      Railway Platform                    │
+├─────────────────────────────────────────────────────────┤
+│                                                           │
+│  ┌──────────────────┐         ┌──────────────────┐      │
+│  │  Game Server     │────────→│   PostgreSQL     │      │
+│  │  (Fastify + WS)  │         │   (Persistent)   │      │
+│  │                  │         │                  │      │
+│  │ hyperscape-prod  │         │  Player data     │      │
+│  │ .up.railway.app  │         │  World state     │      │
+│  └──────────────────┘         └──────────────────┘      │
+│                                                           │
+└───────────────────────────────────────────────────────────┘
 ```
 
-**Components:**
-- **Frontend**: Cloudflare Pages (global CDN, automatic deployments)
-- **Backend**: Railway (Nixpacks builder, PostgreSQL included)
-- **Assets**: Cloudflare R2 (manifests, 3D models, textures, audio)
-- **Database**: PostgreSQL on Railway (automatic backups)
+**Traffic Flow**:
+1. Users access `hyperscape.club` (Cloudflare Pages)
+2. Client loads from edge network (global CDN)
+3. Client connects to Railway server via WebSocket
+4. Assets load from `assets.hyperscape.club` (Cloudflare R2)
+5. Server queries PostgreSQL for player data
 
-**Deployment Flow:**
-1. Push to `main` branch
-2. GitHub Actions triggers Railway deployment (backend)
-3. Cloudflare Pages auto-deploys frontend
-4. Manifests uploaded to R2 via GitHub Actions
-5. Server fetches manifests from R2 at startup
+**Benefits**:
+- **Low latency**: Frontend served from nearest edge location
+- **Scalability**: CDN handles static asset traffic
+- **Reliability**: Cloudflare's global network
+- **Cost-effective**: Railway free tier for server, Cloudflare free tier for CDN
 
 ## Build Dependency Graph
 

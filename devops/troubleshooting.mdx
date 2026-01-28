@@ -129,12 +129,106 @@ npm test
 - Server not running
 - Wrong port configuration
 - Firewall blocking
+- CORS origin not allowed
 
 **Solution**:
 
 1. Verify server is running: `lsof -i:5555`
 2. Check client config: `PUBLIC_WS_URL`
 3. Ensure no firewall blocks
+4. Check browser console for CORS errors
+
+### CORS Errors in Production
+
+**Symptom**: API requests fail with CORS errors in browser console
+
+**Cause**: Your deployment domain is not in the CORS allowlist
+
+**Solution**:
+
+Add your domain to `packages/server/src/startup/http-server.ts`:
+
+```typescript
+const allowedOrigins = [
+  // ... existing origins
+  "https://your-custom-domain.com",
+];
+```
+
+**Current Allowed Origins**:
+- `https://hyperscape.club`
+- `https://www.hyperscape.club`
+- `https://hyperscape.pages.dev`
+- `https://*.hyperscape.pages.dev` (preview deployments)
+- `http://localhost:*` (any port)
+- `https://*.up.railway.app`
+
+### Railway Deployment Failures
+
+**Symptom**: Railway build fails or crashes on startup
+
+**Common Causes & Solutions**:
+
+1. **Lockfile frozen error**:
+   ```
+   lockfile had changes, but lockfile is frozen
+   ```
+   **Solution**: Regenerate lockfile locally and commit:
+   ```bash
+   bun install
+   git add bun.lock
+   git commit -m "fix: update bun.lock"
+   ```
+
+2. **Frontend not building**:
+   ```
+   No index.html found in public directory
+   ```
+   **Solution**: Verify build commands in `nixpacks.toml`:
+   ```toml
+   [phases.build]
+   cmds = [
+     "bun run build:shared",
+     "bun run build:server",
+     "cd packages/client && bun run build",
+     "cp -r packages/client/dist/* packages/server/public/"
+   ]
+   ```
+
+3. **Manifest fetch failures**:
+   ```
+   Failed to fetch manifests from CDN
+   ```
+   **Solution**: Verify `PUBLIC_CDN_URL` is set and accessible:
+   ```bash
+   curl https://assets.hyperscape.club/manifests/items.json
+   ```
+
+4. **Database connection timeout**:
+   ```
+   Error: connect ETIMEDOUT
+   ```
+   **Solution**: Ensure Railway PostgreSQL service is running and `DATABASE_URL` is set correctly.
+
+### Cloudflare Pages Build Failures
+
+**Symptom**: Pages deployment fails
+
+**Common Causes**:
+
+1. **Wrong build directory**:
+   - Build output must be in `packages/client/dist`
+   - Set "Build output directory" to `packages/client/dist`
+
+2. **Missing environment variables**:
+   - Ensure all `PUBLIC_*` variables are set in Pages dashboard
+   - Check Settings → Environment variables
+
+3. **Build command fails**:
+   ```bash
+   # Correct build command:
+   cd packages/client && bun install && bun run build
+   ```
 
 ### Hot Reload Not Working
 

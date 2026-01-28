@@ -85,7 +85,7 @@ curl https://api.hyperscape.lol/health
   Get skill unlock definitions for all skills
 </ParamField>
 
-Returns a mapping of skill names to arrays of unlock entries. Each unlock specifies the level requirement, description, and type (item/ability/area/quest/activity).
+Returns a mapping of skill names to their unlock progression:
 
 ```bash
 curl https://api.hyperscape.lol/api/data/skill-unlocks
@@ -101,13 +101,13 @@ curl https://api.hyperscape.lol/api/data/skill-unlocks
       "type": "item"
     },
     {
-      "level": 5,
-      "description": "Steel weapons",
+      "level": 40,
+      "description": "Rune weapons",
       "type": "item"
     },
     {
-      "level": 40,
-      "description": "Rune weapons",
+      "level": 60,
+      "description": "Dragon weapons",
       "type": "item"
     }
   ],
@@ -115,12 +115,12 @@ curl https://api.hyperscape.lol/api/data/skill-unlocks
     {
       "level": 1,
       "description": "Normal trees",
-      "type": "area"
+      "type": "item"
     },
     {
       "level": 15,
       "description": "Oak trees",
-      "type": "area"
+      "type": "item"
     }
   ]
 }
@@ -128,7 +128,7 @@ curl https://api.hyperscape.lol/api/data/skill-unlocks
 </Accordion>
 
 <Info>
-This endpoint is used by the Skill Guide Panel to display unlock progression. Data is server-authoritative and loaded from `manifests/skill-unlocks.json`.
+This endpoint is used by the Skill Guide Panel to display unlock progression. Data is sourced from `skill-unlocks.json` manifest.
 </Info>
 
 ## WebSocket Events
