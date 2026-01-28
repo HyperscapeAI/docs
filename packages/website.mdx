@@ -1,0 +1,393 @@
+---
+title: "website"
+description: "Marketing website built with Next.js 15"
+icon: "globe"
+---
+
+# @hyperscape/website
+
+The Hyperscape marketing website built with Next.js 15, featuring scroll animations, 3D effects, and responsive design.
+
+## Tech Stack
+
+| Technology | Purpose |
+|------------|---------|
+| **Next.js 15** | Static site generation with App Router |
+| **React 19** | UI framework |
+| **Tailwind CSS 4** | Utility-first styling |
+| **Framer Motion** | Scroll animations and transitions |
+| **GSAP** | Advanced animations |
+| **Lenis** | Smooth scroll library |
+| **React Three Fiber** | 3D background effects |
+| **detect-gpu** | GPU capability detection |
+
+## Project Structure
+
+```
+packages/website/
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── page.tsx           # Landing page
+│   │   ├── gold/page.tsx      # $GOLD token page
+│   │   ├── layout.tsx         # Root layout
+│   │   └── globals.css        # Global styles
+│   ├── components/            # React components
+│   │   ├── Header.tsx         # Navigation header
+│   │   ├── Footer.tsx         # Site footer
+│   │   ├── Background.tsx     # Reusable background
+│   │   ├── Hero/              # Landing page hero
+│   │   ├── Features/          # Features section
+│   │   ├── CTA/               # Call-to-action
+│   │   └── GoldToken/         # $GOLD token page
+│   └── lib/
+│       └── fonts.ts           # Font configuration
+├── public/
+│   ├── images/                # Static images
+│   └── fonts/                 # Custom fonts
+├── next.config.ts             # Next.js configuration
+├── tailwind.config.ts         # Tailwind configuration
+└── package.json
+```
+
+## Pages
+
+### Landing Page (`/`)
+
+Features:
+- Hero section with logo, tagline, and CTA button
+- Features grid with AI agents, classic MMORPG, and economy highlights
+- Call-to-action banner with gradient overlay
+- Responsive design for mobile and desktop
+
+### $GOLD Token Page (`/gold`)
+
+Features:
+- Two-column hero layout with token image
+- Scroll-style design with parchment aesthetic
+- Token details (1 $GOLD = 1 gold in-game)
+- Features grid (Play-to-Earn, Fair Launch, Community Driven)
+- How It Works section
+- CTA section with banner background
+
+## Components
+
+### Background
+
+Reusable background component with customizable image and opacity:
+
+```typescript
+<Background 
+  image="/images/app_background.png" 
+  opacity={0.04} 
+/>
+```
+
+**Features:**
+- Horizontal gradient overlay
+- Fixed background attachment
+- Configurable opacity
+- Per-page customization
+
+### Header
+
+Navigation header with logo and links:
+
+```typescript
+<Header />
+```
+
+**Links:**
+- Play Now (game URL)
+- Docs (documentation)
+- $GOLD (token page)
+- Discord, Twitter, GitHub (social)
+
+### Footer
+
+Site footer with links and social icons:
+
+```typescript
+<Footer />
+```
+
+**Sections:**
+- Product links (Play, Docs, GitHub)
+- Community links (Discord, Twitter)
+- Legal links (Terms, Privacy)
+- Copyright notice
+
+### Hero
+
+Landing page hero with staggered animations:
+
+```typescript
+<Hero />
+```
+
+**Features:**
+- Logo with glow effect
+- Animated tagline
+- CTA button with hover effects
+- Responsive layout
+
+### Features
+
+Features grid with icon cards:
+
+```typescript
+<Features />
+```
+
+**Highlights:**
+- AI Agents (autonomous NPCs)
+- Classic MMORPG (RuneScape-inspired)
+- Player Economy (trading, banking)
+
+### CTA
+
+Call-to-action section with banner:
+
+```typescript
+<CTA />
+```
+
+**Features:**
+- Banner background image
+- Gradient overlay
+- Heading and description
+- CTA button
+
+### GoldToken
+
+Complete $GOLD token page:
+
+```typescript
+<GoldToken />
+```
+
+**Sections:**
+- Hero with two-column layout
+- Token details
+- Features grid
+- How It Works
+- CTA section
+
+## Styling
+
+### Theme Configuration
+
+Custom theme defined in `globals.css`:
+
+```css
+@theme {
+  /* Typography */
+  --font-display: 'Cinzel', serif;
+  --font-body: 'Rubik', system-ui, sans-serif;
+  
+  /* Gold palette */
+  --gold-essence: #d4a84b;
+  --gold-flame: #ffd866;
+  --gold-dim: #c49530;
+  --gold-ember: #b8860b;
+  
+  /* Background depths */
+  --bg-depth: #0a0a0c;
+  --bg-surface: #141416;
+  --bg-elevated: #1e1e22;
+  
+  /* Glass effects */
+  --glass-surface: rgba(10, 10, 12, 0.85);
+  --glass-border: rgba(45, 40, 32, 0.5);
+  --glass-highlight: rgba(212, 168, 75, 0.1);
+}
+```
+
+### Utility Classes
+
+```css
+.glass {
+  background: var(--glass-surface);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+}
+
+.glow-gold {
+  filter: drop-shadow(0 0 20px rgba(212, 168, 75, 0.6));
+}
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, #d4a84b 0%, #ffd866 50%, #d4a84b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+```
+
+### Animations
+
+```css
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes slowZoom {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.08); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+```
+
+## Environment Variables
+
+```bash
+# External URLs
+NEXT_PUBLIC_DOCS_URL=https://hyperscape-ai.mintlify.app/
+NEXT_PUBLIC_GAME_URL=https://play.hyperscape.club
+NEXT_PUBLIC_DISCORD_URL=https://discord.gg/f4ZwhAbKye
+NEXT_PUBLIC_TWITTER_URL=https://x.com/hyperscapeai
+NEXT_PUBLIC_GITHUB_URL=https://github.com/hyperscape-ai
+```
+
+## Development
+
+### Local Development
+
+```bash
+cd packages/website
+bun install
+bun run dev
+```
+
+The website runs on **port 3334** by default.
+
+### Build
+
+```bash
+bun run build
+```
+
+Generates static export in `out/` directory.
+
+### Type Checking
+
+```bash
+bun run typecheck
+```
+
+<Info>
+TypeScript build errors are ignored for R3F types (jsx: preserve incompatibility). The code works at runtime.
+</Info>
+
+## Deployment
+
+The website is configured for static export:
+
+```typescript
+// next.config.ts
+const config: NextConfig = {
+  output: "export",
+  images: {
+    unoptimized: true,
+  },
+  trailingSlash: true,
+};
+```
+
+**Deployment Options:**
+- Cloudflare Pages
+- Vercel
+- Netlify
+- Any static hosting
+
+## Fonts
+
+### Cinzel (Display)
+
+Serif font for headings and titles:
+
+```typescript
+import { Cinzel } from "next/font/google";
+
+export const cinzel = Cinzel({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+});
+```
+
+### Rubik (Body)
+
+Sans-serif font for body text:
+
+```typescript
+import { Rubik } from "next/font/google";
+
+export const rubik = Rubik({
+  subsets: ["latin"],
+  variable: "--font-body",
+  display: "swap",
+});
+```
+
+## SEO
+
+### Metadata
+
+```typescript
+export const metadata: Metadata = {
+  title: "Hyperscape - The First AI-Native MMORPG",
+  description: "Where autonomous agents powered by ElizaOS play alongside humans...",
+  keywords: ["MMORPG", "AI gaming", "RuneScape", "ElizaOS", ...],
+  openGraph: {
+    title: "Hyperscape - The First AI-Native MMORPG",
+    images: [{ url: "/images/og-image.jpg", width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@hyperscapeai",
+  },
+};
+```
+
+### Viewport
+
+```typescript
+export const viewport: Viewport = {
+  themeColor: "#0a0a0c",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
+```
+
+## Accessibility
+
+- Semantic HTML structure
+- ARIA labels on interactive elements
+- Keyboard navigation support
+- Reduced motion support via `prefers-reduced-motion`
+- Color contrast ratios meet WCAG AA standards
+
+## Performance
+
+- Static site generation (no server runtime)
+- Image optimization disabled (static export)
+- Font preloading with `display: swap`
+- CSS-only animations for low-end devices
+- GPU detection for 3D effects
+
+## Browser Support
+
+- Chrome/Edge 90+
+- Firefox 88+
+- Safari 14+
+- Mobile browsers (iOS Safari, Chrome Mobile)
+
+## Related Documentation
+
+- [Configuration](/devops/configuration) - Environment variables
+- [Deployment](/guides/deployment) - Deployment guides
