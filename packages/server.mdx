@@ -53,32 +53,52 @@ packages/server/
 
 ## API Routes
 
+### Core Routes
+
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/health` | GET | Health check |
-| `/status` | GET | Server status (used by Railway healthcheck) |
-| `/auth` | POST | Authentication |
+| `/status` | GET | Health check and server status |
+| `/health` | GET | Health check (legacy) |
 | `/ws` | WS | Game WebSocket connection |
-| `/api/data/skill-unlocks` | GET | Skill unlock definitions (server-authoritative) |
-| `/manifests/*.json` | GET | Game data manifests (fetched from CDN at startup) |
-| `/debug/public` | GET | Debug endpoint showing public directory contents |
+| `/` | GET | Serve frontend (index.html) |
 
 ### Data Routes
 
-The server provides static game data endpoints that are server-authoritative:
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/data/skill-unlocks` | GET | Get skill unlock definitions |
 
-```typescript
-// packages/server/src/startup/routes/data-routes.ts
-export function registerDataRoutes(fastify: FastifyInstance): void {
-  // Get skill unlock definitions
-  fastify.get("/api/data/skill-unlocks", async (_req, reply) => {
-    const unlocks = getAllSkillUnlocks();
-    return reply.send(unlocks);
-  });
-}
-```
+### Player Routes
 
-These endpoints serve data that the client needs but shouldn't bundle (to allow server-side updates without client rebuilds).
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/player` | GET | Get player data |
+| `/api/player` | POST | Create/update player |
+
+### Character Routes
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/characters` | GET | List characters |
+| `/api/characters` | POST | Create character |
+| `/api/characters/:id` | GET | Get character details |
+
+### Agent Routes (ElizaOS)
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/agents` | GET | List active agents |
+| `/api/agents/:id` | GET | Get agent details |
+
+### Debug Routes
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/debug/public` | GET | List public directory contents |
+
+<Info>
+All API routes support CORS for Cloudflare Pages, Railway, and localhost origins. See [CORS Configuration](/devops/configuration#cors-configuration) for details.
+</Info>
 
 ## Database
 
@@ -293,28 +313,84 @@ bun run assets:deploy # Deploy to R2 (production)
 
 ## Deployment
 
-### Cloudflare Workers
+### Railway (Production)
 
-```bash
-bun run deploy        # Deploy to staging
-bun run deploy:prod   # Deploy to production
+The server is deployed to Railway with automatic GitHub Actions integration.
+
+**Build configuration** (`nixpacks.toml`):
+```toml
+[phases.build]
+cmds = [
+  "bun run build:shared",
+  "bun run build:server",
+  "mkdir -p packages/server/world/assets/manifests"
+]
+
+[start]
+cmd = "cd packages/server && bun dist/index.js"
+
+[variables]
+CI = "true"
+SKIP_ASSETS = "true"  # Assets served from Cloudflare R2
 ```
 
-### Railway
+**Automatic deployment:**
+- Triggered on push to `main` branch
+- Builds shared and server packages
+- Skips asset download (served from CDN)
+- Fetches manifests from Cloudflare R2 at startup
 
-Railway deployment is automated via GitHub Actions (`.github/workflows/deploy-railway.yml`):
+**Manual deployment:**
+```bash
+# Via GitHub Actions workflow dispatch
+# Or via Railway CLI:
+railway up
+```
 
-- **Nixpacks Builder**: Uses `nixpacks.toml` for build configuration
-- **Frontend Integration**: Client is built and served from server's `public/` directory
-- **Manifest Fetching**: Server downloads manifests from CDN at startup (no assets repo clone needed)
-- **Multi-stage Build**: Separate build phases for debugging
-- **GraphQL API**: Deployment triggered via Railway GraphQL API
+### Docker (Alternative)
 
-Configuration files:
-- `nixpacks.toml` - Nixpacks builder settings
-- `railway.server.json` - Railway service configuration
-- `.railwayignore` - Files excluded from deployment
-- `Dockerfile.server` - Alternative Docker build
+Build and run with Docker:
+
+```bash
+# Build image
+docker build -f Dockerfile.server -t hyperscape-server .
+
+# Run container
+docker run -p 5555:5555 \
+  -e DATABASE_URL=postgresql://... \
+  -e JWT_SECRET=... \
+  -e PRIVY_APP_ID=... \
+  -e PRIVY_APP_SECRET=... \
+  -e PUBLIC_CDN_URL=https://assets.hyperscape.club \
+  hyperscape-server
+```
+
+**Multi-stage build:**
+1. **Builder stage**: Installs dependencies, builds packages
+2. **Runtime stage**: Minimal production image with only runtime dependencies
+
+### Manifest Fetching
+
+The server automatically fetches game manifests from the CDN at startup:
+
+```typescript
+// packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Fetched files:**
+- items.json, npcs.json, resources.json, tools.json
+- biomes.json, world-areas.json, stores.json
+- music.json, vegetation.json, buildings.json
+
+**Behavior:**
+- **Production**: Always fetches from CDN
+- **Development**: Skips if local manifests exist
+- **CI/Test**: Skips with `SKIP_MANIFESTS=true`
+
+<Info>
+Manifests are cached locally with 5-minute revalidation headers. The server compares fetched content with local cache and only writes if changed.
+</Info>
 
 ## Key Files
 

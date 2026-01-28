@@ -8,38 +8,32 @@ icon: "boxes"
 
 Hyperscape uses a **split deployment model** for optimal performance:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Production Deployment                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Frontend (Cloudflare Pages)                                │
-│  ├─ hyperscape.club                                         │
-│  ├─ www.hyperscape.club                                     │
-│  └─ *.hyperscape.pages.dev (preview deployments)           │
-│                                                              │
-│  Server/API (Railway)                                       │
-│  ├─ hyperscape-production.up.railway.app                   │
-│  ├─ WebSocket: wss://.../ws                                │
-│  ├─ REST API: /api/*                                        │
-│  └─ Serves frontend at / (SPA routing)                     │
-│                                                              │
-│  Assets/CDN (Cloudflare R2)                                 │
-│  ├─ assets.hyperscape.club                                  │
-│  ├─ 3D models, textures, audio                             │
-│  └─ Game data manifests (JSON)                             │
-│                                                              │
-│  Database (Railway PostgreSQL)                              │
-│  └─ Player data, inventory, world state                    │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    A[Player Browser] -->|HTTPS| B[Cloudflare Pages]
+    A -->|WSS| C[Railway Server]
+    A -->|HTTPS| D[Cloudflare R2 CDN]
+    C -->|SQL| E[Neon PostgreSQL]
+    C -->|Fetch Manifests| D
+    
+    B -.->|Static HTML/JS/CSS| A
+    D -.->|Models/Audio/Textures| A
+    C -.->|Game State| A
 ```
 
-**Key Features:**
-- Frontend served from Cloudflare's global CDN (low latency)
-- Server handles game logic and WebSocket connections
-- Assets served from R2 (not bundled with frontend)
-- Manifests fetched from CDN at server startup (allows content updates without redeployment)
+| Component | Platform | Purpose |
+|-----------|----------|---------|
+| **Frontend** | Cloudflare Pages | Static site hosting with global CDN |
+| **Backend** | Railway | Game server with WebSocket support |
+| **Database** | Neon PostgreSQL | Serverless PostgreSQL with autoscaling |
+| **Assets** | Cloudflare R2 | Object storage for game assets |
+
+**Benefits:**
+- Global CDN distribution for frontend and assets
+- Dedicated compute for game server
+- Independent scaling of components
+- Automatic deployments via GitHub Actions
+- Manifest fetching from CDN at server startup
 
 ## Monorepo Structure
 
@@ -250,7 +244,7 @@ packages/shared/src/systems/shared/
 
 ### Manifest-Driven Content
 
-Game content is defined in JSON manifest files in `packages/server/world/assets/manifests/`:
+Game content is defined in JSON manifest files. In production, manifests are fetched from the CDN at server startup and cached locally in `packages/server/world/assets/manifests/`:
 
 | File | Purpose |
 |------|---------|
@@ -276,38 +270,35 @@ Game content is defined in JSON manifest files in `packages/server/world/assets/
 
 Add new content by editing these JSON files—no code changes required.
 
-## Deployment Architecture
+### Manifest Loading System
 
-Hyperscape uses a **split deployment model** for optimal performance and cost:
+**Development:**
+- Manifests loaded from local `packages/server/world/assets/manifests/`
+- If directory is empty, server fetches from `PUBLIC_CDN_URL`
+- Assets cloned via Git LFS during `bun install` (see `scripts/ensure-assets.mjs`)
 
-```mermaid
-flowchart LR
-    A[Client Browser] -->|HTTPS| B[Cloudflare Pages]
-    A -->|WSS/HTTPS| C[Railway Server]
-    C -->|Fetch| D[Cloudflare R2 CDN]
-    C -->|Query| E[Railway PostgreSQL]
-    B -->|Assets| D
+**Production/CI:**
+- Manifests fetched from CDN at server startup
+- Cached locally with 5-minute revalidation headers
+- Asset download skipped (CI=true, SKIP_ASSETS=true)
+- All assets served directly from Cloudflare R2
+
+**Fetch behavior** (`packages/server/src/startup/config.ts`):
+```typescript
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
 ```
 
-### Production Services
-
-| Service | Platform | Purpose |
-|---------|----------|---------|
-| **Frontend** | Cloudflare Pages | Static site hosting (`hyperscape.club`) |
-| **Backend/API** | Railway | Game server with WebSockets |
-| **Database** | Railway PostgreSQL | Player data persistence |
-| **Assets/CDN** | Cloudflare R2 | 3D models, audio, textures |
-
-### Deployment Flow
-
-1. **Push to main** triggers GitHub Actions
-2. **Railway workflow** builds server + client via Nixpacks
-3. **Client build** copied to `packages/server/public/`
-4. **Server starts**, fetches manifests from CDN
-5. **Unified deployment** serves both API and frontend
+**Fetched files:**
+```typescript
+const MANIFEST_FILES = [
+  "items.json", "npcs.json", "resources.json", "tools.json",
+  "biomes.json", "world-areas.json", "stores.json",
+  "music.json", "vegetation.json", "buildings.json"
+];
+```
 
 <Info>
-The server serves the built client from `/public/` for unified deployment, while Cloudflare Pages hosts the primary frontend for better global distribution.
+The server compares fetched manifests with local cache and only writes if content changed, minimizing disk I/O.
 </Info>
 
 ## Build Pipeline

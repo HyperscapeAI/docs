@@ -48,11 +48,21 @@ PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
 
 ```bash
 # Server
-PORT=5555                                      # Railway auto-assigns if not set
-NODE_ENV=production                            # Set automatically by Railway
+PORT=5555
+NODE_ENV=production
 
 # Assets & CDN
 PUBLIC_CDN_URL=http://localhost:8080
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5555/ws
+
+# Database (local development)
+USE_LOCAL_POSTGRES=true
+POSTGRES_CONTAINER=hyperscape-postgres
+POSTGRES_USER=hyperscape
+POSTGRES_PASSWORD=hyperscape_dev
+POSTGRES_DB=hyperscape
+POSTGRES_PORT=5432
 
 # Deployment
 NODE_ENV=production
@@ -65,8 +75,18 @@ LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
 
 # ElizaOS Integration
-ELIZAOS_URL=http://localhost:4001
 ELIZAOS_API_URL=http://localhost:4001
+
+# Game Configuration
+SAVE_INTERVAL=60                    # Auto-save interval in seconds
+PUBLIC_PLAYER_COLLISION=false       # Enable player-to-player collision
+PUBLIC_MAX_UPLOAD_SIZE=12           # Max upload size in MB
+DISABLE_RATE_LIMIT=false            # Disable rate limiting (dev only!)
+
+# Advanced
+WORLD=world                         # World folder to load
+SYSTEMS_PATH=/path/to/custom/systems  # Custom systems directory
+COMMIT_HASH=abc123                  # Git commit (auto-set by CI)
 ```
 
 ### CI/Production Variables
@@ -101,9 +121,18 @@ PUBLIC_PRIVY_APP_ID=your-privy-app-id         # Must match server
 ### Production (Cloudflare Pages)
 
 ```bash
+# Required
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
+
+# Production endpoints
 PUBLIC_API_URL=https://hyperscape-production.up.railway.app
-PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app
-PUBLIC_CDN_URL=https://cdn.hyperscape.club
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_APP_URL=https://hyperscape.club
+
+# Optional
+PUBLIC_ENABLE_FARCASTER=true        # Enable Farcaster integration
+DEBUG_RPG=0                         # Disable debug logging
 ```
 
 ## CORS Configuration
@@ -267,6 +296,60 @@ Manifests are cached in `packages/server/world/assets/manifests/` and served to 
 <Info>
   Without Privy, the game runs in anonymous mode with temporary identities.
 </Info>
+
+## CORS Configuration
+
+The server automatically configures CORS for development and production environments.
+
+### Allowed Origins
+
+**Production domains:**
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  "https://hyperscape-production.up.railway.app",
+  "http://hyperscape.pages.dev",  // HTTP fallback for testing
+];
+```
+
+**Dynamic patterns:**
+```typescript
+/^https?:\/\/localhost:\d+$/,                    // localhost:3000, 3333, 5555, etc.
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/,      // Cloudflare preview deployments
+/^https:\/\/.+\.farcaster\.xyz$/,               // Farcaster frames
+/^https:\/\/.+\.warpcast\.com$/,                // Warpcast integration
+/^https:\/\/.+\.privy\.io$/,                    // Privy authentication
+/^https:\/\/.+\.up\.railway\.app$/,             // Railway deployments
+```
+
+**Environment-based origins:**
+- `ELIZAOS_API_URL` (default: http://localhost:4001)
+- `CLIENT_URL` or `PUBLIC_APP_URL` (default: http://localhost:3333)
+- `SERVER_URL` (default: http://localhost:5555)
+
+### Adding Custom Domains
+
+To add a custom domain, set the `PUBLIC_APP_URL` environment variable:
+
+```bash
+# In packages/server/.env
+PUBLIC_APP_URL=https://yourdomain.com
+```
+
+The server automatically adds this to the CORS allowlist.
+
+### CORS Headers
+
+All CORS responses include:
+```
+Access-Control-Allow-Origin: <origin>
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, PUT, POST, DELETE, OPTIONS, PATCH
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With
+```
 
 ## GitHub Actions
 

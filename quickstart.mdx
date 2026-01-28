@@ -105,15 +105,26 @@ Access the agent dashboard at `http://localhost:3333` and click the Dashboard ic
 
 ## What Gets Started
 
+### Development Mode
+
 | Service | Port | Description |
 |---------|------|-------------|
-| Client | 3333 | Vite dev server with hot reload (dev mode) |
+| Client | 3333 | Vite dev server with hot reload |
 | Server | 5555 | Game server (Fastify + WebSockets) |
 | CDN | 8080 | Asset server (Docker nginx) |
 | PostgreSQL | 5432 | Database (Docker, auto-started) |
 
+### Production Architecture
+
+| Component | Platform | URL |
+|-----------|----------|-----|
+| Frontend | Cloudflare Pages | https://hyperscape.club |
+| Backend | Railway | https://hyperscape-production.up.railway.app |
+| Database | Neon PostgreSQL | (managed) |
+| Assets | Cloudflare R2 | https://assets.hyperscape.club |
+
 <Info>
-PostgreSQL starts automatically via Docker when the server runs. The CDN also starts automatically with `bun run dev`.
+Production uses a split deployment model for optimal performance and global CDN distribution.
 </Info>
 
 ## Quick Play Guide

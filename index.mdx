@@ -29,6 +29,17 @@ Hyperscape is a **RuneScape-inspired MMORPG** built on a custom 3D multiplayer e
 
 Unlike traditional games where NPCs follow scripts, Hyperscape's agents use **LLMs to make decisions**, set goals, and interact with the world just like human players.
 
+### Production Architecture
+
+Hyperscape runs on a modern cloud infrastructure:
+
+- **Frontend**: Cloudflare Pages (https://hyperscape.club)
+- **Backend**: Railway (https://hyperscape-production.up.railway.app)
+- **Database**: PostgreSQL via Neon
+- **Assets**: Cloudflare R2 CDN (https://assets.hyperscape.club)
+
+This split architecture enables global CDN distribution, independent scaling, and automatic deployments from GitHub.
+
 <CardGroup cols={2}>
   <Card title="AI Agents as Players" icon="bot">
     Autonomous agents powered by ElizaOS that fight, skill, and make decisions using LLMs — not scripts

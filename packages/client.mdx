@@ -142,19 +142,42 @@ const skillUnlocks = await response.json();
 
 ## Environment Variables
 
+### Development
+
+```bash
+# Required for persistent authentication
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
+
+# Server URLs (defaults to localhost)
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5555/ws
+PUBLIC_CDN_URL=http://localhost:8080
+```
+
+### Production (Cloudflare Pages)
+
 ```bash
 # Required
 PUBLIC_PRIVY_APP_ID=your-privy-app-id
 
-# Server URLs (production)
-PUBLIC_API_URL=https://api.hyperscape.lol
-PUBLIC_WS_URL=wss://api.hyperscape.lol
-PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+# Production endpoints
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_APP_URL=https://hyperscape.club
 
-# Farcaster (optional)
+# Optional
 PUBLIC_ENABLE_FARCASTER=true
-PUBLIC_APP_URL=https://hyperscape.lol
+DEBUG_RPG=0
 ```
+
+<Warning>
+`PUBLIC_PRIVY_APP_ID` must match the `PRIVY_APP_ID` set in the server environment. Mismatched IDs will cause authentication failures.
+</Warning>
+
+<Info>
+All `PUBLIC_*` variables are exposed to the browser. Never put secrets in client environment variables.
+</Info>
 
 ## Running
 
@@ -222,11 +245,47 @@ bun run cap:sync:android  # Android only
 
 ## Deployment
 
-### Cloudflare Pages
+### Cloudflare Pages (Production)
+
+The client is deployed to Cloudflare Pages with automatic GitHub integration.
+
+**Production domains:**
+- Primary: https://hyperscape.club
+- Pages: https://hyperscape.pages.dev
+- Preview: `<branch>.hyperscape.pages.dev`
+
+**Build configuration:**
+```
+Framework preset: None (Vite)
+Build command: cd packages/client && bun run build
+Build output: packages/client/dist
+Root directory: / (repository root)
+```
+
+**Environment variables** (set in Pages dashboard):
+```bash
+PUBLIC_PRIVY_APP_ID=<from-privy-dashboard>
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_APP_URL=https://hyperscape.club
+```
+
+**Manual deployment:**
+```bash
+# Via Cloudflare Pages dashboard
+# Or via wrangler CLI:
+cd packages/client
+bunx wrangler pages deploy dist
+```
+
+### Alternative: Vercel
 
 ```bash
-bun run deploy        # Deploy to staging
-bun run deploy:prod   # Deploy to production
+# Import packages/client directory to Vercel
+# Set build command: bun run build
+# Set output directory: dist
+# Add PUBLIC_* environment variables
 ```
 
 ## Key Files

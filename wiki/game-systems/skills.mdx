@@ -907,107 +907,55 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
-## Weight and Stamina System
-
-Agility interacts with the weight and stamina mechanics:
-
-### Stamina Drain (Weight-Based)
-
-Carrying heavy items increases stamina drain while running:
-
-**Formula:** `Drain Rate = Base Rate × (1 + Weight × 0.005)`
-
-| Weight (kg) | Drain Multiplier | Drain/Second |
-|-------------|------------------|--------------|
-| 0 | 1.0× | 2.0 |
-| 10 | 1.05× | 2.1 |
-| 20 | 1.1× | 2.2 |
-| 50 | 1.25× | 2.5 |
-| 100 | 1.5× | 3.0 |
-
-<Info>
-Weight is calculated server-side from your inventory and equipment, then synced to the client for stamina calculations.
-</Info>
-
-### Stamina Regeneration (Agility-Based)
-
-Higher agility levels increase stamina regeneration:
-
-**Formula:** `Regen Rate = Base Rate × (1 + Agility Level × 0.01)`
-
-| Agility Level | Idle Regen/Sec | Walking Regen/Sec |
-|---------------|----------------|-------------------|
-| 1 | 4.04 | 2.02 |
-| 10 | 4.4 | 2.2 |
-| 25 | 5.0 | 2.5 |
-| 50 | 6.0 | 3.0 |
-| 75 | 7.0 | 3.5 |
-| 99 | 7.96 | 3.98 |
-
-<Info>
-At level 99 agility, stamina regenerates nearly twice as fast as level 1, making it easier to sustain running even with heavy loads.
-</Info>
-
-## Skill Unlocks
+## Skill Unlocks & Guide Panel
 
 The `skill-unlocks.json` manifest documents what players unlock at each level. This data powers the in-game Skill Guide Panel.
 
-### Skill Guide Panel
+### Skill Guide Panel (OSRS-Style)
 
-Players can click any skill in the Skills tab to open a detailed guide showing all unlocks:
+Players can click any skill in the Skills Panel to open an OSRS-style guide showing all unlocks:
 
-**Features**:
-- Lists all unlocks with level requirements
+**Features:**
+- Click any skill icon to open guide
+- Shows all unlocks with level requirements
 - Visual distinction between unlocked (green ✓) and locked (🔒) items
-- Highlights the next unlock to work toward
-- Shows progress: "X of Y unlocks achieved"
-- Type badges (item, ability, area, etc.)
-- Scrollable for skills with many unlocks
+- Next unlock highlighted with progress indicator
+- Scrollable list for skills with many unlocks
+- Type badges (item/ability) with color coding
+- ESC key or click outside to close
 
-**Implementation**:
-- Component: `packages/client/src/game/panels/SkillGuidePanel.tsx`
-- Data source: `/api/data/skill-unlocks` endpoint
-- Manifest: `packages/server/world/assets/manifests/skill-unlocks.json`
+**Implementation:**
+```typescript
+// packages/client/src/game/panels/SkillGuidePanel.tsx
+interface SkillGuidePanelProps {
+  visible: boolean;
+  skillLabel: string;
+  skillIcon: string;
+  playerLevel: number;
+  unlocks: readonly SkillUnlock[];
+  isLoading: boolean;
+  onClose: () => void;
+}
+```
 
-**Example Unlocks**:
+**Data source:**
+- Fetched from server API: `GET /api/data/skill-unlocks`
+- Returns all skill unlocks from `skill-unlocks.json` manifest
+- Cached in client state after initial fetch
+
+**Example unlocks:**
 - **Attack 1**: Bronze weapons, Iron weapons
+- **Attack 5**: Steel weapons
 - **Attack 40**: Rune weapons
 - **Attack 60**: Dragon weapons
 - **Woodcutting 15**: Oak trees
 - **Mining 30**: Coal
 - **Cooking 40**: Lobster
 - **Smithing 50**: Mithril bar
-- **Prayer 43**: Protect from Melee
+- **Prayer 1-77**: 29 different prayers
 
 <Info>
-The Skill Guide Panel fetches unlock data from the server API to ensure it's always up-to-date with the latest manifest changes.
-</Info>
-
-### Skill Guide Panel
-
-Players can view all unlocks for a skill by **clicking on the skill icon** in the Skills panel. This opens an OSRS-style guide showing:
-
-- All unlocks with level requirements
-- Visual distinction between unlocked (achieved) and locked (future) items
-- Next unlock highlighted with progress indicator
-- Type badges (item vs ability)
-- Scrollable list for skills with many unlocks
-
-**Features**:
-- Click any skill in Skills Panel to open its guide
-- Shows current level and unlock progress (e.g., "15/29 unlocked")
-- Next unlock highlighted with "X more levels to unlock..." message
-- Green checkmarks for achieved unlocks
-- Lock icons for future unlocks
-- Close with ESC key, X button, or click outside
-
-**Implementation**:
-- Component: `packages/client/src/game/panels/SkillGuidePanel.tsx`
-- Data source: `/api/data/skill-unlocks` endpoint
-- Fetched once at Skills Panel mount and cached
-
-<Info>
-The Skill Guide Panel matches OSRS visual design with dark brown backgrounds, gold accents, and smooth animations.
+The guide panel handles British/American spelling differences automatically (defence → defense) for consistent display.
 </Info>
 
 ## Manifest-Driven Design
