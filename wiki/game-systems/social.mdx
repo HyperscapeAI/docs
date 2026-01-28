@@ -1,0 +1,336 @@
+---
+title: "Social Features"
+description: "Friend system, private messaging, and ignore list"
+icon: "users"
+---
+
+## Overview
+
+Hyperscape includes comprehensive social features for player interaction: friend management, private messaging, and an ignore list for blocking unwanted players.
+
+**Location:** `packages/shared/src/systems/shared/social/`
+
+## Friend System
+
+### Adding Friends
+
+1. Right-click another player
+2. Select "Add Friend"
+3. Friend request sent to target player
+4. Target accepts or declines request
+5. If accepted, both players added to each other's friend lists
+
+### Friend List
+
+The friend list shows:
+- Friend's name
+- Online/offline status (real-time)
+- Combat level
+- Current activity (if online)
+
+### Managing Friends
+
+| Action | Description |
+|--------|-------------|
+| **Add Friend** | Send friend request to player |
+| **Remove Friend** | Remove player from friend list |
+| **View Friends** | Open friend list panel |
+| **Private Message** | Send direct message to friend |
+
+### Online Status
+
+Friend online status updates in real-time:
+- **Green dot**: Friend is online
+- **Gray dot**: Friend is offline
+- **Notification**: "Friend [Name] has logged in"
+
+## Private Messaging
+
+### Sending Messages
+
+1. Open friend list
+2. Click friend's name
+3. Type message in chat input
+4. Message appears in private chat tab
+
+### Message Features
+
+- **Direct messages**: Only visible to sender and recipient
+- **Message history**: Conversation history per friend
+- **Notifications**: Alert when new message received
+- **Offline messages**: Messages delivered when friend logs in
+
+### Chat Integration
+
+Private messages appear in dedicated chat tab:
+- Purple color for private messages
+- "From [Friend]:" or "To [Friend]:" prefix
+- Separate from public chat
+- Persistent message history
+
+## Ignore List
+
+### Blocking Players
+
+1. Right-click player
+2. Select "Ignore"
+3. Player added to ignore list
+4. Blocked player can't:
+   - Send you private messages
+   - Send you trade requests
+   - Send you friend requests
+
+### Managing Ignore List
+
+| Action | Description |
+|--------|-------------|
+| **Add to Ignore** | Block player from contacting you |
+| **Remove from Ignore** | Unblock player |
+| **View Ignore List** | See all blocked players |
+
+### Ignore Behavior
+
+When you ignore a player:
+- Their messages don't appear in your chat
+- Their trade requests are auto-declined
+- Their friend requests are auto-declined
+- They don't know they're ignored (OSRS-style)
+
+## Database Schema
+
+### Tables
+
+**friendships**
+```sql
+CREATE TABLE friendships (
+  id SERIAL PRIMARY KEY,
+  player_id VARCHAR(255) NOT NULL,
+  friend_id VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(player_id, friend_id)
+);
+```
+
+**friend_requests**
+```sql
+CREATE TABLE friend_requests (
+  id SERIAL PRIMARY KEY,
+  from_player_id VARCHAR(255) NOT NULL,
+  to_player_id VARCHAR(255) NOT NULL,
+  status VARCHAR(50) DEFAULT 'pending',
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(from_player_id, to_player_id)
+);
+```
+
+**ignore_list**
+```sql
+CREATE TABLE ignore_list (
+  id SERIAL PRIMARY KEY,
+  player_id VARCHAR(255) NOT NULL,
+  ignored_player_id VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(player_id, ignored_player_id)
+);
+```
+
+## Network Packets
+
+### Client → Server
+
+| Packet | Data | Purpose |
+|--------|------|---------|
+| `friendRequest` | `{ targetPlayerId }` | Send friend request |
+| `friendRequestRespond` | `{ requestId, accept }` | Accept/decline request |
+| `friendRemove` | `{ friendId }` | Remove friend |
+| `privateMessage` | `{ recipientId, message }` | Send private message |
+| `ignoreAdd` | `{ playerId }` | Add to ignore list |
+| `ignoreRemove` | `{ playerId }` | Remove from ignore list |
+
+### Server → Client
+
+| Packet | Data | Purpose |
+|--------|------|---------|
+| `friendRequestIncoming` | `{ requestId, fromPlayerId, fromPlayerName }` | Incoming friend request |
+| `friendAdded` | `{ friendId, friendName, online }` | Friend added to list |
+| `friendRemoved` | `{ friendId }` | Friend removed |
+| `friendOnline` | `{ friendId }` | Friend logged in |
+| `friendOffline` | `{ friendId }` | Friend logged out |
+| `privateMessageReceived` | `{ fromId, fromName, message }` | Incoming private message |
+| `friendListSync` | `{ friends }` | Full friend list on login |
+
+## Implementation
+
+### SocialSystem
+
+**Location:** `packages/shared/src/systems/client/SocialSystem.ts`
+
+Client-side system managing social UI state:
+
+```typescript
+class SocialSystem extends SystemBase {
+  private friendList: Map<string, Friend>;
+  private ignoreList: Set<string>;
+  private pendingRequests: Map<string, FriendRequest>;
+  
+  // Add friend request
+  sendFriendRequest(targetPlayerId: string): void;
+  
+  // Accept/decline request
+  respondToFriendRequest(requestId: string, accept: boolean): void;
+  
+  // Remove friend
+  removeFriend(friendId: string): void;
+  
+  // Send private message
+  sendPrivateMessage(recipientId: string, message: string): void;
+  
+  // Ignore player
+  addToIgnoreList(playerId: string): void;
+  removeFromIgnoreList(playerId: string): void;
+}
+```
+
+### Server-Side Handlers
+
+**Location:** `packages/server/src/systems/ServerNetwork/handlers/friends.ts`
+
+Server-authoritative friend management:
+
+```typescript
+// Handle friend request
+export function handleFriendRequest(
+  socket: ServerSocket,
+  data: { targetPlayerId: string },
+  world: World,
+  db: DatabaseConnection
+): Promise<void>;
+
+// Handle friend request response
+export function handleFriendRequestRespond(
+  socket: ServerSocket,
+  data: { requestId: string, accept: boolean },
+  world: World,
+  db: DatabaseConnection
+): Promise<void>;
+
+// Handle friend removal
+export function handleFriendRemove(
+  socket: ServerSocket,
+  data: { friendId: string },
+  world: World,
+  db: DatabaseConnection
+): Promise<void>;
+
+// Handle private message
+export function handlePrivateMessage(
+  socket: ServerSocket,
+  data: { recipientId: string, message: string },
+  world: World
+): void;
+```
+
+### Friend List Synchronization
+
+On player login:
+1. Server loads friend list from database
+2. Server checks online status of each friend
+3. Server sends `friendListSync` packet with full list
+4. Server notifies online friends that player logged in
+
+On player logout:
+1. Server broadcasts `friendOffline` to all online friends
+2. Friend list persists in database
+
+## UI Components
+
+### FriendsPanel
+
+**Location:** `packages/client/src/game/panels/FriendsPanel.tsx`
+
+Main friend list interface:
+
+- **Friend list**: Scrollable list of friends with online status
+- **Add friend button**: Opens player search
+- **Private message**: Click friend to open chat
+- **Remove friend**: Right-click menu option
+- **Ignore list tab**: View and manage ignored players
+
+### Chat Integration
+
+Private messages integrate with chat system:
+
+- **Private tab**: Dedicated tab for private messages
+- **Color coding**: Purple for private messages
+- **Notifications**: Badge count for unread messages
+- **History**: Persistent conversation history
+
+## Security & Privacy
+
+### Rate Limiting
+
+- Friend requests: 5 per minute
+- Private messages: 10 per minute
+- Prevents spam and abuse
+
+### Validation
+
+- **Player existence**: Target player must exist and be online
+- **Duplicate prevention**: Can't send multiple requests to same player
+- **Self-requests**: Can't friend yourself
+- **Ignore check**: Ignored players can't send requests
+
+### Privacy
+
+- **Ignore is private**: Ignored players don't know they're ignored
+- **Online status**: Only visible to friends
+- **Message privacy**: Private messages not logged or visible to others
+
+## Common Issues
+
+### Friend Request Not Received
+
+**Possible causes:**
+- Target player is offline
+- You're on their ignore list
+- Request already pending
+
+### Can't Send Private Message
+
+**Possible causes:**
+- Player is not on your friend list
+- Player is offline
+- You're on their ignore list
+
+### Friend Shows Offline But Is Online
+
+**Cause:** Friend list not synced
+
+**Solution:** Relog to refresh friend list
+
+## Future Enhancements
+
+Planned social features:
+
+- **Clan system**: Player-created groups
+- **Group chat**: Multi-player chat rooms
+- **Friend notes**: Add notes to friends
+- **Last seen**: Show when offline friend was last online
+- **Activity status**: Show what friend is doing (skilling, combat, etc.)
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Trading System" icon="handshake" href="/wiki/game-systems/trading">
+    Player-to-player item trading
+  </Card>
+  <Card title="Chat System" icon="message-square" href="/wiki/game-systems/chat">
+    Public and private messaging
+  </Card>
+  <Card title="Context Menus" icon="mouse-pointer-2" href="/wiki/game-systems/context-menus">
+    OSRS-style right-click menus
+  </Card>
+  <Card title="Database Schema" icon="database" href="/wiki/engine/database">
+    Database tables and relationships
+  </Card>
+</CardGroup>

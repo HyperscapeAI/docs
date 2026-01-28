@@ -11,7 +11,8 @@ icon: "code"
 | Command | Description |
 |---------|-------------|
 | `bun run dev` | Start game (client + server + shared) |
-| `bun run dev:elizaos` | Game + ElizaOS AI agents |
+| `bun run dev:ai` | Game + ElizaOS AI agents (simplified) |
+| `bun run dev:elizaos` | Game + ElizaOS AI agents (legacy) |
 | `bun run dev:all` | Everything: game + AI + AssetForge |
 | `bun run build` | Build all packages |
 | `bun start` | Start production server |
@@ -25,6 +26,12 @@ bun run dev:server    # Server only (port 5555)
 bun run dev:shared    # Shared package with watch mode
 bun run dev:turbo     # Turbo-based dev (excludes asset-forge)
 bun run dev:reset     # Clean + rebuild + dev (nuclear option)
+
+# Website (in packages/website/)
+cd packages/website
+bun run dev           # Next.js dev server (port 3334)
+bun run build         # Build static site
+bun run start         # Start production server
 
 # Server build tasks
 cd packages/server
@@ -59,10 +66,12 @@ This scans `world/assets/models/**/*.glb` and generates `world/assets/manifests/
 | Port | Service | Started By |
 |------|---------|------------|
 | 3333 | Game Client | `bun run dev` |
+| 3334 | Website | `bun run dev:website` |
 | 5555 | Game Server | `bun run dev` |
 | 8080 | Asset CDN | `bun run dev` |
 | 5432 | PostgreSQL | Docker (auto) |
 | 4001 | ElizaOS API | `bun run dev:elizaos` |
+| 4000 | ElizaOS Dashboard | `bun run dev:elizaos` (internal) |
 | 3400 | AssetForge UI | `bun run dev:forge` |
 | 3401 | AssetForge API | `bun run dev:forge` |
 
@@ -76,14 +85,58 @@ The dev server provides:
 
 ## Docker Services
 
+### CDN Container (Required)
+
+The CDN serves game assets and manifests. It must be running before starting the game:
+
 ```bash
 bun run cdn:up      # Start CDN container
 bun run cdn:down    # Stop CDN container
+bun run cdn:logs    # View CDN logs
+bun run cdn:verify  # Verify CDN is working
 ```
 
-<Info>
-  The CDN starts automatically with `bun run dev`. Only run manually if using services separately.
-</Info>
+**What it serves:**
+- 3D models: `http://localhost:8080/models/`
+- Audio: `http://localhost:8080/audio/`
+- Manifests: `http://localhost:8080/manifests/`
+
+**Why it's required:**
+The server fetches manifests from `PUBLIC_CDN_URL` at startup. In development, this defaults to `http://localhost:8080`, so the CDN must be running.
+
+<Warning>
+Unlike PostgreSQL which starts automatically, the CDN must be started manually with `bun run cdn:up` before running `bun run dev`.
+</Warning>
+
+### PostgreSQL Container (Automatic)
+
+PostgreSQL starts automatically when the server runs:
+
+```bash
+# No manual start needed - runs automatically with bun run dev
+# To manually control:
+cd packages/server
+docker-compose up postgres    # Start
+docker-compose down postgres  # Stop
+```
+
+### Manifest Loading
+
+The server fetches manifests from the CDN at startup:
+
+**Development:**
+- Skips CDN fetch if local manifests exist in `packages/server/world/assets/manifests/`
+- Falls back to local files for offline development
+
+**Production:**
+- Always fetches from `PUBLIC_CDN_URL/manifests/`
+- Caches locally with 5-minute TTL
+- Logs fetch status and errors
+
+**Manifest Files:**
+- 25+ JSON files including NPCs, items, recipes, gathering data
+- Organized in subdirectories: `items/`, `gathering/`, `recipes/`
+- See [Manifest-Driven Design](/concepts/manifests) for full list
 
 ## Testing
 
@@ -126,9 +179,37 @@ Requires `CLAUDE_CODE_OAUTH_TOKEN` and `MINTLIFY_API_KEY` secrets to be configur
 
 ### Adding a New Feature
 
-1. Make changes in `packages/shared/src/`
+1. Make changes in appropriate package:
+   - Game logic: `packages/shared/src/systems/`
+   - UI components: `packages/client/src/ui/` (reusable) or `packages/client/src/game/` (game-specific)
+   - Server handlers: `packages/server/src/systems/ServerNetwork/handlers/`
 2. Hot reload applies automatically
 3. Test in browser at localhost:3333
+
+### Adding UI Components
+
+1. Create component in `packages/client/src/ui/components/`
+2. Add to barrel export in `index.ts`
+3. Import via `@/ui` alias
+4. Use theme tokens from `useThemeStore`
+
+```typescript
+// Example: Creating a new UI component
+import { useThemeStore } from '@/ui';
+
+export function MyComponent() {
+  const theme = useThemeStore((s) => s.theme);
+  
+  return (
+    <div style={{ 
+      background: theme.colors.background.primary,
+      border: `1px solid ${theme.colors.border.default}`,
+    }}>
+      Content
+    </div>
+  );
+}
+```
 
 ### Updating Game Content
 

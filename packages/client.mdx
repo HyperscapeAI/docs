@@ -10,10 +10,40 @@ The `@hyperscape/client` package is the web game client:
 
 - Vite for fast builds with HMR
 - React 19 UI framework
-- Three.js 3D rendering
-- Capacitor for iOS/Android mobile builds
+- Three.js 3D rendering (WebGPU with WebGL fallback)
 - Privy authentication
 - Farcaster miniapp SDK
+- Tauri desktop app support
+- Solana wallet integration
+
+## Rendering
+
+### WebGPU with WebGL Fallback
+
+The client uses `THREE.WebGPURenderer` with automatic fallback to WebGL for compatibility:
+
+**WebGPU (Preferred):**
+- Modern high-performance rendering
+- TSL post-processing effects
+- Cascaded shadow maps (CSM)
+- Requires Chrome 113+, Edge 113+, or Safari 17+
+
+**WebGL (Fallback):**
+- Graceful degradation for older browsers and WebViews
+- Single directional shadow maps (no CSM)
+- Disabled TSL post-processing
+- Works in WKWebView (Tauri), older Safari, and browsers without WebGPU
+
+**Backend Detection:**
+```typescript
+import { isWebGPURenderer, getRendererBackend } from "@hyperscape/shared";
+
+const renderer = await createRenderer();
+const isWebGPU = isWebGPURenderer(renderer);  // true or false
+const backend = getRendererBackend(renderer); // "webgpu" or "webgl"
+```
+
+The settings panel displays the active renderer type to users.
 
 ## Package Location
 
@@ -21,22 +51,37 @@ The `@hyperscape/client` package is the web game client:
 packages/client/
 ├── src/
 │   ├── auth/           # Privy authentication
-│   ├── components/     # React UI components
 │   ├── constants/      # Client constants
 │   ├── game/           # Game loop and logic
+│   │   ├── character/  # Character rendering
+│   │   ├── chat/       # Chat system
+│   │   ├── components/ # Game-specific components
+│   │   ├── dashboard/  # Agent dashboard
+│   │   ├── hud/        # HUD elements
+│   │   ├── interface/  # Interface manager
+│   │   ├── panels/     # Game panels (inventory, bank, combat, etc.)
+│   │   ├── systems/    # Client-side game systems
+│   │   └── types/      # Game type definitions
 │   ├── hooks/          # React hooks
-│   ├── lib/            # Networking, utilities
-│   ├── public/         # Static assets
+│   ├── lib/            # Networking, utilities, error handling
 │   ├── screens/        # UI screens
 │   ├── types/          # TypeScript types
+│   ├── ui/             # UI system
+│   │   ├── components/ # Reusable UI components (Window, TabBar, Portal, etc.)
+│   │   ├── controls/   # Form controls (Slider, Toggle, Select, etc.)
+│   │   ├── core/       # Core UI systems (drag-and-drop, window management, presets)
+│   │   ├── stores/     # Zustand state stores
+│   │   ├── theme/      # Theme system
+│   │   └── types/      # UI type definitions
 │   ├── utils/          # Helper functions
-│   ├── index.tsx       # React entry point
-│   ├── index.html      # HTML template
-│   └── index.css       # Global styles (Tailwind)
-├── ios/                # iOS native project (Capacitor)
-├── android/            # Android native project (Capacitor)
-├── capacitor.config.ts # Mobile configuration
+│   └── index.tsx       # React entry point
+├── public/             # Static assets (fonts, textures, LUTs)
+├── tests/              # E2E (Playwright) and unit tests (Vitest)
+├── scripts/            # Deployment scripts
 ├── vite.config.ts      # Vite configuration
+├── vitest.config.ts    # Vitest configuration
+├── playwright.config.ts # E2E test configuration
+├── wrangler.toml       # Cloudflare Pages config
 └── .env.example        # Environment template
 ```
 
@@ -53,6 +98,7 @@ CharacterSelectScreen.tsx // Choose character
 CharacterEditorScreen.tsx // Create/edit character with VRM preview
 DashboardScreen.tsx       // Game hub / lobby
 GameClient.tsx            // Main 3D gameplay
+AdminScreen.tsx           // Admin dashboard
 ```
 
 | Screen | Purpose |
@@ -64,63 +110,208 @@ GameClient.tsx            // Main 3D gameplay
 | `DashboardScreen` | Game hub and lobby |
 | `GameClient` | Main 3D gameplay |
 | `LoadingScreen` | Asset loading state |
+| `AdminScreen` | Admin dashboard and tools |
 
-## UI Components
+## UI System Architecture
 
-Located in `src/components/`:
+### UI System (`src/ui/`)
 
-```typescript
-// From packages/client/src/components/
-CharacterPreview.tsx      // VRM character preview
-DraggableWindow.tsx       // Draggable UI windows
-EmbeddedGameClient.tsx    // Embedded game in dashboard
-GameWindow.tsx            // Main game container
-MinimapCompass.tsx        // Minimap with compass
-MinimapStaminaBar.tsx     // Stamina display
-MenuButton.tsx            // Menu buttons
-Portal.tsx                // React portal for overlays
-Fields.tsx                // Form field components
-Icons.tsx                 // Icon components
+Complete UI system with components, hooks, stores, and theming:
 
-// Subfolders
-character/                // Character-related components
-dashboard/                // Dashboard components
+```
+src/ui/
+├── components/        # UI components (45+ files)
+│   ├── Window.tsx     # Draggable, resizable windows
+│   ├── Tab.tsx        # Tab component
+│   ├── TabBar.tsx     # Tab container
+│   ├── Slider.tsx     # Range slider
+│   ├── Portal.tsx     # React portal
+│   ├── MenuButton.tsx # Menu buttons
+│   ├── ActionBar.tsx  # Action bar
+│   ├── BuffBar.tsx    # Buff display
+│   ├── ItemSlot.tsx   # Inventory slot
+│   ├── Minimap.tsx    # Minimap component
+│   ├── ScrollableArea.tsx # Scrollable containers
+│   ├── VirtualList.tsx    # Virtual scrolling
+│   ├── VirtualGrid.tsx    # Virtual grid
+│   └── ...
+├── controls/          # Form controls
+│   ├── ColorControl.tsx
+│   ├── KeybindControl.tsx
+│   ├── SelectControl.tsx
+│   ├── SliderControl.tsx
+│   └── ToggleControl.tsx
+├── core/              # Core UI systems
+│   ├── drag/          # Drag-and-drop (@dnd-kit)
+│   ├── edit/          # Edit mode (L key unlock)
+│   ├── notifications/ # Toast notifications
+│   ├── presets/       # Layout presets and cloud sync
+│   ├── responsive/    # Breakpoints, mobile layout
+│   ├── settings/      # Settings schema
+│   ├── tabs/          # Tab management
+│   ├── tooltip/       # Progressive tooltips
+│   ├── virtual/       # Virtual scrolling
+│   └── window/        # Window management
+├── stores/            # Zustand stores
+│   ├── windowStore.ts       # Window state
+│   ├── themeStore.ts        # Theme state
+│   ├── dragStore.ts         # Drag state
+│   ├── editStore.ts         # Edit mode state
+│   ├── presetStore.ts       # Layout presets
+│   ├── keybindStore.ts      # Keybindings
+│   ├── notificationStore.ts # Notifications
+│   ├── accessibilityStore.ts # Accessibility
+│   ├── complexityStore.ts   # UI complexity
+│   └── questStore.ts        # Quest tracking
+├── theme/             # Theme system
+│   ├── themes.ts      # Dark theme
+│   └── animations.ts  # CSS animations
+└── types/             # TypeScript types
 ```
 
-### HUD Components
+### Game Components (`src/game/components/`)
 
-- Health/Constitution display
-- Combat status indicators
-- Skills panel with XP progress
-- 28-slot inventory grid
-- Equipment slots display
-- Bank interface (unlimited storage)
-- Chat window
-- Minimap with compass
+Domain-organized game UI components:
 
-### Game Components
+```
+src/game/components/
+├── chat/              # Chat system
+│   ├── ChatBox.tsx
+│   ├── ChatMessage.tsx
+│   ├── ChatInput.tsx
+│   └── ChatTabs.tsx
+├── currency/          # Currency display
+│   ├── CurrencyDisplay.tsx
+│   ├── CurrencyExchange.tsx
+│   ├── CurrencyIcon.tsx
+│   ├── CurrencyInput.tsx
+│   └── CurrencyTooltip.tsx
+├── dialog/            # NPC dialogue
+│   ├── DialogBox.tsx
+│   ├── DialogChoices.tsx
+│   ├── DialogHistory.tsx
+│   ├── DialogPortrait.tsx
+│   └── DialogText.tsx
+├── equipment/         # Equipment panel
+│   ├── CharacterModel.tsx
+│   ├── EquipmentPanel.tsx
+│   ├── EquipmentSlot.tsx
+│   ├── ItemComparison.tsx
+│   └── StatsSummary.tsx
+├── map/               # World map
+│   ├── WorldMap.tsx
+│   ├── MapControls.tsx
+│   ├── MapMarker.tsx
+│   ├── MapLegend.tsx
+│   └── MapTooltip.tsx
+├── quest/             # Quest system
+│   ├── QuestLog.tsx
+│   ├── QuestEntry.tsx
+│   ├── QuestObjective.tsx
+│   ├── QuestRewards.tsx
+│   └── QuestTracker.tsx
+├── settings/          # Settings panel
+│   ├── SettingsPanel.tsx
+│   ├── SettingsCategory.tsx
+│   └── SettingsControl.tsx
+└── skilltree/         # Skill tree
+    ├── SkillTree.tsx
+    ├── SkillNode.tsx
+    ├── SkillConnection.tsx
+    └── SkillTooltip.tsx
+```
 
-- Three.js 3D renderer
-- Camera controller (third-person, click-to-move)
-- Input handler (WASD movement, click actions)
-- Entity renderers (players, mobs, items)
-- VRM avatar display with emotes
+### HUD Components (`src/game/hud/`)
+
+```
+src/game/hud/
+├── StatusBars.tsx           # Health/Constitution display
+├── ActionProgressBar.tsx    # Action progress
+├── Minimap.tsx              # World minimap
+├── MinimapCompass.tsx       # Compass overlay
+├── MinimapStaminaBar.tsx    # Stamina indicator
+├── MinimapOverlayControls.tsx
+├── RadialMinimapMenu.tsx    # Radial menu
+├── HomeTeleportButton.tsx   # Teleport home
+├── ContextMenu.tsx          # Right-click menus
+├── EntityContextMenu.tsx    # Entity interactions
+├── EscapeMenu.tsx           # Pause menu
+├── ConnectionIndicator.tsx  # Network status
+├── level-up/                # Level-up system
+│   ├── LevelUpNotification.tsx
+│   ├── LevelUpPopup.tsx
+│   └── UnlocksSection.tsx
+├── overlays/                # Screen overlays
+│   ├── DeathScreen.tsx
+│   ├── DisconnectedOverlay.tsx
+│   └── KickedOverlay.tsx
+└── xp-orb/                  # XP progress orbs
+    ├── XPProgressOrb.tsx
+    ├── XPProgressOrbs.tsx
+    └── FloatingXPDrops.tsx
+```
+
+### Anchor-Based Positioning
+
+Windows use Unity/Unreal-style anchors for responsive scaling:
+
+- **9 anchor points**: corners, edges, center
+- **Offset-based**: Windows store offset from anchor, not absolute position
+- **Responsive**: Preserves anchor relationships on resize
+- **Default anchors**:
+  - Chat, Skills/Prayer: `bottom-left`
+  - Minimap: `top-right`
+  - Inventory, Menubar: `bottom-right`
+  - Action bar: `bottom-center`
+
+### Drag-and-Drop System
+
+Powered by `@dnd-kit` with custom enhancements:
+
+- **Inventory items**: Drag to move, combine, or drop
+- **Action bar**: Drag skills, prayers, combat styles
+- **Tabs**: Drag to reorder or combine windows
+- **Windows**: Drag headers to move
+- **Context menus**: Right-click for OSRS-style menus
 
 ## Environment Variables
+
+### Development
+
+```bash
+# Required for persistent authentication
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
+
+# Server URLs (defaults to localhost)
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5555/ws
+PUBLIC_CDN_URL=http://localhost:8080
+```
+
+### Production (Cloudflare Pages)
 
 ```bash
 # Required
 PUBLIC_PRIVY_APP_ID=your-privy-app-id
 
-# Server URLs (production)
-PUBLIC_API_URL=https://api.hyperscape.lol
-PUBLIC_WS_URL=wss://api.hyperscape.lol
-PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+# Production endpoints
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_APP_URL=https://hyperscape.club
 
-# Farcaster (optional)
+# Optional
 PUBLIC_ENABLE_FARCASTER=true
-PUBLIC_APP_URL=https://hyperscape.lol
+DEBUG_RPG=0
 ```
+
+<Warning>
+`PUBLIC_PRIVY_APP_ID` must match the `PRIVY_APP_ID` set in the server environment. Mismatched IDs will cause authentication failures.
+</Warning>
+
+<Info>
+All `PUBLIC_*` variables are exposed to the browser. Never put secrets in client environment variables.
+</Info>
 
 ## Running
 
@@ -140,60 +331,85 @@ bun run build         # Build to dist/
 bun run preview       # Preview production build
 ```
 
-## Mobile Builds
-
-### iOS
-
-Requires macOS with Xcode installed.
-
-```bash
-bun run ios           # Build and open Xcode
-bun run ios:dev       # Sync and open (no rebuild)
-bun run ios:build     # Production build
-```
-
-### Android
-
-Requires Android Studio installed.
-
-```bash
-bun run android       # Build and open Android Studio
-bun run android:dev   # Sync and open (no rebuild)
-bun run android:build # Production build
-```
-
-### Capacitor Sync
-
-```bash
-bun run cap:sync          # Sync both platforms
-bun run cap:sync:ios      # iOS only
-bun run cap:sync:android  # Android only
-```
-
 ## Dependencies
 
 | Package | Purpose |
 |---------|---------|
 | `react` | UI framework (v19) |
 | `react-dom` | React DOM renderer |
-| `vite` | Build tool |
-| `three` | 3D rendering |
-| `@capacitor/core` | Mobile builds |
+| `three` | 3D rendering (v0.181) |
 | `@hyperscape/shared` | Core engine |
 | `@privy-io/react-auth` | Authentication |
 | `@farcaster/miniapp-sdk` | Farcaster integration |
-| `styled-components` | CSS-in-JS |
-| `tailwindcss` | Utility CSS |
+| `@dnd-kit/core` | Drag-and-drop core |
+| `@dnd-kit/sortable` | Sortable lists |
+| `@pixiv/three-vrm` | VRM avatar support |
+| `@solana/wallet-adapter-react` | Solana wallet |
+| `@tauri-apps/api` | Desktop app integration |
 | `livekit-client` | Voice chat |
+| `lucide-react` | Icons |
+| `d3` | Data visualization |
+| `tailwindcss` | Utility CSS |
+| `vite` | Build tool |
 
 ## Deployment
 
-### Cloudflare Pages
+### Cloudflare Pages (Production)
 
+The client deploys to Cloudflare Pages with automatic GitHub integration:
+
+**Configuration:**
+- **Build command**: `cd packages/client && bun install && bun run build`
+- **Build output**: `packages/client/dist`
+- **Root directory**: `/` (monorepo root)
+- **Node version**: 22
+
+**Environment Variables (Cloudflare Pages):**
 ```bash
-bun run deploy        # Deploy to staging
-bun run deploy:prod   # Deploy to production
+PUBLIC_PRIVY_APP_ID=<from-privy-dashboard>
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_APP_URL=https://hyperscape.club
 ```
+
+**Deployment Process:**
+1. Push to `main` branch
+2. Cloudflare Pages detects changes to `packages/client/**`
+3. Builds client with Vite
+4. Deploys to `hyperscape.pages.dev` and `hyperscape.club`
+5. Creates preview deployments for pull requests
+
+**Preview Deployments:**
+- URL pattern: `https://<branch>-<hash>.hyperscape.pages.dev`
+- Automatic for every PR
+- Uses production environment variables
+- CORS automatically allows `*.hyperscape.pages.dev` origins
+
+### Vite Configuration
+
+```typescript
+// packages/client/vite.config.ts
+export default defineConfig({
+  envPrefix: 'PUBLIC_',  // Expose PUBLIC_* vars to client
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'three': ['three'],
+          'react': ['react', 'react-dom']
+        }
+      }
+    }
+  }
+});
+```
+
+<Warning>
+Only `PUBLIC_*` prefixed environment variables are exposed to the client. Never put secrets in client environment variables.
+</Warning>
 
 ## Key Files
 
@@ -202,6 +418,8 @@ bun run deploy:prod   # Deploy to production
 | `src/index.tsx` | React entry point |
 | `src/game/` | Game loop and logic |
 | `src/screens/` | UI screens |
+| `src/ui/` | UI system (windows, drag-drop, stores) |
 | `vite.config.ts` | Vite configuration |
-| `capacitor.config.ts` | Mobile configuration |
+| `vitest.config.ts` | Unit test configuration |
+| `playwright.config.ts` | E2E test configuration |
 | `wrangler.toml` | Cloudflare Pages config |

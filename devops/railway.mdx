@@ -1,0 +1,452 @@
+---
+title: "Railway Deployment"
+description: "Deploy Hyperscape server to Railway with automated CI/CD"
+icon: "train"
+---
+
+## Overview
+
+Hyperscape uses Railway for production server deployment with automated GitHub Actions integration. The deployment uses Nixpacks for building and includes automatic manifest fetching from CDN.
+
+## Architecture
+
+The production deployment uses a split architecture:
+
+- **Frontend**: Cloudflare Pages (`hyperscape.club`)
+- **Server/API**: Railway (`hyperscape-production.up.railway.app`)
+- **Assets/CDN**: Cloudflare R2 (`assets.hyperscape.club`)
+- **Database**: Railway PostgreSQL
+
+## Prerequisites
+
+- Railway account ([railway.app](https://railway.app))
+- GitHub repository connected to Railway
+- Cloudflare R2 bucket for assets (or alternative CDN)
+- Privy account for authentication
+
+## Initial Setup
+
+<Steps>
+  <Step title="Create Railway project">
+    1. Sign up at [railway.app](https://railway.app)
+    2. Click "New Project"
+    3. Select "Deploy from GitHub repo"
+    4. Choose your Hyperscape repository
+    5. Select the `main` branch
+  </Step>
+  
+  <Step title="Add PostgreSQL database">
+    1. In your Railway project, click "New"
+    2. Select "Database" → "Add PostgreSQL"
+    3. Railway automatically sets `DATABASE_URL` environment variable
+    4. Database migrations run automatically on server startup
+  </Step>
+  
+  <Step title="Configure environment variables">
+    Add these in Railway dashboard → Variables tab:
+    
+    ```bash
+    # Required
+    PUBLIC_PRIVY_APP_ID=your-privy-app-id
+    PRIVY_APP_SECRET=your-privy-app-secret
+    JWT_SECRET=your-jwt-secret-32-chars
+    
+    # CDN Configuration
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    
+    # Client URLs (for CORS)
+    CLIENT_URL=https://hyperscape.club
+    PUBLIC_APP_URL=https://hyperscape.club
+    
+    # Optional
+    ADMIN_CODE=your-admin-code
+    NODE_ENV=production
+    SAVE_INTERVAL=60
+    ```
+  </Step>
+  
+  <Step title="Deploy">
+    Railway automatically deploys when you push to `main`. You can also trigger manual deployments from the Railway dashboard.
+  </Step>
+</Steps>
+
+<Warning>
+  Never commit secrets to git. Use Railway's environment variable UI to set sensitive values.
+</Warning>
+
+## Build Configuration
+
+### Nixpacks Configuration
+
+Railway uses `nixpacks.toml` in the repository root:
+
+```toml
+[phases.setup]
+# Install system dependencies for native modules
+aptPkgs = [
+  "python3",
+  "make",
+  "g++",
+  "pkg-config",
+  "libcairo2-dev",
+  "libpango1.0-dev",
+  "libjpeg-dev",
+  "libgif-dev",
+  "librsvg2-dev",
+  "ca-certificates"
+]
+
+[phases.install]
+cmds = ["bun install"]
+
+[phases.build]
+dependsOn = ["install"]
+cmds = [
+  "bun run build:shared",
+  "bun run build:server",
+  "mkdir -p packages/server/world/assets/manifests"
+]
+
+[start]
+cmd = "cd packages/server && bun dist/index.js"
+
+[variables]
+CI = "true"
+SKIP_ASSETS = "true"
+NODE_ENV = "production"
+TURBO_FORCE = "true"
+```
+
+**Key Points:**
+- Only builds `shared` and `server` packages (client is on Cloudflare Pages)
+- Creates manifests directory for CDN-fetched manifests
+- Skips asset download (`SKIP_ASSETS=true`) - assets served from CDN
+- Forces fresh Turbo builds to avoid cache issues
+
+### Service Configuration
+
+`railway.server.json` defines the service:
+
+```json
+{
+  "build": {
+    "builder": "NIXPACKS",
+    "nixpacksConfigPath": "nixpacks.toml",
+    "watchPatterns": [
+      "packages/shared/**",
+      "packages/server/**",
+      "packages/plugin-hyperscape/**",
+      "package.json",
+      "bun.lock"
+    ]
+  },
+  "deploy": {
+    "startCommand": "cd packages/server && bun dist/index.js",
+    "healthcheckPath": "/status",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3,
+    "numReplicas": 1
+  }
+}
+```
+
+### Railway Ignore
+
+`.railwayignore` excludes unnecessary files from upload:
+
+```
+node_modules/
+.git/
+packages/server/world/assets/  # Assets served from CDN
+test-results/
+*.log
+```
+
+This significantly reduces upload time and deployment size.
+
+## Automated Deployment
+
+### GitHub Actions Workflow
+
+The repository includes `.github/workflows/deploy-railway.yml` for automated deployments:
+
+```yaml
+name: Deploy to Railway
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/shared/**'
+      - 'packages/client/**'
+      - 'packages/server/**'
+      - 'packages/plugin-hyperscape/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'nixpacks.toml'
+      - 'railway.server.json'
+      - 'Dockerfile.server'
+  workflow_dispatch:
+```
+
+**Triggers:**
+- Automatic on push to `main` when relevant files change
+- Manual via GitHub Actions UI (`workflow_dispatch`)
+
+**Process:**
+1. Triggers Railway deployment via GraphQL API
+2. Waits for deployment to start
+3. Polls deployment status (5 attempts, 30s intervals)
+4. Reports success/failure
+
+### Setup GitHub Actions
+
+<Steps>
+  <Step title="Get Railway token">
+    1. Go to [railway.app/account/tokens](https://railway.app/account/tokens)
+    2. Create a new token
+    3. Copy the token value
+  </Step>
+  
+  <Step title="Add GitHub secret">
+    1. Go to your GitHub repository → Settings → Secrets and variables → Actions
+    2. Click "New repository secret"
+    3. Name: `RAILWAY_TOKEN`
+    4. Value: Your Railway token
+    5. Click "Add secret"
+  </Step>
+  
+  <Step title="Update workflow IDs">
+    Edit `.github/workflows/deploy-railway.yml` with your Railway IDs:
+    
+    ```yaml
+    env:
+      RAILWAY_PROJECT_ID: your-project-id
+      RAILWAY_SERVICE_ID: your-service-id
+      RAILWAY_ENVIRONMENT_ID: your-environment-id
+    ```
+    
+    Find these IDs in Railway dashboard → Project Settings.
+  </Step>
+</Steps>
+
+## Manifest Loading
+
+The server fetches game manifests from CDN at startup instead of requiring local assets:
+
+```typescript
+// From packages/server/src/startup/config.ts
+const MANIFEST_FILES = [
+  'biomes.json',
+  'npcs.json',
+  'items/weapons.json',
+  'recipes/smithing.json',
+  // ... 25+ manifest files
+];
+
+await fetchManifestsFromCDN(cdnUrl, manifestsDir, nodeEnv);
+```
+
+**Benefits:**
+- No Git LFS required in production
+- Faster deployments (no asset cloning)
+- Manifests cached locally for 5 minutes
+- Automatic updates when CDN manifests change
+
+**Behavior:**
+- **Production/CI**: Always fetches from CDN
+- **Development**: Skips fetch if local manifests exist
+- **Caching**: Manifests cached in `world/assets/manifests/`
+
+## CORS Configuration
+
+The server automatically allows requests from:
+
+```typescript
+// Production domains
+'https://hyperscape.club'
+'https://www.hyperscape.club'
+'https://hyperscape.pages.dev'
+'https://hyperscape-production.up.railway.app'
+
+// Preview deployments
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/
+/^https:\/\/.+\.up\.railway\.app$/
+
+// Development
+/^https?:\/\/localhost:\d+$/
+```
+
+Additional origins from environment variables:
+- `CLIENT_URL`
+- `PUBLIC_APP_URL`
+- `ELIZAOS_URL` / `ELIZAOS_API_URL`
+
+## Troubleshooting
+
+### Build Failures
+
+**"lockfile frozen" error:**
+```bash
+# Regenerate lockfile locally
+bun install
+git add bun.lock
+git commit -m "chore: update bun.lock"
+git push
+```
+
+**Native module build failures:**
+- Nixpacks installs required system dependencies (Cairo, Pango, etc.)
+- Check Railway build logs for missing packages
+- Add to `aptPkgs` in `nixpacks.toml` if needed
+
+### Runtime Issues
+
+**Manifests not loading:**
+- Verify `PUBLIC_CDN_URL` is set correctly
+- Check CDN is serving manifests at `/manifests/*.json`
+- Review Railway logs for fetch errors
+- Ensure CORS headers allow Railway domain
+
+**Frontend not accessible:**
+- Railway serves API only - frontend is on Cloudflare Pages
+- Verify CORS origins include your Cloudflare Pages domain
+- Check `CLIENT_URL` environment variable
+
+**Database connection errors:**
+- Railway PostgreSQL sets `DATABASE_URL` automatically
+- Verify database service is running in Railway dashboard
+- Check connection string format: `postgresql://user:pass@host:port/db`
+
+### Deployment Status
+
+Check deployment status in Railway:
+
+1. Go to Railway dashboard → Your project
+2. Click on the service
+3. View "Deployments" tab
+4. Check logs for errors
+
+Or use the Railway CLI:
+
+```bash
+railway logs
+railway status
+```
+
+## Monitoring
+
+### Health Checks
+
+Railway uses the `/status` endpoint for health checks:
+
+```typescript
+// From packages/server/src/startup/routes/health-routes.ts
+fastify.get('/status', async () => {
+  return {
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: Date.now(),
+    version: process.env.COMMIT_HASH || 'unknown'
+  };
+});
+```
+
+**Configuration:**
+- Path: `/status`
+- Timeout: 300 seconds
+- Restart policy: `ON_FAILURE` with 3 max retries
+
+### Logs
+
+View logs in Railway dashboard or via CLI:
+
+```bash
+railway logs --tail
+```
+
+Filter by severity:
+
+```bash
+railway logs --filter error
+railway logs --filter warn
+```
+
+## Scaling
+
+Railway supports horizontal scaling:
+
+1. Go to Railway dashboard → Service → Settings
+2. Adjust "Replicas" count
+3. Railway handles load balancing automatically
+
+<Info>
+  Hyperscape is designed for vertical scaling (single instance). Horizontal scaling requires session affinity (sticky sessions) for WebSocket connections.
+</Info>
+
+## Cost Optimization
+
+### Resource Limits
+
+Set resource limits in Railway dashboard:
+
+- **Memory**: 2GB recommended minimum
+- **CPU**: 1 vCPU sufficient for 50-100 concurrent players
+- **Disk**: 1GB for database and logs
+
+### Deployment Frequency
+
+The GitHub Actions workflow only triggers on relevant file changes:
+
+```yaml
+paths:
+  - 'packages/shared/**'
+  - 'packages/server/**'
+  - 'packages/plugin-hyperscape/**'
+  - 'package.json'
+  - 'bun.lock'
+  - 'nixpacks.toml'
+```
+
+This prevents unnecessary deployments for documentation or client-only changes.
+
+## Alternative: Docker Deployment
+
+If you prefer Docker over Nixpacks, use `Dockerfile.server`:
+
+```bash
+# Build multi-stage Docker image
+docker build -f Dockerfile.server -t hyperscape-server .
+
+# Run locally
+docker run -p 5555:5555 \
+  -e DATABASE_URL=postgresql://... \
+  -e PUBLIC_CDN_URL=https://... \
+  hyperscape-server
+```
+
+Railway can deploy from Dockerfile:
+
+1. Railway dashboard → Service → Settings
+2. Change "Builder" to "Dockerfile"
+3. Set "Dockerfile Path" to `Dockerfile.server`
+4. Redeploy
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environment Variables" icon="sliders" href="/devops/configuration">
+    Configure server environment
+  </Card>
+  <Card title="Database Setup" icon="database" href="/devops/database">
+    Set up PostgreSQL and migrations
+  </Card>
+  <Card title="CDN Setup" icon="cloud" href="/guides/deployment#cdn-setup">
+    Configure asset CDN
+  </Card>
+  <Card title="Monitoring" icon="chart-line" href="/devops/troubleshooting">
+    Monitor and debug production
+  </Card>
+</CardGroup>

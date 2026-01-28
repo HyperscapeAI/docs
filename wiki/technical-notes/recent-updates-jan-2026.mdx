@@ -1,0 +1,366 @@
+---
+title: "Recent Updates - January 2026"
+description: "Technical summary of prayer system, death system overhaul, and equipment sync improvements"
+icon: "file-text"
+---
+
+# Recent Updates - January 2026
+
+This document provides a technical summary of major system updates merged to main in January 2026.
+
+---
+
+## Prayer System (PR #563)
+
+**Merged**: January 16, 2026  
+**Files Changed**: 51 files (+4,126 / -257 lines)  
+**Commits**: 20
+
+### Overview
+
+Complete OSRS-style prayer system with drain mechanics, combat integration, and manifest-driven prayer definitions.
+
+### Key Features
+
+1. **Prayer Skill**
+   - New combat skill with XP and leveling (1-99)
+   - Train by burying bones (2-tick delay, OSRS-accurate)
+   - Prayer points scale with level: `floor(level/2) + floor(level/4) + 10`
+
+2. **Prayer Drain**
+   - OSRS-accurate formula: `drainResistance = 2 × prayerBonus + 60`
+   - Tick-based drain processing (600ms intervals)
+   - Prayer bonus from equipment reduces drain rate
+
+3. **Combat Integration**
+   - Prayer bonuses applied to effective levels before damage calculation
+   - Bonuses modify attack, strength, and defense
+   - Example: Burst of Strength (+5%) increases max hit from 18 to 19
+
+4. **Prayer Altars**
+   - Interactable entities that restore prayer points to maximum
+   - `AltarEntity` class with 1×1 footprint and collision
+   - Left-click to pray, right-click for context menu
+
+5. **Manifest-Driven**
+   - Prayers defined in `manifests/prayers.json`
+   - `PrayerDataProvider` loads and validates prayer definitions
+   - Add new prayers without code changes
+
+### Database Changes
+
+**Migration**: `0016_add_prayer_system.sql`
+
+```sql
+ALTER TABLE characters ADD COLUMN prayerLevel INTEGER DEFAULT 1;
+ALTER TABLE characters ADD COLUMN prayerXp INTEGER DEFAULT 0;
+ALTER TABLE characters ADD COLUMN prayerPoints INTEGER DEFAULT 1;
+ALTER TABLE characters ADD COLUMN prayerMaxPoints INTEGER DEFAULT 1;
+ALTER TABLE characters ADD COLUMN activePrayers TEXT DEFAULT '[]';
+```
+
+### Network Protocol
+
+**New Packets**:
+- `prayerToggle` (Client → Server)
+- `prayerDeactivateAll` (Client → Server)
+- `altarPray` (Client → Server)
+- `prayerStateSync` (Server → Client)
+- `prayerToggled` (Server → Client)
+- `prayerPointsChanged` (Server → Client)
+
+### Security
+
+- Prayer ID format validation (regex pattern, length limits)
+- Rate limiting (5 toggles/second)
+- Timestamp validation (prevents replay attacks)
+- Server-side prayer existence verification via `PrayerDataProvider`
+
+### Testing
+
+62 unit tests covering:
+- Type guard validation
+- Bounds checking (overflow, underflow, NaN, Infinity)
+- Prayer ID format validation
+- Rate limiting behavior
+- Drain calculations
+- Conflict resolution
+
+---
+
+## Death System Overhaul (PR #566)
+
+**Merged**: January 18, 2026  
+**Files Changed**: 74 files (+3,191 / -798 lines)  
+**Commits**: 29
+
+### Overview
+
+Production-grade death/respawn system with crash recovery, atomic operations, and comprehensive combat state cleanup.
+
+### Key Features
+
+1. **Crash Recovery System**
+   - Database-first persistence prevents item loss on server restart
+   - Death locks created with full item data before clearing inventory
+   - Unrecovered deaths automatically restored on server startup
+   - `recovered` flag prevents duplicate processing
+
+2. **Atomic Death Lock Acquisition**
+   - Uses `INSERT ... ON CONFLICT DO NOTHING` for race-free locking
+   - Prevents duplicate deaths from simultaneous events
+   - Database enforces uniqueness constraint on `playerId`
+
+3. **Combat State Cleanup**
+   - Three-layer cleanup: `CombatStateService`, `AggroSystem`, runtime guards
+   - `clearStatesTargeting()` method clears all attackers targeting a dead player
+   - Mobs no longer chase dead players to spawn point
+   - Combat states don't persist after respawn
+
+4. **Shadow State Loot UI**
+   - Transaction-based loot with automatic rollback
+   - Optimistic UI updates with pending transaction tracking
+   - 3-second timeout with rollback if no server response
+   - `LOOT_RESULT` events confirm/reject loot requests
+
+5. **Input Sanitization**
+   - `killedBy` field: Unicode normalization, zero-width char removal, BiDi override filtering
+   - Position validation: NaN/Infinity checks, world bounds clamping
+   - 32-bit safe tick calculations (prevents MessagePack overflow)
+
+6. **OSRS-Accurate Timing**
+   - Ground item despawn: 300 ticks → 6000 ticks (60 minutes)
+   - Death animation: 8 ticks → 7 ticks (4.2 seconds)
+   - Stale lock cleanup: 6000 ticks → 3000 ticks (30 minutes)
+
+### Database Changes
+
+**Migration**: `0017_add_death_recovery_columns.sql`
+
+```sql
+ALTER TABLE player_deaths ADD COLUMN items JSONB DEFAULT '[]'::jsonb NOT NULL;
+ALTER TABLE player_deaths ADD COLUMN killedBy TEXT DEFAULT 'unknown' NOT NULL;
+ALTER TABLE player_deaths ADD COLUMN recovered BOOLEAN DEFAULT false NOT NULL;
+
+CREATE INDEX idx_player_deaths_recovered ON player_deaths (recovered);
+CREATE INDEX idx_player_deaths_recovery_lookup ON player_deaths (recovered, timestamp);
+```
+
+### New Classes
+
+- `DeathRepository` methods:
+  - `getUnrecoveredDeathsAsync()` - Find deaths needing recovery
+  - `markDeathRecoveredAsync()` - Mark death as processed
+  - `acquireDeathLockAsync()` - Atomic check-and-create
+  - `safeJsonParse()` - Defensive parsing prevents crashes
+
+### Architecture Patterns
+
+1. **Database-First Persistence**: Death locks created in DB first, then cached in memory
+2. **Shadow State with Rollback**: Client UI uses optimistic updates with transaction tracking
+3. **Event-Driven Cleanup**: Death/respawn events trigger cascading cleanup
+4. **Defense in Depth**: Multiple validation layers (DB constraints, runtime validation, event handlers)
+5. **Atomic Operations**: Database for synchronization instead of in-memory locks
+
+### Security Hardening
+
+- Input validation (killedBy, position)
+- Rate limiting (100ms loot cooldown)
+- Atomic operations (queued loot processing)
+- Death state blocking (cannot loot while dying)
+- Double-check pattern (inventory space verified before and after item removal)
+
+---
+
+## Equipment Sync Fix (PR #568)
+
+**Merged**: January 19, 2026  
+**Files Changed**: 3 files (+153 / -35 lines)  
+**Commits**: 3
+
+### Overview
+
+Eliminated equipment disappearing on login via single source of truth pattern.
+
+### Root Cause
+
+Race condition where `character-selection.ts` and `EquipmentSystem` both queried database independently, potentially receiving stale data.
+
+### Solution
+
+1. Load equipment once in `character-selection.ts` before emitting `PLAYER_JOINED`
+2. Pass equipment data via event payload
+3. `EquipmentSystem` uses payload data instead of querying DB again
+
+### Implementation
+
+**New Type**: `EquipmentSyncData`
+
+```typescript
+export interface EquipmentSyncData {
+  slotType: string;
+  itemId: string | null;
+  quantity: number;
+}
+```
+
+**Event Payload**:
+
+```typescript
+world.emit(EventType.PLAYER_JOINED, {
+  playerId: socket.player.data.id,
+  player: socket.player,
+  equipment: equipmentRows,  // NEW: Equipment data from DB
+});
+```
+
+**EquipmentSystem**:
+
+```typescript
+this.subscribe(EventType.PLAYER_JOINED, async (data) => {
+  const typedData = data as {
+    playerId: string;
+    equipment?: EquipmentSyncData[];
+  };
+  
+  if (typedData.equipment && typedData.equipment.length > 0) {
+    // Use equipment from payload (single source of truth)
+    await this.loadEquipmentFromPayload(typedData.playerId, typedData.equipment);
+  } else if (typedData.equipment) {
+    // Empty array = new player, clear visuals
+    this.emitEmptyEquipmentEvents(typedData.playerId);
+  } else {
+    // Backwards compatibility: fall back to DB query
+    await this.loadEquipmentFromDatabase(typedData.playerId);
+  }
+});
+```
+
+### Benefits
+
+- **Eliminates race condition**: Only one DB query instead of two
+- **Network efficiency**: Equipment loaded once, sent once to client
+- **Error handling**: DB load failures trigger fallback instead of empty equipment
+- **Backwards compatibility**: Falls back to DB query if payload missing
+
+---
+
+## Interaction System Improvements (PR #567)
+
+**Merged**: January 18, 2026  
+**Files Changed**: 1 file (+46 / -1 lines)  
+**Commits**: 2
+
+### Overview
+
+Fixed dead mobs blocking item pickup by skipping them during raycasting.
+
+### Implementation
+
+**New Method**: `RaycastService.isDeadMob()`
+
+```typescript
+private isDeadMob(
+  entity: { type?: string },
+  userData: { type?: string }
+): boolean {
+  const entityType = entity.type || userData.type;
+  if (entityType !== "mob") return false;
+  
+  const mobEntity = entity as {
+    config?: { aiState?: MobAIState; currentHealth?: number };
+  };
+  
+  if (!mobEntity.config) return false;
+  
+  const { aiState, currentHealth } = mobEntity.config;
+  
+  // Mob is dead if aiState is DEAD or health is 0 or below
+  return (
+    aiState === MobAIState.DEAD ||
+    (currentHealth !== undefined && currentHealth <= 0)
+  );
+}
+```
+
+**Raycast Integration**:
+
+```typescript
+// In raycast loop
+if (this.isDeadMob(entity, userData)) {
+  break; // Skip dead mob and check next intersection (item underneath)
+}
+```
+
+### Type Safety Improvements
+
+- Uses `MobAIState.DEAD` enum instead of string literal
+- Proper type guard pattern with single assertion
+- Dual health check (aiState + currentHealth) for robustness
+
+---
+
+## Summary Statistics
+
+### Total Changes
+
+| Metric | Value |
+|--------|-------|
+| **Pull Requests Merged** | 4 major PRs |
+| **Files Changed** | 129 files |
+| **Lines Added** | 7,516 |
+| **Lines Removed** | 1,091 |
+| **Net Change** | +6,425 lines |
+| **Database Migrations** | 2 new migrations |
+| **New Documentation Pages** | 1 (Prayer System) |
+| **Updated Documentation Pages** | 5 |
+
+### Code Quality
+
+- **Type Safety**: 100% (no `any` types)
+- **Test Coverage**: 62 new prayer tests, comprehensive death system coverage
+- **Security**: Input validation, rate limiting, atomic operations
+- **OSRS Accuracy**: Authentic formulas, timing, and mechanics
+- **Memory Efficiency**: Pre-allocated buffers, object pooling
+
+### Breaking Changes
+
+None. All changes are backwards compatible with existing save data.
+
+---
+
+## Migration Guide
+
+### For Players
+
+No action required. Existing characters will:
+- Start with Prayer level 1 and 10 prayer points
+- Have empty active prayers array
+- Retain all existing skills and items
+
+### For Developers
+
+1. **Prayer System**:
+   - Add `manifests/prayers.json` to your world assets
+   - Import `PrayerSystem` and add to world systems
+   - Import `prayerDataProvider` and call `initialize()` after `DataManager.initialize()`
+
+2. **Death System**:
+   - Run migration `0017_add_death_recovery_columns.sql`
+   - Update `DeathRepository` imports if using custom death handling
+   - Test crash recovery by killing server mid-death and restarting
+
+3. **Equipment Sync**:
+   - No changes required - fix is transparent
+   - If using custom `PLAYER_JOINED` handlers, check for `equipment` in payload
+
+---
+
+## Related Documentation
+
+- [Prayer System](/wiki/game-systems/prayer)
+- [Death & Respawn](/wiki/game-systems/death)
+- [Combat System](/wiki/game-systems/combat)
+- [Skills & Progression](/wiki/game-systems/skills)
+- [Database Schema](/wiki/engine/database)
+- [Changelog](/changelog)

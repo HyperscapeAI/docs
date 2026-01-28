@@ -27,15 +27,141 @@ PRIVY_APP_SECRET=your-app-secret
 
 **Symptom**: 404 errors for models/avatars
 
-**Cause**: CDN container not running
+**Cause**: CDN container not running (development) or wrong CDN URL (production)
 
-**Solution**:
+**Solutions**:
 
+**Development:**
 ```bash
+# Start CDN container
+bun run cdn:up
+
+# Verify CDN is serving manifests
+curl http://localhost:8080/manifests/npcs.json
+```
+
+**Production:**
+```bash
+# Verify CDN URL is correct
+echo $PUBLIC_CDN_URL
+# Should be: https://assets.hyperscape.club
+
+# Check server logs for manifest fetch errors
+# Server fetches manifests at startup from CDN
+```
+
+**Verify CDN is accessible:**
+```bash
+# Test manifest fetch
+curl https://assets.hyperscape.club/manifests/npcs.json
+
+# Test model fetch
+curl -I https://assets.hyperscape.club/models/goblin/goblin.vrm
+```
+
+**Production:**
+1. Verify `PUBLIC_CDN_URL` is set correctly in server environment
+2. Check manifests are publicly accessible:
+   ```bash
+   curl https://assets.hyperscape.club/manifests/items.json
+   ```
+3. Check server logs for manifest fetch errors:
+   ```
+   [Config] 📥 Fetching manifests from CDN: https://assets.hyperscape.club
+   [Config] ✅ items.json updated
+   ```
+
+**Manifest fetch failures:**
+- Server logs "Failed to fetch manifests from CDN"
+- Verify CDN URL is accessible
+- Check CORS headers allow server origin
+- In development, manifests can be local (skips CDN fetch)
+
+### Manifests Not Loading
+
+**Symptom**: Server logs show "Failed to fetch manifests" or "No manifests available"
+
+**Causes**:
+- CDN not accessible at `PUBLIC_CDN_URL`
+- Manifests not deployed to CDN
+- Network connectivity issues
+
+**Solutions**:
+
+**Development:**
+```bash
+# Ensure local manifests exist
+ls packages/server/world/assets/manifests/
+
+# If missing, clone assets repo
+cd packages/server/world
+git clone https://github.com/HyperscapeAI/assets.git
+
+# Or start CDN
 bun run cdn:up
 ```
 
-Or ensure you're using `bun run dev` which starts it automatically.
+**Production:**
+```bash
+# Verify CDN URL is correct
+echo $PUBLIC_CDN_URL
+
+# Test manifest accessibility
+curl $PUBLIC_CDN_URL/manifests/npcs.json
+
+# Check Railway logs for fetch errors
+railway logs --filter manifest
+```
+
+**Test Environment:**
+```bash
+# Skip manifest loading for tests
+SKIP_MANIFESTS=true bun test
+```
+
+**Production:**
+Verify `PUBLIC_CDN_URL` points to the correct R2 bucket:
+- Production: `https://assets.hyperscape.club`
+- Staging: `https://staging-assets.hyperscape.club`
+
+### Manifest Fetch Failures
+
+**Symptom**: Server logs show "Failed to fetch manifests from CDN"
+
+**Causes**:
+- CDN URL incorrect or unreachable
+- R2 bucket not configured
+- Network connectivity issues
+
+**Solution**:
+
+**Development:**
+```bash
+# Use local manifests (skip CDN fetch)
+# Manifests already exist in packages/server/world/assets/manifests/
+# Server will skip fetch if files exist locally
+```
+
+**Production:**
+```bash
+# Verify CDN URL is accessible
+curl https://assets.hyperscape.club/manifests/npcs.json
+
+# Check Railway logs for fetch errors
+railway logs
+
+# Manually upload manifests to R2 if missing
+wrangler r2 object put "hyperscape-assets/manifests/npcs.json" \
+  --file="packages/server/world/assets/manifests/npcs.json"
+```
+
+**Test environment:**
+```bash
+# Skip manifest fetching entirely
+SKIP_MANIFESTS=true bun run dev
+# or
+NODE_ENV=test bun run dev
+```
 
 ### Database Schema Errors
 
@@ -129,12 +255,27 @@ npm test
 - Server not running
 - Wrong port configuration
 - Firewall blocking
+- CORS issues
 
-**Solution**:
+**Solutions**:
 
 1. Verify server is running: `lsof -i:5555`
 2. Check client config: `PUBLIC_WS_URL`
 3. Ensure no firewall blocks
+4. Verify CORS configuration includes your client domain
+
+**CORS Debugging:**
+```bash
+# Check server logs for CORS errors
+# Server automatically allows:
+# - https://hyperscape.club
+# - https://*.hyperscape.pages.dev
+# - https://*.up.railway.app
+# - http://localhost:*
+
+# Add custom domain via environment variable
+CLIENT_URL=https://your-domain.com
+```
 
 ### Hot Reload Not Working
 
@@ -149,6 +290,60 @@ npm test
 ```bash
 bun run dev:reset
 ```
+
+### UI Windows Not Positioning Correctly
+
+**Symptom**: Windows cluster in corner or overlap after resize
+
+**Causes**:
+- Saved layout from different screen size
+- Missing anchor data in saved layout
+- Mobile-to-desktop transition
+
+**Solution**:
+
+1. Press **L** to enter edit mode
+2. Manually reposition windows
+3. Save new layout
+4. Or reset to default layout:
+
+```typescript
+// In browser console
+localStorage.removeItem('hyperscape-window-layout');
+location.reload();
+```
+
+### Drag-and-Drop Not Working
+
+**Symptom**: Can't drag items or windows
+
+**Causes**:
+- Edit mode not enabled (for windows)
+- Drop zone not registered
+- Race condition in drag state
+
+**Solution**:
+
+- For windows: Press **L** to enable edit mode
+- For items: Ensure inventory panel is open
+- Check browser console for errors
+- Try refreshing the page
+
+### Trade Not Completing
+
+**Symptom**: Trade stuck on confirmation screen
+
+**Causes**:
+- Players moved too far apart
+- Inventory full
+- Items no longer available
+
+**Solution**:
+
+1. Check distance to trade partner (must be within 2 tiles)
+2. Free up inventory space
+3. Verify items still in inventory
+4. Cancel and restart trade if stuck
 
 ## Logs
 
@@ -169,11 +364,137 @@ docker logs hyperscape-postgres
 docker logs hyperscape-cdn
 ```
 
+## Deployment Issues
+
+### Railway Build Failing
+
+**Symptom**: Railway deployment fails during build
+
+**Common Causes:**
+
+1. **Lockfile frozen error**:
+   ```
+   lockfile had changes, but lockfile is frozen
+   ```
+   
+   **Solution**: Regenerate lockfile locally and commit:
+   ```bash
+   bun install
+   git add bun.lock
+   git commit -m "fix: update bun.lock"
+   git push
+   ```
+
+2. **Out of memory during build**:
+   
+   **Solution**: Railway provides 8GB RAM for builds. If exceeded, optimize build:
+   ```bash
+   # Reduce concurrent builds in turbo.json
+   "pipeline": {
+     "build": {
+       "dependsOn": ["^build"],
+       "outputs": ["dist/**", "build/**"]
+     }
+   }
+   ```
+
+3. **Missing environment variables**:
+   
+   **Solution**: Verify all required vars are set in Railway dashboard:
+   - `DATABASE_URL` (auto-set if using Railway PostgreSQL)
+   - `PRIVY_APP_ID` and `PRIVY_APP_SECRET`
+   - `PUBLIC_CDN_URL`
+
+### Cloudflare Pages Build Failing
+
+**Symptom**: Pages deployment fails
+
+**Common Causes:**
+
+1. **Build command not found**:
+   
+   **Solution**: Ensure build command includes `cd packages/client`:
+   ```bash
+   cd packages/client && bun install && bun run build
+   ```
+
+2. **Environment variables not set**:
+   
+   **Solution**: Add in Pages dashboard → Settings → Environment variables:
+   - `PUBLIC_PRIVY_APP_ID`
+   - `PUBLIC_API_URL`
+   - `PUBLIC_WS_URL`
+   - `PUBLIC_CDN_URL`
+
+3. **Build output directory wrong**:
+   
+   **Solution**: Set to `packages/client/dist` in Pages settings
+
+### Manifest Fetch Errors
+
+**Symptom**: Server logs show manifest fetch failures
+
+**Causes**:
+- CDN URL incorrect
+- R2 bucket not public
+- Manifests not uploaded to R2
+
+**Solutions**:
+
+```bash
+# Verify CDN URL
+curl $PUBLIC_CDN_URL/manifests/npcs.json
+
+# Check R2 bucket permissions
+# Bucket must allow public reads
+
+# Re-upload manifests
+wrangler r2 object put hyperscape-assets/manifests/npcs.json \
+  --file=packages/server/world/assets/manifests/npcs.json
+```
+
+### Frontend Can't Connect to Backend
+
+**Symptom**: Client shows "Connecting..." indefinitely
+
+**Causes**:
+- Wrong `PUBLIC_API_URL` or `PUBLIC_WS_URL`
+- CORS blocking requests
+- Railway server not running
+
+**Solutions**:
+
+1. **Verify environment variables** in Cloudflare Pages:
+   ```bash
+   PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+   PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+   ```
+
+2. **Check Railway server status**:
+   ```bash
+   curl https://hyperscape-production.up.railway.app/status
+   ```
+
+3. **Verify CORS configuration** in server logs:
+   ```
+   [HTTP] ✅ CORS configured for: https://hyperscape.club, https://www.hyperscape.club, ...
+   ```
+
+4. **Test WebSocket connection**:
+   ```javascript
+   // Browser console
+   const ws = new WebSocket('wss://hyperscape-production.up.railway.app/ws');
+   ws.onopen = () => console.log('Connected!');
+   ws.onerror = (e) => console.error('Error:', e);
+   ```
+
 ## Getting Help
 
 1. Check [GitHub Issues](https://github.com/HyperscapeAI/hyperscape/issues)
 2. Search existing discussions
-3. Open a new issue with:
-   - Error message
+3. Join [Discord](https://discord.gg/JD3MEwNbbX) for community support
+4. Open a new issue with:
+   - Error message (full stack trace)
    - Steps to reproduce
    - Environment details (OS, Node version, Bun version)
+   - Deployment platform (Railway, Cloudflare Pages, local)

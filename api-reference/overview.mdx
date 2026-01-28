@@ -16,7 +16,7 @@ The Hyperscape server exposes both REST and WebSocket APIs for game interactions
 
 <CodeGroup>
 ```bash Production
-https://api.hyperscape.lol
+https://hyperscape-production.up.railway.app
 ```
 
 ```bash Development
@@ -24,13 +24,17 @@ http://localhost:5555
 ```
 </CodeGroup>
 
+<Info>
+  The production API is deployed on Railway. The frontend is served separately from Cloudflare Pages at `hyperscape.club`.
+</Info>
+
 ## Authentication
 
 All authenticated endpoints require a Bearer token in the Authorization header:
 
 ```bash
 curl -H "Authorization: Bearer <your-token>" \
-  https://api.hyperscape.lol/api/v1/player
+  https://hyperscape-production.up.railway.app/api/v1/player
 ```
 
 <ResponseField name="Authorization" type="string" required>
@@ -79,6 +83,93 @@ curl https://api.hyperscape.lol/health
   List all world areas
 </ParamField>
 
+### Game Data
+
+<ParamField path="GET /api/data/skill-unlocks" type="endpoint">
+  Get skill unlock definitions for all skills
+</ParamField>
+
+**New in v1.0:** Server-authoritative skill unlock data for the Skill Guide Panel.
+
+```bash
+curl https://api.hyperscape.lol/api/data/skill-unlocks
+```
+
+<Accordion title="Response">
+```json
+{
+  "attack": [
+    {
+      "level": 1,
+      "description": "Bronze weapons, Iron weapons",
+      "type": "item"
+    },
+    {
+      "level": 5,
+      "description": "Steel weapons",
+      "type": "item"
+    },
+    {
+      "level": 40,
+      "description": "Rune weapons",
+      "type": "item"
+    },
+    {
+      "level": 60,
+      "description": "Dragon weapons",
+      "type": "item"
+    }
+  ],
+  "woodcutting": [
+    {
+      "level": 1,
+      "description": "Normal trees",
+      "type": "item"
+    },
+    {
+      "level": 15,
+      "description": "Oak trees",
+      "type": "item"
+    }
+  ],
+  "prayer": [
+    {
+      "level": 1,
+      "description": "Thick Skin (+5% Defense)",
+      "type": "ability"
+    },
+    {
+      "level": 4,
+      "description": "Burst of Strength (+5% Strength)",
+      "type": "ability"
+    }
+  ]
+}
+```
+</Accordion>
+
+**Response Fields:**
+- `level` (number) - Required skill level
+- `description` (string) - What is unlocked
+- `type` (string) - Unlock category: `item`, `ability`, `area`, `quest`, or `activity`
+
+**Usage:**
+- Fetched by Skills Panel on mount
+- Cached in client state
+- Used by Skill Guide Panel to display unlocks
+- No authentication required (public data)
+
+**Implementation:**
+```typescript
+// packages/server/src/startup/routes/data-routes.ts
+import { getAllSkillUnlocks } from "@hyperscape/shared";
+
+fastify.get("/api/data/skill-unlocks", async (_req, reply) => {
+  const unlocks = getAllSkillUnlocks();
+  return reply.send(unlocks);
+});
+```
+
 ## WebSocket Events
 
 Connect to the game server via WebSocket for real-time updates:
@@ -102,6 +193,12 @@ ws.onmessage = (event) => {
 | `inventory:use` | Use inventory item |
 | `bank:deposit` | Deposit item to bank |
 | `bank:withdraw` | Withdraw item from bank |
+| `tradeRequest` | Request trade with another player |
+| `tradeRequestRespond` | Accept/decline trade request |
+| `tradeAddItem` | Add item to trade offer |
+| `tradeRemoveItem` | Remove item from trade offer |
+| `tradeAccept` | Accept current trade state |
+| `tradeCancel` | Cancel trade |
 
 ### Server → Client Events
 
@@ -112,6 +209,63 @@ ws.onmessage = (event) => {
 | `combat:hit` | Combat hit event |
 | `skill:xp` | Skill XP gained |
 | `chat:message` | Chat message received |
+| `tradeIncoming` | Trade request received |
+| `tradeStarted` | Trade session started |
+| `tradeUpdated` | Trade offer changed |
+| `tradeConfirmScreen` | Move to confirmation screen |
+| `tradeCompleted` | Trade completed successfully |
+| `tradeCancelled` | Trade cancelled |
+| `tradeError` | Trade error occurred |
+
+### Trading Protocol
+
+<Accordion title="Trade Request Flow">
+```mermaid
+sequenceDiagram
+    participant P1 as Player 1
+    participant Server
+    participant P2 as Player 2
+    
+    P1->>Server: tradeRequest { targetPlayerId }
+    Server->>P2: tradeIncoming { tradeId, fromPlayerId, fromPlayerName }
+    P2->>Server: tradeRequestRespond { tradeId, accept: true }
+    Server->>P1: tradeStarted { tradeId, partnerId, partnerName }
+    Server->>P2: tradeStarted { tradeId, partnerId, partnerName }
+```
+</Accordion>
+
+<Accordion title="Trade Offer Flow">
+```mermaid
+sequenceDiagram
+    participant P1 as Player 1
+    participant Server
+    participant P2 as Player 2
+    
+    P1->>Server: tradeAddItem { tradeId, inventorySlot, quantity }
+    Server->>P1: tradeUpdated { myOffer, theirOffer }
+    Server->>P2: tradeUpdated { myOffer, theirOffer }
+    
+    P1->>Server: tradeAccept { tradeId }
+    P2->>Server: tradeAccept { tradeId }
+    Server->>P1: tradeConfirmScreen { myOffer, theirOffer, values }
+    Server->>P2: tradeConfirmScreen { myOffer, theirOffer, values }
+```
+</Accordion>
+
+<Accordion title="Trade Completion Flow">
+```mermaid
+sequenceDiagram
+    participant P1 as Player 1
+    participant Server
+    participant P2 as Player 2
+    
+    P1->>Server: tradeAccept { tradeId } (on confirm screen)
+    P2->>Server: tradeAccept { tradeId } (on confirm screen)
+    Server->>Server: Atomic item swap (database transaction)
+    Server->>P1: tradeCompleted { receivedItems }
+    Server->>P2: tradeCompleted { receivedItems }
+```
+</Accordion>
 
 ## Rate Limits
 

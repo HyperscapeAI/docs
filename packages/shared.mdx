@@ -45,6 +45,39 @@ packages/shared/
 └── index.client.ts     # Client exports
 ```
 
+## Rendering
+
+### WebGPU with WebGL Fallback
+
+The shared package includes renderer factory utilities for creating renderers with automatic fallback:
+
+```typescript
+// From src/utils/rendering/RendererFactory.ts
+import { createRenderer, isWebGPURenderer, getRendererBackend } from '@hyperscape/shared';
+
+// Create renderer (WebGPU preferred, WebGL fallback)
+const renderer = await createRenderer({
+  antialias: true,
+  powerPreference: "high-performance",
+});
+
+// Check backend
+const isWebGPU = isWebGPURenderer(renderer);  // true or false
+const backend = getRendererBackend(renderer); // "webgpu" or "webgl"
+```
+
+**Renderer Features:**
+- Automatic WebGPU detection and fallback to WebGL
+- Works in WKWebView (Tauri), older Safari, and browsers without WebGPU
+- Configurable shadow maps and post-processing
+- Max anisotropy detection
+
+**Environment System:**
+- Auto exposure for day/night cycle (mimics eye adaptation)
+- Cascaded shadow maps (WebGPU) or single directional shadows (WebGL)
+- Dynamic ambient lighting based on time of day
+- Fog color transitions
+
 ## Key Exports
 
 ### Entity Hierarchy
@@ -83,15 +116,17 @@ Located in `src/systems/shared/`:
 
 | Category | Systems |
 |----------|---------|
-| `character/` | Character stats, equipment, skills |
-| `combat/` | Combat mechanics, damage, death |
-| `death/` | Death handling, respawn |
-| `economy/` | Banks, shops, trading |
-| `entities/` | Entity lifecycle management |
-| `interaction/` | Player-world interactions |
+| `character/` | Character stats, equipment, skills, inventory |
+| `combat/` | Combat mechanics, damage, death, aggro |
+| `death/` | Death handling, respawn, safe zones |
+| `economy/` | Banks, shops, trading, loot |
+| `entities/` | Entity lifecycle, spawning, resource management |
+| `interaction/` | Player-world interactions, dialogue, processing |
 | `movement/` | Tile-based movement, collision, pathfinding |
-| `presentation/` | Visual rendering |
-| `world/` | World management |
+| `presentation/` | Visual rendering, particles, music |
+| `progression/` | Quest system, achievements |
+| `tick/` | Game tick processing, NPC AI |
+| `world/` | Terrain generation, flat zones, biomes, vegetation |
 
 ### Collision System
 
@@ -152,6 +187,47 @@ Game content is defined in TypeScript files in `src/data/`:
   Add new NPCs in `world/assets/manifests/npcs.json`.
 </Info>
 
+### Skill Unlocks API
+
+The skill unlocks system provides functions for querying what players unlock at each level:
+
+```typescript
+import { 
+  getAllSkillUnlocks,
+  getUnlocksAtLevel,
+  getUnlocksUpToLevel,
+  loadSkillUnlocks,
+  type SkillUnlock
+} from '@hyperscape/shared';
+
+// Load from manifest (called by DataManager)
+loadSkillUnlocks(manifest);
+
+// Get all unlocks for a skill
+const attackUnlocks = getAllSkillUnlocks()["attack"];
+
+// Get unlocks at specific level
+const level40Unlocks = getUnlocksAtLevel("attack", 40);
+// Returns: [{ level: 40, description: "Rune weapons", type: "item" }]
+
+// Get all unlocks up to level
+const unlockedSoFar = getUnlocksUpToLevel("attack", 45);
+```
+
+**Defence/Defense Normalization:**
+
+The system automatically handles British/American spelling:
+
+```typescript
+// skill-unlocks.json uses "defence" (OSRS-accurate)
+// UI uses "defense" (codebase convention)
+// Both work - normalization happens at load time
+const defenceUnlocks = getAllSkillUnlocks()["defence"];  // Works
+const defenseUnlocks = getAllSkillUnlocks()["defense"];  // Also works
+```
+
+This allows the manifest to use OSRS-accurate British spelling while the codebase uses American spelling consistently.
+
 ## Entry Points
 
 ### Server (index.ts)
@@ -183,13 +259,34 @@ import {
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `three` | 0.180.0 | 3D rendering |
+| `three` | 0.181.0 | 3D rendering |
 | `@pixiv/three-vrm` | 3.4.3 | VRM avatar support |
 | `@hyperscape/physx-js-webidl` | workspace | Physics |
 | `react` | ^19.2.0 | UI components |
-| `styled-components` | ^6.1.19 | CSS-in-JS |
 | `fastify` | ^5.0.0 | HTTP server (server builds) |
 | `livekit-client` | ^2.9.9 | Voice chat |
+
+## Recent Changes
+
+### Terrain Flattening System (PR #644)
+
+The terrain system now supports flat zones under stations for proper building placement:
+
+- **FlatZone interface** — Defines rectangular flat areas with smooth blending
+- **Spatial indexing** — O(1) flat zone lookup using terrain tiles
+- **Manifest-driven** — Stations configure `flattenGround`, `flattenPadding`, `flattenBlendRadius`
+- **Dynamic registration** — `registerFlatZone()`, `unregisterFlatZone()`, `getFlatZoneAt()`
+
+See [Terrain System](/wiki/game-systems/terrain) for details.
+
+### Equipment System Fixes (PR #641)
+
+Atomic equip/unequip operations prevent item duplication:
+
+- **Transaction locks** prevent race conditions
+- **Order of operations** — Remove from inventory FIRST (equip), clear equipment FIRST (unequip)
+- **Rollback on failure** — Restores state if operation fails
+- **New helper methods** — `hasSpace()`, `hasItemAtSlot()`, `removeItemDirect()`, `addItemDirect()`
 
 ## Building
 

@@ -6,10 +6,10 @@ icon: "database"
 
 # Agent Providers Reference
 
-Providers supply **game context** to ElizaOS agents, enabling the LLM to make informed decisions. There are **7 providers** that run before each agent decision.
+Providers supply **game context** to ElizaOS agents, enabling the LLM to make informed decisions. There are **10 providers** that run before each agent decision.
 
 <Info>
-Providers are defined in `packages/plugin-hyperscape/src/providers/`.
+Providers are defined in `packages/plugin-hyperscape/src/providers/`. PR #628 added 3 new providers for enhanced LLM decision-making.
 </Info>
 
 ## Provider Execution Order
@@ -23,6 +23,9 @@ Providers run in a specific order to ensure dependencies are met:
 5. **skillsProvider** - Skill levels and XP
 6. **equipmentProvider** - Currently equipped items
 7. **availableActionsProvider** - Context-aware action list
+8. **possibilitiesProvider** - What actions are currently possible (NEW)
+9. **goalTemplatesProvider** - Structured goal templates (NEW)
+10. **guardrailsProvider** - Safety constraints and warnings (NEW)
 
 ---
 
@@ -244,17 +247,21 @@ ${skillList}
 ```
 ## Skills
 Combat Level: 15
-Total Level: 85
+Total Level: 95
 
 - Attack: Level 10 (1,154 XP)
 - Strength: Level 12 (1,623 XP)
 - Defense: Level 8 (737 XP)
 - Constitution: Level 15 (2,411 XP)
 - Ranged: Level 1 (0 XP)
+- Prayer: Level 5 (388 XP)
 - Woodcutting: Level 25 (8,740 XP)
 - Fishing: Level 18 (3,258 XP)
+- Mining: Level 10 (1,154 XP)
 - Firemaking: Level 10 (1,154 XP)
 - Cooking: Level 6 (535 XP)
+- Smithing: Level 3 (276 XP)
+- Agility: Level 8 (737 XP)
 ```
 
 ---
@@ -397,6 +404,230 @@ Use these actions based on your current goal and situation.
 
 ---
 
+## Possibilities Provider
+
+Analyzes inventory and nearby entities to determine what's currently possible.
+
+```typescript
+// From providers/possibilitiesProvider.ts (PR #628)
+export const possibilitiesProvider: Provider = {
+  name: "possibilities",
+  description: "What actions are currently possible based on inventory, skills, and nearby entities",
+  
+  async get(runtime: IAgentRuntime): Promise<ProviderResult> {
+    const service = runtime.getService("hyperscapeService");
+    const player = service.getPlayerEntity();
+    const nearbyEntities = service.getNearbyEntities();
+    
+    // Calculate what's craftable
+    const craftable = {
+      smelting: getSmeltableBars(inventory, smithingLevel),
+      smithing: getSmithableItems(inventory, smithingLevel),
+      cooking: getCookableFood(inventory, cookingLevel),
+      firemaking: getBurnableLogs(inventory, firemakingLevel)
+    };
+    
+    // Calculate what's gatherable
+    const gatherable = getGatherableResources(nearbyEntities, skills);
+    
+    // Calculate combat opportunities
+    const attackableTargets = getAttackableTargets(nearbyEntities);
+    const combatReadiness = getCombatReadiness(service);
+    
+    return {
+      text: formatPossibilities(craftable, gatherable, attackableTargets),
+      data: { craftable, gatherable, combat: { attackableTargets, combatReadiness } }
+    };
+  }
+};
+```
+
+### Output Example
+
+```markdown
+## What You Can Do Right Now
+
+### Crafting
+**Smelting** (at a furnace):
+- Bronze Bar: You have copper_ore + tin_ore (can make 5)
+
+**Smithing** (at an anvil):
+- Bronze Sword: Need 1 bronze_bar (can make 3)
+
+**Cooking** (on fire/range):
+- Raw Shrimp -> Shrimp (10 available)
+
+### Gathering (Nearby)
+- Oak Tree x3 (tree) - CAN gather
+- Copper Rock x2 (rock) - CAN gather
+
+### Combat
+Combat Readiness: 75%
+Attackable targets:
+- Goblin x5
+
+### Skills You Can Train Now
+- **Woodcutting** (Level 10): Chop nearby trees
+- **Mining** (Level 5): Mine nearby rocks
+- **Cooking** (Level 8): Cook food on a fire or range
+```
+
+---
+
+## Goal Templates Provider
+
+Provides structured goal templates for OSRS beginner flows.
+
+```typescript
+// From providers/goalTemplatesProvider.ts (PR #628)
+export const goalTemplatesProvider: Provider = {
+  name: "goalTemplates",
+  description: "Structured goal templates for OSRS beginner activities",
+  
+  async get(runtime: IAgentRuntime): Promise<ProviderResult> {
+    const service = runtime.getService("hyperscapeService");
+    const player = service.getPlayerEntity();
+    const nearbyEntities = service.getNearbyEntities();
+    
+    // Build player context
+    const ctx = buildPlayerContext(player, nearbyEntities, combatReadiness);
+    
+    // Score all templates
+    const scoredTemplates = GOAL_TEMPLATES
+      .map(template => scoreTemplate(template, ctx))
+      .sort((a, b) => b.score - a.score);
+    
+    const topTemplates = scoredTemplates.filter(t => t.applicable).slice(0, 5);
+    
+    return {
+      text: formatGoalTemplates(topTemplates),
+      data: { templates: scoredTemplates, topTemplates }
+    };
+  }
+};
+```
+
+### Goal Template Structure
+
+```typescript
+interface GoalTemplate {
+  id: string;                    // "woodcutting_basics"
+  name: string;                  // "Learn Woodcutting"
+  type: string;                  // "woodcutting"
+  description: string;           // "Chop trees to gather logs..."
+  prerequisites: string[];       // ["Have an axe equipped or in inventory"]
+  hardRequirements: string[];    // ["has_axe"] - MUST be met
+  steps: string[];               // Step-by-step instructions
+  successCondition: string;      // "Woodcutting level 10+"
+  recommendedWhen: string[];     // ["trees_nearby", "woodcutting < 20"]
+  priority: number;              // Base priority (0-100)
+  estimatedTime: string;         // "5-10 minutes"
+}
+```
+
+### Output Example
+
+```markdown
+## Recommended Goals
+
+Based on your current situation, here are recommended goals:
+
+### 1. Learn Woodcutting (Score: 85)
+**Type**: woodcutting
+**Description**: Chop trees to gather logs and train woodcutting skill
+**Why**: Trees nearby, woodcutting level 5 (room to grow)
+**Steps**:
+  - Ensure you have an axe (bronze axe works for beginners)
+  - Travel to an area with trees (forest location)
+  - Click on a tree to start chopping
+  - Continue until inventory is full or target level reached
+**Success**: Woodcutting level 10+ OR inventory full of logs
+
+### 2. Get Starter Tools (Score: 95)
+**Type**: starter_items
+**Description**: Acquire basic tools needed for gathering skills
+**Why**: No axe - need to acquire tools
+**Steps**:
+  - Find and loot starter chest near spawn
+  - Or: Kill goblins - they sometimes drop tools
+  - Priority: Get axe first (for logs), then pickaxe (for ore)
+**Success**: Have axe AND pickaxe in inventory
+```
+
+**Goal Types:**
+- `woodcutting`, `mining`, `fishing` - Gathering skills
+- `smithing`, `firemaking`, `cooking` - Artisan skills
+- `combat` - Combat training
+- `exploration` - Discover new areas
+- `starter_items` - Acquire basic tools
+
+---
+
+## Guardrails Provider
+
+Provides safety constraints and warnings to prevent dangerous decisions.
+
+```typescript
+// From providers/guardrailsProvider.ts (PR #628)
+export const guardrailsProvider: Provider = {
+  name: "guardrails",
+  description: "Safety constraints and warnings for decision making",
+  
+  async get(runtime: IAgentRuntime): Promise<ProviderResult> {
+    const service = runtime.getService("hyperscapeService");
+    const player = service.getPlayerEntity();
+    const nearbyEntities = service.getNearbyEntities();
+    const combatReadiness = getCombatReadiness(service);
+    
+    // Generate warnings and blocked actions
+    const activeWarnings = generateWarnings(player, nearbyEntities, combatReadiness);
+    const blockedActions = generateBlockedActions(player, nearbyEntities, combatReadiness);
+    
+    return {
+      text: formatGuardrails(activeWarnings, blockedActions),
+      data: { hardConstraints, softConstraints, activeWarnings, blockedActions }
+    };
+  }
+};
+```
+
+### Output Example
+
+```markdown
+## Safety Guardrails
+
+### ⚠️ CRITICAL WARNINGS
+**Health critically low (22%) - FLEE IMMEDIATELY!**
+→ Use FLEE action to escape combat
+
+### ⚡ Warnings
+- No food in inventory - get food before combat
+  → Fish and cook, or buy food from a shop
+- Combat readiness low (35%): No weapon equipped, No food
+  → Address issues before engaging in combat
+
+### 🚫 Blocked Actions
+- **ATTACK_ENTITY**: No weapon equipped
+  → Fix by: Equip a weapon from inventory or smith one
+- **combat**: No food for healing during combat
+  → Fix by: Gather or buy food first
+
+### Hard Rules (MUST Follow)
+- NEVER set combat goals when health is below 30%
+- NEVER engage in combat without a weapon equipped
+- ALWAYS flee immediately when health drops below 25% during combat
+- ALWAYS finish killing current target before switching to another
+
+**Status**: 🔴 CRITICAL ISSUES - Address immediately
+```
+
+**Warning Levels:**
+- `critical` - Immediate danger, must address
+- `warning` - Risky situation, should address
+- `info` - Informational, nice to address
+
+---
+
 ## Custom Providers
 
 You can create custom providers for additional context:
@@ -418,6 +649,193 @@ ${formatCustomData(data)}
     `.trim();
   },
 };
+```
+
+---
+
+## Possibilities Provider
+
+Tells the LLM what actions are currently possible based on inventory, skills, and nearby entities.
+
+```typescript
+// From providers/possibilitiesProvider.ts
+export const possibilitiesProvider: Provider = {
+  name: "possibilities",
+  description: "What actions are currently possible based on inventory, skills, and nearby entities",
+
+  async get(runtime: IAgentRuntime): Promise<string> {
+    const service = runtime.getService("hyperscape") as HyperscapeService;
+    const player = service.getPlayerEntity();
+    const nearbyEntities = service.getNearbyEntities();
+    const inventory = player.items || [];
+    const skills = player.skills;
+
+    // Calculate what can be crafted
+    const craftable = {
+      smelting: getSmeltableBars(inventory, skills.smithing.level),
+      smithing: getSmithableItems(inventory, skills.smithing.level),
+      cooking: getCookableFood(inventory, skills.cooking.level),
+      firemaking: getBurnableLogs(inventory, skills.firemaking.level),
+    };
+
+    // Calculate what can be gathered
+    const gatherable = getGatherableResources(nearbyEntities, skills);
+
+    // Calculate combat readiness
+    const combatReadiness = getCombatReadiness(service);
+
+    return formatPossibilities(craftable, gatherable, combatReadiness);
+  },
+};
+```
+
+### Output Example
+
+```
+## What You Can Do Right Now
+
+### Crafting
+**Smelting** (at a furnace):
+- Bronze Bar: You have copper_ore + tin_ore (can make 5)
+
+**Smithing** (at an anvil):
+- Bronze Sword: Need 1 bronze_bar (can make 3)
+- Bronze Pickaxe: Need 2 bronze_bar (can make 1)
+
+### Gathering (Nearby)
+- Oak Tree x3 (tree) - CAN gather
+- Copper Rock x2 (rock) - CAN gather
+
+### Combat
+Combat Readiness: 75%
+Attackable targets:
+- Goblin x5
+
+### Status
+- Food: Yes
+- Inventory: 12 slots free
+```
+
+---
+
+## Goal Templates Provider
+
+Provides structured goal templates for OSRS beginner flows with scoring based on current state.
+
+```typescript
+// From providers/goalTemplatesProvider.ts
+export const goalTemplatesProvider: Provider = {
+  name: "goalTemplates",
+  description: "Structured goal templates for OSRS beginner activities",
+
+  async get(runtime: IAgentRuntime): Promise<string> {
+    const service = runtime.getService("hyperscape") as HyperscapeService;
+    const player = service.getPlayerEntity();
+    const nearbyEntities = service.getNearbyEntities();
+
+    // Score all templates based on current state
+    const scoredTemplates = GOAL_TEMPLATES.map(template =>
+      scoreTemplate(template, buildPlayerContext(player, nearbyEntities))
+    ).sort((a, b) => b.score - a.score);
+
+    // Filter to applicable templates (prerequisites met)
+    const topTemplates = scoredTemplates.filter(t => t.applicable).slice(0, 5);
+
+    return formatGoalTemplates(topTemplates);
+  },
+};
+```
+
+**Goal Templates Include:**
+- Acquire starter tools (axe, pickaxe, tinderbox)
+- Woodcutting basics
+- Mining basics
+- Fishing basics
+- Bronze gear crafting chain (mine → smelt → smith)
+- Combat training on goblins
+- Firemaking and cooking
+
+**Scoring Factors:**
+- Prerequisites met (hard requirements)
+- Recommended conditions (soft factors)
+- Diversity penalty (encourages variety)
+- Recent goal history (prevents repetition)
+
+### Output Example
+
+```
+## Recommended Goals
+
+### 1. Learn Woodcutting (Score: 85)
+**Type**: woodcutting
+**Description**: Chop trees to gather logs and train woodcutting skill
+**Why**: Trees nearby, woodcutting level 5 (room to grow)
+**Steps**:
+  - Ensure you have an axe (bronze axe works for beginners)
+  - Travel to an area with trees (forest location)
+  - Click on a tree to start chopping
+**Success**: Woodcutting level 10+ OR inventory full of logs
+```
+
+---
+
+## Guardrails Provider
+
+Provides safety constraints and warnings for LLM decision-making.
+
+```typescript
+// From providers/guardrailsProvider.ts
+export const guardrailsProvider: Provider = {
+  name: "guardrails",
+  description: "Safety constraints and warnings for decision making",
+
+  async get(runtime: IAgentRuntime): Promise<string> {
+    const service = runtime.getService("hyperscape") as HyperscapeService;
+    const player = service.getPlayerEntity();
+    const nearbyEntities = service.getNearbyEntities();
+    const combatReadiness = getCombatReadiness(service);
+
+    // Generate warnings and blocked actions
+    const activeWarnings = generateWarnings(player, nearbyEntities, combatReadiness);
+    const blockedActions = generateBlockedActions(player, nearbyEntities, combatReadiness);
+
+    return formatGuardrails(activeWarnings, blockedActions);
+  },
+};
+```
+
+**Hard Constraints (MUST follow):**
+- NEVER set combat goals when health is below 30%
+- NEVER engage in combat without a weapon equipped
+- ALWAYS flee immediately when health drops below 25% during combat
+- NEVER travel more than 200 tiles from spawn point
+- ALWAYS finish killing current target before switching
+
+**Soft Constraints (SHOULD follow):**
+- Prefer goals that utilize current inventory items
+- Prefer nearby resources over distant ones
+- Balance skill training - don't over-specialize too early
+- Gather food supplies before extended combat sessions
+
+### Output Example
+
+```
+## Safety Guardrails
+
+### ⚠️ CRITICAL WARNINGS
+**Health at 28% - eat food or avoid combat**
+→ Eat food to restore health
+
+### 🚫 Blocked Actions
+- **ATTACK_ENTITY**: No weapon equipped
+  → Fix by: Equip a weapon from inventory or smith one
+
+### Hard Rules (MUST Follow)
+- NEVER set combat goals when health is below 30%
+- NEVER engage in combat without a weapon equipped
+- ALWAYS flee immediately when health drops below 25% during combat
+
+**Status**: 🟡 Some actions blocked - see above
 ```
 
 ---

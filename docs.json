@@ -36,17 +36,16 @@
     "codeblocks": {
       "theme": {
         "light": "github-light",
-        "dark": "tokyo-night"
+        "dark": "css-variables"
       }
     },
-    "eyebrow": "breadcrumbs",
-    "rounded": "default"
+    "eyebrows": "breadcrumbs"
   },
   "favicon": "/favicon.svg",
   "logo": {
     "light": "/logo/light.svg",
     "dark": "/logo/dark.svg",
-    "href": "https://hyperscape.lol"
+    "href": "/"
   },
   "metadata": {
     "og:site_name": "Hyperscape Documentation",
@@ -66,7 +65,6 @@
     "charset": "utf-8"
   },
   "seo": {
-    "indexHiddenPages": false,
     "indexing": "all"
   },
   "search": {
@@ -80,42 +78,10 @@
   "api": {
     "baseUrl": "https://api.hyperscape.lol",
     "playground": {
-      "mode": "simple"
-    },
-    "auth": {
-      "method": "bearer",
-      "name": "Authorization"
+      "display": "simple"
     }
   },
   "openapi": ["/openapi.json"],
-  "analytics": {
-    "posthog": {
-      "apiKey": "<your-posthog-api-key>",
-      "apiHost": "https://app.posthog.com"
-    },
-    "ga4": {
-      "measurementId": "<your-ga4-measurement-id>"
-    }
-  },
-  "integrations": {
-    "intercom": {
-      "appId": "<your-intercom-app-id>"
-    }
-  },
-  "redirects": [
-    {
-      "source": "/getting-started",
-      "destination": "/quickstart"
-    },
-    {
-      "source": "/docs",
-      "destination": "/"
-    },
-    {
-      "source": "/api",
-      "destination": "/packages/server"
-    }
-  ],
   "navigation": {
     "tabs": [
       {
@@ -125,12 +91,10 @@
           {
             "group": "Get Started",
             "icon": "rocket",
-            "expanded": true,
             "pages": [
               "index",
               "quickstart",
-              "architecture",
-              "changelog"
+              "architecture"
             ]
           },
           {
@@ -150,24 +114,12 @@
             "group": "Core Concepts",
             "icon": "lightbulb",
             "pages": [
-              {
-                "group": "Architecture",
-                "icon": "layers",
-                "pages": [
-                  "concepts/ecs",
-                  "concepts/entities",
-                  "concepts/multiplayer"
-                ]
-              },
-              {
-                "group": "Game Systems",
-                "icon": "swords",
-                "pages": [
-                  "concepts/combat",
-                  "concepts/skills",
-                  "concepts/economy"
-                ]
-              },
+              "concepts/ecs",
+              "concepts/entities",
+              "concepts/multiplayer",
+              "concepts/combat",
+              "concepts/skills",
+              "concepts/economy",
               "concepts/manifests"
             ]
           }
@@ -180,7 +132,6 @@
           {
             "group": "Overview",
             "icon": "layout-grid",
-            "expanded": true,
             "pages": ["packages/overview"]
           },
           {
@@ -209,7 +160,6 @@
           {
             "group": "REST API",
             "icon": "plug",
-            "expanded": true,
             "pages": ["api-reference/overview"]
           }
         ]
@@ -221,7 +171,6 @@
           {
             "group": "Configuration",
             "icon": "settings",
-            "expanded": true,
             "pages": [
               "devops/configuration",
               "devops/docker"
@@ -244,7 +193,6 @@
           {
             "group": "Overview",
             "icon": "home",
-            "expanded": true,
             "pages": ["wiki/index"]
           },
           {
@@ -308,35 +256,44 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "Changelog",
+        "icon": "clock",
+        "groups": [
+          {
+            "group": "Changelog",
+            "icon": "scroll",
+            "pages": [
+              "changelog/index",
+              "changelog/2026-01",
+              "changelog/2025"
+            ]
+          }
+        ]
       }
-    ],
-    "global": {
-      "anchors": []
-    }
+    ]
   },
   "navbar": {
     "links": [
       {
         "label": "Changelog",
-        "href": "/changelog"
-      },
-      {
-        "label": "GitHub",
-        "href": "https://github.com/HyperscapeAI/hyperscape"
+        "href": "/changelog/index"
       },
       {
         "label": "Discord",
         "href": "https://discord.gg/JD3MEwNbbX"
+      },
+      {
+        "label": "Play Game",
+        "href": "https://hyperscape.lol"
       }
     ],
     "primary": {
-      "type": "button",
-      "label": "Play Game",
-      "href": "https://hyperscape.lol"
+      "type": "github",
+      "label": "GitHub",
+      "href": "https://github.com/HyperscapeAI/hyperscape"
     }
-  },
-  "sidebar": {
-    "items": "border"
   },
   "interaction": {
     "drilldown": false
@@ -357,7 +314,7 @@
     },
     "links": [
       {
-        "title": "Resources",
+        "header": "Resources",
         "items": [
           {
             "label": "Documentation",
@@ -374,7 +331,7 @@
         ]
       },
       {
-        "title": "Community",
+        "header": "Community",
         "items": [
           {
             "label": "Discord",
@@ -391,7 +348,7 @@
         ]
       },
       {
-        "title": "Legal",
+        "header": "Legal",
         "items": [
           {
             "label": "Privacy Policy",
@@ -404,11 +361,5 @@
         ]
       }
     ]
-  },
-  "backgroundImage": "/images/docs-background.svg",
-  "modeToggle": {
-    "default": "dark",
-    "isHidden": false
-  },
-  "isWhiteLabeled": false
+  }
 }

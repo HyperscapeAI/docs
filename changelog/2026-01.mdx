@@ -1,0 +1,164 @@
+---
+title: "January 2026"
+description: "Duel Arena, Prayer, Collision, Smithing, Website, and UI Improvements"
+---
+
+## Week 4: January 26-28
+
+### Duel Arena System (PR #685)
+
+*Merged: January 27, 2026 | +15,066 lines | 85 files*
+
+Complete PvP dueling system with stake wagering:
+
+- **Challenge System**: Right-click to challenge, rules negotiation, stakes with anti-scam warnings
+- **Arena System**: Procedural generation, arena pool management, lobby-only initiation
+- **Combat Phase**: 3D countdown, rule enforcement, forfeit pillars, disconnect handling
+- **Resolution**: Winner receives stakes, result modal, teleportation to lobby
+- **Technical**: Transaction wrapping, audit logging, rate limiting, SOLID refactoring, 1,750+ test lines
+
+**Bug Fixes**: Death animation race conditions, movement blocking, combat rotation, inventory tab isolation
+
+---
+
+### Website Redesign (PR #684)
+
+*Merged: January 28, 2026 | +2,723 lines | 46 files*
+
+- Redesigned landing page hero with responsive layout and animations
+- New `/gold` token page with scroll-style design
+- Reusable Background, CTA, Hero, and Button components
+- Improved Header/Footer with $GOLD link
+
+---
+
+### UI Improvements & Mobile (PR #656)
+
+*Merged: January 26, 2026 | +1,972 / -907 lines | 57 files*
+
+- **Action Bar**: RS3-style shortcuts (Ctrl/Shift/Alt), 5 bars × 14 slots
+- **Mobile**: Long-press context menu, TouchSensor drag-and-drop
+- **Panels**: 30% larger, responsive menu bar, chat filtering, dark fantasy status orbs
+- **Edit Mode**: Extracted keyboard hook, delete zone for panels
+
+---
+
+## Week 3: January 14-16
+
+### Static Tile Collision (PR #552)
+
+*Merged: January 15, 2026 | +3,691 lines*
+
+Zone-based collision system:
+
+- **CollisionMatrix**: Bitmask flags, 8×8 tile zones, lazy allocation, O(1) lookups
+- **Flags**: BLOCKED, WATER, STEEP_SLOPE, OCCUPIED_PLAYER, OCCUPIED_NPC
+- **Integration**: Resources/stations register collision, mob pathfinding, TerrainSystem
+- **Build**: Auto-detect footprints from model bounds, turbo caching
+- **Multi-Tile**: Interaction from any side, center-based registration
+
+---
+
+### Prayer System (PR #563)
+
+*Merged: January 16, 2026 | +4,126 lines*
+
+Complete prayer skill:
+
+- Manifest-driven prayer types with database persistence
+- Drain mechanics, conflict resolution, combat bonuses
+- Bone burying (regular/big/dragon) with 2-tick delay
+- Prayer altars for recharging
+- Prayer panel with real-time updates, 62 unit tests
+
+---
+
+### Coin Pouch Withdrawal (PR #559)
+
+*Merged: January 15, 2026*
+
+- RS3-style money pouch with withdrawal modal
+- Server-authoritative, atomic transactions, rate limiting
+
+---
+
+### Hover Tooltips & Click-to-Unequip (PR #558)
+
+*Merged: January 15, 2026*
+
+- Item stats on hover for equipment/inventory
+- Direct click to unequip, smart tooltip suppression
+
+---
+
+### Walk Here Context Menu (PR #555)
+
+*Merged: January 15, 2026*
+
+- Right-click terrain shows "Walk here"
+- New ContextMenuTargetType union
+
+---
+
+### Bug Fixes
+
+- **#554**: Restored fishing animation
+- **#553**: Store transactions wrapped with executeInventoryTransaction
+- **#547**: Removed overhead nametags
+- **#544**: Fixed mob combat animation override
+- **#560**: Fixed Vitest imports, updated stale assertions
+
+---
+
+## Week 2: January 9-10
+
+### Smithing Skill (PR #492)
+
+*Merged: January 9, 2026 | +6,682 / -622 lines | 31 commits*
+
+Complete smithing implementation:
+
+- **Smelting**: Furnaces, tier-specific XP, manifest-driven recipes
+- **Smithing**: Anvils, Make X memory, level requirements UI
+- **Timing**: OSRS-accurate tick-based processing
+- **Database**: smithingLevel/smithingXp persistence
+- **Performance**: Memory leak fixes, pre-allocated buffers, server-only guards
+- **Security**: Input validation, type guards, rate limiting
+
+**Bonus**: Firemaking/cooking level requirement validation
+
+---
+
+### Context Menu Colors (PR #497)
+
+*Merged: January 10, 2026*
+
+- **Colors**: Orange items, yellow NPCs, cyan objects
+- **Actions**: Manifest-driven inventory actions, heuristic fallback
+- Centralized InventoryActionDispatcher, item helper utilities
+
+---
+
+### Food & Eating System (PR #500)
+
+*Merged: January 10, 2026*
+
+- 3-tick eat delay, combat integration (+3 ticks to attack cooldown)
+- Server-authoritative, EatDelayManager, event-driven health updates
+
+---
+
+### Station 3D Models (PR #496)
+
+*Merged: January 10, 2026*
+
+- Manifest-driven anvil and furnace models with configurable scale/offset
+
+---
+
+### Bug Fixes
+
+- **#502**: Two-phase bank slot update to prevent constraint violations
+- **#494**: Prevent duplicate resource harvesting
+- **#504**: 100% rock depletion, accurate mining success rates
+- **#505**: F5 keybind for debug panel

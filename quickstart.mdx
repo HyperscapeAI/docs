@@ -60,25 +60,51 @@ Before you begin, ensure you have:
     <Info>First build takes 5-10 minutes due to PhysX WASM compilation. Subsequent builds are cached.</Info>
   </Step>
   
-  <Step title="Start the game">
-    **Production mode:**
-    ```bash
-    bun start
-    ```
-    Open [http://localhost:5555](http://localhost:5555) in your browser.
+  <Step title="Start the CDN">
+    The CDN serves game assets (models, textures, audio, manifests):
     
+    ```bash
+    bun run cdn:up
+    ```
+    
+    This starts a Docker nginx container on port 8080. The server will fetch manifests from the CDN at startup.
+  </Step>
+  
+  <Step title="Start the game">
     **Development mode (with hot reload):**
     ```bash
     bun run dev
     ```
     - Client: [http://localhost:3333](http://localhost:3333) (Vite HMR)
     - Server: `ws://localhost:5555/ws`
+    - CDN: `http://localhost:8080`
+    
+    **Production mode:**
+    ```bash
+    bun start
+    ```
+    Open [http://localhost:5555](http://localhost:5555) in your browser.
+    
+    <Info>
+      The server fetches manifests from `PUBLIC_CDN_URL` at startup. In development, it skips the fetch if local manifests exist.
+    </Info>
   </Step>
 </Steps>
 
 <Warning>
   Without Privy credentials, the game runs in anonymous mode where users get a new identity on every page refresh. Characters will appear to vanish because they're tied to the old anonymous account.
 </Warning>
+
+## Play Online
+
+You can play Hyperscape online without installing anything:
+
+- **Production**: [hyperscape.club](https://hyperscape.club) - Stable release
+- **Staging**: [staging.hyperscape.club](https://staging.hyperscape.club) - Latest features (may be unstable)
+
+<Info>
+  The staging environment is updated automatically when changes are merged to the `staging` branch. Use it to test new features before they reach production.
+</Info>
 
 ## Running with AI Agents
 
@@ -88,11 +114,25 @@ To run the game with ElizaOS AI agents:
 bun run dev:ai
 ```
 
-This starts the game server plus the ElizaOS agent runtime. The AI agent will connect as a player and autonomously play the game.
+This starts both the game and ElizaOS runtime concurrently:
+- Game server on port **5555**
+- Client on port **3333**
+- ElizaOS runtime on port **4001**
+
+The AI agent will connect as a player and autonomously play the game using LLM-driven decision making.
 
 <Info>
-  You need ElizaOS configured with an LLM provider (OpenAI, Anthropic, or OpenRouter) in your environment variables.
+  Requires ElizaOS 1.7.0+ with an LLM provider (OpenAI, Anthropic, OpenRouter, or Ollama) configured in your environment variables.
 </Info>
+
+### AI Agent Features
+
+- **THINKING+ACTION format** - Agents explain their reasoning before acting
+- **Target locking** - Agents finish killing one mob before switching
+- **Force flee** - Auto-flee at less than 25% health with threats nearby
+- **Combat readiness** - Agents assess if they're prepared for combat
+- **Goal templates** - Structured beginner flows (woodcutting, mining, combat)
+- **Real-time thoughts** - Watch agent decision-making in the dashboard
 
 ## What Gets Started
 
@@ -100,18 +140,24 @@ This starts the game server plus the ElizaOS agent runtime. The AI agent will co
 |---------|------|-------------|
 | Client | 3333 | Vite dev server with hot reload (dev mode) |
 | Server | 5555 | Game server (Fastify + WebSockets) |
-| CDN | 8080 | Asset server (Docker nginx, if started) |
+| CDN | 8080 | Asset server (Docker nginx) - serves models, audio, manifests |
+| PostgreSQL | 5432 | Database (Docker, auto-started by server) |
+
+<Info>
+  The server fetches manifests from the CDN at startup. In production, manifests are served from Cloudflare R2. In development, the local CDN serves them from `packages/server/world/assets/`.
+</Info>
 
 ## Quick Play Guide
 
-1. **Start the game** - Your character spawns in a starter town
+1. **Start the game** - Your character spawns in Central Haven (starter town)
 2. **Find green cubes** (goblins) - Click to attack
-3. **Gain XP** - Level up Attack, Strength, Defense, Constitution
+3. **Gain XP** - Level up Attack, Strength, Defense, Constitution, Prayer, Agility
 4. **Collect loot** - Coins and equipment drops
 5. **Visit shops** - Buy tools (hatchet, fishing rod, tinderbox, hammer)
 6. **Train gathering skills** - Chop trees, mine ore, fish
 7. **Train artisan skills** - Light fires, cook food, smelt bars, smith equipment
-8. **Press F5** - Toggle FPS debug panel to monitor performance
+8. **Challenge players** - Visit the Duel Arena to challenge other players to PvP combat
+9. **Press F5** - Toggle FPS debug panel to monitor performance
 
 ### Controls & Keybinds
 
@@ -133,9 +179,10 @@ bun start                 # Start game server (cd packages/server && bun run sta
 
 # Development  
 bun run dev               # All packages with hot reload
-bun run dev:ai            # With AI agents
+bun run dev:ai            # Game + ElizaOS agents (concurrently)
 bun run dev:client        # Client only
 bun run dev:server        # Server only
+bun run dev:app           # Tauri desktop app
 bun run dev:turbo         # Turbo-based dev (excludes asset-forge)
 bun run dev:reset         # Clean rebuild and restart
 

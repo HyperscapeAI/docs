@@ -4,9 +4,57 @@ description: "Monorepo structure and package overview"
 icon: "boxes"
 ---
 
+## Deployment Architecture
+
+Hyperscape uses a modern cloud-native architecture with separate services:
+
+```mermaid
+flowchart LR
+    A[Client Browser] -->|HTTPS| B[Cloudflare Pages]
+    A -->|WSS| C[Railway API]
+    A -->|HTTPS| D[Cloudflare R2 CDN]
+    C -->|Fetches manifests| D
+    C -->|Queries| E[PostgreSQL]
+    
+    subgraph "Frontend"
+        B[Cloudflare Pages<br/>hyperscape.club]
+    end
+    
+    subgraph "Backend"
+        C[Railway<br/>api.hyperscape.club]
+        E[PostgreSQL<br/>Railway]
+    end
+    
+    subgraph "Assets"
+        D[Cloudflare R2<br/>assets.hyperscape.club]
+    end
+```
+
+### Production Stack
+
+| Component | Service | URL | Purpose |
+|-----------|---------|-----|---------|
+| **Frontend** | Cloudflare Pages | hyperscape.club | React SPA, static assets |
+| **API/WebSocket** | Railway | api.hyperscape.club | Game server, real-time sync |
+| **Database** | Railway PostgreSQL | (internal) | Player data, world state |
+| **Assets/CDN** | Cloudflare R2 | assets.hyperscape.club | 3D models, manifests, audio |
+
+### Staging Stack
+
+| Component | Service | URL | Purpose |
+|-----------|---------|-----|---------|
+| **Frontend** | Cloudflare Pages | staging.hyperscape.club | Staging frontend |
+| **API/WebSocket** | Railway | staging-api.hyperscape.club | Staging server |
+| **Database** | Railway PostgreSQL | (internal) | Staging database |
+| **Assets/CDN** | Cloudflare R2 | staging-assets.hyperscape.club | Staging assets |
+
+<Info>
+  The staging environment is a complete isolated instance for testing changes before production deployment.
+</Info>
+
 ## Monorepo Structure
 
-Hyperscape is a **Turbo monorepo** with 7 packages:
+Hyperscape is a **Turbo monorepo** with 8 packages:
 
 ```
 hyperscape/
@@ -17,11 +65,13 @@ hyperscape/
 │   ├── plugin-hyperscape/   # @hyperscape/plugin-hyperscape - ElizaOS AI agent plugin
 │   ├── physx-js-webidl/     # @hyperscape/physx-js-webidl - PhysX WASM bindings
 │   ├── asset-forge/         # 3d-asset-forge - AI asset generation (Elysia + React Three Fiber)
+│   ├── website/             # @hyperscape/website - Marketing website (Next.js)
 │   └── docs-site/           # Documentation (Docusaurus)
 ├── assets/                  # Shared game assets
 ├── world/                   # World configuration and manifests
 └── scripts/                 # Build and dev scripts
 ```
+
 
 ## Build Dependency Graph
 
@@ -46,21 +96,35 @@ flowchart TD
 The core Hyperscape 3D engine containing:
 
 - **Entity Component System (ECS)**: Game object architecture
-- **Three.js integration**: 3D rendering (v0.180.0)
+- **Three.js integration**: 3D rendering (v0.180.0) with WebGPU/WebGL support
 - **PhysX bindings**: Physics simulation via WASM
 - **Networking**: Real-time multiplayer sync via WebSockets
-- **React UI components**: In-game interface with styled-components
 - **Game data**: Manifests for NPCs, items, world areas
+- **Game systems**: Combat, economy, skills, trading, terrain
+
+**Rendering Backend:**
+- **WebGPU** (preferred): Modern GPU API with TSL post-processing
+- **WebGL fallback**: For environments without WebGPU (e.g., WKWebView in Tauri)
+- Automatic detection and graceful degradation
+- Settings panel displays active backend (WebGPU/WebGL)
 
 **Key directories:**
 ```
 packages/shared/src/
 ├── components/     # ECS components
+├── constants/      # Game constants (combat, equipment, gathering, etc.)
 ├── core/           # Core engine classes
-├── data/           # Game manifests (npcs.ts, items.ts, etc.)
+├── data/           # Game manifests (npcs.ts, items.ts, world-areas.ts, etc.)
 ├── entities/       # Entity definitions (PlayerEntity, MobEntity)
+│   ├── player/     # PlayerEntity, PlayerLocal, PlayerRemote
+│   ├── npc/        # MobEntity, NPCEntity
+│   ├── world/      # BankEntity, FurnaceEntity, ResourceEntity, etc.
+│   └── managers/   # AIStateMachine, AggroManager, CombatStateManager, etc.
 ├── physics/        # PhysX wrapper
-├── systems/        # ECS systems (combat, economy, etc.)
+├── systems/        # ECS systems
+│   ├── client/     # Client-only (rendering, input, audio)
+│   ├── server/     # Server-only (persistence, LiveKit)
+│   └── shared/     # Shared systems (combat, economy, skills, trading, terrain)
 └── types/          # TypeScript types
 ```
 
@@ -70,16 +134,28 @@ Game server built with:
 
 - **Fastify 5**: HTTP API with rate limiting
 - **WebSockets**: Real-time game state via `@fastify/websocket`
-- **PostgreSQL/SQLite**: Database persistence
+- **PostgreSQL**: Database persistence (Drizzle ORM)
 - **LiveKit**: Voice chat integration
+- **Trading System**: Player-to-player trading with atomic swaps
+- **Social System**: Friend management and private messaging
 
 **Key directories:**
 ```
 packages/server/src/
-├── database/       # Database schema and queries
+├── database/       # Database schema and repositories
+│   ├── repositories/  # Data access layer (Inventory, Bank, Character, etc.)
+│   ├── migrations/    # Database migrations
+│   └── schema.ts      # Drizzle schema definitions
 ├── infrastructure/ # Docker, CDN configuration
 ├── startup/        # Server initialization
 ├── systems/        # Server-specific systems
+│   ├── ServerNetwork/  # Network handlers
+│   │   ├── handlers/   # Packet handlers (trade, bank, combat, friends, etc.)
+│   │   ├── PendingTradeManager.ts  # Walk-to-trade behavior
+│   │   ├── FollowManager.ts        # Follow player behavior
+│   │   └── InteractionSessionManager.ts  # UI session tracking
+│   ├── TradingSystem/  # Trade session management
+│   └── TickSystem.ts   # Game tick processing
 └── index.ts        # Entry point
 ```
 
@@ -90,6 +166,8 @@ Web client featuring:
 - **Vite**: Fast development builds with HMR
 - **React 19**: UI framework
 - **Three.js**: 3D rendering
+- **@dnd-kit**: Accessible drag-and-drop
+- **Zustand**: State management
 - **Capacitor**: iOS/Android mobile builds
 - **Privy**: Authentication
 - **Farcaster**: Miniapp SDK integration
@@ -98,33 +176,71 @@ Web client featuring:
 ```
 packages/client/src/
 ├── auth/           # Privy authentication
-├── components/     # React UI components
 ├── game/           # Game loop and logic
+│   ├── components/ # Game-specific components (chat, currency, dialog, equipment, map, quest, settings, skilltree)
+│   ├── dashboard/  # Agent dashboard
+│   ├── hud/        # HUD elements (StatusBars, Minimap, XPProgressOrb, etc.)
+│   ├── interface/  # Interface manager and layout
+│   ├── panels/     # Game panels (Inventory, Bank, Combat, Trade, etc.)
+│   └── systems/    # Client-side game systems
 ├── hooks/          # React hooks
+├── lib/            # Networking, utilities, error handling
 ├── screens/        # UI screens (login, game, etc.)
+├── ui/             # UI system (windows, tabs, drag-and-drop, theming)
+│   ├── components/ # Reusable UI components (Window, TabBar, Portal, etc.)
+│   ├── controls/   # Form controls (Slider, Toggle, Select, etc.)
+│   ├── core/       # Core UI systems (drag-and-drop, window management, presets)
+│   ├── stores/     # Zustand state stores (windowStore, themeStore, etc.)
+│   ├── theme/      # Theme system
+│   └── types/      # UI type definitions
+├── utils/          # Helper functions
 └── index.tsx       # React entry point
 ```
+
 
 ### plugin-hyperscape (`@hyperscape/plugin-hyperscape`)
 
 ElizaOS plugin enabling AI agents to:
 
-- Perform actions (combat, skills, movement, banking)
+- Perform actions (combat, skills, movement, banking, social)
 - Query world state via 7 providers (goal, gameState, inventory, nearbyEntities, skills, equipment, availableActions)
 - Make LLM-driven decisions with Anthropic, OpenAI, or OpenRouter
 - Play autonomously as real players with full WebSocket connectivity
+- Train all 12 skills including Agility (passive movement-based XP)
+
+**Type System:**
+
+The plugin uses **local type definitions** instead of importing from `@hyperscape/shared` to satisfy ElizaOS's `isolatedModules: true` requirement. This resolves 70+ TypeScript build errors.
 
 **Key Dependencies:**
 
-```typescript
-// From packages/plugin-hyperscape/package.json
-"@elizaos/core": "^1.2.9"
-"@elizaos/plugin-anthropic": "^1.5.12"
-"@elizaos/plugin-openai": "1.5.16"
-"@elizaos/plugin-openrouter": "^1.5.15"
-"@elizaos/plugin-sql": "^1.6.4"
-"@hyperscape/shared": "workspace:*"
+```json
+{
+  "@elizaos/core": "^1.2.9",
+  "@elizaos/plugin-anthropic": "^1.5.12",
+  "@elizaos/plugin-openai": "1.5.16",
+  "@elizaos/plugin-openrouter": "^1.5.15",
+  "@hyperscape/shared": "workspace:*",
+  "three": "^0.181.0"
+}
 ```
+
+### website (`@hyperscape/website`)
+
+Marketing website built with:
+
+- **Next.js 15**: React framework with static export
+- **React 19**: UI framework
+- **Three.js**: 3D rendering and effects
+- **Tailwind CSS 4**: Utility-first styling
+- **Framer Motion**: Animations
+- **GSAP**: Advanced animations
+
+**Pages:**
+- Landing page with hero, features, and CTA
+- $GOLD token page with scroll design
+
+**Deployment:** Static site export compatible with Vercel, Netlify, Cloudflare Pages
 
 ### asset-forge (`3d-asset-forge`)
 
@@ -157,11 +273,16 @@ packages/shared/src/systems/shared/
 ├── economy/        # Banks, shops, trading
 ├── entities/       # Entity management
 └── interaction/    # Player interactions
+
+packages/server/src/systems/
+├── DuelSystem/     # PvP duel arena system
+├── ServerNetwork/  # Network and authentication
+└── ...
 ```
 
 ### Manifest-Driven Content
 
-Game content is defined in JSON manifest files in `packages/server/world/assets/manifests/`:
+Game content is defined in JSON manifest files. In production, manifests are fetched from the CDN at server startup and cached locally in `packages/server/world/assets/manifests/`:
 
 | File | Purpose |
 |------|---------|
@@ -176,16 +297,64 @@ Game content is defined in JSON manifest files in `packages/server/world/assets/
 | `recipes/smelting.json` | Furnace recipes |
 | `recipes/smithing.json` | Anvil recipes |
 | `recipes/cooking.json` | Cooking recipes |
+| `quests.json` | Quest definitions with stages and rewards |
 | `tier-requirements.json` | Centralized level requirements |
 | `skill-unlocks.json` | Skill progression milestones |
+| `quests.json` | Quest definitions with stages and rewards |
 | `stores.json` | Shop inventories |
-| `world-areas.json` | Zone configuration |
+| `world-areas.json` | Zone configuration with station spawns |
 | `biomes.json` | Biome definitions |
 | `vegetation.json` | Procedural vegetation |
 | `stations.json` | Station models and configurations |
 | `model-bounds.json` | Auto-generated model footprints (build-time) |
 
 Add new content by editing these JSON files—no code changes required.
+
+## Asset Serving Architecture
+
+### Development
+
+In development, assets are served from a local Docker CDN:
+
+```bash
+bun run cdn:up  # Starts nginx on port 8080
+```
+
+**Asset flow:**
+1. Client requests asset: `http://localhost:8080/models/goblin/goblin.vrm`
+2. nginx serves from `packages/server/world/assets/`
+3. Manifests loaded from local filesystem
+
+### Production
+
+In production, assets are served from Cloudflare R2:
+
+```bash
+# Automatic upload via GitHub Actions
+# .github/workflows/deploy-cloudflare.yml
+```
+
+**Asset flow:**
+1. Client requests asset: `https://assets.hyperscape.club/models/goblin/goblin.vrm`
+2. Cloudflare R2 serves with global CDN caching
+3. Server fetches manifests from R2 at startup
+4. Manifests cached locally in `packages/server/world/assets/manifests/`
+
+**Manifest fetching:**
+```typescript
+// From packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Files fetched** (30+ manifests):
+- `npcs.json`, `stores.json`, `world-areas.json`, `prayers.json`
+- `items/*.json` (weapons, tools, resources, food, misc)
+- `gathering/*.json` (woodcutting, mining, fishing)
+- `recipes/*.json` (cooking, firemaking, smelting, smithing)
+
+### Staging
+
+Staging uses a separate R2 bucket (`hyperscape-assets-staging`) to isolate test content from production.
 
 ## Build Pipeline
 
@@ -226,3 +395,55 @@ bun run extract-bounds
 <Info>
 The bounds extraction is **cached** - it only re-runs when GLB files or the script changes. This keeps builds fast while ensuring collision data stays in sync with models.
 </Info>
+
+## Deployment Architecture
+
+### Railway Deployment
+
+Hyperscape server deploys to Railway with automated CI/CD:
+
+**Configuration Files**:
+- **`nixpacks.toml`**: Nixpacks build configuration (recommended)
+- **`Dockerfile.server`**: Multi-stage Docker build (alternative)
+- **`railway.server.json`**: Railway service configuration
+- **`.railwayignore`**: Excludes large directories from upload
+- **`.github/workflows/deploy-railway.yml`**: Automated deployment workflow
+
+**Build Process**:
+1. Install system dependencies (python3, make, g++, git, cairo, pango)
+2. Install Node dependencies with `bun install --frozen-lockfile`
+3. Clone assets repository (manifests needed by DataManager)
+4. Build packages in order: shared → server
+5. Start server with `bun dist/index.js`
+
+**Asset Handling**:
+- Assets are **not uploaded** to Railway (excluded via `.railwayignore`)
+- Assets are **cloned during build** from GitHub assets repository
+- Assets are **served from CDN** in production (not bundled with server)
+- `ensure-assets.mjs` detects CI environments and skips download
+
+**Environment Detection**:
+```javascript
+function isCI() {
+  return !!(
+    process.env.CI ||
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_SERVICE_ID ||
+    process.env.SKIP_ASSETS
+  );
+}
+```
+
+### Split Deployment Model
+
+Hyperscape supports split deployments:
+
+- **Server**: Railway, Fly.io, or Docker host
+- **Client**: Vercel, Netlify, or static hosting
+- **Database**: PostgreSQL (Neon, Railway, or self-hosted)
+- **Assets**: CDN or object storage (R2, S3)
+
+**Environment Variable Coordination**:
+- `PRIVY_APP_ID` (server) must match `PUBLIC_PRIVY_APP_ID` (client)
+- Client's `PUBLIC_WS_URL` and `PUBLIC_API_URL` must point to server
+- Both must use same `PUBLIC_CDN_URL` for assets

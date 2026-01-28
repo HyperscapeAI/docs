@@ -16,12 +16,42 @@ Network code lives in `packages/shared/src/systems/client/ClientNetwork.ts` (264
 
 ```mermaid
 flowchart LR
-    A[Client 60 FPS] -->|moveRequest| B[Server 600ms Ticks]
-    B -->|entityModified| A
-    B -->|snapshot| A
-    A -->|attackEntity| B
-    B -->|damageDealt| A
+    A[Client Browser] -->|WSS| B[Railway Server]
+    A -->|HTTPS| C[Cloudflare Pages]
+    A -->|HTTPS| D[Cloudflare R2]
+    B -->|Fetches| D
+    
+    subgraph "Client 60 FPS"
+        A
+    end
+    
+    subgraph "Server 600ms Ticks"
+        B
+    end
+    
+    subgraph "Assets"
+        D[CDN<br/>Manifests + Models]
+    end
 ```
+
+### Connection URLs
+
+| Environment | WebSocket URL | HTTP API URL |
+|-------------|---------------|--------------|
+| **Development** | `ws://localhost:5555/ws` | `http://localhost:5555` |
+| **Production** | `wss://api.hyperscape.club/ws` | `https://api.hyperscape.club` |
+| **Staging** | `wss://staging-api.hyperscape.club/ws` | `https://staging-api.hyperscape.club` |
+
+### CORS Configuration
+
+The server automatically allows connections from:
+
+- Production: `https://hyperscape.club`, `https://www.hyperscape.club`
+- Staging: `https://staging.hyperscape.club`
+- Preview: `https://*.hyperscape.pages.dev`
+- Development: `http://localhost:*` (any port)
+
+See [Configuration](/devops/configuration#cors-configuration) for full CORS details.
 
 | Layer | Rate | Purpose |
 |-------|------|---------|
@@ -107,6 +137,11 @@ Entity updates use **abbreviated keys** to minimize bandwidth:
 | `catchFish` | Start fishing | `{ spotId }` |
 | `lightFire` | Light fire | `{ logId }` |
 | `cookFood` | Cook food | `{ foodId, fireId }` |
+| `getQuestList` | Fetch quest list | `{}` |
+| `getQuestDetail` | Fetch quest details | `{ questId }` |
+| `questAccept` | Accept quest | `{ questId }` |
+| `xpLampUse` | Use XP lamp | `{ itemId, slot, skillId, xpAmount }` |
+| `dialogueContinue` | Continue dialogue | `{ npcId }` |
 
 ### Server → Client
 
@@ -123,6 +158,12 @@ Entity updates use **abbreviated keys** to minimize bandwidth:
 | `chatMessage` | Incoming chat | `{ sender, message }` |
 | `damageDealt` | Combat damage | `{ targetId, damage, didHit }` |
 | `deathNotification` | Entity died | `{ entityId, killerId }` |
+| `questList` | Quest list response | `{ quests[], questPoints }` |
+| `questDetail` | Quest detail response | `{ id, name, status, stages[], ... }` |
+| `questStartConfirm` | Quest accept screen | `{ questId, questName, requirements, rewards }` |
+| `questProgressed` | Quest progress update | `{ questId, stage, progress }` |
+| `questCompleted` | Quest completion | `{ questId, questName, rewards }` |
+| `xpDrop` | XP gain notification | `{ skill, xpGained, newXp, newLevel }` |
 
 ---
 
@@ -360,6 +401,57 @@ export const NETWORK_CONSTANTS = {
   CONNECTION_TIMEOUT_MS: 10000,   // Max time to connect
   IDLE_TIMEOUT_MS: 300000,        // Disconnect after 5 min idle
 };
+```
+
+---
+
+## Rate Limiting
+
+Network handlers use **sliding window rate limiters** to prevent abuse:
+
+```typescript
+// From ServerNetwork/services/SlidingWindowRateLimiter.ts
+
+// Quest handlers
+getQuestListRateLimiter()    // 5 requests/sec
+getQuestDetailRateLimiter()  // 10 requests/sec
+getQuestAcceptRateLimiter()  // 3 requests/sec
+
+// Inventory handlers
+getPickupRateLimiter()       // 5 requests/sec
+getConsumeRateLimiter()      // 3 requests/sec
+getCoinPouchRateLimiter()    // 5 requests/sec
+
+// Combat handlers
+getAttackRateLimiter()       // 10 requests/sec
+getPrayerRateLimiter()       // 5 requests/sec
+
+// Movement handlers
+getMoveRateLimiter()         // 30 requests/sec
+getFollowRateLimiter()       // 5 requests/sec
+```
+
+**Features:**
+- Per-player tracking
+- Sliding window algorithm (more accurate than fixed window)
+- Automatic stale entry cleanup
+- Configurable cleanup interval (60s default)
+
+**Example:**
+
+```typescript
+// Handler with rate limiting
+export function handleQuestAccept(socket: ServerSocket, data: { questId: string }, world: World): void {
+  const playerId = getPlayerId(socket);
+  
+  // Rate limit check
+  if (!getQuestAcceptRateLimiter().check(playerId)) {
+    logger.debug(`Rate limit exceeded for ${playerId} on questAccept`);
+    return;
+  }
+  
+  // Process request...
+}
 ```
 
 ---

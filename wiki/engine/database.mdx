@@ -23,10 +23,17 @@ Database schema is defined in `packages/server/src/database/schema.ts`.
 | `equipment` | Equipped items | EquipmentRepository |
 | `bank_storage` | Bank storage (480 slots) | BankRepository |
 | `bank_tabs` | Custom bank tab configuration | BankRepository |
+| `quest_progress` | Player quest state tracking | QuestRepository |
+| `quest_audit_log` | Quest action audit trail | QuestRepository |
 | `world_chunks` | Persistent world modifications | WorldRepository |
 | `player_sessions` | Login/logout tracking | SessionRepository |
 | `npc_kills` | Kill statistics | StatsRepository |
 | `death_locks` | Death state for reconnects | PlayerDeathSystem |
+| `quest_progress` | Player quest progression | QuestRepository |
+| `quest_audit_log` | Quest action audit trail | QuestRepository |
+| `activity_log` | Player activity logging | ActivityLogRepository |
+| `trades` | Trade history | TradingSystem |
+| `user_bans` | Moderation bans | AdminSystem |
 
 ---
 
@@ -66,39 +73,64 @@ export const characters = pgTable('characters', {
   positionY: real('position_y').notNull().default(0),
   positionZ: real('position_z').notNull().default(0),
 
-  // Skill levels (individual columns for efficient queries)
+  // Combat skill levels
   attackLevel: integer('attackLevel').default(1),
   strengthLevel: integer('strengthLevel').default(1),
   defenseLevel: integer('defenseLevel').default(1),
   constitutionLevel: integer('constitutionLevel').default(10),
   rangedLevel: integer('rangedLevel').default(1),
+  
+  // Prayer skill (added in PR #563)
   prayerLevel: integer('prayerLevel').default(1),
+  
+  // Gathering skill levels
   woodcuttingLevel: integer('woodcuttingLevel').default(1),
   miningLevel: integer('miningLevel').default(1),
   fishingLevel: integer('fishingLevel').default(1),
+  
+  // Artisan skill levels
   firemakingLevel: integer('firemakingLevel').default(1),
   cookingLevel: integer('cookingLevel').default(1),
   smithingLevel: integer('smithingLevel').default(1),
+  agilityLevel: integer('agilityLevel').default(1),
 
-  // Skill XP (individual columns)
+  // Combat skill XP
   attackXp: integer('attackXp').default(0),
   strengthXp: integer('strengthXp').default(0),
   defenseXp: integer('defenseXp').default(0),
   constitutionXp: integer('constitutionXp').default(1154),
   rangedXp: integer('rangedXp').default(0),
+  
+  // Prayer skill XP (added in PR #563)
   prayerXp: integer('prayerXp').default(0),
+  
+  // Gathering skill XP
   woodcuttingXp: integer('woodcuttingXp').default(0),
   miningXp: integer('miningXp').default(0),
   fishingXp: integer('fishingXp').default(0),
+  
+  // Artisan skill XP
   firemakingXp: integer('firemakingXp').default(0),
   cookingXp: integer('cookingXp').default(0),
   smithingXp: integer('smithingXp').default(0),
+  agilityXp: integer('agilityXp').default(0),
+
+  // Prayer
+  prayerPoints: integer('prayerPoints').default(1),
+  prayerMaxPoints: integer('prayerMaxPoints').default(1),
+  activePrayers: text('activePrayers').default('[]'),
+
+  // Quest progression
+  questPoints: integer('questPoints').default(0),
 
   // Combat state
   health: integer('health').default(100),
   maxHealth: integer('maxHealth').default(100),
   combatState: text('combat_state').default('idle'), // idle, fighting, dead
   lastCombatTick: bigint('last_combat_tick', { mode: 'number' }),
+
+  // Quest progression
+  questPoints: integer('questPoints').default(0).notNull(),
 
   // Timestamps
   lastLogin: bigint('last_login', { mode: 'number' }),
@@ -247,6 +279,70 @@ export const playerSessions = pgTable('player_sessions', {
 
 ---
 
+## Quest System Tables
+
+### Quest Progress
+
+Tracks player quest state:
+
+```typescript
+export const questProgress = pgTable('quest_progress', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),              // Quest identifier from manifest
+  status: text('status').default('not_started').notNull(),
+  currentStage: text('currentStage'),              // Current stage ID
+  stageProgress: jsonb('stageProgress').default({}), // e.g., {"kills": 7}
+  startedAt: bigint('startedAt', { mode: 'number' }),
+  completedAt: bigint('completedAt', { mode: 'number' }),
+}, (table) => ({
+  uniquePlayerQuest: unique().on(table.playerId, table.questId),
+  playerIdx: index('idx_quest_progress_player').on(table.playerId),
+  statusIdx: index('idx_quest_progress_status').on(table.playerId, table.status),
+}));
+```
+
+**Status Values:**
+- `not_started` — Quest not started
+- `in_progress` — Quest active
+- `completed` — Quest finished
+
+<Info>
+`ready_to_complete` is a **derived status** computed at runtime when objectives are met. It's not stored in the database.
+</Info>
+
+### Quest Audit Log
+
+Immutable audit trail for security and debugging:
+
+```typescript
+export const questAuditLog = pgTable('quest_audit_log', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),
+  action: text('action').notNull(),                // "started", "progressed", "completed"
+  questPointsAwarded: integer('questPointsAwarded').default(0),
+  stageId: text('stageId'),
+  stageProgress: jsonb('stageProgress').default({}),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+  metadata: jsonb('metadata').default({}),
+}, (table) => ({
+  playerIdx: index('idx_quest_audit_log_player').on(table.playerId),
+  questIdx: index('idx_quest_audit_log_quest').on(table.questId),
+  timestampIdx: index('idx_quest_audit_log_timestamp').on(table.timestamp),
+  actionIdx: index('idx_quest_audit_log_action').on(table.action),
+}));
+```
+
+**Features:**
+- Immutable log (no updates or deletes)
+- Used for fraud detection and debugging
+- Indexed for efficient queries by player, quest, and timestamp
+
+---
+
 ## Statistics Tables
 
 ### NPC Kills
@@ -267,6 +363,73 @@ export const npcKillsIndexes = {
     .on(npcKills.characterId, npcKills.npcId),
 };
 ```
+
+---
+
+## Quest System Tables
+
+### quest_progress
+
+Tracks player quest state:
+
+```typescript
+export const questProgress = pgTable('quest_progress', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),
+  status: text('status').default('not_started').notNull(),
+  currentStage: text('currentStage'),
+  stageProgress: jsonb('stageProgress').default({}),
+  startedAt: bigint('startedAt', { mode: 'number' }),
+  completedAt: bigint('completedAt', { mode: 'number' }),
+}, (table) => ({
+  uniquePlayerQuest: unique().on(table.playerId, table.questId),
+  playerIdx: index('idx_quest_progress_player').on(table.playerId),
+  statusIdx: index('idx_quest_progress_status').on(table.playerId, table.status),
+}));
+```
+
+**Key Features**:
+- UNIQUE constraint on `(playerId, questId)` prevents duplicate progress entries
+- CASCADE DELETE cleans up on character deletion
+- `stageProgress` JSONB stores flexible progress data (e.g., `{"kills": 7, "copper_ore": 3}`)
+- `status` values: `not_started`, `in_progress`, `completed`
+
+<Info>
+  `ready_to_complete` is a **derived status** computed by QuestSystem when `status === "in_progress"` AND the current stage objective is met. It's not stored in the database.
+</Info>
+
+### quest_audit_log
+
+Immutable audit trail for security and analytics:
+
+```typescript
+export const questAuditLog = pgTable('quest_audit_log', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),
+  action: text('action').notNull(),  // "started", "progressed", "completed"
+  questPointsAwarded: integer('questPointsAwarded').default(0),
+  stageId: text('stageId'),
+  stageProgress: jsonb('stageProgress').default({}),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+  metadata: jsonb('metadata').default({}),
+}, (table) => ({
+  playerIdx: index('idx_quest_audit_log_player').on(table.playerId),
+  questIdx: index('idx_quest_audit_log_quest').on(table.questId),
+  playerQuestIdx: index('idx_quest_audit_log_player_quest').on(table.playerId, table.questId),
+  timestampIdx: index('idx_quest_audit_log_timestamp').on(table.timestamp),
+  actionIdx: index('idx_quest_audit_log_action').on(table.action),
+}));
+```
+
+**Use Cases**:
+- Fraud detection and investigation
+- Debugging quest progression bugs
+- Analytics for game design
+- Customer support inquiries
 
 ---
 
@@ -389,6 +552,11 @@ bunx drizzle-kit push
 
 | Migration | Description |
 |-----------|-------------|
+| `0021_add_quest_audit_log.sql` | Added quest audit logging table |
+| `0020_add_trading_activity_bans.sql` | Added trading, activity log, and user bans tables |
+| `0019_add_quest_progress.sql` | Added quest progression tracking |
+| `0018_add_agility_skill.sql` | Added `agilityLevel` and `agilityXp` columns |
+| `0016_add_prayer_system.sql` | Added prayer points and active prayers |
 | `0015_add_smithing_skill.sql` | Added `smithingLevel` and `smithingXp` columns |
 | `0014_add_mining_skill.sql` | Added `miningLevel` and `miningXp` columns |
 | `0013_add_auto_retaliate.sql` | Added auto-retaliate preference |
@@ -397,6 +565,151 @@ bunx drizzle-kit push
 | `0010_add_player_deaths.sql` | Added death tracking |
 
 Migrations are located in `packages/server/src/database/migrations/`.
+
+---
+
+## Quest System Tables
+
+### quest_progress
+
+Tracks player quest progression:
+
+```typescript
+export const questProgress = pgTable('quest_progress', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),
+  status: text('status').default('not_started').notNull(),
+  currentStage: text('currentStage'),
+  stageProgress: jsonb('stageProgress').default({}),
+  startedAt: bigint('startedAt', { mode: 'number' }),
+  completedAt: bigint('completedAt', { mode: 'number' }),
+}, (table) => ({
+  uniquePlayerQuest: unique().on(table.playerId, table.questId),
+  playerIdx: index('idx_quest_progress_player').on(table.playerId),
+  statusIdx: index('idx_quest_progress_status').on(table.playerId, table.status),
+}));
+```
+
+**Status Values**:
+- `not_started` — Quest not yet started
+- `in_progress` — Quest active, objectives incomplete
+- `completed` — Quest finished, rewards claimed
+
+**Note**: `ready_to_complete` is a derived status (computed when `status === "in_progress"` AND current stage objective is met).
+
+**Stage Progress Format**:
+```json
+{
+  "kills": 7,              // Kill stage progress
+  "copper_ore": 3,         // Gather stage progress (by item ID)
+  "fire_created": 1        // Interact stage progress
+}
+```
+
+### quest_audit_log
+
+Immutable audit trail for quest actions:
+
+```typescript
+export const questAuditLog = pgTable('quest_audit_log', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  questId: text('questId').notNull(),
+  action: text('action').notNull(),  // "started", "progressed", "completed"
+  questPointsAwarded: integer('questPointsAwarded').default(0),
+  stageId: text('stageId'),
+  stageProgress: jsonb('stageProgress').default({}),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+  metadata: jsonb('metadata').default({}),
+}, (table) => ({
+  playerIdx: index('idx_quest_audit_log_player').on(table.playerId),
+  questIdx: index('idx_quest_audit_log_quest').on(table.questId),
+  timestampIdx: index('idx_quest_audit_log_timestamp').on(table.timestamp),
+  actionIdx: index('idx_quest_audit_log_action').on(table.action),
+}));
+```
+
+**Use Cases**:
+- Fraud detection and investigation
+- Debugging quest progression bugs
+- Analytics for game design
+- Customer support inquiries
+
+---
+
+## Activity & Moderation Tables
+
+### activity_log
+
+Tracks player actions for admin panel:
+
+```typescript
+export const activityLog = pgTable('activity_log', {
+  id: serial('id').primaryKey(),
+  playerId: text('playerId').notNull()
+    .references(() => characters.id, { onDelete: 'cascade' }),
+  eventType: text('eventType').notNull(),
+  action: text('action').notNull(),
+  entityType: text('entityType'),
+  entityId: text('entityId'),
+  details: jsonb('details').default({}),
+  position: jsonb('position'),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+}, (table) => ({
+  playerIdx: index('idx_activity_log_player').on(table.playerId),
+  timestampIdx: index('idx_activity_log_timestamp').on(table.timestamp),
+  eventTypeIdx: index('idx_activity_log_event_type').on(table.eventType),
+}));
+```
+
+### trades
+
+Trade transaction history:
+
+```typescript
+export const trades = pgTable('trades', {
+  id: serial('id').primaryKey(),
+  initiatorId: text('initiatorId')
+    .references(() => characters.id, { onDelete: 'set null' }),
+  receiverId: text('receiverId')
+    .references(() => characters.id, { onDelete: 'set null' }),
+  status: text('status').notNull(),  // "pending", "accepted", "declined", "completed"
+  initiatorItems: jsonb('initiatorItems').default([]),
+  receiverItems: jsonb('receiverItems').default([]),
+  initiatorCoins: integer('initiatorCoins').default(0),
+  receiverCoins: integer('receiverCoins').default(0),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+}, (table) => ({
+  initiatorIdx: index('idx_trades_initiator').on(table.initiatorId),
+  receiverIdx: index('idx_trades_receiver').on(table.receiverId),
+  timestampIdx: index('idx_trades_timestamp').on(table.timestamp),
+}));
+```
+
+### user_bans
+
+Moderation ban records:
+
+```typescript
+export const userBans = pgTable('user_bans', {
+  id: serial('id').primaryKey(),
+  bannedUserId: text('bannedUserId').notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  bannedByUserId: text('bannedByUserId').notNull()
+    .references(() => users.id, { onDelete: 'set null' }),
+  reason: text('reason'),
+  expiresAt: bigint('expiresAt', { mode: 'number' }),
+  createdAt: bigint('createdAt', { mode: 'number' }).notNull(),
+  active: integer('active').default(1).notNull(),
+}, (table) => ({
+  bannedUserIdx: index('idx_user_bans_banned_user').on(table.bannedUserId),
+  activeIdx: index('idx_user_bans_active').on(table.active),
+  activeBannedIdx: index('idx_user_bans_active_banned').on(table.active, table.bannedUserId),
+}));
+```
 
 ---
 

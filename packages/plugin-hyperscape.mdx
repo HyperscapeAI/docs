@@ -32,46 +32,63 @@ packages/plugin-hyperscape/
 │   ├── systems/        # Agent systems
 │   ├── templates/      # LLM prompts
 │   ├── testing/        # Test utilities
-│   ├── types/          # TypeScript types
+│   ├── types/          # TypeScript types (local type definitions)
+│   │   ├── core-types.ts      # Local World, Entity, System, Player types
+│   │   ├── core-interfaces.ts # Agent interfaces
+│   │   ├── external-libs.ts   # THREE and PhysX types
+│   │   └── system-types.ts    # System interfaces
 │   ├── utils/          # Helper functions
 │   ├── index.ts        # Plugin entry
 │   └── service.ts      # Main service
 └── .env.example        # Environment template
 ```
 
+<Info>
+**Type System (PR #629)**: The plugin now defines core types locally instead of importing from `@hyperscape/shared` to resolve 70+ TypeScript build errors. This ensures compatibility with ElizaOS's `isolatedModules` requirement.
+</Info>
+
 ## Actions
 
 Agent capabilities are defined in `src/actions/`:
 
 ```typescript
-// From packages/plugin-hyperscape/src/index.ts (lines 161-188)
+// From packages/plugin-hyperscape/src/index.ts
 actions: [
-  // Movement
+  // Movement (6 actions)
   moveToAction,
   followEntityAction,
   stopMovementAction,
+  exploreAction,
+  approachEntityAction,
+  navigateToAction,
 
-  // Combat
+  // Combat (3 actions)
   attackEntityAction,
   changeCombatStyleAction,
+  fleeAction,
 
-  // Skills
+  // Skills (4 actions)
   chopTreeAction,
   catchFishAction,
   lightFireAction,
   cookFoodAction,
 
-  // Inventory
+  // Inventory (4 actions)
   equipItemAction,
   useItemAction,
   dropItemAction,
+  pickupItemAction,  // NEW in ElizaOS 1.7
 
-  // Social
+  // Social (1 action)
   chatMessageAction,
 
-  // Banking
+  // Banking (2 actions)
   bankDepositAction,
   bankWithdrawAction,
+
+  // Goals (2 actions)
+  setGoalAction,
+  idleAction,
 ],
 ```
 
@@ -79,12 +96,26 @@ actions: [
 
 | Category | Actions | Source File |
 |----------|---------|-------------|
-| **Movement** | moveTo, followEntity, stopMovement | `actions/movement.ts` |
-| **Combat** | attackEntity, changeCombatStyle | `actions/combat.ts` |
+| **Movement** | moveTo, followEntity, stopMovement, explore, approachEntity, navigateTo | `actions/movement.ts`, `actions/autonomous.ts`, `actions/goals.ts` |
+| **Combat** | attackEntity, changeCombatStyle, flee | `actions/combat.ts`, `actions/autonomous.ts` |
 | **Skills** | chopTree, catchFish, lightFire, cookFood | `actions/skills.ts` |
-| **Inventory** | equipItem, useItem, dropItem | `actions/inventory.ts` |
+| **Inventory** | equipItem, useItem, dropItem, **pickupItem** | `actions/inventory.ts` |
 | **Social** | chatMessage | `actions/social.ts` |
 | **Banking** | bankDeposit, bankWithdraw | `actions/banking.ts` |
+| **Goals** | setGoal, idle | `actions/goals.ts`, `actions/autonomous.ts` |
+
+### New Actions in 1.7
+
+**PICKUP_ITEM**: Pick up items from the ground with smart matching
+- Word-boundary scoring prevents false matches
+- Auto-walks to items beyond pickup range
+- Handles server's 200-tile movement limit
+
+**DROP_ITEM Enhancements**:
+- "Drop all" support for entire inventory
+- "Drop all \<type\>" for specific item types
+- Safety limits (max 50 items)
+- Consecutive failure protection
 
 ## Providers
 
@@ -147,14 +178,76 @@ flowchart TD
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `@elizaos/core` | ^1.2.9 | ElizaOS framework |
+| `@elizaos/core` | ^1.7.0 | ElizaOS framework |
 | `@elizaos/plugin-anthropic` | ^1.5.12 | Anthropic LLM |
-| `@elizaos/plugin-openai` | 1.5.16 | OpenAI LLM |
-| `@elizaos/plugin-openrouter` | ^1.5.15 | OpenRouter LLM |
-| `@elizaos/plugin-sql` | ^1.6.4 | SQL database |
+| `@elizaos/plugin-openai` | ^1.6.0 | OpenAI LLM |
+| `@elizaos/plugin-openrouter` | ^1.5.17 | OpenRouter LLM |
+| `@elizaos/plugin-ollama` | ^1.2.4 | Ollama local LLM |
+| `@elizaos/plugin-sql` | ^1.7.0 | SQL database |
 | `@hyperscape/shared` | workspace | Core engine |
 | `ws` | ^8.18.3 | WebSocket client |
 | `zod` | ^3.25.67 | Schema validation |
+
+## Type System
+
+<Warning>
+**Breaking Change (PR #629)**: The plugin now uses **local type definitions** instead of importing from `@hyperscape/shared` to fix TypeScript build errors with `isolatedModules`.
+</Warning>
+
+### Local Type Definitions
+
+Core types are defined in `src/types/core-types.ts`:
+
+```typescript
+// Local type aliases for THREE types
+export type Vector3 = THREEVector3;
+export type Quaternion = THREEQuaternion;
+export type Object3D = THREEObject3D;
+
+// World type as instance type of WorldClass
+export type World = InstanceType<typeof WorldClass>;
+
+// System type based on SystemClass
+export type System = InstanceType<typeof SystemClass>;
+
+// Entity interface defined locally
+export interface Entity {
+  id: string;
+  type: string;
+  data?: Record<string, unknown>;
+  node: {
+    position: Vector3;
+    quaternion: Quaternion;
+    visible?: boolean;
+  };
+  velocity?: Vector3;
+  speed?: number;
+  isMoving?: boolean;
+}
+
+// Player interface extends Entity
+export interface Player extends Entity {
+  username?: string;
+  input?: PlayerInput;
+  stats?: PlayerStats;
+  health?: { current: number; max: number };
+  inventory?: unknown;
+  equipment?: unknown;
+}
+```
+
+### Why Local Types?
+
+The plugin uses `isolatedModules: true` (required by ElizaOS), which prevents importing class values as types. Local type definitions solve this by:
+
+1. Importing THREE types directly from `'three'` package
+2. Defining PhysX types locally (PxVec3, PxTransform, PxQuat)
+3. Using `InstanceType<typeof WorldClass>` for World type
+4. Defining Entity, Player, System interfaces locally
+
+<Info>
+This approach ensures the plugin builds successfully while maintaining type safety and compatibility with ElizaOS.
+</Info>
 
 ## Building
 
@@ -164,15 +257,88 @@ bun run build    # Compile TypeScript
 bun run dev      # Watch mode
 ```
 
+## Dashboard Features
+
+The ElizaOS 1.7 upgrade includes comprehensive dashboard improvements:
+
+### Quick Action Menu
+
+One-click commands for common tasks:
+- 🪓 **Woodcutting** - Chop nearest tree
+- ⛏️ **Mining** - Mine nearest ore
+- 🎣 **Fishing** - Fish at nearest spot
+- ⚔️ **Combat** - Attack nearest enemy
+- 📦 **Pick Up** - Pick up nearby items
+- 🏦 **Bank** - Go to bank
+- ⏹️ **Stop** - Stop current goal immediately
+- ⏸️ **Idle** - Set agent to idle mode
+
+### Stop/Resume Goal Controls
+
+**Stop Button**: Halts agent and prevents auto-goal setting
+- Immediate halt - cancels movement path
+- Paused state UI - shows "Goals Paused"
+- Blocks auto-goals - SET_GOAL actions blocked while paused
+- Chat commands still work - user can send commands
+- Pause persists - agent returns to idle after commands
+
+**API Endpoints**:
+```
+POST /api/agents/:agentId/goal/stop    # Stop goal and pause
+POST /api/agents/:agentId/goal/resume  # Resume autonomous behavior
+```
+
+### Dashboard Panels
+
+**AgentSummaryCard**: Quick overview with combat level, total level, current goal
+**AgentGoalPanel**: Goal progress with time estimates and XP rates
+**AgentSkillsPanel**: Skill levels with session XP tracking
+**AgentActivityPanel**: Recent actions and session stats
+**AgentPositionPanel**: Location with nearby POIs and zone detection
+
+### Rate Limiting Improvements
+
+Dashboard polling intervals increased to prevent 429 errors:
+- AgentSummaryCard: 2s → 10s
+- AgentGoalPanel: 2s → 10s
+- AgentSkillsPanel: 2-5s → 10s
+- AgentActivityPanel: 3s → 10s
+- AgentPositionPanel: 1-3s → 5-10s
+
+All API calls include retry logic with exponential backoff (1s → 2s → 4s).
+
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/index.ts` | Plugin registration |
-| `src/service.ts` | Main service class |
+| `src/services/HyperscapeService.ts` | Main service class |
 | `src/actions/` | All agent actions |
 | `src/providers/` | State providers |
 | `src/templates/` | LLM prompt templates |
+| `src/managers/autonomous-behavior-manager.ts` | Goal management and pause state |
+
+## API Endpoints
+
+### Agent Management
+
+```
+GET  /api/agents/:agentId/goal           # Get current goal
+POST /api/agents/:agentId/goal           # Set new goal
+POST /api/agents/:agentId/goal/stop      # Stop and pause goals
+POST /api/agents/:agentId/goal/resume    # Resume autonomous behavior
+POST /api/agents/:agentId/message        # Send message to agent
+GET  /api/agents/:agentId/quick-actions  # Get quick action menu data
+GET  /api/agents/mapping/:agentId        # Get agent-to-character mapping
+```
+
+### Data Endpoints
+
+```
+GET /api/data/skill-unlocks              # Get skill unlock definitions
+GET /api/characters/:characterId/skills  # Get character skills
+GET /api/characters/:characterId/position # Get character position
+```
 
 ## License
 

@@ -1,21 +1,24 @@
 # ============================================================================
-# Webhook Trigger for Instant Changelog Updates
+# Webhook Trigger for Changelog Updates
 # ============================================================================
 #
-# This workflow is triggered by a repository_dispatch event from the 
-# Hyperscape repo when a new release is published.
+# Appends release content to the current month's changelog file.
 #
-# To enable this:
-# 1. Add this workflow to the docs repo
-# 2. In Hyperscape repo, add a workflow that sends repository_dispatch:
+# To enable in Hyperscape repo, add to release workflow:
 #
-#    - name: Trigger docs changelog update
+#    - name: Trigger docs changelog
 #      uses: peter-evans/repository-dispatch@v3
 #      with:
 #        token: ${{ secrets.DOCS_REPO_TOKEN }}
 #        repository: HyperscapeAI/docs
 #        event-type: release-published
-#        client-payload: '{"tag": "${{ github.event.release.tag_name }}"}'
+#        client-payload: |
+#          {
+#            "release_name": "${{ github.event.release.name }}",
+#            "release_tag": "${{ github.event.release.tag_name }}",
+#            "release_body": "${{ github.event.release.body }}",
+#            "release_date": "${{ github.event.release.published_at }}"
+#          }
 #
 # ============================================================================
 
@@ -26,7 +29,7 @@ on:
     types: [release-published]
 
 jobs:
-  sync:
+  update-changelog:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -36,30 +39,66 @@ jobs:
       - name: Log trigger
         run: |
           echo "🚀 Release webhook received!"
-          echo "   Tag: ${{ github.event.client_payload.tag }}"
+          echo "   Name: ${{ github.event.client_payload.release_name }}"
+          echo "   Tag: ${{ github.event.client_payload.release_tag }}"
 
-      - name: Checkout docs repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Sync changelog
-        run: bun run scripts/sync-changelog.ts
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Commit and push directly
+      - name: Add to monthly changelog
         run: |
-          if git diff --quiet changelog.mdx; then
-            echo "📝 No changes to commit"
-            exit 0
+          NAME="${{ github.event.client_payload.release_name }}"
+          TAG="${{ github.event.client_payload.release_tag }}"
+          BODY="${{ github.event.client_payload.release_body }}"
+          DATE="${{ github.event.client_payload.release_date }}"
+          
+          # Use tag as name if empty
+          [ -z "$NAME" ] || [ "$NAME" = "null" ] && NAME="$TAG"
+          
+          # Parse date
+          YEAR=$(echo "$DATE" | cut -d'-' -f1)
+          MONTH=$(echo "$DATE" | cut -d'-' -f2)
+          DAY=$(echo "$DATE" | cut -d'T' -f1 | cut -d'-' -f3)
+          
+          FILEPATH="changelog/$YEAR-$MONTH.mdx"
+          
+          # Create file if needed
+          if [ ! -f "$FILEPATH" ]; then
+            MONTH_NAME=$(date -d "$YEAR-$MONTH-01" "+%B" 2>/dev/null || echo "Month $MONTH")
+            cat > "$FILEPATH" << EOF
+          ---
+          title: "$MONTH_NAME $YEAR"
+          description: "Updates and releases for $MONTH_NAME $YEAR"
+          ---
+          EOF
           fi
           
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add changelog.mdx
-          git commit -m "docs: add changelog for ${{ github.event.client_payload.tag }}"
-          git push
+          # Append release
+          cat >> "$FILEPATH" << EOF
+
+          ## $NAME ($TAG)
+
+          *Released: $YEAR-$MONTH-$DAY*
+
+          $BODY
+
+          ---
+          EOF
+          
+          echo "✅ Added to $FILEPATH"
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "docs(changelog): add ${{ github.event.client_payload.release_tag }}"
+          title: "📝 Changelog: ${{ github.event.client_payload.release_name }}"
+          body: |
+            Added release **${{ github.event.client_payload.release_tag }}** to changelog.
+            
+            Review and merge when ready.
+          branch: auto/changelog-${{ github.event.client_payload.release_tag }}
+          delete-branch: true
+          labels: |
+            documentation
+            automated

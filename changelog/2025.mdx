@@ -1,0 +1,108 @@
+---
+title: "2025 - Project Foundation"
+description: "August - December 2025 - Initial development and core systems"
+---
+
+<Info>
+The Hyperscape project began development in August 2025. This documents the foundational systems built during the initial development phase.
+</Info>
+
+## Timeline
+
+| Date | Milestone |
+|------|-----------|
+| August 5, 2025 | Initial commit |
+| August 2025 | Refactored RPG into core engine |
+| September 2025 | Terrain snapping, player controller |
+| October 2025 | Skill system, asset-forge integration |
+| October 27, 2025 | First pre-release deployment |
+
+---
+
+## Core Engine
+
+### Entity-Component-System (ECS)
+- Custom ECS architecture for game entities
+- Components: Position, Health, Inventory, Skills, Combat
+- Systems: Movement, Combat, Gathering, Processing
+
+### 3D Rendering
+- Three.js for WebGL rendering
+- Custom terrain system with tile-based world
+- Entity rendering with animations and emotes
+
+### Physics
+- PhysX WASM bindings for collision detection
+- Terrain snapping for entities
+- Raycast-based interaction system
+
+---
+
+## Multiplayer Architecture
+
+### Server
+- Fastify HTTP server
+- WebSocket real-time communication
+- Server-authoritative game state
+- PostgreSQL database with Drizzle ORM
+
+### Networking
+- Tick-based synchronization (600ms ticks)
+- Entity interpolation for smooth movement
+- Event-driven packet handling
+
+### Client
+- React 19 with Vite
+- Zustand state management
+- Responsive UI panels
+
+---
+
+## Skill Systems
+
+### Combat
+- Attack, Strength, Defense, Constitution, Ranged, Prayer
+- OSRS-style damage calculation
+- Auto-retaliate and combat stances
+
+### Gathering
+- Woodcutting, Fishing, Mining
+- Resource nodes with depletion
+- Tool requirements and bonuses
+
+### Artisan
+- Firemaking, Cooking
+- Processing stations (ranges, fires)
+
+---
+
+## Economy
+
+- **Inventory**: 28 slots, stackable items, manifest definitions
+- **Banking**: Tabs, placeholders, deposit/withdraw, note conversion
+- **Shops**: NPC shops with stock and pricing
+
+---
+
+## Monorepo Structure
+
+| Package | Purpose |
+|---------|---------|
+| `@hyperscape/shared` | Core engine (ECS, physics, rendering) |
+| `@hyperscape/server` | Game server (Fastify, WebSockets) |
+| `@hyperscape/client` | Web client (Vite, React) |
+| `@hyperscape/plugin-hyperscape` | ElizaOS AI agent plugin |
+| `@hyperscape/physx-js-webidl` | PhysX WASM bindings |
+| `3d-asset-forge` | AI asset generation tools |
+
+---
+
+## AI Integration
+
+- ElizaOS plugin with agent actions
+- State providers for world awareness
+- Natural language processing for commands
+
+---
+
+[View repository on GitHub](https://github.com/HyperscapeAI/hyperscape)

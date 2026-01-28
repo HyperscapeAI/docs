@@ -8,9 +8,17 @@ icon: "bot"
 
 Hyperscape integrates [ElizaOS](https://elizaos.ai) to enable AI agents that play the game autonomously. Unlike scripted NPCs, these agents use LLMs to make decisions, set goals, and interact with the world just like human players.
 
+<Note>
+**ElizaOS 1.7.0**: Hyperscape is compatible with ElizaOS 1.7.0+ with backwards-compatible shims. Supports OpenAI, Anthropic, OpenRouter, and Ollama (local) LLM providers.
+</Note>
+
 ## Starting AI Agents
 
 ```bash
+# Simplified command (recommended)
+bun run dev:ai
+
+# Legacy command (still supported)
 bun run dev:elizaos
 ```
 
@@ -18,35 +26,94 @@ This starts:
 - Game server on port 5555
 - Client on port 3333
 - ElizaOS runtime on port 4001
+- ElizaOS dashboard on port 4000
+
+Access the agent dashboard at `http://localhost:4000` to monitor and control agents.
+
+The `dev:ai` command uses `concurrently` to run both services with colored output for easier debugging.
+
+## LLM Autonomy System
+
+<Info>
+  Agents use a **THINKING+ACTION** format that separates reasoning from action selection, making behavior transparent and debuggable.
+</Info>
+
+### THINKING+ACTION Format
+
+Agents respond with structured reasoning:
+
+```
+THINKING: I have 3 goblins attacking me and my health is at 40%. I have food in my inventory.
+I should eat to restore health before continuing combat.
+
+ACTION: EAT_FOOD
+```
+
+This enables:
+- Transparent decision-making (see why the agent chose an action)
+- Better debugging (identify flawed reasoning)
+- Foundation for multi-step planning
+
+### Autonomous Features
+
+**Target Locking** - Agents lock onto combat targets for 30 seconds, preventing target switching mid-fight.
+
+**Force Flee** - If health drops below 25% with threats nearby, agents automatically flee (bypasses LLM).
+
+**Combat Readiness** - Agents assess if they're prepared for combat (weapon, food, health) before engaging.
+
+**Goal Templates** - Structured beginner flows guide agents through OSRS-style progression.
+
+**Guardrails** - Hard and soft constraints prevent dangerous decisions.
+
+---
 
 ## Agent Capabilities
 
 ### Available Actions
 
-AI agents have 17 actions across 6 categories:
+AI agents have 23 actions across 9 categories:
 
 ```typescript
-// From packages/plugin-hyperscape/src/index.ts (lines 161-188)
+// From packages/plugin-hyperscape/src/index.ts
 actions: [
+  // Goal-Oriented (2 actions)
+  setGoalAction,
+  navigateToAction,
+
+  // Autonomous Behavior (5 actions)
+  exploreAction,
+  fleeAction,
+  idleAction,
+  approachEntityAction,
+  attackEntityAction,
+  lootStarterChestAction,
+
   // Movement (3 actions)
   moveToAction,
   followEntityAction,
   stopMovementAction,
+  exploreAction,
+  approachEntityAction,
+  navigateToAction,
 
-  // Combat (2 actions)
+  // Combat (3 actions)
   attackEntityAction,
   changeCombatStyleAction,
+  fleeAction,
 
-  // Skills (4 actions)
+  // Skills (5 actions)
   chopTreeAction,
+  mineRockAction,
   catchFishAction,
   lightFireAction,
   cookFoodAction,
 
-  // Inventory (3 actions)
+  // Inventory (4 actions)
   equipItemAction,
   useItemAction,
   dropItemAction,
+  pickupItemAction,
 
   // Social (1 action)
   chatMessageAction,
@@ -54,24 +121,38 @@ actions: [
   // Banking (2 actions)
   bankDepositAction,
   bankWithdrawAction,
+
+  // Goals (2 actions)
+  setGoalAction,
+  idleAction,
 ],
 ```
 
 ### World State Access (Providers)
 
-Agents query world state via 6 providers:
+Agents query world state via 10 providers:
 
 ```typescript
-// From packages/plugin-hyperscape/src/index.ts (lines 148-156)
+// From packages/plugin-hyperscape/src/index.ts
 providers: [
+  goalProvider,             // Current goal and progress
   gameStateProvider,        // Health, stamina, position, combat status
   inventoryProvider,        // Items, coins, free slots
   nearbyEntitiesProvider,   // Players, NPCs, resources nearby
   skillsProvider,           // Skill levels and XP
   equipmentProvider,        // Equipped items
   availableActionsProvider, // Context-aware available actions
+  possibilitiesProvider,    // What actions are currently possible (NEW)
+  goalTemplatesProvider,    // Structured goal templates (NEW)
+  guardrailsProvider,       // Safety constraints and warnings (NEW)
 ],
 ```
+
+**New Providers (PR #628):**
+
+- **possibilitiesProvider** - Analyzes inventory and nearby entities to determine what's craftable, gatherable, and trainable
+- **goalTemplatesProvider** - Provides scored goal templates for OSRS beginner flows (woodcutting, mining, combat, etc.)
+- **guardrailsProvider** - Hard/soft constraints and active warnings to prevent dangerous decisions
 
 ## Agent Architecture
 
@@ -95,6 +176,72 @@ The `plugin-hyperscape` package contains:
 | **Providers** | World state, entity info, stats |
 | **Evaluators** | Goal progress, threat assessment |
 | **Handlers** | Event responses |
+
+## Agent Dashboard
+
+The Agent Dashboard provides real-time monitoring and control of AI agents:
+
+### Dashboard Features
+
+**Summary Card:**
+- Online status and uptime
+- Combat level and total level
+- Current goal with progress bar
+- Session statistics
+
+**Goal Panel:**
+- Current goal with progress tracking
+- Time estimates and XP rates
+- Stop/Resume goal controls
+- Recent goals history
+- Manual goal selection
+
+**Skills Panel:**
+- All 12 skills with levels and XP
+- Session XP gains tracking
+- Progress bars for each skill
+- Live updates when viewport active
+
+**Activity Panel:**
+- Recent actions feed
+- Session stats (kills, deaths, gold, items)
+- Event icons and timestamps
+
+**Position Panel:**
+- Current zone name
+- Coordinates (X, Y, Z)
+- Nearby points of interest
+- Distance to landmarks
+
+**Quick Action Menu:**
+- One-click commands (woodcutting, mining, fishing, combat)
+- Pick up nearby items
+- Go to bank
+- Stop/Idle controls
+
+### Stop/Resume Goal Control
+
+The dashboard includes robust goal control:
+
+**Stop Button:**
+- Immediately halts current goal
+- Cancels movement path
+- Sets agent to paused state
+- Blocks automatic goal selection
+
+**Paused State:**
+- Shows "Goals Paused" indicator
+- Resume Auto button to resume autonomous behavior
+- Set Goal button for manual goal selection
+- Chat commands still work (agent returns to idle after)
+
+**Resume Auto:**
+- Resumes autonomous goal selection
+- Agent picks new goals based on context
+
+<Info>
+The pause state persists across reconnections and is synchronized between the dashboard, server, and agent plugin.
+</Info>
 
 ## Spectator Mode
 
@@ -142,6 +289,7 @@ const configSchema = z.object({
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
 OPENROUTER_API_KEY=your-openrouter-key
+OLLAMA_SERVER_URL=http://localhost:11434  # For local Ollama models
 
 # Hyperscape Connection
 HYPERSCAPE_SERVER_URL=ws://localhost:5555/ws
@@ -149,6 +297,10 @@ HYPERSCAPE_AUTO_RECONNECT=true
 HYPERSCAPE_AUTH_TOKEN=optional-privy-token
 HYPERSCAPE_PRIVY_USER_ID=optional-privy-user-id
 ```
+
+<Info>
+**ElizaOS 1.7.0**: Added Ollama plugin support for local LLM inference. Configure `OLLAMA_SERVER_URL` to use local models.
+</Info>
 
 ## Agent Actions Reference
 
@@ -174,5 +326,16 @@ HYPERSCAPE_PRIVY_USER_ID=optional-privy-user-id
 ### Inventory Actions
 
 - `equipItem(itemId)`: Wear equipment
-- `dropItem(itemId)`: Drop from inventory
+- `dropItem(itemId)`: Drop from inventory (supports "drop all")
+- `pickupItem(itemId)`: Pick up items from ground
 - `useItem(itemId)`: Consume or use
+
+### Goal Management
+
+- `setGoal(description)`: Set autonomous goal
+- `navigateTo(location)`: Navigate to named location
+- `idle()`: Wait and observe
+
+<Info>
+**Goal Pause State**: The dashboard Stop button pauses autonomous goal selection. When paused, SET_GOAL is blocked and the agent stays idle until resumed or given a manual command.
+</Info>

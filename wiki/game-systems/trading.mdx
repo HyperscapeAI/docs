@@ -1,0 +1,327 @@
+---
+title: "Trading System"
+description: "Player-to-player item trading with OSRS-style two-screen confirmation"
+icon: "handshake"
+---
+
+## Overview
+
+The trading system enables secure player-to-player item exchange using OSRS-style mechanics with a two-screen confirmation flow and comprehensive anti-scam features.
+
+**Location:** `packages/server/src/systems/TradingSystem/`
+
+## How Trading Works
+
+### Initiating a Trade
+
+1. **Right-click another player** and select "Trade with [Player Name]"
+2. **Proximity check**: Players must be adjacent (1 tile)
+   - If out of range, your character automatically walks to them
+   - Trade request sent when you reach them
+3. **Trade request** appears as pink clickable chat message
+4. **Target player** clicks the message or accepts via modal
+
+### Trade Flow
+
+#### Offer Screen
+
+The first screen where players add items to their offers:
+
+- **Add items**: Left-click inventory items to add 1
+- **Context menu**: Right-click for quantity options
+  - Offer-1, Offer-5, Offer-10
+  - Offer-X (custom amount with K/M notation)
+  - Offer-All
+  - Value (show item worth)
+  - Examine (show item description)
+- **Remove items**: Click items in your trade offer
+- **Partner's offer**: View what they're offering in real-time
+- **Accept**: Both players must accept to proceed to confirmation
+
+#### Confirmation Screen
+
+The second screen for final review (OSRS anti-scam measure):
+
+- **Read-only view**: Cannot modify offers
+- **Wealth transfer indicator**: Shows value difference
+  - Green: You're gaining value
+  - Red: You're losing value
+  - Warning ⚠️ if difference >50% of your offer
+- **Final accept**: Both players must accept again
+- **Atomic swap**: Items exchanged in single database transaction
+
+### Anti-Scam Features
+
+| Feature | Purpose |
+|---------|---------|
+| **Two-Screen Flow** | Prevents last-second item swaps |
+| **Removal Warning** | Red flashing exclamation when items removed |
+| **Wealth Indicator** | Shows if trade is fair (green/red) |
+| **Free Slots Display** | Shows partner's available inventory space |
+| **Value Warning** | ⚠️ if wealth difference is suspicious |
+| **Acceptance Reset** | Any offer change resets both acceptances |
+
+## Technical Implementation
+
+### TradingSystem
+
+**Location:** `packages/server/src/systems/TradingSystem/index.ts`
+
+Server-authoritative system managing all trade state:
+
+```typescript
+interface TradeSession {
+  id: string;
+  status: 'pending' | 'active' | 'confirming' | 'completed' | 'cancelled';
+  initiator: TradeParticipant;
+  recipient: TradeParticipant;
+  createdAt: number;
+  expiresAt: number;
+}
+
+interface TradeParticipant {
+  playerId: string;
+  playerName: string;
+  socketId: string;
+  offeredItems: TradeOfferItem[];
+  accepted: boolean;
+}
+```
+
+### Trade Handlers
+
+**Location:** `packages/server/src/systems/ServerNetwork/handlers/trade/`
+
+Modular packet handlers organized by responsibility:
+
+| Module | Purpose |
+|--------|---------|
+| `request.ts` | Trade initiation and response |
+| `items.ts` | Add, remove, set quantity |
+| `acceptance.ts` | Accept, cancel, two-screen flow |
+| `swap.ts` | Atomic item swap execution |
+| `helpers.ts` | Shared utilities |
+| `types.ts` | Handler-specific types |
+
+### PendingTradeManager
+
+**Location:** `packages/server/src/systems/ServerNetwork/PendingTradeManager.ts`
+
+Handles walk-to-trade behavior when players are out of range:
+
+```typescript
+class PendingTradeManager {
+  // Queue trade request, walk to target
+  queuePendingTrade(
+    playerId: string,
+    targetId: string,
+    onInRange: () => void
+  ): void;
+  
+  // Cancel pending trade
+  cancelPendingTrade(playerId: string): void;
+  
+  // Process every tick (re-path if target moves)
+  processTick(): void;
+}
+```
+
+**Features:**
+- Zero-allocation hot path with pre-allocated buffers
+- Intelligent re-pathing when target moves
+- Automatic cleanup on disconnect
+- Cancels on new movement command
+
+### Network Packets
+
+#### Client → Server
+
+| Packet | Data | Purpose |
+|--------|------|---------|
+| `tradeRequest` | `{ targetPlayerId }` | Request trade with player |
+| `tradeRequestRespond` | `{ tradeId, accept }` | Accept/decline request |
+| `tradeAddItem` | `{ tradeId, inventorySlot, quantity? }` | Add item to offer |
+| `tradeRemoveItem` | `{ tradeId, tradeSlot }` | Remove item from offer |
+| `tradeAccept` | `{ tradeId }` | Accept current state |
+| `tradeCancel` | `{ tradeId }` | Cancel trade |
+
+#### Server → Client
+
+| Packet | Data | Purpose |
+|--------|------|---------|
+| `tradeIncoming` | `{ tradeId, fromPlayerId, fromPlayerName, fromPlayerLevel }` | Incoming trade request |
+| `tradeStarted` | `{ tradeId, partnerId, partnerName, partnerLevel, partnerFreeSlots }` | Trade accepted, show UI |
+| `tradeUpdated` | `{ tradeId, myOffer, theirOffer, partnerFreeSlots }` | Offer changed |
+| `tradeConfirmScreen` | `{ tradeId, myOffer, theirOffer, myOfferValue, theirOfferValue }` | Move to confirmation screen |
+| `tradeCompleted` | `{ tradeId, receivedItems }` | Trade successful |
+| `tradeCancelled` | `{ tradeId, reason, message }` | Trade cancelled |
+| `tradeError` | `{ message, code }` | Trade error |
+
+### Security Measures
+
+#### Server-Side Validation
+
+- **Proximity checks**: Players must be adjacent (1 tile)
+- **Interface blocking**: Can't trade while banking/shopping
+- **Inventory validation**: Items verified at add time and completion
+- **Tradeable flag**: Only tradeable items can be offered
+- **Rate limiting**: Prevents spam requests
+- **Atomic transactions**: Database locks prevent duplication
+
+#### Item Swap Process
+
+```typescript
+// Atomic swap with inventory locks
+async function executeTradeSwap(tradeId, world, db) {
+  // 1. Lock both inventories
+  inventorySystem.lockForTransaction(initiatorId);
+  inventorySystem.lockForTransaction(recipientId);
+  
+  try {
+    // 2. Flush to database
+    await inventorySystem.persistInventoryImmediate(initiatorId);
+    await inventorySystem.persistInventoryImmediate(recipientId);
+    
+    // 3. Execute atomic swap in transaction
+    await db.transaction(async (tx) => {
+      // Lock rows with FOR UPDATE
+      // Validate items still exist
+      // Remove offered items
+      // Add received items
+    });
+    
+    // 4. Reload from database
+    await inventorySystem.reloadFromDatabase(initiatorId);
+    await inventorySystem.reloadFromDatabase(recipientId);
+  } finally {
+    // 5. Always unlock
+    inventorySystem.unlockTransaction(initiatorId);
+    inventorySystem.unlockTransaction(recipientId);
+  }
+}
+```
+
+### UI Components
+
+**Location:** `packages/client/src/game/panels/TradePanel/`
+
+Modular React components for trade UI:
+
+| Component | Purpose |
+|-----------|---------|
+| `TradePanel.tsx` | Main trade window |
+| `TradeRequestModal.tsx` | Incoming request modal |
+| `components/TradeSlot.tsx` | Individual trade slot |
+| `components/InventoryItem.tsx` | Clickable inventory item |
+| `components/InventoryMiniPanel.tsx` | Inventory grid |
+| `modals/ContextMenu.tsx` | Right-click menu |
+| `modals/QuantityPrompt.tsx` | Offer-X quantity input |
+| `hooks/useRemovedItemTracking.ts` | Anti-scam tracking |
+| `utils.ts` | Formatting and parsing |
+| `types.ts` | TypeScript interfaces |
+
+### Trade States
+
+```typescript
+type TradeStatus = 
+  | 'pending'      // Request sent, awaiting response
+  | 'active'       // Offer screen, adding/removing items
+  | 'confirming'   // Confirmation screen, final review
+  | 'completed'    // Trade successful
+  | 'cancelled';   // Trade cancelled
+```
+
+### Cancellation Reasons
+
+| Reason | Description |
+|--------|-------------|
+| `declined` | Target player declined request |
+| `cancelled` | Player manually cancelled |
+| `timeout` | Request expired (60 seconds) |
+| `disconnected` | Player disconnected |
+| `invalid_items` | Items changed during swap |
+| `server_error` | Unexpected server error |
+
+## Configuration
+
+### Trade Constants
+
+```typescript
+// From packages/server/src/systems/ServerNetwork/handlers/trade/helpers.ts
+const TRADE_PROXIMITY_TILES = 1; // Must be adjacent
+
+// From packages/server/src/systems/TradingSystem/index.ts
+const TRADE_REQUEST_TIMEOUT_MS = 60000; // 60 seconds
+const CLEANUP_INTERVAL_MS = 30000; // 30 seconds
+```
+
+### Rate Limiting
+
+```typescript
+// From packages/server/src/systems/ServerNetwork/services/RateLimitService.ts
+const DEFAULT_WINDOW_MS = 1000;
+const DEFAULT_MAX_REQUESTS = 10;
+```
+
+## Testing
+
+### Integration Tests
+
+**Location:** `packages/server/tests/integration/trade/trade.integration.test.ts`
+
+291 lines of comprehensive tests:
+
+- Trade request flow (initiate, accept, decline)
+- Item management (add, remove, quantity)
+- Two-screen confirmation flow
+- Atomic swap execution
+- Error handling (invalid items, full inventory)
+- Disconnection handling
+- Concurrent trade prevention
+
+### Test Strategy
+
+Following project philosophy:
+- Real `TradingSystem` instances (no mocks)
+- Real database transactions
+- Integration-level testing
+- Helper functions for test setup
+
+## Common Issues
+
+### Trade Request Not Appearing
+
+**Cause:** Players not in proximity range
+
+**Solution:** Walk closer to the target player (must be adjacent)
+
+### Items Disappearing During Trade
+
+**Cause:** Inventory full or items changed
+
+**Solution:** Ensure you have free inventory slots for incoming items
+
+### Trade Cancelled Unexpectedly
+
+**Possible causes:**
+- Player disconnected
+- Player moved away (broke proximity)
+- Player opened another interface (bank/shop)
+- Items were modified in inventory
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Inventory System" icon="backpack" href="/wiki/game-systems/inventory">
+    28-slot inventory management and item stacking
+  </Card>
+  <Card title="Economy Overview" icon="coins" href="/concepts/economy">
+    Banking, shops, currency, and loot drops
+  </Card>
+  <Card title="Social Features" icon="users" href="/wiki/game-systems/social">
+    Friend system and private messaging
+  </Card>
+  <Card title="Security" icon="shield" href="/wiki/engine/security">
+    Server-authoritative design and anti-cheat
+  </Card>
+</CardGroup>

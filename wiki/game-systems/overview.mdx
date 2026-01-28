@@ -27,6 +27,7 @@ packages/shared/src/systems/
     ├── interaction/  # Player interactions
     ├── movement/     # Movement, collision, pathfinding
     ├── presentation/ # Visual effects
+    ├── progression/  # Quest system
     ├── tick/         # Game tick processing
     └── world/        # World management
 ```
@@ -87,14 +88,41 @@ The combat system implements OSRS-style tick-based combat with 20+ supporting fi
   Combat runs on a 600ms tick cycle, matching Old School RuneScape exactly.
 </Tip>
 
+### Duel Arena System
+
+**Location:** `packages/server/src/systems/DuelSystem/`
+
+Player-vs-player dueling with stakes and customizable rules:
+
+| Component | Purpose |
+|-----------|---------|
+| `DuelSystem` | Main orchestrator, state machine (1600+ lines) |
+| `DuelSessionManager` | Session CRUD, player mapping (290 lines) |
+| `PendingDuelManager` | Challenge lifecycle, timeouts (310 lines) |
+| `ArenaPoolManager` | Arena reservation, spawn points (260 lines) |
+| `DuelCombatResolver` | Combat resolution, stake transfers (280 lines) |
+
+**Features:**
+- 10 toggleable combat rules (no ranged, no food, no forfeit, etc.)
+- 11 equipment slot restrictions
+- Item staking with anti-scam protection
+- 6 dedicated arenas with wall collision
+- Disconnect handling (30s grace period)
+- Comprehensive unit tests (1700+ lines)
+
+<Info>
+See [Duel Arena System](/wiki/game-systems/duel-arena) for complete documentation.
+</Info>
+
 ### Economy Systems
 
 **Location:** `systems/shared/economy/`
 
 Handles all economic interactions:
 
-- **Banking** — Deposit, withdraw, note conversion
+- **Banking** — Deposit, withdraw, note conversion (480-slot bank with tabs)
 - **Shops** — Buy/sell with general stores
+- **Trading** — Player-to-player item exchange (see `TradingSystem`)
 - **Inventory** — 28-slot management with stacking
 - **Loot** — Item drops and ground items
 
@@ -119,6 +147,26 @@ Implements tile-based movement and OSRS-accurate collision:
 - Network synchronization (zone serialization)
 - Safespotting mechanics (OSRS-accurate)
 
+### World Systems
+
+**Location:** `systems/shared/world/`
+
+Manages world generation and environment:
+
+- **TerrainSystem.ts** — Procedural terrain with flat zones for stations (see [Terrain System](/wiki/game-systems/terrain))
+- **WaterSystem.ts** — Water rendering and physics
+- **VegetationSystem.ts** — Procedural tree/rock placement
+- **RoadNetworkSystem.ts** — Road generation between towns
+- **SkySystem.ts** — Day/night cycle
+- **Environment.ts** — Lighting and atmosphere
+
+**Terrain Features:**
+- Noise-based procedural generation (50m max height)
+- Flat zones under stations with smooth blending
+- Spatial indexing for O(1) flat zone lookup
+- Biome-based height modulation
+- Water threshold detection
+
 ### Character Systems
 
 **Location:** `systems/shared/character/`
@@ -127,8 +175,54 @@ Player character management:
 
 - **Stats tracking** — Levels, XP, combat level
 - **Equipment** — Gear slots and bonuses
-- **Skills** — 11 trainable skills (5 combat, 3 gathering, 3 artisan)
-- **Prayer** — Prayer point management, drain mechanics, altar recharging
+- **Skills** — 13 trainable skills (6 combat, 3 gathering, 4 artisan)
+
+### Progression Systems
+
+**Location:** `systems/shared/progression/`
+
+Player progression and achievement tracking:
+
+- **Quest System** — OSRS-style quests with multi-stage objectives, requirements, and rewards
+- **Quest Points** — Accumulated from quest completions
+- **XP Lamps** — Quest reward items that grant XP to chosen skill
+
+### Quest System
+
+**Location:** `systems/shared/progression/QuestSystem.ts`
+
+OSRS-style quest system with multi-stage quests:
+
+- **Quest definitions** — JSON manifest-driven quest content
+- **Progress tracking** — Per-player database persistence
+- **Stage types** — Dialogue, kill, gather, interact, craft
+- **Quest points** — Accumulated across completions
+- **Security** — HMAC kill token validation, audit logging
+- **Performance** — O(1) stage lookups, object spread elimination
+
+### Duel Arena System
+
+**Location:** `systems/server/DuelSystem/`
+
+Server-authoritative PvP dueling system with OSRS-accurate mechanics:
+
+- **Challenge Management** — 30-second challenge requests with distance validation
+- **Arena Pooling** — 6 dedicated arenas with automatic reservation
+- **Rules Negotiation** — 10 combat rules + 11 equipment restrictions
+- **Stake System** — Item staking with anti-scam protections
+- **Combat Resolution** — Death handling, forfeit mechanics, stake transfers
+- **Audit Logging** — Complete economic tracking for all duel outcomes
+
+**Key Components:**
+- `DuelSystem.ts` — Main orchestrator (1,609 lines)
+- `PendingDuelManager.ts` — Challenge lifecycle management
+- `ArenaPoolManager.ts` — Arena reservation and collision
+- `DuelSessionManager.ts` — Session CRUD operations
+- `DuelCombatResolver.ts` — Outcome resolution and stake transfers
+
+<Tip>
+  See the [Duel Arena documentation](/wiki/game-systems/duel-arena) for complete implementation details.
+</Tip>
 
 ---
 
@@ -199,7 +293,7 @@ export const LEVEL_CONSTANTS = {
 
 ## Skills System
 
-Hyperscape implements 11 skills with OSRS-accurate mechanics:
+Hyperscape implements 12 skills with OSRS-accurate mechanics:
 
 ### Combat Skills
 
@@ -210,7 +304,7 @@ Hyperscape implements 11 skills with OSRS-accurate mechanics:
 | **Defense** | Damage reduction and armor requirements |
 | **Constitution** | Health points (HP) |
 | **Ranged** | Ranged combat accuracy and damage |
-| **Prayer** | Protection prayers and combat buffs |
+| **Prayer** | Prayer points and combat bonuses |
 
 ### Gathering Skills
 
@@ -228,9 +322,44 @@ Hyperscape implements 11 skills with OSRS-accurate mechanics:
 | **Cooking** | Cook raw fish for healing |
 | **Smithing** | Smelt ores into bars and smith equipment |
 
+### Support Skills
+
+| Skill | Purpose |
+|-------|---------|
+| **Agility** | Traverse the world to improve stamina regeneration |
+
 <Info>
-  Each skill has independent XP tracking and levels 1-99 following OSRS XP curves.
+  Each skill has independent XP tracking and levels 1-99 following OSRS XP curves. Agility is unique in that it trains passively as you move around the world.
 </Info>
+
+---
+
+## Quest System
+
+**Location:** `systems/shared/progression/`
+
+OSRS-style quest system with multi-stage progression:
+
+| Component | Purpose |
+|-----------|---------|
+| `QuestSystem.ts` | Quest logic and progression tracking (~1100 lines) |
+| `QuestRepository.ts` | Database persistence for quest progress |
+| `quest-types.ts` | Quest definitions and validation |
+| `quest-interfaces.ts` | ISP interfaces (IQuestQuery, IQuestActions) |
+
+**Features:**
+- Multi-stage quests (kill, gather, interact, dialogue)
+- Quest requirements (prerequisite quests, skill levels, items)
+- Quest points and rewards (items, XP)
+- HMAC kill token validation (prevents spoofing)
+- Rate limiting (5/sec list, 10/sec detail, 3/sec accept)
+- Quest audit logging for security
+- O(1) stage lookup caches for performance
+
+**Database Tables:**
+- `quest_progress` — Player quest state (status, current stage, progress)
+- `quest_audit_log` — Immutable audit trail for all quest actions
+- `characters.questPoints` — Total quest points earned
 
 ---
 
@@ -301,16 +430,19 @@ export enum EventType {
   <Card title="Combat System" icon="swords" href="/wiki/game-systems/combat">
     OSRS-accurate damage formulas, attack styles, aggro system, and death mechanics.
   </Card>
+  <Card title="Duel Arena" icon="shield-halved" href="/wiki/game-systems/duel-arena">
+    Player-vs-player dueling with rules, stakes, arenas, and anti-scam protections.
+  </Card>
   <Card title="Skills & Progression" icon="chart-line" href="/wiki/game-systems/skills">
     RuneScape XP curves, leveling, combat level formula, and skill requirements.
   </Card>
-  <Card title="Prayer System" icon="hands-praying" href="/wiki/game-systems/prayer">
-    Prayer mechanics, drain formulas, combat bonuses, altars, and bone burying.
+  <Card title="Trading System" icon="handshake" href="/wiki/game-systems/trading">
+    Player-to-player trading with two-screen confirmation and security features.
+  </Card>
+  <Card title="Social System" icon="users" href="/wiki/game-systems/social">
+    Friend management, private messaging, and player interactions.
   </Card>
   <Card title="Tile Movement" icon="route" href="/wiki/game-systems/movement">
     Discrete tile-based movement, pathfinding, and OSRS melee range rules.
-  </Card>
-  <Card title="NPC Data" icon="users" href="/wiki/data/npcs">
-    How NPCs and mobs are defined with drop tables and aggro behaviors.
   </Card>
 </CardGroup>

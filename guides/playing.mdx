@@ -29,6 +29,20 @@ Each starter town includes:
 - **Running**: Hold shift while clicking to run (consumes stamina)
 - **Camera**: Orthographic overhead view
 
+### Stamina System
+
+Stamina affects your ability to run:
+
+- **Drain while running**: 2 stamina/second (base rate)
+- **Weight penalty**: +0.5% drain per kg carried
+- **Regeneration while walking**: 2 stamina/second (base rate)
+- **Regeneration while idle**: 4 stamina/second (base rate)
+- **Agility bonus**: +1% regeneration per agility level
+
+<Info>
+  Manage your inventory weight for optimal travel. Heavy loads drain stamina faster, but higher agility helps you recover faster.
+</Info>
+
 ### Combat
 
 - **Attack**: Click on an enemy to engage
@@ -48,6 +62,7 @@ Each starter town includes:
 - **NPCs**: Click to interact with shops or banks
 - **Items**: Click dropped items to pick up
 - **Right-Click Menus**: Right-click items/entities for context menus with colored names
+- **Skill Guides**: Click any skill in the Skills Panel to view unlock progression
 - **F5 Key**: Toggle FPS debug panel on/off
 
 ### Inventory Actions
@@ -91,6 +106,24 @@ When you die:
 
 ## Skills
 
+### Viewing Skill Unlocks
+
+Click any skill in the Skills panel to open the **Skill Guide Panel**, which shows:
+
+- All unlocks for that skill with level requirements
+- Your current level and progress
+- Visual distinction between unlocked (✓) and locked (🔒) content
+- Next unlock highlighted with progress indicator
+- Type badges (item/ability) for each unlock
+
+**Example Unlocks**:
+- Attack 40: Rune weapons
+- Agility 50: +50% stamina regeneration
+- Prayer 43: Protect from Melee
+- Woodcutting 75: Magic trees
+
+## Skills
+
 ### Gathering Skills
 
 | Skill | How to Train |
@@ -98,9 +131,25 @@ When you die:
 | **Woodcutting** | Click trees with hatchet in inventory or equipped |
 | **Fishing** | Click fishing spots with fishing rod in inventory |
 | **Mining** | Click ore rocks with pickaxe in inventory or equipped |
+| **Agility** | Move through the world (1 XP per 2 tiles traveled) |
 
 <Info>
 Mining rocks always deplete after yielding one ore (OSRS-accurate). Success rate depends on your Mining level, while pickaxe tier affects how often you roll for success.
+</Info>
+
+### Agility Training
+
+Agility is unique - it trains passively as you explore:
+
+- **XP Rate**: 1 XP per 2 tiles traveled
+- **XP Batching**: XP drops appear every 100 tiles (50 XP)
+- **Running**: ~200 XP/minute
+- **Walking**: ~100 XP/minute
+- **Benefits**: Higher Agility = faster stamina regeneration (+1% per level)
+- **Weight Impact**: Heavy inventory increases stamina drain while running (+0.5% per kg)
+
+<Info>
+Click the Agility skill in your Skills Panel to view unlock progression and see how stamina regeneration improves with each level.
 </Info>
 
 ### Processing Skills
@@ -156,3 +205,73 @@ General stores sell basic supplies:
 - Fishing rod
 - Tinderbox
 - Arrows (for bows)
+
+### Player Trading
+
+Trade items directly with other players:
+
+1. **Right-click** on another player
+2. Select **"Trade with [Player]"**
+3. If out of range, you'll auto-walk to them
+4. **Screen 1**: Add items to your offer
+   - Click inventory items to add
+   - Click offered items to remove
+   - Enter quantities for stackable items
+   - View partner's offer and free slots
+   - Click **"Accept"** when ready
+5. **Screen 2**: Final confirmation
+   - Review wealth transfer indicator (shows value difference)
+   - Both players must accept again
+   - Trade completes when both confirm
+
+**Trade Rules:**
+- Must be within 2 tiles of partner
+- Bank/store/dialogue closes when trade starts
+- Any item change resets to Screen 1
+- Moving too far apart cancels trade
+
+## Social Features
+
+### Friends List
+
+Manage your friend list:
+
+1. **Right-click** on a player
+2. Select **"Add Friend"**
+3. They receive a friend request
+4. Once accepted, you're both friends
+
+**Friend List Features:**
+- See online/offline status (🟢 online, ⚪ offline)
+- Send private messages to online friends
+- Remove friends anytime
+- Friend list syncs across sessions
+
+### Private Messaging
+
+Send direct messages to friends:
+
+1. Open **Friends panel**
+2. Click on an online friend
+3. Select **"Send Message"**
+4. Type and send your message
+
+**Message Features:**
+- Direct player-to-player communication
+- Message history per conversation
+- Notification badges for unread messages
+- Integration with chat system
+
+### Ignore List
+
+Block unwanted interactions:
+
+1. **Right-click** on a player
+2. Select **"Add to Ignore List"**
+3. Player is blocked
+
+**Effects:**
+- Their messages are hidden
+- Trade requests blocked
+- Friend requests blocked
+- You can still see them in the world

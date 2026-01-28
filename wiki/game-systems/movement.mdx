@@ -28,6 +28,19 @@ export const PATHFIND_RADIUS = 128;     // BFS search radius in tiles
 Hyperscape uses **2x OSRS speed** for a snappier modern feel while keeping the tick-based system. OSRS uses 1 tile/tick walk, 2 tiles/tick run.
 </Note>
 
+### Agility XP from Movement
+
+Movement grants Agility XP at a rate of **1 XP per 2 tiles traveled**:
+
+- Walking: 2 tiles/tick = ~100 XP/minute
+- Running: 4 tiles/tick = ~200 XP/minute
+- XP granted in batches of 50 XP every 100 tiles (prevents visual spam)
+- Death penalty: Accumulated tile progress is lost (max ~50 XP worth)
+
+<Info>
+Agility XP is tracked server-side in `TileMovementManager` and granted via the `SKILLS_XP_GAINED` event. See [Skills System](/wiki/game-systems/skills) for details on agility's stamina regeneration bonus.
+</Info>
+
 ---
 
 ## Tile Coordinates
@@ -525,51 +538,136 @@ export function getCardinalMeleeTilesInto(
 
 ---
 
-## Context Menu Integration
+## Agility XP Tracking
 
-### Walk Here
-
-Players can right-click terrain to open a context menu with "Walk here":
+The movement system tracks tiles traveled for Agility skill XP:
 
 ```typescript
-// From InteractionRouter.ts - terrain context menu
-getContextMenuActions(target: RaycastTarget): ContextMenuAction[] {
-  if (target.type === "terrain") {
-    return [{
-      id: "walk-here",
-      label: "Walk here",
-      enabled: true,
-      priority: 1,
-      handler: () => {
-        // Send movement request to server
-        world.network?.send("moveToPosition", {
-          x: target.hitPoint.x,
-          y: target.hitPoint.y,
-          z: target.hitPoint.z,
-        });
-      },
-    }];
+// From tile-movement.ts (server-side)
+private tilesTraveledForXP: Map<string, number> = new Map();
+
+// Constants
+const AGILITY_TILES_PER_XP_GRANT = 100;  // Tiles needed before XP is granted
+const AGILITY_XP_PER_GRANT = 50;         // XP granted per threshold
+
+// Track tiles moved during tick processing
+const tilesMoved = Math.abs(state.currentTile.x - prevTile.x) + 
+                   Math.abs(state.currentTile.z - prevTile.z);
+
+if (tilesMoved > 0) {
+  const currentTiles = (this.tilesTraveledForXP.get(playerId) || 0) + tilesMoved;
+  
+  if (currentTiles >= AGILITY_TILES_PER_XP_GRANT) {
+    // Grant XP and preserve overflow
+    const grantsEarned = Math.floor(currentTiles / AGILITY_TILES_PER_XP_GRANT);
+    const xpToGrant = grantsEarned * AGILITY_XP_PER_GRANT;
+    this.tilesTraveledForXP.set(playerId, currentTiles % AGILITY_TILES_PER_XP_GRANT);
+    
+    // Emit XP gain event
+    this.world.emit(EventType.SKILLS_XP_GAINED, {
+      playerId,
+      skill: 'agility',
+      amount: xpToGrant,
+    });
+  } else {
+    // Accumulate tiles silently
+    this.tilesTraveledForXP.set(playerId, currentTiles);
   }
 }
 ```
 
-**Context Menu Types:**
-
-The system distinguishes between entity types and special cases:
-
-```typescript
-// From interaction/types.ts
-export type ContextMenuTargetType =
-  | InteractableEntityType  // npc, mob, player, item, etc.
-  | "terrain";              // Ground/floor (for "Walk here")
-
-// InteractableEntityType includes all entity types
-// ContextMenuTargetType adds terrain for right-click ground
-```
+**XP Batching Design**:
+- Prevents visual spam (XP drop every ~15 seconds running, ~30 seconds walking)
+- Preserves partial progress between batches
+- Death resets tile counter (small penalty)
+- Logout/disconnect clears counter (max ~50 XP lost)
 
 <Info>
-The "Walk here" option only appears when right-clicking terrain. Entity interactions show entity-specific actions instead.
+Agility XP is granted automatically as players move. Both walking and running count toward XP at the same rate (1 XP per 2 tiles).
 </Info>
+
+---
+
+## Stamina System
+
+Stamina is a client-side mechanic that affects running ability. It's influenced by both Agility level and inventory weight.
+
+### Base Stamina Rates
+
+```typescript
+// From PlayerLocal.ts
+private readonly staminaDrainPerSecond: number = 2;              // While running
+private readonly staminaRegenWhileWalkingPerSecond: number = 2;  // While walking
+private readonly staminaRegenPerSecond: number = 4;              // While idle
+```
+
+### Weight-Based Drain
+
+Inventory weight increases stamina drain while running:
+
+```typescript
+// Weight modifier: +0.5% drain per kg carried
+private readonly weightDrainModifier: number = 0.005;
+
+// Calculate drain rate with weight
+const weightMultiplier = 1 + this.totalWeight * this.weightDrainModifier;
+const drainRate = this.staminaDrainPerSecond * weightMultiplier;
+```
+
+**Weight Impact**:
+| Weight (kg) | Drain Multiplier | Drain/Second | Stamina Duration |
+|-------------|------------------|--------------|------------------|
+| 0 | 1.0x | 2.0 | 50 seconds |
+| 20 | 1.1x | 2.2 | 45 seconds |
+| 50 | 1.25x | 2.5 | 40 seconds |
+| 100 | 1.5x | 3.0 | 33 seconds |
+
+### Agility-Based Regeneration
+
+Agility level increases stamina regeneration:
+
+```typescript
+// Agility modifier: +1% regen per level
+private readonly agilityRegenModifier: number = 0.01;
+
+// Calculate regen rate with agility
+const agilityMultiplier = 1 + this.skills.agility.level * this.agilityRegenModifier;
+const regenRate = baseRegenRate * agilityMultiplier;
+```
+
+**Agility Impact**:
+| Agility Level | Regen Multiplier | Idle Regen/Sec | Walk Regen/Sec |
+|---------------|------------------|----------------|----------------|
+| 1 | 1.01x | 4.04 | 2.02 |
+| 25 | 1.25x | 5.00 | 2.50 |
+| 50 | 1.50x | 6.00 | 3.00 |
+| 75 | 1.75x | 7.00 | 3.50 |
+| 99 | 1.99x | 7.96 | 3.98 |
+
+### Weight Synchronization
+
+Player weight is calculated server-side and synced to the client:
+
+```typescript
+// Server: InventorySystem emits weight changes
+const totalWeight = this.getTotalWeight(playerId);
+this.emitTypedEvent(EventType.PLAYER_WEIGHT_CHANGED, {
+  playerId,
+  weight: totalWeight,
+});
+
+// Client: PlayerLocal receives weight updates
+onPlayerWeightUpdated = (data: { playerId: string; weight: number }) => {
+  const localPlayer = this.world.getPlayer?.();
+  if (localPlayer && data.playerId === localPlayer.id) {
+    localPlayer.totalWeight = data.weight;
+  }
+};
+```
+
+<Warning>
+Weight is server-authoritative to prevent client-side manipulation. The Equipment Panel displays the server-synced weight value.
+</Warning>
 
 ---
 
@@ -600,8 +698,74 @@ function interpolateEntity(state: InterpolationState, alpha: number): void {
 
 ---
 
+## Terrain Flattening
+
+Stations and structures can flatten terrain underneath for level building surfaces using the **Flat Zone System**.
+
+### Flat Zone Interface
+
+```typescript
+// From packages/shared/src/types/world/terrain.ts
+export interface FlatZone {
+  id: string;              // Unique identifier (e.g., "station_furnace_spawn_1")
+  centerX: number;         // Center X position in world coordinates (meters)
+  centerZ: number;         // Center Z position in world coordinates (meters)
+  width: number;           // Width in meters (X axis)
+  depth: number;           // Depth in meters (Z axis)
+  height: number;          // Target height for the flat area (meters)
+  blendRadius: number;     // Blend radius for smooth transition (meters)
+}
+```
+
+### TerrainSystem API
+
+```typescript
+// Register a flat zone (for dynamic structures)
+terrainSystem.registerFlatZone({
+  id: "player_house_1",
+  centerX: 50.0,
+  centerZ: 50.0,
+  width: 10.0,
+  depth: 10.0,
+  height: 42.5,
+  blendRadius: 1.0,
+});
+
+// Remove a flat zone
+terrainSystem.unregisterFlatZone("player_house_1");
+
+// Query flat zone at position
+const zone = terrainSystem.getFlatZoneAt(worldX, worldZ);
+if (zone) {
+  console.log(`Standing on flat zone: ${zone.id}`);
+}
+```
+
+### How It Works
+
+1. **Height Calculation Priority**: Flat zones checked before procedural terrain
+2. **Core Flat Area**: Inside the zone, terrain returns exact `height` value
+3. **Blend Area**: Within `blendRadius` of zone edge, smoothstep interpolation blends to procedural terrain
+4. **Spatial Indexing**: Terrain tiles (100m) used for O(1) lookup
+5. **Manifest-Driven**: Stations with `flattenGround: true` automatically create flat zones
+
+**Blend Formula:**
+```typescript
+// Smoothstep interpolation: t² × (3 - 2t)
+const t = blend * blend * (3 - 2 * blend);
+const finalHeight = flatHeight + (proceduralHeight - flatHeight) * t;
+```
+
+<Info>
+Flat zones are loaded from `world-areas.json` during terrain initialization. Station footprints are calculated from model bounds × scale.
+</Info>
+
+---
+
 ## Related Documentation
 
+- [Skills System](/wiki/game-systems/skills) - Agility skill mechanics
 - [Combat System](/wiki/game-systems/combat) - Uses tile range for attacks
 - [NPC Behavior](/wiki/data/npcs) - NPC aggro and pathing
 - [Entity System](/wiki/engine/ecs) - Entity management
+- [Manifests](/concepts/manifests) - Station configuration with terrain flattening

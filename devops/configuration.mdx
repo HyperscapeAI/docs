@@ -24,54 +24,133 @@ cp packages/server/.env.example packages/server/.env
 
 ## Server Environment
 
-### Required
+### Required (Production)
 
 ```bash
-# Database (production)
+# Database (auto-set by Railway PostgreSQL)
 DATABASE_URL=postgresql://user:pass@host:5432/db
 
 # Security
-JWT_SECRET=your-random-secret-key
+JWT_SECRET=your-random-secret-key              # Generate: openssl rand -base64 32
+ADMIN_CODE=your-admin-code                     # For /admin command access
 
 # Authentication
-PRIVY_APP_ID=your-privy-app-id
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
 PRIVY_APP_SECRET=your-privy-app-secret
+
+# Production URLs
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
 ```
+
+<Info>
+  `PUBLIC_PRIVY_APP_ID` is exposed to clients via `/env.js` endpoint. The `PRIVY_APP_SECRET` is server-only and never exposed.
+</Info>
 
 ### Optional
 
 ```bash
 # Server
 PORT=5555
+NODE_ENV=development
 
-# Assets
+# Assets & CDN
 PUBLIC_CDN_URL=http://localhost:8080
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5555/ws
+
+# Manifest Fetching
+# In development, manifests are fetched from CDN only if local manifests don't exist
+# In production, manifests are always fetched from CDN at startup
+# Set SKIP_MANIFESTS=true to bypass manifest fetching in test environments
+
+# CDN Fallback (development only)
+# If localhost CDN is unavailable and required manifests are missing,
+# the server will automatically fall back to production CDN to bootstrap
+# local development. Set SKIP_MANIFESTS=true to bypass manifest checks in tests.
+
+# CDN Fallback (development only)
+# If local CDN is incomplete, server falls back to production CDN
+# Set to "true" to skip manifest validation in test environments
+SKIP_MANIFESTS=false
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
+
+# ElizaOS Integration
+ELIZAOS_API_URL=http://localhost:4001
 ```
+
+### Manifest Loading
+
+The server fetches game manifests from CDN at startup:
+
+```bash
+# Manifests are fetched from PUBLIC_CDN_URL/manifests/
+# and cached in world/assets/manifests/
+```
+
+**Behavior:**
+- **Production/CI**: Always fetches from CDN
+- **Development**: Skips if local manifests exist
+- **Test**: Can skip with `SKIP_MANIFESTS=true`
+
+**Manifest Files:**
+- Root: `biomes.json`, `npcs.json`, `prayers.json`, `stations.json`, etc.
+- Items: `items/food.json`, `items/weapons.json`, `items/tools.json`, etc.
+- Gathering: `gathering/fishing.json`, `gathering/mining.json`, etc.
+- Recipes: `recipes/cooking.json`, `recipes/smithing.json`, etc.
+
+Total: 25+ manifest files fetched and cached at startup.
 
 ## Client Environment
 
 ### Required
 
 ```bash
-PUBLIC_PRIVY_APP_ID=your-privy-app-id
+PUBLIC_PRIVY_APP_ID=your-privy-app-id         # Must match server
 ```
 
 <Warning>
-  `PUBLIC_PRIVY_APP_ID` must match between client and server.
+  `PUBLIC_PRIVY_APP_ID` must match `PRIVY_APP_ID` on the server.
 </Warning>
 
-### Production
+### Production (Cloudflare Pages)
+
+<Tabs>
+  <Tab title="Production">
+    ```bash
+    PUBLIC_API_URL=https://api.hyperscape.club
+    PUBLIC_WS_URL=wss://api.hyperscape.club/ws
+    PUBLIC_CDN_URL=https://assets.hyperscape.club
+    PUBLIC_APP_URL=https://hyperscape.club
+    ```
+  </Tab>
+  <Tab title="Staging">
+    ```bash
+    PUBLIC_API_URL=https://staging-api.hyperscape.club
+    PUBLIC_WS_URL=wss://staging-api.hyperscape.club/ws
+    PUBLIC_CDN_URL=https://staging-assets.hyperscape.club
+    PUBLIC_APP_URL=https://staging.hyperscape.club
+    ```
+  </Tab>
+</Tabs>
+
+### Development
 
 ```bash
 PUBLIC_API_URL=https://api.hyperscape.lol
 PUBLIC_WS_URL=wss://api.hyperscape.lol
-PUBLIC_CDN_URL=https://cdn.hyperscape.lol
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_ELIZAOS_URL=https://hyperscape-production.up.railway.app
 ```
+
+<Note>
+The production CDN URL is `https://assets.hyperscape.club` which serves from Cloudflare R2.
+</Note>
 
 ## AI Agent Environment
 
@@ -82,7 +161,15 @@ ELIZAOS_PORT=4001
 # LLM Providers (at least one required)
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
+OPENROUTER_API_KEY=your-openrouter-key
+
+# Local LLM (optional - ElizaOS 1.7+)
+OLLAMA_API_URL=http://localhost:11434
 ```
+
+<Info>
+**ElizaOS 1.7.0**: Now supports Ollama for local LLM inference. Configure `OLLAMA_API_URL` to use local models.
+</Info>
 
 ## AssetForge Environment
 
@@ -107,6 +194,61 @@ All services have unique default ports:
 | 3400 | AssetForge UI | `ASSET_FORGE_PORT` | `bun run dev:forge` |
 | 3401 | AssetForge API | `ASSET_FORGE_API_PORT` | `bun run dev:forge` |
 
+## CDN Configuration
+
+### Development CDN
+
+The local CDN serves assets from `packages/server/world/assets/`:
+
+```bash
+bun run cdn:up   # Start CDN container (nginx on port 8080)
+```
+
+**Asset Structure:**
+```
+packages/server/world/assets/
+├── manifests/          # JSON manifests (npcs, items, quests, etc.)
+├── models/             # 3D models (.glb files)
+├── audio/              # Sound effects and music
+│   └── music/
+│       ├── normal/     # Ambient music
+│       └── combat/     # Combat music
+└── world/              # Environment assets
+    ├── base-environment.glb
+    └── day2-2k.jpg
+```
+
+### CDN Fallback (Development)
+
+If the local CDN is unavailable and required manifests are missing, the server automatically falls back to the production CDN (`https://assets.hyperscape.club`) to bootstrap local development.
+
+**Required Manifests:**
+- `npcs.json`
+- `world-areas.json`
+- `biomes.json`
+- `stores.json`
+- `items.json` OR `items/{weapons,tools,resources,food,misc}.json`
+
+**Bypass in Tests:**
+```bash
+SKIP_MANIFESTS=true  # Skip manifest validation (test environments only)
+```
+
+### Production CDN
+
+Set `PUBLIC_CDN_URL` to your asset hosting URL:
+
+```bash
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+```
+
+**Supported Paths:**
+- `/manifests/{file}.json` — Game data manifests
+- `/models/{file}.glb` — 3D models
+- `/audio/music/{normal|combat}/{file}.mp3` — Music tracks
+- `/world/{file}` — Environment assets
+- `/health` — Health check endpoint
+
 ## Zero-Config Development
 
 Default values work out of the box for local development:
@@ -120,6 +262,95 @@ Only configure `.env` files when:
 - Connecting to external database
 - Deploying to production
 - Running AI agents
+
+## CORS Configuration
+
+The server automatically configures CORS to allow requests from the frontend and preview deployments.
+
+### Allowed Origins
+
+**Production domains:**
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  "https://hyperscape-production.up.railway.app",
+  // HTTP fallbacks for testing
+  "http://hyperscape.pages.dev",
+];
+```
+
+**Dynamic patterns:**
+```typescript
+// Localhost development (any port)
+/^https?:\/\/localhost:\d+$/
+
+// Cloudflare Pages preview deployments
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/
+
+// Railway preview deployments
+/^https:\/\/.+\.up\.railway\.app$/
+
+// Farcaster frames
+/^https:\/\/.+\.farcaster\.xyz$/
+/^https:\/\/.+\.warpcast\.com$/
+
+// Privy authentication
+/^https:\/\/.+\.privy\.io$/
+```
+
+### Adding Custom Domains
+
+If you deploy to a custom domain, add it to the allowlist:
+
+**Option 1: Environment variable**
+```bash
+# In Railway dashboard or .env
+PUBLIC_APP_URL=https://yourdomain.com
+```
+
+The server automatically adds `PUBLIC_APP_URL` to the CORS allowlist.
+
+**Option 2: Code modification**
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  // ... existing origins
+  "https://yourdomain.com",
+];
+```
+
+### CORS Headers
+
+The server sends these CORS headers:
+
+```http
+Access-Control-Allow-Origin: <origin>
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, PUT, POST, DELETE, OPTIONS, PATCH
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With
+```
+
+### Troubleshooting CORS
+
+**Error: "CORS policy: No 'Access-Control-Allow-Origin' header"**
+
+1. Check that your frontend domain is in the allowlist
+2. Verify `PUBLIC_APP_URL` is set correctly
+3. Check browser console for the exact origin being blocked
+4. Add the origin to `allowedOrigins` array in `http-server.ts`
+
+**Preview deployments not working:**
+
+Cloudflare Pages preview deployments use subdomains like `abc123.hyperscape.pages.dev`. These are automatically allowed by the regex pattern:
+
+```typescript
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/
+```
+
+If you use a different preview domain pattern, add a regex for it.
 
 ## Debug Controls
 
@@ -140,6 +371,60 @@ The debug panel shows:
 The F5 keybind was added to match Minecraft's familiar debug screen shortcut.
 </Info>
 
+## CDN Manifest System
+
+Hyperscape fetches game manifests from the CDN at server startup instead of bundling them in the deployment:
+
+### Manifest Files
+
+The following manifests are fetched from `PUBLIC_CDN_URL/manifests/`:
+
+- `items.json` - Item definitions
+- `npcs.json` - NPC and mob data
+- `resources.json` - Gathering resources
+- `tools.json` - Tool definitions
+- `biomes.json` - Biome configurations
+- `world-areas.json` - World area definitions
+- `stores.json` - Shop inventories
+- `music.json` - Music track metadata
+- `vegetation.json` - Vegetation spawning
+- `buildings.json` - Building placements
+
+### Fetch Behavior
+
+**Production** (`NODE_ENV=production`):
+- Always fetches manifests from CDN
+- Compares with cached versions
+- Only updates files that changed
+- Falls back to cache if CDN unreachable
+
+**Development** (`NODE_ENV=development`):
+- Skips fetch if local manifests already exist
+- Allows working with local asset repository
+- Fetches from CDN if no local manifests found
+
+**CI/CD** (`CI=true` or `SKIP_ASSETS=true`):
+- Skips asset download during build
+- Relies on CDN for all assets and manifests
+- Faster builds and smaller deployment size
+
+### Configuration
+
+```typescript
+// From packages/server/src/startup/config.ts
+const MANIFEST_FILES = [
+  "items.json", "npcs.json", "resources.json", "tools.json",
+  "biomes.json", "world-areas.json", "stores.json", "music.json",
+  "vegetation.json", "buildings.json"
+];
+
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+<Info>
+Manifests are cached in `packages/server/world/assets/manifests/` and served to clients via `/manifests/` route with 5-minute cache headers.
+</Info>
+
 ## Privy Configuration
 
 1. Create account at [dashboard.privy.io](https://dashboard.privy.io)
@@ -151,9 +436,56 @@ The F5 keybind was added to match Minecraft's familiar debug screen shortcut.
   Without Privy, the game runs in anonymous mode with temporary identities.
 </Info>
 
+## New API Endpoints (ElizaOS 1.7)
+
+### Agent Management
+
+```
+GET  /api/agents/:agentId/goal           # Get current goal and progress
+POST /api/agents/:agentId/goal           # Set new goal
+POST /api/agents/:agentId/goal/stop      # Stop goal and pause autonomous behavior
+POST /api/agents/:agentId/goal/resume    # Resume autonomous goal selection
+POST /api/agents/:agentId/message        # Send message to agent
+GET  /api/agents/:agentId/quick-actions  # Get quick action menu data
+GET  /api/agents/mapping/:agentId        # Get agent-to-character mapping
+```
+
+### Data Endpoints
+
+```
+GET /api/data/skill-unlocks              # Get skill unlock definitions for all skills
+GET /api/characters/:characterId/skills  # Get character skill levels and XP
+GET /api/characters/:characterId/position # Get character position and online status
+```
+
+### Goal Control
+
+The stop/resume endpoints enable dashboard control of agent behavior:
+
+**Stop Goal** (`POST /api/agents/:agentId/goal/stop`):
+- Cancels current movement path
+- Sets `goalsPaused` flag to prevent auto-goal setting
+- Agent enters idle state
+- Chat commands still work
+
+**Resume Goal** (`POST /api/agents/:agentId/goal/resume`):
+- Clears `goalsPaused` flag
+- Agent resumes autonomous goal selection
+- Returns to normal behavior
+
+**Response Format**:
+```json
+{
+  "success": true,
+  "goal": null,
+  "goalsPaused": true,
+  "availableGoals": [...]
+}
+```
+
 ## GitHub Actions
 
-The repository includes automated workflows for code quality and documentation:
+The repository includes automated workflows for code quality, deployment, and documentation:
 
 ### Claude Code Review
 
@@ -163,7 +495,7 @@ Automatically reviews pull requests for bugs and code quality issues:
 # .github/workflows/claude-code-review.yml
 name: Claude Code Review
 on:
-  pull_request:
+  pull_request_target:  # Allows fork PRs to access secrets
     types: [opened, synchronize, ready_for_review, reopened]
 ```
 
@@ -171,6 +503,9 @@ on:
 - Automated code review on every PR
 - Checks for bugs and CLAUDE.md compliance
 - Posts review comments directly on PRs
+- Uses `pull_request_target` for fork PR support
+
+**Security**: Checks out PR head commit explicitly to review actual changes.
 
 ### Claude PR Assistant
 
@@ -190,6 +525,48 @@ on:
 - Comment `@claude` in any issue or PR
 - Claude will respond with code suggestions
 - Can read CI results and provide context-aware help
+
+### Railway Deployment
+
+Automatically deploys server to Railway on push to main:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+name: Deploy to Railway
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/shared/**'
+      - 'packages/server/**'
+      - 'packages/client/**'
+      - 'packages/plugin-hyperscape/**'
+```
+
+**Features:**
+- Triggers Railway deployment via GraphQL API
+- Monitors deployment status
+- Only deploys when relevant files change
+- Requires `RAILWAY_TOKEN` secret
+
+### Cloudflare Pages Deployment
+
+Deploys frontend to Cloudflare Pages:
+
+```yaml
+# .github/workflows/deploy-cloudflare.yml
+name: Deploy to Cloudflare Pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/client/**'
+```
+
+**Features:**
+- Builds and deploys client to Cloudflare Pages
+- Automatic preview deployments for PRs
+- Production deployment on main branch
 
 ### Documentation Updates
 
@@ -216,5 +593,53 @@ Configure these in your repository settings:
 | Secret | Purpose |
 |--------|---------|
 | `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code authentication |
+| `RAILWAY_TOKEN` | Railway deployment API token |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare Pages deployment |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
 | `MINTLIFY_API_KEY` | Documentation updates |
 | `MINTLIFY_PROJECT_ID` | Documentation project ID |
+| `RAILWAY_TOKEN` | Railway deployment automation |
+
+## CORS Configuration
+
+The server is configured to allow requests from production and development origins:
+
+### Allowed Origins
+
+**Production Domains**:
+- `https://hyperscape.club` - Main production site
+- `https://www.hyperscape.club` - WWW subdomain
+- `https://hyperscape.pages.dev` - Cloudflare Pages primary
+- `https://hyperscape-production.up.railway.app` - Railway server
+
+**Development Patterns**:
+- `http://localhost:*` - Any localhost port (3000, 3333, 5555, etc.)
+- `https://*.hyperscape.pages.dev` - Cloudflare Pages preview deployments
+- `https://*.up.railway.app` - Railway preview environments
+
+**Integration Domains**:
+- `https://*.farcaster.xyz` - Farcaster frame integration
+- `https://*.warpcast.com` - Warpcast integration
+- `https://*.privy.io` - Privy authentication
+
+<Info>
+CORS configuration is defined in `packages/server/src/startup/http-server.ts`. If you add custom domains, update the `allowedOrigins` array.
+</Info>
+
+### Adding Custom Domains
+
+To add a custom domain to CORS allowlist:
+
+1. Edit `packages/server/src/startup/http-server.ts`
+2. Add your domain to the `allowedOrigins` array:
+   ```typescript
+   const allowedOrigins = [
+     // ... existing origins
+     "https://your-custom-domain.com",
+   ];
+   ```
+3. Redeploy the server
+
+<Warning>
+Never use `origin: "*"` in production - it disables CORS protection and exposes your API to abuse.
+</Warning>

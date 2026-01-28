@@ -27,6 +27,1126 @@ Hyperscape uses manifest-driven design where game content is defined in TypeScri
 
 ## Manifest Files
 
+Manifests are JSON files that define game content. They are stored in `packages/server/world/assets/manifests/` and served from the CDN in production.
+
+### Manifest Loading
+
+**Development:**
+- Manifests loaded from local filesystem: `packages/server/world/assets/manifests/`
+- Assets cloned from [HyperscapeAI/assets](https://github.com/HyperscapeAI/assets) via Git LFS during `bun install`
+- CDN fetching skipped if local manifests exist (allows local modifications)
+- Local CDN serves assets at `http://localhost:8080`
+
+**Production (Railway + Cloudflare):**
+- Manifests fetched from CDN at server startup: `PUBLIC_CDN_URL/manifests/`
+- Cached locally in `packages/server/world/assets/manifests/`
+- Only re-fetched if content changes (HTTP ETag validation)
+- Assets served directly from Cloudflare R2 CDN (no local clone)
+- Frontend served from Cloudflare Pages (separate from game server)
+
+**CI/Test Environments:**
+- Set `CI=true` or `SKIP_ASSETS=true` to skip asset download
+- Set `SKIP_MANIFESTS=true` or `NODE_ENV=test` to allow starting without manifests
+- Useful for unit tests that don't need full game content
+
+### Fetch Implementation
+
+The `fetchManifestsFromCDN` function in `packages/server/src/startup/config.ts` handles manifest synchronization:
+
+```typescript
+async function fetchManifestsFromCDN(
+  cdnUrl: string,
+  manifestsDir: string,
+  nodeEnv: string,
+): Promise<void> {
+  // Skip in development if local manifests exist
+  if (nodeEnv === "development") {
+    const existingFiles = await fs.readdir(manifestsDir).catch(() => []);
+    if (existingFiles.length > 0) {
+      console.log(`[Config] ⏭️  Skipping CDN fetch - ${existingFiles.length} local manifests found`);
+      return;
+    }
+  }
+
+  // Fetch each manifest from CDN
+  for (const file of MANIFEST_FILES) {
+    const url = `${cdnUrl}/manifests/${file}`;
+    const response = await fetch(url);
+    const newContent = await response.text();
+    
+    // Only write if content changed (avoids unnecessary disk writes)
+    const existingContent = await fs.readFile(localPath, "utf-8").catch(() => "");
+    if (newContent !== existingContent) {
+      await fs.writeFile(localPath, newContent, "utf-8");
+    }
+  }
+}
+```
+
+This ensures the server always has the latest content without requiring redeployment when manifests change.
+
+### Manifest Directory Structure
+
+All manifests are in `world/assets/manifests/`:
+
+| File | Content |
+|------|---------|
+| `npcs.json` | Mobs and NPCs |
+| `items/` | Equipment, resources, consumables (split by category) |
+| `banks-stores.json` | Shop inventories |
+| `world-areas.json` | Zones and regions |
+| `avatars.json` | Character models |
+| `quests.json` | Quest definitions with stages and rewards |
+| `tier-requirements.json` | Equipment level requirements by tier |
+| `skill-unlocks.json` | What unlocks at each skill level (served via `/api/data/skill-unlocks`) |
+| `gathering/` | Resource gathering data (woodcutting, mining, fishing) |
+| `recipes/` | Processing recipes (cooking, firemaking, smelting, smithing) |
+| `stations.json` | World station configurations (anvils, furnaces, ranges, banks, altars) |
+| `prayers.json` | Prayer definitions with bonuses and drain rates |
+| `quests.json` | Quest definitions with stages, requirements, and rewards |
+| `model-bounds.json` | Auto-generated model footprints (build-time only) |
+
+<Info>
+The `skill-unlocks.json` manifest is served to clients via the `/api/data/skill-unlocks` API endpoint for use in the Skill Guide Panel UI.
+</Info>
+
+## Manifest Structure
+
+### NPCs (`npcs.json`)
+
+NPC data is loaded from JSON manifests at runtime by DataManager:
+
+```json
+[
+  {
+    "id": "goblin",
+    "name": "Goblin",
+    "description": "A weak goblin creature",
+    "category": "mob",
+    "faction": "monster",
+    "stats": {
+      "level": 2,
+      "health": 5,
+      "attack": 1,
+      "strength": 1,
+      "defense": 1
+    },
+    "combat": {
+      "attackable": true,
+      "aggressive": true,
+      "retaliates": true,
+      "aggroRange": 4,
+      "combatRange": 1,
+      "attackSpeedTicks": 4,
+      "respawnTicks": 35
+    },
+    "drops": {
+      "defaultDrop": { "enabled": true, "itemId": "bones", "quantity": 1 },
+      "common": [{ "itemId": "coins", "minQuantity": 5, "maxQuantity": 15, "chance": 1.0, "rarity": "common" }]
+    },
+    "appearance": { "modelPath": "asset://models/goblin/goblin.vrm", "scale": 0.75 }
+  }
+]
+```
+
+<Info>
+  NPC definitions are in `world/assets/manifests/npcs.json`, not hardcoded in TypeScript.
+</Info>
+
+### Items Directory
+
+Items are now organized into separate JSON files by category for better maintainability:
+
+```
+manifests/items/
+├── weapons.json      # Combat weapons (swords, axes, bows)
+├── tools.json        # Skilling tools (hatchets, pickaxes, fishing rods)
+├── resources.json    # Gathered materials (ores, logs, bars, raw fish)
+├── food.json         # Cooked consumables
+└── misc.json         # Currency, burnt food, junk items
+```
+
+All item files are loaded atomically by DataManager - if any required file is missing, the system falls back to the legacy `items.json` format.
+
+```typescript
+// From packages/shared/src/data/items.ts
+/**
+ * Item Database
+ *
+ * Items are loaded from world/assets/manifests/items/ directory by DataManager.
+ * This file provides the empty Map that gets populated at runtime.
+ *
+ * To add new items:
+ * 1. Add entries to appropriate file in world/assets/manifests/items/
+ * 2. Generate 3D models in 3D Asset Forge (optional)
+ * 3. Restart the server to reload manifests
+ */
+
+// Item Database - Populated by DataManager
+export const ITEMS: Map<string, Item> = new Map();
+
+// Helper functions
+export function getItem(itemId: string): Item | null {
+  return ITEMS.get(itemId) || null;
+}
+```
+
+### Tools (tools.json)
+
+Tools include a `tool` object specifying skill, priority, and optional bonus mechanics:
+
+```json
+{
+  "id": "dragon_pickaxe",
+  "name": "Dragon Pickaxe",
+  "type": "tool",
+  "tier": "dragon",
+  "tool": {
+    "skill": "mining",
+    "priority": 2,
+    "rollTicks": 3,
+    "bonusTickChance": 0.167,
+    "bonusRollTicks": 2
+  },
+  "equipSlot": "weapon",
+  "weaponType": "PICKAXE",
+  "attackType": "MELEE",
+  "value": 50000,
+  "weight": 2.2,
+  "description": "A powerful pickaxe with a chance for bonus mining speed",
+  "examine": "A pickaxe with a dragon metal head.",
+  "tradeable": true,
+  "rarity": "rare",
+  "modelPath": "asset://models/pickaxe-dragon/pickaxe-dragon.glb"
+}
+```
+
+#### Tool Properties
+
+```typescript
+interface GatheringToolData {
+  skill: "woodcutting" | "mining" | "fishing";
+  priority: number;              // Lower = better (1 = best)
+  levelRequired: number;         // Minimum skill level
+  rollTicks?: number;            // Mining: ticks between roll attempts
+  bonusTickChance?: number;      // Mining: chance for bonus speed roll
+  bonusRollTicks?: number;       // Mining: tick count when bonus triggers
+}
+```
+
+**Mining Pickaxe Bonus Speed:**
+
+Dragon and crystal pickaxes have a chance to mine faster:
+
+| Pickaxe | Roll Ticks | Bonus Chance | Bonus Ticks | Avg Speed |
+|---------|------------|--------------|-------------|-----------|
+| Bronze | 8 | - | - | 8 ticks |
+| Rune | 3 | - | - | 3 ticks |
+| Dragon | 3 | 1/6 (0.167) | 2 | 2.83 ticks |
+| Crystal | 3 | 1/4 (0.25) | 2 | 2.75 ticks |
+
+The bonus roll is determined **server-side** to maintain determinism and prevent client/server desyncs.
+
+<Info>
+Tools with `equipSlot: "weapon"` can be equipped and used for combat. The tier system automatically derives level requirements from `tier-requirements.json`.
+</Info>
+### Inventory Actions
+
+Items can define explicit `inventoryActions` for OSRS-accurate context menus:
+
+```json
+{
+  "id": "shrimp",
+  "name": "Shrimp",
+  "type": "consumable",
+  "healAmount": 3,
+  "inventoryActions": ["Eat", "Use", "Drop", "Examine"]
+}
+```
+
+The first action becomes the left-click default. Supported actions:
+
+| Action | Use Case | Example Items |
+|--------|----------|---------------|
+| **Eat** | Food items | Shrimp, Lobster, Shark |
+| **Drink** | Potions | Strength potion, Attack potion |
+| **Wield** | Weapons, shields | Bronze sword, Wooden shield |
+| **Wear** | Armor | Bronze platebody, Leather body |
+| **Bury** | Bones | Bones, Big bones, Dragon bones |
+| **Use** | Tools, misc | Tinderbox, Hammer, Logs |
+| **Drop** | Any item | (always available) |
+| **Examine** | Any item | (always available) |
+
+If `inventoryActions` is not specified, the system falls back to type-based detection using `item-helpers.ts`.
+
+### Gathering Resources (`gathering/`)
+
+**gathering/woodcutting.json** - Trees and log yields:
+```json
+{
+  "trees": [
+    {
+      "id": "tree_normal",
+      "name": "Tree",
+      "type": "tree",
+      "harvestSkill": "woodcutting",
+      "toolRequired": "bronze_hatchet",
+      "levelRequired": 1,
+      "baseCycleTicks": 4,
+      "depleteChance": 0.125,
+      "respawnTicks": 80,
+      "harvestYield": [
+        { "itemId": "logs", "quantity": 1, "chance": 1.0, "xpAmount": 25 }
+      ]
+    }
+  ]
+}
+```
+
+**gathering/mining.json** - Ore rocks with OSRS-accurate success rates:
+```json
+{
+  "rocks": [
+    {
+      "id": "rock_copper",
+      "name": "Copper rocks",
+      "type": "mining_rock",
+      "harvestSkill": "mining",
+      "toolRequired": "bronze_pickaxe",
+      "levelRequired": 1,
+      "baseCycleTicks": 8,
+      "depleteChance": 1.0,
+      "respawnTicks": 200,
+      "depletedModelPath": "asset://models/rocks/copper-rock-depleted.glb",
+      "depletedModelScale": 0.8,
+      "harvestYield": [
+        { 
+          "itemId": "copper_ore", 
+          "quantity": 1, 
+          "chance": 1.0, 
+          "xpAmount": 17.5,
+          "successRate": { "low": 100, "high": 256 }
+        }
+      ]
+    }
+  ]
+}
+```
+
+<Info>
+**Mining Depletion**: Rocks always deplete after one ore (`depleteChance: 1.0`). The `depletedModelPath` and `depletedModelScale` define the visual appearance of depleted rocks.
+</Info>
+
+### Gathering Resources
+
+Resource gathering data is split by skill for better organization:
+
+```
+manifests/gathering/
+├── woodcutting.json  # Trees, logs, XP values, level requirements
+├── mining.json       # Ore rocks, ores, XP values, level requirements
+└── fishing.json      # Fishing spots, fish, XP values, level requirements
+```
+
+Each manifest defines the resources, their requirements, XP rewards, and drop tables.
+
+### Processing Recipes
+
+Processing recipes are organized by skill:
+
+```
+manifests/recipes/
+├── cooking.json      # Raw → cooked food recipes
+├── firemaking.json   # Log burning recipes
+├── smelting.json     # Ore → bar recipes (at furnaces)
+└── smithing.json     # Bar → equipment recipes (at anvils)
+```
+
+These manifests define inputs, outputs, level requirements, XP rewards, and tick-based timing.
+
+### Station Configurations
+
+World stations (anvils, furnaces, ranges, banks, altars) are configured in `stations.json`:
+
+```json
+{
+  "stations": [
+    {
+      "type": "anvil",
+      "name": "Anvil",
+      "model": "asset://models/anvil/anvil.glb",
+      "modelScale": 0.5,
+      "modelYOffset": 0.4,
+      "examine": "An anvil. Used to make things out of metal."
+    },
+    {
+      "type": "furnace",
+      "name": "Furnace",
+      "model": "asset://models/furnace/furnace.glb",
+      "modelScale": 1.5,
+      "modelYOffset": 1.0,
+      "examine": "A very hot furnace."
+    }
+  ]
+}
+```
+
+This allows 3D models and configurations to be updated without code changes. The `modelScale` and `modelYOffset` properties control the visual appearance of stations in the world.
+
+### Stations (`stations.json`)
+
+Defines crafting stations and interactive objects in the world:
+
+```json
+{
+  "stations": [
+    {
+      "type": "anvil",
+      "name": "Anvil",
+      "model": "asset://models/anvil/anvil.glb",
+      "modelScale": 0.5,
+      "modelYOffset": 0.2,
+      "examine": "An anvil for smithing metal bars into weapons and tools."
+    },
+    {
+      "type": "furnace",
+      "name": "Furnace",
+      "model": "asset://models/furnace/furnace.glb",
+      "modelScale": 1.5,
+      "modelYOffset": 1.0,
+      "examine": "A furnace for smelting ores into metal bars."
+    }
+  ]
+}
+```
+
+Station types include:
+- **Anvil** — Smith bars into equipment
+- **Furnace** — Smelt ores into bars
+- **Range** — Cook food with reduced burn chance
+- **Bank** — Store items
+- **Altar** — Restore prayer points
+
+## Manifest Loading
+
+### Server-Side Loading
+
+The server loads manifests in two ways depending on the environment:
+
+**Production/CI:**
+```typescript
+// Fetches from CDN at startup
+await fetchManifestsFromCDN(
+  'https://assets.hyperscape.club',
+  'world/assets/manifests/',
+  'production'
+);
+```
+
+**Development:**
+```typescript
+// Skips CDN fetch if local manifests exist
+// Falls back to local world/assets/manifests/
+```
+
+**Manifest Files Fetched:**
+- Root: `biomes.json`, `npcs.json`, `prayers.json`, `stations.json`, etc.
+- Items: `items/food.json`, `items/weapons.json`, `items/tools.json`, etc.
+- Gathering: `gathering/fishing.json`, `gathering/mining.json`, etc.
+- Recipes: `recipes/cooking.json`, `recipes/smithing.json`, etc.
+
+Total: 25+ manifest files fetched and cached at startup.
+
+**Caching:**
+- Manifests cached locally in `world/assets/manifests/`
+- HTTP cache headers: `max-age=300, must-revalidate` (5 minutes)
+- Compares content before writing to avoid unnecessary disk I/O
+
+**Error Handling:**
+- Logs warnings for failed fetches
+- Falls back to existing local manifests if CDN unavailable
+- Throws error only if no manifests exist at all (prevents broken startup)
+
+### Client-Side Loading
+
+The client fetches manifests from CDN via DataManager:
+
+```typescript
+// From packages/shared/src/data/DataManager.ts
+await dataManager.initialize();
+// Fetches from PUBLIC_CDN_URL/manifests/
+```
+
+## DataManager
+
+The `DataManager` class loads all manifests and populates runtime data structures. Smithing, cooking, and other processing skills use recipe manifests:
+
+**Smelting Recipe** (`recipes/smelting.json`):
+```json
+{
+  "recipes": [
+    {
+      "output": "bronze_bar",
+      "inputs": [
+        { "item": "copper_ore", "amount": 1 },
+        { "item": "tin_ore", "amount": 1 }
+      ],
+      "level": 1,
+      "xp": 6.25,
+      "ticks": 4,
+      "successRate": 1.0
+    }
+  ]
+}
+```
+
+**Smithing Recipe** (`recipes/smithing.json`):
+```json
+{
+  "recipes": [
+    {
+      "output": "bronze_sword",
+      "bar": "bronze_bar",
+      "barsRequired": 1,
+      "level": 4,
+      "xp": 12.5,
+      "ticks": 4,
+      "category": "weapons"
+    }
+  ]
+}
+```
+
+### Tier Requirements (`tier-requirements.json`)
+
+Defines level requirements by equipment tier:
+
+```json
+{
+  "melee": {
+    "bronze": { "attack": 1, "defence": 1 },
+    "iron": { "attack": 1, "defence": 1 },
+    "steel": { "attack": 5, "defence": 5 },
+    "mithril": { "attack": 20, "defence": 20 },
+    "adamant": { "attack": 30, "defence": 30 },
+    "rune": { "attack": 40, "defence": 40 }
+  },
+  "tools": {
+    "bronze": { "attack": 1, "woodcutting": 1, "mining": 1 },
+    "steel": { "attack": 5, "woodcutting": 6, "mining": 6 },
+    "mithril": { "attack": 20, "woodcutting": 21, "mining": 21 }
+  }
+}
+```
+
+### Prayers (`prayers.json`)
+
+Defines prayer bonuses, drain rates, and conflicts:
+
+```json
+{
+  "prayers": [
+    {
+      "id": "thick_skin",
+      "name": "Thick Skin",
+      "description": "Increases Defense by 5%",
+      "icon": "🛡️",
+      "level": 1,
+      "category": "defensive",
+      "drainEffect": 3,
+      "bonuses": {
+        "defenseMultiplier": 1.05
+      },
+      "conflicts": ["rock_skin", "steel_skin"]
+    },
+    {
+      "id": "burst_of_strength",
+      "name": "Burst of Strength",
+      "description": "Increases Strength by 5%",
+      "icon": "💪",
+      "level": 4,
+      "category": "offensive",
+      "drainEffect": 3,
+      "bonuses": {
+        "strengthMultiplier": 1.05
+      },
+      "conflicts": ["superhuman_strength"]
+    }
+  ]
+}
+```
+
+**Prayer Fields:**
+- `id` — Unique prayer ID (lowercase, underscores, max 64 chars)
+- `name` — Display name
+- `description` — Effect description for tooltip
+- `icon` — Emoji icon for UI
+- `level` — Required Prayer level (1-99)
+- `category` — "offensive", "defensive", or "utility"
+- `drainEffect` — Drain rate (higher = faster drain)
+- `bonuses` — Combat stat multipliers (attackMultiplier, strengthMultiplier, defenseMultiplier)
+- `conflicts` — Array of prayer IDs that conflict with this prayer
+
+<Info>
+Prayer bonuses are multipliers applied to base stats. A value of 1.05 means +5%, 1.10 means +10%.
+</Info>
+
+### Station Configuration (`stations.json`)
+
+Defines world stations with 3D models:
+
+```json
+{
+  "stations": [
+    {
+      "type": "anvil",
+      "name": "Anvil",
+      "model": "asset://models/anvil/anvil.glb",
+      "modelScale": 0.5,
+      "modelYOffset": 0.4,
+      "examine": "An anvil for smithing metal bars into weapons and tools."
+    },
+    {
+      "type": "furnace",
+      "name": "Furnace",
+      "model": "asset://models/furnace/furnace.glb",
+      "modelScale": 1.5,
+      "modelYOffset": 1.0,
+      "examine": "A furnace for smelting ores into metal bars."
+    }
+  ]
+}
+```
+
+## Data Providers
+
+### Manifest Distribution
+
+### Development vs Production
+
+Hyperscape uses different manifest loading strategies for development and production:
+
+**Development (Local):**
+- Manifests loaded from `packages/server/world/assets/manifests/`
+- Assets cloned via Git LFS during `bun install`
+- CDN serves from local Docker nginx container
+
+**Production (Railway/Cloudflare):**
+- Manifests fetched from CDN at server startup
+- Cached locally in `packages/server/world/assets/manifests/`
+- Assets served from Cloudflare R2
+
+### CDN Manifest Fetching
+
+The server automatically fetches manifests from the CDN on startup:
+
+```typescript
+// From packages/server/src/startup/config.ts
+const MANIFEST_FILES = [
+  "items.json", "npcs.json", "resources.json", "tools.json",
+  "biomes.json", "world-areas.json", "stores.json", "music.json",
+  "vegetation.json", "buildings.json"
+];
+
+// Fetched from: PUBLIC_CDN_URL/manifests/*.json
+// Cached to: packages/server/world/assets/manifests/
+```
+
+**Fetching Behavior:**
+- **Production/CI**: Always fetches from CDN to ensure latest data
+- **Development**: Skips fetch if local manifests exist (allows local development)
+- **Caching**: Compares content before writing to avoid unnecessary disk I/O
+- **Fallback**: Uses existing local manifests if CDN fetch fails
+
+**Benefits:**
+- Update game content by deploying new manifests to CDN
+- No server redeployment needed for content changes
+- Server always has latest game data
+- Reduces deployment size (manifests not bundled in Docker image)
+
+**Environment Variable:**
+```bash
+PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production
+# or
+PUBLIC_CDN_URL=http://localhost:8080  # Development
+```
+
+<Info>
+This architecture allows content updates (new items, NPCs, balance changes) to be deployed by updating manifests on the CDN, without requiring server redeployment or downtime.
+</Info>
+
+## DataManager
+
+The `DataManager` class in `packages/shared/src/data/DataManager.ts` loads all manifests from JSON files and populates runtime data structures:
+
+```typescript
+import { dataManager } from '@hyperscape/shared';
+
+// Initialize (loads all manifests)
+await dataManager.initialize();
+
+// Access loaded data via global maps
+import { ITEMS, ALL_NPCS } from '@hyperscape/shared';
+
+const item = ITEMS.get("bronze_sword");
+const npc = ALL_NPCS.get("goblin");
+```
+
+### Manifest Loading
+
+DataManager supports two loading modes:
+
+1. **Filesystem** (server-side): Loads from `packages/server/world/assets/manifests/`
+2. **CDN** (client-side): Fetches from `PUBLIC_CDN_URL/manifests/`
+
+The loading is **atomic** for directory-based manifests - all required files must exist or it falls back to legacy single-file format.
+
+### CDN Manifest Fetching
+
+The server automatically fetches manifests from the CDN at startup:
+
+```typescript
+// From packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Fetching behavior:**
+
+| Environment | Behavior |
+|-------------|----------|
+| **Development** | Skips fetch if local manifests exist (allows local editing) |
+| **Production** | Always fetches latest from CDN (ensures consistency) |
+| **Staging** | Always fetches from staging CDN bucket |
+| **Test** | Skips fetch if `SKIP_MANIFESTS=true` or `NODE_ENV=test` |
+
+**Manifest files fetched** (30+ files):
+- Root: `npcs.json`, `stores.json`, `world-areas.json`, `prayers.json`, `skill-unlocks.json`, etc.
+- Items: `items/weapons.json`, `items/tools.json`, `items/resources.json`, `items/food.json`, `items/misc.json`
+- Gathering: `gathering/woodcutting.json`, `gathering/mining.json`, `gathering/fishing.json`
+- Recipes: `recipes/cooking.json`, `recipes/firemaking.json`, `recipes/smelting.json`, `recipes/smithing.json`
+
+**Caching:**
+- Manifests cached in `packages/server/world/assets/manifests/`
+- Content comparison: Only changed files are written to disk
+- HTTP cache headers: 5-minute cache with revalidation
+- Startup logs: `X fetched, Y updated, Z failed`
+
+<Info>
+  This architecture allows updating game content by uploading new manifests to R2 without redeploying the server. The server will fetch the latest manifests on next restart.
+</Info>
+
+## Adding Content
+
+### Development Workflow
+
+<Steps>
+  <Step title="Choose the right manifest">
+    Determine which manifest file to edit based on content type:
+    
+    - **Items**: `manifests/items/weapons.json`, `tools.json`, `resources.json`, `food.json`, or `misc.json`
+    - **NPCs/Mobs**: `manifests/npcs.json`
+    - **Gathering Resources**: `manifests/gathering/woodcutting.json`, `mining.json`, or `fishing.json`
+    - **Processing Recipes**: `manifests/recipes/cooking.json`, `firemaking.json`, `smelting.json`, or `smithing.json`
+    - **Stations**: `manifests/stations.json`
+    - **World Areas**: `manifests/world-areas.json`
+  </Step>
+  
+  <Step title="Edit manifest locally">
+    Add your content following the existing structure. Use tier-based requirements for equipment:
+    
+    ```json
+    {
+      "id": "mithril_sword",
+      "name": "Mithril Sword",
+      "type": "weapon",
+      "tier": "mithril",  // Automatically gets attack: 20 requirement
+      "weaponType": "SWORD",
+      "attackSpeed": 4
+    }
+    ```
+  </Step>
+  
+  <Step title="Test locally">
+    Restart the server to reload manifests:
+    
+    ```bash
+    bun run dev
+    ```
+    
+    Verify the content appears correctly in-game.
+  </Step>
+  
+  <Step title="Deploy to staging">
+    1. Commit changes to a feature branch
+    2. Create PR and merge to `staging` branch
+    3. GitHub Actions uploads manifests to R2 staging bucket
+    4. Railway redeploys staging server
+    5. Server fetches updated manifests from staging CDN
+  </Step>
+  
+  <Step title="Deploy to production">
+    After testing in staging:
+    
+    1. Merge `staging` → `main`
+    2. GitHub Actions uploads to production R2 bucket
+    3. Railway redeploys production server
+    4. Server fetches updated manifests from production CDN
+  </Step>
+</Steps>
+
+- **Items**: `manifests/items/weapons.json`, `tools.json`, `resources.json`, `food.json`, or `misc.json`
+- **NPCs/Mobs**: `manifests/npcs.json`
+- **Gathering Resources**: `manifests/gathering/woodcutting.json`, `mining.json`, or `fishing.json`
+- **Processing Recipes**: `manifests/recipes/cooking.json`, `firemaking.json`, `smelting.json`, or `smithing.json`
+- **Stations**: `manifests/stations.json`
+- **Quests**: `manifests/quests.json`
+- **World Areas**: `manifests/world-areas.json`
+
+You can update manifests in production without redeploying the server:
+
+1. Upload new manifest to R2:
+   ```bash
+   wrangler r2 object put "hyperscape-assets/manifests/npcs.json" \
+     --file="packages/server/world/assets/manifests/npcs.json" \
+     --content-type="application/json"
+   ```
+
+2. Restart the server (Railway dashboard or API)
+
+3. Server fetches latest manifests from R2 on startup
+
+<Warning>
+  Always test manifest changes in staging before uploading to production R2.
+</Warning>
+
+## Validation
+
+Manifests are JSON files validated at runtime by DataManager:
+
+- **Schema validation**: Invalid fields logged as warnings
+- **Duplicate detection**: Duplicate item IDs across files cause errors
+- **Reference checking**: Invalid itemId/npcId references caught at runtime
+- **Atomic loading**: Items directory loads all files or falls back to legacy format
+
+<Warning>
+  Invalid JSON syntax will cause server startup to fail. Use a JSON validator before committing changes.
+</Warning>
+
+## Data Providers
+
+The manifest system uses specialized data providers for efficient lookups:
+
+| Provider | Purpose | Manifest Source |
+|----------|---------|-----------------|
+| `ProcessingDataProvider` | Cooking, firemaking, smelting, smithing recipes | `recipes/*.json` |
+| `TierDataProvider` | Equipment level requirements by tier | `tier-requirements.json` |
+| `StationDataProvider` | Station models and configurations | `stations.json` |
+| `DataManager` | Central loader for all manifests | All manifests |
+
+These providers build optimized lookup tables at startup for fast runtime queries.
+
+### PrayerDataProvider Usage
+
+Access prayer definitions at runtime:
+
+```typescript
+import { prayerDataProvider } from '@hyperscape/shared';
+
+// Get prayer definition
+const prayer = prayerDataProvider.getPrayer("thick_skin");
+// Returns: { id, name, description, icon, level, category, drainEffect, bonuses, conflicts }
+
+// Get all prayers available at player's level
+const available = prayerDataProvider.getAvailablePrayers(prayerLevel);
+
+// Check for conflicts
+const conflicts = prayerDataProvider.getConflictsWithActive("rock_skin", activePrayers);
+
+// Validate activation
+const canActivate = prayerDataProvider.canActivatePrayer(
+  "burst_of_strength",
+  prayerLevel,
+  currentPoints,
+  activePrayers
+);
+```
+
+**Prayer Loading:**
+- Loaded by `DataManager` at startup
+- Validates prayer ID format, bonuses, and conflicts
+- Builds optimized lookup tables by level and category
+- Provides type-safe access methods
+
+### StationDataProvider Usage
+
+Access station configurations at runtime:
+
+```typescript
+import { stationDataProvider } from '@hyperscape/shared';
+
+// Get full station data
+const anvilData = stationDataProvider.getStationData("anvil");
+// Returns: { type, name, model, modelScale, modelYOffset, examine }
+
+// Get specific properties
+const modelPath = stationDataProvider.getModelPath("furnace");
+const scale = stationDataProvider.getModelScale("anvil");
+const yOffset = stationDataProvider.getModelYOffset("furnace");
+
+// Station entities use this for model loading
+// AnvilEntity and FurnaceEntity automatically load models from manifest
+// Falls back to placeholder geometry if model loading fails
+```
+
+**Station Model Loading**:
+- Models loaded via `ModelCache` with transform baking
+- `modelYOffset` raises model so base sits on ground
+- Graceful fallback to blue box placeholder if model fails
+- Shadows and raycasting layers configured automatically
+
+### Quests (`quests.json`)
+
+The `quests.json` manifest defines quest content with stages, requirements, and rewards:
+
+```json
+{
+  "goblin_slayer": {
+    "id": "goblin_slayer",
+    "name": "Goblin Slayer",
+    "description": "Captain Rowan needs help dealing with the goblin threat.",
+    "difficulty": "novice",
+    "questPoints": 1,
+    "replayable": false,
+    "requirements": {
+      "quests": [],
+      "skills": {},
+      "items": []
+    },
+    "startNpc": "captain_rowan",
+    "stages": [
+      {
+        "id": "start",
+        "type": "dialogue",
+        "description": "Speak to Captain Rowan in Central Haven",
+        "npcId": "captain_rowan"
+      },
+      {
+        "id": "kill_goblins",
+        "type": "kill",
+        "description": "Kill 15 goblins",
+        "target": "goblin",
+        "count": 15
+      },
+      {
+        "id": "return",
+        "type": "dialogue",
+        "description": "Return to Captain Rowan",
+        "npcId": "captain_rowan"
+      }
+    ],
+    "onStart": {
+      "items": [
+        { "itemId": "bronze_sword", "quantity": 1 }
+      ],
+      "dialogue": "quest_accepted"
+    },
+    "rewards": {
+      "questPoints": 1,
+      "items": [
+        { "itemId": "xp_lamp_100", "quantity": 1 }
+      ],
+      "xp": {}
+    }
+  }
+}
+```
+
+**Properties**:
+- `id` — Unique quest identifier
+- `name` — Display name shown in quest log
+- `description` — Brief quest summary
+- `difficulty` — Quest difficulty: `novice`, `intermediate`, `experienced`, `master`
+- `questPoints` — Quest points awarded on completion
+- `replayable` — Whether quest can be repeated after completion
+- `requirements` — Prerequisites to start the quest
+  - `quests` — Required completed quests
+  - `skills` — Minimum skill levels (e.g., `{"woodcutting": 15}`)
+  - `items` — Required items in inventory
+- `startNpc` — NPC ID to start the quest
+- `stages` — Ordered list of quest objectives
+  - `type` — Stage type: `dialogue`, `kill`, `gather`, `interact`
+  - `description` — Objective description shown to player
+  - `target` — Target entity/item ID
+  - `count` — Required count for completion
+- `onStart` — Items and dialogue triggered when quest starts
+- `rewards` — Quest completion rewards
+  - `questPoints` — Quest points awarded
+  - `items` — Item rewards
+  - `xp` — Skill XP rewards (e.g., `{"attack": 100}`)
+
+**Stage Types**:
+- **dialogue** — Talk to an NPC
+- **kill** — Defeat a specific number of enemies
+- **gather** — Collect resources (woodcutting, mining, fishing)
+- **interact** — Use items or interact with objects
+
+<Info>
+Quest progress is tracked server-side. Players can view active and completed quests in the quest log interface.
+</Info>
+
+### Prayers (`prayers.json`)
+
+The `prayers.json` manifest defines OSRS-accurate prayer abilities with stat bonuses and drain mechanics:
+
+```json
+{
+  "$schema": "./prayers.schema.json",
+  "_comment": "OSRS-accurate prayer definitions. drainEffect: higher = faster drain.",
+  "prayers": [
+    {
+      "id": "thick_skin",
+      "name": "Thick Skin",
+      "description": "Increases your Defence by 5%",
+      "icon": "prayer_thick_skin",
+      "level": 1,
+      "category": "defensive",
+      "drainEffect": 1,
+      "bonuses": {
+        "defenseMultiplier": 1.05
+      },
+      "conflicts": ["rock_skin", "steel_skin", "chivalry", "piety"]
+    }
+  ]
+}
+```
+
+**Properties**:
+- `id` — Unique prayer identifier
+- `name` — Display name shown in prayer book
+- `description` — Effect description for tooltip
+- `icon` — Icon asset path for prayer book UI
+- `level` — Prayer level required to unlock
+- `category` — Prayer type: `offensive`, `defensive`, or `utility`
+- `drainEffect` — Drain rate (higher = faster drain)
+- `bonuses` — Stat multipliers applied when active
+  - `attackMultiplier` — Attack bonus (e.g., 1.05 = +5%)
+  - `strengthMultiplier` — Strength bonus
+  - `defenseMultiplier` — Defense bonus
+- `conflicts` — Array of prayer IDs that cannot be active simultaneously
+
+**Categories**:
+- **Offensive** — Attack and strength bonuses (Burst of Strength, Clarity of Thought)
+- **Defensive** — Defense bonuses (Thick Skin, Rock Skin, Steel Skin)
+- **Utility** — Special effects (future: Protect from Melee, Rapid Heal)
+
+**Conflict System**:
+Prayers in the same category typically conflict. Activating a prayer automatically deactivates conflicting prayers (OSRS-accurate behavior).
+
+<Info>
+Prayer drain rates follow OSRS formulas. The `drainEffect` value determines how quickly prayer points deplete while the prayer is active.
+</Info>
+
+### Quests (`quests.json`)
+
+Defines multi-stage quests with objectives, requirements, and rewards:
+
+```json
+{
+  "goblin_slayer": {
+    "id": "goblin_slayer",
+    "name": "Goblin Slayer",
+    "description": "Kill 15 goblins to prove your worth.",
+    "difficulty": "novice",
+    "questPoints": 1,
+    "replayable": false,
+    "requirements": {
+      "quests": [],
+      "skills": {},
+      "items": []
+    },
+    "startNpc": "cook",
+    "stages": [
+      {
+        "id": "talk_to_cook",
+        "type": "dialogue",
+        "description": "Talk to the Cook to start the quest."
+      },
+      {
+        "id": "kill_goblins",
+        "type": "kill",
+        "description": "Kill 15 goblins.",
+        "target": "goblin",
+        "count": 15
+      },
+      {
+        "id": "return_to_cook",
+        "type": "dialogue",
+        "description": "Return to the Cook."
+      }
+    ],
+    "onStart": {
+      "items": [{ "itemId": "bronze_sword", "quantity": 1 }]
+    },
+    "rewards": {
+      "questPoints": 1,
+      "items": [{ "itemId": "xp_lamp_1000", "quantity": 1 }],
+      "xp": { "attack": 500, "strength": 500 }
+    }
+  }
+}
+```
+
+**Quest Properties**:
+- `id` — Unique quest identifier (snake_case)
+- `name` — Display name shown in quest journal
+- `description` — Quest summary
+- `difficulty` — `novice`, `intermediate`, `experienced`, `master`
+- `questPoints` — Quest points awarded on completion
+- `replayable` — Whether quest can be repeated (typically false)
+- `requirements` — Prerequisites to start quest
+  - `quests` — Array of quest IDs that must be completed
+  - `skills` — Skill level requirements (e.g., `{ "attack": 10 }`)
+  - `items` — Required items in inventory
+- `startNpc` — NPC ID that starts the quest
+- `stages` — Array of quest objectives
+- `onStart` — Items granted when quest starts (optional)
+- `rewards` — Rewards granted on completion
+
+**Stage Types**:
+- `dialogue` — Talk to NPC (auto-completes via dialogue system)
+- `kill` — Kill specific mob type (`target`: mob type, `count`: number)
+- `gather` — Gather items (`target`: item ID, `count`: number)
+- `interact` — Interact with entities (`target`: entity type, `count`: number)
+
+**Security**: Quest IDs are validated with `isValidQuestId()` to prevent injection attacks. Max length: 64 characters, pattern: `^[a-z][a-z0-9_]{0,63}---
+title: "Manifest-Driven Design"
+description: "Data-driven content through TypeScript manifest files"
+icon: "file-json"
+---
+
+## Overview
+
+Hyperscape uses manifest-driven design where game content is defined in TypeScript data files rather than hardcoded in logic. This enables content creation without modifying game systems.
+
+## Design Philosophy
+
+### Separation of Concerns
+
+| Layer | Responsibility |
+|-------|----------------|
+| **Manifests** | Content definitions (what exists) |
+| **Systems** | Game logic (how things work) |
+| **Entities** | Runtime instances |
+
+### Benefits
+
+- **Content creators** can add items, NPCs, areas without deep coding
+- **Designers** iterate quickly on balance
+- **Developers** focus on systems, not data
+- **Modders** can extend content easily
+
+## Manifest Files
+
 All manifests are in `world/assets/manifests/`:
 
 | File | Content |
@@ -42,6 +1162,7 @@ All manifests are in `world/assets/manifests/`:
 | `recipes/` | Processing recipes (cooking, firemaking, smelting, smithing) |
 | `stations.json` | World station configurations (anvils, furnaces, ranges) |
 | `prayers.json` | Prayer definitions with bonuses and drain rates |
+| `quests.json` | Quest definitions with stages, requirements, and rewards |
 | `model-bounds.json` | Auto-generated model footprints (build-time only) |
 
 ## Manifest Structure
@@ -311,7 +1432,10 @@ World stations (anvils, furnaces, ranges, banks) are configured in `stations.jso
       "model": "asset://models/anvil/anvil.glb",
       "modelScale": 0.5,
       "modelYOffset": 0.4,
-      "examine": "An anvil. Used to make things out of metal."
+      "examine": "An anvil. Used to make things out of metal.",
+      "flattenGround": true,
+      "flattenPadding": 0.3,
+      "flattenBlendRadius": 0.5
     },
     {
       "type": "furnace",
@@ -319,13 +1443,37 @@ World stations (anvils, furnaces, ranges, banks) are configured in `stations.jso
       "model": "asset://models/furnace/furnace.glb",
       "modelScale": 1.5,
       "modelYOffset": 1.0,
-      "examine": "A very hot furnace."
+      "examine": "A very hot furnace.",
+      "flattenGround": true,
+      "flattenPadding": 0.5,
+      "flattenBlendRadius": 0.8
     }
   ]
 }
 ```
 
 This allows 3D models and configurations to be updated without code changes. The `modelScale` and `modelYOffset` properties control the visual appearance of stations in the world.
+
+#### Terrain Flattening
+
+Stations can optionally flatten terrain underneath for level building surfaces:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `flattenGround` | boolean | `false` | Enable terrain flattening under this station |
+| `flattenPadding` | number | `0.3` | Extra meters around footprint to flatten |
+| `flattenBlendRadius` | number | `0.5` | Meters over which to blend from flat to procedural terrain |
+
+**How it works:**
+- Station footprint calculated from model bounds × scale
+- Flat zone created with dimensions: `(footprint + padding × 2)`
+- Terrain height sampled at station center position
+- Smoothstep blending (t² × (3 - 2t)) creates natural transitions
+- Spatial indexing using terrain tiles (100m) for O(1) lookup
+
+<Info>
+Terrain flattening ensures stations sit on level ground even on hills or slopes, improving visual quality and preventing floating/clipping issues.
+</Info>
 
 ### Stations (`stations.json`)
 
@@ -340,7 +1488,10 @@ Defines crafting stations and interactive objects in the world:
       "model": "asset://models/anvil/anvil.glb",
       "modelScale": 0.5,
       "modelYOffset": 0.2,
-      "examine": "An anvil for smithing metal bars into weapons and tools."
+      "examine": "An anvil for smithing metal bars into weapons and tools.",
+      "flattenGround": true,
+      "flattenPadding": 2.0,
+      "flattenBlendRadius": 2.0
     },
     {
       "type": "furnace",
@@ -348,17 +1499,65 @@ Defines crafting stations and interactive objects in the world:
       "model": "asset://models/furnace/furnace.glb",
       "modelScale": 1.5,
       "modelYOffset": 1.0,
-      "examine": "A furnace for smelting ores into metal bars."
+      "examine": "A furnace for smelting ores into metal bars.",
+      "flattenGround": true,
+      "flattenPadding": 2.5,
+      "flattenBlendRadius": 2.5
+    },
+    {
+      "type": "range",
+      "name": "Cooking Range",
+      "model": "asset://models/cooking-range/cooking-range.glb",
+      "modelScale": 1.0,
+      "modelYOffset": 0.3,
+      "examine": "A range for cooking food. Reduces burn chance.",
+      "flattenGround": true,
+      "flattenPadding": 2.0,
+      "flattenBlendRadius": 2.0
+    },
+    {
+      "type": "bank",
+      "name": "Bank Chest",
+      "model": "asset://models/bank-chest/bank-chest.glb",
+      "modelScale": 0.5,
+      "modelYOffset": 0.10,
+      "examine": "A bank chest for storing items.",
+      "flattenGround": true,
+      "flattenPadding": 2.0,
+      "flattenBlendRadius": 2.0
+    },
+    {
+      "type": "altar",
+      "name": "Altar",
+      "model": "asset://models/prayer-alter/prayer-alter.glb",
+      "modelScale": 1.0,
+      "modelYOffset": 0.25,
+      "examine": "An altar to the gods. Pray here to restore prayer points.",
+      "flattenGround": true,
+      "flattenPadding": 2.5,
+      "flattenBlendRadius": 2.5
     }
   ]
 }
 ```
 
-Station types include:
+**Station Properties:**
+- `type` — Station identifier (anvil, furnace, range, bank, altar)
+- `name` — Display name
+- `model` — Path to 3D model asset
+- `modelScale` — Scale multiplier for the model
+- `modelYOffset` — Vertical position offset
+- `examine` — Text shown when examining the station
+- `flattenGround` — Whether to flatten terrain under the station
+- `flattenPadding` — Radius of flattened area around station
+- `flattenBlendRadius` — Blend radius for smooth terrain transition
+
+**Station Types:**
 - **Anvil** — Smith bars into equipment
 - **Furnace** — Smelt ores into bars
 - **Range** — Cook food with reduced burn chance
 - **Bank** — Store items
+- **Altar** — Restore prayer points
 
 ## DataManager
 
@@ -422,58 +1621,6 @@ Defines level requirements by equipment tier:
 }
 ```
 
-### Prayers (`prayers.json`)
-
-Defines prayer bonuses, drain rates, and conflicts:
-
-```json
-{
-  "prayers": [
-    {
-      "id": "thick_skin",
-      "name": "Thick Skin",
-      "description": "Increases Defense by 5%",
-      "icon": "🛡️",
-      "level": 1,
-      "category": "defensive",
-      "drainEffect": 3,
-      "bonuses": {
-        "defenseMultiplier": 1.05
-      },
-      "conflicts": ["rock_skin", "steel_skin"]
-    },
-    {
-      "id": "burst_of_strength",
-      "name": "Burst of Strength",
-      "description": "Increases Strength by 5%",
-      "icon": "💪",
-      "level": 4,
-      "category": "offensive",
-      "drainEffect": 3,
-      "bonuses": {
-        "strengthMultiplier": 1.05
-      },
-      "conflicts": ["superhuman_strength"]
-    }
-  ]
-}
-```
-
-**Prayer Fields:**
-- `id` — Unique prayer ID (lowercase, underscores, max 64 chars)
-- `name` — Display name
-- `description` — Effect description for tooltip
-- `icon` — Emoji icon for UI
-- `level` — Required Prayer level (1-99)
-- `category` — "offensive", "defensive", or "utility"
-- `drainEffect` — Drain rate (higher = faster drain)
-- `bonuses` — Combat stat multipliers (attackMultiplier, strengthMultiplier, defenseMultiplier)
-- `conflicts` — Array of prayer IDs that conflict with this prayer
-
-<Info>
-Prayer bonuses are multipliers applied to base stats. A value of 1.05 means +5%, 1.10 means +10%.
-</Info>
-
 ### Station Configuration (`stations.json`)
 
 Defines world stations with 3D models:
@@ -503,16 +1650,6 @@ Defines world stations with 3D models:
 
 ## Data Providers
 
-The manifest system uses specialized data providers for efficient lookups:
-
-| Provider | Purpose | Manifest Source |
-|----------|---------|-----------------| 
-| `ProcessingDataProvider` | Cooking, firemaking, smelting, smithing recipes | `recipes/*.json` |
-| `TierDataProvider` | Equipment level requirements by tier | `tier-requirements.json` |
-| `StationDataProvider` | Station models and configurations | `stations.json` |
-| `PrayerDataProvider` | Prayer definitions, bonuses, conflicts | `prayers.json` |
-| `DataManager` | Central loader for all manifests | All manifests |
-
 ### DataManager
 
 The `DataManager` class in `packages/shared/src/data/DataManager.ts` loads all manifests from JSON files and populates runtime data structures:
@@ -541,6 +1678,58 @@ The loading is **atomic** for directory-based manifests - all required files mus
 
 ## Adding Content
 
+### World Areas with Station Spawns (`world-areas.json`)
+
+World areas now support data-driven station spawning:
+
+```json
+{
+  "areas": [
+    {
+      "id": "central_haven",
+      "name": "Central Haven",
+      "description": "The starting town for new adventurers",
+      "bounds": {
+        "minX": -100,
+        "maxX": 100,
+        "minZ": -100,
+        "maxZ": 100
+      },
+      "stations": [
+        {
+          "type": "bank",
+          "position": [10, 0, -15],
+          "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 }
+        },
+        {
+          "type": "anvil",
+          "position": [15, 0, -10]
+        },
+        {
+          "type": "furnace",
+          "position": [18, 0, -10]
+        },
+        {
+          "type": "range",
+          "position": [12, 0, -8]
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Station Location Properties:**
+- `type` — Station type (bank, anvil, furnace, range, altar)
+- `position` — [x, y, z] coordinates in world space
+- `rotation` — Optional quaternion rotation { x, y, z, w }
+
+**StationSpawnerSystem:**
+- Reads `stations` field from WorldArea definitions
+- Spawns station entities at configured positions
+- Replaces hardcoded station spawning in EntityManager
+- Uses `getStationsInArea()` helper for querying
+
 ### Step 1: Choose the Right Manifest
 
 Determine which manifest file to edit based on content type:
@@ -549,8 +1738,9 @@ Determine which manifest file to edit based on content type:
 - **NPCs/Mobs**: `manifests/npcs.json`
 - **Gathering Resources**: `manifests/gathering/woodcutting.json`, `mining.json`, or `fishing.json`
 - **Processing Recipes**: `manifests/recipes/cooking.json`, `firemaking.json`, `smelting.json`, or `smithing.json`
-- **Stations**: `manifests/stations.json`
-- **World Areas**: `manifests/world-areas.json`
+- **Stations**: `manifests/stations.json` (station types and models)
+- **World Areas**: `manifests/world-areas.json` (station spawn locations)
+- **Quests**: `manifests/quests.json` (quest definitions)
 
 ### Step 2: Edit Manifest
 
@@ -605,38 +1795,6 @@ The manifest system uses specialized data providers for efficient lookups:
 
 These providers build optimized lookup tables at startup for fast runtime queries.
 
-### PrayerDataProvider Usage
-
-Access prayer definitions at runtime:
-
-```typescript
-import { prayerDataProvider } from '@hyperscape/shared';
-
-// Get prayer definition
-const prayer = prayerDataProvider.getPrayer("thick_skin");
-// Returns: { id, name, description, icon, level, category, drainEffect, bonuses, conflicts }
-
-// Get all prayers available at player's level
-const available = prayerDataProvider.getAvailablePrayers(prayerLevel);
-
-// Check for conflicts
-const conflicts = prayerDataProvider.getConflictsWithActive("rock_skin", activePrayers);
-
-// Validate activation
-const canActivate = prayerDataProvider.canActivatePrayer(
-  "burst_of_strength",
-  prayerLevel,
-  currentPoints,
-  activePrayers
-);
-```
-
-**Prayer Loading:**
-- Loaded by `DataManager` at startup
-- Validates prayer ID format, bonuses, and conflicts
-- Builds optimized lookup tables by level and category
-- Provides type-safe access methods
-
 ### StationDataProvider Usage
 
 Access station configurations at runtime:
@@ -663,6 +1821,95 @@ const yOffset = stationDataProvider.getModelYOffset("furnace");
 - `modelYOffset` raises model so base sits on ground
 - Graceful fallback to blue box placeholder if model fails
 - Shadows and raycasting layers configured automatically
+
+### Quests (`quests.json`)
+
+The `quests.json` manifest defines quest content with multi-stage progression, requirements, and rewards:
+
+```json
+{
+  "goblin_slayer": {
+    "id": "goblin_slayer",
+    "name": "Goblin Slayer",
+    "description": "Captain Rowan needs help dealing with the goblin threat.",
+    "difficulty": "novice",
+    "questPoints": 1,
+    "replayable": false,
+    "requirements": {
+      "quests": [],
+      "skills": {},
+      "items": []
+    },
+    "startNpc": "captain_rowan",
+    "stages": [
+      {
+        "id": "start",
+        "type": "dialogue",
+        "description": "Speak to Captain Rowan in Central Haven",
+        "npcId": "captain_rowan"
+      },
+      {
+        "id": "kill_goblins",
+        "type": "kill",
+        "description": "Kill 15 goblins",
+        "target": "goblin",
+        "count": 15
+      },
+      {
+        "id": "return",
+        "type": "dialogue",
+        "description": "Return to Captain Rowan",
+        "npcId": "captain_rowan"
+      }
+    ],
+    "onStart": {
+      "items": [
+        { "itemId": "bronze_sword", "quantity": 1 }
+      ],
+      "dialogue": "quest_accepted"
+    },
+    "rewards": {
+      "questPoints": 1,
+      "items": [
+        { "itemId": "xp_lamp_100", "quantity": 1 }
+      ],
+      "xp": {}
+    }
+  }
+}
+```
+
+**Quest Properties:**
+- `id` — Unique quest identifier
+- `name` — Display name shown in quest journal
+- `description` — Brief quest summary
+- `difficulty` — Quest difficulty (novice, intermediate, experienced, master, grandmaster)
+- `questPoints` — Quest points awarded on completion
+- `replayable` — Whether quest can be repeated after completion
+- `requirements` — Prerequisites to start the quest
+  - `quests` — Required completed quests
+  - `skills` — Required skill levels (e.g., `{"woodcutting": 15}`)
+  - `items` — Required items in inventory
+- `startNpc` — NPC ID that starts the quest
+- `stages` — Array of quest stages in order
+- `onStart` — Items given and dialogue triggered when quest starts
+- `rewards` — Items, XP, and quest points awarded on completion
+
+**Stage Types:**
+- `dialogue` — Talk to an NPC
+- `kill` — Kill a specific number of NPCs/mobs
+- `gather` — Collect items through gathering skills
+- `interact` — Interact with objects or process items
+
+**Available Quests:**
+- **Goblin Slayer** — Combat tutorial (kill 15 goblins)
+- **Lumberjack's First Lesson** — Woodcutting and firemaking tutorial
+- **Fresh Catch** — Fishing and cooking tutorial
+- **Torvin's Tools** — Mining, smelting, and smithing tutorial
+
+<Info>
+Quest progress is tracked server-side. Each stage must be completed in order before advancing to the next stage.
+</Info>
 
 ### Prayers (`prayers.json`)
 
@@ -715,6 +1962,8 @@ Prayers in the same category typically conflict. Activating a prayer automatical
 <Info>
 Prayer drain rates follow OSRS formulas. The `drainEffect` value determines how quickly prayer points deplete while the prayer is active.
 </Info>
+
+.
 
 ### Model Bounds (`model-bounds.json`)
 
@@ -783,9 +2032,10 @@ DataManager loads manifests in this order:
 6. **Recipe manifests** (`recipes/*.json`)
 7. **Skill unlocks** (`skill-unlocks.json`)
 8. **Prayers** (`prayers.json`)
-9. **Stations** (`stations.json`) - Uses model bounds for footprints
-10. **World areas** (`world-areas.json`)
-11. **Stores** (`stores.json`)
+9. **Quests** (`quests.json`)
+10. **Stations** (`stations.json`) - Uses model bounds for footprints
+11. **World areas** (`world-areas.json`)
+12. **Stores** (`stores.json`)
 
 This order ensures dependencies are loaded before dependent data (e.g., model bounds before stations).
 
@@ -835,3 +2085,75 @@ bun run extract-bounds
 <Warning>
 Do not edit `model-bounds.json` manually. It is regenerated on every build when GLB files change.
 </Warning>
+
+### Quests (`quests.json`)
+
+Defines multi-stage quests with requirements and rewards:
+
+```json
+{
+  "goblin_slayer": {
+    "id": "goblin_slayer",
+    "name": "Goblin Slayer",
+    "description": "Kill 15 goblins to prove your worth.",
+    "difficulty": "novice",
+    "questPoints": 1,
+    "replayable": false,
+    "requirements": {
+      "quests": [],
+      "skills": {},
+      "items": []
+    },
+    "startNpc": "cook",
+    "stages": [
+      {
+        "id": "talk_to_cook",
+        "type": "dialogue",
+        "description": "Talk to the Cook to start the quest."
+      },
+      {
+        "id": "kill_goblins",
+        "type": "kill",
+        "description": "Kill 15 goblins.",
+        "target": "goblin",
+        "count": 15
+      },
+      {
+        "id": "return_to_cook",
+        "type": "dialogue",
+        "description": "Return to the Cook."
+      }
+    ],
+    "onStart": {
+      "items": [
+        { "itemId": "bronze_sword", "quantity": 1 }
+      ]
+    },
+    "rewards": {
+      "questPoints": 1,
+      "items": [
+        { "itemId": "xp_lamp_1000", "quantity": 1 }
+      ],
+      "xp": {
+        "attack": 500,
+        "strength": 500
+      }
+    }
+  }
+}
+```
+
+**Stage Types:**
+- `dialogue` — Talk to an NPC
+- `kill` — Kill specific mobs (with count)
+- `gather` — Gather resources (with count)
+- `interact` — Interact with objects (with count)
+- `craft` — Craft items (with count)
+
+**Difficulty Levels:**
+- `novice` — Beginner quests
+- `intermediate` — Medium difficulty
+- `experienced` — Advanced quests
+- `master` — Expert-level quests
+
+See [Quest System](/wiki/game-systems/quests) for full documentation.

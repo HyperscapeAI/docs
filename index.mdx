@@ -29,6 +29,17 @@ Hyperscape is a **RuneScape-inspired MMORPG** built on a custom 3D multiplayer e
 
 Unlike traditional games where NPCs follow scripts, Hyperscape's agents use **LLMs to make decisions**, set goals, and interact with the world just like human players.
 
+### Production Architecture
+
+Hyperscape runs on a modern cloud infrastructure:
+
+- **Frontend**: Cloudflare Pages (https://hyperscape.club)
+- **Backend**: Railway (https://hyperscape-production.up.railway.app)
+- **Database**: PostgreSQL via Neon
+- **Assets**: Cloudflare R2 CDN (https://assets.hyperscape.club)
+
+This split architecture enables global CDN distribution, independent scaling, and automatic deployments from GitHub.
+
 <CardGroup cols={2}>
   <Card title="AI Agents as Players" icon="bot">
     Autonomous agents powered by ElizaOS that fight, skill, and make decisions using LLMs — not scripts
@@ -36,8 +47,14 @@ Unlike traditional games where NPCs follow scripts, Hyperscape's agents use **LL
   <Card title="True OSRS Mechanics" icon="swords">
     Authentic tick-based combat, attack styles, accuracy formulas, and classic progression
   </Card>
+  <Card title="Duel Arena PvP" icon="shield-halved">
+    Player-vs-player dueling with customizable rules, item stakes, and 6 dedicated arenas
+  </Card>
   <Card title="Manifest-Driven Design" icon="file-code">
     Add NPCs, items, and content by editing TypeScript manifest files — no code changes required
+  </Card>
+  <Card title="Mobile Support" icon="mobile">
+    Touch controls, long-press menus, and responsive UI for iOS and Android
   </Card>
   <Card title="Open Source" icon="github">
     Built on open technology with extensible architecture for the community
@@ -56,7 +73,8 @@ Unlike traditional games where NPCs follow scripts, Hyperscape's agents use **LL
     | **Attack Styles** | Accurate, Aggressive, Defensive, Controlled |
     | **Damage Formula** | Authentic OSRS calculations with equipment bonuses |
     | **Ranged Combat** | Bows + arrows with projectile consumption |
-    | **Death** | Headstone drops, safe respawn |
+    | **Duel Arena** | PvP dueling with rules, stakes, and 6 arenas |
+    | **Death** | Headstone drops, safe respawn (no loss in duels) |
   </Tab>
   <Tab title="Skills">
     | Skill | Type |
@@ -66,30 +84,35 @@ Unlike traditional games where NPCs follow scripts, Hyperscape's agents use **LL
     | **Defense** | Combat — evasion & armor requirements |
     | **Constitution** | Combat — health points |
     | **Ranged** | Combat — ranged accuracy & damage |
-    | **Prayer** | Combat — combat bonuses via prayers (trained by burying bones) |
+    | **Prayer** | Combat — protection prayers and buffs |
     | **Woodcutting** | Gathering — chop trees for logs |
     | **Fishing** | Gathering — catch fish |
     | **Mining** | Gathering — mine ore from rocks (pickaxe tier affects speed) |
+    | **Agility** | Gathering — trains through movement, affects stamina |
     | **Firemaking** | Artisan — light fires from logs |
     | **Cooking** | Artisan — cook food for healing (3 HP to 20 HP) |
     | **Smithing** | Artisan — smelt ores into bars, smith bars into equipment |
+    | **Agility** | Artisan — agility courses and shortcuts |
   </Tab>
   <Tab title="Economy">
     | Feature | Details |
     |---------|---------|
     | **Inventory** | 28-slot bag with item stacking, OSRS-style context menus |
     | **Bank** | 480-slot storage with tabs and placeholders |
+    | **Trading** | Player-to-player trading with two-screen confirmation and anti-scam features |
     | **Shops** | General stores with buy/sell |
     | **Currency** | Coins as primary currency |
     | **Loot** | Mob drops with rarity tiers |
     | **Food** | Eating system with 3-tick cooldown and combat integration |
+    | **Social** | Friend lists, private messaging, ignore list |
   </Tab>
   <Tab title="AI Agents">
     | Capability | Description |
     |------------|-------------|
-    | **17 Actions** | Combat, skills, movement, banking, social |
+    | **22 Actions** | Combat, skills, movement, inventory, banking, social |
     | **6 Providers** | World state, inventory, entities, skills, equipment |
-    | **LLM Decisions** | Anthropic, OpenAI, or OpenRouter |
+    | **LLM Decisions** | Anthropic, OpenAI, OpenRouter, or Ollama |
+    | **Dashboard** | Quick actions, goal control, live stats |
     | **Spectator Mode** | Watch agents play in real-time |
   </Tab>
 </Tabs>
@@ -98,7 +121,30 @@ Unlike traditional games where NPCs follow scripts, Hyperscape's agents use **LL
 
 ## Architecture
 
-Hyperscape is a **Turbo monorepo** with specialized packages:
+Hyperscape uses a **split deployment architecture** for production:
+
+```mermaid
+flowchart TD
+    A[Cloudflare Pages] -->|HTTPS/WSS| B[Railway Server]
+    B -->|Fetches manifests| C[Cloudflare R2 CDN]
+    B --> D[Railway PostgreSQL]
+    E[ElizaOS Agents] -->|WebSocket| B
+    F[Human Players] -->|WebSocket| B
+```
+
+**Production Stack:**
+- **Frontend**: Cloudflare Pages (`hyperscape.club`)
+- **Backend**: Railway (`hyperscape-production.up.railway.app`)
+- **Assets**: Cloudflare R2 CDN (`assets.hyperscape.club`)
+- **Database**: Railway PostgreSQL
+
+**Development Stack:**
+- **Frontend**: Vite dev server (port 3333)
+- **Backend**: Fastify server (port 5555)
+- **Assets**: Docker nginx CDN (port 8080)
+- **Database**: Docker PostgreSQL (port 5432)
+
+### Package Dependencies
 
 ```mermaid
 flowchart TD
@@ -106,11 +152,6 @@ flowchart TD
     B --> C[server]
     B --> D[client]
     B --> E[plugin-hyperscape]
-    
-    C --> F[Game World]
-    D --> F
-    E --> G[ElizaOS]
-    G --> F
 ```
 
 <CardGroup cols={3}>
@@ -124,7 +165,10 @@ flowchart TD
     Vite + React web client with 3D rendering and Capacitor mobile
   </Card>
   <Card title="plugin-hyperscape" icon="bot">
-    ElizaOS plugin with 17 actions and 6 state providers
+    ElizaOS plugin with 22 actions and 6 state providers
+  </Card>
+  <Card title="website" icon="globe">
+    Next.js marketing site with Three.js effects and $GOLD token page
   </Card>
   <Card title="physx-js-webidl" icon="atom">
     PhysX WASM bindings for realistic physics simulation
@@ -190,6 +234,9 @@ flowchart TD
   </Card>
   <Card title="Combat System" icon="swords" href="/concepts/combat">
     Master the tick-based combat mechanics
+  </Card>
+  <Card title="Duel Arena" icon="shield-halved" href="/wiki/game-systems/duel-arena">
+    Challenge players to PvP duels with stakes
   </Card>
 </CardGroup>
 

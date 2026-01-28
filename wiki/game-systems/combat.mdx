@@ -175,33 +175,87 @@ const STYLE_BONUSES: Record<CombatStyle, StyleBonus> = {
 };
 ```
 
+### Combat Style Icons
+
+Each combat style has a unique SVG icon with active state colors:
+
+| Style | Icon | Active Color | Description |
+|-------|------|--------------|-------------|
+| **Accurate** | Target/bullseye | Red (#ef4444) | Concentric circles |
+| **Aggressive** | Double chevrons | Green (#22c55e) | Power attack |
+| **Defensive** | Shield | Blue (#3b82f6) | Protection |
+| **Controlled** | Balance symbol | Purple (#a855f7) | Balanced training |
+
+### Action Bar Integration
+
+Combat styles can be dragged from the combat panel to the action bar for quick switching:
+
+```typescript
+// From packages/client/src/game/panels/CombatPanel.tsx
+<DraggableCombatStyleButton
+  style="accurate"
+  icon={<AccurateIcon />}
+  active={activeStyle === "accurate"}
+/>
+
+// Action bar slot handles combat style drops
+if (dragData.type === "combatstyle") {
+  setSlot(slotIndex, {
+    type: "combatstyle",
+    combatStyleId: dragData.combatStyleId,
+  });
+}
+
+// Clicking combat style slot switches attack style
+if (slot.type === "combatstyle") {
+  world.network.send("changeCombatStyle", {
+    style: slot.combatStyleId,
+  });
+}
+```
+
+**Action Bar Features:**
+- Drag combat styles from combat panel
+- Click to switch attack style
+- Visual highlight when style is active
+- Supports 4-12 customizable slots (default: 9)
+- Persistent across sessions
+
 ---
 
 ## Damage Calculation
 
-Damage uses the authentic OSRS formula from [the wiki](https://oldschool.runescape.wiki/w/Damage_per_second/Melee).
+Damage uses the authentic OSRS formula from [the wiki](https://oldschool.runescape.wiki/w/Damage_per_second/Melee). **Prayer bonuses are applied as multipliers** to effective levels.
 
 ### Maximum Hit Formula
 
 ```typescript
-// Get prayer bonuses (if any prayers active)
-const prayerBonuses = prayerSystem.getCombinedBonuses(attackerId);
+// From CombatCalculations.ts
+function calculateMaxHit(
+  strengthLevel: number,
+  strengthBonus: number,
+  styleBonus: number,
+  prayerMultiplier: number = 1.0,  // NEW: Prayer bonus
+): number {
+  // Effective Strength = floor((Strength Level + 8 + Style Bonus) × Prayer Multiplier)
+  const effectiveStrength = Math.floor(
+    (strengthLevel + 8 + styleBonus) * prayerMultiplier
+  );
 
-// Apply prayer multipliers to base levels
-const prayeredStrength = strengthLevel × (prayerBonuses.strengthMultiplier ?? 1);
-
-// Effective Strength = Prayered Strength + 8 + Style Bonus
-const effectiveStrength = prayeredStrength + 8 + styleBonus.strength;
+// Apply prayer bonuses (NEW in PR #563)
+const prayerBonuses = getPrayerBonuses(attacker);
+const prayerMultiplier = prayerBonuses.strength ?? 1;
+const effectiveStrengthWithPrayer = Math.floor(effectiveStrength * prayerMultiplier);
 
 // Strength Bonus from equipment
 const strengthBonus = equipmentStats?.strength || 0;
 
 // Max Hit = floor(0.5 + (Effective Strength × (Strength Bonus + 64)) / 640)
-const maxHit = Math.floor(0.5 + (effectiveStrength * (strengthBonus + 64)) / 640);
+const maxHit = Math.floor(0.5 + (effectiveStrengthWithPrayer * (strengthBonus + 64)) / 640);
 ```
 
 <Info>
-Prayer bonuses are applied **before** the effective level calculation, matching OSRS mechanics.
+Prayer bonuses are applied to effective levels before damage calculation. For example, Burst of Strength (+5%) multiplies effective strength by 1.05.
 </Info>
 
 ### Accuracy Formula
@@ -214,19 +268,17 @@ function calculateAccuracy(
   targetDefenseLevel: number,
   targetDefenseBonus: number,
   attackerStyle: CombatStyle = "accurate",
+  attackerPrayerBonuses?: PrayerBonuses,  // NEW in PR #563
+  defenderPrayerBonuses?: PrayerBonuses,  // NEW in PR #563
 ): boolean {
-  // Get prayer bonuses for attacker and defender
-  const attackerPrayerBonuses = prayerSystem.getCombinedBonuses(attackerId);
-  const defenderPrayerBonuses = prayerSystem.getCombinedBonuses(targetId);
+  // Apply prayer bonuses to effective levels
+  const prayerAttackMult = attackerPrayerBonuses?.attack ?? 1;
+  const prayerDefenseMult = defenderPrayerBonuses?.defense ?? 1;
   
-  // Apply prayer multipliers
-  const prayeredAttack = attackerAttackLevel × (attackerPrayerBonuses.attackMultiplier ?? 1);
-  const prayeredDefense = targetDefenseLevel × (defenderPrayerBonuses.defenseMultiplier ?? 1);
-  
-  const effectiveAttack = prayeredAttack + 8 + styleBonus.attack;
+  const effectiveAttack = Math.floor((attackerAttackLevel + 8 + styleBonus.attack) * prayerAttackMult);
   const attackRoll = effectiveAttack * (attackerAttackBonus + 64);
 
-  const effectiveDefence = prayeredDefense + 9 + defenderStyleBonus.defense;
+  const effectiveDefence = Math.floor((targetDefenseLevel + 9 + defenderStyleBonus.defense) * prayerDefenseMult);
   const defenceRoll = effectiveDefence * (targetDefenseBonus + 64);
 
   let hitChance: number;
@@ -241,7 +293,7 @@ function calculateAccuracy(
 ```
 
 <Info>
-Prayer bonuses apply to both attacker and defender, affecting accuracy and defense rolls.
+Prayer bonuses from active prayers (e.g., Clarity of Thought +5% attack, Thick Skin +5% defense) are applied to effective levels before calculating attack and defense rolls.
 </Info>
 
 ### Damage Roll
@@ -557,31 +609,59 @@ The combat system emits events for UI and logging:
 
 ---
 
-## Prayer Bonuses in Combat
+---
 
-Active prayers provide multipliers to combat stats. See [Prayer System](/wiki/game-systems/prayer) for complete details.
+## Duel Arena Integration
 
-**Example Prayer Effects:**
-- **Clarity of Thought** (Level 7): +5% Attack (1.05× multiplier)
-- **Burst of Strength** (Level 4): +5% Strength (1.05× multiplier)
-- **Thick Skin** (Level 1): +5% Defense (1.05× multiplier)
+The combat system integrates with the Duel Arena for PvP combat:
 
-**Bonus Application:**
+### Rule Enforcement
+
+The DuelSystem provides APIs for rule checking:
+
 ```typescript
-// Prayer bonuses are applied BEFORE effective level calculation
-const prayeredAttack = baseAttack × attackMultiplier;
-const effectiveAttack = prayeredAttack + 8 + styleBonus;
+const duelSystem = world.getSystem("duel");
+
+// Check if player can use specific combat types
+if (duelSystem && !duelSystem.canUseRanged(attackerId)) {
+  return; // Block ranged attack in duel
+}
+
+if (duelSystem && !duelSystem.canUseMelee(attackerId)) {
+  return; // Block melee attack in duel
+}
+
+if (duelSystem && !duelSystem.canEatFood(playerId)) {
+  return; // Block food consumption in duel
+}
 ```
 
-<Warning>
-Multiple prayers of the same type do NOT stack. The system uses the highest multiplier for each stat.
-</Warning>
+### Death Handling
+
+Duel deaths are handled differently than normal deaths:
+
+```typescript
+// From PlayerDeathSystem.ts
+const duelSystem = this.world.getSystem("duel");
+if (duelSystem?.isPlayerInActiveDuel(playerId)) {
+  // Duel death - DuelSystem handles resolution
+  // No items lost, no headstone, winner gets stakes
+  return;
+}
+
+// Normal death - respawn at hospital with item loss
+this.handleNormalDeath(playerId);
+```
+
+<Info>
+  See the [Duel Arena documentation](/wiki/game-systems/duel-arena) for complete PvP mechanics.
+</Info>
 
 ---
 
 ## Related Documentation
 
-- [Prayer System](/wiki/game-systems/prayer) (Prayer mechanics, drain, altars, bone burying)
+- [Duel Arena](/wiki/game-systems/duel-arena) (PvP dueling system)
 - [Inventory System](/wiki/game-systems/inventory) (for food consumption)
 - [Tile Movement System](/wiki/game-systems/movement)
 - [Skills & Progression](/wiki/game-systems/skills)

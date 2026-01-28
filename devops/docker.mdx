@@ -6,18 +6,23 @@ icon: "container"
 
 ## Overview
 
-Hyperscape uses Docker for:
+Hyperscape uses Docker for local development services:
 
-- **Asset CDN**: nginx serving game assets
-- **PostgreSQL**: Database for player data
-- **Development services**: Local infrastructure
+- **Asset CDN**: nginx serving game assets (development only)
+- **PostgreSQL**: Database for player data (development only)
+
+<Info>
+  In production, assets are served from Cloudflare R2 and the database runs on Railway. Docker is only used for local development.
+</Info>
 
 ## Prerequisites
 
 - [Docker Desktop](https://docker.com/products/docker-desktop) (macOS/Windows)
 - Or Docker Engine on Linux: `apt install docker.io`
 
-## CDN Container
+## CDN Container (Development Only)
+
+The local CDN serves assets during development. In production, assets are served from Cloudflare R2.
 
 ### Start CDN
 
@@ -26,6 +31,8 @@ bun run cdn:up
 ```
 
 This starts an nginx container serving assets from `packages/server/world/assets/` on port 8080.
+
+The CDN script (`scripts/cdn.mjs`) uses `--force-recreate` to refresh volume mounts when assets are updated.
 
 ### Stop CDN
 
@@ -36,6 +43,75 @@ bun run cdn:down
 ### Automatic Start
 
 The CDN starts automatically with `bun run dev`. Only run manually if using services separately.
+
+### CDN Architecture
+
+Hyperscape uses a **fully CDN-based architecture** with automatic fallback:
+
+```mermaid
+flowchart TD
+    A[Server Startup] --> B{Local CDN Available?}
+    B -->|Yes| C[Check Required Manifests]
+    B -->|No| D[Fetch from Production CDN]
+    C -->|Complete| E[Use Local CDN]
+    C -->|Incomplete| F{Development Mode?}
+    F -->|Yes| G[Fallback to Production CDN]
+    F -->|No| H[Throw Error]
+    G --> E
+    D --> E
+```
+
+**Required Manifests:**
+- `npcs.json` - NPC definitions
+- `world-areas.json` - World area data
+- `biomes.json` - Biome definitions
+- `stores.json` - Shop data
+- `items/{weapons,tools,resources,food,misc}.json` - Item categories
+
+**Production CDN Fallback:**
+
+In development mode, if the local CDN (`http://localhost:8080`) is missing required manifests, the server automatically falls back to the production CDN (`https://assets.hyperscape.club`):
+
+```typescript
+// packages/server/src/startup/config.ts
+if (
+  nodeEnv === "development" &&
+  missingRequired.length > 0 &&
+  isLocalhostUrl(cdnUrl)
+) {
+  const fallbackCdnUrl = "https://assets.hyperscape.club";
+  console.warn(`[Config] Falling back to production CDN for manifests: ${fallbackCdnUrl}`);
+  await fetchFrom(fallbackCdnUrl);
+}
+```
+
+This allows developers to start the server without cloning the full assets repository.
+
+### Asset Management
+
+```bash
+# Sync assets from Git LFS
+bun run assets:sync
+
+# Deploy to Cloudflare R2 (production)
+bun run assets:deploy
+
+# Verify CDN is working
+bun run cdn:verify
+```
+
+The `ensure-assets.mjs` script detects whether you have full assets (models, audio, textures) or just manifests:
+
+```typescript
+function hasFullAssets(dir) {
+  // Manifests-only is treated as "missing" to trigger auto-download
+  const hasWorld = dirHasNonHiddenFiles(path.join(dir, "world"));
+  const hasModels = dirHasNonHiddenFiles(path.join(dir, "models"));
+  return hasWorld && hasModels;
+}
+```
+
+If only manifests are present, the script clones the full assets repository and pulls Git LFS objects.
 
 ## PostgreSQL Container
 
@@ -129,16 +205,23 @@ Use a hosted database (e.g., [Neon](https://neon.tech)):
 ```bash
 # packages/server/.env
 DATABASE_URL=postgresql://user:pass@host.neon.tech:5432/db
+USE_LOCAL_POSTGRES=false
 ```
 
 ### External CDN
 
-Host assets on cloud storage:
+Point to the production CDN (or host your own):
 
 ```bash
 # packages/server/.env and packages/client/.env
-PUBLIC_CDN_URL=https://your-cdn.example.com
+PUBLIC_CDN_URL=https://assets.hyperscape.club
 ```
+
+**Manifest fetching:**
+The server will automatically fetch manifests from the CDN at startup. You don't need to clone the assets repository.
+
+**Asset serving:**
+All 3D models, textures, and audio will be loaded from the CDN. The local Docker CDN is not required.
 
 ## Container Status
 
@@ -163,4 +246,67 @@ View container logs:
 ```bash
 docker logs hyperscape-postgres
 docker logs hyperscape-cdn
+
+# Follow logs in real-time
+docker logs -f hyperscape-postgres
 ```
+
+## Production Docker Build
+
+The repository includes `Dockerfile.server` for production deployments.
+
+### Multi-Stage Build
+
+The Dockerfile uses a two-stage build for optimal image size:
+
+**Stage 1: Builder**
+- Installs build dependencies (Python, Cairo, etc.)
+- Runs `bun install` with all dependencies
+- Builds packages in order: physx-js-webidl → shared → client → server
+- Copies client build to `packages/server/public/`
+
+**Stage 2: Runtime**
+- Minimal production image with only runtime dependencies
+- Copies built artifacts from builder stage
+- Installs production dependencies only
+- Exposes port 5555 for game server
+
+### Building Locally
+
+Test the production Docker build:
+
+```bash
+# Build from repository root
+docker build -f Dockerfile.server -t hyperscape-server .
+
+# Run the container
+docker run -p 5555:5555 \
+  -e DATABASE_URL=postgresql://... \
+  -e JWT_SECRET=your-secret \
+  -e PUBLIC_PRIVY_APP_ID=your-app-id \
+  -e PRIVY_APP_SECRET=your-secret \
+  hyperscape-server
+```
+
+### Railway Deployment
+
+Railway can use either Nixpacks or Dockerfile:
+
+**Nixpacks** (default):
+- Configured in `nixpacks.toml`
+- Faster builds with caching
+- Automatic dependency detection
+
+**Dockerfile** (alternative):
+- More control over build process
+- Consistent with local builds
+- Useful for debugging build issues
+
+To switch to Dockerfile on Railway:
+1. Go to project settings
+2. Change "Builder" from "Nixpacks" to "Dockerfile"
+3. Set "Dockerfile Path" to `Dockerfile.server`
+
+<Info>
+The current production deployment uses Nixpacks for faster builds. The Dockerfile is maintained for local testing and alternative deployment platforms.
+</Info>

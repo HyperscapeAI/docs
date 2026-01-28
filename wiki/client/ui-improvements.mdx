@@ -1,0 +1,870 @@
+---
+title: "UI Improvements"
+description: "Action bars, mobile enhancements, and edit mode features"
+icon: "palette"
+---
+
+{/* 
+  Source: packages/client/src/game/panels/, packages/client/src/ui/
+  Verified against PR #656 (1,972 additions)
+*/}
+
+## Overview
+
+Recent UI improvements enhance the game interface with RS3-style keyboard shortcuts, mobile touch support, responsive panel sizing, and improved edit mode functionality.
+
+---
+
+## Action Bar Enhancements
+
+### RS3-Style Keyboard Shortcuts
+
+**Location:** `packages/client/src/game/panels/ActionBarPanel/`
+
+Expanded keyboard shortcuts using modifier keys for up to 5 action bars (70 total slots):
+
+**Bar 1 (14 slots):** No modifier
+- `1-9`, `0`, `-`, `=`, `Backspace`, `Insert`
+
+**Bar 2 (14 slots):** Ctrl modifier
+- `Ctrl+1` through `Ctrl+Insert`
+
+**Bar 3 (14 slots):** Shift modifier
+- `Shift+1` through `Shift+Insert`
+
+**Bar 4 (14 slots):** Alt modifier
+- `Alt+1` through `Alt+Insert`
+
+**Bar 5 (14 slots):** Letter keys
+- `Q`, `W`, `E`, `R`, `T`, `Y`, `U`, `I`, `O`, `P`, `[`, `]`, `\`
+
+**Implementation:**
+
+```typescript
+// From useActionBarState.ts
+function parseKeybind(keybind: string): {
+  key: string;
+  ctrl: boolean;
+  shift: boolean;
+  alt: boolean;
+} {
+  const parts = keybind.split("+");
+  const key = parts[parts.length - 1];
+  return {
+    key,
+    ctrl: parts.includes("Ctrl"),
+    shift: parts.includes("Shift"),
+    alt: parts.includes("Alt"),
+  };
+}
+
+function matchesKeybind(e: KeyboardEvent, keybind: string): boolean {
+  const parsed = parseKeybind(keybind);
+  return (
+    e.key === parsed.key &&
+    e.ctrlKey === parsed.ctrl &&
+    e.shiftKey === parsed.shift &&
+    e.altKey === parsed.alt
+  );
+}
+```
+
+**Display Format:**
+
+Keybinds are displayed in compact format on action bar slots:
+- `Ctrl+1` → `^1`
+- `Shift+2` → `⇧2`
+- `Alt+3` → `⌥3`
+
+```typescript
+export function formatKeybindForDisplay(keybind: string): string {
+  if (!keybind.includes("+")) return keybind;
+  
+  return keybind
+    .replace("Ctrl+", "^")
+    .replace("Shift+", "⇧")
+    .replace("Alt+", "⌥");
+}
+```
+
+### Vertical Layout Support
+
+Action bars now support both horizontal and vertical orientations:
+
+```typescript
+<ActionBarPanel
+  world={world}
+  barId={0}
+  orientation="vertical"    // or "horizontal" (default)
+  showShortcuts={false}     // Hide keyboard hints
+  showControls={false}      // Hide +/- and lock buttons
+/>
+```
+
+**Use Cases:**
+- **Horizontal:** Desktop action bars (default)
+- **Vertical:** Mobile action bar (side of screen)
+
+**Layout Differences:**
+- Horizontal: 1 row × N columns
+- Vertical: N rows × 1 column
+- Controls (±, lock) only shown in horizontal mode
+- Rubbish bin only shown in horizontal mode
+
+---
+
+## Mobile Enhancements
+
+### Touch Sensor Support
+
+**Location:** `packages/client/src/game/interface/InterfaceManager.tsx`
+
+Added TouchSensor to dnd-kit for mobile drag-and-drop:
+
+```typescript
+import { PointerSensor, TouchSensor } from "@dnd-kit/core";
+
+const sensors = useSensors(
+  useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 8,  // Mouse: move 8px before drag
+    },
+  }),
+  useSensor(TouchSensor, {
+    activationConstraint: {
+      delay: 250,      // Touch: long-press 250ms
+      tolerance: 5,    // Allow 5px movement during delay
+    },
+  }),
+);
+```
+
+**Features:**
+- Long-press items to drag to action bar
+- Long-press prayers to drag to action bar
+- Long-press skills to drag to action bar
+- Works on all mobile panels (inventory, equipment, skills, prayer)
+
+### Terrain Long-Press Context Menu
+
+**Location:** `packages/shared/src/systems/client/interaction/InteractionRouter.ts`
+
+Mobile users can long-press terrain to open context menu:
+
+```typescript
+// 500ms long-press activates context menu
+const LONG_PRESS_DURATION = 500;
+
+// In handlePointerDown
+if (isMobile) {
+  longPressTimerRef.current = setTimeout(() => {
+    // Show context menu at touch position
+    this.handleContextMenu(worldTarget, screenX, screenY);
+  }, LONG_PRESS_DURATION);
+}
+```
+
+**Behavior:**
+- Touch and hold terrain for 500ms
+- Context menu appears at touch position
+- Release or move >10px cancels long-press
+- Works for NPCs, objects, and ground items
+
+### Mobile Panel Sizing
+
+Panel sizes reduced for better mobile fit:
+
+**Before (PR #656):**
+- Inventory: 240×320
+- Equipment: 220×320
+- Skills: 250×310
+
+**After (~30% increase for desktop, optimized for mobile):**
+- Inventory: 320×420 (desktop), 260×360 (mobile)
+- Equipment: 260×360 (desktop), 215×310 (mobile)
+- Skills: 325×400 (desktop), matches prayer panel (mobile)
+
+**Mobile-Specific Adjustments:**
+
+```typescript
+// From constants/mobileStyles.ts
+export const MOBILE_SKILLS = {
+  columns: 4,           // Match prayer panel
+  cardHeight: 32,       // Compact
+  gap: 4,
+  iconSize: 14,
+};
+
+export const MOBILE_PRAYER = {
+  iconSize: 40,
+  maxColumns: 4,
+  minColumns: 4,        // Force 4-wide layout
+  gap: 4,
+  barHeight: 14,
+};
+```
+
+---
+
+## Edit Mode Improvements
+
+### Keyboard Handling Refactor
+
+**Location:** `packages/client/src/ui/core/edit/useEditModeKeyboard.ts`
+
+Extracted keyboard handling to separate hook to prevent duplicate listeners:
+
+```typescript
+/**
+ * Edit mode keyboard handling hook
+ * 
+ * IMPORTANT: Only call this ONCE at the top level of InterfaceManager.
+ * Multiple instances will create duplicate event listeners.
+ */
+export function useEditModeKeyboard() {
+  const { isUnlocked, setIsUnlocked, setIsHolding, setHoldProgress } = useEditStore();
+  
+  // L key hold-to-unlock (1 second)
+  // Escape to lock
+}
+```
+
+**Features:**
+- Hold `L` for 1 second to unlock edit mode
+- Progress bar shows hold duration
+- Release before 1 second cancels
+- `Escape` key locks edit mode instantly
+- Single event listener (no duplicates)
+
+**Race Condition Fix:**
+
+```typescript
+// Before (race condition)
+const animate = () => {
+  if (holdStartTimeRef.current === null) return;
+  const elapsed = Date.now() - holdStartTimeRef.current; // Could be null here!
+};
+
+// After (safe)
+const animate = () => {
+  const startTime = holdStartTimeRef.current;
+  if (startTime === null) return;
+  const elapsed = Date.now() - startTime; // Safe to use
+};
+```
+
+### Delete Zone
+
+**Location:** `packages/client/src/ui/components/EditModeOverlay.tsx`
+
+Drag panels to delete zone to remove them:
+
+```typescript
+<DeleteZone
+  isDragging={isDraggingWindow}
+  onDrop={(windowId) => {
+    deleteWindow(windowId);
+  }}
+/>
+```
+
+**Features:**
+- Only visible when dragging a window (not items)
+- Visual feedback on hover (scale, color change)
+- Trash icon with "Drop here to delete" label
+- Uses `useDrop` hook for drop target handling
+
+**Positioning:**
+- Bottom center of screen
+- z-index 9999 (above all panels)
+- 120px × 80px hit area
+
+---
+
+## Chat Improvements
+
+### Message Filtering by Tab
+
+**Location:** `packages/client/src/game/panels/ChatPanel.tsx`
+
+Chat tabs now properly filter messages:
+
+**Tabs:**
+- **All** - Shows all messages
+- **Game** - Chat, system, activity, news, warnings, trade requests
+- **Clan** - Clan/guild messages only
+- **Private** - Private messages and whispers only
+
+**Extended Message Types:**
+
+```typescript
+type MessageType = 
+  | "chat"           // Normal player messages
+  | "system"         // System messages
+  | "activity"       // Login/logout events
+  | "warning"        // Warning messages
+  | "news"           // News/event announcements
+  | "trade"          // Trade channel messages
+  | "trade_request"  // Clickable trade request
+  | "private"        // Private/whisper messages
+  | "clan"           // Clan chat messages
+  | "guild";         // Guild chat messages
+```
+
+**Filtering Logic:**
+
+```typescript
+function filterMessagesByTab(msg: ChatMessage): boolean {
+  const msgType = getMessageType(msg);
+  const serverType = msg.type;
+  const channel = msg.channel?.toLowerCase();
+  
+  switch (activeTab) {
+    case "all":
+      return true;
+    
+    case "game":
+      // Exclude clan/guild and private
+      if (serverType === "private" || serverType === "clan" || 
+          serverType === "guild" || channel === "clan" || 
+          channel === "guild" || channel === "private") {
+        return false;
+      }
+      return true;
+    
+    case "clan":
+      return serverType === "clan" || serverType === "guild" || 
+             channel === "clan" || channel === "guild";
+    
+    case "private":
+      return serverType === "private" || channel === "private" || 
+             channel === "whisper";
+  }
+}
+```
+
+**Message Colors:**
+
+```typescript
+const MESSAGE_COLORS = {
+  chat: "#FFFFFF",
+  system: "#00FFFF",
+  activity: "#FFFF00",
+  warning: "#FF4444",
+  news: "#a855f7",
+  trade_request: "#FF00FF",  // Pink/magenta
+  private: "#ff66ff",        // Pink
+  clan: "#66ff66",           // Green
+  guild: "#66ff66",          // Green
+};
+```
+
+---
+
+## Menu Bar Improvements
+
+### Responsive Layout Algorithm
+
+**Location:** `packages/client/src/game/interface/PanelRegistry.tsx`
+
+Menu bar now uses dynamic layout calculation:
+
+```typescript
+function calculateMenuBarLayout(
+  containerWidth: number,
+  containerHeight: number,
+  buttonCount: number,
+): {
+  cols: number;
+  rows: number;
+  buttonSize: number;
+  gap: number;
+  padding: number;
+} {
+  // Try layouts from fewest rows to most
+  for (let rows = 1; rows <= 5; rows++) {
+    const cols = Math.ceil(buttonCount / rows);
+    
+    // Calculate max button size that fits
+    const maxWidthButtonSize = (availableWidth - (cols - 1) * gap) / cols;
+    const maxHeightButtonSize = (availableHeight - (rows - 1) * gap) / rows;
+    const buttonSize = Math.min(maxWidthButtonSize, maxHeightButtonSize);
+    
+    // If buttons fit at minimum size, use this layout
+    if (buttonSize >= MENUBAR_MIN_BUTTON_SIZE) {
+      return { cols, rows, buttonSize: Math.min(buttonSize, MENUBAR_MAX_BUTTON_SIZE), gap, padding };
+    }
+  }
+  
+  // Fallback: max rows with minimum button size
+  return fallbackLayout;
+}
+```
+
+**Features:**
+- Automatically reflows between 1-5 rows based on container size
+- Buttons scale to fit available space
+- Prefers horizontal layouts (fewer rows)
+- Smooth transitions when resizing
+
+**Button Size Constraints:**
+- Minimum: 20px (compact layouts)
+- Maximum: 32px (cleaner appearance)
+
+### Viewport Edge Snapping
+
+When menu bar layout changes (row count), the window repositions to stay on screen:
+
+```typescript
+// Detect if window was at right edge
+const wasAtRightEdge = Math.abs(newX + oldWidth - viewport.width) < 15;
+if (wasAtRightEdge) {
+  newX = viewport.width - contentWidth; // Keep right edge aligned
+}
+
+// Detect if window was at bottom edge
+const wasAtBottomEdge = Math.abs(newY + oldHeight - viewport.height) < 15;
+if (wasAtBottomEdge) {
+  newY = viewport.height - contentHeight; // Keep bottom edge aligned
+}
+```
+
+---
+
+## Panel Size Increases
+
+All panels increased by ~30% for better readability:
+
+| Panel | Old (Preferred) | New (Preferred) | Increase |
+|-------|-----------------|-----------------|----------|
+| Inventory | 240×320 | 320×420 | +33% |
+| Equipment | 220×320 | 260×360 | +18% |
+| Stats | 210×285 | 275×370 | +31% |
+| Skills | 250×310 | 325×400 | +30% |
+| Combat | 240×280 | 310×360 | +29% |
+| Settings | 280×360 | 360×470 | +29% |
+| Minimap | 420×420 | 550×550 | +31% |
+| Chat | 400×450 | 520×585 | +30% |
+| Presets | 260×300 | 340×390 | +31% |
+| Prayer | 400×450 (max) | 520×585 (max) | +30% |
+
+**Base Theme Update:**
+
+```typescript
+// From packages/client/src/ui/themes/base.ts
+minWidth: 260,   // Was 200
+minHeight: 195,  // Was 150
+```
+
+---
+
+## Minimap Improvements
+
+### Fill Behavior
+
+**Location:** `packages/client/src/game/interface/InterfacePanels.tsx`
+
+Minimap now fills the entire container using the larger dimension:
+
+```typescript
+// Before: Used container width/height separately (could leave gaps)
+setDimensions({ width, height });
+
+// After: Use larger dimension so minimap always fills
+const size = Math.max(width, height, 100);
+setSize(size);
+
+<Minimap
+  width={size}
+  height={size}  // Square aspect ratio
+  zoom={50}
+/>
+```
+
+**Benefits:**
+- No gaps when resizing
+- Always fills panel completely
+- Maintains square aspect ratio
+
+---
+
+## Dialogue Panel Fix
+
+### Removed Redundant Wrapper
+
+**Location:** `packages/client/src/game/interface/InterfaceModals.tsx`
+
+DialoguePanel has its own fixed positioning and backdrop, so wrapping it in ModalWindow caused duplicate styling:
+
+```typescript
+// Before: Redundant wrapper
+<ModalWindow visible={true} onClose={...} title={npcName}>
+  <DialoguePanel {...props} />
+</ModalWindow>
+
+// After: Direct rendering
+<DialoguePanel
+  visible={dialogueData.visible}
+  npcName={dialogueData.npcName}
+  {...props}
+/>
+```
+
+**Fixed Issues:**
+- Duplicate backdrop
+- Incorrect positioning
+- Layout conflicts
+
+**Applied to:**
+- Desktop InterfaceManager
+- Mobile InterfaceManager
+
+---
+
+## Theme Color Updates
+
+### New Panel Colors
+
+**Location:** `packages/client/src/ui/themes/`
+
+Added dedicated panel background colors for better contrast:
+
+```typescript
+// Base theme
+background: {
+  primary: "#0a0a0c",
+  secondary: "#141416",
+  tertiary: "#1e1e22",
+  panelPrimary: "#0f0f11",    // NEW: Slightly lighter than primary
+  panelSecondary: "#1a1a1c",  // NEW: Between secondary and tertiary
+}
+```
+
+**Usage:**
+
+```typescript
+// Old: Used generic background colors
+background: theme.colors.background.secondary
+
+// New: Use panel-specific colors
+background: theme.colors.background.panelSecondary
+```
+
+**Updated Components:**
+- AccountPanel
+- ActionBarPanel
+- ActionPanel
+- BankPanel
+- ChatPanel
+- CombatPanel
+- DashboardPanel
+- EquipmentPanel
+- InventoryPanel
+- All modal components
+
+---
+
+## Equipment Panel Cleanup
+
+### Removed Character Silhouette
+
+**Location:** `packages/client/src/game/panels/EquipmentPanel.tsx`
+
+Removed the character silhouette SVG for cleaner appearance:
+
+```typescript
+// Removed: CharacterSilhouette component (29 lines)
+// Removed: Silhouette rendering in desktop layout
+
+// Before:
+<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+  <CharacterSilhouette color={theme.colors.accent.primary} />
+</div>
+
+// After: Clean equipment grid without background
+```
+
+**Benefits:**
+- Cleaner visual appearance
+- Less visual clutter
+- Equipment slots more prominent
+- Matches OSRS minimalist style
+
+---
+
+## Status Orb Redesign
+
+### Dark Fantasy Theme
+
+**Location:** `packages/client/src/game/hud/StatusOrbs.tsx`
+
+Status orbs redesigned with darker, more atmospheric styling:
+
+**Changes:**
+- Darker background colors
+- Reduced glow intensity
+- Subtle border highlights
+- Better contrast for text
+- Matches overall dark fantasy aesthetic
+
+---
+
+## Border Radius Standardization
+
+### Squared Corners
+
+**Location:** Multiple action bar components
+
+Changed from rounded to squared corners for consistency:
+
+```typescript
+// Before
+borderRadius: 4
+
+// After
+borderRadius: 0
+```
+
+**Updated Components:**
+- ActionBarPanel slots
+- ActionBarSlot elements
+- ActionBarContextMenu
+- Rubbish bin
+
+**Rationale:**
+- Matches OSRS squared UI style
+- More consistent with game aesthetic
+- Cleaner appearance
+
+---
+
+## Performance Optimizations
+
+### Style Memoization
+
+**Location:** `packages/client/src/game/panels/DuelPanel/`
+
+Memoized style objects to reduce render allocations:
+
+```typescript
+// Before: Styles recreated every render
+const sectionStyle: CSSProperties = {
+  background: theme.colors.background.tertiary,
+  // ...
+};
+
+// After: Memoized with useMemo
+function useConfirmScreenStyles(theme: Theme, myAccepted: boolean) {
+  return useMemo(() => {
+    const sectionStyle: CSSProperties = {
+      background: theme.colors.background.tertiary,
+      // ...
+    };
+    return { sectionStyle, /* ... */ };
+  }, [theme, myAccepted]);
+}
+```
+
+**Applied to:**
+- ConfirmScreen
+- RulesScreen
+- StakesScreen
+- All duel panel screens
+
+**Benefits:**
+- Fewer object allocations
+- Reduced garbage collection
+- Smoother rendering
+- Only recalculates when dependencies change
+
+---
+
+## Type Safety Improvements
+
+### Event Payload Types
+
+**Location:** `packages/client/src/game/panels/ActionBarPanel/types.ts`
+
+Added proper type definitions for event payloads:
+
+```typescript
+/** Payload for prayer state sync events */
+export interface PrayerStateSyncEventPayload {
+  playerId: string;
+  active: string[];
+}
+
+/** Payload for prayer toggled events */
+export interface PrayerToggledEventPayload {
+  playerId: string;
+  prayerId: string;
+  active: boolean;
+}
+
+/** Payload for attack style update events */
+export interface AttackStyleUpdateEventPayload {
+  playerId: string;
+  style: string;
+}
+
+// ... more payload types
+```
+
+**Before:**
+```typescript
+const handlePrayerStateSync = (payload: unknown) => {
+  const data = payload as { playerId: string; active: string[] };
+};
+```
+
+**After:**
+```typescript
+const handlePrayerStateSync = (data: PrayerStateSyncEventPayload) => {
+  // Properly typed, no assertions needed
+};
+```
+
+### Network Extensions Interface
+
+```typescript
+/** Extended network interface with action bar cache */
+export interface ActionBarNetworkExtensions {
+  lastAttackStyleByPlayerId?: Record<string, string>;
+}
+
+// Usage
+const network = world.network as ActionBarNetworkExtensions;
+const cachedStyle = network?.lastAttackStyleByPlayerId?.[playerId];
+```
+
+---
+
+## Accessibility Improvements
+
+### Title Attributes
+
+Added title attributes to chat tab buttons for tooltips:
+
+```typescript
+<button
+  aria-label={tab.title}
+  title={tab.title}  // NEW: Tooltip on hover
+  onClick={() => setActiveTab(tab.id)}
+>
+  {tab.icon}
+</button>
+```
+
+### Focus Visible States
+
+Action bar buttons have proper focus indicators:
+
+```typescript
+<button
+  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+  onClick={handleToggleLock}
+>
+  {isLocked ? "🔒" : "🔓"}
+</button>
+```
+
+---
+
+## Bug Fixes
+
+### Inventory Cross-Tab Updates
+
+**Issue:** Inventory updates from one player were applying to other players in the same browser
+
+**Fix:** Added player ID validation:
+
+```typescript
+// From Chat.tsx and usePlayerData.ts
+const localPlayerId = world.entities?.player?.id;
+
+const onInventory = (data: { playerId: string; items: InventorySlotItem[] }) => {
+  // Only update if this inventory belongs to the local player
+  if (localPlayerId && data.playerId && data.playerId !== localPlayerId) {
+    return;
+  }
+  setInventory(data.items);
+};
+```
+
+### Bank Close Event Name
+
+**Issue:** Inconsistent event name for bank closing
+
+**Fix:** Standardized to camelCase:
+
+```typescript
+// Before
+world.network.send("bank_close", {});
+
+// After
+world.network.send("bankClose", {});
+```
+
+---
+
+## Migration Guide
+
+### For Developers
+
+**Action Bar Keybinds:**
+
+If you were using custom keybinds, update to the new system:
+
+```typescript
+// Old: Single bar keybinds
+const keybinds = useActionBarKeybinds();
+
+// New: Bar-specific keybinds (1-indexed)
+const keybinds = useActionBarKeybindsForBar(barId + 1);
+```
+
+**Panel Sizing:**
+
+If you hardcoded panel sizes, update to new dimensions:
+
+```typescript
+// Old
+<ModalWindow width={400} height={450}>
+
+// New
+<ModalWindow width={520} height={585}>
+```
+
+**Event Handlers:**
+
+Update event handlers to use proper types:
+
+```typescript
+// Old
+world.on(EventType.PRAYER_TOGGLED, (payload: unknown) => {
+  const data = payload as { playerId: string; prayerId: string };
+});
+
+// New
+import type { PrayerToggledEventPayload } from "./types";
+
+world.on(EventType.PRAYER_TOGGLED, (data: PrayerToggledEventPayload) => {
+  // Properly typed
+});
+```
+
+---
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Mobile Development" icon="mobile" href="/guides/mobile">
+    Mobile-specific development guide
+  </Card>
+  <Card title="Client Package" icon="browser" href="/packages/client">
+    Client package overview
+  </Card>
+  <Card title="UI Components" icon="palette" href="/wiki/client/overview">
+    Client UI architecture
+  </Card>
+</CardGroup>

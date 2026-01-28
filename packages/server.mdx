@@ -10,8 +10,10 @@ The `@hyperscape/server` package runs the authoritative game server:
 
 - Fastify 5 HTTP API with rate limiting
 - WebSocket real-time game state
-- PostgreSQL (production) / SQLite (local) database
+- PostgreSQL database with Drizzle ORM
 - LiveKit voice chat integration
+- CDN manifest loading at startup
+- Integrated frontend serving (production mode)
 
 ## Package Location
 
@@ -19,11 +21,20 @@ The `@hyperscape/server` package runs the authoritative game server:
 packages/server/
 ├── src/
 │   ├── database/       # Database schema and queries
+│   │   ├── repositories/  # Data access layer
+│   │   ├── migrations/    # Database migrations
+│   │   └── schema.ts      # Drizzle schema definitions
 │   ├── infrastructure/ # Docker, CDN configuration
 │   ├── scripts/        # Utility scripts
 │   ├── shared/         # Shared server utilities
 │   ├── startup/        # Server initialization
+│   │   └── routes/     # API route handlers
 │   ├── systems/        # Server-specific systems
+│   │   ├── ServerNetwork/  # Network handlers
+│   │   │   └── handlers/   # Event handlers (bank, trade, friends, etc.)
+│   │   ├── TradingSystem/  # Player trading system
+│   │   ├── DatabaseSystem/ # Database persistence
+│   │   └── ActivityLoggerSystem/  # Activity logging
 │   ├── types/          # TypeScript types
 │   ├── types.ts        # Core type definitions
 │   └── index.ts        # Entry point
@@ -45,19 +56,93 @@ packages/server/
 
 `src/index.ts` initializes:
 
-1. Database connection (PostgreSQL or SQLite)
-2. Asset CDN (Docker nginx, optional)
-3. Fastify HTTP server with plugins
-4. WebSocket handlers
-5. Game world and systems
+1. Server configuration and environment loading
+2. Manifest fetching from CDN (production) or local cache (development)
+3. Database connection (PostgreSQL via Drizzle ORM)
+4. Fastify HTTP server with CORS, rate limiting, and static file serving
+5. WebSocket handlers for real-time multiplayer
+6. Game world and ECS systems
+7. Frontend serving (if client build exists in `public/`)
+
+### Manifest Loading
+
+The server fetches game manifests from CDN at startup:
+
+```typescript
+// From src/startup/config.ts
+const MANIFEST_FILES = [
+  'biomes.json',
+  'npcs.json',
+  'items/weapons.json',
+  'recipes/smithing.json',
+  // ... 25+ manifest files
+];
+
+// Fetched from PUBLIC_CDN_URL/manifests/
+await fetchManifestsFromCDN(cdnUrl, manifestsDir, nodeEnv);
+```
+
+**Behavior:**
+- **Production/CI**: Always fetches from CDN, caches locally
+- **Development**: Skips fetch if local manifests exist
+- **Caching**: Manifests cached in `world/assets/manifests/` with 5-minute TTL
+
+This eliminates the need for Git LFS in production deployments.
+
+## Server Systems
+
+### TradingSystem
+
+Located in `src/systems/TradingSystem/`:
+
+Modular player-to-player trading system with:
+- **acceptance.ts**: Accept/decline logic
+- **items.ts**: Add/remove items from offers
+- **request.ts**: Trade initiation with proximity checks
+- **swap.ts**: Screen transitions (Screen 1 ↔ Screen 2)
+- **helpers.ts**: Shared utilities and validation
+- **types.ts**: Type definitions
+
+Features:
+- Two-screen confirmation flow (OSRS-accurate)
+- Wealth transfer indicators
+- Proximity validation (2-tile range)
+- Interface blocking (prevents exploits)
+- Audit logging for all trades
+
+### ServerNetwork Handlers
+
+Located in `src/systems/ServerNetwork/handlers/`:
+
+| Handler | Purpose |
+|---------|---------|
+| `bank/` | Banking operations (deposit, withdraw, tabs, coins, equipment) |
+| `trade/` | Trading system handlers |
+| `friends.ts` | Friend management and private messaging |
+| `combat.ts` | Combat actions and validation |
+| `inventory.ts` | Inventory management |
+| `player.ts` | Player state updates |
+| `chat.ts` | Chat message handling |
+| `dialogue.ts` | NPC dialogue |
+| `quest.ts` | Quest progression |
+| `resources.ts` | Resource gathering |
+| `store.ts` | Shop transactions |
+| `prayer.ts` | Prayer system |
+| `home-teleport.ts` | Home teleport functionality |
 
 ## API Routes
 
+### Core Endpoints
+
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/health` | GET | Health check |
-| `/auth` | POST | Authentication |
+| `/status` | GET | Health check (used by Railway) |
+| `/health` | GET | Legacy health check |
 | `/ws` | WS | Game WebSocket connection |
+| `/api/agent/*` | Various | ElizaOS agent API endpoints |
+| `/api/character/*` | Various | Character management |
+| `/api/player/*` | Various | Player data queries |
+| `/api/template/*` | Various | Character templates |
 
 ## Database
 
@@ -103,6 +188,9 @@ export const characters = pgTable("characters", {
 | `playerSessions` | Login/logout tracking |
 | `playerDeaths` | Death locks to prevent duplication |
 | `npcKills` | Kill statistics per player |
+| `friendships` | Bidirectional friend relationships |
+| `friend_requests` | Pending friend requests |
+| `ignore_lists` | Blocked players per account |
 
 ### Database Commands
 
@@ -117,28 +205,91 @@ bunx drizzle-kit studio    # Open Drizzle Studio GUI
 
 ## Environment Variables
 
+### Core Configuration
+
 ```bash
-# Database (choose one)
-DATABASE_URL=postgresql://user:pass@host/db    # PostgreSQL (production)
-# or SQLite is used automatically for local development
+# Server
+PORT=5555                    # HTTP/WebSocket port
+NODE_ENV=development         # Environment: development, production, test
+WORLD=world                  # World directory path
 
-# Authentication (required for persistent accounts)
-PRIVY_APP_ID=your-privy-app-id
+# Database
+DATABASE_URL=postgresql://user:pass@host/db    # PostgreSQL connection string
+USE_LOCAL_POSTGRES=true      # Auto-start PostgreSQL in Docker (dev only)
+
+# Security
+JWT_SECRET=your-jwt-secret   # Token signing (generate with: openssl rand -base64 32)
+ADMIN_CODE=your-admin-code   # In-game admin access code
+```
+
+### Authentication
+
+```bash
+# Privy (required for persistent accounts)
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
 PRIVY_APP_SECRET=your-privy-app-secret
-JWT_SECRET=your-jwt-secret
+```
 
-# Server Configuration
-PORT=5555
-NODE_ENV=development
+<Warning>
+  `PUBLIC_PRIVY_APP_ID` must match between client and server.
+</Warning>
 
-# CDN (optional)
-PUBLIC_CDN_URL=http://localhost:8080
+### Assets & CDN
 
-# Voice Chat (optional)
+```bash
+# CDN URL for game assets (models, textures, audio, manifests)
+PUBLIC_CDN_URL=http://localhost:8080           # Development
+# PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production
+
+# WebSocket and API URLs (exposed to client)
+PUBLIC_WS_URL=ws://localhost:5555/ws
+PUBLIC_API_URL=http://localhost:5555
+```
+
+**Manifest Loading:**
+- Server fetches manifests from `PUBLIC_CDN_URL/manifests/` at startup
+- Cached locally in `world/assets/manifests/`
+- In development, skips fetch if local manifests exist
+- In production/CI, always fetches fresh manifests
+
+### Optional Services
+
+```bash
+# ElizaOS AI Integration
+ELIZAOS_API_URL=http://localhost:4001
+
+# LiveKit Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
-LIVEKIT_URL=wss://your-livekit-url
+LIVEKIT_URL=wss://your-livekit-server
+
+# Advanced
+SAVE_INTERVAL=60             # Auto-save interval in seconds
+DISABLE_RATE_LIMIT=false     # Disable rate limiting (dev only!)
+COMMIT_HASH=abc123           # Git commit hash (auto-set by CI)
 ```
+
+### CORS Origins
+
+The server automatically allows requests from:
+
+```typescript
+// Production domains
+'https://hyperscape.club'
+'https://www.hyperscape.club'
+'https://hyperscape.pages.dev'
+'https://hyperscape-production.up.railway.app'
+
+// Dynamic patterns
+/^https?:\/\/localhost:\d+$/                    // Any localhost port
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/       // Cloudflare preview deployments
+/^https:\/\/.+\.up\.railway\.app$/              // Railway preview deployments
+```
+
+Additional origins from environment variables:
+- `CLIENT_URL`
+- `PUBLIC_APP_URL`
+- `ELIZAOS_URL` / `ELIZAOS_API_URL`
 
 ## Build Scripts
 
@@ -240,16 +391,60 @@ bun run assets:deploy # Deploy to R2 (production)
 
 ## Deployment
 
-### Cloudflare Workers
+### Railway (Production)
 
+The server deploys to Railway using Nixpacks for automatic builds:
+
+**Configuration Files:**
+- `nixpacks.toml` - Build configuration (Bun provider, build commands)
+- `railway.server.json` - Service configuration (health checks, restart policy)
+- `Dockerfile.server` - Multi-stage Docker build (alternative to Nixpacks)
+
+**Deployment Process:**
+1. Push to `main` branch triggers GitHub Actions
+2. Workflow calls Railway GraphQL API to trigger deployment
+3. Railway builds using Nixpacks configuration
+4. Server starts with `cd packages/server && bun dist/index.js`
+5. Manifests fetched from Cloudflare R2 CDN at startup
+
+**Environment Variables (Railway):**
 ```bash
-bun run deploy        # Deploy to staging
-bun run deploy:prod   # Deploy to production
+NODE_ENV=production
+DATABASE_URL=<auto-set-by-railway-postgres>
+JWT_SECRET=<generate-with-openssl>
+PRIVY_APP_ID=<from-privy-dashboard>
+PRIVY_APP_SECRET=<from-privy-dashboard>
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+CI=true
+SKIP_ASSETS=true
 ```
 
-### Railway
+**Health Check:**
+Railway monitors `/status` endpoint every 30 seconds. Server must respond within 3 seconds or it will be restarted.
 
-The `railway.server.json` in the project root configures Railway deployment.
+### Manifest Fetching at Startup
+
+In production, the server fetches manifests from the CDN instead of bundling them:
+
+```typescript
+// packages/server/src/startup/config.ts
+await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
+```
+
+**Fetched Manifests:**
+- Root: `npcs.json`, `stores.json`, `world-areas.json`, etc.
+- Items: `items/weapons.json`, `items/tools.json`, etc.
+- Gathering: `gathering/woodcutting.json`, `gathering/mining.json`, etc.
+- Recipes: `recipes/cooking.json`, `recipes/smithing.json`, etc.
+
+**Caching:**
+- Manifests cached locally in `packages/server/world/assets/manifests/`
+- Only re-fetched if content changes (HTTP ETag validation)
+- 5-minute cache headers (`Cache-Control: public, max-age=300, must-revalidate`)
+
+<Info>
+This allows updating game content (items, NPCs, recipes) without redeploying the server—just upload new manifests to R2.
+</Info>
 
 ## Key Files
 
