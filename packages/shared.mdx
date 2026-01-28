@@ -116,17 +116,15 @@ Located in `src/systems/shared/`:
 
 | Category | Systems |
 |----------|---------|
-| `character/` | Character stats, equipment, skills, inventory, prayer |
+| `character/` | Character stats, equipment (with atomic operations), skills, inventory (with transaction locks), prayer, coin pouch |
 | `combat/` | Combat mechanics, damage, death, aggro, animations |
-| `death/` | Death handling, respawn, safe zones, wilderness |
-| `economy/` | Banks, shops, trading, loot, ground items |
-| `entities/` | Entity lifecycle, spawning, resource management |
-| `interaction/` | Player-world interactions, cooking, firemaking, smithing |
+| `death/` | Death handling, respawn, safe area vs wilderness |
+| `economy/` | Banks, shops, trading (player-to-player), loot, ground items |
+| `entities/` | Entity lifecycle management, spawning, gathering, processing |
+| `interaction/` | Player-world interactions, cooking, firemaking, smelting, smithing |
 | `movement/` | Tile-based movement, collision, pathfinding, chase behavior |
-| `presentation/` | Visual rendering, particles, music, chat |
-| `progression/` | Quest system and progression tracking |
-| `tick/` | NPC tick processing and optimization |
-| `world/` | Terrain, vegetation, sky, water, environment |
+| `presentation/` | Visual rendering, particles, music |
+| `world/` | World management, terrain (with flat zones), water, vegetation, roads |
 
 ### Collision System
 
@@ -266,9 +264,27 @@ import {
 | `fastify` | ^5.0.0 | HTTP server (server builds) |
 | `livekit-client` | ^2.9.9 | Voice chat |
 
-<Note>
-The `hs-kit` package was removed in January 2026. All UI components are now in `packages/client/src/ui/`.
-</Note>
+## Recent Changes
+
+### Terrain Flattening System (PR #644)
+
+The terrain system now supports flat zones under stations for proper building placement:
+
+- **FlatZone interface** — Defines rectangular flat areas with smooth blending
+- **Spatial indexing** — O(1) flat zone lookup using terrain tiles
+- **Manifest-driven** — Stations configure `flattenGround`, `flattenPadding`, `flattenBlendRadius`
+- **Dynamic registration** — `registerFlatZone()`, `unregisterFlatZone()`, `getFlatZoneAt()`
+
+See [Terrain System](/wiki/game-systems/terrain) for details.
+
+### Equipment System Fixes (PR #641)
+
+Atomic equip/unequip operations prevent item duplication:
+
+- **Transaction locks** prevent race conditions
+- **Order of operations** — Remove from inventory FIRST (equip), clear equipment FIRST (unequip)
+- **Rollback on failure** — Restores state if operation fails
+- **New helper methods** — `hasSpace()`, `hasItemAtSlot()`, `removeItemDirect()`, `addItemDirect()`
 
 ## Building
 

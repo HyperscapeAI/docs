@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world.
+Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with AI agents powered by ElizaOS.
 
 ## Essential Commands
 
@@ -102,13 +102,16 @@ packages/
 │   └── React UI components
 ├── server/              # Game server (Fastify + WebSockets)
 │   ├── World management
-│   ├── SQLite/PostgreSQL persistence
+│   ├── PostgreSQL persistence
+│   ├── Trading system (player-to-player)
 │   └── LiveKit voice chat integration
 ├── client/              # Web client (Vite + React)
 │   ├── 3D rendering
 │   ├── Player controls
-│   └── UI/HUD
+│   ├── UI system (consolidated from hs-kit)
+│   └── Drag-and-drop (@dnd-kit)
 ├── physx-js-webidl/     # PhysX WASM bindings
+├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
 └── docs-site/           # Docusaurus documentation site
 ```
@@ -121,7 +124,7 @@ packages/
 2. **shared** - Depends on physx-js-webidl
 3. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
 
 ### Entity Component System (ECS)
 
@@ -135,7 +138,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -148,43 +151,6 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 - Use existing Hyperscape abstractions (ECS, networking, physics)
 - Don't reinvent systems that Hyperscape already provides
 - Separation of concerns: core engine vs. game content
-
-### Production Deployment Architecture
-
-Hyperscape uses a **split deployment** model for scalability and performance:
-
-```
-┌─────────────────┐
-│   Cloudflare    │  Frontend (Static)
-│     Pages       │  - React SPA
-│ hyperscape.club │  - Vite build
-└────────┬────────┘
-         │ WebSocket + HTTP
-         ▼
-┌─────────────────┐
-│    Railway      │  Game Server (API)
-│  Game Server    │  - Fastify + WebSockets
-│ (Nixpacks)      │  - PostgreSQL (Neon)
-└────────┬────────┘
-         │ Fetches manifests
-         ▼
-┌─────────────────┐
-│  Cloudflare R2  │  Assets & CDN
-│   Assets CDN    │  - Models, textures, audio
-│                 │  - JSON manifests
-└─────────────────┘
-```
-
-**Key Points:**
-- **Frontend** is statically hosted on Cloudflare Pages (fast global CDN)
-- **Server** runs on Railway with auto-scaling and managed PostgreSQL
-- **Assets** are served from Cloudflare R2 (object storage with CDN)
-- **Manifests** are fetched from CDN at server startup and cached locally
-
-**Deployment Triggers:**
-- Push to `main` → Railway redeploys server via GitHub Actions
-- Push to `main` → Cloudflare Pages auto-deploys frontend
-- Manual: `bun run sync:r2` to upload assets to R2
 
 ## Critical Development Rules
 
@@ -238,7 +204,7 @@ Visual testing uses colored cube proxies:
 
 ### Production Code Only
 
-- No TODOs or "will fill this out later" - implement completely
+- No TODOs or \"will fill this out later\" - implement completely
 - No hardcoded data - use JSON files and general systems
 - No shortcuts or workarounds - fix root causes
 - Build toward the general case (many items, players, mobs)
@@ -266,6 +232,7 @@ Before creating new abstractions, research existing Hyperscape systems:
 **Getting Systems:**
 ```typescript
 const combatSystem = world.getSystem('combat') as CombatSystem;
+const terrainSystem = world.getSystem<TerrainSystem>('terrain');
 ```
 
 **Entity Queries:**
@@ -306,7 +273,7 @@ All services have unique default ports to avoid conflicts:
 | 3401 | AssetForge API | `ASSET_FORGE_API_PORT` | `bun run dev:forge` |
 | 3402 | Docusaurus | (hardcoded) | `bun run docs:dev` |
 | 5555 | Game Server | `PORT` | `bun run dev` |
-| 8080 | Asset CDN | (Docker) | `bun run cdn:up` |
+| 4001 | ElizaOS API | `ELIZAOS_PORT` | `bun run dev:ai` |
 
 ### Environment Variables
 
@@ -319,43 +286,25 @@ All services have unique default ports to avoid conflicts:
 | Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
+| Plugin | `packages/plugin-hyperscape/.env.example` | ElizaOS agent configuration |
 
 **Common variables**:
 ```bash
 # Server (packages/server/.env)
 DATABASE_URL=postgresql://...    # Required for production
 JWT_SECRET=...                   # Required for production
-PUBLIC_PRIVY_APP_ID=...          # For Privy auth
+PRIVY_APP_ID=...                 # For Privy auth
 PRIVY_APP_SECRET=...             # For Privy auth
-PUBLIC_CDN_URL=...               # CDN for assets and manifests
 
 # Client (packages/client/.env)
 PUBLIC_PRIVY_APP_ID=...          # Must match server's PRIVY_APP_ID
 PUBLIC_API_URL=https://...       # Point to your server
 PUBLIC_WS_URL=wss://...          # Point to your server WebSocket
-PUBLIC_CDN_URL=...               # CDN for assets (same as server)
 ```
 
 **Split deployment** (client and server on different hosts):
-- `PUBLIC_PRIVY_APP_ID` (client) must equal `PUBLIC_PRIVY_APP_ID` (server)
+- `PUBLIC_PRIVY_APP_ID` (client) must equal `PRIVY_APP_ID` (server)
 - `PUBLIC_WS_URL` and `PUBLIC_API_URL` must point to your server
-- `PUBLIC_CDN_URL` should point to your CDN (R2, S3, etc.)
-
-### Manifest System
-
-**Development**: Manifests are auto-downloaded with assets during `bun install` via Git LFS.
-
-**Production/CI**: Manifests are fetched from CDN at server startup:
-- Server calls `fetchManifestsFromCDN()` on boot
-- Downloads all JSON files from `{PUBLIC_CDN_URL}/manifests/`
-- Caches locally in `packages/server/world/assets/manifests/`
-- Skips download if local manifests exist (development mode)
-
-**Manifest Files:**
-- Root: `biomes.json`, `npcs.json`, `prayers.json`, `skill-unlocks.json`, `stores.json`, etc.
-- Items: `items/food.json`, `items/weapons.json`, `items/tools.json`, etc.
-- Gathering: `gathering/fishing.json`, `gathering/mining.json`, etc.
-- Recipes: `recipes/cooking.json`, `recipes/smithing.json`, etc.
 
 ## Package Manager
 
@@ -369,83 +318,67 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 
 - **Runtime**: Bun v1.1.38+
 - **Engine**: Three.js 0.180.0, PhysX (WASM)
-- **UI**: React 19.2.0, styled-components
+- **UI**: React 19.2.0, @dnd-kit (drag-and-drop), Zustand (state management)
 - **Server**: Fastify, WebSockets, LiveKit
-- **Database**: SQLite (local), PostgreSQL (production via Neon)
+- **Database**: PostgreSQL (production via Neon), SQLite (local dev)
 - **Testing**: Playwright, Vitest
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
-- **Deployment**: Railway (server), Cloudflare Pages (frontend), Cloudflare R2 (assets)
+- **AI**: ElizaOS 1.2.9+
 
-## Deployment
+## Recent Architectural Changes
 
-### Production Architecture
+### UI System Consolidation (PR #638)
 
-Hyperscape uses a **split deployment** for optimal performance:
+The `hs-kit` package has been **removed** and all UI components consolidated into `packages/client/src/ui/`:
 
-| Component | Platform | URL | Purpose |
-|-----------|----------|-----|---------|
-| Frontend | Cloudflare Pages | https://hyperscape.club | Static React SPA |
-| Game Server | Railway | https://hyperscape-production.up.railway.app | API + WebSocket |
-| Assets/CDN | Cloudflare R2 | https://assets.hyperscape.club | Models, audio, textures |
+- **Before**: Separate `packages/hs-kit/` package with 80+ files
+- **After**: Consolidated into `packages/client/src/ui/` with improved organization
+- **Benefits**: Faster builds, simpler dependency graph, better code organization
 
-### Railway Deployment
+**Migration Impact:**
+- All `hs-kit` imports changed to `@/ui`
+- Drag-and-drop now uses `@dnd-kit` instead of custom implementation
+- Theme system moved to `src/ui/theme/`
+- Window management moved to `src/ui/core/window/`
 
-**Build Process** (via Nixpacks):
-1. Install system dependencies (Python, Cairo, Pango for native modules)
-2. Run `bun install`
-3. Build `shared` package
-4. Build `server` package
-5. Create manifests directory
-6. Start server with `bun dist/index.js`
+### Trading System (PR #641)
 
-**Configuration Files:**
-- `nixpacks.toml` - Railway build configuration
-- `Dockerfile.server` - Alternative Docker build (multi-stage)
-- `.github/workflows/deploy-railway.yml` - Auto-deployment on push to main
-- `railway.server.json` - Railway service configuration
+Player-to-player trading with OSRS-style mechanics:
 
-**Environment Variables** (set in Railway dashboard):
-```bash
-NODE_ENV=production
-DATABASE_URL=postgresql://...           # Neon PostgreSQL
-PUBLIC_CDN_URL=https://assets.hyperscape.club
-PUBLIC_PRIVY_APP_ID=...
-PRIVY_APP_SECRET=...
-JWT_SECRET=...
-ADMIN_CODE=...
-```
+- **Two-screen confirmation flow** (Offer → Confirm)
+- **Proximity checks** (players must be adjacent)
+- **Auto-walk to trade** (walks to player if out of range)
+- **Wealth transfer indicator** (shows value difference)
+- **Anti-scam protection** (red flashing when items removed)
+- **Atomic item swaps** (database transactions prevent duplication)
 
-### Cloudflare Pages Deployment
+**New Systems:**
+- `TradingSystem` (server) — Trade session management
+- `PendingTradeManager` (server) — Walk-to-trade behavior
+- `TradePanel/` (client) — Modular UI components
 
-**Build Process:**
-- Automatic deployment on push to main
-- Vite builds React SPA
-- Outputs to `packages/client/dist/`
-- Served globally via Cloudflare CDN
+### Terrain Flattening (PR #644)
 
-**Environment Variables** (set in Pages dashboard):
-```bash
-PUBLIC_PRIVY_APP_ID=...                # Must match server
-PUBLIC_API_URL=https://hyperscape-production.up.railway.app
-PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
-PUBLIC_CDN_URL=https://assets.hyperscape.club
-PUBLIC_APP_URL=https://hyperscape.club
-```
+Terrain system now supports flat zones under stations:
 
-### Asset Deployment
+- **Flat zones** defined in station manifests (`flattenGround: true`)
+- **Spatial indexing** for O(1) flat zone lookup
+- **Smooth blending** using smoothstep interpolation
+- **Manifest-driven** station spawning via `StationSpawnerSystem`
 
-**Upload to R2:**
-```bash
-bun run sync:r2          # Upload all assets to Cloudflare R2
-bun run sync:r2:dry      # Preview what would be uploaded
-bun run sync:r2:verbose  # Detailed upload logs
-```
+**New APIs:**
+- `TerrainSystem.registerFlatZone(zone)` — Register flat zone
+- `TerrainSystem.unregisterFlatZone(id)` — Remove flat zone
+- `TerrainSystem.getFlatZoneAt(x, z)` — Query flat zone
 
-**Manifest Updates:**
-- Manifests are committed to the repo at `packages/server/world/assets/manifests/`
-- Server fetches from CDN at startup for production
-- Local development uses committed manifests
+### Plugin Type System (PR #629)
+
+The `plugin-hyperscape` package now uses **local type definitions** instead of importing from `@hyperscape/shared`:
+
+- **Reason**: ElizaOS requires `isolatedModules: true`, which prevents importing class values as types
+- **Solution**: Define World, Entity, System, Player types locally in `src/types/core-types.ts`
+- **Impact**: Plugin builds successfully with 0 errors (previously 70+ errors)
 
 ## Troubleshooting
 
@@ -484,25 +417,6 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Check `/logs/` folder for error details
 - Tests spawn their own Hyperscape instances
 - Visual tests require headless browser support
-
-### Deployment Issues
-
-**Railway build fails:**
-- Check `nixpacks.toml` configuration
-- Verify all dependencies are in `package.json`
-- Check Railway logs for build errors
-- Ensure `PUBLIC_CDN_URL` is set correctly
-
-**Manifests not loading:**
-- Verify CDN is accessible from server
-- Check that manifests exist at `{CDN_URL}/manifests/*.json`
-- Review server startup logs for fetch errors
-- In development, manifests should exist locally
-
-**CORS errors:**
-- Verify client domain is in CORS allowlist (see `packages/server/src/startup/http-server.ts`)
-- Check that `PUBLIC_PRIVY_APP_ID` matches between client and server
-- Ensure WebSocket URL uses correct protocol (ws:// or wss://)
 
 ## Additional Resources
 

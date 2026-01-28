@@ -100,8 +100,8 @@ The core Hyperscape 3D engine containing:
 - **Three.js integration**: 3D rendering (v0.180.0) with WebGPU/WebGL support
 - **PhysX bindings**: Physics simulation via WASM
 - **Networking**: Real-time multiplayer sync via WebSockets
-- **React UI components**: In-game interface with styled-components
 - **Game data**: Manifests for NPCs, items, world areas
+- **Game systems**: Combat, economy, skills, trading, terrain
 
 **Rendering Backend:**
 - **WebGPU** (preferred): Modern GPU API with TSL post-processing
@@ -113,11 +113,19 @@ The core Hyperscape 3D engine containing:
 ```
 packages/shared/src/
 ├── components/     # ECS components
+├── constants/      # Game constants (combat, equipment, gathering, etc.)
 ├── core/           # Core engine classes
-├── data/           # Game manifests (npcs.ts, items.ts, etc.)
+├── data/           # Game manifests (npcs.ts, items.ts, world-areas.ts, etc.)
 ├── entities/       # Entity definitions (PlayerEntity, MobEntity)
+│   ├── player/     # PlayerEntity, PlayerLocal, PlayerRemote
+│   ├── npc/        # MobEntity, NPCEntity
+│   ├── world/      # BankEntity, FurnaceEntity, ResourceEntity, etc.
+│   └── managers/   # AIStateMachine, AggroManager, CombatStateManager, etc.
 ├── physics/        # PhysX wrapper
-├── systems/        # ECS systems (combat, economy, etc.)
+├── systems/        # ECS systems
+│   ├── client/     # Client-only (rendering, input, audio)
+│   ├── server/     # Server-only (persistence, LiveKit)
+│   └── shared/     # Shared systems (combat, economy, skills, trading, terrain)
 └── types/          # TypeScript types
 ```
 
@@ -127,16 +135,28 @@ Game server built with:
 
 - **Fastify 5**: HTTP API with rate limiting
 - **WebSockets**: Real-time game state via `@fastify/websocket`
-- **PostgreSQL/SQLite**: Database persistence
+- **PostgreSQL**: Database persistence (Drizzle ORM)
 - **LiveKit**: Voice chat integration
+- **Trading System**: Player-to-player trading with atomic swaps
+- **Social System**: Friend management and private messaging
 
 **Key directories:**
 ```
 packages/server/src/
-├── database/       # Database schema and queries
+├── database/       # Database schema and repositories
+│   ├── repositories/  # Data access layer (Inventory, Bank, Character, etc.)
+│   ├── migrations/    # Database migrations
+│   └── schema.ts      # Drizzle schema definitions
 ├── infrastructure/ # Docker, CDN configuration
 ├── startup/        # Server initialization
 ├── systems/        # Server-specific systems
+│   ├── ServerNetwork/  # Network handlers
+│   │   ├── handlers/   # Packet handlers (trade, bank, combat, friends, etc.)
+│   │   ├── PendingTradeManager.ts  # Walk-to-trade behavior
+│   │   ├── FollowManager.ts        # Follow player behavior
+│   │   └── InteractionSessionManager.ts  # UI session tracking
+│   ├── TradingSystem/  # Trade session management
+│   └── TickSystem.ts   # Game tick processing
 └── index.ts        # Entry point
 ```
 
@@ -147,7 +167,7 @@ Web client featuring:
 - **Vite**: Fast development builds with HMR
 - **React 19**: UI framework
 - **Three.js**: 3D rendering
-- **@dnd-kit**: Drag-and-drop system
+- **@dnd-kit**: Accessible drag-and-drop
 - **Zustand**: State management
 - **Capacitor**: iOS/Android mobile builds
 - **Privy**: Authentication
@@ -157,22 +177,23 @@ Web client featuring:
 ```
 packages/client/src/
 ├── auth/           # Privy authentication
-├── ui/             # UI system (consolidated from hs-kit)
-│   ├── components/ # Window, Tab, Modal, ItemSlot, etc.
-│   ├── controls/   # Form controls (Slider, Toggle, etc.)
-│   ├── core/       # Drag-and-drop, edit mode, presets, responsive
-│   ├── stores/     # Zustand state stores
-│   ├── theme/      # Theme system and animations
-│   └── types.ts    # UI type definitions
 ├── game/           # Game loop and logic
-│   ├── components/ # Game-specific components (chat, currency, dialog, etc.)
-│   ├── panels/     # Game panels (inventory, equipment, bank, trade, etc.)
-│   ├── hud/        # HUD elements (status bars, minimap, etc.)
-│   └── interface/  # Interface management
+│   ├── components/ # Game-specific components (chat, currency, dialog, equipment, map, quest, settings, skilltree)
+│   ├── dashboard/  # Agent dashboard
+│   ├── hud/        # HUD elements (StatusBars, Minimap, XPProgressOrb, etc.)
+│   ├── interface/  # Interface manager and layout
+│   ├── panels/     # Game panels (Inventory, Bank, Combat, Trade, etc.)
+│   └── systems/    # Client-side game systems
 ├── hooks/          # React hooks
 ├── lib/            # Networking, utilities, error handling
 ├── screens/        # UI screens (login, game, etc.)
-├── types/          # TypeScript types
+├── ui/             # Consolidated UI system (from hs-kit)
+│   ├── components/ # Reusable UI components (Window, TabBar, Portal, etc.)
+│   ├── controls/   # Form controls (Slider, Toggle, Select, etc.)
+│   ├── core/       # Core UI systems (drag-and-drop, window management, presets)
+│   ├── stores/     # Zustand state stores (windowStore, themeStore, etc.)
+│   ├── theme/      # Theme system
+│   └── types/      # UI type definitions
 ├── utils/          # Helper functions
 └── index.tsx       # React entry point
 ```
@@ -191,17 +212,21 @@ ElizaOS plugin enabling AI agents to:
 - Play autonomously as real players with full WebSocket connectivity
 - Train all 12 skills including Agility (passive movement-based XP)
 
+**Type System:**
+
+The plugin uses **local type definitions** instead of importing from `@hyperscape/shared` to satisfy ElizaOS's `isolatedModules: true` requirement. This resolves 70+ TypeScript build errors.
+
 **Key Dependencies:**
 
-```typescript
-// From packages/plugin-hyperscape/package.json
-"@elizaos/core": "^1.7.0"
-"@elizaos/plugin-anthropic": "^1.5.12"
-"@elizaos/plugin-openai": "^1.6.0"
-"@elizaos/plugin-openrouter": "^1.5.17"
-"@elizaos/plugin-ollama": "^1.2.4"  // NEW: Local LLM support
-"@elizaos/plugin-sql": "^1.7.0"
-"@hyperscape/shared": "workspace:*"
+```json
+{
+  "@elizaos/core": "^1.2.9",
+  "@elizaos/plugin-anthropic": "^1.5.12",
+  "@elizaos/plugin-openai": "1.5.16",
+  "@elizaos/plugin-openrouter": "^1.5.15",
+  "@hyperscape/shared": "workspace:*",
+  "three": "^0.181.0"
+}
 ```
 
 ### asset-forge (`3d-asset-forge`)

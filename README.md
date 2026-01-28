@@ -12,34 +12,19 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - **Spectator Mode**: Watch agents play in real-time and observe their decision-making process
 - **Open Source**: Built on open technology with extensible architecture
 
-**Production Deployment:**
-- Frontend: [hyperscape.club](https://hyperscape.club) (Cloudflare Pages)
-- Backend: Railway (hyperscape-production.up.railway.app)
-- Assets: Cloudflare R2 CDN (assets.hyperscape.club)
+## Core Features
 
-**Latest Features:**
-- **LLM Autonomy System**: Agents use THINKING+ACTION format for genuine reasoning
-- **Quest System**: OSRS-style multi-stage quests with progress tracking
-- **WebGPU Rendering**: High-performance graphics with automatic WebGL fallback
-- **Auto Exposure**: Adaptive lighting for day/night cycle visibility
-
-## Recent Updates (January 2026)
-
-- **Player Trading**: OSRS-accurate two-screen confirmation flow with anti-scam features
-- **Terrain Flattening**: Stations automatically flatten terrain underneath for level surfaces
-- **UI Consolidation**: Removed `hs-kit` package, all UI now in `packages/client/src/ui/`
-- **Responsive UI**: Anchor-based positioning system for proper mobile↔desktop scaling
-- **Social Features**: Friend management, private messaging, online status notifications
-- **Combat Styles**: Draggable to action bar with SVG icons and active state tracking
-
-## Documentation Structure
-
-- **Quickstart** - Get Hyperscape running locally in minutes
-- **Guides** - Development, deployment, AI agents, and mobile
-- **Concepts** - Core architecture (ECS, combat, economy, multiplayer)
-- **Wiki** - In-depth system documentation (combat, skills, quests, movement, etc.)
-- **API Reference** - TypeScript API documentation
-- **Packages** - Package-specific documentation
+| Category | Features |
+|----------|----------|
+| **Combat** | Tick-based OSRS mechanics (600ms ticks), attack styles, accuracy formulas, death/respawn system, auto-retaliate |
+| **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking, Smithing, Prayer + combat skills with XP/leveling |
+| **Economy** | 480-slot bank with tabs, shops, player-to-player trading (OSRS-style), item weights, loot drops |
+| **Social** | Friend system, private messaging, ignore list, online status tracking |
+| **World** | Procedural terrain with flat zones for stations, biomes, roads, vegetation, day/night cycle |
+| **UI** | Anchor-based responsive positioning, drag-and-drop (@dnd-kit), customizable action bar (12 slots), mobile support |
+| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
+| **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
+| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
 
 ## Quick Start
 
@@ -118,8 +103,8 @@ cp packages/asset-forge/.env.example packages/asset-forge/.env
 
 ```
 packages/
-├── shared/              # Core 3D engine (ECS, Three.js, PhysX, networking)
-├── server/              # Game server (Fastify, WebSockets, database)
+├── shared/              # Core 3D engine (ECS, Three.js, PhysX, networking, React UI)
+├── server/              # Game server (Fastify, WebSockets, PostgreSQL)
 ├── client/              # Web client (Vite, React)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
@@ -186,7 +171,7 @@ Game assets (3D models, textures, audio) source: [HyperscapeAI/assets](https://g
 bun run assets:sync    # Pull latest assets from repo (local dev only)
 ```
 
-**Production/CI**: Manifests are fetched from CDN at server startup and cached locally. The server automatically downloads manifests from `PUBLIC_CDN_URL` on first run.
+**Production/CI**: Manifests are committed to the repo at `packages/server/world/assets/manifests/`.
 
 ## Configuration
 
@@ -214,55 +199,6 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
 
-## Production Deployment
-
-Hyperscape uses a split deployment architecture:
-
-| Component | Platform | URL |
-|-----------|----------|-----|
-| **Frontend** | Cloudflare Pages | https://hyperscape.club |
-| **Game Server** | Railway | https://hyperscape-production.up.railway.app |
-| **Assets/CDN** | Cloudflare R2 | https://assets.hyperscape.club |
-
-### Deployment Workflow
-
-1. **Push to main** triggers automatic deployments:
-   - Frontend deploys to Cloudflare Pages
-   - Server deploys to Railway via GitHub Actions
-   - Assets are manually synced to R2 with `bun run sync:r2`
-
-2. **Railway builds** using Nixpacks:
-   - Builds `shared` and `server` packages
-   - Fetches manifests from CDN at startup
-   - Serves API and WebSocket connections
-
-3. **Cloudflare Pages** serves the static frontend:
-   - Vite-built React application
-   - Connects to Railway server via WebSocket
-   - Loads assets from R2 CDN
-
-### Environment Variables for Production
-
-**Server (Railway):**
-```bash
-NODE_ENV=production
-DATABASE_URL=postgresql://...           # Neon or other PostgreSQL
-PUBLIC_CDN_URL=https://assets.hyperscape.club
-PUBLIC_PRIVY_APP_ID=your-app-id
-PRIVY_APP_SECRET=your-app-secret
-JWT_SECRET=your-secure-secret
-ADMIN_CODE=your-admin-code
-```
-
-**Client (Cloudflare Pages):**
-```bash
-PUBLIC_PRIVY_APP_ID=your-app-id        # Must match server
-PUBLIC_API_URL=https://hyperscape-production.up.railway.app
-PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
-PUBLIC_CDN_URL=https://assets.hyperscape.club
-PUBLIC_APP_URL=https://hyperscape.club
-```
-
 ## Troubleshooting
 
 **Characters vanishing / not appearing on character select:**
@@ -273,12 +209,6 @@ The CDN container needs to be running. It starts automatically with `bun run dev
 ```bash
 bun run cdn:up
 ```
-
-**Manifests not loading in production:**
-The server fetches manifests from `PUBLIC_CDN_URL` at startup. Check that:
-- `PUBLIC_CDN_URL` is set correctly in server environment
-- CDN is accessible from the server
-- Manifests exist at `{CDN_URL}/manifests/*.json`
 
 **Database schema errors or stale data after pulling updates:**
 Migrations only run once, so pulling new code won't fix an outdated database schema. Reset to fresh:

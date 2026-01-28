@@ -175,6 +175,52 @@ const STYLE_BONUSES: Record<CombatStyle, StyleBonus> = {
 };
 ```
 
+### Combat Style Icons
+
+Each combat style has a unique SVG icon with active state colors:
+
+| Style | Icon | Active Color | Description |
+|-------|------|--------------|-------------|
+| **Accurate** | Target/bullseye | Red (#ef4444) | Concentric circles |
+| **Aggressive** | Double chevrons | Green (#22c55e) | Power attack |
+| **Defensive** | Shield | Blue (#3b82f6) | Protection |
+| **Controlled** | Balance symbol | Purple (#a855f7) | Balanced training |
+
+### Action Bar Integration
+
+Combat styles can be dragged from the combat panel to the action bar for quick switching:
+
+```typescript
+// From packages/client/src/game/panels/CombatPanel.tsx
+<DraggableCombatStyleButton
+  style="accurate"
+  icon={<AccurateIcon />}
+  active={activeStyle === "accurate"}
+/>
+
+// Action bar slot handles combat style drops
+if (dragData.type === "combatstyle") {
+  setSlot(slotIndex, {
+    type: "combatstyle",
+    combatStyleId: dragData.combatStyleId,
+  });
+}
+
+// Clicking combat style slot switches attack style
+if (slot.type === "combatstyle") {
+  world.network.send("changeCombatStyle", {
+    style: slot.combatStyleId,
+  });
+}
+```
+
+**Action Bar Features:**
+- Drag combat styles from combat panel
+- Click to switch attack style
+- Visual highlight when style is active
+- Supports 4-12 customizable slots (default: 9)
+- Persistent across sessions
+
 ---
 
 ## Damage Calculation

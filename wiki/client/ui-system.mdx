@@ -1,183 +1,406 @@
 ---
 title: "UI System"
-description: "Responsive UI with drag-and-drop, themes, and window management"
-icon: "window"
+description: "Anchor-based positioning, drag-and-drop, and responsive scaling"
+icon: "layout"
 ---
 
 # UI System
 
-Hyperscape's UI system provides a flexible, responsive interface with drag-and-drop, theming, and window management.
+Hyperscape's UI system features anchor-based positioning (Unity/Unreal-style), accessible drag-and-drop with @dnd-kit, responsive scaling for mobile ↔ desktop transitions, and customizable layouts.
 
 <Info>
-All UI code is in `packages/client/src/ui/` (consolidated from the removed `hs-kit` package in January 2026).
+UI code lives in `packages/client/src/ui/` with core systems in `src/ui/core/`.
 </Info>
-
----
 
 ## Architecture
 
 ```
 packages/client/src/ui/
-├── components/         # Core UI components
+├── components/          # Reusable UI components
 │   ├── Window.tsx      # Draggable, resizable windows
-│   ├── Tab.tsx         # Tab component
-│   ├── TabBar.tsx      # Tab container
-│   ├── ModalWindow.tsx # Modal dialogs
-│   ├── DragOverlay.tsx # Drag preview overlay
-│   ├── ItemSlot.tsx    # Inventory/equipment slots
-│   ├── StatusBar.tsx   # HP/Prayer bars
+│   ├── TabBar.tsx      # Tab management
+│   ├── Portal.tsx      # React portals
 │   └── ...
-├── controls/           # Form controls
-│   ├── ColorControl.tsx
-│   ├── KeybindControl.tsx
-│   ├── SelectControl.tsx
+├── controls/            # Form controls
 │   ├── SliderControl.tsx
-│   └── ToggleControl.tsx
-├── core/               # Core UI systems
-│   ├── drag/           # Drag-and-drop system
-│   ├── edit/           # Edit mode
-│   ├── presets/        # Layout presets
-│   ├── responsive/     # Responsive utilities
-│   ├── tabs/           # Tab management
-│   ├── tooltip/        # Tooltip system
-│   └── window/         # Window management
-├── stores/             # Zustand state stores
-│   ├── windowStore.ts  # Window positions/state
-│   ├── themeStore.ts   # Theme configuration
-│   ├── dragStore.ts    # Drag state
-│   ├── editStore.ts    # Edit mode state
-│   ├── anchorUtils.ts  # Anchor positioning utilities
+│   ├── ToggleControl.tsx
 │   └── ...
-├── theme/              # Theme system
+├── core/                # Core UI systems
+│   ├── drag/           # Drag-and-drop (@dnd-kit)
+│   ├── window/         # Window management
+│   ├── presets/        # Layout presets
+│   ├── responsive/     # Breakpoints
+│   └── ...
+├── stores/              # Zustand state stores
+│   ├── windowStore.ts  # Window positions
+│   ├── themeStore.ts   # Theme config
+│   ├── anchorUtils.ts  # Anchor positioning
+│   └── ...
+├── theme/               # Theme system
 │   ├── themes.ts       # Theme definitions
 │   └── animations.ts   # Animation utilities
-└── types.ts            # UI type definitions
+└── types/               # UI type definitions
 ```
 
 ---
 
-## Window System
+## Anchor-Based Positioning
 
-### Window Component
+Windows maintain their position relative to a viewport anchor point (corner, edge, or center) instead of absolute pixel positions. This ensures windows stay attached to their intended viewport edges when resizing between any screen sizes.
 
-```typescript
-import { Window } from '@/ui';
-
-<Window
-  id="inventory"
-  title="Inventory"
-  defaultPosition={{ x: 100, y: 100 }}
-  defaultSize={{ width: 400, height: 500 }}
-  anchor="bottom-right"
-  resizable={true}
-  closable={true}
-  onClose={() => console.log('Window closed')}
->
-  {/* Window content */}
-</Window>
-```
-
-### Window Anchors
-
-Windows use anchor-based positioning for responsive scaling:
+### WindowAnchor Type
 
 ```typescript
-// From packages/client/src/ui/types.ts
+// From packages/client/src/ui/stores/windowStore.ts
 export type WindowAnchor =
   | "top-left" | "top-center" | "top-right"
   | "center-left" | "center" | "center-right"
   | "bottom-left" | "bottom-center" | "bottom-right";
 ```
 
-**How anchors work:**
-- Windows store **offset from anchor** instead of absolute position
-- When viewport resizes, windows maintain their anchor relationship
-- Prevents clustering when switching between mobile and desktop
-
-**Default anchors:**
-- Chat, Skills: `bottom-left`
-- Minimap: `top-right`
-- Inventory, Menubar: `bottom-right`
-- Action bar: `bottom-center`
-
-### Window Store
+### Anchor Utilities
 
 ```typescript
-import { useWindowStore } from '@/ui';
+// From packages/client/src/ui/stores/anchorUtils.ts
 
-// Get window state
-const window = useWindowStore((s) => s.windows.get('inventory'));
+/**
+ * Get viewport coordinates for an anchor point
+ */
+export function getAnchorPosition(
+  anchor: WindowAnchor,
+  viewportWidth: number,
+  viewportHeight: number,
+): { x: number; y: number };
 
-// Update window position
-useWindowStore.getState().updateWindow('inventory', {
-  position: { x: 200, y: 200 },
-});
+/**
+ * Calculate window's offset from its anchor
+ */
+export function calculateOffsetFromAnchor(
+  windowPos: { x: number; y: number },
+  anchor: WindowAnchor,
+  viewportWidth: number,
+  viewportHeight: number,
+): { x: number; y: number };
 
-// Close window
-useWindowStore.getState().closeWindow('inventory');
+/**
+ * Calculate window position from anchor + offset
+ */
+export function calculatePositionFromAnchor(
+  anchor: WindowAnchor,
+  offset: { x: number; y: number },
+  viewportWidth: number,
+  viewportHeight: number,
+): { x: number; y: number };
+
+/**
+ * Auto-detect nearest anchor from window position
+ */
+export function detectNearestAnchor(
+  windowPos: { x: number; y: number },
+  viewportWidth: number,
+  viewportHeight: number,
+): WindowAnchor;
+
+/**
+ * Get default anchor based on window ID
+ */
+export function getDefaultAnchor(windowId: string): WindowAnchor;
+
+/**
+ * Reposition window for viewport resize
+ */
+export function repositionWindowForViewport(
+  window: WindowState,
+  oldViewport: { width: number; height: number },
+  newViewport: { width: number; height: number },
+): { x: number; y: number };
+```
+
+### Default Anchors
+
+```typescript
+// From packages/client/src/game/interface/DefaultLayoutFactory.ts
+const DEFAULT_ANCHORS: Record<string, WindowAnchor> = {
+  chat: "bottom-left",
+  skills: "bottom-left",
+  prayer: "bottom-left",
+  minimap: "top-right",
+  inventory: "bottom-right",
+  menubar: "bottom-right",
+  actionbar: "bottom-center",
+};
+```
+
+---
+
+## Responsive Scaling
+
+### Mobile ↔ Desktop Transitions
+
+The UI handles transitions between mobile and desktop layouts:
+
+```typescript
+// From packages/client/src/game/interface/useViewportResize.ts
+useEffect(() => {
+  const handleResize = () => {
+    const isMobile = window.innerWidth < 768;
+    const wasMobile = wasMobileRef.current;
+    
+    // Detect mobile ↔ desktop transition
+    if (wasMobile && !isMobile) {
+      // Mobile → Desktop: Use default layout positions
+      const defaultWindows = createDefaultWindows();
+      
+      for (const [id, window] of Object.entries(windows)) {
+        const defaultWindow = defaultWindows.find(w => w.id === id);
+        if (defaultWindow) {
+          // Apply default position for this window
+          updateWindow(id, {
+            x: defaultWindow.x,
+            y: defaultWindow.y,
+          });
+        }
+      }
+    }
+    
+    wasMobileRef.current = isMobile;
+  };
+  
+  window.addEventListener("resize", handleResize);
+  return () => window.removeEventListener("resize", handleResize);
+}, [windows]);
+```
+
+### Viewport Size Persistence
+
+Window layouts are saved with viewport size for proper scaling:
+
+```typescript
+// From packages/client/src/ui/stores/windowStore.ts
+export interface WindowStoreState {
+  windows: Record<string, WindowState>;
+  savedViewportSize?: { width: number; height: number };
+}
+
+// On load, calculate scale factor
+const scaleX = currentViewport.width / savedViewportSize.width;
+const scaleY = currentViewport.height / savedViewportSize.height;
+
+// Apply proportional scaling to window positions
+const scaledX = window.x * scaleX;
+const scaledY = window.y * scaleY;
 ```
 
 ---
 
 ## Drag-and-Drop System
 
-Hyperscape uses `@dnd-kit` for drag-and-drop functionality:
+The UI uses `@dnd-kit` for accessible drag-and-drop with keyboard and pointer support.
 
-### useDrag Hook
+### Core Hooks
 
 ```typescript
-import { useDrag } from '@/ui/core/drag';
+// From packages/client/src/ui/core/drag/
+import { useDraggable, useDroppable, DndProvider } from '@/ui';
 
-const { attributes, listeners, setNodeRef, isDragging } = useDrag({
-  id: 'item-bronze-sword',
-  data: {
-    type: 'inventory',
-    slot: 5,
-    itemId: 'bronze_sword',
-    quantity: 1,
-  },
+// Draggable item
+const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  id: 'item-123',
+  data: { type: 'inventory', itemId: 'bronze_sword', slot: 5 },
 });
 
-<div ref={setNodeRef} {...listeners} {...attributes}>
-  {/* Draggable content */}
-</div>
-```
-
-### useDrop Hook
-
-```typescript
-import { useDrop } from '@/ui/core/drag';
-
-const { setNodeRef, isOver } = useDrop({
+// Drop zone
+const { setNodeRef: setDropRef, isOver } = useDroppable({
   id: 'equipment-weapon',
-  accept: ['inventory'],
-  onDrop: (item) => {
-    console.log('Dropped:', item);
-    // Handle drop
-  },
+  data: { type: 'equipment', slot: 'weapon' },
 });
-
-<div ref={setNodeRef} style={{ background: isOver ? 'green' : 'transparent' }}>
-  {/* Drop zone */}
-</div>
 ```
 
-### Drag Context
+### Collision Detection
 
 ```typescript
-import { DragContext } from '@/ui/core/drag';
+// From packages/client/src/ui/core/drag/collisionDetection.ts
+import { pointerWithin, closestCenter, rectIntersection } from '@/ui';
 
-<DragContext>
-  {/* Draggable and droppable components */}
-</DragContext>
+// Collision algorithms
+<DndProvider collisionDetection={pointerWithin}>
+  {/* Drag-and-drop content */}
+</DndProvider>
 ```
 
-**Features:**
-- Keyboard accessibility (Space/Enter to pick up, arrow keys to move)
-- Pointer events (mouse and touch)
-- Custom collision detection
-- Drag modifiers (snap to grid, restrict axis)
-- Visual feedback (hover states, drop previews)
+**Available Algorithms:**
+- `pointerWithin` — Pointer must be inside drop zone
+- `closestCenter` — Closest drop zone by center distance
+- `rectIntersection` — Bounding box overlap
+
+### Accessibility Features
+
+```typescript
+// Keyboard support
+const { attributes, listeners } = useDraggable({
+  id: 'item',
+  data: { ... },
+});
+
+// Attributes include:
+// - role="button"
+// - tabIndex={0}
+// - aria-pressed
+// - aria-roledescription="draggable"
+
+// Listeners include:
+// - onPointerDown
+// - onKeyDown (Space/Enter to activate)
+```
+
+---
+
+## Window Management
+
+### Window State
+
+```typescript
+// From packages/client/src/ui/stores/windowStore.ts
+export interface WindowState {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  visible: boolean;
+  minimized: boolean;
+  zIndex: number;
+  anchor?: WindowAnchor;  // Anchor point for responsive scaling
+  tabs?: TabState[];
+}
+```
+
+### Window Operations
+
+```typescript
+// From packages/client/src/ui/core/window/useWindowManager.ts
+const {
+  windows,
+  createWindow,
+  updateWindow,
+  closeWindow,
+  minimizeWindow,
+  bringToFront,
+  resetLayout,
+} = useWindowManager();
+
+// Create window
+createWindow({
+  id: "inventory",
+  x: 100,
+  y: 100,
+  width: 200,
+  height: 300,
+  anchor: "bottom-right",
+});
+
+// Update position
+updateWindow("inventory", { x: 150, y: 150 });
+
+// Bring to front
+bringToFront("inventory");
+```
+
+### Tab Combining
+
+Windows support tab combining via drag-and-drop:
+
+```typescript
+// From packages/client/src/ui/core/tabs/useTabDrag.ts
+const handleTabDrop = (event: DragEndEvent) => {
+  const { active, over } = event;
+  
+  if (over && over.id !== active.id) {
+    // Dragging tab to another window's header
+    if (over.data.type === "window-header") {
+      combineTabsIntoWindow(active.id, over.id);
+    }
+  }
+};
+```
+
+---
+
+## Layout Presets
+
+### Preset System
+
+```typescript
+// From packages/client/src/ui/core/presets/usePresets.ts
+const {
+  presets,
+  currentPreset,
+  savePreset,
+  loadPreset,
+  deletePreset,
+  sharePreset,
+} = usePresets();
+
+// Save current layout
+savePreset("My Layout", {
+  windows: windowStore.getState().windows,
+  viewport: { width: window.innerWidth, height: window.innerHeight },
+});
+
+// Load preset
+loadPreset(presetId);
+
+// Share preset (generates shareable code)
+const shareCode = sharePreset(presetId);
+```
+
+### Cloud Sync
+
+```typescript
+// From packages/client/src/ui/core/presets/useCloudSync.ts
+const { syncToCloud, loadFromCloud } = useCloudSync();
+
+// Sync layout to server
+await syncToCloud(playerId, layout);
+
+// Load layout from server
+const layout = await loadFromCloud(playerId);
+```
+
+---
+
+## Edit Mode
+
+The UI includes an edit mode for layout customization:
+
+```typescript
+// From packages/client/src/ui/core/edit/useEditMode.ts
+const {
+  isEditMode,
+  enableEditMode,
+  disableEditMode,
+  toggleEditMode,
+} = useEditMode();
+
+// Edit mode features:
+// - Alignment guides
+// - Grid snapping
+// - Collision visualization
+// - Window locking
+// - Advanced options panel
+```
+
+### Alignment Guides
+
+```typescript
+// From packages/client/src/ui/core/edit/useAlignmentGuides.ts
+const { guides, showGuides } = useAlignmentGuides(windows);
+
+// Shows alignment guides when dragging windows
+// - Vertical guides for left/center/right alignment
+// - Horizontal guides for top/center/bottom alignment
+// - Snap to guide when within threshold
+```
 
 ---
 
@@ -186,107 +409,43 @@ import { DragContext } from '@/ui/core/drag';
 ### Theme Store
 
 ```typescript
+// From packages/client/src/ui/stores/themeStore.ts
 import { useThemeStore } from '@/ui';
 
 const theme = useThemeStore((s) => s.theme);
 
-// Access theme colors
-const bgColor = theme.colors.background.primary;
-const borderColor = theme.colors.border.default;
-const accentColor = theme.colors.accent.primary;
-```
-
-### Theme Structure
-
-```typescript
-export interface Theme {
+// Theme structure
+interface Theme {
   colors: {
-    background: {
-      primary: string;
-      secondary: string;
-      tertiary: string;
-      elevated: string;
-      overlay: string;
-    };
-    border: {
-      default: string;
-      decorative: string;
-      focus: string;
-    };
-    text: {
-      primary: string;
-      secondary: string;
-      muted: string;
-      accent: string;
-    };
-    accent: {
-      primary: string;
-      light: string;
-      dark: string;
-    };
-    state: {
-      success: string;
-      danger: string;
-      warning: string;
-      info: string;
-    };
-    status: {
-      hp: string;
-      hpBackground: string;
-      prayer: string;
-      prayerBackground: string;
-    };
+    background: { primary, secondary, tertiary, overlay };
+    text: { primary, secondary, muted, accent };
+    border: { default, decorative };
+    state: { success, danger, warning, info };
+    accent: { primary };
   };
   typography: {
-    fontFamily: {
-      primary: string;
-      mono: string;
-    };
-    fontSize: {
-      xs: string;
-      sm: string;
-      base: string;
-      lg: string;
-      xl: string;
-    };
-    fontWeight: {
-      normal: number;
-      medium: number;
-      bold: number;
-    };
+    fontFamily: string;
+    fontSize: { xs, sm, base, lg, xl };
+    fontWeight: { normal, medium, bold };
   };
-  spacing: {
-    xs: string;
-    sm: string;
-    md: string;
-    lg: string;
-    xl: string;
-  };
-  borderRadius: {
-    sm: string;
-    md: string;
-    lg: string;
-  };
+  spacing: { xs, sm, md, lg, xl };
+  borderRadius: { sm, md, lg };
 }
 ```
 
-### Dark Theme (Default)
+### Dark Theme
+
+The default theme uses a dark color scheme with gold accents:
 
 ```typescript
 // From packages/client/src/ui/theme/themes.ts
 export const hyperscapeTheme: Theme = {
   colors: {
     background: {
-      primary: "#0a0a0c",
-      secondary: "#141416",
+      primary: "#141416",
+      secondary: "#18181a",
       tertiary: "#1e1e22",
-      elevated: "#1e1e22",
       overlay: "rgba(0, 0, 0, 0.75)",
-    },
-    border: {
-      default: "#2d2820",
-      decorative: "#4a3f30",
-      focus: "#e8c55a",
     },
     text: {
       primary: "#f5f0e8",
@@ -294,228 +453,219 @@ export const hyperscapeTheme: Theme = {
       muted: "#7d7460",
       accent: "#d4a84b",
     },
+    border: {
+      default: "#2d2820",
+      decorative: "#4a3f30",
+    },
     accent: {
       primary: "#d4a84b",
-      light: "#ffd866",
-      dark: "#c49530",
     },
-    // ...
   },
+  // ... typography, spacing, etc.
 };
 ```
 
 ---
 
-## Responsive System
-
-### Breakpoints
+## Responsive Breakpoints
 
 ```typescript
-import { useBreakpoint } from '@/ui/core/responsive';
+// From packages/client/src/ui/core/responsive/useBreakpoint.ts
+export const BREAKPOINTS = {
+  mobile: 0,
+  tablet: 768,
+  desktop: 1024,
+  wide: 1440,
+};
 
-const breakpoint = useBreakpoint();
-// Returns: 'mobile' | 'tablet' | 'desktop'
-```
+const { isMobile, isTablet, isDesktop, isWide } = useBreakpoint();
 
-**Breakpoint values:**
-- Mobile: < 768px
-- Tablet: 768px - 1024px
-- Desktop: > 1024px
-
-### Mobile Layout
-
-```typescript
-import { useMobileLayout } from '@/ui/core/responsive';
-
-const isMobile = useMobileLayout();
-
-if (isMobile) {
-  // Render mobile-optimized UI
-}
-```
-
-### Orientation
-
-```typescript
-import { useOrientation } from '@/ui/core/responsive';
-
-const orientation = useOrientation();
-// Returns: 'portrait' | 'landscape'
+// Mobile layout detection
+const { isMobileLayout } = useMobileLayout();
 ```
 
 ---
 
-## Anchor-Based Positioning
+## Action Bar
 
-Windows use anchor-based positioning for proper responsive scaling:
+The action bar supports 4-12 customizable slots with drag-and-drop:
 
 ```typescript
-// From packages/client/src/ui/stores/anchorUtils.ts
+// From packages/client/src/constants/tokens.ts
+export const gameUI = {
+  actionBar: {
+    minSlots: 4,
+    maxSlots: 12,      // RS3 has 14, we use 12
+    defaultSlots: 9,
+    slotsPerPage: 7,
+    totalPages: 2,
+  },
+};
+```
 
-// Get anchor position in viewport
-export function getAnchorPosition(
-  anchor: WindowAnchor,
-  viewportWidth: number,
-  viewportHeight: number,
-): { x: number; y: number } {
-  // Returns pixel coordinates for anchor point
+### Draggable Combat Styles
+
+Combat styles can be dragged to the action bar:
+
+```typescript
+// From packages/client/src/game/panels/CombatPanel.tsx
+<DraggableCombatStyleButton
+  style="accurate"
+  icon={<AccurateIcon />}
+  active={activeStyle === "accurate"}
+/>
+
+// Action bar slot handles combat style drops
+if (dragData.type === "combatstyle") {
+  setSlot(slotIndex, {
+    type: "combatstyle",
+    combatStyleId: dragData.combatStyleId,
+  });
 }
 
-// Calculate window offset from its anchor
-export function calculateOffsetFromAnchor(
-  windowPos: { x: number; y: number },
-  anchor: WindowAnchor,
-  viewportWidth: number,
-  viewportHeight: number,
-): { x: number; y: number } {
-  // Returns offset vector
-}
-
-// Reposition window for new viewport size
-export function repositionWindowForViewport(
-  window: WindowState,
-  oldViewport: { width: number; height: number },
-  newViewport: { width: number; height: number },
-): { x: number; y: number } {
-  // Maintains anchor relationship
+// Clicking combat style slot switches attack style
+if (slot.type === "combatstyle") {
+  world.network.send("changeCombatStyle", {
+    style: slot.combatStyleId,
+  });
 }
 ```
 
-**Benefits:**
-- Windows stay attached to viewport edges when resizing
-- Proper mobile ↔ desktop transitions
-- No clustering or overlapping
-- Consistent layout across devices
+**Combat Style Icons:**
+
+Each style has a unique SVG icon with active state colors:
+
+| Style | Icon | Active Color |
+|-------|------|--------------|
+| Accurate | Target/bullseye | Red (#ef4444) |
+| Aggressive | Double chevrons | Green (#22c55e) |
+| Defensive | Shield | Blue (#3b82f6) |
+| Controlled | Balance symbol | Purple (#a855f7) |
 
 ---
 
-## Tab System
+## Drag-and-Drop API
 
-### Tab Component
-
-```typescript
-import { Tab, TabBar } from '@/ui';
-
-<TabBar>
-  <Tab id="inventory" title="Inventory" icon="backpack">
-    {/* Tab content */}
-  </Tab>
-  <Tab id="equipment" title="Equipment" icon="shield">
-    {/* Tab content */}
-  </Tab>
-</TabBar>
-```
-
-### Tab Management
+### DndProvider
 
 ```typescript
-import { useTabs } from '@/ui/core/tabs';
+// From packages/client/src/ui/core/drag/DragContext.tsx
+import { DndProvider } from '@/ui';
 
-const {
-  activeTab,
-  setActiveTab,
-  addTab,
-  removeTab,
-  reorderTabs,
-} = useTabs({
-  defaultTab: 'inventory',
-  tabs: ['inventory', 'equipment', 'skills'],
-});
-```
-
-### Tab Combining
-
-Windows can be combined by dragging tabs:
-
-1. Drag tab from Window A
-2. Drop on Window B's header
-3. Tab moves to Window B
-4. Visual preview shows drop target
-
----
-
-## Tooltip System
-
-### Progressive Tooltips
-
-```typescript
-import { useProgressiveTooltip } from '@/ui/core/tooltip';
-
-const { showTooltip, hideTooltip, tooltipProps } = useProgressiveTooltip({
-  delay: 500,  // Show after 500ms hover
-  content: 'Tooltip content',
-});
-
-<div
-  onMouseEnter={showTooltip}
-  onMouseLeave={hideTooltip}
-  {...tooltipProps}
+<DndProvider
+  collisionDetection={pointerWithin}
+  onDragStart={handleDragStart}
+  onDragEnd={handleDragEnd}
 >
-  Hover me
+  {children}
+</DndProvider>
+```
+
+### useDraggable
+
+```typescript
+// From packages/client/src/ui/core/drag/useDrag.ts
+const {
+  attributes,      // Accessibility attributes
+  listeners,       // Event listeners
+  setNodeRef,      // Ref for draggable element
+  isDragging,      // Dragging state
+  transform,       // Current transform
+} = useDraggable({
+  id: 'unique-id',
+  data: { type: 'inventory', itemId: 'bronze_sword' },
+  disabled: false,
+});
+
+// Apply to element
+<div
+  ref={setNodeRef}
+  {...listeners}
+  {...attributes}
+  style={{
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    opacity: isDragging ? 0.5 : 1,
+  }}
+>
+  {content}
 </div>
 ```
 
-### Tooltip Positioning
+### useDroppable
 
 ```typescript
-import { useTooltipPosition } from '@/ui/core/tooltip';
-
-const position = useTooltipPosition({
-  targetRef,
-  placement: 'top',
-  offset: 8,
+// From packages/client/src/ui/core/drag/useDrop.ts
+const {
+  setNodeRef,      // Ref for drop zone
+  isOver,          // Hover state
+  active,          // Currently dragged item
+} = useDroppable({
+  id: 'drop-zone-id',
+  data: { type: 'equipment', slot: 'weapon' },
+  disabled: false,
 });
+
+// Apply to element
+<div
+  ref={setNodeRef}
+  style={{
+    background: isOver ? 'rgba(0, 255, 0, 0.2)' : 'transparent',
+  }}
+>
+  {content}
+</div>
+```
+
+### Drag Overlay
+
+```typescript
+// From packages/client/src/ui/components/DragOverlay.tsx
+import { ComposableDragOverlay } from '@/ui';
+
+<ComposableDragOverlay>
+  {activeItem && (
+    <div className="drag-preview">
+      <img src={getItemIcon(activeItem.itemId)} />
+    </div>
+  )}
+</ComposableDragOverlay>
 ```
 
 ---
 
-## State Management
+## Window Resize Handling
 
-### Window Store
+### useViewportResize Hook
 
 ```typescript
-// From packages/client/src/ui/stores/windowStore.ts
-interface WindowState {
-  id: string;
-  position: { x: number; y: number };
-  size: { width: number; height: number };
-  anchor: WindowAnchor;
-  visible: boolean;
-  minimized: boolean;
-  zIndex: number;
-  tabs?: TabState[];
+// From packages/client/src/game/interface/useViewportResize.ts
+export function useViewportResize(
+  windows: Record<string, WindowState>,
+  updateWindow: (id: string, updates: Partial<WindowState>) => void,
+): void {
+  useEffect(() => {
+    const handleResize = () => {
+      const newWidth = window.innerWidth;
+      const newHeight = window.innerHeight;
+      
+      // Reposition all windows using anchor-based positioning
+      for (const [id, window] of Object.entries(windows)) {
+        if (!window.anchor) continue;
+        
+        const newPos = repositionWindowForViewport(
+          window,
+          { width: prevWidth, height: prevHeight },
+          { width: newWidth, height: newHeight },
+        );
+        
+        updateWindow(id, { x: newPos.x, y: newPos.y });
+      }
+    };
+    
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [windows]);
 }
-
-export const useWindowStore = create<WindowStore>((set, get) => ({
-  windows: new Map(),
-  openWindow: (id: string) => { /* ... */ },
-  closeWindow: (id: string) => { /* ... */ },
-  updateWindow: (id: string, updates: Partial<WindowState>) => { /* ... */ },
-  // ...
-}));
-```
-
-### Theme Store
-
-```typescript
-// From packages/client/src/ui/stores/themeStore.ts
-export const useThemeStore = create<ThemeStore>((set) => ({
-  theme: hyperscapeTheme,
-  setTheme: (theme: Theme) => set({ theme }),
-}));
-```
-
-### Drag Store
-
-```typescript
-// From packages/client/src/ui/stores/dragStore.ts
-export const useDragStore = create<DragStore>((set) => ({
-  activeId: null,
-  overId: null,
-  dragData: null,
-  setActiveId: (id: string | null) => set({ activeId: id }),
-  // ...
-}));
 ```
 
 ---
@@ -524,45 +674,52 @@ export const useDragStore = create<DragStore>((set) => ({
 
 ### Keyboard Navigation
 
-All interactive elements support keyboard navigation:
-
-- **Tab**: Focus next element
-- **Shift+Tab**: Focus previous element
-- **Enter/Space**: Activate button or drag item
-- **Escape**: Close modal or cancel drag
-- **Arrow keys**: Move dragged item (when using keyboard drag)
-
-### Screen Reader Support
+All interactive UI elements support keyboard navigation:
 
 ```typescript
-// Example: Accessible button
+// Skip link for screen readers
+<a
+  href="#main-content"
+  className="skip-link"
+  style={{
+    position: "absolute",
+    left: "-9999px",
+    zIndex: 999999,
+  }}
+  onFocus={(e) => {
+    e.currentTarget.style.left = "0";
+  }}
+  onBlur={(e) => {
+    e.currentTarget.style.left = "-9999px";
+  }}
+>
+  Skip to main content
+</a>
+
+// Main content landmark
+<main id="main-content" role="main" aria-label="Game Interface">
+  {/* Game UI */}
+</main>
+```
+
+### ARIA Labels
+
+```typescript
+// Button with descriptive label
 <button
   role="button"
   tabIndex={0}
-  aria-label="Close window"
-  onClick={handleClose}
+  aria-label="Money pouch: 1,234 coins. Press Enter to withdraw."
+  onClick={handleClick}
   onKeyDown={(e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
+    if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      handleClose();
+      handleClick();
     }
   }}
 >
-  ×
+  {content}
 </button>
-```
-
-### Skip Links
-
-```typescript
-// From packages/client/src/game/CoreUI.tsx
-<main
-  id="main-content"
-  role="main"
-  aria-label="Game Interface"
->
-  {/* UI content */}
-</main>
 ```
 
 ---
@@ -571,101 +728,39 @@ All interactive elements support keyboard navigation:
 
 ### Memoization
 
-Components are memoized to prevent unnecessary re-renders:
-
 ```typescript
+// From packages/client/src/game/components/settings/SettingsCategory.tsx
 import { memo } from 'react';
 
-export const ChatBox = memo(function ChatBox({ /* props */ }) {
-  // Component implementation
+export const SettingsCategory = memo(function SettingsCategory(props) {
+  // Component only re-renders when props change
+});
+
+export const SettingsControl = memo(function SettingsControl(props) {
+  // Prevents unnecessary re-renders from parent updates
 });
 ```
 
-### Consolidated Refs
-
-The `useDrop` hook consolidates multiple refs into a single object:
+### useCallback
 
 ```typescript
-// Before: 6 separate refs
-const onDropRef = useRef(onDrop);
-const acceptRef = useRef(accept);
-// ... 4 more refs
-
-// After: Single savedStateRef
-const savedStateRef = useRef({
-  onDrop,
-  accept,
-  disabled,
-  id,
-  data,
-  collisionDetection,
-});
-```
-
-### Effect Consolidation
-
-Multiple effects combined for better performance:
-
-```typescript
-// Before: 3 separate effects
-useEffect(() => { /* save onDrop */ }, [onDrop]);
-useEffect(() => { /* save accept */ }, [accept]);
-useEffect(() => { /* register drop zone */ }, [id]);
-
-// After: 2 combined effects
-useEffect(() => {
-  // Save all callbacks
-  savedStateRef.current = { onDrop, accept, disabled, id, data, collisionDetection };
-}, [onDrop, accept, disabled, id, data, collisionDetection]);
-
-useEffect(() => {
-  // Register drop zone
-}, [id]);
-```
-
----
-
-## Migration from hs-kit
-
-The `hs-kit` package was removed in January 2026. All imports should be updated:
-
-```typescript
-// Before (hs-kit)
-import { Window, useThemeStore, useDrag } from 'hs-kit';
-
-// After (consolidated UI)
-import { Window, useThemeStore } from '@/ui';
-import { useDrag } from '@/ui/core/drag';
-```
-
-**Import alias:**
-```typescript
-// tsconfig.json
-{
-  "compilerOptions": {
-    "paths": {
-      "@/ui": ["./src/ui"],
-      "@/ui/*": ["./src/ui/*"]
-    }
-  }
-}
+// From packages/client/src/game/panels/ChatPanel.tsx
+const handleTradeRequestClick = useCallback(
+  (tradeId: string) => {
+    world.network.send("tradeRequestRespond", {
+      tradeId,
+      accept: true,
+    });
+  },
+  [world],
+);
 ```
 
 ---
 
 ## Related Documentation
 
-<CardGroup cols={2}>
-  <Card title="Client Package" icon="monitor" href="/packages/client">
-    Client package overview and structure
-  </Card>
-  <Card title="Game Components" icon="gamepad-2" href="/wiki/client/overview">
-    Game-specific UI components
-  </Card>
-  <Card title="Theme System" icon="palette" href="/wiki/client/ui-system#theme-system">
-    Theming and color tokens
-  </Card>
-  <Card title="Responsive Design" icon="smartphone" href="/wiki/client/ui-system#responsive-system">
-    Mobile and desktop layouts
-  </Card>
-</CardGroup>
+- [Client Package](/packages/client) (package overview)
+- [Theme System](/wiki/client/theming) (theme customization)
+- [Window System](/wiki/client/windows) (window management)
+- [Drag-and-Drop](/wiki/client/drag-drop) (drag-and-drop API)

@@ -94,40 +94,11 @@ The combat system implements OSRS-style tick-based combat with 20+ supporting fi
 
 Handles all economic interactions:
 
-- **Banking** — Deposit, withdraw, note conversion
+- **Banking** — Deposit, withdraw, note conversion (480-slot bank with tabs)
 - **Shops** — Buy/sell with general stores
-- **Trading** — Player-to-player trading with two-screen confirmation
-- **Inventory** — 28-slot management with stacking
-- **Loot** — Item drops and ground items
-- **Trading** — Player-to-player trading with two-screen confirmation
-
-### Trading System
-
-**Location:** `server/src/systems/TradingSystem/`
-
-OSRS-accurate player-to-player trading with anti-scam features:
-
-- **Two-Screen Flow**: Offer screen → Confirmation screen
-  - Both players must accept on offer screen to move to confirmation
-  - Both players must accept on confirmation screen to complete trade
-  - Acceptance resets if either offer changes
-- **Trade Sessions**: Server-authoritative state management
-  - Request → Active → Confirming → Completed/Cancelled
-  - Timeout handling (5 minutes for requests, 10 minutes for active trades)
-  - Automatic cleanup on disconnect
-- **Proximity Checks**: Players must be adjacent (1 tile) to trade
-  - `PendingTradeManager` handles automatic pathfinding if out of range
-  - Re-paths if target moves during approach
-- **Interface Blocking**: Can't trade while using bank/store/dialogue
-- **Atomic Swaps**: Database transactions prevent item duplication
-  - Inventory locks during swap
-  - Validation of all items before swap
-  - Rollback on failure
-- **Anti-Scam Features**:
-  - Red flashing indicators when items removed
-  - Wealth transfer indicator (value difference)
-  - Partner inventory slots display
-  - Tradeable flag enforcement
+- **Inventory** — 28-slot management with stacking and transaction locks
+- **Loot** — Item drops and ground items with despawn timers
+- **Trading** — Player-to-player trading with OSRS-style two-screen confirmation (see [Trading System](/wiki/game-systems/trading))
 
 ### Movement & Collision System
 
@@ -149,6 +120,26 @@ Implements tile-based movement and OSRS-accurate collision:
 - Directional walls (for future dungeons)
 - Network synchronization (zone serialization)
 - Safespotting mechanics (OSRS-accurate)
+
+### World Systems
+
+**Location:** `systems/shared/world/`
+
+Manages world generation and environment:
+
+- **TerrainSystem.ts** — Procedural terrain with flat zones for stations (see [Terrain System](/wiki/game-systems/terrain))
+- **WaterSystem.ts** — Water rendering and physics
+- **VegetationSystem.ts** — Procedural tree/rock placement
+- **RoadNetworkSystem.ts** — Road generation between towns
+- **SkySystem.ts** — Day/night cycle
+- **Environment.ts** — Lighting and atmosphere
+
+**Terrain Features:**
+- Noise-based procedural generation (50m max height)
+- Flat zones under stations with smooth blending
+- Spatial indexing for O(1) flat zone lookup
+- Biome-based height modulation
+- Water threshold detection
 
 ### Character Systems
 
@@ -404,13 +395,19 @@ export enum EventType {
   <Card title="Tile Movement" icon="route" href="/wiki/game-systems/movement">
     Discrete tile-based movement, pathfinding, and OSRS melee range rules.
   </Card>
-  <Card title="Inventory System" icon="backpack" href="/wiki/game-systems/inventory">
-    28-slot inventory management with drag-drop and context menus.
+  <Card title="Trading System" icon="handshake" href="/wiki/game-systems/trading">
+    Player-to-player trading with OSRS-style two-screen confirmation and anti-scam protection.
   </Card>
-  <Card title="Bank System" icon="vault" href="/wiki/game-systems/bank">
-    Unlimited storage with tabs and organization features.
+  <Card title="Terrain System" icon="mountain" href="/wiki/game-systems/terrain">
+    Procedural terrain generation with flat zones for stations and smooth blending.
   </Card>
-  <Card title="NPC Data" icon="dragon" href="/wiki/data/npcs">
+  <Card title="Social System" icon="users" href="/wiki/game-systems/social">
+    Friend management, private messaging, online status tracking, and ignore lists.
+  </Card>
+  <Card title="Inventory System" icon="briefcase" href="/wiki/game-systems/inventory">
+    28-slot inventory with transaction locks, coin pouch, and OSRS-style context menus.
+  </Card>
+  <Card title="NPC Data" icon="database" href="/wiki/data/npcs">
     How NPCs and mobs are defined with drop tables and aggro behaviors.
   </Card>
 </CardGroup>
