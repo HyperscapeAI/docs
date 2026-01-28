@@ -111,15 +111,139 @@ DAMAGE_DIVISOR: 640,           // Used in max hit calculation
 
 ## Ranged Combat
 
-Ranged attacks require:
+Ranged combat is now fully implemented with OSRS-accurate mechanics for bows and arrows.
 
-- Bow equipped in weapon slot
-- Arrows equipped in arrow slot
-- Arrows consumed on each attack
+### Requirements
+
+- **Bow** equipped in weapon slot
+- **Arrows** equipped in ammo slot
+- Arrows consumed on each attack (100% consumption, no Ava's device yet)
+
+### Combat Styles
+
+| Style | Speed | Accuracy | Range | XP Split |
+|-------|-------|----------|-------|----------|
+| **Accurate** | Base | +3 Ranged | Normal | Ranged + Constitution |
+| **Rapid** | -1 tick | Normal | Normal | Ranged + Constitution |
+| **Longrange** | Base | Normal | +2 tiles | Ranged + Defense + Constitution |
+
+### Damage Formula
+
+```typescript
+// Effective Ranged Level
+const effectiveRanged = floor(rangedLevel * prayerBonus) + styleBonus + 8;
+
+// Max Hit
+const maxHit = floor(0.5 + effectiveRanged * (rangedStrength + 64) / 640);
+
+// rangedStrength comes from equipped arrows
+```
+
+### Projectile System
+
+Ranged attacks use a projectile system with OSRS-accurate hit delays:
+
+```typescript
+// Hit delay formula: 1 + floor((3 + distance) / 6)
+const hitDelayTicks = 1 + Math.floor((3 + distance) / 6);
+```
+
+Projectiles are rendered as 3D arrow meshes that travel from attacker to target.
 
 <Warning>
-  Without arrows, the bow cannot attack. Arrows are not recoverable.
+  Without arrows, the bow cannot attack. Arrows are consumed on every shot (100% loss rate).
 </Warning>
+
+## Magic Combat
+
+Magic combat allows spellcasting with or without a staff equipped.
+
+### Requirements
+
+- **Magic level** sufficient for the spell
+- **Runes** in inventory (or infinite runes from elemental staff)
+- **Spell selected** for autocast (optional)
+
+### Combat Styles
+
+| Style | Accuracy | Range | XP Split |
+|-------|----------|-------|----------|
+| **Accurate** | +3 Magic | Normal | Magic + Constitution |
+| **Longrange** | +1 Magic | +2 tiles | Magic + Defense + Constitution |
+| **Autocast** | Normal | Normal | Magic + Constitution |
+
+### Spells (F2P)
+
+**Strike Tier (Levels 1-13):**
+- Wind Strike (L1): 2 max hit
+- Water Strike (L5): 4 max hit
+- Earth Strike (L9): 6 max hit
+- Fire Strike (L13): 8 max hit
+
+**Bolt Tier (Levels 17-35):**
+- Wind Bolt (L17): 9 max hit
+- Water Bolt (L23): 10 max hit
+- Earth Bolt (L29): 11 max hit
+- Fire Bolt (L35): 12 max hit
+
+### Damage Formula
+
+```typescript
+// Effective Magic Level
+const effectiveMagic = floor(magicLevel * prayerBonus) + styleBonus + 8;
+
+// Max Hit = spell base damage (no equipment modifiers in F2P)
+const maxHit = spellBaseMaxHit;
+```
+
+### Magic Defense
+
+Magic defense uses a unique formula combining Magic and Defense levels:
+
+```typescript
+// For players
+const effectiveDefense = floor(0.7 * magicLevel + 0.3 * defenseLevel) + 9;
+
+// For NPCs
+const effectiveDefense = magicLevel + 9;
+```
+
+### Rune Consumption
+
+Runes are consumed on each cast. Elemental staves provide infinite runes:
+
+- **Staff of Air**: Infinite air runes
+- **Staff of Water**: Infinite water runes
+- **Staff of Earth**: Infinite earth runes
+- **Staff of Fire**: Infinite fire runes
+
+### Autocast
+
+Players can select a spell for autocast, which automatically casts that spell when attacking:
+
+```typescript
+// Set autocast spell
+world.network.send("setAutocast", { spellId: "fire_strike" });
+
+// Clear autocast
+world.network.send("setAutocast", { spellId: null });
+```
+
+### Projectile Visuals
+
+Magic spells render as colored orbs with element-specific colors:
+
+- **Wind**: Light gray/white
+- **Water**: Blue
+- **Earth**: Brown
+- **Fire**: Orange-red
+
+Projectiles use OSRS-accurate hit delay formula:
+
+```typescript
+// Hit delay formula: 1 + floor((1 + distance) / 3)
+const hitDelayTicks = 1 + Math.floor((1 + distance) / 3);
+```
 
 ## Death Mechanics
 
