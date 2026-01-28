@@ -60,6 +60,14 @@ Before you begin, ensure you have:
     <Info>First build takes 5-10 minutes due to PhysX WASM compilation. Subsequent builds are cached.</Info>
   </Step>
   
+  <Step title="Start the CDN (serves game assets)">
+    ```bash
+    bun run cdn:up
+    ```
+    
+    This starts a Docker nginx container serving assets on port 8080.
+  </Step>
+  
   <Step title="Start the game">
     **Production mode:**
     ```bash
@@ -73,6 +81,7 @@ Before you begin, ensure you have:
     ```
     - Client: [http://localhost:3333](http://localhost:3333) (Vite HMR)
     - Server: `ws://localhost:5555/ws`
+    - CDN: `http://localhost:8080` (Docker)
   </Step>
 </Steps>
 
@@ -112,19 +121,10 @@ Access the agent dashboard at `http://localhost:3333` and click the Dashboard ic
 | Client | 3333 | Vite dev server with hot reload |
 | Server | 5555 | Game server (Fastify + WebSockets) |
 | CDN | 8080 | Asset server (Docker nginx) |
-| PostgreSQL | 5432 | Database (Docker, auto-started) |
-
-### Production Architecture
-
-| Component | Platform | URL |
-|-----------|----------|-----|
-| Frontend | Cloudflare Pages | https://hyperscape.club |
-| Backend | Railway | https://hyperscape-production.up.railway.app |
-| Database | Neon PostgreSQL | (managed) |
-| Assets | Cloudflare R2 | https://assets.hyperscape.club |
+| PostgreSQL | 5432 | Database (Docker, auto-started by server) |
 
 <Info>
-Production uses a split deployment model for optimal performance and global CDN distribution.
+  PostgreSQL starts automatically when the server starts. The CDN must be started manually with `bun run cdn:up`.
 </Info>
 
 ## Quick Play Guide

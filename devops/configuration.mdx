@@ -50,43 +50,34 @@ PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
 # Server
 PORT=5555
 NODE_ENV=production
+ADMIN_CODE=your-admin-code
 
 # Assets & CDN
 PUBLIC_CDN_URL=http://localhost:8080
 PUBLIC_API_URL=http://localhost:5555
 PUBLIC_WS_URL=ws://localhost:5555/ws
 
-# Database (local development)
+# Database (if not using Railway's auto-configured DATABASE_URL)
 USE_LOCAL_POSTGRES=true
 POSTGRES_CONTAINER=hyperscape-postgres
 POSTGRES_USER=hyperscape
 POSTGRES_PASSWORD=hyperscape_dev
 POSTGRES_DB=hyperscape
-POSTGRES_PORT=5432
-
-# Deployment
-NODE_ENV=production
-COMMIT_HASH=abc123def456  # Git commit hash for tracking
-SKIP_ASSETS=true           # Skip asset download in CI/Railway
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
 
-# ElizaOS Integration
-ELIZAOS_API_URL=http://localhost:4001
+# Asset Management
+SKIP_ASSETS=false          # Set to true in CI/production
+SKIP_MANIFESTS=false       # Set to true to skip manifest fetching
 
-# Game Configuration
-SAVE_INTERVAL=60                    # Auto-save interval in seconds
-PUBLIC_PLAYER_COLLISION=false       # Enable player-to-player collision
-PUBLIC_MAX_UPLOAD_SIZE=12           # Max upload size in MB
-DISABLE_RATE_LIMIT=false            # Disable rate limiting (dev only!)
+# Auto-save
+SAVE_INTERVAL=60           # Seconds between auto-saves
 
-# Advanced
-WORLD=world                         # World folder to load
-SYSTEMS_PATH=/path/to/custom/systems  # Custom systems directory
-COMMIT_HASH=abc123                  # Git commit (auto-set by CI)
+# Deployment
+COMMIT_HASH=abc123         # Auto-populated by CI/CD
 ```
 
 ### CI/Production Variables
@@ -121,49 +112,20 @@ PUBLIC_PRIVY_APP_ID=your-privy-app-id         # Must match server
 ### Production (Cloudflare Pages)
 
 ```bash
-# Required
-PUBLIC_PRIVY_APP_ID=your-privy-app-id
-
-# Production endpoints
+# Server connection (Railway)
 PUBLIC_API_URL=https://hyperscape-production.up.railway.app
 PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+
+# Assets (Cloudflare R2)
 PUBLIC_CDN_URL=https://assets.hyperscape.club
+
+# App URL (Cloudflare Pages)
 PUBLIC_APP_URL=https://hyperscape.club
-
-# Optional
-PUBLIC_ENABLE_FARCASTER=true        # Enable Farcaster integration
-DEBUG_RPG=0                         # Disable debug logging
 ```
 
-## CORS Configuration
-
-The server accepts requests from multiple origins for development and production:
-
-### Allowed Origins
-
-**Production Domains**:
-- `https://hyperscape.club` - Main production site
-- `https://www.hyperscape.club` - WWW subdomain
-- `https://hyperscape.pages.dev` - Cloudflare Pages (HTTPS)
-- `http://hyperscape.pages.dev` - Cloudflare Pages (HTTP fallback)
-- `https://hyperscape-production.up.railway.app` - Railway backend
-
-**Dynamic Patterns**:
-- `http://localhost:*` - Any localhost port (development)
-- `https://*.hyperscape.pages.dev` - Cloudflare preview deployments
-- `https://*.up.railway.app` - Railway preview deployments
-
-**Configuration Location**: `packages/server/src/startup/http-server.ts`
-
-### Custom Domains
-
-Add custom domains via environment variable:
-
-```bash
-PUBLIC_APP_URL=https://custom.example.com
-```
-
-This automatically adds the domain to the CORS allowlist.
+<Info>
+  These URLs are for the official production deployment. For your own deployment, replace with your Railway and Cloudflare domains.
+</Info>
 
 ## AI Agent Environment
 
@@ -212,6 +174,95 @@ Only configure `.env` files when:
 - Connecting to external database
 - Deploying to production
 - Running AI agents
+
+## CORS Configuration
+
+The server automatically configures CORS to allow requests from the frontend and preview deployments.
+
+### Allowed Origins
+
+**Production domains:**
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  "https://hyperscape.club",
+  "https://www.hyperscape.club",
+  "https://hyperscape.pages.dev",
+  "https://hyperscape-production.up.railway.app",
+  // HTTP fallbacks for testing
+  "http://hyperscape.pages.dev",
+];
+```
+
+**Dynamic patterns:**
+```typescript
+// Localhost development (any port)
+/^https?:\/\/localhost:\d+$/
+
+// Cloudflare Pages preview deployments
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/
+
+// Railway preview deployments
+/^https:\/\/.+\.up\.railway\.app$/
+
+// Farcaster frames
+/^https:\/\/.+\.farcaster\.xyz$/
+/^https:\/\/.+\.warpcast\.com$/
+
+// Privy authentication
+/^https:\/\/.+\.privy\.io$/
+```
+
+### Adding Custom Domains
+
+If you deploy to a custom domain, add it to the allowlist:
+
+**Option 1: Environment variable**
+```bash
+# In Railway dashboard or .env
+PUBLIC_APP_URL=https://yourdomain.com
+```
+
+The server automatically adds `PUBLIC_APP_URL` to the CORS allowlist.
+
+**Option 2: Code modification**
+```typescript
+// packages/server/src/startup/http-server.ts
+const allowedOrigins = [
+  // ... existing origins
+  "https://yourdomain.com",
+];
+```
+
+### CORS Headers
+
+The server sends these CORS headers:
+
+```http
+Access-Control-Allow-Origin: <origin>
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, PUT, POST, DELETE, OPTIONS, PATCH
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With
+```
+
+### Troubleshooting CORS
+
+**Error: "CORS policy: No 'Access-Control-Allow-Origin' header"**
+
+1. Check that your frontend domain is in the allowlist
+2. Verify `PUBLIC_APP_URL` is set correctly
+3. Check browser console for the exact origin being blocked
+4. Add the origin to `allowedOrigins` array in `http-server.ts`
+
+**Preview deployments not working:**
+
+Cloudflare Pages preview deployments use subdomains like `abc123.hyperscape.pages.dev`. These are automatically allowed by the regex pattern:
+
+```typescript
+/^https?:\/\/.+\.hyperscape\.pages\.dev$/
+```
+
+If you use a different preview domain pattern, add a regex for it.
 
 ## Debug Controls
 

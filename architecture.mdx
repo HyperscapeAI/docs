@@ -48,61 +48,65 @@ hyperscape/
 │   ├── plugin-hyperscape/   # @hyperscape/plugin-hyperscape - ElizaOS AI agent plugin
 │   ├── physx-js-webidl/     # @hyperscape/physx-js-webidl - PhysX WASM bindings
 │   ├── asset-forge/         # 3d-asset-forge - AI asset generation (Elysia + React Three Fiber)
-│   └── docs-site/           # Documentation (Mintlify)
+│   └── docs-site/           # Documentation (Docusaurus)
+├── assets/                  # Shared game assets (Git LFS, ~200MB)
 ├── scripts/                 # Build and dev scripts
-├── .github/workflows/       # CI/CD automation
-├── nixpacks.toml           # Railway Nixpacks configuration
-└── Dockerfile.server       # Production Docker build
+├── nixpacks.toml            # Railway build configuration
+├── railway.server.json      # Railway service configuration
+└── Dockerfile.server        # Multi-stage Docker build for server
 ```
 
-## Production Architecture
+## Deployment Architecture
 
-Hyperscape uses a distributed deployment model:
+Hyperscape uses a **split deployment model** for optimal performance and scalability:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Cloudflare Network                    │
-├─────────────────────────────────────────────────────────┤
-│                                                           │
-│  ┌──────────────────┐         ┌──────────────────┐      │
-│  │ Cloudflare Pages │         │  Cloudflare R2   │      │
-│  │  (Edge Caching)  │         │   (CDN/Storage)  │      │
-│  │                  │         │                  │      │
-│  │ hyperscape.club  │         │ assets.hyperscape│      │
-│  │                  │         │      .club       │      │
-│  └────────┬─────────┘         └──────────────────┘      │
-│           │                                              │
-└───────────┼──────────────────────────────────────────────┘
-            │
-            │ API/WebSocket
-            ↓
-┌─────────────────────────────────────────────────────────┐
-│                      Railway Platform                    │
-├─────────────────────────────────────────────────────────┤
-│                                                           │
-│  ┌──────────────────┐         ┌──────────────────┐      │
-│  │  Game Server     │────────→│   PostgreSQL     │      │
-│  │  (Fastify + WS)  │         │   (Persistent)   │      │
-│  │                  │         │                  │      │
-│  │ hyperscape-prod  │         │  Player data     │      │
-│  │ .up.railway.app  │         │  World state     │      │
-│  └──────────────────┘         └──────────────────┘      │
-│                                                           │
-└───────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                         PRODUCTION                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Frontend (Cloudflare Pages)                                │
+│  ├─ hyperscape.club                                         │
+│  ├─ www.hyperscape.club                                     │
+│  └─ *.hyperscape.pages.dev (preview deployments)            │
+│                                                             │
+│  Game Server (Railway)                                      │
+│  ├─ hyperscape-production.up.railway.app                    │
+│  ├─ WebSocket: wss://hyperscape-production.up.railway.app/ws│
+│  └─ HTTP API: https://hyperscape-production.up.railway.app  │
+│                                                             │
+│  Database (Railway PostgreSQL)                              │
+│  └─ Managed PostgreSQL instance                             │
+│                                                             │
+│  Assets/CDN (Cloudflare R2)                                 │
+│  ├─ assets.hyperscape.club                                  │
+│  ├─ Models, textures, audio (edge-cached globally)          │
+│  └─ Manifests (JSON game data)                              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Traffic Flow**:
-1. Users access `hyperscape.club` (Cloudflare Pages)
-2. Client loads from edge network (global CDN)
-3. Client connects to Railway server via WebSocket
-4. Assets load from `assets.hyperscape.club` (Cloudflare R2)
-5. Server queries PostgreSQL for player data
+### Why Split Deployment?
 
-**Benefits**:
-- **Low latency**: Frontend served from nearest edge location
-- **Scalability**: CDN handles static asset traffic
-- **Reliability**: Cloudflare's global network
-- **Cost-effective**: Railway free tier for server, Cloudflare free tier for CDN
+**Performance:**
+- Static assets served from CDN edge locations (low latency worldwide)
+- Frontend cached at edge (instant page loads)
+- Game server handles only dynamic logic (WebSocket, database)
+
+**Scalability:**
+- Frontend scales automatically via Cloudflare's global network
+- Server scales independently on Railway
+- Database scales separately
+
+**Cost:**
+- Cloudflare R2 has no egress fees (unlike S3)
+- Pages hosting is free for most use cases
+- Railway charges only for server compute time
+
+**Developer Experience:**
+- Automatic deployments on push to `main`
+- Preview deployments for every PR
+- Zero-downtime deploys
 
 ## Build Dependency Graph
 

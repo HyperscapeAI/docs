@@ -53,52 +53,52 @@ packages/server/
 
 ## API Routes
 
-### Core Routes
+### Core Endpoints
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/status` | GET | Health check and server status |
-| `/health` | GET | Health check (legacy) |
+| `/status` | GET | Health check (used by Railway) |
+| `/health` | GET | Legacy health check |
 | `/ws` | WS | Game WebSocket connection |
-| `/` | GET | Serve frontend (index.html) |
+| `/debug/public` | GET | Debug endpoint showing public directory contents |
 
-### Data Routes
+### Data Endpoints
 
-| Route | Method | Purpose |
-|-------|--------|---------|
-| `/api/data/skill-unlocks` | GET | Get skill unlock definitions |
-
-### Player Routes
+**New in v1.0:** Server-authoritative game data endpoints.
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/api/player` | GET | Get player data |
-| `/api/player` | POST | Create/update player |
+| `/api/data/skill-unlocks` | GET | Get skill unlock definitions for all skills |
 
-### Character Routes
+**Example:**
+```bash
+curl https://hyperscape-production.up.railway.app/api/data/skill-unlocks
+```
 
-| Route | Method | Purpose |
-|-------|--------|---------|
-| `/api/characters` | GET | List characters |
-| `/api/characters` | POST | Create character |
-| `/api/characters/:id` | GET | Get character details |
+Returns skill progression data used by the Skill Guide Panel UI.
 
-### Agent Routes (ElizaOS)
+### Player Endpoints
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/api/agents` | GET | List active agents |
-| `/api/agents/:id` | GET | Get agent details |
+| `/api/player` | GET | Get current player data |
+| `/api/player` | POST | Create or update player |
+| `/api/character` | POST | Create new character |
+| `/api/character/:id` | GET | Get character by ID |
 
-### Debug Routes
+### Admin Endpoints
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/debug/public` | GET | List public directory contents |
+| `/api/admin/users` | GET | List all users (requires admin) |
+| `/api/admin/ban` | POST | Ban user (requires admin) |
 
-<Info>
-All API routes support CORS for Cloudflare Pages, Railway, and localhost origins. See [CORS Configuration](/devops/configuration#cors-configuration) for details.
-</Info>
+### Upload Endpoints
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/upload/avatar` | POST | Upload VRM avatar |
+| `/api/upload/model` | POST | Upload GLB model |
 
 ## Database
 
@@ -315,82 +315,61 @@ bun run assets:deploy # Deploy to R2 (production)
 
 ### Railway (Production)
 
-The server is deployed to Railway with automatic GitHub Actions integration.
+The server is deployed to Railway with automatic builds from GitHub.
 
-**Build configuration** (`nixpacks.toml`):
-```toml
-[phases.build]
-cmds = [
-  "bun run build:shared",
-  "bun run build:server",
-  "mkdir -p packages/server/world/assets/manifests"
-]
+**Configuration files:**
+- `nixpacks.toml` - Build configuration (Nixpacks builder)
+- `railway.server.json` - Service configuration
+- `Dockerfile.server` - Multi-stage Docker build (alternative to Nixpacks)
 
-[start]
-cmd = "cd packages/server && bun dist/index.js"
+**Build process:**
+1. Install dependencies with Bun
+2. Build `shared` package (core engine)
+3. Build `server` package (game server)
+4. Build `client` package (frontend)
+5. Copy client build to `server/public/` directory
+6. Create manifests directory
+7. Start server with `bun dist/index.js`
 
-[variables]
-CI = "true"
-SKIP_ASSETS = "true"  # Assets served from Cloudflare R2
+**Manifest fetching:**
+At server startup, manifests are automatically fetched from `PUBLIC_CDN_URL` and cached locally. This ensures the server always has the latest game data without bundling large JSON files.
+
+**Environment variables:**
+```bash
+# Required
+DATABASE_URL=postgresql://...  # Auto-set by Railway PostgreSQL
+PRIVY_APP_ID=your-app-id
+PRIVY_APP_SECRET=your-app-secret
+JWT_SECRET=your-secret-32-chars
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+NODE_ENV=production
+
+# Optional
+ADMIN_CODE=your-admin-code
+SAVE_INTERVAL=60
 ```
 
-**Automatic deployment:**
-- Triggered on push to `main` branch
-- Builds shared and server packages
-- Skips asset download (served from CDN)
-- Fetches manifests from Cloudflare R2 at startup
+**Health checks:**
+Railway monitors the `/status` endpoint to verify server health.
 
-**Manual deployment:**
-```bash
-# Via GitHub Actions workflow dispatch
-# Or via Railway CLI:
-railway up
-```
+### Local Docker
 
-### Docker (Alternative)
-
-Build and run with Docker:
+For local testing with Docker:
 
 ```bash
-# Build image
+# Build Docker image
 docker build -f Dockerfile.server -t hyperscape-server .
 
 # Run container
 docker run -p 5555:5555 \
   -e DATABASE_URL=postgresql://... \
-  -e JWT_SECRET=... \
-  -e PRIVY_APP_ID=... \
-  -e PRIVY_APP_SECRET=... \
-  -e PUBLIC_CDN_URL=https://assets.hyperscape.club \
+  -e JWT_SECRET=your-secret \
   hyperscape-server
 ```
 
-**Multi-stage build:**
-1. **Builder stage**: Installs dependencies, builds packages
-2. **Runtime stage**: Minimal production image with only runtime dependencies
+### Cloudflare Workers (Deprecated)
 
-### Manifest Fetching
-
-The server automatically fetches game manifests from the CDN at startup:
-
-```typescript
-// packages/server/src/startup/config.ts
-await fetchManifestsFromCDN(CDN_URL, manifestsDir, NODE_ENV);
-```
-
-**Fetched files:**
-- items.json, npcs.json, resources.json, tools.json
-- biomes.json, world-areas.json, stores.json
-- music.json, vegetation.json, buildings.json
-
-**Behavior:**
-- **Production**: Always fetches from CDN
-- **Development**: Skips if local manifests exist
-- **CI/Test**: Skips with `SKIP_MANIFESTS=true`
-
-<Info>
-Manifests are cached locally with 5-minute revalidation headers. The server compares fetched content with local cache and only writes if changed.
-</Info>
+The server previously supported Cloudflare Workers deployment but has migrated to Railway for better WebSocket support and PostgreSQL integration.
 
 ## Key Files
 

@@ -958,6 +958,59 @@ interface SkillGuidePanelProps {
 The guide panel handles British/American spelling differences automatically (defence → defense) for consistent display.
 </Info>
 
+### Skill Guide Panel
+
+**New in v1.0:** Players can click any skill in the Skills Panel to open an OSRS-style guide showing all unlocks.
+
+**Features:**
+- Click any skill icon to open its guide
+- Shows all unlocks with level requirements
+- Visual distinction between unlocked (green ✓) and locked (🔒) items
+- Highlights next unlock with progress indicator
+- Scrollable list for skills with many unlocks
+- Type badges (item vs ability)
+- Matches OSRS UI theme
+
+**Implementation:**
+- Component: `packages/client/src/game/panels/SkillGuidePanel.tsx`
+- Data source: `/api/data/skill-unlocks` endpoint
+- Fetched once at Skills Panel mount
+- Cached in component state
+
+**API Endpoint:**
+```typescript
+GET /api/data/skill-unlocks
+
+Response:
+{
+  "attack": [
+    { "level": 1, "description": "Bronze weapons", "type": "item" },
+    { "level": 40, "description": "Rune weapons", "type": "item" },
+    { "level": 60, "description": "Dragon weapons", "type": "item" }
+  ],
+  "woodcutting": [
+    { "level": 1, "description": "Normal trees", "type": "item" },
+    { "level": 15, "description": "Oak trees", "type": "item" }
+  ]
+}
+```
+
+**User Experience:**
+1. Open Skills Panel (default keybind)
+2. Click any skill icon (e.g., Attack ⚔️)
+3. Skill Guide Panel opens showing all unlocks
+4. Green checkmarks indicate achieved unlocks
+5. Lock icons indicate future unlocks
+6. Next unlock is highlighted with "➤ X more levels to unlock..."
+7. Close with X button, ESC key, or click outside
+
+**Unlock Types:**
+- `item` - Equipment, resources, or craftable items (blue badge)
+- `ability` - Passive bonuses, prayers, or unlocked actions (purple badge)
+- `area` - Accessible locations or zones
+- `quest` - Quest requirements
+- `activity` - Minigames or special activities
+
 ## Manifest-Driven Design
 
 All skill-related data is now defined in JSON manifests:
