@@ -299,6 +299,310 @@ const damage = didHit ? rng.damageRoll(maxHit) : 0;
 
 ---
 
+## Ranged Combat
+
+Ranged combat uses bows and arrows with OSRS-accurate mechanics.
+
+### Requirements
+
+- **Bow** equipped in weapon slot
+- **Arrows** equipped in ammo slot
+- Sufficient Ranged level for bow
+
+### Available Bows (F2P)
+
+| Bow | Level | Attack Bonus | Speed |
+|-----|-------|--------------|-------|
+| Shortbow | 1 | +8 | 4 ticks (2.4s) |
+| Oak Shortbow | 5 | +14 | 4 ticks |
+| Willow Shortbow | 20 | +20 | 4 ticks |
+| Maple Shortbow | 30 | +29 | 4 ticks |
+
+### Available Arrows (F2P)
+
+| Arrow | Strength Bonus | Required Bow Tier |
+|-------|----------------|-------------------|
+| Bronze | +7 | Any |
+| Iron | +10 | Any |
+| Steel | +16 | Oak+ |
+| Mithril | +22 | Willow+ |
+| Adamant | +31 | Maple+ |
+
+### Ranged Damage Formula
+
+```typescript
+// Effective Ranged Level
+const prayeredRanged = floor(rangedLevel * prayerMultiplier);
+const effectiveRanged = prayeredRanged + styleBonus + 8;
+
+// Attack Roll
+const attackRoll = effectiveRanged * (rangedAttackBonus + 64);
+
+// Defense Roll
+const defenseRoll = (defenseLevel + 9) * (rangedDefenseBonus + 64);
+
+// Hit Chance
+if (attackRoll > defenseRoll) {
+  hitChance = 1 - (defenseRoll + 2) / (2 * (attackRoll + 1));
+} else {
+  hitChance = attackRoll / (2 * (defenseRoll + 1));
+}
+
+// Max Hit
+const maxHit = floor(0.5 + effectiveRanged * (arrowStrength + 64) / 640);
+
+// Damage (if hit succeeds)
+const damage = didHit ? random(0, maxHit) : 0;
+```
+
+### Projectile System
+
+Ranged attacks create projectiles with OSRS-accurate hit delays:
+
+```typescript
+// Hit delay formula
+const hitDelayTicks = 1 + Math.floor((3 + distance) / 6);
+
+// Examples:
+// Distance 0-2: 1 tick delay
+// Distance 3-8: 2 tick delay
+// Distance 9-14: 3 tick delay
+```
+
+**Projectile Rendering:**
+- 3D arrow meshes with metal-colored tips
+- Arc trajectory (straight line, no gravity arc in F2P)
+- Rotates to face travel direction
+- Delayed hit based on distance
+
+### Ammunition Consumption
+
+Arrows are consumed on every shot:
+
+```typescript
+// 100% consumption rate (no Ava's device in F2P)
+const consumed = 1;
+const remaining = currentQuantity - consumed;
+```
+
+<Warning>
+Arrows are NOT recoverable. Each shot consumes 1 arrow permanently.
+</Warning>
+
+### Ranged XP
+
+```typescript
+// XP per damage dealt
+const rangedXP = damage * 4;
+const constitutionXP = damage * 1.33;
+
+// Longrange style splits XP
+if (style === "longrange") {
+  grantXP(playerId, "ranged", damage * 2);
+  grantXP(playerId, "defense", damage * 2);
+  grantXP(playerId, "constitution", damage * 1.33);
+}
+```
+
+---
+
+## Magic Combat
+
+Magic combat allows spellcasting with or without a staff.
+
+### Requirements
+
+- **Magic level** sufficient for the spell
+- **Runes** in inventory (or infinite from elemental staff)
+- **Spell selected** for autocast (optional)
+
+<Info>
+**OSRS-Accurate**: You can cast spells without a staff. The staff provides magic attack bonus and infinite runes for its element.
+</Info>
+
+### Available Spells (F2P)
+
+**Strike Tier (Levels 1-13):**
+
+| Spell | Level | Max Hit | XP | Runes |
+|-------|-------|---------|----|----|
+| Wind Strike | 1 | 2 | 5.5 | 1 Air, 1 Mind |
+| Water Strike | 5 | 4 | 7.5 | 1 Air, 1 Water, 1 Mind |
+| Earth Strike | 9 | 6 | 9.5 | 1 Air, 2 Earth, 1 Mind |
+| Fire Strike | 13 | 8 | 11.5 | 2 Air, 3 Fire, 1 Mind |
+
+**Bolt Tier (Levels 17-35):**
+
+| Spell | Level | Max Hit | XP | Runes |
+|-------|-------|---------|----|----|
+| Wind Bolt | 17 | 9 | 13.5 | 2 Air, 1 Chaos |
+| Water Bolt | 23 | 10 | 16.5 | 2 Air, 2 Water, 1 Chaos |
+| Earth Bolt | 29 | 11 | 19.5 | 2 Air, 3 Earth, 1 Chaos |
+| Fire Bolt | 35 | 12 | 22.5 | 3 Air, 4 Fire, 1 Chaos |
+
+### Elemental Staves
+
+Staves provide infinite runes for their element:
+
+| Staff | Infinite Runes | Magic Attack Bonus |
+|-------|----------------|-------------------|
+| Staff | - | +4 |
+| Magic Staff | - | +10 |
+| Staff of Air | Air | +10 |
+| Staff of Water | Water | +10 |
+| Staff of Earth | Earth | +10 |
+| Staff of Fire | Fire | +10 |
+
+### Magic Damage Formula
+
+```typescript
+// Effective Magic Level
+const prayeredMagic = floor(magicLevel * prayerMultiplier);
+const effectiveMagic = prayeredMagic + styleBonus + 8;
+
+// Attack Roll
+const attackRoll = effectiveMagic * (magicAttackBonus + 64);
+
+// Defense Roll (Players)
+const effectiveDefense = floor(0.7 * magicLevel + 0.3 * defenseLevel) + 9;
+const defenseRoll = effectiveDefense * (magicDefenseBonus + 64);
+
+// Defense Roll (NPCs)
+const defenseRoll = (magicLevel + 9) * (magicDefenseBonus + 64);
+
+// Hit Chance (same formula as melee/ranged)
+if (attackRoll > defenseRoll) {
+  hitChance = 1 - (defenseRoll + 2) / (2 * (attackRoll + 1));
+} else {
+  hitChance = attackRoll / (2 * (defenseRoll + 1));
+}
+
+// Max Hit = spell base damage (no equipment modifiers in F2P)
+const maxHit = spellBaseMaxHit;
+
+// Damage (if hit succeeds)
+const damage = didHit ? random(0, maxHit) : 0;
+```
+
+<Info>
+**Key Difference**: Magic defense for players uses 70% Magic level + 30% Defense level. NPCs only use Magic level.
+</Info>
+
+### Rune Consumption
+
+Runes are consumed on each cast:
+
+```typescript
+// Check required runes
+const hasRunes = runeService.hasRequiredRunes(playerId, spell.runes);
+
+// Consume runes (accounting for elemental staff)
+const infiniteRunes = getInfiniteRunesFromStaff(playerId);
+const runesToConsume = spell.runes.filter(r => !infiniteRunes.includes(r.runeId));
+runeService.consumeRunes(playerId, runesToConsume);
+```
+
+### Autocast
+
+Players can select a spell for autocast:
+
+```typescript
+// Set autocast spell
+world.network.send("setAutocast", { spellId: "fire_strike" });
+
+// Clear autocast
+world.network.send("setAutocast", { spellId: null });
+
+// Autocast is cleared on weapon swap
+```
+
+**Autocast Behavior:**
+- Selected spell automatically casts when attacking
+- Spell selection persists across sessions (saved in database)
+- Cleared when weapon is changed
+- Shown in Spells panel with checkmark
+
+### Spell Projectiles
+
+Magic spells render as colored orbs:
+
+```typescript
+// From spell-visuals.ts
+export const SPELL_VISUALS = {
+  wind_strike: { color: 0xcccccc, size: 0.25, glowIntensity: 0.25 },
+  water_strike: { color: 0x3b82f6, size: 0.25, glowIntensity: 0.35 },
+  earth_strike: { color: 0x8b4513, size: 0.25, glowIntensity: 0.2 },
+  fire_strike: { color: 0xff4500, size: 0.25, glowIntensity: 0.5 },
+  // Bolt spells are larger with more glow
+  wind_bolt: { color: 0xcccccc, size: 0.35, glowIntensity: 0.35 },
+  water_bolt: { color: 0x3b82f6, size: 0.35, glowIntensity: 0.45 },
+  earth_bolt: { color: 0x8b4513, size: 0.35, glowIntensity: 0.3 },
+  fire_bolt: { color: 0xff4500, size: 0.35, glowIntensity: 0.6 },
+};
+```
+
+**Hit Delay:**
+```typescript
+// Magic hit delay formula
+const hitDelayTicks = 1 + Math.floor((1 + distance) / 3);
+
+// Examples:
+// Distance 0-1: 1 tick delay
+// Distance 2-4: 2 tick delay
+// Distance 5-7: 3 tick delay
+```
+
+### Magic XP
+
+```typescript
+// XP formula: Base spell XP + (2 × damage dealt)
+const magicXP = spellBaseXP + (damage * 2);
+const constitutionXP = damage * 1.33;
+
+// Example: Fire Strike (11.5 base XP) dealing 6 damage
+// Magic XP: 11.5 + (6 * 2) = 23.5
+// Constitution XP: 6 * 1.33 = 8
+```
+
+---
+
+## Attack Type Detection
+
+The combat system automatically detects attack type from equipped weapon or selected spell:
+
+```typescript
+// From ServerNetwork/index.ts
+getPlayerAttackType(playerId): AttackType {
+  // Check if player has a spell selected - if so, use magic regardless of weapon
+  const selectedSpell = playerEntity.data.selectedSpell;
+  if (selectedSpell) {
+    return AttackType.MAGIC;
+  }
+
+  // Check equipped weapon
+  const weapon = equipmentSystem.getPlayerEquipment(playerId).weapon;
+  if (weapon?.attackType) {
+    return weapon.attackType; // MELEE, RANGED, or MAGIC
+  }
+
+  // Check weapon type for legacy compatibility
+  if (weapon?.weaponType === WeaponType.BOW) {
+    return AttackType.RANGED;
+  }
+  if (weapon?.weaponType === WeaponType.STAFF || weapon?.weaponType === WeaponType.WAND) {
+    return AttackType.MAGIC;
+  }
+
+  return AttackType.MELEE;
+}
+```
+
+<Info>
+**Spell Priority**: If a spell is selected for autocast, the attack type is MAGIC regardless of equipped weapon. This allows staffless casting (OSRS-accurate).
+</Info>
+
+---
+
 ## Attack Range System
 
 ### Melee Range
