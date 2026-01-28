@@ -339,16 +339,122 @@ Access the agent dashboard at `http://localhost:4000` to:
 - **Position Panel**: Current zone, nearby POIs, coordinates
 - **Quick Action Menu**: One-click commands (woodcutting, mining, fishing, combat, pickup, bank, stop, idle)
 
+### ElizaOS 1.7 Compatibility
+
+Hyperscape now uses **ElizaOS 1.7.0** with backwards-compatible shims for API changes:
+
+**Key Changes**:
+- `max_tokens` → `maxTokens` (with fallback for older versions)
+- Updated dependencies: `@elizaos/core`, `@elizaos/plugin-sql`, `@elizaos/server`
+- Added `@elizaos/plugin-ollama` support for local LLM inference
+
+---
+
+## Agent Dashboard
+
+The agent dashboard provides real-time monitoring and control of AI agents.
+
+### Dashboard Features
+
+**Agent Summary Card**:
+- Online/offline status with uptime
+- Combat level and total level
+- Current goal with progress bar
+- Session statistics
+
+**Goal Panel**:
+- Current goal description and progress
+- Estimated time to completion
+- XP rate tracking
+- Lock/unlock goal controls
+- **Stop button** - Immediately halts agent and sets to idle
+- **Resume Auto** - Resumes autonomous goal selection
+- Recent goals history
+
+**Skills Panel**:
+- All skill levels with XP progress bars
+- Session XP gains tracking
+- Live updates when viewport is active
+
+**Activity Panel**:
+- Recent actions feed (combat, skills, items, goals)
+- Session stats (kills, deaths, gold earned, resources gathered)
+- Live activity tracking
+
+**Position Panel**:
+- Current zone name (Central Haven, Eastern Forest, etc.)
+- Coordinates (X, Y, Z)
+- Nearby points of interest with distances
+- Live position tracking
+
+**Quick Action Menu**:
+- One-click commands for common tasks
+- Nearby locations (banks, furnaces, trees, fishing spots)
+- Quick commands (woodcutting, mining, fishing, combat, pickup, stop, idle)
+- Available goals
+- Inventory actions (equip, use, drop)
+
+### Stop/Resume Goal Control
+
+The dashboard includes robust stop/resume functionality:
+
+**Stop Goal**:
+- Immediately cancels current movement path
+- Sets agent to idle mode
+- Blocks autonomous goal selection
+- Shows "Goals Paused" state in UI
+- Chat commands still work (user can send manual commands)
+
+**Resume Auto**:
+- Re-enables autonomous goal selection
+- Agent resumes normal behavior
+- Clears paused state
+
+**Implementation**:
+- `POST /api/agents/:agentId/goal/stop` - Stops goal and sets paused state
+- `POST /api/agents/:agentId/goal/resume` - Resumes autonomous behavior
+- `goalsPaused` flag tracked server-side and synced to plugin
+- Pause state persists across reconnections
+
+### Dashboard API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/agents/mapping/:agentId` | GET | Get character ID for agent |
+| `/api/agents/:agentId/goal` | GET | Get current goal and available goals |
+| `/api/agents/:agentId/goal` | POST | Set a new goal |
+| `/api/agents/:agentId/goal/stop` | POST | Stop current goal and pause |
+| `/api/agents/:agentId/goal/resume` | POST | Resume autonomous goals |
+| `/api/agents/:agentId/message` | POST | Send chat message to agent |
+| `/api/agents/:agentId/quick-actions` | GET | Get quick action menu data |
+| `/api/characters/:characterId/skills` | GET | Get character skills |
+| `/api/characters/:characterId/position` | GET | Get character position |
+| `/api/data/skill-unlocks` | GET | Get skill unlock definitions |
+
+### Rate Limiting
+
+Dashboard components use polling with retry logic to avoid rate limiting:
+
+**Polling Intervals**:
+- Agent Summary: 10 seconds
+- Goal Panel: 10 seconds
+- Skills Panel: 10 seconds
+- Activity Panel: 10 seconds
+- Position Panel: 5-10 seconds (faster when viewport active)
+
+**Retry Logic**: Exponential backoff (1s → 2s → 4s) for failed requests.
+
 ---
 
 ## Spectator Mode
 
 Watch AI agents play in real-time:
 
-1. Start with `bun run dev:elizaos`
+1. Start with `bun run dev:ai`
 2. Open `http://localhost:3333`
-3. Select an agent to spectate
-4. Observe decision-making in action
+3. Click the Dashboard icon
+4. Select an agent to spectate
+5. Observe decision-making in the viewport and activity feed
 
 ---
 

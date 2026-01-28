@@ -167,9 +167,13 @@ export const navigateToAction: Action = {
 
 **Usage**: Navigate using location names instead of coordinates.
 
-<Info>
-The server enforces a 200-tile maximum movement distance per command. NAVIGATE_TO automatically breaks long journeys into multiple steps.
-</Info>
+**Long-Distance Movement**: The server has a 200-tile movement limit. For destinations beyond this range, the action automatically moves in steps:
+1. Calculates intermediate waypoint (150 tiles toward destination)
+2. Moves to waypoint
+3. On next tick, continues toward destination
+4. Repeats until destination reached
+
+This prevents movement command rejection while maintaining progress toward distant goals.
 
 ---
 
@@ -261,14 +265,12 @@ export const chopTreeAction: Action = {
 
 **Requirements**: Hatchet in inventory, Woodcutting level.
 
-**Positioning:**
-- Server requires player to be on a **cardinal adjacent tile** (N/S/E/W, not diagonal)
-- Action automatically finds nearest cardinal tile and walks there
-- Ensures proper face direction for gathering animation
+**Cardinal Positioning**: The server requires players to be on a cardinal adjacent tile (North/South/East/West, not diagonal) to chop trees. The action automatically:
+1. Finds the 4 cardinal adjacent tiles to the tree
+2. Selects the nearest one to the player's current position
+3. Moves to that tile before starting to chop
 
-<Info>
-The cardinal positioning requirement ensures consistent face direction during woodcutting, matching OSRS behavior.
-</Info>
+This ensures OSRS-accurate positioning mechanics.
 
 ---
 
@@ -435,6 +437,49 @@ export const pickupItemAction: Action = {
 <Info>
 The scoring system uses word boundary regex to prevent false matches. "pick up axe" won't match "Bronze Hatchet" (contains "axe" substring) - it requires exact word matches.
 </Info>
+
+**Drop All Support**: The action supports "drop all" commands:
+- `"drop all logs"` - Drops all logs in inventory
+- `"drop everything"` - Drops all items (limited to 50 items max)
+- `"drop all items"` - Same as "drop everything"
+
+**Safety Limits**:
+- Maximum 50 items per drop-all operation (prevents DoS)
+- Stops after 3 consecutive failures
+- 150ms delay between drops
+
+**Item Matching**: Uses word boundary regex to prevent false matches:
+- `"drop bronze pickaxe"` → Correctly matches "Bronze Pickaxe" (not "Bronze Hatchet")
+- Scoring system: more matching words = higher score
+- Falls back to nearest item if no match found
+
+---
+
+### `pickupItem`
+
+Pick up an item from the ground.
+
+```typescript
+export const pickupItemAction: Action = {
+  name: "PICKUP_ITEM",
+  description: "Pick up an item from the ground nearby",
+  parameters: {
+    itemId: { type: "string", optional: true, description: "Specific item ID" },
+  },
+};
+```
+
+**Usage**: Collect loot, gather dropped items.
+
+**Auto-Approach**: If item is more than 4 meters away, agent automatically walks to it first.
+
+**Item Matching**: Uses intelligent scoring system:
+- Perfect name match: 100 points
+- Each matching word: 10 points
+- Exact word match bonus: 5 points
+- Word boundary checks prevent false matches
+
+**Example**: `"pick up bronze pickaxe"` correctly identifies "Bronze Pickaxe" over "Bronze Hatchet" because both words match (20 points vs 10 points).
 
 ---
 
