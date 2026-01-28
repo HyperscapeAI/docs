@@ -1,16 +1,14 @@
 # ============================================================================
-# Automatic Changelog Sync from Hyperscape Releases
+# Sync Changelog from GitHub Releases
 # ============================================================================
 #
-# This workflow runs in the DOCS repo and fetches releases from the 
-# Hyperscape repo, then updates the changelog.mdx file.
+# This workflow fetches new releases from the Hyperscape repo and creates
+# changelog entry files in the changelog/ folder structure.
 #
 # Triggers:
-#   - Daily at midnight UTC (cron)
-#   - Manual trigger (workflow_dispatch)
-#   - When pushed to main (to catch manual edits)
+#   - Daily at midnight UTC (checks for new releases)
+#   - Manual trigger
 #
-# No PAT required for public repos - uses built-in GITHUB_TOKEN
 # ============================================================================
 
 name: Sync Changelog
@@ -22,14 +20,6 @@ on:
   
   # Manual trigger
   workflow_dispatch:
-  
-  # Also run on push to catch any issues
-  push:
-    branches:
-      - main
-    paths:
-      - "scripts/sync-changelog.ts"
-      - ".github/workflows/sync-changelog.yml"
 
 jobs:
   sync:
@@ -42,27 +32,80 @@ jobs:
       - name: Checkout docs repository
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Sync changelog from GitHub releases
-        run: bun run scripts/sync-changelog.ts
+      - name: Fetch recent releases from Hyperscape
+        id: releases
         env:
-          # Using default GITHUB_TOKEN - works for public repos
-          # For private repos, add a PAT as GITHUB_TOKEN secret
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch the 5 most recent releases
+          RELEASES=$(gh api repos/HyperscapeAI/hyperscape/releases --jq '.[0:5]')
+          echo "Found $(echo "$RELEASES" | jq length) releases"
+          echo "$RELEASES" > /tmp/releases.json
+
+      - name: Create missing changelog entries
+        id: create
+        run: |
+          CREATED_FILES=""
+          
+          # Process each release
+          jq -c '.[]' /tmp/releases.json | while read release; do
+            TAG=$(echo "$release" | jq -r '.tag_name')
+            NAME=$(echo "$release" | jq -r '.name // .tag_name')
+            BODY=$(echo "$release" | jq -r '.body // ""')
+            DATE=$(echo "$release" | jq -r '.published_at')
+            
+            # Parse date
+            YEAR=$(echo "$DATE" | cut -d'-' -f1)
+            MONTH=$(echo "$DATE" | cut -d'-' -f2)
+            DAY=$(echo "$DATE" | cut -d'T' -f1 | cut -d'-' -f3)
+            
+            # Generate slug
+            SLUG=$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-40)
+            
+            FILEPATH="changelog/$YEAR/$MONTH-$DAY-$SLUG.mdx"
+            
+            # Skip if file already exists
+            if [ -f "$FILEPATH" ]; then
+              echo "⏭️  Skipping $TAG (already exists)"
+              continue
+            fi
+            
+            # Ensure directory exists
+            mkdir -p "changelog/$YEAR"
+            
+            # Create the file
+            cat > "$FILEPATH" << EOF
+          ---
+          title: "$NAME"
+          description: "$YEAR-$MONTH-$DAY - Release $TAG"
+          ---
+          
+          $BODY
+          
+          ---
+          
+          [View release on GitHub](https://github.com/HyperscapeAI/hyperscape/releases/tag/$TAG)
+          EOF
+            
+            echo "✅ Created: $FILEPATH"
+            CREATED_FILES="$CREATED_FILES $FILEPATH"
+          done
+          
+          if [ -z "$CREATED_FILES" ]; then
+            echo "created=false" >> $GITHUB_OUTPUT
+          else
+            echo "created=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet changelog.mdx; then
+          if git diff --quiet && git diff --cached --quiet; then
             echo "changed=false" >> $GITHUB_OUTPUT
-            echo "📝 No changelog updates needed"
+            echo "📝 No new changelog entries needed"
           else
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "📝 Changelog has updates"
+            echo "📝 New changelog entries created"
           fi
 
       - name: Create Pull Request
@@ -70,28 +113,23 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "docs: sync changelog from GitHub releases"
+          commit-message: "docs(changelog): sync from GitHub releases"
           title: "📝 Sync Changelog from GitHub Releases"
           body: |
             ## Automatic Changelog Sync
             
-            This PR updates the changelog with the latest releases from [HyperscapeAI/hyperscape](https://github.com/HyperscapeAI/hyperscape/releases).
+            This PR adds changelog entries for new releases from [HyperscapeAI/hyperscape](https://github.com/HyperscapeAI/hyperscape/releases).
+            
+            ### Manual Steps
+            1. Review the generated content
+            2. Update `changelog/index.mdx` to add cards for new entries
+            3. Merge when ready
             
             ---
-            
-            _This PR was automatically generated by the [sync-changelog](.github/workflows/sync-changelog.yml) workflow._
+            _Auto-generated by sync-changelog workflow_
           branch: auto/sync-changelog
           delete-branch: true
           labels: |
             documentation
+            changelog
             automated
-
-      # Alternative: Direct commit (uncomment if you prefer auto-merge)
-      # - name: Commit and push
-      #   if: steps.changes.outputs.changed == 'true'
-      #   run: |
-      #     git config user.name "github-actions[bot]"
-      #     git config user.email "github-actions[bot]@users.noreply.github.com"
-      #     git add changelog.mdx
-      #     git commit -m "docs: sync changelog from GitHub releases"
-      #     git push

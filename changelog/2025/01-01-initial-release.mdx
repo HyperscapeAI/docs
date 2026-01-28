@@ -1,0 +1,73 @@
+---
+title: "Initial Release (v0.1.0)"
+description: "January 1, 2025 - First public release of Hyperscape"
+---
+
+## Core Features
+
+### Tick-Based Combat
+- Authentic OSRS-style 600ms tick combat system
+- Attack styles, combat stances, and special attacks
+- Damage calculation with attack/defense bonuses
+
+### AI Agents
+- ElizaOS integration with 17 actions and 6 state providers
+- Autonomous NPC behavior and player assistants
+- Natural language interaction
+
+### Skill System
+11 skills with OSRS-accurate XP curves:
+
+**Combat Skills:**
+- Attack, Strength, Defense, Constitution, Ranged, Prayer
+
+**Gathering Skills:**
+- Woodcutting, Fishing, Mining
+
+**Artisan Skills:**
+- Firemaking, Cooking, Smithing
+
+### Economy
+- Banks with tabs and placeholders
+- Shops with stock and pricing
+- Inventory management (28 slots)
+- Loot drops with rarity tables
+
+---
+
+## Architecture
+
+### Monorepo Structure
+Turbo monorepo with 7 packages for modular development.
+
+### 3D Engine
+- Three.js for rendering
+- PhysX WASM for physics simulation
+- Custom ECS (Entity-Component-System) architecture
+
+### Multiplayer
+- Fastify HTTP server
+- WebSocket real-time communication
+- Server-authoritative game state
+
+### Client
+- React 19 with hooks
+- Vite for fast development
+- Responsive UI panels
+
+---
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| `@hyperscape/shared` | Core 3D engine (ECS, physics, rendering) |
+| `@hyperscape/server` | Game server (Fastify, WebSockets, PostgreSQL) |
+| `@hyperscape/client` | Web client (Vite, React) |
+| `@hyperscape/plugin-hyperscape` | ElizaOS AI agent plugin |
+| `@hyperscape/physx-js-webidl` | PhysX WASM bindings |
+| `3d-asset-forge` | AI asset generation tools |
+
+---
+
+[View release on GitHub](https://github.com/HyperscapeAI/hyperscape/releases/tag/v0.1.0)

@@ -1,13 +1,11 @@
 # ============================================================================
-# Webhook Trigger for Instant Changelog Updates
+# Webhook Trigger for Changelog Entry Creation
 # ============================================================================
 #
 # This workflow is triggered by a repository_dispatch event from the 
 # Hyperscape repo when a new release is published.
 #
-# To enable this:
-# 1. Add this workflow to the docs repo
-# 2. In Hyperscape repo, add a workflow that sends repository_dispatch:
+# To enable this in the Hyperscape repo, add to release workflow:
 #
 #    - name: Trigger docs changelog update
 #      uses: peter-evans/repository-dispatch@v3
@@ -15,7 +13,13 @@
 #        token: ${{ secrets.DOCS_REPO_TOKEN }}
 #        repository: HyperscapeAI/docs
 #        event-type: release-published
-#        client-payload: '{"tag": "${{ github.event.release.tag_name }}"}'
+#        client-payload: |
+#          {
+#            "release_name": "${{ github.event.release.name }}",
+#            "release_tag": "${{ github.event.release.tag_name }}",
+#            "release_body": "${{ github.event.release.body }}",
+#            "release_date": "${{ github.event.release.published_at }}"
+#          }
 #
 # ============================================================================
 
@@ -26,7 +30,7 @@ on:
     types: [release-published]
 
 jobs:
-  sync:
+  create-changelog-entry:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -36,30 +40,84 @@ jobs:
       - name: Log trigger
         run: |
           echo "🚀 Release webhook received!"
-          echo "   Tag: ${{ github.event.client_payload.tag }}"
+          echo "   Name: ${{ github.event.client_payload.release_name }}"
+          echo "   Tag: ${{ github.event.client_payload.release_tag }}"
+          echo "   Date: ${{ github.event.client_payload.release_date }}"
 
       - name: Checkout docs repository
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Sync changelog
-        run: bun run scripts/sync-changelog.ts
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Commit and push directly
+      - name: Parse release data
+        id: release
         run: |
-          if git diff --quiet changelog.mdx; then
-            echo "📝 No changes to commit"
-            exit 0
+          RELEASE_NAME="${{ github.event.client_payload.release_name }}"
+          RELEASE_TAG="${{ github.event.client_payload.release_tag }}"
+          RELEASE_DATE="${{ github.event.client_payload.release_date }}"
+          
+          # Use tag as title if name is empty
+          if [ -z "$RELEASE_NAME" ] || [ "$RELEASE_NAME" = "null" ]; then
+            RELEASE_NAME="$RELEASE_TAG"
           fi
           
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add changelog.mdx
-          git commit -m "docs: add changelog for ${{ github.event.client_payload.tag }}"
-          git push
+          # Parse date components
+          YEAR=$(echo "$RELEASE_DATE" | cut -d'-' -f1)
+          MONTH=$(echo "$RELEASE_DATE" | cut -d'-' -f2)
+          DAY=$(echo "$RELEASE_DATE" | cut -d'T' -f1 | cut -d'-' -f3)
+          
+          # Generate slug from title
+          SLUG=$(echo "$RELEASE_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-40)
+          
+          FILENAME="$MONTH-$DAY-$SLUG"
+          
+          echo "title=$RELEASE_NAME" >> $GITHUB_OUTPUT
+          echo "tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "year=$YEAR" >> $GITHUB_OUTPUT
+          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+          echo "display_date=$YEAR-$MONTH-$DAY" >> $GITHUB_OUTPUT
+
+      - name: Ensure year directory exists
+        run: mkdir -p "changelog/${{ steps.release.outputs.year }}"
+
+      - name: Create changelog entry
+        run: |
+          FILEPATH="changelog/${{ steps.release.outputs.year }}/${{ steps.release.outputs.filename }}.mdx"
+          
+          cat > "$FILEPATH" << 'EOF'
+          ---
+          title: "${{ steps.release.outputs.title }}"
+          description: "${{ steps.release.outputs.display_date }} - Release ${{ steps.release.outputs.tag }}"
+          ---
+          
+          ${{ github.event.client_payload.release_body }}
+          
+          ---
+          
+          [View release on GitHub](https://github.com/HyperscapeAI/hyperscape/releases/tag/${{ steps.release.outputs.tag }})
+          EOF
+          
+          echo "✅ Created: $FILEPATH"
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "docs(changelog): add ${{ steps.release.outputs.title }}"
+          title: "📝 Changelog: ${{ steps.release.outputs.title }}"
+          body: |
+            ## New Changelog Entry
+            
+            Adds changelog for release: **${{ steps.release.outputs.tag }}**
+            
+            ### Manual Steps
+            1. Review the generated content
+            2. Update `changelog/index.mdx` to add a card for this entry
+            3. Merge when ready
+            
+            ---
+            _Auto-generated from GitHub release_
+          branch: auto/changelog-${{ steps.release.outputs.filename }}
+          delete-branch: true
+          labels: |
+            documentation
+            changelog
+            automated

@@ -1,0 +1,113 @@
+---
+title: "Collision System & UI Improvements"
+description: "January 16, 2026 - OSRS-accurate tile collision, coin pouch, tooltips, and context menus"
+---
+
+## Static Tile Collision System
+
+Production-quality OSRS-accurate collision system for static world objects and entities:
+
+### CollisionMatrix
+- Zone-based collision storage with bitmask flags
+- World divided into 8×8 tile zones (Int32Array[64] = 256 bytes per zone)
+- Lazy allocation: zones created on first write
+- Memory efficient: 1000×1000 tile world = ~4MB
+- O(1) tile lookups with zero allocations in hot paths
+
+### Collision Flags
+- Static objects: `BLOCKED`, `WATER`, `STEEP_SLOPE`
+- Entity occupancy: `OCCUPIED_PLAYER`, `OCCUPIED_NPC`
+- Directional walls: 8 directions for future dungeons/buildings
+- Combined masks: `BLOCKS_WALK`, `BLOCKS_MOVEMENT`, `BLOCKS_RANGED`
+
+### Automatic Footprint Detection
+- Build-time model bounds extraction via `extract-model-bounds.ts`
+- Generates `model-bounds.json` manifest automatically
+- Footprints calculated from model dimensions × scale
+- Turbo caching avoids rebuilding when models unchanged
+
+### Multi-Tile Entities
+- Stations and large resources occupy multiple tiles
+- Furnaces, anvils, banks support 2×2 footprints
+- Center-based registration (footprint centered on entity position)
+- OSRS-style interaction from any adjacent tile
+
+### Pathfinding Integration
+- BFSPathfinder checks `CollisionMatrix` for static objects
+- Safespotting: players can hide behind trees/rocks
+- Depleted resources remain solid (stumps block movement)
+
+### Testing
+- 1,118 lines of comprehensive unit tests
+- CollisionMatrix: zone allocation, flag operations, negative coordinates
+- CollisionFlags: bitmask uniqueness, directional walls
+- TileSystem: multi-tile footprint calculations
+
+---
+
+## Coin Pouch Withdrawal System
+
+RS3-style money pouch with secure withdrawal to inventory:
+
+### Features
+- Protected coin storage (characters.coins column)
+- Doesn't use inventory slots
+- Displayed in inventory panel footer
+
+### Withdrawal Flow
+- Click coin pouch to open withdrawal modal
+- Enter amount or use preset buttons
+- Coins added to existing stack or new inventory slot
+- Server-authoritative with atomic database transactions
+
+### Security
+- Rate limiting: 10 requests/second with auto-cleanup
+- Timestamp validation: prevents replay attacks (±30s window)
+- Input validation: positive integers, max 2.1B coins
+- Overflow protection: prevents MAX_COINS stack overflow
+- Row-level locking: `FOR UPDATE` in transactions
+- Audit logging: tracks large withdrawals (≥1M coins)
+
+### Testing
+- 32 comprehensive unit tests covering validation, edge cases, and atomicity
+
+---
+
+## Hover Tooltips & Click-to-Unequip
+
+RS3-style hover tooltips and improved equipment interaction:
+
+- Item stats on hover (equipment and inventory)
+- Shows item name, bonuses (attack/defense/strength), and quantity
+- Portal-based rendering avoids z-index issues
+- Click-to-unequip: Direct equipment slot clicks unequip items
+- Smart tooltip suppression when context menu is open
+
+---
+
+## Walk Here Context Menu
+
+OSRS-style terrain interaction with right-click menu:
+
+- Right-click empty terrain shows "Walk here"
+- New `ContextMenuTargetType` union for type safety
+- `ContextMenuController.showMenu()` accepts null target for terrain
+
+---
+
+## Bug Fixes & Improvements
+
+- **Fishing Animation**: Restored fishing emote instead of idle placeholder
+- **Store Transactions**: Wrapped with `executeInventoryTransaction` to prevent race conditions
+- **Bank Stacking**: Stackable base items now stack when withdrawing
+- **Mob Combat Animations**: Fixed idle/walk emotes overriding combat animations
+- **Nametag Removal**: Removed overhead nametags for OSRS accuracy
+
+---
+
+## Test Suite Maintenance
+
+- Fixed Vitest imports (was incorrectly using `bun:test`)
+- Updated hardcoded counts to match current implementation
+- Adjusted performance thresholds for CI environment variance
+- Added missing `entities.players` to mock worlds

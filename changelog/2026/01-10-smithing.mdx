@@ -1,0 +1,109 @@
+---
+title: "Smithing & Manifest System"
+description: "January 10, 2026 - Complete smithing skill, context menus, and manifest architecture"
+---
+
+## Smithing Skill System
+
+Complete implementation of the Smithing skill with OSRS-accurate mechanics:
+
+### Smelting
+- Convert ores into bars at furnaces
+- 6 bar types: Bronze, Iron, Steel, Mithril, Adamant, Rune
+- Iron ore has 50% success rate (OSRS-accurate)
+- Coal requirements for higher-tier bars
+- Tick-based timing (4 ticks per bar)
+
+### Smithing
+- Convert bars into equipment at anvils
+- 40+ smithable items across weapons, armor, and tools
+- Requires hammer in inventory
+- Organized by category in UI
+- "Make X" functionality with quantity memory
+
+### Database Changes
+- New `smithingLevel` and `smithingXp` columns
+- New `recipes/smelting.json` and `recipes/smithing.json` manifests
+
+---
+
+## OSRS-Style Context Menus
+
+Authentic context menu system with colored entity names:
+
+### Color Coding
+- Orange for items (#ff9040)
+- Yellow for NPCs (#ffff00)
+- Cyan for objects (#00ffff)
+
+### Inventory Actions
+- Manifest-driven actions with heuristic fallback
+- Items can define `inventoryActions` array
+- First action becomes left-click default
+- Supported: Eat, Drink, Wield, Wear, Bury, Use, Drop, Examine
+
+### Architecture
+- Centralized `InventoryActionDispatcher` eliminates code duplication
+- Item helper utilities: `isFood`, `isPotion`, `isBone`, `usesWield`, `usesWear`
+- Cancel option always shown last (OSRS standard)
+
+---
+
+## Manifest Architecture Improvements
+
+### Items Directory
+- Items split into 5 category files: weapons, tools, resources, food, misc
+
+### Gathering Manifests
+- Separate files for woodcutting, mining, fishing
+- Complete fishing spot definitions with OSRS-accurate catch rates
+- Mining rocks with 3D model paths and depleted states
+
+### Recipe Manifests
+- Dedicated files for cooking, firemaking, smelting, smithing
+
+### Station Manifests
+- 3D models and configs for anvils, furnaces, ranges
+- Anvil model with scale 0.5 and yOffset 0.2
+- Furnace model with scale 1.5 and yOffset 1.0
+
+### Other Changes
+- Tier system: Centralized `tier-requirements.json` for equipment levels
+- Skill unlocks: `skill-unlocks.json` defines what unlocks at each level
+- Atomic loading: All category files must exist or system falls back to legacy format
+
+---
+
+## New 3D Models
+
+- **Fishing Tools**: Base and standard fishing rod models with metadata
+- **Mining Rocks**: Copper, mithril, and runite ore rocks with depleted variants
+- **Stations**: Anvil and furnace models for crafting
+
+---
+
+## Data Providers
+
+New specialized providers for efficient data access:
+
+- **ProcessingDataProvider**: Cooking, firemaking, smelting, smithing recipes
+- **TierDataProvider**: Equipment level requirements by tier
+- **StationDataProvider**: Station models and configurations
+- **Pre-allocated Buffers**: Memory optimization for inventory counting
+
+---
+
+## Bug Fixes
+
+- **Resource Spam Fix**: Prevent duplicate harvesting on spam-click
+- **Equipment System**: Tools with `equipSlot: "weapon"` can now be equipped
+- **Firemaking**: Level requirement validation added
+- **Cooking**: Level requirement check before starting action
+
+---
+
+## Testing
+
+- 843 new test lines for comprehensive coverage
+- Unit Tests: InventoryActionDispatcher (333 lines), item-helpers (510 lines)
+- Integration Tests: ProcessingDataProvider, skill unlocks, data integrity

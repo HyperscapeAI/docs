@@ -35,7 +35,17 @@
               "index",
               "quickstart",
               "architecture",
-              "changelog"
+              {
+                "group": "Changelog",
+                "icon": "scroll",
+                "pages": [
+                  "changelog/index",
+                  "changelog/2026/01-28-duel-arena",
+                  "changelog/2026/01-16-collision-system",
+                  "changelog/2026/01-10-smithing",
+                  "changelog/2025/01-01-initial-release"
+                ]
+              }
             ]
           },
           {
@@ -238,7 +248,17 @@
             "index",
             "quickstart",
             "architecture",
-            "changelog"
+            {
+              "group": "Changelog",
+              "icon": "scroll",
+              "pages": [
+                "changelog/index",
+                "changelog/2026/01-28-duel-arena",
+                "changelog/2026/01-16-collision-system",
+                "changelog/2026/01-10-smithing",
+                "changelog/2025/01-01-initial-release"
+              ]
+            }
           ]
         },
         {
