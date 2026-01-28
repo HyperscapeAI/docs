@@ -42,6 +42,7 @@ All manifests are in `world/assets/manifests/`:
 | `recipes/` | Processing recipes (cooking, firemaking, smelting, smithing) |
 | `stations.json` | World station configurations (anvils, furnaces, ranges) |
 | `prayers.json` | Prayer definitions with bonuses and drain rates |
+| `quests.json` | Quest definitions with stages, requirements, and rewards |
 | `model-bounds.json` | Auto-generated model footprints (build-time only) |
 
 ## Manifest Structure
@@ -716,6 +717,99 @@ Prayers in the same category typically conflict. Activating a prayer automatical
 Prayer drain rates follow OSRS formulas. The `drainEffect` value determines how quickly prayer points deplete while the prayer is active.
 </Info>
 
+### Quests (`quests.json`)
+
+The `quests.json` manifest defines quest content with stages, requirements, and rewards:
+
+```json
+{
+  "goblin_slayer": {
+    "id": "goblin_slayer",
+    "name": "Goblin Slayer",
+    "description": "Captain Rowan needs help dealing with the goblin threat.",
+    "difficulty": "novice",
+    "questPoints": 1,
+    "replayable": false,
+    "requirements": {
+      "quests": [],
+      "skills": {},
+      "items": []
+    },
+    "startNpc": "captain_rowan",
+    "stages": [
+      {
+        "id": "start",
+        "type": "dialogue",
+        "description": "Speak to Captain Rowan in Central Haven",
+        "npcId": "captain_rowan"
+      },
+      {
+        "id": "kill_goblins",
+        "type": "kill",
+        "description": "Kill 15 goblins",
+        "target": "goblin",
+        "count": 15
+      },
+      {
+        "id": "return",
+        "type": "dialogue",
+        "description": "Return to Captain Rowan",
+        "npcId": "captain_rowan"
+      }
+    ],
+    "onStart": {
+      "items": [
+        { "itemId": "bronze_sword", "quantity": 1 }
+      ],
+      "dialogue": "quest_accepted"
+    },
+    "rewards": {
+      "questPoints": 1,
+      "items": [
+        { "itemId": "xp_lamp_100", "quantity": 1 }
+      ],
+      "xp": {}
+    }
+  }
+}
+```
+
+**Properties**:
+- `id` — Unique quest identifier
+- `name` — Display name shown in quest log
+- `description` — Brief quest summary
+- `difficulty` — Quest difficulty: `novice`, `intermediate`, `experienced`, `master`, `grandmaster`
+- `questPoints` — Quest points awarded on completion
+- `replayable` — Whether quest can be repeated after completion
+- `requirements` — Prerequisites to start the quest
+  - `quests` — Array of required quest IDs
+  - `skills` — Object mapping skill names to required levels
+  - `items` — Array of required item IDs
+- `startNpc` — NPC ID to start the quest
+- `stages` — Array of quest stages in order
+  - `id` — Unique stage identifier
+  - `type` — Stage type: `dialogue`, `kill`, `gather`, `deliver`
+  - `description` — Stage objective description
+  - `target` — Target NPC/mob/item ID (for kill/gather stages)
+  - `count` — Required count (for kill/gather stages)
+- `onStart` — Actions triggered when quest starts
+  - `items` — Items given to player
+  - `dialogue` — Dialogue key to display
+- `rewards` — Quest completion rewards
+  - `questPoints` — Quest points awarded
+  - `items` — Items given as rewards
+  - `xp` — Object mapping skill names to XP amounts
+
+**Stage Types**:
+- **dialogue** — Talk to an NPC
+- **kill** — Defeat a specific number of mobs
+- **gather** — Collect a specific number of items
+- **deliver** — Bring items to an NPC
+
+<Info>
+Quest progress is tracked server-side in the database. The quest system supports branching dialogues and conditional stage progression.
+</Info>
+
 ### Model Bounds (`model-bounds.json`)
 
 The `model-bounds.json` manifest contains pre-calculated bounding box data for all 3D models in the game. This data is used for spatial calculations, collision detection, and tile-based placement:
@@ -783,9 +877,10 @@ DataManager loads manifests in this order:
 6. **Recipe manifests** (`recipes/*.json`)
 7. **Skill unlocks** (`skill-unlocks.json`)
 8. **Prayers** (`prayers.json`)
-9. **Stations** (`stations.json`) - Uses model bounds for footprints
-10. **World areas** (`world-areas.json`)
-11. **Stores** (`stores.json`)
+9. **Quests** (`quests.json`)
+10. **Stations** (`stations.json`) - Uses model bounds for footprints
+11. **World areas** (`world-areas.json`)
+12. **Stores** (`stores.json`)
 
 This order ensures dependencies are loaded before dependent data (e.g., model bounds before stations).
 
