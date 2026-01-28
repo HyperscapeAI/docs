@@ -101,8 +101,7 @@ All manifests are in `world/assets/manifests/`:
 | `skill-unlocks.json` | What unlocks at each skill level (served via `/api/data/skill-unlocks`) |
 | `gathering/` | Resource gathering data (woodcutting, mining, fishing) |
 | `recipes/` | Processing recipes (cooking, firemaking, smelting, smithing) |
-| `quests.json` | Quest definitions with stages, requirements, and rewards |
-| `stations.json` | World station configurations (anvils, furnaces, ranges) |
+| `stations.json` | World station configurations (anvils, furnaces, ranges, banks, altars) |
 | `prayers.json` | Prayer definitions with bonuses and drain rates |
 | `quests.json` | Quest definitions with stages, requirements, and rewards |
 | `model-bounds.json` | Auto-generated model footprints (build-time only) |
@@ -367,7 +366,7 @@ These manifests define inputs, outputs, level requirements, XP rewards, and tick
 
 ### Station Configurations
 
-World stations (anvils, furnaces, ranges, banks) are configured in `stations.json`:
+World stations (anvils, furnaces, ranges, banks, altars) are configured in `stations.json`:
 
 ```json
 {
@@ -426,6 +425,7 @@ Station types include:
 - **Furnace** — Smelt ores into bars
 - **Range** — Cook food with reduced burn chance
 - **Bank** — Store items
+- **Altar** — Restore prayer points
 
 ## Manifest Loading
 
@@ -1107,36 +1107,33 @@ The `quests.json` manifest defines quest content with stages, requirements, and 
 - `id` — Unique quest identifier
 - `name` — Display name shown in quest log
 - `description` — Brief quest summary
-- `difficulty` — Quest difficulty: `novice`, `intermediate`, `experienced`, `master`, `grandmaster`
+- `difficulty` — Quest difficulty: `novice`, `intermediate`, `experienced`, `master`
 - `questPoints` — Quest points awarded on completion
-- `replayable` — Whether quest can be repeated after completion
+- `replayable` — Whether the quest can be repeated
 - `requirements` — Prerequisites to start the quest
   - `quests` — Array of required quest IDs
-  - `skills` — Object mapping skill names to required levels
-  - `items` — Array of required item IDs
-- `startNpc` — NPC ID to start the quest
+  - `skills` — Skill level requirements (e.g., `{"woodcutting": 10}`)
+  - `items` — Required items to start
+- `startNpc` — NPC ID that starts the quest
 - `stages` — Array of quest stages in order
-  - `id` — Unique stage identifier
-  - `type` — Stage type: `dialogue`, `kill`, `gather`, `deliver`
-  - `description` — Stage objective description
-  - `target` — Target NPC/mob/item ID (for kill/gather stages)
-  - `count` — Required count (for kill/gather stages)
-- `onStart` — Actions triggered when quest starts
-  - `items` — Items given to player
-  - `dialogue` — Dialogue key to display
+  - `type` — Stage type: `dialogue`, `kill`, `gather`, `interact`
+  - `description` — Stage objective text
+  - `target` — Target entity/item ID
+  - `count` — Required count for completion
+- `onStart` — Items and dialogue triggered when quest starts
 - `rewards` — Quest completion rewards
   - `questPoints` — Quest points awarded
-  - `items` — Items given as rewards
-  - `xp` — Object mapping skill names to XP amounts
+  - `items` — Item rewards
+  - `xp` — Skill XP rewards
 
 **Stage Types**:
 - **dialogue** — Talk to an NPC
-- **kill** — Defeat a specific number of mobs
-- **gather** — Collect a specific number of items
-- **deliver** — Bring items to an NPC
+- **kill** — Defeat a specific number of enemies
+- **gather** — Collect resources (woodcutting, mining, fishing)
+- **interact** — Use items or interact with objects
 
 <Info>
-Quest progress is tracked server-side in the database. The quest system supports branching dialogues and conditional stage progression.
+Quests support multi-stage progression with different objective types. NPCs referenced in quests must exist in `npcs.json` and be placed in `world-areas.json`.
 </Info>
 
 ### Model Bounds (`model-bounds.json`)

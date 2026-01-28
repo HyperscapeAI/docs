@@ -64,8 +64,8 @@ interface Item {
   type: ItemType;                // Category
   tier?: string;                 // Equipment tier (bronze, steel, mithril, etc.)
   rarity: ItemRarity;            // Common, Uncommon, Rare, etc.
-  modelPath?: string;            // Path to GLB model
-  tier?: string;                 // Metal tier (bronze, iron, steel, etc.)
+  modelPath?: string;            // Path to GLB model (for ground/inventory display)
+  equippedModelPath?: string;    // Path to aligned GLB model (for equipped display)
 
   // Inventory properties
   stackable: boolean;            // Can stack in inventory
