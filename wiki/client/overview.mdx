@@ -177,7 +177,7 @@ Located in `packages/client/src/game/panels/`:
 |-------|-------------|
 | `InventoryPanel.tsx` | 28-slot inventory with drag & drop |
 | `EquipmentPanel.tsx` | Equipment slots with stat display and weight tracking |
-| `SkillsPanel.tsx` | All skills with XP progress bars and click-to-view guides |
+| `SkillsPanel.tsx` | All 12 skills with XP progress bars and clickable skill guides |
 | `SkillGuidePanel.tsx` | OSRS-style skill unlock progression viewer |
 | `CombatPanel.tsx` | Combat style selection |
 | `BankPanel.tsx` | Bank interface with tabs |
@@ -185,6 +185,60 @@ Located in `packages/client/src/game/panels/`:
 | `StorePanel.tsx` | Shop/trading interface |
 | `SettingsPanel.tsx` | Game settings |
 | `LootWindow.tsx` | Ground item pickup interface |
+
+### Skill Guide Panel
+
+The Skill Guide Panel is an OSRS-style popup that shows what you can unlock at each level:
+
+**Features:**
+- Click any skill in the Skills Panel to open
+- Shows all unlocks with level requirements
+- Visual distinction between unlocked (green ✓) and locked (gray 🔒) content
+- Highlights next unlock you're working toward (gold ➤)
+- Type badges (item vs ability)
+- Scrollable for skills with many unlocks (Prayer has 29!)
+- Fetches data from `/api/data/skill-unlocks` endpoint
+
+**Implementation:**
+
+```typescript
+// SkillGuidePanel.tsx
+export function SkillGuidePanel({
+  visible,
+  skillLabel,
+  skillIcon,
+  playerLevel,
+  unlocks,
+  isLoading,
+  onClose,
+}: SkillGuidePanelProps) {
+  // Portal rendering for proper z-index
+  return createPortal(
+    <div className="fixed inset-0 z-[9999]">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      
+      {/* Panel with OSRS-style theming */}
+      <div className="relative bg-[rgba(20,15,10,0.98)] border-2 border-[rgba(139,69,19,0.8)]">
+        {/* Header with skill icon and name */}
+        {/* Current level display */}
+        {/* Next unlock indicator */}
+        {/* Scrollable unlock list */}
+      </div>
+    </div>,
+    document.body
+  );
+}
+```
+
+**Data Flow:**
+```
+SkillsPanel → fetch /api/data/skill-unlocks → SkillGuidePanel → render unlocks
+```
+
+<Info>
+The Skill Guide Panel uses server-authoritative data to ensure unlock information matches the actual game state.
+</Info>
 
 ### HUD Components
 

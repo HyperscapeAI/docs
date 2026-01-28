@@ -46,21 +46,7 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
-Railway deployment is automated via GitHub Actions (`.github/workflows/deploy-railway.yml`). The workflow triggers on pushes to `main` that affect server or client files.
-
-### Automated Deployment
-
-The deployment workflow:
-1. Builds the client frontend (`bun run build:client`)
-2. Copies client dist to server's `public/` directory
-3. Deploys to Railway using the GraphQL API
-4. Server fetches game manifests from CDN at startup
-
-<Info>
-  Manifests are fetched from `https://d20g7vd4m53hpb.cloudfront.net` at server startup. No need to clone the assets repository in production.
-</Info>
-
-### Manual Railway Setup
+Railway deployment is automated via GitHub Actions and uses Nixpacks for building.
 
 <Steps>
   <Step title="Create Railway project">
@@ -68,10 +54,23 @@ The deployment workflow:
   </Step>
   
   <Step title="Configure build">
-    Railway uses `nixpacks.toml` for build configuration:
-    - Build command: `bun run build`
-    - Start command: `cd packages/server && bun run start:railway`
-    - Frontend is built and copied to `public/` during build
+    Railway automatically detects the build configuration from `nixpacks.toml`:
+    
+    ```toml
+    [phases.setup]
+    nixPkgs = ['bun']
+    
+    [phases.build]
+    cmds = [
+      'bun install --frozen-lockfile',
+      'bun run build:shared',
+      'bun run build:client',
+      'bun run build:server'
+    ]
+    
+    [start]
+    cmd = 'cd packages/server && bun run start:railway'
+    ```
   </Step>
   
   <Step title="Add PostgreSQL">
@@ -79,29 +78,83 @@ The deployment workflow:
   </Step>
   
   <Step title="Set environment variables">
-    Required variables:
+    Add all required server environment variables:
+    
     ```bash
-    PUBLIC_PRIVY_APP_ID=your-app-id
+    DATABASE_URL=postgresql://...  # Auto-set by Railway PostgreSQL
+    JWT_SECRET=your-secret-key
+    PRIVY_APP_ID=your-app-id
     PRIVY_APP_SECRET=your-app-secret
-    JWT_SECRET=your-jwt-secret
     PUBLIC_CDN_URL=https://d20g7vd4m53hpb.cloudfront.net
+    NODE_ENV=production
     ```
-  </Step>
-  
-  <Step title="Configure GitHub Actions">
-    Add `RAILWAY_TOKEN` secret to your GitHub repository:
-    1. Generate token at [Railway Dashboard](https://railway.app/account/tokens)
-    2. Add as repository secret: Settings → Secrets → Actions → New secret
-    3. Name: `RAILWAY_TOKEN`
   </Step>
 </Steps>
 
-### Railway Configuration Files
+### Railway-Specific Features
 
-- **`nixpacks.toml`**: Nixpacks builder configuration with Bun provider
-- **`railway.server.json`**: Railway service configuration
-- **`.railwayignore`**: Files to exclude from deployment
-- **`Dockerfile.server`**: Multi-stage Docker build (alternative to Nixpacks)
+**CDN Manifest Fetching:**
+
+In production, the server fetches game manifests from the CDN at startup instead of bundling them:
+
+```typescript
+// From packages/server/src/startup/http-server.ts
+async function fetchManifestsFromCDN(manifestsDir: string): Promise<void> {
+  // Downloads manifests from PUBLIC_CDN_URL at server startup
+  // Skipped in development if local manifests exist
+}
+```
+
+**Benefits:**
+- Smaller deployment size (no bundled assets)
+- Faster deployments
+- Assets served from CDN with proper caching
+- Manifests can be updated without redeploying server
+
+**Frontend Serving:**
+
+The Railway deployment serves both the game server and the built client from a single service:
+
+```typescript
+// Static file serving for built client
+fastify.register(fastifyStatic, {
+  root: path.join(process.cwd(), 'public'),
+  prefix: '/',
+});
+
+// Fallback to index.html for SPA routing
+fastify.setNotFoundHandler((req, reply) => {
+  reply.sendFile('index.html');
+});
+```
+
+### GitHub Actions Workflow
+
+Deployment is triggered automatically on push to main:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+name: Deploy to Railway
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/server/**'
+      - 'packages/shared/**'
+      - 'packages/client/**'
+```
+
+The workflow:
+1. Checks out code
+2. Triggers Railway deployment via GraphQL API
+3. Railway builds using Nixpacks
+4. Client is built and copied to `packages/server/public/`
+5. Server fetches manifests from CDN at startup
+6. Service starts and serves both API and static files
+
+<Info>
+The Railway deployment serves both the game server (WebSocket + API) and the built client (static files) from a single service on port 5555.
+</Info>
 
 ## Vercel Client Deployment
 

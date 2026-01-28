@@ -23,7 +23,7 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | **Defense** | Damage reduction | Combat (Defensive style) |
 | **Constitution** | Maximum HP | All combat (always granted) |
 | **Ranged** | Ranged combat | Bow/crossbow attacks |
-| **Prayer** | Protection prayers and combat buffs | Burying bones, using altars |
+| **Prayer** | Combat buffs and protection | Burying bones, using altars |
 
 ### Gathering Skills
 
@@ -46,8 +46,7 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 
 | Skill | Description | Training Methods |
 |-------|-------------|------------------|
-| **Agility** | Stamina regeneration | Moving through the world (1 XP per 2 tiles) |
-| **Prayer** | Protection prayers | Burying bones, using altars |
+| **Agility** | Stamina regeneration | Moving around the world |
 
 <Info>
 Smithing is a two-step process: first smelt ores into bars at a furnace, then smith bars into equipment at an anvil.
@@ -219,7 +218,7 @@ public getTotalLevel(stats: StatsComponent): number {
 
 ### Maximum Total Level
 
-With 12 skills at level 99: **1,188 total level**
+With 13 skills at level 99: **1,287 total level**
 
 ---
 
@@ -802,100 +801,183 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
-## Agility & Stamina System
+---
 
-Agility is a unique skill that affects stamina regeneration and is trained through movement.
+## Agility System
 
-### Movement-Based XP
+Agility is a unique support skill that rewards exploration and affects stamina mechanics.
 
-Agility XP is granted automatically as you traverse the world:
+### Training Agility
 
-**XP Batching**:
-- XP is granted every 100 tiles traveled
-- Each batch grants 50 XP (effective rate: 1 XP per 2 tiles)
-- Prevents visual spam from constant XP drops
-- Both walking and running count toward progress
+Agility XP is gained passively by moving around the world:
 
-**XP Rates by Movement Type**:
-| Movement | Tiles/Tick | Tiles/Second | XP/Minute | Time to Level 50 |
-|----------|------------|--------------|-----------|------------------|
-| Walking | 2 | 3.33 | ~100 XP | ~17 hours |
-| Running | 4 | 6.67 | ~200 XP | ~8.5 hours |
+- **XP Rate**: 1 XP per 2 tiles traveled
+- **XP Batching**: XP is granted in batches of 50 XP every 100 tiles to reduce visual spam
+- **Movement Types**: Both walking and running grant XP at the same rate
+- **Death Penalty**: Accumulated tiles toward the next XP grant are lost on death (earned XP is kept)
+- **Teleportation**: Does not grant Agility XP
 
-**Death Penalty**:
-- Tiles accumulated toward the next XP grant are reset to 0
-- Already-earned XP is preserved
-- Maximum loss per death: 99 tiles (~50 XP worth of progress)
+**XP Rates:**
 
-<Warning>
-Teleportation does NOT grant Agility XP. Only tile-based movement (walking/running) counts.
-</Warning>
-
-### Weight-Based Stamina Drain
-
-Inventory weight affects how quickly stamina drains while running:
-
-**Formula**: `Drain Rate = Base Drain × (1 + Weight × 0.005)`
-
-**Drain Rates by Weight**:
-| Weight (kg) | Drain Multiplier | Stamina/Second |
-|-------------|------------------|----------------|
-| 0 kg | 1.0x | 2.0 |
-| 10 kg | 1.05x | 2.1 |
-| 20 kg | 1.1x | 2.2 |
-| 50 kg | 1.25x | 2.5 |
-| 100 kg | 1.5x | 3.0 |
-
-**Weight Calculation**:
-- Each item has a `weight` property (in kg)
-- Total weight = sum of (item weight × quantity) for all inventory items
-- Weight is calculated server-side and synced to client
-- Equipment weight is included in total
+| Movement Type | Tiles/Second | XP/Minute | Time to Level 50 | Time to Level 99 |
+|---------------|--------------|-----------|------------------|------------------|
+| Walking | 3.33 | ~100 XP | ~17 hours | ~2,000 hours |
+| Running | 6.67 | ~200 XP | ~8.5 hours | ~1,000 hours |
 
 <Info>
-Weight is displayed in the Equipment Panel. Heavier loads drain stamina faster, encouraging players to manage their inventory strategically.
+XP drops appear every ~15 seconds while running or ~30 seconds while walking. This batching prevents spam while maintaining fair XP rates.
 </Info>
 
-### Agility-Based Stamina Regeneration
+### Agility Benefits
+
+#### Stamina Regeneration Bonus
 
 Higher Agility levels increase stamina regeneration rate:
 
-**Formula**: `Regen Rate = Base Regen × (1 + Agility Level × 0.01)`
+- **Formula**: +1% stamina regen per Agility level
+- **Applies to**: Both walking regen and idle regen
+- **Maximum Bonus**: +99% at level 99 (nearly double regen speed)
 
-**Regeneration Rates by Agility Level**:
-| Agility Level | Regen Multiplier | Idle Regen/Sec | Walking Regen/Sec |
-|---------------|------------------|----------------|-------------------|
-| 1 | 1.01x | 4.04 | 2.02 |
-| 10 | 1.10x | 4.40 | 2.20 |
-| 25 | 1.25x | 5.00 | 2.50 |
-| 50 | 1.50x | 6.00 | 3.00 |
-| 75 | 1.75x | 7.00 | 3.50 |
-| 99 | 1.99x | 7.96 | 3.98 |
+**Stamina Regen Rates:**
 
-**Base Regeneration Rates**:
-- **Idle**: 4 stamina/second
-- **Walking**: 2 stamina/second
-- **Running**: -2 stamina/second (drain, modified by weight)
+| Agility Level | Walking Regen/sec | Idle Regen/sec |
+|---------------|-------------------|----------------|
+| 1 | 2.02 | 4.04 |
+| 10 | 2.20 | 4.40 |
+| 25 | 2.50 | 5.00 |
+| 50 | 3.00 | 6.00 |
+| 75 | 3.50 | 7.00 |
+| 99 | 3.98 | 7.96 |
 
 <Info>
-High Agility levels significantly improve stamina sustainability. A level 99 Agility player regenerates stamina nearly twice as fast as a level 1 player.
+Base stamina regen is 2/sec while walking and 4/sec while idle. Agility multiplies these base rates.
 </Info>
 
-### Stamina Mechanics
+### Weight and Stamina
 
-**Stamina Range**: 0-100 points
+Inventory weight affects stamina drain while running:
 
-**Behavior**:
-- Running drains stamina (rate affected by weight)
-- Walking regenerates stamina (rate affected by Agility)
-- Standing idle regenerates stamina faster (rate affected by Agility)
-- When stamina reaches 0, player is forced to walk
-- Stamina must regenerate above 1 before running is re-enabled
+- **Base Drain**: 2 stamina/second while running
+- **Weight Penalty**: +0.5% drain per kg carried
+- **Formula**: `drainRate = baseDrain × (1 + weight × 0.005)`
 
-**Implementation**:
-- Stamina is client-side only (visual indicator)
-- Weight is server-authoritative and synced to client
-- Agility level is server-authoritative and synced to client
+**Weight Impact Examples:**
+
+| Weight (kg) | Drain Multiplier | Drain/Second | Run Duration (100 stamina) |
+|-------------|------------------|--------------|----------------------------|
+| 0 | 1.0× | 2.0 | 50 seconds |
+| 10 | 1.05× | 2.1 | 47.6 seconds |
+| 20 | 1.10× | 2.2 | 45.5 seconds |
+| 50 | 1.25× | 2.5 | 40 seconds |
+| 100 | 1.50× | 3.0 | 33.3 seconds |
+
+<Warning>
+Heavy loads significantly impact run sustainability. High Agility can partially offset this penalty through faster regeneration.
+</Warning>
+
+### Combined Effects
+
+High Agility with heavy weight creates interesting gameplay:
+
+**Example: Level 50 Agility with 50kg load**
+- Drain rate: 2.5/sec (25% penalty from weight)
+- Idle regen: 6.0/sec (50% bonus from Agility)
+- Net effect: Even with heavy load, idle regen exceeds drain rate
+
+This rewards players who train Agility for carrying heavy equipment or loot.
+
+### Agility Unlocks
+
+| Level | Unlock |
+|-------|--------|
+| 1 | Basic stamina regeneration (+1% per level) |
+| 10 | +10% stamina regeneration |
+| 25 | +25% stamina regeneration |
+| 50 | +50% stamina regeneration |
+| 75 | +75% stamina regeneration |
+| 99 | Agility cape, +99% stamina regeneration |
+
+---
+
+## Prayer System
+
+Prayer provides temporary combat bonuses and protection at the cost of prayer points.
+
+### Prayer Points
+
+- **Maximum Points**: Equal to Prayer level
+- **Restoration**: Pray at altars to restore points to maximum
+- **Drain**: Active prayers drain points over time
+- **Bone Burial**: Bury bones to gain Prayer XP and restore some points
+
+### Training Prayer
+
+**Burying Bones:**
+- Use bones from inventory to bury them
+- Grants Prayer XP based on bone type
+- Restores a small amount of prayer points
+
+**Using Altars:**
+- Click on an altar to restore prayer points to maximum
+- Does not grant XP
+- Instant restoration
+
+### Prayer Unlocks
+
+Prayer has 29 unlockable prayers from level 1 to 77:
+
+**Protection Prayers:**
+- **Protect from Melee** (level 43) - Blocks melee damage
+- **Protect from Missiles** (level 40) - Blocks ranged damage
+- **Protect from Magic** (level 37) - Blocks magic damage
+
+**Offensive Prayers:**
+- **Burst of Strength** (level 4) - +5% Strength
+- **Clarity of Thought** (level 7) - +5% Attack
+- **Sharp Eye** (level 8) - +5% Ranged
+- **Mystic Will** (level 9) - +5% Magic
+
+**Ultimate Prayers:**
+- **Piety** (level 70) - +20% Attack, +23% Strength, +25% Defense
+- **Rigour** (level 74) - +20% Ranged, +23% Ranged Strength, +25% Defense
+- **Augury** (level 77) - +20% Magic, +25% Magic Damage, +25% Defense
+
+<Info>
+Click on the Prayer skill in the Skills Panel to view all 29 unlockable prayers and their level requirements.
+</Info>
+
+---
+
+## Skill Guide Panel
+
+The Skill Guide Panel is an OSRS-style UI feature that shows what you can unlock at each level.
+
+### Opening the Guide
+
+Click on any skill in the Skills Panel to open its guide.
+
+### Features
+
+- **Unlock List**: Shows all items, abilities, and activities unlocked at each level
+- **Progress Tracking**: Visual distinction between unlocked (green) and locked (gray) content
+- **Next Unlock**: Highlights the next unlock you're working toward
+- **Type Indicators**: Badges showing whether unlocks are items or abilities
+- **Scrollable**: Handles skills with many unlocks (Prayer has 29!)
+
+### Example: Attack Skill Guide
+
+```
+✓ Lvl 1   Bronze weapons       [item]
+✓ Lvl 5   Steel weapons        [item]
+✓ Lvl 40  Rune weapons         [item]
+➤ Lvl 60  Dragon weapons       [item]  [NEXT]
+🔒 Lvl 70 Abyssal whip         [item]
+🔒 Lvl 75 Godswords            [item]
+```
+
+<Info>
+The Skill Guide Panel fetches data from the server endpoint `/api/data/skill-unlocks` to ensure server-authoritative unlock information.
+</Info>
 
 ---
 
@@ -914,50 +996,7 @@ Example unlocks:
 - **Prayer 43**: Protect from Melee
 
 <Info>
-See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills. Click any skill in the Skills Panel to view its unlock progression.
-</Info>
-
-### Skill Guide Panel
-
-Players can view detailed unlock progression for any skill:
-
-**How to Access**:
-1. Open the Skills Panel (🧠 icon)
-2. Click on any skill icon
-3. A popup shows all unlocks for that skill
-
-**Features**:
-- Shows all unlocks with level requirements
-- Visual distinction between unlocked (green ✓) and locked (🔒) items
-- Highlights the next unlock you're working toward
-- Progress indicator showing unlocks achieved
-- Scrollable list for skills with many unlocks
-
-<Info>
-The Skill Guide Panel fetches unlock data from the server endpoint `/api/data/skill-unlocks` to ensure server-authoritative progression information.
-</Info>
-
-### Skill Guide Panel
-
-Players can click any skill in the Skills Panel to open an OSRS-style guide showing all unlocks for that skill:
-
-**Features**:
-- **Click-to-view**: Click any skill icon to open its guide
-- **Unlock progression**: Shows all unlocks with level requirements
-- **Visual distinction**: Unlocked items shown in green with checkmarks, locked items dimmed with lock icons
-- **Next unlock highlight**: The next unlock you're working toward is highlighted in gold
-- **Progress tracking**: Shows "X of Y unlocks achieved" at the top
-- **Type indicators**: Badges show whether unlocks are items or abilities
-- **Scrollable**: Handles skills with many unlocks (Prayer has 29!)
-
-**Implementation**:
-- **Server API**: `GET /api/data/skill-unlocks` provides unlock data
-- **Client Component**: `SkillGuidePanel.tsx` renders the modal
-- **Loading States**: Shows spinner while fetching data
-- **Animations**: Smooth fade-in and slide-up transitions
-
-<Info>
-The Skill Guide Panel is purely informational - it doesn't affect gameplay, just helps players understand what they can unlock at each level.
+See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills. You can also view unlocks in-game by clicking on any skill in the Skills Panel.
 </Info>
 
 ## Manifest-Driven Design

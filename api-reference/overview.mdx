@@ -85,21 +85,63 @@ curl https://api.hyperscape.lol/health
   Get skill unlock definitions for all skills
 </ParamField>
 
+Returns a mapping of skill names to their unlock progression:
+
+```bash
+curl https://api.hyperscape.lol/api/data/skill-unlocks
+```
+
 <Accordion title="Response">
 ```json
 {
   "attack": [
-    { "level": 1, "description": "Bronze weapons", "type": "item" },
-    { "level": 5, "description": "Steel weapons", "type": "item" },
-    { "level": 40, "description": "Rune weapons", "type": "item" }
+    {
+      "level": 1,
+      "description": "Bronze weapons, Iron weapons",
+      "type": "item"
+    },
+    {
+      "level": 40,
+      "description": "Rune weapons",
+      "type": "item"
+    },
+    {
+      "level": 60,
+      "description": "Dragon weapons",
+      "type": "item"
+    }
   ],
   "agility": [
-    { "level": 1, "description": "Basic stamina regeneration (+1% per level)", "type": "ability" },
-    { "level": 50, "description": "+50% stamina regeneration", "type": "ability" }
+    {
+      "level": 1,
+      "description": "Basic stamina regeneration (+1% per level)",
+      "type": "ability"
+    },
+    {
+      "level": 50,
+      "description": "+50% stamina regeneration",
+      "type": "ability"
+    }
+  ],
+  "prayer": [
+    {
+      "level": 1,
+      "description": "Thick Skin - +5% Defense",
+      "type": "ability"
+    },
+    {
+      "level": 43,
+      "description": "Protect from Melee",
+      "type": "ability"
+    }
   ]
 }
 ```
 </Accordion>
+
+<Info>
+This endpoint is used by the Skill Guide Panel UI to display unlock progression. The data is server-authoritative and fetched from the CDN-hosted `skill-unlocks.json` manifest.
+</Info>
 
 ## WebSocket Events
 
