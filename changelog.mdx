@@ -23,75 +23,148 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Deployment Infrastructure & Staging Environment" description="January 2026" date="2026-01-22">
+<Update label="Quest System & Skill Quests" description="January 2026" date="2026-01-22">
 
-### 🚀 Production Deployment Architecture
+### 📜 Complete Quest System
 
-Complete cloud-native deployment infrastructure with staging environment:
+Production-ready OSRS-style quest system with kill tracking, dialogue integration, and rewards:
 
-- **Cloudflare Pages**: Frontend hosting with automatic deployments
-  - Production: `hyperscape.club` (main branch)
-  - Staging: `staging.hyperscape.club` (staging branch)
-  - Preview deployments: `*.hyperscape.pages.dev`
-- **Railway**: Game server with automated deployments
-  - Production: `api.hyperscape.club`
-  - Staging: `staging-api.hyperscape.club`
-  - Separate PostgreSQL databases per environment
-- **Cloudflare R2**: Asset CDN with dual buckets
-  - Production: `assets.hyperscape.club`
-  - Staging: `staging-assets.hyperscape.club`
-  - Automatic uploads via GitHub Actions
+- **Quest Journal UI**: OSRS-accurate quest tracking interface
+  - Color-coded quest list (red/yellow/green by status)
+  - Quest points display
+  - Quest detail view with strikethrough for completed steps
+  - Live progress counters for kill/gather/interact stages
+- **Quest Flow**: Request → Accept → Progress → Complete
+  - Quest Start Screen with requirements and rewards preview
+  - Quest Complete Screen with parchment/scroll aesthetic
+  - Dialogue integration via quest overrides
+  - Server-authoritative quest state management
+- **Quest Types**: Multiple stage types supported
+  - **Kill stages**: Track NPC kills with HMAC validation
+  - **Gather stages**: Track item collection (mining, fishing, woodcutting)
+  - **Interact stages**: Track skill actions (firemaking, cooking, smithing)
+  - **Dialogue stages**: NPC conversation checkpoints
+- **Quest Rewards**:
+  - Quest points (tracked per player)
+  - Item rewards (swords, armor, coins)
+  - XP rewards (direct skill XP)
+  - XP lamps (player chooses skill)
+- **XP Lamp System**: Skill selection modal for quest rewards
+  - Grid display of all 11 skills with current levels
+  - Click skill to apply XP
+  - Lamp consumed on use
+  - Supports multiple lamp tiers (100, 1000, 5000 XP)
 
-### 📦 Manifest CDN Fetching
+### 🔒 Quest Security Features
 
-Server now fetches manifests from CDN at startup instead of bundling them:
+Enterprise-grade security to prevent cheating and exploits:
 
-- **Automatic Fetching**: Downloads 30+ manifest files from R2 at server startup
-- **Smart Caching**: Compares content and only writes changed files
-- **Environment-Aware**: Skips fetch in development if local manifests exist
-- **Production Updates**: Update game content by uploading new manifests to R2 without redeploying
-- **Manifest Files**: npcs.json, items/*.json, gathering/*.json, recipes/*.json, etc.
-- **HTTP Caching**: 5-minute cache headers with revalidation
+- **HMAC Kill Token Validation**: Cryptographic validation prevents spoofed NPC_DIED events
+  - Uses HMAC-SHA256 with server-side secret
+  - Tokens include: mobId, killedBy, timestamp
+  - 5-second validity window
+  - Server-only (uses Node.js crypto module)
+- **Rate Limiting**: Sliding window rate limiters on all quest handlers
+  - `getQuestList`: 5 requests/second
+  - `getQuestDetail`: 10 requests/second
+  - `questAccept`: 3 requests/second
+  - Per-player tracking with automatic stale entry cleanup
+- **Input Validation**: Comprehensive quest ID validation
+  - Max length: 64 characters
+  - Pattern: `^[a-z][a-z0-9_]{0,63}---
+title: "Changelog"
+description: "Latest updates and releases from Hyperscape"
+icon: "scroll"
+rss: true
+---
 
-### 🔒 CORS Enhancements
+{/* 
+  ⚡ AUTOMATIC CHANGELOG
+  
+  This file is automatically synced with GitHub Releases.
+  Run: bun run scripts/sync-changelog.ts
+  
+  Or wait for the daily GitHub Action to update it.
+  
+  Manual entries can be added below the auto-generated section.
+*/}
 
-Expanded CORS allowlist for production domains:
 
-- **Production Domains**: hyperscape.club, www.hyperscape.club
-- **Cloudflare Pages**: hyperscape.pages.dev (HTTP and HTTPS)
-- **Preview Deployments**: `*.hyperscape.pages.dev` pattern matching
-- **Railway**: `*.up.railway.app` pattern matching
-- **Development**: `localhost:*` (any port)
-- **Integrations**: Farcaster, Warpcast, Privy domains
+  - Prevents log injection and DoS attacks
+- **Audit Logging**: Immutable quest action trail
+  - Tracks all quest state changes (started, progressed, completed)
+  - Indexed for efficient queries by player, quest, and timestamp
+  - Used for fraud detection and debugging
 
-### 🏗️ Railway Build Improvements
+### ⚡ Quest Performance Optimizations
 
-Optimized nixpacks configuration for faster, more reliable builds:
+Production-ready optimizations for high-traffic scenarios:
 
-- **Split Build Phases**: Separate install, build, and start phases
-- **Frontend Serving**: Server now serves built client from `public/` directory
-- **Asset Route Logic**: Conditional `/assets/` registration (avoids conflicts with client assets)
-- **Debug Endpoints**: `/debug/public` endpoint for troubleshooting deployments
-- **Build Verification**: Checks for `index.html` existence before starting
-- **Manifest Directory**: Creates `manifests/` directory during build (populated at runtime)
+- **O(1) Stage Lookups**: Pre-computed Map caches replace O(n) array searches
+  - Stage lookups in hot paths (NPC kill events) now constant time
+  - Lazy cache allocation on first access
+- **Direct Mutation**: Eliminated object spreads in hot paths
+  - Zero allocations for progress updates
+  - Reduces GC pressure during combat
+- **Smart Logging**: Debug-level for frequent events, info-level for milestones
+  - Reduces I/O overhead in production
+  - Prevents log spam from mob kills
 
-### 🎭 Staging Environment
+### 🗄️ Quest Database Schema
 
-Complete isolated staging environment for testing:
+Two new tables for quest persistence:
 
-- **Separate Infrastructure**: Dedicated Railway environment, R2 bucket, and database
-- **Branch-Based Deployment**: `staging` branch auto-deploys to staging
-- **Environment URLs**: All services use `staging-*` subdomains
-- **GitHub Actions**: Workflows detect branch and deploy to correct environment
-- **Native App Builds**: iOS and Android builds support staging environment URLs
+- **quest_progress**: Player quest state tracking
+  - Columns: playerId, questId, status, currentStage, stageProgress (JSONB), startedAt, completedAt
+  - Unique constraint on (playerId, questId)
+  - Indexes on playerId and (playerId, status)
+  - CASCADE DELETE on character deletion
+- **quest_audit_log**: Immutable audit trail
+  - Columns: playerId, questId, action, questPointsAwarded, stageId, stageProgress, timestamp, metadata
+  - Indexes on playerId, questId, timestamp, action
+  - Used for security auditing and exploit detection
+- **characters.questPoints**: Quest points column added to characters table
 
-### 🔧 Configuration Updates
+### 🎮 Cooking Range Entity
 
-- **Environment Detection**: Workflows automatically detect `main` vs `staging` branch
-- **URL Configuration**: Environment-specific URLs for API, WebSocket, CDN, and frontend
-- **Docker Image Tags**: Environment suffix added to Docker images
-- **Artifact Naming**: Build artifacts tagged with environment name
-- **Railway GraphQL API**: Deployment triggers use Railway GraphQL API for reliability
+Permanent cooking stations for skill quests:
+
+- **Range Entity**: Permanent alternative to fires for cooking
+  - Entity type: `range`
+  - Supports same cooking mechanics as fires
+  - Used in cooking skill quests
+- **Cooking Source Abstraction**: Unified fire/range handling
+  - `PendingCookManager` supports both fires and ranges
+  - `sourceType` field distinguishes between fire and range
+  - Flexible quest design (cook at fire OR range)
+
+### 🧪 Quest Testing
+
+Comprehensive test coverage (45 test cases, 997 lines):
+
+- **Quest Status**: not_started, in_progress, ready_to_complete, completed
+- **Quest Start**: Success, events, item grants, validation, prerequisites, DB persistence
+- **Kill Tracking**: Progress updates, events, multiple kills, objective completion, wrong mob filtering
+- **Quest Completion**: Success, events, quest points, rewards, validation, atomic DB operations
+- **Full Quest Flow**: End-to-end test (request → accept → kill 15 goblins → complete)
+
+### 🐛 Bug Fixes
+
+- **PLAYER_JOINED Event**: Fixed local player not emitting PLAYER_JOINED (broke skill updates)
+- **Gather Progress**: Fixed gather/interact progress tracking by item ID (flexible completion order)
+- **Firemaking Limit**: Removed concurrent fire limit blocking skill quests
+- **Smithing Event**: Fixed SMITHING_COMPLETE using correct itemId property
+- **Dialogue Continue**: Added dialogueContinue handler for terminal dialogue nodes
+- **XP Drop Broadcast**: Fixed XP drops to use XP_DROP_BROADCAST (ensures newLevel reflects level-ups)
+- **Inventory Deadlock**: Added retry logic for PostgreSQL deadlocks in inventory sync
+
+### 📚 Documentation
+
+- New quest system documentation page
+- Updated game systems overview
+- Updated event system with quest events
+- Updated database schema with quest tables
+- Updated networking docs with quest handlers
 
 </Update>
 

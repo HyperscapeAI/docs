@@ -186,6 +186,10 @@ Use raw fish on a fire or range to cook.
 | Swordfish | 45 | 140 | 14 HP |
 | Shark | 80 | 210 | 20 HP |
 
+**Cooking Sources:**
+- **Fires**: Created via Firemaking skill (temporary)
+- **Ranges**: Permanent cooking stations found in towns
+
 <Warning>
   Cooking can fail at low levels, burning the food. Ranges reduce burn chance compared to fires.
 </Warning>
@@ -367,16 +371,34 @@ playerData.skills = {
   Player health equals their Constitution level.
 </Info>
 
-## Skill Guide Panel
+---
 
-Click any skill in the Skills Panel to view its unlock progression. The Skill Guide Panel shows:
+## XP Lamps
 
-- All unlocks available at each level
-- Visual distinction between unlocked (green checkmark) and locked (lock icon) items
-- Next unlock highlighted with progress indicator
-- Unlock types (item, ability, area, quest, activity)
-- Scrollable list for skills with many unlocks
+XP lamps are quest rewards that allow players to choose which skill receives XP:
 
-<Info>
-  The Skill Guide Panel is OSRS-inspired and helps players plan their progression.
-</Info>
+```json
+{
+  "itemId": "xp_lamp_1000",
+  "name": "XP Lamp (1000 XP)",
+  "useEffect": {
+    "type": "xp_lamp",
+    "xpAmount": 1000
+  }
+}
+```
+
+**Usage:**
+1. Right-click lamp in inventory → "Rub"
+2. Skill selection modal appears showing all 11 skills
+3. Select skill to receive XP
+4. Lamp consumed, XP granted
+
+**Available Lamps:**
+- `xp_lamp_100` — 100 XP
+- `xp_lamp_1000` — 1,000 XP
+- `xp_lamp_5000` — 5,000 XP
+
+<Tip>
+XP lamps are commonly awarded as quest rewards, allowing players to boost their preferred skill.
+</Tip>

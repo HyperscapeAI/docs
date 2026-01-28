@@ -27,6 +27,7 @@ packages/shared/src/systems/
     ├── interaction/  # Player interactions
     ├── movement/     # Movement, collision, pathfinding
     ├── presentation/ # Visual effects
+    ├── progression/  # Quest system
     ├── tick/         # Game tick processing
     └── world/        # World management
 ```
@@ -130,6 +131,16 @@ Player character management:
 - **Skills** — 12 trainable skills (6 combat, 3 gathering, 3 artisan, 1 support)
 - **Inventory** — 28-slot bag with weight tracking
 - **Prayer** — Prayer points and active prayer management
+
+### Progression Systems
+
+**Location:** `systems/shared/progression/`
+
+Quest and achievement tracking:
+
+- **Quest System** — OSRS-style quests with kill tracking, dialogue integration, and rewards
+- **Quest Points** — Track quest completion and unlock advanced quests
+- **XP Lamps** — Skill selection for quest XP rewards
 
 ---
 
@@ -311,8 +322,8 @@ export enum EventType {
   <Card title="Skills & Progression" icon="chart-line" href="/wiki/game-systems/skills">
     RuneScape XP curves, leveling, combat level formula, and skill requirements.
   </Card>
-  <Card title="Prayer System" icon="hands-praying" href="/wiki/game-systems/prayer">
-    Prayer mechanics, drain formulas, combat bonuses, altars, and bone burying.
+  <Card title="Quest System" icon="scroll" href="/wiki/game-systems/quests">
+    OSRS-style quests with kill tracking, dialogue integration, and XP lamp rewards.
   </Card>
   <Card title="Tile Movement" icon="route" href="/wiki/game-systems/movement">
     Discrete tile-based movement, pathfinding, and OSRS melee range rules.
