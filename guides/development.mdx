@@ -26,6 +26,12 @@ bun run dev:shared    # Shared package with watch mode
 bun run dev:turbo     # Turbo-based dev (excludes asset-forge)
 bun run dev:reset     # Clean + rebuild + dev (nuclear option)
 
+# Website (in packages/website/)
+cd packages/website
+bun run dev           # Next.js dev server (port 3334)
+bun run build         # Build static site
+bun run start         # Start production server
+
 # Server build tasks
 cd packages/server
 bun run extract-bounds  # Generate model-bounds.json from GLB files
