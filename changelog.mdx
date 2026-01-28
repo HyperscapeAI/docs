@@ -23,148 +23,57 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Quest System & Skill Quests" description="January 2026" date="2026-01-22">
+<Update label="Quest System & Skill Enhancements" description="January 2026" date="2026-01-23">
 
-### 📜 Complete Quest System
+### 🗺️ Quest System
 
-Production-ready OSRS-style quest system with kill tracking, dialogue integration, and rewards:
+Complete quest system with 4 starter quests:
 
-- **Quest Journal UI**: OSRS-accurate quest tracking interface
-  - Color-coded quest list (red/yellow/green by status)
-  - Quest points display
-  - Quest detail view with strikethrough for completed steps
-  - Live progress counters for kill/gather/interact stages
-- **Quest Flow**: Request → Accept → Progress → Complete
-  - Quest Start Screen with requirements and rewards preview
-  - Quest Complete Screen with parchment/scroll aesthetic
-  - Dialogue integration via quest overrides
-  - Server-authoritative quest state management
-- **Quest Types**: Multiple stage types supported
-  - **Kill stages**: Track NPC kills with HMAC validation
-  - **Gather stages**: Track item collection (mining, fishing, woodcutting)
-  - **Interact stages**: Track skill actions (firemaking, cooking, smithing)
-  - **Dialogue stages**: NPC conversation checkpoints
-- **Quest Rewards**:
-  - Quest points (tracked per player)
-  - Item rewards (swords, armor, coins)
-  - XP rewards (direct skill XP)
-  - XP lamps (player chooses skill)
-- **XP Lamp System**: Skill selection modal for quest rewards
-  - Grid display of all 11 skills with current levels
-  - Click skill to apply XP
-  - Lamp consumed on use
-  - Supports multiple lamp tiers (100, 1000, 5000 XP)
+- **Quest Manifest**: New `quests.json` with structured quest definitions
+  - **Goblin Slayer**: Kill 15 goblins for Captain Rowan (rewards bronze sword and XP lamp)
+  - **Lumberjack's First Lesson**: Chop and burn 6 logs for Forester Wilma (rewards bronze hatchet, tinderbox, and XP lamp)
+  - **Fresh Catch**: Catch and cook 6 shrimp for Fisherman Pete (rewards small fishing net and XP lamp)
+  - **Torvin's Tools**: Mine ores, smelt bronze bars, and smith tools for Torvin (rewards bronze pickaxe, hammer, and XP lamp)
+- **Quest Structure**: Multi-stage quests with dialogue, kill, gather, and interact objectives
+  - Requirements system (quests, skills, items)
+  - Difficulty ratings (novice, intermediate, experienced, master, grandmaster)
+  - Quest points and XP rewards
+  - Starting items provided on quest acceptance
+  - Replayable flag for repeatable content
+- **Quest Types**: Support for dialogue, kill, gather, and interact stage types
+  - Target tracking with count requirements
+  - NPC-based quest givers and completion
+  - Item rewards and XP lamps
 
-### 🔒 Quest Security Features
+### 🏃 Agility Skill Unlocks
 
-Enterprise-grade security to prevent cheating and exploits:
+New agility skill progression with stamina regeneration bonuses:
 
-- **HMAC Kill Token Validation**: Cryptographic validation prevents spoofed NPC_DIED events
-  - Uses HMAC-SHA256 with server-side secret
-  - Tokens include: mobId, killedBy, timestamp
-  - 5-second validity window
-  - Server-only (uses Node.js crypto module)
-- **Rate Limiting**: Sliding window rate limiters on all quest handlers
-  - `getQuestList`: 5 requests/second
-  - `getQuestDetail`: 10 requests/second
-  - `questAccept`: 3 requests/second
-  - Per-player tracking with automatic stale entry cleanup
-- **Input Validation**: Comprehensive quest ID validation
-  - Max length: 64 characters
-  - Pattern: `^[a-z][a-z0-9_]{0,63}---
-title: "Changelog"
-description: "Latest updates and releases from Hyperscape"
-icon: "scroll"
-rss: true
----
+- **Stamina Scaling**: Stamina regeneration increases by 1% per agility level
+- **Milestone Bonuses**:
+  - Level 10: +10% stamina regen
+  - Level 25: +25% stamina regen
+  - Level 50: +50% stamina regen
+  - Level 75: +75% stamina regen
+  - Level 99: +99% stamina regen (mastery)
+- **Skill Unlocks Manifest**: Updated `skill-unlocks.json` with complete agility progression
 
-{/* 
-  ⚡ AUTOMATIC CHANGELOG
-  
-  This file is automatically synced with GitHub Releases.
-  Run: bun run scripts/sync-changelog.ts
-  
-  Or wait for the daily GitHub Action to update it.
-  
-  Manual entries can be added below the auto-generated section.
-*/}
+### 🙏 Prayer System Expansion
 
+Enhanced prayer manifest with OSRS-accurate prayers:
 
-  - Prevents log injection and DoS attacks
-- **Audit Logging**: Immutable quest action trail
-  - Tracks all quest state changes (started, progressed, completed)
-  - Indexed for efficient queries by player, quest, and timestamp
-  - Used for fraud detection and debugging
-
-### ⚡ Quest Performance Optimizations
-
-Production-ready optimizations for high-traffic scenarios:
-
-- **O(1) Stage Lookups**: Pre-computed Map caches replace O(n) array searches
-  - Stage lookups in hot paths (NPC kill events) now constant time
-  - Lazy cache allocation on first access
-- **Direct Mutation**: Eliminated object spreads in hot paths
-  - Zero allocations for progress updates
-  - Reduces GC pressure during combat
-- **Smart Logging**: Debug-level for frequent events, info-level for milestones
-  - Reduces I/O overhead in production
-  - Prevents log spam from mob kills
-
-### 🗄️ Quest Database Schema
-
-Two new tables for quest persistence:
-
-- **quest_progress**: Player quest state tracking
-  - Columns: playerId, questId, status, currentStage, stageProgress (JSONB), startedAt, completedAt
-  - Unique constraint on (playerId, questId)
-  - Indexes on playerId and (playerId, status)
-  - CASCADE DELETE on character deletion
-- **quest_audit_log**: Immutable audit trail
-  - Columns: playerId, questId, action, questPointsAwarded, stageId, stageProgress, timestamp, metadata
-  - Indexes on playerId, questId, timestamp, action
-  - Used for security auditing and exploit detection
-- **characters.questPoints**: Quest points column added to characters table
-
-### 🎮 Cooking Range Entity
-
-Permanent cooking stations for skill quests:
-
-- **Range Entity**: Permanent alternative to fires for cooking
-  - Entity type: `range`
-  - Supports same cooking mechanics as fires
-  - Used in cooking skill quests
-- **Cooking Source Abstraction**: Unified fire/range handling
-  - `PendingCookManager` supports both fires and ranges
-  - `sourceType` field distinguishes between fire and range
-  - Flexible quest design (cook at fire OR range)
-
-### 🧪 Quest Testing
-
-Comprehensive test coverage (45 test cases, 997 lines):
-
-- **Quest Status**: not_started, in_progress, ready_to_complete, completed
-- **Quest Start**: Success, events, item grants, validation, prerequisites, DB persistence
-- **Kill Tracking**: Progress updates, events, multiple kills, objective completion, wrong mob filtering
-- **Quest Completion**: Success, events, quest points, rewards, validation, atomic DB operations
-- **Full Quest Flow**: End-to-end test (request → accept → kill 15 goblins → complete)
-
-### 🐛 Bug Fixes
-
-- **PLAYER_JOINED Event**: Fixed local player not emitting PLAYER_JOINED (broke skill updates)
-- **Gather Progress**: Fixed gather/interact progress tracking by item ID (flexible completion order)
-- **Firemaking Limit**: Removed concurrent fire limit blocking skill quests
-- **Smithing Event**: Fixed SMITHING_COMPLETE using correct itemId property
-- **Dialogue Continue**: Added dialogueContinue handler for terminal dialogue nodes
-- **XP Drop Broadcast**: Fixed XP drops to use XP_DROP_BROADCAST (ensures newLevel reflects level-ups)
-- **Inventory Deadlock**: Added retry logic for PostgreSQL deadlocks in inventory sync
-
-### 📚 Documentation
-
-- New quest system documentation page
-- Updated game systems overview
-- Updated event system with quest events
-- Updated database schema with quest tables
-- Updated networking docs with quest handlers
+- **Basic Prayers**: Thick Skin, Burst of Strength, Clarity of Thought
+  - Level 1-7 prayers with 5% stat boosts
+  - Drain effect: 1 (slowest drain rate)
+- **Intermediate Prayers**: Rock Skin, Superhuman Strength
+  - Level 10-13 prayers with 10% stat boosts
+  - Drain effect: 6 (moderate drain rate)
+- **Prayer Conflicts**: Prayers properly conflict with higher-tier versions
+  - Thick Skin conflicts with Rock Skin, Steel Skin, Chivalry, Piety
+  - Burst of Strength conflicts with Superhuman Strength, Ultimate Strength, Chivalry, Piety
+  - Clarity of Thought conflicts with Improved Reflexes, Incredible Reflexes, Chivalry, Piety
+- **Prayer Categories**: Offensive and defensive prayer types
+- **Bonus System**: Multipliers for attack, strength, and defense stats
 
 </Update>
 
