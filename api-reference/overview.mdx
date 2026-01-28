@@ -50,7 +50,7 @@ curl -H "Authorization: Bearer <your-token>" \
 </ParamField>
 
 ```bash
-curl https://api.hyperscape.lol/health
+curl https://api.hyperscape.club/health
 ```
 
 <Accordion title="Response">
@@ -92,7 +92,7 @@ curl https://api.hyperscape.lol/health
 **New in v1.0:** Server-authoritative skill unlock data for the Skill Guide Panel.
 
 ```bash
-curl https://api.hyperscape.lol/api/data/skill-unlocks
+curl https://api.hyperscape.club/api/data/skill-unlocks
 ```
 
 <Accordion title="Response">
@@ -175,7 +175,7 @@ fastify.get("/api/data/skill-unlocks", async (_req, reply) => {
 Connect to the game server via WebSocket for real-time updates:
 
 ```javascript
-const ws = new WebSocket('wss://api.hyperscape.lol/ws');
+const ws = new WebSocket('wss://api.hyperscape.club/ws');
 
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);

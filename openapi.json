@@ -6,8 +6,8 @@
     "version": "1.0.0",
     "contact": {
       "name": "Hyperscape Team",
-      "url": "https://hyperscape.lol",
-      "email": "api@hyperscape.lol"
+      "url": "https://hyperscape.club",
+      "email": "api@hyperscape.club"
     },
     "license": {
       "name": "MIT",
@@ -16,7 +16,7 @@
   },
   "servers": [
     {
-      "url": "https://api.hyperscape.lol",
+      "url": "https://api.hyperscape.club",
       "description": "Production server"
     },
     {
