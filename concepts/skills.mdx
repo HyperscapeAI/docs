@@ -10,7 +10,7 @@ Hyperscape features a RuneScape-inspired skill system with leveling, XP gain, an
 
 ## Available Skills
 
-Hyperscape has **12 skills** total:
+Hyperscape has **13 skills** total:
 
 ### Combat Skills
 
@@ -30,6 +30,7 @@ Hyperscape has **12 skills** total:
 | **Woodcutting** | Chop trees for logs |
 | **Mining** | Mine rocks for ores |
 | **Fishing** | Catch fish at water spots |
+| **Agility** | Stamina regeneration (trained by moving) |
 
 ### Artisan Skills
 
@@ -368,119 +369,24 @@ playerData.skills = {
   Player health equals their Constitution level.
 </Info>
 
-## Agility System
+## Skill Guide Panel
 
-Agility is a unique skill that rewards movement and affects stamina mechanics.
+Click any skill in the Skills panel to view its Skill Guide - an OSRS-style interface showing all unlocks for that skill.
 
-### Training Agility
+**Features**:
+- Shows all level-based unlocks with requirements
+- Green checkmarks (✓) for unlocked content
+- Lock icons (🔒) for locked content
+- Highlights your next unlock with progress indicator
+- Type badges distinguish items from abilities
+- Scrollable for skills with many unlocks (Prayer has 29!)
 
-Agility XP is gained passively by moving around the world:
-
-- **XP Rate**: 1 XP per 2 tiles traveled
-- **XP Batching**: XP is granted in batches of 50 XP every 100 tiles to reduce visual spam
-- **Movement Types**: Both walking and running grant XP at the same rate
-- **Death Penalty**: Accumulated tiles toward the next XP grant are lost on death (earned XP is kept)
-
-**XP Rates:**
-
-| Movement Type | Tiles/Second | XP/Minute | Time to Level 99 |
-|---------------|--------------|-----------|------------------|
-| Walking | 3.33 | ~100 XP | ~2,000 hours |
-| Running | 6.67 | ~200 XP | ~1,000 hours |
+**How to Use**:
+1. Open the Skills panel (default keybind: Skills icon in sidebar)
+2. Click on any skill icon
+3. View all unlocks for that skill
+4. Close with ESC, X button, or click outside
 
 <Info>
-Teleportation does not grant Agility XP - only physical movement counts.
-</Info>
-
-### Agility Benefits
-
-#### Stamina Regeneration Bonus
-
-Higher Agility levels increase stamina regeneration rate:
-
-- **Formula**: +1% stamina regen per Agility level
-- **Applies to**: Both walking regen and idle regen
-- **Maximum Bonus**: +99% at level 99 (nearly double regen speed)
-
-**Stamina Regen Rates:**
-
-| Agility Level | Walking Regen/sec | Idle Regen/sec |
-|---------------|-------------------|----------------|
-| 1 | 2.02 | 4.04 |
-| 10 | 2.20 | 4.40 |
-| 25 | 2.50 | 5.00 |
-| 50 | 3.00 | 6.00 |
-| 75 | 3.50 | 7.00 |
-| 99 | 3.98 | 7.96 |
-
-<Info>
-Base stamina regen is 2/sec while walking and 4/sec while idle. Agility multiplies these base rates.
-</Info>
-
-### Weight and Stamina
-
-Inventory weight affects stamina drain while running:
-
-- **Base Drain**: 2 stamina/second while running
-- **Weight Penalty**: +0.5% drain per kg carried
-- **Formula**: `drainRate = baseDrain × (1 + weight × 0.005)`
-
-**Weight Impact Examples:**
-
-| Weight (kg) | Drain Multiplier | Drain/Second |
-|-------------|------------------|--------------|
-| 0 | 1.0× | 2.0 |
-| 10 | 1.05× | 2.1 |
-| 20 | 1.10× | 2.2 |
-| 50 | 1.25× | 2.5 |
-| 100 | 1.50× | 3.0 |
-
-<Warning>
-Heavy loads significantly impact run sustainability. High Agility can partially offset this penalty through faster regeneration.
-</Warning>
-
-### Agility Unlocks
-
-| Level | Unlock |
-|-------|--------|
-| 1 | Basic stamina regeneration (+1% per level) |
-| 10 | +10% stamina regeneration |
-| 25 | +25% stamina regeneration |
-| 50 | +50% stamina regeneration |
-| 75 | +75% stamina regeneration |
-| 99 | Agility cape, +99% stamina regeneration |
-
-## Prayer System
-
-Prayer provides temporary combat bonuses and protection at the cost of prayer points.
-
-### Prayer Points
-
-- **Maximum Points**: Equal to Prayer level
-- **Restoration**: Pray at altars to restore points
-- **Drain**: Active prayers drain points over time
-- **Bone Burial**: Bury bones to gain Prayer XP and restore points
-
-### Prayer Unlocks
-
-Prayer unlocks are defined in `skill-unlocks.json` with 29 different prayers from level 1 to 77.
-
-**Protection Prayers:**
-- Protect from Melee (level 43)
-- Protect from Missiles (level 40)
-- Protect from Magic (level 37)
-
-**Offensive Prayers:**
-- Burst of Strength (level 4) - +5% Strength
-- Clarity of Thought (level 7) - +5% Attack
-- Sharp Eye (level 8) - +5% Ranged
-- Mystic Will (level 9) - +5% Magic
-
-**Ultimate Prayers:**
-- Piety (level 70) - +20% Attack, +23% Strength, +25% Defense
-- Rigour (level 74) - +20% Ranged, +23% Ranged Strength, +25% Defense
-- Augury (level 77) - +20% Magic, +25% Magic Damage, +25% Defense
-
-<Info>
-See the Skills Panel in-game and click on Prayer to view all 29 unlockable prayers.
+The Skill Guide fetches data from `/api/data/skill-unlocks` to ensure server-authoritative unlock information.
 </Info>

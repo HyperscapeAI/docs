@@ -27,66 +27,129 @@ rss: true
 
 ### 🏃 Agility Skill System
 
-Complete implementation of the Agility skill with movement-based XP and stamina mechanics:
+Complete implementation of the Agility skill with movement-based progression and stamina mechanics:
 
-- **Movement XP**: Earn 1 XP per 2 tiles traveled (walking or running)
-  - XP batched at 100 tiles = 50 XP to prevent visual spam
-  - XP drops every ~15 seconds running, ~30 seconds walking
-  - Partial progress preserved between batches
-  - Death resets tile counter (small penalty)
-- **Stamina Regeneration**: +1% stamina regen per agility level
-  - Level 1: 1.01x multiplier (4.04/sec idle, 2.02/sec walking)
-  - Level 50: 1.50x multiplier (6.00/sec idle, 3.00/sec walking)
-  - Level 99: 1.99x multiplier (7.96/sec idle, 3.98/sec walking)
-- **Weight-Based Stamina Drain**: +0.5% drain per kg carried
-  - 0kg: 2.0/sec drain (base rate)
-  - 50kg: 2.5/sec drain (25% penalty)
-  - 100kg: 3.0/sec drain (50% penalty)
+- **Movement XP**: Gain 1 XP per 2 tiles traveled (walking or running)
+  - XP granted in batches of 50 XP every 100 tiles
+  - Prevents visual spam (XP drops every ~15s running, ~30s walking)
+  - Death penalty: lose accumulated tile progress (max ~50 XP worth)
+- **Stamina Regeneration**: Agility level increases stamina regen
+  - Base: 2/sec walking, 4/sec idle
+  - Bonus: +1% regeneration per agility level
+  - Level 99: Nearly double regeneration speed (3.98/sec walking, 7.96/sec idle)
+- **Weight System**: Inventory weight affects stamina drain
+  - Base drain: 2/sec while running
+  - Weight penalty: +0.5% drain per kg carried
+  - 50kg load: 25% increased drain (2.5/sec)
+  - Weight calculated server-side and synced to client
 - **Database**: New `agilityLevel` and `agilityXp` columns with migration
-- **Weight Synchronization**: Server calculates and syncs weight to client
-  - Weight emitted on inventory load and changes
-  - Equipment Panel displays server-synced weight
-  - Single source of truth prevents client/server drift\n- **Testing**: 868 lines of comprehensive tests\n  - Unit tests for XP batching, stamina formulas\n  - Integration tests for persistence and death penalty\n\n### 📊 Skill Guide Panel
+- **UI Integration**: Agility appears in Skills panel and Agent dashboard
+- **Event System**: New `PLAYER_WEIGHT_CHANGED` event for stamina calculations
+- **Testing**: 868 lines of comprehensive tests (unit + persistence integration)
 
-OSRS-style UI panel showing skill unlocks at each level:
+**XP Rates**:
+| Movement | XP/Minute | Level 99 Time |
+|----------|-----------|---------------|
+| Walking | ~100 XP | ~2,000 hours |
+| Running | ~200 XP | ~1,000 hours |
 
-- **Click-to-View**: Click any skill in Skills Panel to open its guide
-- **Visual States**: Green checkmarks for unlocked, gray locks for locked, gold arrow for next unlock
-- **Progress Indicator**: Shows levels needed to reach next unlock
-- **Type Badges**: Distinguishes items vs abilities
-- **Animations**: Smooth fade-in/slide-up with custom scrollbar styling
-- **Loading State**: Spinner while fetching unlock data from server
-- **Server Endpoint**: New `/api/data/skill-unlocks` endpoint serves unlock definitions
-- **Defence/Defense Normalization**: Handles British/American spelling differences
-- **Keyboard Accessible**: ESC key and click-outside-to-close
-- **Portal Rendering**: Proper z-index layering above all UI
+**Stamina Impact**:
+| Scenario | Drain/Sec | Regen/Sec (Idle) |
+|----------|-----------|------------------|
+| No weight, Level 1 | 2.0 | 4.04 |
+| 50kg, Level 1 | 2.5 | 4.04 |
+| 50kg, Level 50 | 2.5 | 6.00 |
+| 50kg, Level 99 | 2.5 | 7.96 |
 
-### 🚂 Railway Deployment Improvements
+<Info>
+High agility levels help offset stamina penalties from heavy loads. A level 50 agility player with 50kg of gear regenerates faster than a level 1 player with no gear.
+</Info>
 
-Production deployment enhancements for Railway platform:
+### 📖 Skill Guide Panel
 
-- **CDN Manifest Fetching**: Server fetches manifests from CDN at startup
-  - Skips Git LFS asset download in CI/Railway environments
-  - `fetchManifestsFromCDN()` downloads manifests to local cache
-  - Conditional asset route registration based on manifest availability
-- **Multi-Phase Build**: Nixpacks configuration for reliable builds
-  - Phase 1: Install dependencies with Bun
-  - Phase 2: Build shared → client → server
-  - Phase 3: Copy client dist to server public directory
-- **Frontend Serving**: Server serves built client from `/public`
-  - Automatic fallback to `index.html` for SPA routing
-  - Build timestamp file for deployment verification
-  - Debug endpoint `/debug/public` to inspect directory contents
-- **Build Verification**: Explicit checks that `index.html` exists before starting
-- **Verbose Logging**: Improved debugging for Railway build failures
-- **GraphQL API**: Updated Railway workflow to use GraphQL API for deployments
+OSRS-style UI for viewing skill unlocks and progression:
 
-### 🐛 Bug Fixes
+- **Click-to-View**: Click any skill in Skills panel to open its guide
+- **Unlock Display**: Shows all level-based unlocks with requirements
+  - Green checkmarks (✓) for unlocked content
+  - Lock icons (🔒) for locked content
+  - Type badges (item/ability) for each unlock
+- **Next Unlock Highlight**: Shows progress toward next unlock
+  - "X more levels to unlock: [description]"
+  - Highlighted with gold accent color
+- **Server-Authoritative**: Fetches data from `/api/data/skill-unlocks` endpoint
+- **Animations**: Smooth fade-in and slide-up animations
+- **Keyboard Support**: ESC key to close, click outside to dismiss
+- **Loading States**: Spinner during data fetch, empty state handling
+- **Custom Scrollbar**: Themed scrollbar matching OSRS aesthetic
 
-- **Prayer System**: Added to database schema and type definitions (was missing from CharacterRepository)
-- **Event Bridge**: Weight change events now forwarded to clients for UI updates
-- **Initial Weight**: Weight emitted on inventory load (not just on changes)
-- **Type Coverage**: Added `prayer` and `agility` to `SkillsData` interface
+**New API Endpoint**:
+- `GET /api/data/skill-unlocks` - Returns all skill unlock definitions
+- Implemented in `packages/server/src/startup/routes/data-routes.ts`
+- Uses `getAllSkillUnlocks()` from shared package
+
+**UI Components**:
+- `SkillGuidePanel.tsx` - Main panel component (392 lines)
+- `UnlockRow` - Individual unlock display with state-based styling
+- Integrated into `SkillsPanel.tsx` with click handlers
+
+**Skills with Unlocks**:
+- Attack (9 unlocks), Strength (2), Defense (10), Constitution (2)
+- Prayer (29 unlocks - most detailed)
+- Woodcutting (9), Mining (8), Fishing (10)
+- Cooking (10), Firemaking (9), Smithing (8)
+- Agility (6 unlocks for stamina bonuses)
+
+### 🔧 Prayer Skill Integration
+
+Prayer skill fully integrated into type system and database:
+
+- Added to `SkillsData` interface (was missing)
+- Added to `CharacterRepository.getCharacterSkills()` return type
+- Database columns already existed, now properly typed
+- Appears in all skill lists and calculations
+
+### 🚀 Railway Deployment Infrastructure
+
+Major improvements to production deployment configuration:
+
+- **Nixpacks Configuration**: `nixpacks.toml` for Railway builds
+  - Multi-phase build: setup → install → build → start
+  - Installs system dependencies (Python, Cairo, etc.)
+  - Builds only shared and server packages (client on Cloudflare Pages)
+  - Start command: `cd packages/server && bun dist/index.js`
+- **Manifest Fetching**: Server fetches manifests from CDN at startup
+  - Function: `fetchManifestsFromCDN()` in `packages/server/src/startup/config.ts`
+  - Downloads from `${PUBLIC_CDN_URL}/manifests/`
+  - Skipped in development if local manifests exist
+  - Required in production (CI=true)
+- **GitHub Actions**: Updated Railway deployment workflow
+  - Uses Railway GraphQL API (CLI deprecated)
+  - Triggers on server-related file changes
+  - Requires `RAILWAY_TOKEN` secret
+- **Docker Multi-Stage Build**: `Dockerfile.server` for containerized deployments
+  - Builder stage: Installs deps and builds packages
+  - Runtime stage: Minimal production image with Bun runtime
+  - Includes curl for healthchecks
+- **Frontend Separation**: Client build copied to server public directory
+  - Enables single-server deployment option
+  - Railway serves both API and static frontend
+  - Debug endpoint: `GET /debug/public` lists public directory contents
+
+**Environment Variables**:
+- `CI=true` - Skips local asset download in production
+- `SKIP_ASSETS=true` - Skips Git LFS clone
+- `PUBLIC_CDN_URL` - Required for manifest fetching
+- `TURBO_FORCE=true` - Disables Turbo caching for fresh builds
+
+### 🐛 Bug Fixes & Improvements
+
+- **Build Reliability**: Split build commands into separate phases for better debugging
+- **Cache Busting**: Build timestamp file created to verify builds are running
+- **Index.html Verification**: Server verifies frontend files exist before starting
+- **Lockfile Sync**: Updated `bun.lock` to match package.json dependencies
+- **Linting**: Multiple lint fixes for code quality
+- **Type Safety**: Fixed type errors across codebase
 
 </Update>
 

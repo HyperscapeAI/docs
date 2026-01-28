@@ -46,7 +46,7 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ## Railway Deployment
 
-Railway deployment uses Nixpacks for automatic builds and serves both the game server and client from a single service.
+Railway deployment uses Nixpacks for automatic builds. The configuration is in `nixpacks.toml` at the repository root.
 
 <Steps>
   <Step title="Create Railway project">
@@ -54,71 +54,53 @@ Railway deployment uses Nixpacks for automatic builds and serves both the game s
   </Step>
   
   <Step title="Configure build">
-    Railway automatically detects the Nixpacks configuration from `nixpacks.toml`:
-    - Build command: Multi-phase build (shared → client → server)
-    - Start command: `bun run start:railway`
-    - Frontend assets are built and copied to `public/` directory
+    Railway automatically detects `nixpacks.toml` and uses it for builds.
+    
+    Build phases:
+    - **Setup**: Installs system dependencies (Python, Cairo, etc.)
+    - **Install**: Runs `bun install`
+    - **Build**: Builds shared and server packages only (client is on Cloudflare Pages)
+    - **Start**: Runs `cd packages/server && bun dist/index.js`
   </Step>
   
   <Step title="Add PostgreSQL">
     Add PostgreSQL service from Railway marketplace.
-    Railway will automatically set `DATABASE_URL` environment variable.
+    Railway automatically sets `DATABASE_URL` environment variable.
   </Step>
   
   <Step title="Set environment variables">
-    Add all required server environment variables:
+    Required variables:
     ```bash
-    PUBLIC_PRIVY_APP_ID=your-app-id
-    PRIVY_APP_SECRET=your-app-secret
+    DATABASE_URL=postgresql://...  # Auto-set by Railway
     JWT_SECRET=your-secret-key
-    PUBLIC_CDN_URL=https://d20g7vd4m53hpb.cloudfront.net
+    PRIVY_APP_ID=your-app-id
+    PRIVY_APP_SECRET=your-app-secret
+    PUBLIC_CDN_URL=https://your-cdn.com
+    NODE_ENV=production
     ```
   </Step>
   
-  <Step title="Configure asset serving">
-    The server automatically:
-    - Fetches game manifests from CDN at startup
-    - Serves frontend from `/public` directory
-    - Registers asset routes conditionally based on manifest availability
+  <Step title="Configure CDN">
+    Assets are served from CDN (Cloudflare R2 recommended).
+    
+    The server fetches manifests from `PUBLIC_CDN_URL` at startup:
+    - Manifests are downloaded to `packages/server/world/assets/manifests/`
+    - Skipped in development if local manifests exist
+    - Required in production (CI=true environment)
   </Step>
 </Steps>
 
-### Railway Build Process
+### Railway GitHub Actions
 
-The Railway deployment uses a multi-phase build process defined in `nixpacks.toml`:
+Automatic deployment is configured in `.github/workflows/deploy-railway.yml`:
 
-1. **Install Phase**: Install dependencies with Bun
-2. **Build Phase**: 
-   - Build shared package
-   - Build client (Vite)
-   - Build server
-   - Copy client dist to server public directory
-3. **Start Phase**: Run server with `bun run start:railway`
-
-### Asset Handling in Production
-
-In production (Railway/CI environments), assets are served from CDN:
-
-- **Manifests**: Fetched from CDN at server startup via `fetchManifestsFromCDN()`
-- **3D Models/Textures**: Served directly from CloudFront CDN
-- **No Git LFS**: The `ensure-assets.mjs` script skips asset download in CI environments
+- Triggers on push to `main` for server-related paths
+- Uses Railway GraphQL API for deployments
+- Requires `RAILWAY_TOKEN` secret in GitHub repository settings
 
 <Info>
-The server detects CI/Railway environments and automatically skips local asset downloads, relying entirely on the CDN for asset delivery.
+The Railway deployment workflow was updated to use the GraphQL API instead of the deprecated CLI method.
 </Info>
-
-### Debugging Railway Deployments
-
-Recent improvements to Railway deployment include:
-
-- Build timestamp file (`/public/build-timestamp.txt`) to verify builds are running
-- Debug endpoint (`/debug/public`) to inspect public directory contents
-- Verbose logging during build phases
-- Explicit verification that `index.html` exists before starting server
-
-<Warning>
-If the frontend fails to load, check the Railway build logs for client build errors. The server will not start if `public/index.html` is missing.
-</Warning>
 
 ## Vercel Client Deployment
 
@@ -156,7 +138,21 @@ bunx drizzle-kit migrate   # Run migrations
 
 ## CDN Setup
 
-### Production CDN
+### Option 1: Cloudflare R2 (Recommended for Production)
+
+Cloudflare R2 provides S3-compatible object storage with zero egress fees.
+
+1. Create R2 bucket at [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Upload assets to bucket (models, textures, manifests)
+3. Configure public access or custom domain
+4. Set `PUBLIC_CDN_URL` to your R2 bucket URL
+
+**Manifest Fetching**:
+- Server automatically fetches manifests from `PUBLIC_CDN_URL` at startup
+- Manifests are cached in `packages/server/world/assets/manifests/`
+- In development, local manifests are used if they exist (skips CDN fetch)
+
+### Option 2: Self-Hosted (Development)
 
 In production, the server automatically fetches manifests from the CDN at startup:
 
@@ -178,15 +174,19 @@ Use the included Docker CDN for local development:
 bun run cdn:up
 ```
 
-This serves assets from the local `assets/` directory cloned via Git LFS.
+Configure `PUBLIC_CDN_URL=http://localhost:8080`
 
-### Custom CDN Setup
+### Option 3: Other Cloud Storage
 
-To use your own CDN:
+Upload assets to S3, Google Cloud Storage, or similar:
 
 1. Upload assets to S3, R2, or similar
 2. Set `PUBLIC_CDN_URL` environment variable
 3. Ensure manifests are accessible at `${CDN_URL}/manifests/`
+
+<Info>
+**Production Requirement**: In production (CI=true), the server expects manifests to be available at `PUBLIC_CDN_URL`. The `ensure-assets.mjs` script skips local asset downloads in CI environments.
+</Info>
 
 ## Production Checklist
 

@@ -43,55 +43,50 @@ PRIVY_APP_SECRET=your-privy-app-secret
 ```bash
 # Server
 PORT=5555
-NODE_ENV=production
+NODE_ENV=development
 
 # Assets & CDN
 PUBLIC_CDN_URL=http://localhost:8080
-SKIP_ASSETS=true  # Skip asset download in CI/production (assets served from CDN)
-CI=true  # Indicates CI environment (skips asset download)
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5555/ws
 
 # Voice Chat
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
 
-# Admin
-ADMIN_CODE=your-admin-code
-
-# Deployment
-COMMIT_HASH=git-commit-sha  # For deployment tracking
+# Database (local development)
+USE_LOCAL_POSTGRES=true
+POSTGRES_CONTAINER=hyperscape-postgres
+POSTGRES_USER=hyperscape
+POSTGRES_PASSWORD=hyperscape_dev
+POSTGRES_DB=hyperscape
+POSTGRES_PORT=5432
 ```
 
-### CI/Production Environment Variables
-
-When deploying to Railway, Vercel, or other platforms, set these variables to skip local asset downloads:
+### Production/Railway
 
 ```bash
-CI=true                    # Detected by ensure-assets.mjs
-SKIP_ASSETS=true          # Explicit skip flag
-```
+# Railway automatically sets DATABASE_URL
+DATABASE_URL=postgresql://...  # Auto-set by Railway
 
-The `ensure-assets.mjs` script automatically detects CI environments:
+# Required for production
+NODE_ENV=production
+CI=true                        # Skips local asset download
+SKIP_ASSETS=true              # Skips Git LFS clone
+PUBLIC_CDN_URL=https://your-cdn.com  # Required for manifest fetching
 
-```javascript
-function isCI() {
-  return !!(
-    process.env.CI ||
-    process.env.RAILWAY_ENVIRONMENT ||
-    process.env.RAILWAY_SERVICE_ID ||
-    process.env.VERCEL ||
-    process.env.NETLIFY ||
-    process.env.GITHUB_ACTIONS ||
-    process.env.GITLAB_CI ||
-    process.env.CIRCLECI ||
-    process.env.DOCKER_BUILD ||
-    process.env.SKIP_ASSETS
-  );
-}
+# Security
+JWT_SECRET=your-secure-random-secret
+ADMIN_CODE=your-admin-code
+
+# Privy
+PRIVY_APP_ID=your-privy-app-id
+PRIVY_APP_SECRET=your-privy-app-secret
 ```
 
 <Info>
-In production, assets are served from CDN instead of being bundled with the server. Set `PUBLIC_CDN_URL` to your asset hosting URL.
+**Manifest Fetching**: In production (CI=true), the server fetches manifests from `PUBLIC_CDN_URL` at startup. Manifests are downloaded to `packages/server/world/assets/manifests/` and cached for the server lifetime.
 </Info>
 
 ## Client Environment

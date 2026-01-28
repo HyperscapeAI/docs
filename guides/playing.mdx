@@ -105,21 +105,23 @@ When you die:
 
 ## Skills
 
-Hyperscape features 12 skills across combat, gathering, artisan, and support categories. Click any skill in the Skills Panel to view its unlock guide.
+### Viewing Skill Unlocks
 
-### Skill Guide Panel
+Click any skill in the Skills panel to open the **Skill Guide Panel**, which shows:
 
-Click any skill icon in the Skills Panel to open the Skill Guide:
+- All unlocks for that skill with level requirements
+- Your current level and progress
+- Visual distinction between unlocked (✓) and locked (🔒) content
+- Next unlock highlighted with progress indicator
+- Type badges (item/ability) for each unlock
 
-- **View all unlocks** at each level
-- **Green checkmarks** for unlocked content
-- **Lock icons** for future unlocks
-- **Next unlock highlighted** with gold accent
-- **Progress tracking**: See how many unlocks you've achieved
+**Example Unlocks**:
+- Attack 40: Rune weapons
+- Agility 50: +50% stamina regeneration
+- Prayer 43: Protect from Melee
+- Woodcutting 75: Magic trees
 
-<Info>
-  The Skill Guide helps you plan your progression by showing exactly what you'll unlock at each level milestone.
-</Info>
+## Skills
 
 ### Gathering Skills
 
@@ -130,45 +132,28 @@ Click any skill icon in the Skills Panel to open the Skill Guide:
 | **Mining** | Click ore rocks with pickaxe in inventory or equipped |
 | **Agility** | Move through the world (walking or running) |
 
-### Support Skills
-
-| Skill | How to Train |
-|-------|--------------|
-| **Agility** | Move through the world (1 XP per 2 tiles traveled) |
-
-<Info>
-  Agility improves stamina regeneration (+1% per level). Higher agility means you can run longer without resting.
-</Info>
-
 <Info>
 Mining rocks always deplete after yielding one ore (OSRS-accurate). Success rate depends on your Mining level, while pickaxe tier affects how often you roll for success.
 </Info>
 
 ### Agility & Stamina
 
-Agility is a unique skill that trains passively as you explore:
+Agility is a unique skill trained passively by moving:
 
-**Training**:
-- Gain XP by moving through the world (walking or running)
-- 100 tiles traveled = 50 XP (batched to prevent spam)
-- Effective rate: 1 XP per 2 tiles
-- Death resets progress toward next XP grant
-
-**Benefits**:
-- +1% stamina regeneration per Agility level
-- At level 99: Nearly 2x stamina regeneration
-- Helps sustain running for longer periods
+- **XP Gain**: 1 XP per 2 tiles traveled (walking or running)
+- **XP Drops**: Granted in batches of 50 XP every 100 tiles (~15s running, ~30s walking)
+- **Stamina Regen**: +1% regeneration per agility level
+- **Weight Penalty**: Inventory weight increases stamina drain (+0.5% per kg)
 
 **Stamina Mechanics**:
-- Running drains stamina (affected by inventory weight)
-- Walking regenerates stamina (affected by Agility level)
-- Idle regenerates stamina faster (affected by Agility level)
-- Heavier inventory = faster stamina drain (+0.5% per kg)
+- Running drains stamina (2/sec base, increased by weight)
+- Walking regenerates stamina (2/sec base, increased by agility)
+- Idle regenerates faster (4/sec base, increased by agility)
 - When stamina reaches 0, you're forced to walk
 
-<Info>
-Check your total inventory weight in the Equipment Panel. Lighter loads allow you to run longer!
-</Info>
+<Tip>
+Train agility to offset the stamina penalty from carrying heavy loads. High agility players can run longer with full inventories.
+</Tip>
 
 ### Processing Skills
 

@@ -23,7 +23,7 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | **Defense** | Damage reduction | Combat (Defensive style) |
 | **Constitution** | Maximum HP | All combat (always granted) |
 | **Ranged** | Ranged combat | Bow/crossbow attacks |
-| **Prayer** | Combat buffs and protection | Burying bones, using altars |
+| **Prayer** | Protection prayers and combat buffs | Burying bones, using altars |
 
 ### Gathering Skills
 
@@ -32,7 +32,7 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | **Woodcutting** | Chop trees | Using hatchet on trees |
 | **Mining** | Mine ore | Using pickaxe on rocks |
 | **Fishing** | Catch fish | Using fishing rod at spots |
-| **Agility** | Stamina regeneration | Moving through the world |
+| **Agility** | Stamina regeneration | Moving through the world (1 XP per 2 tiles) |
 
 ### Artisan Skills
 
@@ -489,17 +489,22 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 | Yew | 60 | 202.5 |
 | Magic | 75 | 303.8 |
 
-### Agility XP
+### Movement XP (Agility)
 
-**Agility** (movement-based):
-| Activity | XP Rate | Notes |
-|----------|---------|-------|
-| Walking | ~100 XP/min | 1 XP per 2 tiles, batched at 100 tiles |
-| Running | ~200 XP/min | Same rate, faster movement |
+Agility XP is gained passively by moving through the world:
+
+| Movement Type | Tiles/Tick | XP Rate | XP/Minute |
+|---------------|------------|---------|-----------|
+| Walking | 2 | 1 XP per 2 tiles | ~100 XP |
+| Running | 4 | 1 XP per 2 tiles | ~200 XP |
 
 <Info>
-Agility XP is batched to prevent visual spam. You earn 50 XP every 100 tiles traveled, which appears as an XP drop every ~15 seconds while running or ~30 seconds while walking.
+**XP Batching**: To prevent visual spam, agility XP is granted in batches of 50 XP every 100 tiles traveled. This creates XP drops approximately every 15 seconds while running or 30 seconds while walking.
 </Info>
+
+<Warning>
+**Death Penalty**: When you die, accumulated tiles toward your next agility XP grant are lost (maximum ~50 XP worth of progress). Already-earned XP is not affected.
+</Warning>
 
 ---
 
@@ -796,100 +801,73 @@ skillsSystem.resetSkill(entityId, "attack");
 
 ---
 
-## Agility System
+## Agility & Stamina System
 
-Agility is a unique skill that rewards players for traversing the game world and directly impacts stamina mechanics.
+Agility is a unique skill that affects stamina regeneration and is trained through movement.
 
-### Training Agility
+### How Agility Works
 
-**XP Gain**: Earn 1 XP per 2 tiles traveled (walking or running)
+**Training Method**: Move through the world (walking or running)
+- 1 XP per 2 tiles traveled
+- XP granted in batches of 50 XP every 100 tiles
+- Both walking and running grant XP at the same rate per tile
 
-**XP Batching**: To prevent visual spam, XP is granted in batches:
-- Every 100 tiles traveled = 50 XP granted
-- Partial progress is preserved between batches
-- Death resets accumulated tiles (not earned XP)
-- Logout/disconnect clears tile counter (max ~50 XP lost)
+**Stamina Regeneration Bonus**:
+- Base regeneration: 2/sec while walking, 4/sec while idle
+- Agility bonus: +1% regeneration per agility level
+- Level 99 agility: Nearly double regeneration speed
 
-**XP Rates**:
-| Movement Type | Tiles/Second | XP/Minute | Time to Level 50 |
-|---------------|--------------|-----------|------------------|
-| Walking | 3.33 | ~100 XP | ~17 hours |
-| Running | 6.67 | ~200 XP | ~8.5 hours |
+| Agility Level | Walking Regen/Sec | Idle Regen/Sec |
+|---------------|-------------------|----------------|
+| 1 | 2.02 | 4.04 |
+| 25 | 2.50 | 5.00 |
+| 50 | 3.00 | 6.00 |
+| 75 | 3.50 | 7.00 |
+| 99 | 3.98 | 7.96 |
 
-<Info>
-Agility XP is granted automatically as you move around the world - no special actions required!
-</Info>
-
-### Stamina Regeneration Bonus
-
-Agility provides a **+1% stamina regen bonus per level**:
-
-| Agility Level | Regen Multiplier | Idle Regen/Sec | Walk Regen/Sec |
-|---------------|------------------|----------------|----------------|
-| 1 | 1.01x | 4.04 | 2.02 |
-| 10 | 1.10x | 4.40 | 2.20 |
-| 25 | 1.25x | 5.00 | 2.50 |
-| 50 | 1.50x | 6.00 | 3.00 |
-| 75 | 1.75x | 7.00 | 3.50 |
-| 99 | 1.99x | 7.96 | 3.98 |
-
-<Info>
-High agility levels significantly improve stamina sustainability, allowing longer running sessions and faster recovery.
-</Info>
-
-### Weight-Based Stamina Drain
+### Weight & Stamina Drain
 
 Inventory weight affects stamina drain while running:
 
 **Weight Penalty**: +0.5% stamina drain per kg carried
 
-| Weight (kg) | Drain Multiplier | Drain/Second | Stamina Duration |
-|-------------|------------------|--------------|------------------|
-| 0 | 1.0x | 2.0 | 50 seconds |
-| 20 | 1.1x | 2.2 | 45 seconds |
-| 50 | 1.25x | 2.5 | 40 seconds |
-| 100 | 1.5x | 3.0 | 33 seconds |
+| Weight (kg) | Drain Multiplier | Drain/Second |
+|-------------|------------------|--------------|
+| 0 | 1.0x | 2.0 |
+| 20 | 1.1x | 2.2 |
+| 50 | 1.25x | 2.5 |
+| 100 | 1.5x | 3.0 |
 
-<Warning>
-Heavy loads significantly increase stamina drain. Manage your inventory weight for optimal running efficiency. The Equipment Panel displays your total weight.
-</Warning>
+<Info>
+**Weight Display**: Your total inventory weight is shown in the Equipment panel. Weight is calculated server-side and synced to the client for accurate stamina calculations.
+</Info>
 
-### Combined Effects
-
-High agility can partially offset heavy weight penalties:
-
-**Example**: Level 50 Agility with 50kg load
-- Weight increases drain by 25% (2.0 → 2.5/sec)
-- Agility increases idle regen by 50% (4.0 → 6.0/sec)
-- Net effect: Still regenerate faster than you drain while idle
-
-### Agility Unlocks
-
-| Level | Unlock |
-|-------|--------|
-| 1 | Basic stamina regeneration (+1% per level) |
-| 10 | +10% stamina regeneration |
-| 25 | +25% stamina regeneration |
-| 50 | +50% stamina regeneration |
-| 75 | +75% stamina regeneration |
-| 99 | Agility cape, +99% stamina regeneration |
+<Tip>
+High agility levels help offset the stamina penalty from carrying heavy loads. A level 50 agility player with 50kg of gear will regenerate stamina faster than a level 1 agility player with no gear.
+</Tip>
 
 ---
 
 ## Skill Guide Panel
 
-Click any skill in the Skills panel to open its Skill Guide, which shows all unlocks available at each level.
+Click any skill in the Skills panel to open its Skill Guide, which shows all unlocks for that skill.
 
 **Features**:
-- Visual distinction between unlocked (green) and locked (gray) items
+- Level requirements for each unlock
+- Visual distinction between unlocked (green ✓) and locked (🔒) content
 - Next unlock highlighted with progress indicator
+- Type badges (item/ability) for each unlock
 - Scrollable list for skills with many unlocks
-- Type indicators (item vs ability)
-- Shows levels needed to reach next unlock
-- Loading state while fetching unlock data from server
+
+**Example Unlocks**:
+- **Attack 40**: Rune weapons
+- **Attack 60**: Dragon weapons
+- **Agility 50**: +50% stamina regeneration
+- **Woodcutting 75**: Magic trees
+- **Prayer 43**: Protect from Melee
 
 <Info>
-The Skill Guide Panel helps players plan their progression by showing what they'll unlock at future levels. Data is fetched from the server endpoint `/api/data/skill-unlocks`.
+The Skill Guide Panel fetches unlock data from the server endpoint `/api/data/skill-unlocks`, ensuring server-authoritative progression information.
 </Info>
 
 ---
@@ -906,6 +884,7 @@ Example unlocks:
 - **Cooking 40**: Lobster
 - **Smithing 50**: Mithril bar
 - **Agility 50**: +50% stamina regeneration
+- **Prayer 43**: Protect from Melee
 
 <Info>
 See `manifests/skill-unlocks.json` for the complete list of unlocks for all skills. You can also view unlocks in-game by clicking on any skill in the Skills Panel.
