@@ -273,27 +273,48 @@ Drop tables are defined in `packages/shared/src/data/npcs.ts`.
 
 ## Duel Arena (PvP)
 
-Hyperscape features a **player-vs-player dueling system** with customizable rules and stakes:
+The Duel Arena is a dedicated PvP zone where players can challenge each other to combat with customizable rules and stakes.
 
-### Duel Features
+### Location
 
-- **Customizable Rules**: Toggle 10 combat restrictions (no ranged, no food, no forfeit, etc.)
+The Duel Arena consists of:
+- **Lobby** (center: x=250, z=295) - Main gathering area with spawn point
+- **Hospital** (center: x=210, z=295) - Healing area with Nurse Sarah
+- **6 Combat Arenas** - 16×16 tile arenas arranged in 2×3 grid with trapdoors
+
+### Arena Layout
+
+| Arena | Center Position | Spawn Points |
+|-------|----------------|--------------|
+| Arena 1 | (210, 210) | (206, 210), (214, 210) |
+| Arena 2 | (250, 210) | (246, 210), (254, 210) |
+| Arena 3 | (290, 210) | (286, 210), (294, 210) |
+| Arena 4 | (210, 260) | (206, 260), (214, 260) |
+| Arena 5 | (250, 260) | (246, 260), (254, 260) |
+| Arena 6 | (290, 260) | (286, 260), (294, 260) |
+
+### NPCs
+
+- **Nurse Sarah** (Hospital) - Restores health and prayer points
+- **Duel Scoreboard** (Lobby) - View rankings and statistics
+- **Duel Master Marcus** (Lobby) - Provides guidance on dueling
+
+### Features
+
+- **Safe Zones**: Lobby and hospital are PvP-disabled
+- **Duel-Only Combat**: Arena zones only allow consensual duels
+- **Bank Access**: Bank chest available in lobby
+- **Healing Services**: Free health and prayer restoration at hospital
+- **Trapdoors**: Each arena has 4 trapdoors at corners for hazards
+
+### Duel Mechanics
+
+Players can challenge others to duels with:
+- **Customizable Rules**: Combat restrictions (no ranged, no food, no forfeit, etc.)
 - **Equipment Restrictions**: Disable specific equipment slots
 - **Stakes**: Bet inventory items on the outcome
-- **6 Arenas**: Dedicated combat zones with wall collision
 - **Anti-Scam Protection**: Acceptance resets when stakes change
-- **Disconnect Handling**: 30-second grace period during combat
-
-### Duel Flow
-
-1. **Challenge** — Player A challenges Player B (must be in Duel Arena zone)
-2. **Rules** — Both players negotiate combat rules and equipment restrictions
-3. **Stakes** — Both players add items to stake
-4. **Confirm** — Read-only review before combat
-5. **Countdown** — 3-2-1-FIGHT! (players frozen and teleported to arena)
-6. **Combat** — Fight until death or forfeit
-7. **Resolution** — Winner receives all stakes, both players restored to full health
 
 <Info>
-See [Duel Arena System](/wiki/game-systems/duel-arena) for complete documentation including network protocol, server architecture, and testing.
+Right-click another player and select "Challenge to Duel" to begin. Both players must agree to rules and stakes before combat starts.
 </Info>
