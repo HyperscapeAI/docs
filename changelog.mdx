@@ -23,6 +23,201 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="F2P Ranged & Magic Combat" description="January 2026" date="2026-01-28">
+
+### ⚔️ Ranged Combat System
+
+Complete implementation of OSRS-style ranged combat with bows and arrows:
+
+- **Ranged Weapons**: Shortbow, Oak shortbow, Willow shortbow, Maple shortbow
+- **Ammunition**: Bronze, Iron, Steel, Mithril, and Adamant arrows
+  - Arrows equipped in new ammo slot
+  - 100% consumption rate (no Ava's device yet)
+  - Arrow strength bonuses affect damage
+- **Combat Styles**: Accurate (+3 Ranged), Rapid (-1 tick speed), Longrange (+2 range, Ranged+Defense XP)
+- **Damage Calculation**: OSRS-accurate formulas with equipment bonuses
+  - Effective Ranged = floor(rangedLevel × prayer) + styleBonus + 8
+  - Max Hit = floor(0.5 + effectiveRanged × (arrowStrength + 64) / 640)
+- **Projectile System**: 3D arrow meshes with arc trajectories
+  - OSRS-accurate hit delay: 1 + floor((3 + distance) / 6)
+  - Arrows rotate to face travel direction
+  - Metal-colored arrow tips based on arrow type
+- **Attack Range**: 10 tiles (Chebyshev distance)
+- **XP Distribution**: 4 XP per damage to Ranged, 1.33 XP to Constitution
+
+### ✨ Magic Combat System
+
+Complete implementation of F2P magic with Strike and Bolt spells:
+
+- **Spells Panel**: New spellbook UI with spell grid
+  - Click to select autocast spell
+  - Right-click for context menu (Autocast/Cast)
+  - Element-colored spell icons with glow effects
+  - Level requirements displayed
+- **Combat Spells**: 8 F2P spells across 2 tiers
+  - **Strike**: Wind (L1, 2 dmg), Water (L5, 4 dmg), Earth (L9, 6 dmg), Fire (L13, 8 dmg)
+  - **Bolt**: Wind (L17, 9 dmg), Water (L23, 10 dmg), Earth (L29, 11 dmg), Fire (L35, 12 dmg)
+- **Rune System**: Air, Water, Earth, Fire, Mind, and Chaos runes
+  - Runes consumed on each cast
+  - Elemental staves provide infinite runes (Staff of Air/Water/Earth/Fire)
+- **Staffless Casting**: Can cast spells without a staff (OSRS-accurate)
+  - Staff provides magic attack bonus and infinite runes
+  - Spells work with any weapon or no weapon
+- **Combat Styles**: Accurate (+3 Magic), Longrange (+2 range, Magic+Defense XP), Autocast
+- **Damage Calculation**: OSRS-accurate formulas
+  - Effective Magic = floor(magicLevel × prayer) + styleBonus + 8
+  - Max Hit = spell base damage (no equipment modifiers in F2P)
+  - Magic Defense = floor(0.7 × magicLevel + 0.3 × defenseLevel) for players
+- **Projectile Visuals**: Colored spell orbs with element-specific effects
+  - OSRS-accurate hit delay: 1 + floor((1 + distance) / 3)
+  - Spell trails with glow and pulse effects
+- **Database**: New `magicLevel`, `magicXp`, and `selectedSpell` columns
+- **XP Distribution**: Base spell XP + (2 × damage) to Magic, 1.33 XP per damage to Constitution
+
+### 🎯 Combat System Enhancements
+
+- **Attack Type Detection**: Automatic detection of MELEE/RANGED/MAGIC from equipped weapon or selected spell
+- **Pathfinding Updates**: Ranged/magic use Chebyshev distance, melee uses cardinal-only for range 1
+- **Pending Attack Manager**: Updated to support all three attack types with appropriate range checks
+- **Equipment Panel**: New ammo slot for arrows (top-right position)
+- **Menu Bar**: Added Spells button (🔮) to menu bar
+- **Combat Panel**: Updated with icons for Rapid, Longrange, and Autocast styles
+- **Timestamp Validation**: Required timestamp validation on all combat packets (prevents replay attacks)
+
+### 🧪 Testing
+
+- **Unit Tests**: Comprehensive tests for ranged/magic damage calculators
+- **Integration Tests**: Full combat flow testing for all three attack types
+- **Type Guards**: Event payload validation throughout combat handlers
+
+</Update>
+
+<Update label="Duel Arena System" description="January 2026" date="2026-01-27">
+
+### ⚔️ Player vs Player Dueling
+
+Complete OSRS-style duel arena system with rules negotiation and stakes:
+
+- **Duel Flow**: Challenge → Rules → Stakes → Confirm → Countdown → Fight → Result
+- **Challenge System**: Walk to player and send duel challenge (like trading)
+  - 30-second timeout for acceptance
+  - Distance-based cancellation (15 tiles)
+  - Clickable chat messages for acceptance
+- **Rules Screen**: 10 combat rule toggles
+  - No Ranged, No Melee, No Magic, No Special Attack
+  - No Prayer, No Potions, No Food, No Movement, No Forfeit
+  - Equipment slot restrictions (11 slots)
+  - Both players must accept to proceed
+- **Stakes Screen**: Item staking with anti-scam features
+  - Left-click to stake 1, right-click for quantity menu
+  - Value imbalance warnings
+  - Opponent modification warnings
+  - Both players must accept to proceed
+- **Confirmation Screen**: Final read-only review
+  - Shows all rules, equipment restrictions, and stakes
+  - Both players must accept to start
+- **Arena System**: 6 arenas in 2×3 grid layout
+  - Arena pooling with automatic reservation
+  - Collision walls prevent escape during combat
+  - Flattened terrain for fair combat
+  - Forfeit pillars for surrendering (if allowed)
+- **Combat Resolution**: Winner receives all stakes
+  - Death or forfeit determines winner
+  - Automatic health restoration
+  - Teleport to lobby after duel
+  - Disconnect handling with 30-second timeout
+- **UI Components**: 
+  - DuelPanel with screen transitions
+  - DuelChallengeModal for incoming challenges
+  - DuelCountdown overlay (3-2-1-FIGHT)
+  - DuelResultModal showing items won/lost
+  - DuelHUD during combat with opponent health
+
+### 🏗️ Architecture
+
+- **DuelSystem**: Main orchestrator for duel state machine
+- **DuelSessionManager**: Session CRUD operations
+- **PendingDuelManager**: Challenge tracking and timeouts
+- **ArenaPoolManager**: Arena reservation and collision
+- **DuelCombatResolver**: Combat resolution and stake transfers
+- **Audit Logging**: Economic tracking for all duel outcomes
+
+### 🧪 Testing
+
+- **1,066 lines** of DuelSystem unit tests
+- **456 lines** of PendingDuelManager tests
+- **233 lines** of ArenaPoolManager tests
+- Full coverage of state machine transitions and edge cases
+
+</Update>
+
+<Update label="Security & Type Safety" description="January 2026" date="2026-01-28">
+
+### 🔒 Security Enhancements
+
+Comprehensive security improvements across authentication and input validation:
+
+- **Secure Token Storage**: Configurable auth storage (localStorage, sessionStorage, or memory)
+  - `AuthStorageType` enum for storage selection
+  - Memory-only mode for maximum security
+  - Proper cleanup on logout (clears all storage types)
+- **URL Parameter Validation**: Removed authToken from URL params (security vulnerability)
+  - **BREAKING**: Tokens must now be passed via postMessage, not URL
+  - Schema-based validation for embedded config parameters
+  - Prevents token exposure in browser history and server logs
+- **CSP Violation Monitoring**: Content-Security-Policy violation event handling
+  - Throttled reporting to prevent flooding
+  - Report-URI endpoint for security monitoring
+  - Documented CSP directives and security implications
+- **Async Token Provider**: Fresh token retrieval for API calls
+  - Registered with API client for automatic token refresh
+  - Prevents stale token usage
+- **Timestamp Validation**: Required on all combat packets
+  - ±30 second window for replay attack prevention
+  - Missing timestamps now rejected (was optional)
+- **Type Guards**: Comprehensive event payload validation
+  - `isUIUpdateEvent`, `isPlayerStatsData`, `isSkillsUpdateEvent`
+  - `isPrayerPointsChangedEvent`, `isPrayerStateSyncEvent`
+  - Runtime validation at system boundaries
+
+### 🎨 UI/UX Improvements
+
+- **Viewport Scaling**: Proportional panel resize on viewport changes
+  - ViewportScaler component for design resolution-based scaling
+  - Grid snapping utility for window alignment
+  - Left/right column panel scaling with proper stacking
+- **Minimap Overhaul**: 
+  - Independent width/height resizing (no longer forced square)
+  - Extracted MinimapOverlayControls component
+  - Fixed pip desync using cached projection-view matrices
+  - Default zoom set to 10 for better visibility
+- **Panel Layout Redesign**: Right column flush stacking
+  - Minimap (top) → gap → Combat → Skills → Inventory → Menubar (bottom)
+  - Consistent panel widths (235px) for alignment
+  - No overlaps, touching edges
+- **Combat Panel**: Attack style buttons changed from 2×2 grid to 1×3 row for better mobile UX
+
+### ⚡ Performance Optimizations
+
+- **Object Pooling**: Memory optimization utilities
+  - ArrayPool for reusable temporary arrays
+  - EventDataPool for pooled event objects
+  - PositionPool for {x, y, z} position reuse
+  - withPooledArray helper for scoped pool usage
+- **Notification Helpers**: Convenient error handling functions
+  - showErrorNotification, showNetworkErrorNotification, showSuccessNotification
+  - Consistent error logging with console output
+
+### 🧪 Testing
+
+- **Security Tests**: URL parameter validation, error boundaries
+- **E2E Test Utilities**: Entity introspection, visual testing helpers
+  - getEntitiesByType, getPlayerInventory, getPlayerEquipment, getPlayerSkills
+  - clickAtWorldPosition for world coordinate input simulation
+- **Unit Tests**: Expanded test patterns in vitest config
+
+</Update>
+
 <Update label="Collision System & UI Improvements" description="January 2026" date="2026-01-16">
 
 ### 🎯 Static Tile Collision System
