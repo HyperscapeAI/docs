@@ -160,7 +160,7 @@ public getXPProgress(skill: SkillData): number {
 
 ## Combat Level
 
-Combat level is calculated from combat skills using the OSRS formula.
+Combat level is calculated from combat skills using the OSRS formula. Magic and Prayer are now included in the calculation.
 
 ```typescript
 // From SkillsSystem.ts
@@ -189,6 +189,10 @@ public getCombatLevel(stats: StatsComponent): number {
   return Math.floor(base + Math.max(melee, rangedCalc, magicCalc));
 }
 ```
+
+<Info>
+**Magic & Prayer Persistence**: Magic and Prayer skills now persist to the database. Previously, these skills were not saved between sessions.
+</Info>
 
 ### Combat Level Examples
 
