@@ -1,0 +1,725 @@
+---
+title: "Security"
+description: "Authentication, CSP, input validation, and anti-cheat measures"
+icon: "shield"
+---
+
+# Security
+
+Hyperscape implements multiple layers of security to protect player data and prevent exploits.
+
+<Info>
+Security code lives in `packages/client/src/auth/`, `packages/server/src/infrastructure/auth/`, and `packages/server/src/systems/ServerNetwork/services/`.
+</Info>
+
+---
+
+## Authentication
+
+### Privy Integration
+
+Hyperscape uses [Privy](https://privy.io) for secure authentication with support for:
+
+- **Email/SMS** — Passwordless login
+- **Social OAuth** — Google, Twitter, Discord, etc.
+- **Wallet Connect** — Ethereum and Solana wallets
+- **Farcaster** — Farcaster Frame integration
+
+```typescript
+// From PrivyAuthManager.ts
+export class PrivyAuthManager {
+  /**
+   * Storage type for auth tokens
+   * - 'localStorage': Persists across browser sessions, but vulnerable to XSS
+   * - 'sessionStorage': Per-tab only, cleared on tab close, more secure
+   * - 'memory': In-memory only, most secure but lost on page refresh
+   */
+  setStorageType(type: AuthStorageType): void;
+  
+  login(user: PrivyUser, token: string, farcasterFid?: string): void;
+  logout(): void;
+  restoreFromStorage(): { token: string | null; userId: string | null };
+}
+```
+
+### Configurable Auth Storage
+
+Auth tokens can be stored in different locations based on security requirements:
+
+```typescript
+// From PrivyAuthManager.ts
+export type AuthStorageType = "localStorage" | "sessionStorage" | "memory";
+
+// Set storage type before authentication
+privyAuthManager.setStorageType("sessionStorage"); // More secure than localStorage
+```
+
+**Storage Options:**
+
+| Type | Persistence | Security | Use Case |
+|------|-------------|----------|----------|
+| `localStorage` | Across sessions | Vulnerable to XSS | Default, convenient |
+| `sessionStorage` | Per-tab only | More secure | Production recommended |
+| `memory` | Lost on refresh | Most secure | High-security environments |
+
+<Warning>
+**XSS Risk**: Tokens stored in browser storage are accessible to JavaScript. For production, consider using `sessionStorage` or `memory` storage types.
+</Warning>
+
+### Async Token Provider
+
+The API client supports async token refresh for fresh tokens:
+
+```typescript
+// From api-client.ts
+export function setAsyncTokenProvider(
+  provider: () => Promise<string | null>,
+): void {
+  asyncTokenProvider = provider;
+}
+
+// Registered in PrivyAuthProvider.tsx
+useEffect(() => {
+  if (ready && authenticated) {
+    setAsyncTokenProvider(async () => {
+      try {
+        return await getAccessToken();
+      } catch (error) {
+        logger.warn("[PrivyAuthHandler] Failed to get access token:", error);
+        return null;
+      }
+    });
+  }
+}, [ready, authenticated, getAccessToken]);
+```
+
+<Info>
+**Fresh Tokens**: The async token provider ensures API requests always use fresh tokens from Privy, not stale cached tokens.
+</Info>
+
+---
+
+## URL Parameter Validation
+
+### Embedded Mode Security
+
+Embedded mode (iframe integration) now validates all URL parameters to prevent injection attacks:
+
+```typescript
+// From embeddedConfig.ts
+export function validateURLParams(params: URLSearchParams): {
+  valid: boolean;
+  errors: string[];
+  config: EmbeddedConfig | null;
+} {
+  const errors: string[] = [];
+
+  // Validate characterId (UUID format)
+  const characterId = params.get("characterId");
+  if (characterId && !isValidUUID(characterId)) {
+    errors.push("Invalid characterId format");
+  }
+
+  // Validate mode (enum)
+  const mode = params.get("mode");
+  if (mode && !["play", "spectate", "agent"].includes(mode)) {
+    errors.push("Invalid mode");
+  }
+
+  // ... more validation ...
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    config: errors.length === 0 ? buildConfig(params) : null,
+  };
+}
+```
+
+<Warning>
+**BREAKING CHANGE**: `authToken` must now be passed via postMessage, not URL parameters. This prevents token exposure in browser history and server logs.
+</Warning>
+
+### Secure Token Delivery
+
+Auth tokens are now delivered via postMessage instead of URL parameters:
+
+```typescript
+// From EmbeddedGameClient.tsx
+useEffect(() => {
+  // Wait for auth token via postMessage from parent window
+  const handleAuthReady = () => {
+    const updatedConfig = getEmbeddedConfig();
+    if (updatedConfig?.authToken) {
+      logger.log("[EmbeddedGameClient] Auth token received via postMessage");
+      setConfig(updatedConfig);
+    }
+  };
+
+  window.addEventListener("hyperscape:auth-ready", handleAuthReady);
+
+  // Timeout after 10 seconds if no token received
+  const timeoutId = setTimeout(() => {
+    if (!getEmbeddedConfig()?.authToken) {
+      setError("Authentication timeout - please try refreshing the page");
+    }
+  }, 10000);
+
+  return () => {
+    window.removeEventListener("hyperscape:auth-ready", handleAuthReady);
+    clearTimeout(timeoutId);
+  };
+}, []);
+```
+
+**Parent Window Integration:**
+
+```javascript
+// Parent window sends auth token via postMessage
+const iframe = document.getElementById('hyperscape-iframe');
+iframe.contentWindow.postMessage({
+  type: 'hyperscape:auth',
+  authToken: 'your-auth-token-here'
+}, 'https://play.hyperscape.club');
+```
+
+---
+
+## Content Security Policy
+
+### CSP Headers
+
+Hyperscape implements Content Security Policy headers to mitigate XSS attacks:
+
+```
+# From packages/client/public/_headers
+Content-Security-Policy: 
+  default-src 'self'; 
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://auth.privy.io https://*.privy.io; 
+  style-src 'self' 'unsafe-inline'; 
+  img-src 'self' data: https: blob:; 
+  font-src 'self' data:; 
+  connect-src 'self' wss: https: ws://localhost:* http://localhost:*; 
+  frame-src 'self' https://auth.privy.io https://*.privy.io; 
+  worker-src 'self' blob:; 
+  media-src 'self' blob:; 
+  report-uri /api/csp-report;
+```
+
+**Why `unsafe-inline` and `unsafe-eval`?**
+
+1. **Privy SDK**: Injects inline styles for modal/popup UI and uses eval for authentication flows
+2. **React**: Some styled-components patterns use inline styles
+3. **Three.js**: Shader compilation may use inline scripts
+4. **Webpack/Vite**: Hot module replacement in development
+
+<Info>
+**Future Improvement**: Consider migrating to CSP nonces when Privy SDK adds support.
+</Info>
+
+### CSP Violation Monitoring
+
+CSP violations are monitored and reported:
+
+```typescript
+// From error-reporting.ts
+window.addEventListener("securitypolicyviolation", (event: SecurityPolicyViolationEvent) => {
+  // Throttle CSP violation reports to prevent flooding
+  const now = Date.now();
+  if (now - lastCspViolationReport < CSP_VIOLATION_THROTTLE_MS) {
+    return;
+  }
+  lastCspViolationReport = now;
+
+  console.warn("[Security] CSP violation:", {
+    violatedDirective: event.violatedDirective,
+    blockedURI: event.blockedURI,
+    documentURI: event.documentURI,
+    effectiveDirective: event.effectiveDirective,
+  });
+
+  // Report to server for monitoring
+  fetch("/api/csp-report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      violatedDirective: event.violatedDirective,
+      blockedURI: event.blockedURI,
+      documentURI: event.documentURI,
+    }),
+  }).catch(() => {
+    // Ignore reporting errors
+  });
+});
+```
+
+<Info>
+**Throttling**: CSP violation reports are throttled to prevent flooding the server with duplicate reports.
+</Info>
+
+---
+
+## Input Validation
+
+### Server-Side Validation
+
+All client inputs are validated server-side to prevent exploits:
+
+```typescript
+// From InputValidation.ts
+export function validateRequestTimestamp(
+  timestamp: unknown,
+): { valid: boolean; reason?: string } {
+  if (typeof timestamp !== "number") {
+    return { valid: false, reason: "Timestamp must be a number" };
+  }
+
+  const now = Date.now();
+  const age = now - timestamp;
+
+  // Reject timestamps from the future (clock skew tolerance: 5s)
+  if (age < -5000) {
+    return { valid: false, reason: "Timestamp is in the future" };
+  }
+
+  // Reject timestamps older than 30 seconds (replay attack prevention)
+  if (age > 30000) {
+    return { valid: false, reason: "Timestamp is too old" };
+  }
+
+  return { valid: true };
+}
+```
+
+### Combat Request Validation
+
+Combat requests require timestamp validation to prevent replay attacks:
+
+```typescript
+// From handlers/combat.ts
+export function handleAttackPlayer(socket, data, world) {
+  const payload = data as Record<string, unknown>;
+
+  // Validate timestamp to prevent replay attacks (required)
+  if (
+    payload.timestamp === undefined ||
+    typeof payload.timestamp !== "number"
+  ) {
+    console.warn(
+      `[Combat] Missing or invalid timestamp from ${attackerId} - potential replay attack`,
+    );
+    return;
+  }
+  
+  const timestampValidation = validateRequestTimestamp(payload.timestamp);
+  if (!timestampValidation.valid) {
+    console.warn(
+      `[Combat] Replay attack blocked from ${attackerId}: ${timestampValidation.reason}`,
+    );
+    return;
+  }
+
+  // ... rest of validation ...
+}
+```
+
+<Warning>
+**Timestamp Required**: All combat requests must include a timestamp. Requests without timestamps or with invalid timestamps are rejected.
+</Warning>
+
+### Type Guards
+
+Event payloads use type guards for runtime validation:
+
+```typescript
+// From types/guards.ts
+export function isUIUpdateEvent(data: unknown): data is UIUpdateEvent {
+  if (typeof data !== "object" || data === null) return false;
+  const obj = data as Record<string, unknown>;
+  return typeof obj.component === "string" && obj.data !== undefined;
+}
+
+export function isPlayerStatsData(data: unknown): data is PlayerStatsData {
+  if (typeof data !== "object" || data === null) return false;
+  // Validate structure...
+  return true;
+}
+```
+
+---
+
+## Rate Limiting
+
+### Combat Rate Limiting
+
+Combat actions are rate-limited to prevent spam:
+
+```typescript
+// From SlidingWindowRateLimiter.ts
+export class SlidingWindowRateLimiter {
+  constructor(
+    private maxRequests: number,
+    private windowMs: number,
+  ) {}
+
+  tryRequest(key: string): boolean {
+    const now = Date.now();
+    const window = this.windows.get(key) || [];
+
+    // Remove expired timestamps
+    const validTimestamps = window.filter(
+      (timestamp) => now - timestamp < this.windowMs,
+    );
+
+    // Check if under limit
+    if (validTimestamps.length >= this.maxRequests) {
+      return false; // Rate limited
+    }
+
+    // Add new timestamp
+    validTimestamps.push(now);
+    this.windows.set(key, validTimestamps);
+    return true;
+  }
+}
+
+// Usage in combat handlers
+const combatRateLimiter = new SlidingWindowRateLimiter(
+  10, // 10 requests
+  1000, // per second
+);
+
+if (!combatRateLimiter.tryRequest(playerId)) {
+  console.warn(`[Combat] Rate limit exceeded for ${playerId}`);
+  return;
+}
+```
+
+### Global Rate Limits
+
+| Action | Limit | Window |
+|--------|-------|--------|
+| Combat attacks | 10 | 1 second |
+| Inventory actions | 20 | 1 second |
+| Chat messages | 5 | 1 second |
+| Bank operations | 30 | 1 second |
+
+---
+
+## Anti-Cheat Measures
+
+### Server-Authoritative Validation
+
+All game state changes are validated server-side:
+
+```typescript
+// From CombatValidator.ts
+export class CombatValidator {
+  validateRangedAttack(
+    attackerId: string,
+    targetId: string,
+    world: World,
+  ): ValidationResult {
+    // Rate limit check
+    if (!this.rateLimiter.canAttack(attackerId)) {
+      return { valid: false, error: "Rate limited", code: "RATE_LIMITED" };
+    }
+
+    // Entity validation
+    const attacker = world.entities.players?.get(attackerId);
+    const target = world.entities.get(targetId);
+
+    if (!attacker || !target) {
+      return { valid: false, error: "Invalid entities", code: "INVALID_ENTITY" };
+    }
+
+    // Dead check
+    if (isEntityDead(attacker) || isEntityDead(target)) {
+      return { valid: false, error: "Dead entity", code: "ENTITY_DEAD" };
+    }
+
+    // Equipment validation (server checks, not trusting client)
+    const weapon = this.getServerEquippedWeapon(attacker);
+    if (!weapon || !this.isRangedWeapon(weapon)) {
+      return { valid: false, error: "No ranged weapon", code: "NO_WEAPON" };
+    }
+
+    // Ammunition validation
+    const ammo = this.getServerEquippedAmmo(attacker);
+    if (!ammo && this.requiresAmmo(weapon)) {
+      return { valid: false, error: "No ammunition", code: "NO_AMMO" };
+    }
+
+    // Range validation (server calculates, not trusting client distance)
+    const distance = this.calculateServerDistance(attacker, target);
+    const maxRange = this.calculateMaxRange(weapon, attacker);
+    if (distance > maxRange) {
+      return { valid: false, error: "Out of range", code: "OUT_OF_RANGE" };
+    }
+
+    return { valid: true };
+  }
+}
+```
+
+<Info>
+**Never Trust the Client**: All calculations (distance, equipment, ammunition) are performed server-side. Client requests are treated as untrusted input.
+</Info>
+
+### Movement Anti-Cheat
+
+Movement is validated to prevent teleportation and speed hacks:
+
+```typescript
+// From MovementAntiCheat.ts
+export class MovementAntiCheat {
+  validateMovement(
+    playerId: string,
+    oldPos: Position3D,
+    newPos: Position3D,
+    deltaTime: number,
+  ): { valid: boolean; reason?: string } {
+    // Calculate distance moved
+    const distance = Math.sqrt(
+      Math.pow(newPos.x - oldPos.x, 2) +
+      Math.pow(newPos.z - oldPos.z, 2),
+    );
+
+    // Calculate maximum allowed distance
+    const maxSpeed = this.getPlayerMaxSpeed(playerId); // Accounts for run energy
+    const maxDistance = maxSpeed * (deltaTime / 1000);
+
+    // Allow 10% tolerance for network latency
+    if (distance > maxDistance * 1.1) {
+      return {
+        valid: false,
+        reason: `Movement too fast: ${distance.toFixed(2)} > ${maxDistance.toFixed(2)}`,
+      };
+    }
+
+    return { valid: true };
+  }
+}
+```
+
+---
+
+## Secure Storage
+
+### Client-Side Storage
+
+The `secureStorage` utility provides safe browser storage access:
+
+```typescript
+// From secureStorage.ts
+export const secureStorage = {
+  /**
+   * Get item from storage with error handling
+   */
+  getItem(key: string, storage: Storage = localStorage): string | null {
+    try {
+      return storage.getItem(key);
+    } catch (error) {
+      console.warn(`[SecureStorage] Failed to get ${key}:`, error);
+      return null;
+    }
+  },
+
+  /**
+   * Set item in storage with error handling
+   */
+  setItem(key: string, value: string, storage: Storage = localStorage): boolean {
+    try {
+      storage.setItem(key, value);
+      return true;
+    } catch (error) {
+      // Storage may be unavailable (private browsing, quota exceeded, etc.)
+      console.warn(`[SecureStorage] Failed to set ${key}:`, error);
+      return false;
+    }
+  },
+
+  /**
+   * Remove item from storage with error handling
+   */
+  removeItem(key: string, storage: Storage = localStorage): boolean {
+    try {
+      storage.removeItem(key);
+      return true;
+    } catch (error) {
+      console.warn(`[SecureStorage] Failed to remove ${key}:`, error);
+      return false;
+    }
+  },
+};
+```
+
+<Info>
+**Error Handling**: All storage operations are wrapped in try-catch to handle private browsing mode, quota exceeded, and other storage failures.
+</Info>
+
+---
+
+## Error Reporting
+
+### Unhandled Error Tracking
+
+Unhandled errors and promise rejections are tracked:
+
+```typescript
+// From error-reporting.ts
+window.addEventListener("error", (event: ErrorEvent) => {
+  console.error("[Error] Unhandled error:", {
+    message: event.message,
+    filename: event.filename,
+    lineno: event.lineno,
+    colno: event.colno,
+    error: event.error,
+  });
+
+  // Report to server for monitoring
+  reportError({
+    type: "unhandled_error",
+    message: event.message,
+    stack: event.error?.stack,
+    filename: event.filename,
+    lineno: event.lineno,
+  });
+});
+
+window.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
+  console.error("[Error] Unhandled promise rejection:", event.reason);
+
+  reportError({
+    type: "unhandled_rejection",
+    message: String(event.reason),
+    stack: event.reason?.stack,
+  });
+});
+```
+
+### CSP Violation Reporting
+
+CSP violations are reported to the server for security monitoring:
+
+```typescript
+window.addEventListener("securitypolicyviolation", (event: SecurityPolicyViolationEvent) => {
+  // Throttle to prevent report flooding
+  const now = Date.now();
+  if (now - lastCspViolationReport < CSP_VIOLATION_THROTTLE_MS) {
+    return;
+  }
+  lastCspViolationReport = now;
+
+  console.warn("[Security] CSP violation:", {
+    violatedDirective: event.violatedDirective,
+    blockedURI: event.blockedURI,
+  });
+
+  // Report to server
+  fetch("/api/csp-report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      violatedDirective: event.violatedDirective,
+      blockedURI: event.blockedURI,
+      documentURI: event.documentURI,
+    }),
+  }).catch(() => {});
+});
+```
+
+---
+
+## Database Security
+
+### Parameterized Queries
+
+All database queries use Drizzle ORM with parameterized queries to prevent SQL injection:
+
+```typescript
+// ✅ SAFE - Drizzle uses parameterized queries
+await db
+  .select()
+  .from(characters)
+  .where(eq(characters.id, playerId));
+
+// ❌ NEVER DO THIS - Raw SQL concatenation
+await db.execute(`SELECT * FROM characters WHERE id = '${playerId}'`);
+```
+
+### Transaction Isolation
+
+Critical operations use database transactions for atomicity:
+
+```typescript
+// From EquipmentRepository.ts
+await this.db.transaction(async (tx) => {
+  // All operations in this block are atomic
+  await tx.delete(equipment).where(eq(equipment.playerId, playerId));
+  await tx.insert(equipment).values(items);
+  // Either both succeed or both are rolled back
+});
+```
+
+---
+
+## Audit Logging
+
+### Activity Log
+
+Player actions are logged for audit trails:
+
+```typescript
+// From ActivityLogRepository.ts
+export class ActivityLogRepository {
+  async logActivity(
+    playerId: string,
+    eventType: string,
+    details: Record<string, unknown>,
+  ): Promise<void> {
+    await this.db.insert(schema.activityLog).values({
+      playerId,
+      eventType,
+      details,
+      timestamp: Date.now(),
+    });
+  }
+}
+```
+
+**Logged Events:**
+- Player login/logout
+- Item trades
+- Bank transactions
+- Combat kills
+- Admin actions
+
+---
+
+## Best Practices
+
+### Client-Side
+
+1. **Never trust client data** — Validate everything server-side
+2. **Use secure storage** — Prefer `sessionStorage` over `localStorage`
+3. **Validate URL parameters** — Use schema-based validation
+4. **Report errors** — Send CSP violations and unhandled errors to server
+5. **Use type guards** — Validate event payloads at runtime
+
+### Server-Side
+
+1. **Parameterized queries** — Always use Drizzle ORM, never raw SQL
+2. **Rate limiting** — Apply to all player actions
+3. **Timestamp validation** — Prevent replay attacks
+4. **Server-authoritative** — Calculate all game state server-side
+5. **Audit logging** — Log critical actions for investigation
+
+---
+
+## Related Documentation
+
+- [Authentication](/guides/development#authentication)
+- [Database Schema](/wiki/engine/database)
+- [Persistence Architecture](/wiki/engine/persistence)
+- [Configuration](/devops/configuration)
