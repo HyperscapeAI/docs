@@ -77,6 +77,7 @@ export const characters = pgTable('characters', {
   defenseLevel: integer('defenseLevel').default(1),
   constitutionLevel: integer('constitutionLevel').default(10),
   rangedLevel: integer('rangedLevel').default(1),
+  magicLevel: integer('magicLevel').default(1),
   prayerLevel: integer('prayerLevel').default(1),
   woodcuttingLevel: integer('woodcuttingLevel').default(1),
   miningLevel: integer('miningLevel').default(1),
@@ -84,6 +85,7 @@ export const characters = pgTable('characters', {
   firemakingLevel: integer('firemakingLevel').default(1),
   cookingLevel: integer('cookingLevel').default(1),
   smithingLevel: integer('smithingLevel').default(1),
+  agilityLevel: integer('agilityLevel').default(1),
 
   // Skill XP (individual columns)
   attackXp: integer('attackXp').default(0),
@@ -91,6 +93,7 @@ export const characters = pgTable('characters', {
   defenseXp: integer('defenseXp').default(0),
   constitutionXp: integer('constitutionXp').default(1154),
   rangedXp: integer('rangedXp').default(0),
+  magicXp: integer('magicXp').default(0),
   prayerXp: integer('prayerXp').default(0),
   woodcuttingXp: integer('woodcuttingXp').default(0),
   miningXp: integer('miningXp').default(0),
@@ -98,6 +101,7 @@ export const characters = pgTable('characters', {
   firemakingXp: integer('firemakingXp').default(0),
   cookingXp: integer('cookingXp').default(0),
   smithingXp: integer('smithingXp').default(0),
+  agilityXp: integer('agilityXp').default(0),
 
   // Combat state
   health: integer('health').default(100),
