@@ -109,6 +109,11 @@ export const characters = pgTable('characters', {
   combatState: text('combat_state').default('idle'), // idle, fighting, dead
   lastCombatTick: bigint('last_combat_tick', { mode: 'number' }),
 
+  // Combat preferences
+  attackStyle: text('attackStyle').default('accurate'),
+  autoRetaliate: integer('autoRetaliate').default(1).notNull(), // 1=ON (default), 0=OFF
+  selectedSpell: text('selectedSpell'), // Autocast spell ID (null = no autocast)
+
   // Timestamps
   lastLogin: bigint('last_login', { mode: 'number' }),
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
