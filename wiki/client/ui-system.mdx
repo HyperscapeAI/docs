@@ -1,0 +1,882 @@
+---
+title: "UI System"
+description: "Minimap, viewport scaling, and responsive layout"
+icon: "window"
+---
+
+# UI System
+
+Hyperscape features a sophisticated UI system with draggable windows, responsive layouts, and OSRS-inspired panels.
+
+<Info>
+UI code lives in `packages/client/src/game/interface/` and `packages/client/src/ui/`.
+</Info>
+
+---
+
+## Minimap System
+
+### Three-Layer Architecture
+
+The minimap uses a three-layer architecture for optimal performance:
+
+1. **Fixed Canvas Layer** — 512×512 rendering canvas (never resizes)
+2. **Resizable Viewport Layer** — User-controlled window size
+3. **Overlay Controls Layer** — Compass, teleport, stamina orbs
+
+```typescript
+// From MinimapWrapper.tsx
+export function MinimapWrapper({ world, isUnlocked }: MinimapWrapperProps) {
+  const [size, setSize] = useState(200); // Canvas size (square, uses larger dimension)
+  const [containerDimensions, setContainerDimensions] = useState({
+    width: 200,
+    height: 200,
+  });
+
+  return (
+    <div ref={containerRef}>
+      {/* Layer 1: Minimap canvas (square, centered) */}
+      <div style={{ width: size, height: size }}>
+        <Minimap
+          world={world}
+          width={size}
+          height={size}
+          zoom={10}
+          resizable={false}
+          embedded={true}
+        />
+      </div>
+      
+      {/* Layer 3: Overlay controls at container level */}
+      <MinimapOverlayControls
+        world={world}
+        width={containerDimensions.width}
+        height={containerDimensions.height}
+      />
+    </div>
+  );
+}
+```
+
+### Independent Width/Height Resizing
+
+The minimap now supports independent width and height resizing (no longer forced square):
+
+```typescript
+// From Minimap.tsx
+const handleResizeMove = (moveEvent: PointerEvent) => {
+  const dx = moveEvent.clientX - resizeStartRef.current.x;
+  const dy = moveEvent.clientY - resizeStartRef.current.y;
+
+  let newW = resizeStartRef.current.w;
+  let newH = resizeStartRef.current.h;
+
+  // Width and height are independent - no longer forcing square
+  if (corner === "se") {
+    newW = resizeStartRef.current.w + dx;
+    newH = resizeStartRef.current.h + dy;
+  } else if (corner === "sw") {
+    newW = resizeStartRef.current.w - dx;
+    newH = resizeStartRef.current.h + dy;
+  } else if (corner === "ne") {
+    newW = resizeStartRef.current.w + dx;
+    newH = resizeStartRef.current.h - dy;
+  } else if (corner === "nw") {
+    newW = resizeStartRef.current.w - dx;
+    newH = resizeStartRef.current.h - dy;
+  }
+
+  // Clamp to bounds independently for width and height
+  const clampedW = Math.max(minSize, Math.min(effectiveMaxSize, Math.round(newW / 8) * 8));
+  const clampedH = Math.max(minSize, Math.min(effectiveMaxSize, Math.round(newH / 8) * 8));
+  
+  setCurrentWidth(clampedW);
+  setCurrentHeight(clampedH);
+};
+```
+
+<Info>
+**Before**: Minimap was forced to be square (width === height). **After**: Width and height resize independently for flexible layouts.
+</Info>
+
+### Cached Projection Matrix
+
+The minimap uses a cached projection-view matrix to keep entity pips synced with the throttled 3D background:
+
+```typescript
+// From Minimap.tsx
+const _cachedProjectionViewMatrix = new THREE.Matrix4();
+let _hasCachedMatrix = false;
+
+// Cache the projection-view matrix used for this render
+// This keeps pip positions synced with the throttled 3D background
+_cachedProjectionViewMatrix.multiplyMatrices(
+  cam.projectionMatrix,
+  cam.matrixWorldInverse,
+);
+_hasCachedMatrix = true;
+
+// Later, when rendering pips...
+_tempProjectVec.copy(pip.position);
+// Apply cached projection-view matrix to stay synced with throttled 3D render
+_tempProjectVec.applyMatrix4(_cachedProjectionViewMatrix);
+```
+
+<Info>
+**Why Cache?** The 3D background is throttled for performance, but pips need to stay synced. Using the cached matrix ensures pips don't desync during fast camera rotation.
+</Info>
+
+### Overlay Controls
+
+Overlay controls (compass, teleport, stamina) are now extracted into a reusable component:
+
+```typescript
+// From MinimapOverlayControls.tsx
+export function MinimapOverlayControls({
+  world,
+  width,
+  height,
+  onCompassClick,
+}: MinimapOverlayControlsProps) {
+  const controlSize = 40;
+  const controlPadding = 12;
+
+  return (
+    <div className="absolute pointer-events-none" style={{ width, height }}>
+      {/* Compass - top left */}
+      <div style={{ top: controlPadding, left: controlPadding }}>
+        <CompassControl onClick={onCompassClick} />
+      </div>
+
+      {/* Home Teleport - bottom left */}
+      <div style={{ bottom: controlPadding, left: controlPadding }}>
+        <MinimapHomeTeleportOrb world={world} size={controlSize} />
+      </div>
+
+      {/* Stamina - bottom right */}
+      <div style={{ bottom: controlPadding, right: controlPadding }}>
+        <MinimapStaminaOrb world={world} size={controlSize} />
+      </div>
+    </div>
+  );
+}
+```
+
+<Info>
+**Reusability**: MinimapOverlayControls can be used with both the minimap window and the fullscreen world map.
+</Info>
+
+---
+
+## Viewport Scaling
+
+### Design Resolution
+
+The UI uses a design resolution for proportional scaling:
+
+```typescript
+// From DefaultLayoutFactory.ts
+export const DESIGN_RESOLUTION: Viewport = { width: 1920, height: 1080 };
+```
+
+**How it works:**
+- Layout positions and sizes are calculated relative to 1920×1080
+- When viewport changes, all panels scale proportionally
+- Maintains consistent layout across different screen sizes
+
+### ViewportScaler Component
+
+The `ViewportScaler` component provides design resolution-based scaling:
+
+```typescript
+// From ViewportScaler.tsx
+export function ViewportScaler({ children }: ViewportScalerProps) {
+  const scale = useViewportScale();
+
+  return (
+    <div
+      style={{
+        transform: `scale(${scale})`,
+        transformOrigin: "top left",
+        width: `${100 / scale}%`,
+        height: `${100 / scale}%`,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function useViewportScale(): number {
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const updateScale = () => {
+      const scaleX = window.innerWidth / DESIGN_WIDTH;
+      const scaleY = window.innerHeight / DESIGN_HEIGHT;
+      setScale(Math.min(scaleX, scaleY));
+    };
+
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, []);
+
+  return scale;
+}
+```
+
+### Proportional Panel Resize
+
+Panels scale proportionally when the viewport changes:
+
+```typescript
+// From useViewportResize.ts
+function scaleWindowSize(
+  currentSize: { width: number; height: number },
+  oldViewport: { width: number; height: number },
+  newViewport: { width: number; height: number },
+  minSize: { width: number; height: number },
+  maxSize?: { width: number; height: number },
+): { width: number; height: number } {
+  const widthScale = newViewport.width / oldViewport.width;
+  const heightScale = newViewport.height / oldViewport.height;
+
+  let newWidth = Math.round(currentSize.width * widthScale);
+  let newHeight = Math.round(currentSize.height * heightScale);
+
+  // Clamp to min/max constraints
+  newWidth = Math.max(minSize.width, newWidth);
+  newHeight = Math.max(minSize.height, newHeight);
+
+  if (maxSize) {
+    newWidth = Math.min(maxSize.width, newWidth);
+    newHeight = Math.min(maxSize.height, newHeight);
+  }
+
+  return { width: newWidth, height: newHeight };
+}
+```
+
+<Info>
+**Responsive Design**: Panels maintain their proportional size relative to the viewport, ensuring consistent layouts across different screen sizes.
+</Info>
+
+---
+
+## Default Layout
+
+### Right Column Stack
+
+The default layout uses a flush, no-overlap design with panels stacked vertically:
+
+```typescript
+// From DefaultLayoutFactory.ts
+// Right column layout (top to bottom):
+// - Minimap (top, large, fills available space)
+// - [gap]
+// - Combat panel
+// - Skills/Prayer panel
+// - Inventory/Equipment panel
+// - Menubar (bottom, flush with screen edge)
+
+const rightColumnWidth = 235; // Consistent width for all right column panels
+const rightColumnX = viewport.width - rightColumnWidth;
+
+// Calculate positions from bottom up
+const menubarY = viewport.height - menubarHeight;
+const inventoryY = menubarY - inventoryHeight;
+const skillsY = inventoryY - skillsHeight;
+const combatY = skillsY - combatHeight;
+const minimapY = 0;
+const minimapHeight = combatY - minimapCombatGap;
+```
+
+**Layout Principles:**
+- All right column panels share consistent width (235px)
+- Bottom stack panels touch each other (no gaps)
+- Gap between minimap and combat stack
+- Menubar flush to screen bottom
+- Minimap fills remaining space at top
+
+### Left Column Stack
+
+```typescript
+// Left column layout (bottom to top):
+// - Chat (bottom, flush with screen edge)
+// - Quests (above chat, half width of chat)
+
+const chatWidth = Math.max(280, Math.round(viewport.width * 0.22));
+const questsWidth = Math.round(chatWidth / 2);
+const chatHeight = Math.max(200, Math.round(viewport.height * 0.35));
+const questsHeight = questsConfig.minSize.height;
+const chatY = viewport.height - chatHeight;
+const questsY = chatY - questsHeight;
+```
+
+---
+
+## Grid Snapping
+
+### Snap to Grid Utility
+
+Windows snap to an 8-pixel grid for alignment:
+
+```typescript
+// From types.ts
+export function snapToGrid(value: number, gridSize: number = 8): number {
+  if (gridSize <= 0) return value;
+  return Math.round(value / gridSize) * gridSize;
+}
+```
+
+**Usage:**
+```typescript
+// Snap position to grid
+const snappedX = snapToGrid(position.x);
+const snappedY = snapToGrid(position.y);
+
+// Snap size to grid
+const snappedWidth = snapToGrid(size.width);
+const snappedHeight = snapToGrid(size.height);
+```
+
+<Info>
+**Grid Size**: The default grid size is 8 pixels, matching common UI design systems.
+</Info>
+
+---
+
+## Panel Configuration
+
+### Panel Registry
+
+All panels are configured in `PanelRegistry.tsx` with responsive sizing:
+
+```typescript
+// From PanelRegistry.tsx
+export const PANEL_CONFIG: Record<string, PanelConfig> = {
+  inventory: {
+    minSize: { width: 235, height: 340 },
+    preferredSize: { width: 320, height: 420 },
+    maxSize: { width: 390, height: 550 },
+    scrollable: false,
+    resizable: true,
+    scaleFactor: { min: 0.85, max: 1.15 },
+    responsive: {
+      mobile: { width: 235, height: 340 },
+      tablet: { width: 280, height: 380 },
+      desktop: { width: 320, height: 420 },
+    },
+  },
+  
+  minimap: {
+    minSize: { width: 80, height: 80 }, // Very minimal
+    preferredSize: { width: 300, height: 300 },
+    // No maxSize - allow near-fullscreen resizing
+    // No aspectRatio - width and height resize independently
+    scrollable: false,
+    resizable: true,
+    scaleFactor: { min: 0.4, max: 1.5 },
+  },
+};
+```
+
+### Responsive Breakpoints
+
+```typescript
+// From useMobileLayout.ts
+const MOBILE_BREAKPOINT = 768;
+const TABLET_BREAKPOINT = 1024;
+
+export function useMobileLayout() {
+  const [shouldUseMobileUI, setShouldUseMobileUI] = useState(
+    typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT,
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setShouldUseMobileUI(window.innerWidth < MOBILE_BREAKPOINT);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return { shouldUseMobileUI };
+}
+```
+
+---
+
+## Combat Panel
+
+### Attack Style Layout
+
+The combat panel uses a 1×3 row layout for better mobile UX:
+
+```typescript
+// From CombatPanel.tsx
+<div
+  style={{
+    display: "flex",
+    flexDirection: "row",
+    gap: shouldUseMobileUI ? "6px" : "4px",
+    width: "100%",
+  }}
+>
+  {styles.map((s) => (
+    <DraggableCombatStyleButton
+      key={s.id}
+      styleInfo={s}
+      isActive={currentStyle === s.id}
+      onClick={() => handleStyleChange(s.id)}
+      isMobile={shouldUseMobileUI}
+    />
+  ))}
+</div>
+```
+
+**Before**: 2×2 grid layout (harder to tap on mobile)
+**After**: 1×3 row layout (larger touch targets)
+
+### Style Button Improvements
+
+```typescript
+// From CombatPanel.tsx
+const buttonStyle = {
+  flex: 1,
+  minWidth: 0,
+  padding: isMobile ? "8px 4px" : "8px 4px",
+  fontSize: isMobile ? "10px" : "9px",
+  borderRadius: "6px",
+  boxShadow: isActive
+    ? `0 2px 8px ${styleInfo.color}20`
+    : "0 1px 3px rgba(0,0,0,0.1)",
+};
+```
+
+**Improvements:**
+- Increased padding for easier touch targets
+- Larger icon sizes (18px mobile, 16px desktop)
+- Subtle box shadow for depth
+- Better text alignment and spacing
+
+---
+
+## Skills Panel
+
+### OSRS-Style Layout
+
+The skills panel now uses OSRS-style 3-column grid ordering:
+
+```typescript
+// From skill-icons.ts
+/**
+ * All skill definitions in OSRS-style display order.
+ * Arranged in 3-column grid matching RuneScape layout:
+ *   Column 1: Combat (Attack, Strength, Defence, Ranged, Magic, Prayer)
+ *   Column 2: Support (Constitution, Agility)
+ *   Column 3: Gathering/Production (Mining, Smithing, Fishing, Cooking, Firemaking, Woodcutting)
+ */
+export const SKILL_DEFINITIONS: readonly SkillDefinition[] = [
+  // Row 1: Attack, Constitution, Mining
+  { key: "attack", label: "Attack", icon: "⚔️", category: "combat", defaultLevel: 1 },
+  { key: "constitution", label: "Constitution", icon: "❤️", category: "combat", defaultLevel: 10 },
+  { key: "mining", label: "Mining", icon: "⛏️", category: "gathering", defaultLevel: 1 },
+  
+  // Row 2: Strength, Agility, Smithing
+  { key: "strength", label: "Strength", icon: "💪", category: "combat", defaultLevel: 1 },
+  { key: "agility", label: "Agility", icon: "🏃", category: "production", defaultLevel: 1 },
+  { key: "smithing", label: "Smithing", icon: "🔨", category: "production", defaultLevel: 1 },
+  
+  // Row 3: Defence, Fishing, Cooking
+  { key: "defense", label: "Defence", icon: "🛡️", category: "combat", defaultLevel: 1 },
+  { key: "fishing", label: "Fishing", icon: "🎣", category: "gathering", defaultLevel: 1 },
+  { key: "cooking", label: "Cooking", icon: "🍖", category: "production", defaultLevel: 1 },
+  
+  // Row 4: Ranged, Firemaking, Woodcutting
+  { key: "ranged", label: "Ranged", icon: "🏹", category: "combat", defaultLevel: 1 },
+  { key: "firemaking", label: "Firemaking", icon: "🔥", category: "production", defaultLevel: 1 },
+  { key: "woodcutting", label: "Woodcutting", icon: "🪓", category: "gathering", defaultLevel: 1 },
+  
+  // Row 5: Magic, Prayer
+  { key: "magic", label: "Magic", icon: "🔮", category: "combat", defaultLevel: 1 },
+  { key: "prayer", label: "Prayer", icon: "✨", category: "combat", defaultLevel: 1 },
+];
+```
+
+### Total XP Tooltip
+
+Hovering over the total level now shows total XP:
+
+```typescript
+// From SkillsPanel.tsx
+const totalLevel = skills.reduce((sum, skill) => sum + skill.level, 0);
+const totalXP = skills.reduce((sum, skill) => sum + skill.xp, 0);
+
+<div
+  onMouseEnter={(e) => {
+    setHoveredTotalLevel(true);
+    setMousePos({ x: e.clientX, y: e.clientY });
+  }}
+>
+  <div>Total Level: {totalLevel}</div>
+</div>
+
+{/* Total Level XP Tooltip */}
+{hoveredTotalLevel && (
+  <div className="tooltip">
+    <div>Total XP</div>
+    <div>{totalXP.toLocaleString()}</div>
+  </div>
+)}
+```
+
+---
+
+## Spells Panel
+
+### Spell Grid
+
+The spells panel displays available combat spells in a responsive grid:
+
+```typescript
+// From SpellsPanel.tsx
+export const SPELLS_PANEL_DIMENSIONS = {
+  minWidth: 180,
+  minHeight: 200,
+  defaultWidth: 220,
+  defaultHeight: 320,
+  maxWidth: 400,
+  maxHeight: 500,
+};
+
+function calculateColumns(containerWidth: number, isMobile: boolean): number {
+  const iconSize = isMobile ? 52 : 40;
+  const gap = isMobile ? 6 : 4;
+  const availableWidth = containerWidth - PANEL_PADDING * 2 - GRID_PADDING * 2;
+  const colWidth = iconSize + gap;
+  const maxCols = Math.floor((availableWidth + gap) / colWidth);
+  return Math.max(2, Math.min(4, maxCols));
+}
+```
+
+### Spell Icons
+
+Spells are displayed with element-colored icons:
+
+```typescript
+// From SpellsPanel.tsx
+const ELEMENT_ICONS: Record<string, string> = {
+  air: "💨",
+  water: "💧",
+  earth: "🪨",
+  fire: "🔥",
+};
+
+function getElementColor(element: string): string {
+  switch (element) {
+    case "air": return "#87CEEB"; // Sky blue
+    case "water": return "#4169E1"; // Royal blue
+    case "earth": return "#8B4513"; // Saddle brown
+    case "fire": return "#FF4500"; // Orange red
+    default: return "#9370DB"; // Medium purple
+  }
+}
+```
+
+### Autocast Selection
+
+Players can select a spell for autocast by clicking it:
+
+```typescript
+// From SpellsPanel.tsx
+const selectSpell = useCallback((spellId: string) => {
+  const network = world.network;
+  if (!network) return;
+
+  // Toggle: if already selected, deselect; otherwise select
+  const newSpellId = selectedSpellId === spellId ? null : spellId;
+
+  if ("setAutocast" in network) {
+    (network as { setAutocast: (id: string | null) => void }).setAutocast(newSpellId);
+  }
+
+  // Optimistically update UI
+  setSelectedSpellId(newSpellId);
+}, [world, selectedSpellId]);
+```
+
+**Autocast Indicator:**
+- Selected spell shows checkmark (✓)
+- Glow effect with element color
+- Pulse animation
+- "Currently Selected for Autocast" status
+
+---
+
+## Equipment Panel
+
+### Ammo Slot
+
+The equipment panel now includes an ammo slot for arrows:
+
+```typescript
+// From EquipmentPanel.tsx
+const equipmentSlots = [
+  { key: EquipmentSlotName.HEAD, label: "Head", icon: <HelmetIcon /> },
+  { key: EquipmentSlotName.WEAPON, label: "Weapon", icon: <SwordIcon /> },
+  { key: EquipmentSlotName.BODY, label: "Body", icon: <ShirtIcon /> },
+  { key: EquipmentSlotName.SHIELD, label: "Shield", icon: <ShieldIcon /> },
+  { key: EquipmentSlotName.LEGS, label: "Legs", icon: <LegsIcon /> },
+  { key: EquipmentSlotName.ARROWS, label: "Ammo", icon: <ArrowsIcon /> }, // ← New
+];
+```
+
+**Ammo Slot Icon:**
+
+```typescript
+function ArrowsIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      {/* Arrow shaft */}
+      <path d="M5 19L19 5" />
+      {/* Arrow head */}
+      <path d="M15 5h4v4" />
+      {/* Arrow fletching */}
+      <path d="M5 19l3-1M5 19l1-3" />
+      {/* Second arrow (stacked) */}
+      <path d="M8 16L18 6" strokeOpacity="0.5" />
+    </svg>
+  );
+}
+```
+
+### Equipment Grid Layout
+
+**Desktop**: 3×3 grid with ammo in top-right
+**Mobile**: 2-column grid with ammo in row 3
+
+```typescript
+// Desktop layout
+<div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+  {/* Row 1: empty, Head, Ammo */}
+  <div />
+  <EquipmentSlot slot="head" />
+  <EquipmentSlot slot="arrows" />
+  
+  {/* Row 2: Weapon, Body, Shield */}
+  <EquipmentSlot slot="weapon" />
+  <EquipmentSlot slot="body" />
+  <EquipmentSlot slot="shield" />
+  
+  {/* Row 3: empty, Legs, empty */}
+  <div />
+  <EquipmentSlot slot="legs" />
+  <div />
+</div>
+```
+
+---
+
+## Menubar
+
+### Content-Based Sizing
+
+The menubar now uses content-based sizing to wrap tightly around buttons:
+
+```typescript
+// From PanelRegistry.tsx
+const MENUBAR_BUTTON_SIZE = 30;
+const MENUBAR_BUTTON_GAP = 2; // Reduced from 3
+const MENUBAR_PADDING = 2; // Reduced from 6 (tight wrap)
+
+// Minimum width aligned with equipment panel (235px) for consistent right column sizing
+export const MENUBAR_DIMENSIONS = {
+  minWidth: 235,
+  minHeight: calcMenubarHorizontalDimensions(MENUBAR_MIN_BUTTONS).height + 2,
+  maxWidth: calcMenubarHorizontalDimensions(MENUBAR_MAX_BUTTONS).width + 2,
+  maxHeight: 300,
+};
+```
+
+**Button Count:**
+- Minimum: 4 buttons
+- Default: 10 buttons (includes new Spells button)
+- Maximum: 10 buttons
+
+### New Spells Button
+
+```typescript
+// From PanelRegistry.tsx
+const ALL_MENU_BUTTONS = [
+  { panelId: "inventory", iconName: "inventory", label: "Inventory" },
+  { panelId: "equipment", iconName: "equipment", label: "Equipment" },
+  { panelId: "skills", iconName: "skills", label: "Skills" },
+  { panelId: "prayer", iconName: "prayer", label: "Prayer" },
+  { panelId: "spells", iconName: "spells", label: "Spells" }, // ← New
+  { panelId: "combat", iconName: "combat", label: "Combat" },
+  { panelId: "quests", iconName: "quests", label: "Quests" },
+  { panelId: "friends", iconName: "friends", label: "Friends" },
+  { panelId: "settings", iconName: "settings", label: "Settings" },
+  { panelId: "account", iconName: "account", label: "Account" },
+];
+```
+
+---
+
+## Window Management
+
+### Z-Index Normalization
+
+Z-indices are normalized when edit mode is locked to prevent shadow overlap:
+
+```typescript
+// From InterfaceManager.tsx
+const prevUnlockedRef = useRef(isUnlocked);
+useEffect(() => {
+  // When transitioning from unlocked to locked, normalize all z-indices
+  if (prevUnlockedRef.current && !isUnlocked) {
+    normalizeZIndices();
+  }
+  prevUnlockedRef.current = isUnlocked;
+}, [isUnlocked, normalizeZIndices]);
+```
+
+**Why Normalize?**
+- During edit mode, windows can have arbitrary z-indices from dragging
+- When locking, normalize to prevent visual glitches (shadows overlapping incorrectly)
+- Ensures consistent stacking order
+
+### Anchor-Based Positioning
+
+Windows use anchor-based positioning to maintain their position relative to viewport edges:
+
+```typescript
+// From anchorUtils.ts
+export type WindowAnchor =
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right"
+  | "top-center"
+  | "bottom-center";
+
+export function repositionWindowForViewport(
+  position: { x: number; y: number },
+  size: { width: number; height: number },
+  anchor: WindowAnchor,
+  oldViewport: { width: number; height: number },
+  newViewport: { width: number; height: number },
+): { x: number; y: number } {
+  switch (anchor) {
+    case "top-left":
+      return position; // No change
+    
+    case "top-right":
+      return {
+        x: newViewport.width - (oldViewport.width - position.x),
+        y: position.y,
+      };
+    
+    case "bottom-right":
+      return {
+        x: newViewport.width - (oldViewport.width - position.x),
+        y: newViewport.height - (oldViewport.height - position.y),
+      };
+    
+    // ... other anchors ...
+  }
+}
+```
+
+<Info>
+**Responsive Layouts**: Anchor-based positioning ensures windows stay in the correct position when the viewport resizes.
+</Info>
+
+---
+
+## Drag and Drop
+
+### DndKit Integration
+
+The UI uses `@dnd-kit` for cross-panel item dragging:
+
+```typescript
+// From DragDropCoordinator.tsx
+export function useDragDropCoordinator({
+  world,
+  inventory,
+}: DragDropCoordinatorProps): DragDropCoordinatorResult {
+  const dndKitSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Must move 8 pixels before drag starts
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250, // Long-press 250ms to start drag on mobile
+        tolerance: 5, // Allow 5px movement during delay
+      },
+    }),
+  );
+
+  // ... drag handlers ...
+}
+```
+
+**Supported Drags:**
+- Inventory → Equipment (equip items)
+- Inventory → Action Bar (add item shortcuts)
+- Prayer → Action Bar (add prayer shortcuts)
+- Skill → Action Bar (add skill shortcuts)
+- Action Bar → Action Bar (reorder slots)
+- Action Bar → Rubbish Bin (remove slots)
+
+---
+
+## Mobile UI
+
+### Touch Optimizations
+
+Mobile UI includes touch-specific optimizations:
+
+```typescript
+// From CombatPanel.tsx
+const buttonStyle = {
+  padding: isMobile ? "8px 4px" : "8px 4px",
+  fontSize: isMobile ? "10px" : "9px",
+  touchAction: "manipulation", // Disable double-tap zoom
+};
+```
+
+**Mobile Features:**
+- Larger touch targets (52px vs 40px icons)
+- Increased padding and gaps
+- Long-press to drag (250ms delay)
+- Touch action manipulation to disable double-tap zoom
+
+### Mobile Breakpoint
+
+```typescript
+const MOBILE_BREAKPOINT = 768;
+
+export function useMobileLayout() {
+  const [shouldUseMobileUI, setShouldUseMobileUI] = useState(
+    window.innerWidth < MOBILE_BREAKPOINT,
+  );
+  
+  // ... resize listener ...
+}
+```
+
+---
+
+## Related Documentation
+
+- [Client Overview](/wiki/client/overview)
+- [Security](/devops/security)
+- [Configuration](/devops/configuration)
+- [Mobile Development](/guides/mobile)
