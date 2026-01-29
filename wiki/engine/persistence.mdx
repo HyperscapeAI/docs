@@ -1,0 +1,745 @@
+---
+title: "Persistence Architecture"
+description: "Write-ahead logging, transactional saves, and crash recovery"
+icon: "floppy-disk"
+---
+
+# Persistence Architecture
+
+Hyperscape implements a **robust persistence layer** with write-ahead logging, transactional saves, and crash recovery to prevent data loss during server crashes or network failures.
+
+<Info>
+Persistence code lives in `packages/server/src/persistence/` and `packages/shared/src/systems/shared/character/`.
+</Info>
+
+---
+
+## Architecture Overview
+
+The persistence system uses multiple layers of protection:
+
+1. **Transactional Saves** — Equipment and bank operations use database transactions
+2. **Immediate Persistence** — Critical operations (item pickup/drop) save immediately
+3. **Auto-Save** — Periodic saves every 5 seconds for inventory/equipment
+4. **Write-Ahead Logging** — Phase 2 scaffolding for trade/bank crash recovery
+5. **Unified Payloads** — Single source of truth for player data loading
+
+---
+
+## Transactional Saves
+
+### Equipment Persistence
+
+Equipment saves use database transactions to prevent data loss during crashes:
+
+```typescript
+// From EquipmentRepository.ts
+async savePlayerEquipment(
+  playerId: string,
+  items: EquipmentItem[],
+): Promise<void> {
+  // Wrap delete and insert in a transaction for atomicity
+  // This prevents equipment loss if server crashes between operations
+  await this.db.transaction(async (tx) => {
+    // Delete existing equipment
+    await tx
+      .delete(schema.equipment)
+      .where(eq(schema.equipment.playerId, playerId));
+
+    // Insert new equipment
+    if (items.length > 0) {
+      await tx.insert(schema.equipment).values(
+        items.map((item) => ({
+          playerId,
+          slotType: item.slotType,
+          itemId: item.itemId || null,
+          quantity: item.quantity ?? 1,
+        })),
+      );
+    }
+  });
+}
+```
+
+<Info>
+**Atomicity Guarantee**: Either both delete and insert succeed, or both are rolled back. No partial state is possible.
+</Info>
+
+### Bank Persistence
+
+Bank saves also use transactions for atomic updates:
+
+```typescript
+// From BankRepository.ts
+async savePlayerBankComplete(
+  playerId: string,
+  data: { items: BankItem[]; tabs: BankTab[] },
+): Promise<void> {
+  await this.db.transaction(async (tx) => {
+    // Delete existing bank items
+    await tx
+      .delete(schema.bankStorage)
+      .where(eq(schema.bankStorage.playerId, playerId));
+
+    // Delete existing tabs
+    await tx
+      .delete(schema.bankTabs)
+      .where(eq(schema.bankTabs.playerId, playerId));
+
+    // Insert new items
+    if (data.items.length > 0) {
+      await tx.insert(schema.bankStorage).values(
+        data.items.map((item) => ({
+          playerId,
+          itemId: item.itemId,
+          quantity: item.quantity,
+          slot: item.slot,
+          tabIndex: item.tabIndex,
+        })),
+      );
+    }
+
+    // Insert new tabs (only custom tabs 1-9, tab 0 is implicit)
+    const customTabs = data.tabs.filter((tab) => tab.tabIndex > 0);
+    if (customTabs.length > 0) {
+      await tx.insert(schema.bankTabs).values(
+        customTabs.map((tab) => ({
+          playerId,
+          tabIndex: tab.tabIndex,
+          iconItemId: tab.iconItemId,
+        })),
+      );
+    }
+  });
+}
+```
+
+<Warning>
+**Breaking Change**: `savePlayerBankComplete` replaces separate `savePlayerItems` and `savePlayerTabs` calls. Use the unified method for atomic bank saves.
+</Warning>
+
+---
+
+## Auto-Save System
+
+### Reduced Save Intervals
+
+Auto-save intervals were reduced from 30 seconds to 5 seconds to minimize data loss:
+
+```typescript
+// From EquipmentSystem.ts
+private readonly AUTO_SAVE_INTERVAL = 5000; // 5 seconds - reduced for minimal data loss
+
+// From InventorySystem.ts
+private readonly AUTO_SAVE_INTERVAL = 5000; // 5 seconds - reduced for minimal data loss
+```
+
+**Impact:**
+- **Before**: Up to 30 seconds of progress could be lost on crash
+- **After**: Maximum 5 seconds of progress lost
+- **Performance**: Negligible overhead (6x more frequent saves with minimal DB load)
+
+---
+
+## Immediate Persistence
+
+Critical operations persist immediately to prevent duplication or loss:
+
+### Item Pickup
+
+```typescript
+// From InventorySystem.ts
+private async pickupItem(data: {
+  playerId: string;
+  entityId: string;
+  itemId?: string;
+}): Promise<void> {
+  // ... pickup logic ...
+  
+  // CRITICAL: Persist immediately for item pickups to prevent loss on crash
+  await this.persistInventoryImmediate(data.playerId);
+}
+```
+
+### Item Drop
+
+```typescript
+// From InventorySystem.ts
+private dropItem(data: { playerId: string; slot: number }): void {
+  // ... drop logic ...
+  
+  // CRITICAL: Persist immediately for item drops to prevent duplication on crash
+  await this.persistInventoryImmediate(data.playerId);
+}
+```
+
+<Info>
+**Why Immediate?** If the server crashes after an item is picked up but before the next auto-save, the item could be lost. Immediate persistence ensures the database is updated before the operation completes.
+</Info>
+
+---
+
+## Unified PLAYER_JOINED Payload
+
+### Single Source of Truth Pattern
+
+The `PLAYER_JOINED` event now includes equipment and inventory data loaded from the database **before** the event is emitted. This eliminates race conditions where multiple systems query the database independently.
+
+```typescript
+// From character-selection.ts
+async function handleEnterWorld(socket, data, world) {
+  // CRITICAL: Load equipment and inventory from DB BEFORE emitting PLAYER_JOINED
+  // This ensures systems receive the data via event payload (single source of truth)
+  // and eliminates the race condition where two systems query DB independently
+  
+  let equipmentRows: EquipmentSyncData[] | undefined;
+  try {
+    equipmentRows = await dbSys.getPlayerEquipmentAsync(persistenceId);
+  } catch (err) {
+    console.error("[CharacterSelection] ❌ Failed to load equipment:", err);
+    // Leave equipmentRows undefined to trigger DB fallback in EquipmentSystem
+    equipmentRows = undefined;
+  }
+
+  let inventoryRows: InventorySyncData[] | undefined;
+  try {
+    const rawRows = await dbSys.getPlayerInventoryAsync(persistenceId);
+    // Transform to InventorySyncData format (slotIndex, itemId, quantity)
+    inventoryRows = rawRows?.map((row) => ({
+      slotIndex: row.slotIndex ?? 0,
+      itemId: String(row.itemId),
+      quantity: row.quantity || 1,
+    }));
+  } catch (err) {
+    console.error("[CharacterSelection] ❌ Failed to load inventory:", err);
+    // Leave inventoryRows undefined to trigger DB fallback in InventorySystem
+    inventoryRows = undefined;
+  }
+
+  // Emit PLAYER_JOINED with equipment and inventory data in payload
+  // Systems will use this data instead of querying DB again
+  // If data is undefined (load failed), systems fall back to DB query
+  world.emit(EventType.PLAYER_JOINED, {
+    playerId: socket.player.data.id,
+    player: socket.player,
+    equipment: equipmentRows,
+    inventory: inventoryRows,
+    isLoadTestBot,
+  });
+}
+```
+
+### System Integration
+
+Systems now load from the event payload instead of querying the database:
+
+```typescript
+// From InventorySystem.ts
+this.subscribe(
+  EventType.PLAYER_JOINED,
+  async (data: { playerId: string; inventory?: InventorySyncData[] }) => {
+    // Use inventory from payload (single source of truth from character-selection)
+    if (data.inventory && data.inventory.length > 0) {
+      await this.loadInventoryFromPayload(data.playerId, data.inventory);
+    } else if (data.inventory) {
+      // Empty array = new player or no items, inventory already initialized
+      this.initializedInventories.add(data.playerId);
+    } else {
+      // Backwards compatibility: no inventory in payload, fall back to DB query
+      const loaded = await this.loadPersistedInventoryAsync(data.playerId);
+      if (!loaded) {
+        this.initializedInventories.add(data.playerId);
+      }
+    }
+  },
+);
+```
+
+<Info>
+**Backwards Compatibility**: If the payload doesn't include equipment/inventory data (old server version), systems fall back to querying the database directly.
+</Info>
+
+---
+
+## EventBus Async Handler Tracking
+
+The EventBus now tracks pending async handlers to enable graceful shutdown:
+
+```typescript
+// From EventBus.ts
+export class EventBus extends EventEmitter {
+  /**
+   * Track pending async handlers for graceful shutdown
+   * Allows waiting for all async operations to complete before shutdown
+   */
+  private pendingAsyncHandlers: Set<Promise<unknown>> = new Set();
+
+  emit<T extends EventType>(eventType: T, event: EventPayload<T>): void {
+    // ... emit logic ...
+
+    const result = handler(event);
+
+    // Handle async handlers - track for graceful shutdown
+    if (result instanceof Promise) {
+      this.pendingAsyncHandlers.add(result);
+      result
+        .catch((err) => {
+          // Log error but don't crash - handlers should handle their own errors
+          console.error("[EventBus] Async handler error:", err);
+        })
+        .finally(() => {
+          this.pendingAsyncHandlers.delete(result);
+        });
+    }
+  }
+
+  /**
+   * Wait for all pending async handlers to complete
+   *
+   * Call this during graceful shutdown to ensure all async operations
+   * (like database saves) complete before shutting down.
+   *
+   * @param timeout - Maximum time to wait in ms (default: 5000)
+   * @returns Promise that resolves when all handlers complete or timeout
+   */
+  async waitForPendingHandlers(timeout: number = 5000): Promise<void> {
+    if (this.pendingAsyncHandlers.size === 0) {
+      return;
+    }
+
+    const pending = Array.from(this.pendingAsyncHandlers);
+    console.log(
+      `[EventBus] Waiting for ${pending.length} pending async handlers...`,
+    );
+
+    // Race between waiting for all handlers and timeout
+    await Promise.race([
+      Promise.allSettled(pending),
+      new Promise<void>((resolve) => setTimeout(resolve, timeout)),
+    ]);
+
+    if (this.pendingAsyncHandlers.size > 0) {
+      console.warn(
+        `[EventBus] ${this.pendingAsyncHandlers.size} handlers still pending after timeout`,
+      );
+    }
+  }
+
+  /**
+   * Get count of pending async handlers (for debugging/monitoring)
+   */
+  getPendingHandlerCount(): number {
+    return this.pendingAsyncHandlers.size;
+  }
+}
+```
+
+<Info>
+**Graceful Shutdown**: Call `eventBus.waitForPendingHandlers()` before server shutdown to ensure all database saves complete.
+</Info>
+
+---
+
+## Write-Ahead Logging (Phase 2)
+
+### PersistenceService
+
+The `PersistenceService` provides write-ahead logging for critical operations. **Status: Phase 2 scaffolding** — not yet integrated into game systems.
+
+```typescript
+// From PersistenceService.ts
+/**
+ * PersistenceService - Unified Write-Ahead Logging for Critical Operations
+ *
+ * STATUS: Phase 2 scaffolding - not yet integrated into game systems.
+ * TODO: Wire up to TradingSystem, BankSystem in future PR for crash recovery.
+ *
+ * Provides durability guarantees for critical operations (trades, bank, inventory, equipment).
+ * Uses Write-Ahead Logging (WAL) pattern:
+ * 1. Log operation intent before execution
+ * 2. Execute operation
+ * 3. Mark operation complete
+ * 4. On startup, replay incomplete operations
+ */
+export class PersistenceService {
+  async queueOperation(
+    playerId: string,
+    operationType: OperationType,
+    operationState: Record<string, unknown>,
+  ): Promise<string>;
+
+  async flush(): Promise<void>;
+  async recoverIncompleteOperations(): Promise<PendingOperation[]>;
+  async markOperationComplete(operationId: string): Promise<void>;
+  async cleanupOldOperations(): Promise<number>;
+  async destroy(): Promise<void>;
+}
+```
+
+### Operations Log Table
+
+The `operations_log` table stores write-ahead log entries:
+
+```sql
+CREATE TABLE "operations_log" (
+  "id" text PRIMARY KEY NOT NULL,
+  "playerId" text NOT NULL,
+  "operationType" text NOT NULL,
+  "operationState" jsonb NOT NULL,
+  "completed" boolean DEFAULT false,
+  "timestamp" bigint NOT NULL,
+  "completedAt" bigint
+);
+
+CREATE INDEX "idx_operations_log_incomplete" ON "operations_log" 
+  USING btree ("playerId", "completed");
+CREATE INDEX "idx_operations_log_timestamp" ON "operations_log" 
+  USING btree ("timestamp");
+```
+
+**Operation Types:**
+- `trade_complete` — Trade finalization
+- `bank_deposit` — Bank deposit transaction
+- `bank_withdraw` — Bank withdrawal transaction
+- `inventory_add` — Inventory item addition
+- `inventory_remove` — Inventory item removal
+- `equipment_change` — Equipment slot change
+
+### WAL Pattern
+
+The write-ahead logging pattern ensures durability:
+
+```typescript
+// 1. Log operation intent (durability point)
+const operationId = await persistenceService.queueOperation(
+  playerId,
+  "trade_complete",
+  { tradeId, items, coins },
+);
+
+// 2. Execute operation
+await executeTrade(tradeId);
+
+// 3. Mark operation complete
+await persistenceService.markOperationComplete(operationId);
+
+// 4. On startup, replay incomplete operations
+const incomplete = await persistenceService.recoverIncompleteOperations();
+for (const op of incomplete) {
+  await replayOperation(op);
+  await persistenceService.markOperationComplete(op.id);
+}
+```
+
+<Warning>
+**Phase 2 Status**: PersistenceService is scaffolding for future integration. It is not currently wired up to TradingSystem or BankSystem. The operations_log table exists but is not populated.
+</Warning>
+
+---
+
+## Auto-Save Configuration
+
+### Equipment System
+
+```typescript
+// From EquipmentSystem.ts
+export class EquipmentSystem extends SystemBase {
+  private saveInterval?: NodeJS.Timeout;
+  private readonly AUTO_SAVE_INTERVAL = 5000; // 5 seconds - reduced for minimal data loss
+
+  async init(): Promise<void> {
+    // Start auto-save timer
+    this.saveInterval = setInterval(() => {
+      this.saveAllEquipment();
+    }, this.AUTO_SAVE_INTERVAL);
+  }
+
+  private async saveAllEquipment(): Promise<void> {
+    for (const [playerId, equipment] of this.playerEquipment) {
+      await this.persistEquipment(playerId, equipment);
+    }
+  }
+}
+```
+
+### Inventory System
+
+```typescript
+// From InventorySystem.ts
+export class InventorySystem extends SystemBase {
+  private saveInterval?: NodeJS.Timeout;
+  private readonly AUTO_SAVE_INTERVAL = 5000; // 5 seconds - reduced for minimal data loss
+
+  async init(): Promise<void> {
+    // Start auto-save timer
+    this.saveInterval = setInterval(() => {
+      this.saveAllInventories();
+    }, this.AUTO_SAVE_INTERVAL);
+  }
+
+  private async saveAllInventories(): Promise<void> {
+    for (const playerId of this.initializedInventories) {
+      await this.persistInventory(playerId);
+    }
+  }
+}
+```
+
+<Info>
+**Performance**: 5-second auto-save has negligible overhead. Database writes are batched and use transactions for efficiency.
+</Info>
+
+---
+
+## Immediate Persistence
+
+### When to Persist Immediately
+
+Immediate persistence is used for operations that could cause duplication or loss:
+
+| Operation | Why Immediate? | Risk if Delayed |
+|-----------|----------------|-----------------|
+| Item pickup | Prevent loss | Item disappears from world but not added to inventory |
+| Item drop | Prevent duplication | Item added to world but not removed from inventory |
+| Equipment change | Prevent loss | Equipment cleared but not saved |
+| Bank deposit | Prevent duplication | Item removed from inventory but not added to bank |
+| Bank withdrawal | Prevent loss | Item removed from bank but not added to inventory |
+
+### Implementation
+
+```typescript
+// From InventorySystem.ts
+async persistInventoryImmediate(playerId: string): Promise<void> {
+  const dbSys = this.getDatabaseSystem();
+  if (!dbSys) return;
+
+  const inventory = this.playerInventories.get(createPlayerID(playerId));
+  if (!inventory) return;
+
+  // Save immediately (no batching, no delay)
+  await dbSys.savePlayerInventoryAsync(playerId, inventory.items);
+}
+```
+
+---
+
+## Database Schema
+
+### Operations Log
+
+```typescript
+// From schema.ts
+export const operationsLog = pgTable(
+  "operations_log",
+  {
+    id: text("id").primaryKey(), // UUID
+    playerId: text("playerId").notNull(),
+    operationType: text("operationType").notNull(), // 'trade', 'bank', 'equipment', 'inventory'
+    operationState: jsonb("operationState").notNull(), // Full operation data for replay
+    completed: boolean("completed").default(false),
+    timestamp: bigint("timestamp", { mode: "number" }).notNull(),
+    completedAt: bigint("completedAt", { mode: "number" }),
+  },
+  (table) => ({
+    // Index for recovery queries - find incomplete operations for a player
+    incompleteIdx: index("idx_operations_log_incomplete").on(
+      table.playerId,
+      table.completed,
+    ),
+    // Index for cleanup queries - find old completed operations
+    timestampIdx: index("idx_operations_log_timestamp").on(table.timestamp),
+  }),
+);
+```
+
+### Magic Skill Columns
+
+Magic skill support was added in migration `0027_messy_dorian_gray.sql`:
+
+```sql
+ALTER TABLE "characters" ADD COLUMN "magicLevel" integer DEFAULT 1;
+ALTER TABLE "characters" ADD COLUMN "magicXp" integer DEFAULT 0;
+ALTER TABLE "characters" ADD COLUMN "selectedSpell" text;
+```
+
+**Columns:**
+- `magicLevel` — Magic skill level (default: 1)
+- `magicXp` — Magic skill XP (default: 0)
+- `selectedSpell` — Autocast spell ID (null = no autocast)
+
+---
+
+## Crash Recovery
+
+### Equipment Loading
+
+Equipment is loaded from the database during character selection and passed via the `PLAYER_JOINED` event:
+
+```typescript
+// From character-selection.ts
+// Load equipment from DB BEFORE emitting PLAYER_JOINED
+let equipmentRows: EquipmentSyncData[] | undefined;
+try {
+  equipmentRows = await dbSys.getPlayerEquipmentAsync(persistenceId);
+} catch (err) {
+  console.error("[CharacterSelection] ❌ Failed to load equipment:", err);
+  // Leave equipmentRows undefined to trigger DB fallback in EquipmentSystem
+  equipmentRows = undefined;
+}
+
+// Emit PLAYER_JOINED with equipment data in payload
+world.emit(EventType.PLAYER_JOINED, {
+  playerId: socket.player.data.id,
+  player: socket.player,
+  equipment: equipmentRows, // ← Single source of truth
+  inventory: inventoryRows,
+  isLoadTestBot,
+});
+```
+
+<Info>
+**Race Condition Fix**: Previously, both `character-selection.ts` and `EquipmentSystem` would query the database independently, causing race conditions. Now, character-selection loads the data once and passes it via the event payload.
+</Info>
+
+### Inventory Loading
+
+Inventory follows the same pattern:
+
+```typescript
+// From InventorySystem.ts
+this.subscribe(
+  EventType.PLAYER_JOINED,
+  async (data: { playerId: string; inventory?: InventorySyncData[] }) => {
+    // Use inventory from payload (single source of truth from character-selection)
+    if (data.inventory && data.inventory.length > 0) {
+      await this.loadInventoryFromPayload(data.playerId, data.inventory);
+    } else if (data.inventory) {
+      // Empty array = new player or no items, inventory already initialized
+      this.initializedInventories.add(data.playerId);
+    } else {
+      // Backwards compatibility: no inventory in payload, fall back to DB query
+      const loaded = await this.loadPersistedInventoryAsync(data.playerId);
+      if (!loaded) {
+        this.initializedInventories.add(data.playerId);
+      }
+    }
+  },
+);
+```
+
+---
+
+## Performance Considerations
+
+### Batched Writes
+
+The PersistenceService uses batched writes for performance:
+
+```typescript
+private readonly FLUSH_INTERVAL_MS = 50; // 50ms max latency
+private readonly BATCH_SIZE = 100;
+
+async queueOperation(...): Promise<string> {
+  // ... log operation ...
+
+  // Trigger flush if batch is full
+  if (this.queue.size >= this.BATCH_SIZE) {
+    await this.flush();
+  } else if (!this.flushTimer) {
+    // Otherwise flush after 50ms
+    this.flushTimer = setTimeout(() => this.flush(), this.FLUSH_INTERVAL_MS);
+  }
+}
+```
+
+**Trade-offs:**
+- **Latency**: Maximum 50ms delay before write
+- **Throughput**: Up to 100 operations per batch
+- **Durability**: Operations are logged immediately (durability point), batching only affects completion marking
+
+### Cleanup
+
+Old completed operations are cleaned up periodically:
+
+```typescript
+private readonly CLEANUP_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+async cleanupOldOperations(): Promise<number> {
+  const cutoff = Date.now() - this.CLEANUP_AGE_MS;
+
+  const result = await this.db
+    .delete(schema.operationsLog)
+    .where(
+      and(
+        eq(schema.operationsLog.completed, true),
+        lt(schema.operationsLog.timestamp, cutoff),
+      ),
+    );
+
+  return result.rowCount ?? 0;
+}
+```
+
+<Info>
+**Recommendation**: Run cleanup daily via cron job or scheduled task to prevent table growth.
+</Info>
+
+---
+
+## Migration Guide
+
+### Updating to Transactional Saves
+
+If you have custom persistence code, update to use transactions:
+
+**Before:**
+```typescript
+// ❌ Non-atomic - can lose data on crash
+await db.delete(equipment).where(eq(equipment.playerId, playerId));
+await db.insert(equipment).values(items);
+```
+
+**After:**
+```typescript
+// ✅ Atomic - either both succeed or both fail
+await db.transaction(async (tx) => {
+  await tx.delete(equipment).where(eq(equipment.playerId, playerId));
+  await tx.insert(equipment).values(items);
+});
+```
+
+### Using Unified Payloads
+
+Update systems to load from event payloads instead of querying the database:
+
+**Before:**
+```typescript
+// ❌ Race condition - multiple systems query DB
+this.subscribe(EventType.PLAYER_JOINED, async (data) => {
+  const equipment = await db.getPlayerEquipment(data.playerId);
+  this.loadEquipment(data.playerId, equipment);
+});
+```
+
+**After:**
+```typescript
+// ✅ Single source of truth - data comes from event payload
+this.subscribe(EventType.PLAYER_JOINED, async (data) => {
+  if (data.equipment) {
+    this.loadEquipmentFromPayload(data.playerId, data.equipment);
+  } else {
+    // Fallback to DB query if payload doesn't include equipment
+    const equipment = await db.getPlayerEquipment(data.playerId);
+    this.loadEquipment(data.playerId, equipment);
+  }
+});
+```
+
+---
+
+## Related Documentation
+
+- [Database Schema](/wiki/engine/database)
+- [EventBus](/wiki/engine/events)
+- [Inventory System](/wiki/game-systems/inventory)
+- [Bank System](/wiki/game-systems/bank)
