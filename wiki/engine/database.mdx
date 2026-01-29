@@ -27,6 +27,11 @@ Database schema is defined in `packages/server/src/database/schema.ts`.
 | `player_sessions` | Login/logout tracking | SessionRepository |
 | `npc_kills` | Kill statistics | StatsRepository |
 | `death_locks` | Death state for reconnects | PlayerDeathSystem |
+| `operations_log` | Write-ahead logging for crash recovery | PersistenceService |
+| `activity_log` | Player activity tracking | ActivityLogRepository |
+| `trades` | Trade history | TradingSystem |
+| `user_bans` | Ban management | ModerationSystem |
+| `action_bar_storage` | Action bar configurations | ActionBarSystem |
 
 ---
 
