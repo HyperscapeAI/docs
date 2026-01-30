@@ -473,9 +473,9 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
 | `users` | User accounts | id, wallet, privyId |
-| `characters` | Player characters | id, userId, username, position, skills |
+| `characters` | Player characters | id, userId, username, position, skills, selectedSpell |
 | `inventory` | Player inventory | playerId, itemId, quantity, slotIndex |
-| `equipment` | Equipped items | playerId, slotType, itemId, quantity |
+| `equipment` | Equipped items (11 slots) | playerId, slotType, itemId, quantity |
 | `bank_storage` | Bank items | playerId, itemId, quantity, slot, tabIndex |
 | `bank_tabs` | Bank tab icons | playerId, tabIndex, iconItemId |
 | `operations_log` | WAL for crash recovery | id, playerId, operationType, operationState |
