@@ -16,13 +16,14 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 | Category | Features |
 |----------|----------|
-| **Combat** | Melee, ranged, and magic combat with OSRS-accurate formulas, attack styles, projectile system, prayer bonuses |
+| **Combat** | Melee, ranged, and magic combat with OSRS-accurate formulas, per-style attack/defense bonuses, combat triangle, projectile system, prayer bonuses |
+| **Equipment** | 11-slot equipment system (weapon, shield, helmet, body, legs, boots, gloves, cape, amulet, ring, arrows) with per-style bonuses |
 | **Skills** | Attack, Strength, Defence, Constitution, Ranged, Magic, Prayer, Woodcutting, Mining, Fishing, Cooking, Firemaking, Smithing, Agility |
 | **Economy** | 480-slot bank with tabs, shops, item weights, loot drops, coin pouch system |
-| **PvP** | Duel arena with staking, wilderness zones, player-vs-player combat |
+| **PvP** | Duel arena with crash-safe staking, equipment restrictions, rule negotiation, idempotency protection |
 | **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
-| **Content** | JSON manifests for NPCs, items, stores, spells, ammunition—no code required |
-| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
+| **Content** | JSON manifests for NPCs, items, stores, spells, ammunition, armor—no code required |
+| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics, spatial indexing |
 
 ### Combat System
 
