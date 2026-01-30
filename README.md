@@ -27,17 +27,19 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 ### Combat System
 
-Hyperscape features a complete OSRS-style combat system with three attack types:
+Hyperscape features a complete OSRS-style combat system with three attack types and the combat triangle:
 
-- **Melee Combat**: Swords, axes, maces with accurate/aggressive/defensive/controlled styles
-- **Ranged Combat**: Bows with arrows, accurate/rapid/longrange styles, ammunition consumption
-- **Magic Combat**: Combat spells (Strike/Bolt tiers), rune consumption, autocast system, elemental staves
+- **Melee Combat**: Swords, axes, maces with accurate/aggressive/defensive/controlled styles, per-style attack bonuses (stab/slash/crush)
+- **Ranged Combat**: Bows with arrows, accurate/rapid/longrange styles, ammunition consumption, projectile system
+- **Magic Combat**: Combat spells (Strike/Bolt tiers), rune consumption, autocast system, elemental staves, staffless casting
 
 All combat uses OSRS-accurate formulas for damage calculation, hit chance, and XP distribution. The system includes:
-- Projectile rendering with hit delay based on distance
-- Prayer bonuses for all combat styles
-- Equipment bonuses (attack, strength, defense for each style)
-- Combat styles affecting XP distribution and bonuses
+- **Combat Triangle**: Per-style attack and defense bonuses (stab, slash, crush, magic, ranged)
+- **Armor System**: 69 OSRS-accurate armor items with per-style defense bonuses and negative magic penalties for melee armor
+- **Projectile System**: Visual projectiles with distance-based hit delays for ranged and magic attacks
+- **Prayer Bonuses**: Multipliers for all combat styles (melee, ranged, magic)
+- **Equipment Stats**: 11 equipment slots with comprehensive bonus tracking
+- **Combat Styles**: XP distribution and stat bonuses based on selected style
 
 ## Quick Start
 
