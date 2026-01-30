@@ -384,6 +384,67 @@ world.on('inventory:add', (event: InventoryAddEvent) => {
 });
 ```
 
+### Duel System
+
+The duel arena implements OSRS-accurate dueling with crash-safe stake handling:
+
+#### Duel States
+1. **RULES** - Players negotiate combat rules (noFood, noPrayer, noRanged, etc.)
+2. **STAKES** - Players stake items from inventory
+3. **CONFIRMING** - Final review before fight
+4. **COUNTDOWN** - 3-2-1-FIGHT animation
+5. **FIGHTING** - Active combat
+6. **FINISHED** - Resolution pending (death animation delay)
+
+#### Crash-Safe Stakes
+
+Items remain in player inventory during staking (not removed until duel completion):
+
+```typescript
+// Stakes are tracked in-memory only during negotiation
+session.challengerStakes: StakedItem[] = [
+  { inventorySlot: 5, itemId: "dragon_scimitar", quantity: 1, value: 100000 }
+];
+
+// At duel completion, atomic database transaction transfers items
+// Uses Math.min(stake.quantity, dbItem.quantity) to handle consumed items
+```
+
+**Protection Mechanisms:**
+- **Slot Locking**: `getStakedSlots()` returns Set of locked inventory slots
+- **Trade Protection**: Cannot trade staked items
+- **Drop Protection**: All drops blocked during duels
+- **Move Protection**: Cannot move/swap staked items
+- **Use Protection**: Cannot consume staked items (food, potions)
+- **Equipment Protection**: Cannot equip/unequip during active duels
+- **Idempotency**: Duplicate equip/unequip requests blocked with 5s dedup window
+
+#### Settlement Safety
+
+The settlement transaction includes multiple safety checks:
+
+```typescript
+// Validate item exists and matches expected ID
+const dbItem = await pool.query(`SELECT itemId, quantity FROM inventory WHERE ...`);
+if (dbItem.itemId !== stake.itemId) {
+  // Security: Item ID mismatch - skip transfer
+  continue;
+}
+
+// Use actual remaining quantity (handles consumed food)
+const transferQuantity = Math.min(stake.quantity, dbItem.quantity);
+
+// Integer overflow protection
+if (existingQty > 2147483647 - transferQuantity) {
+  // Skip merge to prevent overflow
+  continue;
+}
+```
+
+**Deadlock Retry**: Settlement retries up to 3 times on PostgreSQL deadlock (error code 40P01).
+
+**Inventory Overflow**: If winner's inventory is full, items go to bank automatically.
+
 ### Manifest-Driven Content
 
 Game content is defined in JSON manifests at `packages/server/world/assets/manifests/`:
