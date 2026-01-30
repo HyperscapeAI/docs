@@ -490,8 +490,8 @@ All skill data is stored in the `characters` table:
 - `defenseLevel`, `defenseXp`
 - `constitutionLevel`, `constitutionXp`
 - `rangedLevel`, `rangedXp`
-- `magicLevel`, `magicXp`
-- `prayerLevel`, `prayerXp`
+- `magicLevel`, `magicXp` (now persisted)
+- `prayerLevel`, `prayerXp` (now persisted)
 
 **Gathering Skills:**
 - `woodcuttingLevel`, `woodcuttingXp`
