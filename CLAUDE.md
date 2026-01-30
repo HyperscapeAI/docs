@@ -509,7 +509,16 @@ All skill data is stored in the `characters` table:
 ### Combat Preferences
 - `attackStyle` - Selected combat style (accurate, aggressive, defensive, controlled, rapid, longrange, autocast)
 - `autoRetaliate` - Auto-retaliate toggle (1=ON, 0=OFF)
-- `selectedSpell` - Autocast spell ID (null = no autocast)
+- `selectedSpell` - Autocast spell ID (null = no autocast, persisted across sessions)
+
+### Equipment Slots
+
+The equipment table supports 11 slots (OSRS-style paperdoll):
+- `weapon`, `shield`, `helmet`, `body`, `legs`
+- `boots`, `gloves`, `cape`, `amulet`, `ring`
+- `arrows` (ammunition slot for ranged combat)
+
+Each slot tracks `itemId` and `quantity` (for stackable items like arrows).
 
 ### Migrations
 
