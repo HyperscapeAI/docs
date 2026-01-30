@@ -137,27 +137,41 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### Combat System Architecture
 
-Hyperscape implements OSRS-accurate combat with three attack types:
+Hyperscape implements OSRS-accurate combat with three attack types and the combat triangle:
 
 #### Attack Types
-- **MELEE**: Swords, axes, maces - cardinal-only range for distance 1
-- **RANGED**: Bows with arrows - Chebyshev distance, projectile system
-- **MAGIC**: Combat spells with runes - Chebyshev distance, autocast support
+- **MELEE**: Swords, axes, maces - cardinal-only range for distance 1, per-style bonuses (stab/slash/crush)
+- **RANGED**: Bows with arrows - Chebyshev distance, projectile system, ammunition consumption
+- **MAGIC**: Combat spells with runes - Chebyshev distance, autocast support, staffless casting
+
+#### Combat Triangle (OSRS-Accurate)
+
+The armor system implements per-style attack and defense bonuses:
+
+- **Melee Styles**: Stab, Slash, Crush (weapon type determines default style)
+- **Armor Defense**: Each armor piece has separate defense values for stab/slash/crush/ranged/magic
+- **Weapon Defaults**: Swords=slash, Daggers=stab, Maces=crush, Axes=slash, Spears=stab, Halberds=slash, Unarmed=crush
+
+**Armor Characteristics:**
+- **Melee Armor** (Bronze-Rune): High melee/ranged defense, negative magic attack/defense
+- **Ranged Armor** (Leather, D'hide): Positive ranged/magic defense, lower melee defense
+- **Magic Armor** (Wizard, Mystic): Positive magic attack/defense, minimal physical defense
 
 #### Key Combat Systems
 
 | System | Location | Purpose |
 |--------|----------|---------|
-| CombatSystem | `shared/src/systems/shared/combat/` | Main combat orchestration |
-| CombatStateManager | `shared/src/entities/managers/` | Attack timing, cooldowns |
-| DamageCalculator | `shared/src/systems/shared/combat/` | OSRS damage formulas |
+| CombatSystem | `shared/src/systems/shared/combat/` | Main combat orchestration, per-style routing |
+| CombatStateManager | `shared/src/entities/managers/` | Attack timing, cooldowns, first-attack delay |
+| DamageCalculator | `shared/src/systems/shared/combat/` | OSRS damage formulas with per-style bonuses |
 | RangedDamageCalculator | `shared/src/systems/shared/combat/` | Ranged-specific formulas |
 | MagicDamageCalculator | `shared/src/systems/shared/combat/` | Magic-specific formulas |
 | ProjectileService | `shared/src/systems/shared/combat/` | Projectile tracking and hit delay |
 | AmmunitionService | `shared/src/systems/shared/combat/` | Arrow consumption |
 | RuneService | `shared/src/systems/shared/combat/` | Rune validation and consumption |
 | SpellService | `shared/src/systems/shared/combat/` | Spell data and validation |
-| AggroSystem | `shared/src/systems/shared/combat/` | Mob aggression with spatial indexing |
+| AggroSystem | `shared/src/systems/shared/combat/` | Mob aggression with spatial indexing (21x21 tile regions) |
+| EquipmentSystem | `shared/src/systems/shared/character/` | 11-slot equipment with per-style bonus tracking |
 
 #### Combat Formulas
 
