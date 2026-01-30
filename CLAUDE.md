@@ -219,11 +219,11 @@ Projectiles are tracked server-side and rendered client-side with visual effects
 
 ### Persistence Architecture
 
-The game uses a multi-layered persistence system:
+The game uses a multi-layered persistence system with crash-safe guarantees:
 
 #### Auto-Save System
-- Equipment: 5-second auto-save interval
-- Inventory: 5-second auto-save interval
+- Equipment: 5-second auto-save interval (reduced from 30s)
+- Inventory: 5-second auto-save interval (reduced from 30s)
 - Bank: Immediate persistence on changes
 - Skills: Immediate persistence on XP gain
 
@@ -231,9 +231,42 @@ The game uses a multi-layered persistence system:
 Pickups and drops persist immediately to prevent item loss on server crashes.
 
 #### Transactional Safety
-- Equipment saves use database transactions (atomic delete + insert)
-- Bank operations use unified atomic saves for items and tabs
-- Prevents data loss if server crashes mid-operation
+- **Equipment saves**: Use database transactions with upsert pattern (prevents race conditions)
+- **Bank operations**: Unified atomic saves for items and tabs via `savePlayerBankComplete()`
+- **Inventory operations**: Transactional with FOR UPDATE locks
+- **Duel stakes**: Crash-safe design - items stay in inventory until duel completion, then atomic transfer
+
+#### Unified PLAYER_JOINED Payload
+
+Equipment and inventory data are loaded once during character selection and passed via the PLAYER_JOINED event payload:
+
+```typescript
+// From character-selection.ts
+world.emit(EventType.PLAYER_JOINED, {
+  playerId: socket.player.data.id,
+  player: socket.player,
+  equipment: equipmentRows,  // Pre-loaded from DB
+  inventory: inventoryRows,  // Pre-loaded from DB
+  isLoadTestBot,
+});
+```
+
+This eliminates race conditions where multiple systems query the database independently.
+
+#### EventBus Async Handler Tracking
+
+The EventBus now tracks pending async handlers for graceful shutdown:
+
+```typescript
+// From EventBus.ts
+private pendingAsyncHandlers: Set<Promise<unknown>> = new Set();
+
+async waitForPendingHandlers(timeout: number = 5000): Promise<void> {
+  // Waits for all async operations (like database saves) to complete
+}
+```
+
+This ensures all database writes complete before server shutdown.
 
 #### Write-Ahead Logging (Phase 2)
 PersistenceService provides WAL pattern for future crash recovery:
