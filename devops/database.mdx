@@ -80,11 +80,14 @@ CREATE TABLE characters (
   prayerPoints INTEGER DEFAULT 1,
   prayerMaxPoints INTEGER DEFAULT 1,
   activePrayers TEXT DEFAULT '[]',  -- JSON array: '["thick_skin", "burst_of_strength"]'
+  -- Combat preferences
+  attackStyle TEXT DEFAULT 'accurate',
+  autoRetaliate INTEGER DEFAULT 1,
+  selectedSpell TEXT,              -- Autocast spell ID (null = no autocast)
   -- Status
   health INTEGER DEFAULT 100,
   maxHealth INTEGER DEFAULT 100,
   coins INTEGER DEFAULT 0,
-  autoRetaliate INTEGER DEFAULT 1,
   -- Metadata
   createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
   updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
