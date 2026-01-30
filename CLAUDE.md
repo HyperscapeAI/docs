@@ -389,6 +389,78 @@ The combat system routes attacks based on weapon type and selected spell:
 2. Else if weapon is bow → RANGED attack
 3. Else → MELEE attack
 
+#### Armor System (69 Items)
+
+The armor system implements OSRS-accurate per-style defense bonuses:
+
+**Armor Categories:**
+- **Melee Armor** (24 items): Bronze, Iron, Steel, Mithril, Adamant, Rune (helmet, body, legs, shield per tier)
+  - High stab/slash/crush/ranged defense
+  - Negative magic attack and magic defense penalties
+  - Example: Rune platebody has +82 stab, +80 slash, +72 crush, +80 ranged, -6 magic defense, -30 magic attack
+
+- **Ranged Armor** (8 items): Leather, Studded leather, Green d'hide, Coif
+  - Positive ranged and magic defense
+  - Lower melee defense than plate armor
+  - Example: Green d'hide body has +40 stab, +32 slash, +45 crush, +40 ranged, +20 magic defense, +15 ranged attack
+
+- **Magic Armor** (8 items): Wizard robes, Mystic robes, boots, gloves
+  - Positive magic attack and magic defense
+  - Minimal physical defense
+  - Example: Mystic robe top has +20 magic attack, +20 magic defense
+
+**Per-Style Bonus Tracking:**
+
+Equipment bonuses are tracked in `PlayerEquipment.totalStats`:
+```typescript
+totalStats: {
+  // Generic bonuses (backward compatibility)
+  attack: number;
+  strength: number;
+  defense: number;
+  ranged: number;
+  
+  // Per-style melee attack bonuses
+  attackStab: number;
+  attackSlash: number;
+  attackCrush: number;
+  
+  // Per-style melee defense bonuses
+  defenseStab: number;
+  defenseSlash: number;
+  defenseCrush: number;
+  defenseRanged: number;
+  
+  // Magic/ranged bonuses
+  attackMagic: number;
+  attackRanged: number;
+  magicDefense: number;
+  rangedStrength: number;
+  meleeStrength: number;
+  magicDamage: number;
+}
+```
+
+**Weapon Attack Style Mapping:**
+
+Melee weapons have default attack styles that determine which per-style bonus is used:
+
+```typescript
+// From CombatConstants.ts
+export const WEAPON_DEFAULT_ATTACK_STYLE: Record<string, MeleeAttackStyle> = {
+  [WeaponType.SWORD]: "slash",
+  [WeaponType.SCIMITAR]: "slash",
+  [WeaponType.AXE]: "slash",
+  [WeaponType.MACE]: "crush",
+  [WeaponType.DAGGER]: "stab",
+  [WeaponType.SPEAR]: "stab",
+  [WeaponType.HALBERD]: "slash",
+  [WeaponType.NONE]: "crush", // unarmed = crush (fists)
+};
+```
+
+The DamageCalculator uses these mappings to select the appropriate attack/defense bonuses for combat calculations.
+
 ### Development Server
 
 The dev server provides:
