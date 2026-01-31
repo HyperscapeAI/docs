@@ -16,13 +16,14 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 | Category | Features |
 |----------|----------|
-| **Combat** | Melee, ranged, and magic combat with OSRS-accurate formulas, per-style attack/defense bonuses, combat triangle, projectile system, prayer bonuses |
-| **Equipment** | 11-slot equipment system (weapon, shield, helmet, body, legs, boots, gloves, cape, amulet, ring, arrows) with per-style bonuses |
-| **Skills** | Attack, Strength, Defence, Constitution, Ranged, Magic, Prayer, Woodcutting, Mining, Fishing, Cooking, Firemaking, Smithing, Agility |
+| **Combat** | Melee, ranged, and magic combat with OSRS-accurate formulas, per-style attack/defense bonuses (stab/slash/crush), combat triangle, projectile system, prayer bonuses |
+| **Equipment** | 11-slot equipment system (weapon, shield, helmet, body, legs, boots, gloves, cape, amulet, ring, arrows) with per-style bonuses and OSRS paperdoll layout |
+| **Skills** | Attack, Strength, Defence, Constitution, Ranged, Magic, Prayer, Woodcutting, Mining, Fishing, Cooking, Firemaking, Smithing, Agility, Crafting (15 skills total) |
+| **Crafting** | Leather crafting, dragonhide armor, jewelry, gem cutting with needle/chisel/furnace, thread consumption, tanning system |
 | **Economy** | 480-slot bank with tabs, shops, item weights, loot drops, coin pouch system |
 | **PvP** | Duel arena with crash-safe staking, equipment restrictions, rule negotiation, idempotency protection |
 | **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
-| **Content** | JSON manifests for NPCs, items, stores, spells, ammunition, armor—no code required |
+| **Content** | JSON manifests for NPCs, items, stores, spells, ammunition, armor, crafting recipes—no code required |
 | **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics, spatial indexing |
 
 ### Combat System
@@ -40,6 +41,23 @@ All combat uses OSRS-accurate formulas for damage calculation, hit chance, and X
 - **Prayer Bonuses**: Multipliers for all combat styles (melee, ranged, magic)
 - **Equipment Stats**: 11 equipment slots with comprehensive bonus tracking
 - **Combat Styles**: XP distribution and stat bonuses based on selected style
+
+### Crafting System
+
+The crafting skill allows players to create leather armor, dragonhide equipment, jewelry, and cut gems:
+
+- **Leather Crafting**: Use needle + thread on leather to create gloves, boots, vambraces, chaps, body, coif
+- **Dragonhide Crafting**: Use needle + thread on dragon leather for high-level ranged armor
+- **Jewelry Crafting**: Use furnace + moulds to create rings, necklaces, amulets, bracelets from gold/silver bars
+- **Gem Cutting**: Use chisel on uncut gems to create cut gems for jewelry
+- **Tanning System**: Convert hides to leather at tanner NPCs for a coin fee
+
+**Crafting Mechanics:**
+- **Thread Consumption**: Thread has 5 uses before being consumed
+- **Tick-Based**: Each craft takes 2-3 ticks (1.2-1.8 seconds)
+- **Movement Cancellation**: Walking or entering combat cancels crafting
+- **Make-X**: Craft multiple items in one session with quantity memory
+- **Recipe Filtering**: Recipes filter by input item (e.g., chisel + uncut sapphire shows only sapphire)
 
 ## Quick Start
 
