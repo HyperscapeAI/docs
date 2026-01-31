@@ -227,6 +227,54 @@ export const MAGIC_STYLE_BONUSES = {
 
 Damage uses the authentic OSRS formula from [the wiki](https://oldschool.runescape.wiki/w/Damage_per_second/Melee).
 
+### Per-Style Combat Bonuses
+
+The armor system implements OSRS-accurate per-style attack and defense bonuses:
+
+**Melee Attack Styles:**
+- **Stab**: Daggers, spears (piercing attacks)
+- **Slash**: Swords, scimitars, axes (slicing attacks)
+- **Crush**: Maces, unarmed (blunt attacks)
+
+**Weapon Default Styles:**
+
+| Weapon Type | Default Style |
+|-------------|---------------|
+| Sword | Slash |
+| Scimitar | Slash |
+| Axe | Slash |
+| Mace | Crush |
+| Dagger | Stab |
+| Spear | Stab |
+| Halberd | Slash |
+| Unarmed | Crush |
+
+**Armor Defense Bonuses:**
+
+Each armor piece provides separate defense values for each attack style:
+
+```typescript
+// Example: Rune platebody bonuses
+{
+  defenseStab: 82,
+  defenseSlash: 80,
+  defenseCrush: 72,
+  defenseRanged: 80,
+  magicDefense: -6,
+  attackMagic: -30,
+  attackRanged: -15
+}
+```
+
+**Combat Triangle:**
+- **Melee Armor**: High stab/slash/crush/ranged defense, negative magic bonuses
+- **Ranged Armor**: Positive ranged/magic defense, lower melee defense
+- **Magic Armor**: Positive magic attack/defense, minimal physical defense
+
+<Info>
+The combat system automatically selects the appropriate attack/defense bonus based on weapon type. For example, a sword attack uses `attackSlash` vs. the defender's `defenseSlash`.
+</Info>
+
 ### Maximum Hit Formula
 
 ```typescript
@@ -250,30 +298,33 @@ const maxHit = Math.floor(0.5 + (effectiveStrength * (strengthBonus + 64)) / 640
 Prayer bonuses are applied **before** the effective level calculation, matching OSRS mechanics.
 </Info>
 
-### Accuracy Formula
+### Accuracy Formula (Per-Style)
 
 ```typescript
-// From CombatCalculations.ts
-function calculateAccuracy(
-  attackerAttackLevel: number,
-  attackerAttackBonus: number,
-  targetDefenseLevel: number,
-  targetDefenseBonus: number,
-  attackerStyle: CombatStyle = "accurate",
-): boolean {
-  // Get prayer bonuses for attacker and defender
-  const attackerPrayerBonuses = prayerSystem.getCombinedBonuses(attackerId);
-  const defenderPrayerBonuses = prayerSystem.getCombinedBonuses(targetId);
+// From DamageCalculator.ts
+function calculateMeleeDamage(
+  attacker: Entity,
+  target: Entity,
+  style: CombatStyle,
+  attackerPrayerBonuses?: PrayerCombatBonuses,
+  defenderPrayerBonuses?: PrayerCombatBonuses,
+  meleeAttackStyle?: MeleeAttackStyle, // stab/slash/crush
+): number {
+  // Get per-style attack bonus based on weapon type
+  const attackBonus = getAttackBonusForStyle(equipmentStats, meleeAttackStyle);
+  
+  // Get per-style defense bonus based on weapon type
+  const defenseBonus = getDefenseBonusForStyle(targetStats, meleeAttackStyle);
   
   // Apply prayer multipliers
-  const prayeredAttack = attackerAttackLevel × (attackerPrayerBonuses.attackMultiplier ?? 1);
-  const prayeredDefense = targetDefenseLevel × (defenderPrayerBonuses.defenseMultiplier ?? 1);
+  const prayeredAttack = attackLevel × (attackerPrayerBonuses.attackMultiplier ?? 1);
+  const prayeredDefense = defenseLevel × (defenderPrayerBonuses.defenseMultiplier ?? 1);
   
   const effectiveAttack = prayeredAttack + 8 + styleBonus.attack;
-  const attackRoll = effectiveAttack * (attackerAttackBonus + 64);
+  const attackRoll = effectiveAttack * (attackBonus + 64);
 
   const effectiveDefence = prayeredDefense + 9 + defenderStyleBonus.defense;
-  const defenceRoll = effectiveDefence * (targetDefenseBonus + 64);
+  const defenceRoll = effectiveDefence * (defenseBonus + 64);
 
   let hitChance: number;
   if (attackRoll > defenceRoll) {
@@ -286,8 +337,42 @@ function calculateAccuracy(
 }
 ```
 
+**Per-Style Bonus Helpers:**
+
+```typescript
+// Get attack bonus for specific melee style
+function getAttackBonusForStyle(
+  stats: EquipmentStats,
+  attackStyle: MeleeAttackStyle,
+): number {
+  switch (attackStyle) {
+    case "stab":
+      return stats.attackStab ?? stats.attack;
+    case "slash":
+      return stats.attackSlash ?? stats.attack;
+    case "crush":
+      return stats.attackCrush ?? stats.attack;
+  }
+}
+
+// Get defense bonus for specific melee style
+function getDefenseBonusForStyle(
+  stats: EquipmentStats,
+  attackStyle: MeleeAttackStyle,
+): number {
+  switch (attackStyle) {
+    case "stab":
+      return stats.defenseStab ?? stats.defense;
+    case "slash":
+      return stats.defenseSlash ?? stats.defense;
+    case "crush":
+      return stats.defenseCrush ?? stats.defense;
+  }
+}
+```
+
 <Info>
-Prayer bonuses apply to both attacker and defender, affecting accuracy and defense rolls.
+Prayer bonuses apply to both attacker and defender, affecting accuracy and defense rolls. Per-style bonuses fall back to generic bonuses for backward compatibility.
 </Info>
 
 ### Damage Roll
