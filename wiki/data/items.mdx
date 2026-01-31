@@ -43,12 +43,13 @@ manifests/items/
 Items are organized by category in `packages/server/world/assets/manifests/items/`:
 
 - `weapons.json` - Swords, axes, bows, etc.
+- `armor.json` - Helmets, bodies, legs, boots, gloves, shields, capes, amulets, rings
 - `tools.json` - Hatchets, pickaxes, fishing rods, hammer, tinderbox
 - `resources.json` - Ores, bars, logs, raw fish
 - `food.json` - Cooked food, raw food, burnt food
 - `misc.json` - Coins, junk items, quest items
 
-**Atomic Loading**: All 5 category files must exist or the system falls back to legacy `items.json`.
+**Atomic Loading**: All 6 category files must exist or the system falls back to legacy `items.json`.
 
 **Duplicate Detection**: The loader validates that no item ID appears in multiple category files.
 
