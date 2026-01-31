@@ -217,15 +217,82 @@ delay = 1 + floor((1 + distance) / 3) ticks
 
 Projectiles are tracked server-side and rendered client-side with visual effects.
 
+### Crafting System Architecture
+
+The crafting skill allows players to create leather armor, dragonhide equipment, jewelry, and cut gems:
+
+#### Crafting Systems
+
+| System | Location | Purpose |
+|--------|----------|---------|
+| CraftingSystem | `shared/src/systems/shared/interaction/` | Tick-based crafting sessions, thread consumption, movement/combat cancellation |
+| TanningSystem | `shared/src/systems/shared/interaction/` | Instant hide-to-leather conversion at tanner NPCs |
+| ProcessingDataProvider | `shared/src/data/` | Recipe loading, filtering, and lookup |
+
+#### Crafting Categories
+
+**Leather Crafting** (needle + thread):
+- Gloves, boots, vambraces, chaps, body, coif
+- Thread has 5 uses before being consumed
+- Levels 1-18
+
+**Dragonhide Crafting** (needle + thread):
+- Green/blue/red/black d'hide vambraces, chaps, body
+- High-level ranged armor
+- Levels 57-84
+
+**Jewelry Crafting** (furnace + moulds):
+- Gold/silver rings, necklaces, amulets, bracelets
+- Requires specific mould in inventory
+- Levels 5-40
+
+**Gem Cutting** (chisel):
+- Cut sapphire, emerald, ruby, diamond
+- Used in jewelry crafting
+- Levels 20-43
+
+#### Crafting Mechanics
+
+**Thread Consumption:**
+- Thread has 5 uses tracked in-memory per crafting session
+- New thread consumed when uses depleted
+- Crafting stops when no thread available
+
+**Movement/Combat Cancellation:**
+- Crafting cancels on `MOVEMENT_CLICK_TO_MOVE` event
+- Crafting cancels on `COMBAT_STARTED` event
+- Matches OSRS behavior where any action interrupts skilling
+
+**Recipe Filtering:**
+- Recipes filter by input item (e.g., chisel + uncut sapphire shows only sapphire)
+- Furnace jewelry filters by equipped mould
+- Auto-selects single recipe to skip to quantity selection
+
+**Make-X Functionality:**
+- Craft 1, 5, 10, All, or custom quantity
+- Custom quantity remembered in localStorage
+- "All" sends -1 sentinel, server computes actual max based on materials
+
+**Performance Optimizations:**
+- Single inventory scan per tick (consolidated from 4 separate scans)
+- Reusable arrays to avoid per-tick allocations
+- Once-per-tick processing guard
+
+**Security Features:**
+- Rate limiting on crafting interact (prevents inventory scan spam)
+- Structured audit logging on craft completion
+- Monotonic counter for item IDs (prevents Date.now() collisions)
+- Input validation for triggerType and inputItemId
+
 ### Persistence Architecture
 
 The game uses a multi-layered persistence system with crash-safe guarantees:
 
 #### Auto-Save System
-- Equipment: 5-second auto-save interval (reduced from 30s)
-- Inventory: 5-second auto-save interval (reduced from 30s)
+- Equipment: 5-second auto-save interval (parallelized with Promise.allSettled)
+- Inventory: 5-second auto-save interval
 - Bank: Immediate persistence on changes
-- Skills: Immediate persistence on XP gain
+- Skills: Immediate persistence on XP gain (XP rounded to integer at DB boundary)
 
 #### Critical Operations
 Pickups and drops persist immediately to prevent item loss on server crashes.
@@ -268,6 +335,22 @@ async waitForPendingHandlers(timeout: number = 5000): Promise<void> {
 
 This ensures all database writes complete before server shutdown.
 
+#### Graceful Shutdown Sequence
+
+The shutdown system ensures no data loss on server termination:
+
+1. Close HTTP server (stop accepting new connections)
+2. Shutdown embedded agents
+3. **Force-save all player data** (inventory, equipment, coins) - calls `destroyAsync()` directly on systems
+4. Wait for pending database operations
+5. Destroy world and all systems
+6. Close database connections
+7. Stop Docker containers (if started)
+8. Clear startup flag (for hot reload)
+9. Exit process (unless hot reload)
+
+**Critical Fix**: Player data is now saved BEFORE `world.destroy()` to prevent data loss. The `forcePlayerDataSave()` function directly calls `destroyAsync()` on inventory, equipment, and coin pouch systems, then awaits completion before proceeding.
+
 #### Write-Ahead Logging (Phase 2)
 PersistenceService provides WAL pattern for future crash recovery:
 - Located at `packages/server/src/persistence/PersistenceService.ts`
@@ -276,7 +359,7 @@ PersistenceService provides WAL pattern for future crash recovery:
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -458,6 +541,12 @@ Game content is defined in JSON manifests at `packages/server/world/assets/manif
 | `runes.json` | Magic runes | Elemental staves, infinite runes |
 | `combat-spells.json` | Combat spells | Damage, XP, rune costs |
 | `banks-stores.json` | Shops and banks | Stock, prices, locations |
+| `recipes/crafting.json` | Crafting recipes | Leather, dragonhide, jewelry, gems |
+| `recipes/tanning.json` | Tanning recipes | Hide-to-leather conversion costs |
+| `recipes/smelting.json` | Smelting recipes | Ore-to-bar conversion |
+| `recipes/smithing.json` | Smithing recipes | Bar-to-equipment crafting |
+| `recipes/cooking.json` | Cooking recipes | Raw-to-cooked food |
+| `recipes/firemaking.json` | Firemaking recipes | Log burning XP |
 
 **Adding new content**: Edit the appropriate manifest file - no code changes required.
 
@@ -668,6 +757,7 @@ All skill data is stored in the `characters` table:
 - `cookingLevel`, `cookingXp`
 - `firemakingLevel`, `firemakingXp`
 - `smithingLevel`, `smithingXp`
+- `craftingLevel`, `craftingXp` (new)
 
 **Other Skills:**
 - `agilityLevel`, `agilityXp`
