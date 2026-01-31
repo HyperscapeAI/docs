@@ -1,0 +1,717 @@
+---
+title: "Crafting System"
+description: "Leather armor, dragonhide, jewelry, and gem cutting"
+icon: "scissors"
+---
+
+# Crafting System
+
+The Crafting skill allows players to create leather armor, dragonhide equipment, jewelry, and cut gems. The system implements OSRS-accurate mechanics with tick-based crafting, thread consumption, and movement/combat cancellation.
+
+<Info>
+Crafting code lives in `packages/shared/src/systems/shared/interaction/CraftingSystem.ts` and `TanningSystem.ts`. Recipe data is in `manifests/recipes/crafting.json` and `tanning.json`.
+</Info>
+
+---
+
+## Crafting Categories
+
+### Leather Crafting
+
+Use **needle** on **leather** to open the crafting interface. Requires **thread** in inventory (5 uses per thread).
+
+| Item | Level | Materials | Thread Uses | XP | Ticks |
+|------|-------|-----------|-------------|-----|-------|
+| Leather gloves | 1 | 1 Leather | 1 | 13.8 | 3 |
+| Leather boots | 7 | 1 Leather | 1 | 16.3 | 3 |
+| Leather cowl | 9 | 1 Leather | 1 | 18.5 | 3 |
+| Leather vambraces | 11 | 1 Leather | 1 | 22 | 3 |
+| Leather body | 14 | 1 Leather | 1 | 25 | 3 |
+| Leather chaps | 18 | 1 Leather | 1 | 27 | 3 |
+
+**Studded Leather:**
+
+| Item | Level | Materials | Thread Uses | XP | Ticks |
+|------|-------|-----------|-------------|-----|-------|
+| Studded body | 41 | 1 Leather + 1 Steel studs | 1 | 40 | 3 |
+| Studded chaps | 44 | 1 Leather + 1 Steel studs | 1 | 42 | 3 |
+
+<Info>
+Thread has **5 uses** before being consumed. The system tracks uses in-memory during crafting sessions. When thread is depleted, a new thread is consumed from inventory.
+</Info>
+
+### Dragonhide Crafting
+
+Use **needle** on **dragon leather** for high-level ranged armor. Requires **thread** in inventory.
+
+| Item | Level | Materials | Thread Uses | XP | Ticks |
+|------|-------|-----------|-------------|-----|-------|
+| Green d'hide vambraces | 57 | 1 Green dragon leather | 1 | 62 | 3 |
+| Green d'hide chaps | 60 | 2 Green dragon leather | 2 | 124 | 3 |
+| Green d'hide body | 63 | 3 Green dragon leather | 3 | 186 | 3 |
+| Blue d'hide vambraces | 66 | 1 Blue dragon leather | 1 | 70 | 3 |
+| Blue d'hide chaps | 68 | 2 Blue dragon leather | 2 | 140 | 3 |
+| Blue d'hide body | 71 | 3 Blue dragon leather | 3 | 210 | 3 |
+| Red d'hide vambraces | 73 | 1 Red dragon leather | 1 | 78 | 3 |
+| Red d'hide chaps | 75 | 2 Red dragon leather | 2 | 156 | 3 |
+| Red d'hide body | 77 | 3 Red dragon leather | 3 | 234 | 3 |
+| Black d'hide vambraces | 79 | 1 Black dragon leather | 1 | 86 | 3 |
+| Black d'hide chaps | 82 | 2 Black dragon leather | 2 | 172 | 3 |
+| Black d'hide body | 84 | 3 Black dragon leather | 3 | 258 | 3 |
+
+<Warning>
+Dragonhide armor requires both Crafting level AND Defence level to equip. For example, green d'hide body requires 63 Crafting to make and 40 Defence to wear.
+</Warning>
+
+### Jewelry Crafting
+
+Use **furnace** to craft jewelry from gold/silver bars. Requires **specific mould** in inventory (not consumed).
+
+**Gold Jewelry:**
+
+| Item | Level | Materials | Mould | XP | Ticks |
+|------|-------|-----------|-------|-----|-------|
+| Gold ring | 5 | 1 Gold bar | Ring mould | 15 | 2 |
+| Gold necklace | 6 | 1 Gold bar | Necklace mould | 20 | 2 |
+| Gold bracelet | 7 | 1 Gold bar | Bracelet mould | 25 | 2 |
+| Gold amulet (u) | 8 | 1 Gold bar | Amulet mould | 30 | 2 |
+
+**Sapphire Jewelry:**
+
+| Item | Level | Materials | Mould | XP | Ticks |
+|------|-------|-----------|-------|-----|-------|
+| Sapphire ring | 20 | 1 Gold bar + 1 Sapphire | Ring mould | 40 | 2 |
+| Sapphire necklace | 22 | 1 Gold bar + 1 Sapphire | Necklace mould | 55 | 2 |
+| Sapphire bracelet | 23 | 1 Gold bar + 1 Sapphire | Bracelet mould | 60 | 2 |
+| Sapphire amulet (u) | 24 | 1 Gold bar + 1 Sapphire | Amulet mould | 65 | 2 |
+
+**Emerald Jewelry:**
+
+| Item | Level | Materials | Mould | XP | Ticks |
+|------|-------|-----------|-------|-----|-------|
+| Emerald ring | 27 | 1 Gold bar + 1 Emerald | Ring mould | 55 | 2 |
+| Emerald necklace | 29 | 1 Gold bar + 1 Emerald | Necklace mould | 60 | 2 |
+| Emerald bracelet | 30 | 1 Gold bar + 1 Emerald | Bracelet mould | 65 | 2 |
+| Emerald amulet (u) | 31 | 1 Gold bar + 1 Emerald | Amulet mould | 70 | 2 |
+
+**Ruby Jewelry:**
+
+| Item | Level | Materials | Mould | XP | Ticks |
+|------|-------|-----------|-------|-----|-------|
+| Ruby ring | 34 | 1 Gold bar + 1 Ruby | Ring mould | 70 | 2 |
+| Ruby necklace | 40 | 1 Gold bar + 1 Ruby | Necklace mould | 75 | 2 |
+| Ruby bracelet | 42 | 1 Gold bar + 1 Ruby | Bracelet mould | 80 | 2 |
+| Ruby amulet (u) | 50 | 1 Gold bar + 1 Ruby | Amulet mould | 85 | 2 |
+
+**Diamond Jewelry:**
+
+| Item | Level | Materials | Mould | XP | Ticks |
+|------|-------|-----------|-------|-----|-------|
+| Diamond ring | 43 | 1 Gold bar + 1 Diamond | Ring mould | 85 | 2 |
+| Diamond necklace | 56 | 1 Gold bar + 1 Diamond | Necklace mould | 90 | 2 |
+| Diamond bracelet | 58 | 1 Gold bar + 1 Diamond | Bracelet mould | 95 | 2 |
+| Diamond amulet (u) | 70 | 1 Gold bar + 1 Diamond | Amulet mould | 100 | 2 |
+
+<Info>
+Jewelry crafting requires you to be near a **furnace** entity. The crafting interface filters recipes by the mould you have equipped (e.g., ring mould shows only rings).
+</Info>
+
+### Gem Cutting
+
+Use **chisel** on **uncut gems** to create cut gems for jewelry.
+
+| Gem | Level | Materials | XP | Ticks |
+|-----|-------|-----------|-----|-------|
+| Sapphire | 20 | 1 Uncut sapphire | 50 | 2 |
+| Emerald | 27 | 1 Uncut emerald | 67.5 | 2 |
+| Ruby | 34 | 1 Uncut ruby | 85 | 2 |
+| Diamond | 43 | 1 Uncut diamond | 107.5 | 2 |
+
+<Info>
+When using chisel on a specific gem (e.g., uncut sapphire), the crafting interface auto-selects that gem and skips to quantity selection. This matches OSRS behavior.
+</Info>
+
+---
+
+## Tanning System
+
+Convert hides to leather at **tanner NPCs** for a coin fee. Tanning is **instant** (no XP granted).
+
+| Hide | Output | Cost | Notes |
+|------|--------|------|-------|
+| Cowhide | Leather | 1 gp | Basic leather for low-level crafting |
+| Green dragonhide | Green dragon leather | 20 gp | For green d'hide armor (level 57-63) |
+| Blue dragonhide | Blue dragon leather | 20 gp | For blue d'hide armor (level 66-71) |
+| Red dragonhide | Red dragon leather | 20 gp | For red d'hide armor (level 73-77) |
+| Black dragonhide | Black dragon leather | 20 gp | For black d'hide armor (level 79-84) |
+
+**Tanning Mechanics:**
+- Talk to tanner NPC to open tanning interface
+- Select hide type and quantity
+- Coins deducted from inventory
+- Hides instantly converted to leather
+- No XP granted (it's a service, not a skill action)
+
+<Info>
+Tanning is a prerequisite for dragonhide crafting. You must tan the hides before you can craft them into armor.
+</Info>
+
+---
+
+## Crafting Mechanics
+
+### Thread Consumption
+
+Thread is a consumable item with **5 uses**:
+
+```typescript
+// From CraftingSystem.ts
+interface CraftingSession {
+  playerId: string;
+  recipeId: string;
+  quantity: number;
+  crafted: number;
+  completionTick: number;
+  consumableUses: Map<string, number>; // Tracks thread uses
+}
+```
+
+**Thread Lifecycle:**
+1. Player starts crafting with thread in inventory
+2. Each craft consumes 1 use from the thread
+3. After 5 uses, thread is consumed and removed from inventory
+4. If no thread available, crafting stops with message
+
+**In-Memory Tracking:**
+- Thread uses are tracked per crafting session
+- Server crash mid-batch resets the counter (acceptable trade-off)
+- Max exploitation: 4 free crafts per crash (thread has 5 uses)
+
+### Tick-Based Crafting
+
+Crafting operates on the game's 600ms tick system:
+
+```typescript
+// Schedule next craft
+const ticksPerCraft = recipe.ticks; // 2-3 ticks depending on item
+const completionTick = currentTick + ticksPerCraft;
+
+// Update loop checks for completion
+if (currentTick >= session.completionTick) {
+  this.completeCraft(playerId);
+  this.scheduleNextCraft(playerId);
+}
+```
+
+**Timing Examples:**
+- Leather gloves: 3 ticks = 1.8 seconds
+- Sapphire ring: 2 ticks = 1.2 seconds
+- Green d'hide body: 3 ticks = 1.8 seconds
+
+### Movement/Combat Cancellation
+
+Crafting automatically cancels when the player:
+- Starts moving (clicks to walk)
+- Enters combat (attacks or is attacked)
+
+```typescript
+// From CraftingSystem.ts
+this.subscribe(EventType.MOVEMENT_CLICK_TO_MOVE, (data) => {
+  if (this.activeSessions.has(data.entityId)) {
+    this.cancelCrafting(data.entityId);
+  }
+});
+
+this.subscribe(EventType.COMBAT_STARTED, (data) => {
+  if (this.activeSessions.has(data.playerId)) {
+    this.cancelCrafting(data.playerId);
+  }
+});
+```
+
+<Info>
+This matches OSRS behavior where any action (movement, combat, banking) interrupts skilling activities.
+</Info>
+
+### Recipe Filtering
+
+The crafting interface intelligently filters recipes based on context:
+
+**Input Item Filtering:**
+- Using needle on leather shows only leather recipes
+- Using needle on green dragon leather shows only green d'hide recipes
+- Using chisel on uncut sapphire shows only sapphire cutting
+
+**Station Filtering:**
+- Furnace jewelry requires being near a furnace entity
+- Recipes filter by `station: "furnace"` vs `station: "none"`
+
+**Mould Filtering:**
+- Jewelry recipes filter by equipped mould
+- Ring mould shows only rings
+- Necklace mould shows only necklaces
+- Amulet mould shows only amulets
+- Bracelet mould shows only bracelets
+
+**Auto-Select:**
+- If only 1 recipe matches, it auto-selects and skips to quantity selection
+- Example: Chisel + uncut sapphire → immediately shows "How many?" prompt
+
+### Make-X Functionality
+
+Players can craft multiple items in one session:
+
+**Quantity Options:**
+- **1, 5, 10**: Quick-select buttons
+- **All**: Crafts maximum possible based on materials (sends -1 sentinel, server computes actual max)
+- **X**: Custom quantity with localStorage memory
+
+**Quantity Memory:**
+```typescript
+// From CraftingPanel.tsx
+const CRAFTING_LAST_X_KEY = "crafting_last_x";
+
+// Remember last custom quantity
+const lastCustomQuantity = localStorage.getItem(CRAFTING_LAST_X_KEY);
+
+// Restore on next "X" click
+<input placeholder={`Amount (last: ${lastCustomQuantity})`} />
+```
+
+**Server-Side Max Calculation:**
+- Client sends -1 for "All" button
+- Server computes actual max based on available materials
+- Crafting stops when materials run out or target quantity reached
+
+---
+
+## Crafting Flow
+
+### Client-Side Flow
+
+1. **Trigger Interaction**: Player uses needle/chisel on item, or clicks furnace
+2. **Send Interact Packet**: `craftingSourceInteract` with `triggerType` and `inputItemId`
+3. **Receive Recipe List**: Server sends `CRAFTING_INTERFACE_OPEN` with filtered recipes
+4. **Select Recipe**: Player chooses item and quantity
+5. **Send Craft Request**: `processingCrafting` with `recipeId` and `quantity`
+6. **Receive Updates**: `CRAFTING_COMPLETE` events as items are crafted
+
+### Server-Side Flow
+
+```typescript
+// From CraftingSystem.ts
+handleCraftingInteract(data: {
+  playerId: string;
+  triggerType: "needle" | "chisel" | "furnace";
+  stationId?: string;
+  inputItemId?: string;
+}): void {
+  // 1. Get all crafting recipes
+  const allRecipes = processingDataProvider.getAllCraftingRecipes();
+  
+  // 2. Filter by station (furnace vs none)
+  const stationRecipes = filterByStation(allRecipes, triggerType);
+  
+  // 3. Filter by input item (if provided)
+  const filteredRecipes = filterByInputItem(stationRecipes, inputItemId);
+  
+  // 4. Check player level and materials
+  const availableRecipes = filteredRecipes.map(recipe => ({
+    ...recipe,
+    meetsLevel: playerLevel >= recipe.level,
+    hasInputs: hasRequiredMaterials(playerId, recipe),
+  }));
+  
+  // 5. Send to client
+  this.emit(EventType.CRAFTING_INTERFACE_OPEN, {
+    playerId,
+    availableRecipes,
+    station: triggerType,
+  });
+}
+```
+
+### Crafting Session Lifecycle
+
+```typescript
+// 1. Start crafting
+startCrafting(playerId: string, recipeId: string, quantity: number): void {
+  // Validate level, materials, tools, consumables
+  // Create session with completion tick
+  // Emit CRAFTING_STARTED event
+}
+
+// 2. Complete craft (on tick boundary)
+completeCraft(playerId: string): void {
+  // Consume input materials
+  // Add output item to inventory
+  // Grant XP
+  // Decrement thread uses
+  // Emit CRAFTING_COMPLETE event
+  // Audit log the craft
+}
+
+// 3. Schedule next craft
+scheduleNextCraft(playerId: string): void {
+  // Check if more crafts needed
+  // Validate materials still available
+  // Set next completion tick
+  // Or end session if done
+}
+
+// 4. Cancel crafting (movement/combat)
+cancelCrafting(playerId: string): void {
+  // Remove active session
+  // Emit CRAFTING_CANCELLED event
+}
+```
+
+---
+
+## Performance Optimizations
+
+The crafting system includes several optimizations to reduce server load:
+
+### Consolidated Inventory Scans
+
+**Problem**: Original implementation scanned inventory 4 times per craft tick (once for tools, inputs, consumables, and interact handler).
+
+**Solution**: Single `getInventoryState()` call per tick:
+
+```typescript
+// From CraftingSystem.ts
+private getInventoryState(playerId: string): {
+  counts: Map<string, number>;
+  itemIds: Set<string>;
+} | null {
+  const inventory = this.world.getInventory?.(playerId);
+  if (!inventory || !Array.isArray(inventory)) return null;
+
+  const counts = new Map<string, number>();
+  const itemIds = new Set<string>();
+  
+  for (const item of inventory) {
+    if (!isLooseInventoryItem(item)) continue;
+    itemIds.add(item.itemId);
+    const count = counts.get(item.itemId) || 0;
+    counts.set(item.itemId, count + getItemQuantity(item));
+  }
+  
+  return { counts, itemIds };
+}
+```
+
+**Impact**: Reduced from 4 inventory scans to 1 per tick per active crafter.
+
+### Reusable Arrays
+
+**Problem**: `Array.from(this.activeSessions)` allocated a new array every tick.
+
+**Solution**: Collect completed IDs first, then process:
+
+```typescript
+// Collect completed session IDs
+const completedIds: string[] = [];
+for (const [playerId, session] of this.activeSessions) {
+  if (currentTick >= session.completionTick) {
+    completedIds.push(playerId);
+  }
+}
+
+// Process completions
+for (const playerId of completedIds) {
+  this.completeCraft(playerId);
+}
+```
+
+### Once-Per-Tick Processing
+
+**Problem**: Update loop could be called multiple times per tick.
+
+**Solution**: Guard clause with `lastProcessedTick`:
+
+```typescript
+if (currentTick === this.lastProcessedTick) {
+  return; // Already processed this tick
+}
+this.lastProcessedTick = currentTick;
+```
+
+---
+
+## Security Features
+
+### Rate Limiting
+
+Crafting interact requests are rate-limited to prevent inventory scan spam:
+
+```typescript
+// From ServerNetwork/index.ts
+this.handlers["onCraftingSourceInteract"] = (socket, data) => {
+  const player = socket.player;
+  if (!player) return;
+
+  // Rate limiting - prevent inventory/recipe computation spam
+  if (!this.canProcessRequest(player.id)) {
+    return;
+  }
+  
+  // ... handle request
+};
+```
+
+**Limits:**
+- 5 requests per second per player
+- Prevents malicious clients from spamming inventory fetches
+
+### Audit Logging
+
+All craft completions are logged for security monitoring:
+
+```typescript
+// From CraftingSystem.ts
+Logger.audit("CraftingSystem", "craft_complete", {
+  playerId,
+  recipeId: session.recipeId,
+  output: recipe.output,
+  inputsConsumed: recipe.inputs,
+  xpAwarded: recipe.xp,
+  crafted: session.crafted + 1,
+  batchTotal: session.quantity,
+});
+```
+
+**Logged Data:**
+- Player ID
+- Recipe ID and output item
+- Materials consumed
+- XP awarded
+- Batch progress (e.g., "3 of 10")
+
+### Item ID Generation
+
+Crafted items use monotonic counters to prevent ID collisions:
+
+```typescript
+// From CraftingSystem.ts
+private craftCounter = 0;
+
+// Generate unique item ID
+id: `craft_${playerId}_${++this.craftCounter}_${Date.now()}`,
+```
+
+**Protection**: Prevents `Date.now()` collisions when multiple crafts complete in the same millisecond.
+
+### Input Validation
+
+All crafting requests validate:
+- `triggerType` must be "needle", "chisel", or "furnace"
+- `inputItemId` length capped at 64 characters
+- `quantity` bounded to 1-10,000 range
+- Recipe ID validated against manifest
+
+---
+
+## Crafting Events
+
+The crafting system emits events for UI and logging:
+
+| Event | Data | Description |
+|-------|------|-------------|
+| `CRAFTING_INTERACT` | `playerId`, `triggerType`, `stationId`, `inputItemId` | Player initiated crafting |
+| `CRAFTING_INTERFACE_OPEN` | `playerId`, `availableRecipes`, `station` | Show crafting UI |
+| `PROCESSING_CRAFTING_REQUEST` | `playerId`, `recipeId`, `quantity` | Player selected recipe |
+| `CRAFTING_STARTED` | `playerId`, `recipeId`, `quantity` | Crafting session started |
+| `CRAFTING_COMPLETE` | `playerId`, `itemId`, `quantity`, `xp` | Single craft completed |
+| `CRAFTING_CANCELLED` | `playerId`, `reason` | Session cancelled |
+| `TANNING_REQUEST` | `playerId`, `inputItemId`, `quantity` | Player requested tanning |
+| `TANNING_INTERFACE_OPEN` | `playerId`, `availableRecipes` | Show tanning UI |
+
+---
+
+## UI Components
+
+### CraftingPanel
+
+The crafting panel displays available recipes grouped by category:
+
+**Categories:**
+- Leather
+- Studded
+- Dragonhide
+- Jewelry
+- Gem Cutting
+
+**Features:**
+- Recipe cards with icons, level requirements, XP, materials
+- Color-coded level requirements (green = can craft, red = too low)
+- Quantity selector (1, 5, 10, All, X)
+- Auto-select for single recipes
+- Make-X memory in localStorage
+
+### TanningPanel
+
+The tanning panel shows available hides with costs:
+
+**Features:**
+- Hide list with icons and inventory counts
+- Cost per hide in gold pieces
+- Quantity selector (1, 5, 10, All, X)
+- Make-X memory in localStorage
+
+---
+
+## API Reference
+
+### ProcessingDataProvider
+
+The data provider loads and indexes crafting recipes:
+
+```typescript
+// Get crafting recipe by output item ID
+getCraftingRecipe(outputItemId: string): CraftingRecipeData | null;
+
+// Get all craftable item IDs
+getCraftableItemIds(): Set<string>;
+
+// Get recipes by category
+getCraftingRecipesByCategory(category: string): CraftingRecipeData[];
+
+// Get recipes by station
+getCraftingRecipesByStation(station: string): CraftingRecipeData[];
+
+// Get recipes player can make
+getAvailableCraftingRecipes(craftingLevel: number): CraftingRecipeData[];
+
+// Get valid input items for a tool
+getCraftingInputsForTool(toolId: string): Set<string>;
+
+// Check if item is a crafting input
+isCraftingInput(itemId: string): boolean;
+
+// Get tool required for an input item
+getCraftingToolForInput(inputItemId: string): string | null;
+```
+
+### CraftingSystem
+
+The crafting system manages active crafting sessions:
+
+```typescript
+// Start a crafting session
+startCrafting(playerId: string, recipeId: string, quantity: number): void;
+
+// Complete a single craft
+completeCraft(playerId: string): void;
+
+// Schedule next craft in batch
+scheduleNextCraft(playerId: string): void;
+
+// Cancel active session
+cancelCrafting(playerId: string): void;
+
+// Check if player has required materials
+hasRequiredInputs(playerId: string, recipe: CraftingRecipeData): boolean;
+
+// Check if player has required tools
+hasRequiredTools(playerId: string, recipe: CraftingRecipeData): boolean;
+
+// Check if player has required consumables
+hasRequiredConsumables(playerId: string, recipe: CraftingRecipeData): boolean;
+```
+
+---
+
+## Testing
+
+The crafting system has comprehensive test coverage:
+
+**Unit Tests** (`CraftingSystem.test.ts` - 658 lines):
+- Recipe filtering by station and inputItemId
+- Crafting lifecycle (start, complete, schedule next)
+- Level/material/tool/consumable validation
+- Movement and combat cancellation
+- Concurrent crafting prevention
+- Tick-based update loop
+- Unique item ID generation
+- Thread consumption tracking
+
+**Data Tests** (`ProcessingDataProvider.test.ts`):
+- Manifest loading and parsing
+- Recipe lookup functions
+- Category grouping
+- Input item validation
+- Tanning recipe validation
+
+<Warning>
+**Missing E2E Tests**: The crafting system currently lacks Playwright integration tests. These should be added to verify the full flow: use needle on leather → panel opens → select recipe → craft completes → XP awarded.
+</Warning>
+
+---
+
+## Manifest Structure
+
+### crafting.json
+
+```json
+{
+  "recipes": [
+    {
+      "output": "leather_gloves",
+      "category": "leather",
+      "inputs": [
+        { "item": "leather", "amount": 1 }
+      ],
+      "tools": ["needle"],
+      "consumables": [
+        { "item": "thread", "uses": 1 }
+      ],
+      "level": 1,
+      "xp": 13.8,
+      "ticks": 3,
+      "station": "none"
+    }
+  ]
+}
+```
+
+**Fields:**
+- `output`: Item ID of crafted item
+- `category`: UI grouping (leather, studded, dragonhide, jewelry, gem_cutting)
+- `inputs`: Materials consumed (item ID + amount)
+- `tools`: Required tools in inventory (not consumed)
+- `consumables`: Items with limited uses (e.g., thread with 5 uses)
+- `level`: Crafting level required
+- `xp`: XP granted per item (float values for OSRS accuracy, rounded at DB boundary)
+- `ticks`: Time in game ticks (600ms per tick)
+- `station`: Required station ("none" or "furnace")
+
+### tanning.json
+
+```json
+{
+  "recipes": [
+    {
+      "input": "cowhide",
+      "output": "leather",
+      "cost": 1,
+      "name": "Leather"
+    }
+  ]
+}
+```
+
+**Fields:**
+- `input`: Hide item ID
+- `output`: Leather item ID
+- `cost`: Coin cost per hide
+- `name`: Display name
+
+---
+
+## Related Documentation
+
+- [Skills & Progression](/wiki/game-systems/skills) (Crafting skill XP and leveling)
+- [Inventory System](/wiki/game-systems/inventory) (Material storage and management)
+- [Item Data Structure](/wiki/data/items) (Item manifests and bonuses)
+- [Data Manifests Overview](/wiki/data/overview) (Manifest-driven design)
