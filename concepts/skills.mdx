@@ -10,7 +10,7 @@ Hyperscape features a RuneScape-inspired skill system with leveling, XP gain, an
 
 ## Available Skills
 
-Hyperscape has **11 skills** total:
+Hyperscape has **15 skills** total:
 
 ### Combat Skills
 
@@ -21,6 +21,7 @@ Hyperscape has **11 skills** total:
 | **Defense** | Damage reduction, armor requirements |
 | **Constitution** | Health points |
 | **Ranged** | Ranged combat accuracy and damage |
+| **Magic** | Spellcasting accuracy and damage |
 | **Prayer** | Combat bonuses via prayers (trained by burying bones) |
 
 ### Gathering Skills
@@ -38,6 +39,13 @@ Hyperscape has **11 skills** total:
 | **Firemaking** | Create fires from logs |
 | **Cooking** | Prepare food from raw fish |
 | **Smithing** | Smelt ores into bars and smith equipment |
+| **Crafting** | Create leather armor, dragonhide, jewelry, and cut gems |
+
+### Support Skills
+
+| Skill | Activity |
+|-------|----------|
+| **Agility** | Movement and shortcuts (future) |
 
 ## XP and Leveling
 
@@ -91,7 +99,7 @@ Requirements:
 - Dragon/Crystal pickaxes have **bonus speed rolls**
 
 | Ore | Level | XP | Depletion |
-|-----|-------|-----|-----------|
+|-----|-------|-----|-----------| 
 | Copper/Tin | 1 | 17.5 | 1/8 chance |
 | Iron | 15 | 35 | 1/8 chance |
 | Coal | 30 | 50 | 1/8 chance |
@@ -167,7 +175,7 @@ Smelt ores into bars at furnaces, then smith bars into equipment at anvils.
 #### Smelting (at Furnace)
 
 | Bar | Level | Ores Required | XP | Success Rate |
-|-----|-------|---------------|-----|--------------|
+|-----|-------|---------------|-----|--------------| 
 | Bronze | 1 | 1 Copper + 1 Tin | 6.25 | 100% |
 | Iron | 15 | 1 Iron Ore | 12.5 | 50% |
 | Steel | 30 | 1 Iron Ore + 2 Coal | 17.5 | 100% |
@@ -219,28 +227,111 @@ Click an anvil to open the smithing interface. **Requires a hammer in your inven
   Smithing supports "Make X" functionality - you can smith multiple items in one session. The system auto-smiths until you run out of bars or reach the target quantity.
 </Info>
 
+### Crafting
+
+Create leather armor, dragonhide equipment, jewelry, and cut gems using various tools.
+
+#### Leather Crafting (Needle + Thread)
+
+Use needle on leather to open the crafting interface. **Requires thread in inventory** (5 uses per thread).
+
+| Item | Level | Materials | XP | Category |
+|------|-------|-----------|-----|----------|
+| Leather gloves | 1 | 1 Leather | 13.8 | Leather |
+| Leather boots | 7 | 1 Leather | 16.3 | Leather |
+| Leather cowl | 9 | 1 Leather | 18.5 | Leather |
+| Leather vambraces | 11 | 1 Leather | 22 | Leather |
+| Leather body | 14 | 1 Leather | 25 | Leather |
+| Leather chaps | 18 | 1 Leather | 27 | Leather |
+
+#### Dragonhide Crafting (Needle + Thread)
+
+Use needle on dragon leather for high-level ranged armor.
+
+| Item | Level | Materials | XP | Category |
+|------|-------|-----------|-----|----------|
+| Green d'hide vambraces | 57 | 1 Green dragon leather | 62 | Dragonhide |
+| Green d'hide chaps | 60 | 2 Green dragon leather | 124 | Dragonhide |
+| Green d'hide body | 63 | 3 Green dragon leather | 186 | Dragonhide |
+
+#### Jewelry Crafting (Furnace + Moulds)
+
+Use furnace to craft jewelry from gold/silver bars. **Requires specific mould in inventory** (not consumed).
+
+| Item | Level | Materials | Mould | XP |
+|------|-------|-----------|-------|-----|
+| Gold ring | 5 | 1 Gold bar | Ring mould | 15 |
+| Sapphire ring | 20 | 1 Gold bar + 1 Sapphire | Ring mould | 40 |
+| Gold necklace | 6 | 1 Gold bar | Necklace mould | 20 |
+| Sapphire necklace | 22 | 1 Gold bar + 1 Sapphire | Necklace mould | 55 |
+| Gold amulet (u) | 8 | 1 Gold bar | Amulet mould | 30 |
+| Sapphire amulet (u) | 24 | 1 Gold bar + 1 Sapphire | Amulet mould | 65 |
+
+#### Gem Cutting (Chisel)
+
+Use chisel on uncut gems to create cut gems for jewelry.
+
+| Item | Level | Materials | XP |
+|------|-------|-----------|-----|
+| Sapphire | 20 | 1 Uncut sapphire | 50 |
+| Emerald | 27 | 1 Uncut emerald | 67.5 |
+| Ruby | 34 | 1 Uncut ruby | 85 |
+| Diamond | 43 | 1 Uncut diamond | 107.5 |
+
+#### Tanning System
+
+Convert hides to leather at tanner NPCs for a coin fee.
+
+| Hide | Output | Cost | Location |
+|------|--------|------|----------|
+| Cowhide | Leather | 1 gp | Tanner NPC |
+| Green dragonhide | Green dragon leather | 20 gp | Tanner NPC |
+| Blue dragonhide | Blue dragon leather | 20 gp | Tanner NPC |
+| Red dragonhide | Red dragon leather | 20 gp | Tanner NPC |
+| Black dragonhide | Black dragon leather | 20 gp | Tanner NPC |
+
+<Info>
+  Tanning is instant (no XP granted). It's a service provided by NPCs to convert hides into usable leather for crafting.
+</Info>
+
+**Crafting Mechanics:**
+- **Thread Consumption**: Thread has 5 uses before being consumed
+- **Tick-Based**: Each craft takes 2-3 ticks (1.2-1.8 seconds)
+- **Movement Cancellation**: Walking or entering combat cancels crafting
+- **Make-X**: Craft multiple items in one session with quantity memory
+- **Recipe Filtering**: Recipes filter by input item (e.g., chisel + uncut sapphire shows only sapphire)
+- **Auto-Select**: Single recipe auto-selects to skip to quantity selection
+
 ## Equipment Level Requirements
 
 Equipment and activities have level gates:
 
-| Tier | Attack/Defense | Ranged |
-|------|----------------|--------|
-| Bronze | 1 | 1 |
-| Iron | 5 | - |
-| Steel | 10 | 10 |
-| Mithril | 20 | 20 |
-| Adamant | 30 | - |
-| Rune | 40 | - |
-| Dragon | 60 | - |
+| Tier | Attack/Defense | Ranged | Crafting |
+|------|----------------|--------|----------|
+| Bronze | 1 | 1 | 1 |
+| Iron | 5 | - | - |
+| Steel | 10 | 10 | - |
+| Mithril | 20 | 20 | - |
+| Adamant | 30 | - | - |
+| Rune | 40 | - | - |
+| Dragon | 60 | - | - |
+| Green d'hide | - | 40 | 57-63 |
 
 ## Skill Data Files
 
-Skill configuration is in `packages/shared/src/data/`:
+Skill configuration is in `packages/shared/src/data/` and `packages/server/world/assets/manifests/`:
 
 | File | Purpose |
 |------|---------|
-| `equipment-requirements.json` | Level requirements for equipment |
-| `equipment-stats.json` | Stat bonuses for equipment |
+| `tier-requirements.json` | Level requirements by tier |
+| `skill-unlocks.json` | What unlocks at each level |
+| `gathering/*.json` | Resource nodes, yields, XP |
+| `recipes/crafting.json` | Crafting recipes and XP |
+| `recipes/tanning.json` | Tanning costs and outputs |
+| `recipes/smelting.json` | Smelting recipes |
+| `recipes/smithing.json` | Smithing recipes |
+| `recipes/cooking.json` | Cooking recipes |
+| `recipes/firemaking.json` | Firemaking XP |
 
 ## Prayer System
 
@@ -281,6 +372,7 @@ playerData.skills = {
   defense: { level: 1, xp: 0 },
   constitution: { level: 10, xp: 1154 },  // Starts at level 10
   ranged: { level: 1, xp: 0 },
+  magic: { level: 1, xp: 0 },
   prayer: { level: 1, xp: 0 },
   woodcutting: { level: 1, xp: 0 },
   mining: { level: 1, xp: 0 },
@@ -288,6 +380,8 @@ playerData.skills = {
   firemaking: { level: 1, xp: 0 },
   cooking: { level: 1, xp: 0 },
   smithing: { level: 1, xp: 0 },
+  agility: { level: 1, xp: 0 },
+  crafting: { level: 1, xp: 0 },
 };
 ```
 
