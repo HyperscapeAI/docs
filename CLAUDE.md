@@ -840,11 +840,13 @@ All skill data is stored in the `characters` table:
 - `miningLevel`, `miningXp`
 - `fishingLevel`, `fishingXp`
 
-**Processing Skills:**
+**Artisan Skills:**
 - `cookingLevel`, `cookingXp`
 - `firemakingLevel`, `firemakingXp`
 - `smithingLevel`, `smithingXp`
-- `craftingLevel`, `craftingXp` (new)
+- `craftingLevel`, `craftingXp`
+- `fletchingLevel`, `fletchingXp`
+- `runecraftingLevel`, `runecraftingXp`
 
 **Other Skills:**
 - `agilityLevel`, `agilityXp`
