@@ -41,8 +41,9 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | **Firemaking** | Light fires | Using tinderbox on logs |
 | **Cooking** | Cook food | Using raw food on fires/ranges |
 | **Smithing** | Smelt bars and smith equipment | Smelting ores at furnaces, smithing bars at anvils |
-| **Fletching** | Craft bows and arrows | Using knife on logs, stringing bows, tipping arrows |
-| **Runecrafting** | Craft magical runes | Using essence at runecrafting altars |
+| **Fletching** | Create bows and arrows | Using knife on logs, stringing bows, tipping arrows |
+| **Crafting** | Create leather armor and jewelry | Tanning hides, crafting leather, cutting gems |
+| **Runecrafting** | Create magic runes | Using essence at runecrafting altars |
 
 ### Support Skills
 
@@ -206,7 +207,7 @@ public getTotalLevel(stats: StatsComponent): number {
 
   const skills = [
     "attack", "strength", "defense", "constitution", "ranged", "prayer",
-    "woodcutting", "mining", "fishing", "firemaking", "cooking", "smithing", "agility"
+    "woodcutting", "mining", "fishing", "firemaking", "cooking", "smithing", "crafting", "agility"
   ];
 
   for (const skill of skills) {
@@ -220,10 +221,10 @@ public getTotalLevel(stats: StatsComponent): number {
 
 ### Maximum Total Level
 
-With 13 skills at level 99: **1,287 total level**
+With 14 skills at level 99: **1,386 total level**
 
 <Info>
-Total level calculation includes: Attack, Strength, Defense, Constitution, Ranged, Prayer, Woodcutting, Mining, Fishing, Firemaking, Cooking, Smithing, and Agility.
+Total level calculation includes: Attack, Strength, Defense, Constitution, Ranged, Prayer, Woodcutting, Mining, Fishing, Firemaking, Cooking, Smithing, Crafting, and Agility.
 </Info>
 
 ---
@@ -627,24 +628,24 @@ Fletching is a three-stage process: creating arrow shafts, crafting unstrung bow
 | Magic | 75 | 90 | 30 |
 
 *Shortbows* (Knife + Logs, then String):
-| Bow | Level | XP (Cut) | XP (String) |
-|-----|-------|----------|-------------|
-| Shortbow | 5 | 5 | 5 |
-| Oak shortbow | 20 | 16.5 | 16.5 |
-| Willow shortbow | 35 | 33.3 | 33.3 |
-| Maple shortbow | 50 | 50 | 50 |
-| Yew shortbow | 65 | 67.5 | 67.5 |
-| Magic shortbow | 80 | 83.3 | 83.3 |
+| Bow | Level | XP (Cut) | XP (String) | Total XP |
+|-----|-------|----------|-------------|----------|
+| Shortbow | 5 | 5 | 5 | 10 |
+| Oak shortbow | 20 | 16.5 | 16.5 | 33 |
+| Willow shortbow | 35 | 33.3 | 33.3 | 66.6 |
+| Maple shortbow | 50 | 50 | 50 | 100 |
+| Yew shortbow | 65 | 67.5 | 67.5 | 135 |
+| Magic shortbow | 80 | 83.3 | 83.3 | 166.6 |
 
 *Longbows* (Knife + Logs, then String):
-| Bow | Level | XP (Cut) | XP (String) |
-|-----|-------|----------|-------------|
-| Longbow | 10 | 10 | 10 |
-| Oak longbow | 25 | 25 | 25 |
-| Willow longbow | 40 | 41.5 | 41.5 |
-| Maple longbow | 55 | 58.3 | 58.3 |
-| Yew longbow | 70 | 75 | 75 |
-| Magic longbow | 85 | 91.5 | 91.5 |
+| Bow | Level | XP (Cut) | XP (String) | Total XP |
+|-----|-------|----------|-------------|----------|
+| Longbow | 10 | 10 | 10 | 20 |
+| Oak longbow | 25 | 25 | 25 | 50 |
+| Willow longbow | 40 | 41.5 | 41.5 | 83 |
+| Maple longbow | 55 | 58.3 | 58.3 | 116.6 |
+| Yew longbow | 70 | 75 | 75 | 150 |
+| Magic longbow | 85 | 91.5 | 91.5 | 183 |
 
 *Arrows* (Arrowtips + Headless Arrows):
 | Arrow | Level | XP (per 15) |
@@ -656,16 +657,89 @@ Fletching is a three-stage process: creating arrow shafts, crafting unstrung bow
 | Adamant | 60 | 150 |
 | Rune | 75 | 187.5 |
 
-<Info>
-Fletching follows OSRS mechanics: use a knife on logs to create arrow shafts or unstrung bows, then use bowstring to finish bows. Arrowtips are created through Smithing.
-</Info>
+**Crafting** (`recipes/crafting.json`):
+
+*Leather Armor* (Needle + Thread):
+| Item | Level | Leather | XP |
+|------|-------|---------|-----|
+| Leather gloves | 1 | 1 | 13.8 |
+| Leather boots | 7 | 1 | 16.3 |
+| Leather cowl | 9 | 1 | 18.5 |
+| Leather vambraces | 11 | 1 | 22 |
+| Leather body | 14 | 1 | 25 |
+| Leather chaps | 18 | 1 | 27 |
+| Coif | 38 | 1 | 37 |
+
+*Dragonhide Armor* (Needle + Thread):
+| Item | Level | Dragon Leather | XP |
+|------|-------|----------------|-----|
+| Green d'hide vambraces | 57 | 1 | 62 |
+| Green d'hide chaps | 60 | 2 | 124 |
+| Green d'hide body | 63 | 3 | 186 |
+
+*Jewelry* (Gold Bar + Gem at Furnace):
+| Item | Level | Materials | XP |
+|------|-------|-----------|-----|
+| Gold ring | 5 | 1 gold bar | 15 |
+| Amulet of accuracy | 8 | 1 gold bar | 30 |
+| Amulet of strength | 50 | 1 gold bar + ruby | 85 |
+| Amulet of power | 70 | 1 gold bar + diamond | 100 |
+| Amulet of glory | 80 | 1 gold bar + dragonstone | 150 |
+| Amulet of fury | 90 | 1 gold bar + onyx | 165 |
+
+*Gem Cutting* (Chisel):
+**Crafting** (`recipes/crafting.json`):
+
+*Leather Armor*:
+| Item | Level | XP |
+|------|-------|-----|
+| Leather Gloves | 1 | 13.8 |
+| Leather Boots | 7 | 16.3 |
+| Leather Cowl | 9 | 18.5 |
+| Leather Vambraces | 11 | 22 |
+| Leather Body | 14 | 25 |
+| Leather Chaps | 18 | 27 |
+| Coif | 38 | 37 |
+
+*Studded Armor*:
+| Item | Level | XP |
+|------|-------|-----|
+| Studded Body | 41 | 40 |
+| Studded Chaps | 44 | 42 |
+
+*Dragonhide Armor*:
+| Item | Level | XP |
+|------|-------|-----|
+| Green D'hide Vambraces | 57 | 62 |
+| Green D'hide Chaps | 60 | 124 |
+| Green D'hide Body | 63 | 186 |
+
+*Jewelry*:
+| Item | Level | XP |
+|------|-------|-----|
+| Gold Ring | 5 | 15 |
+| Amulet of Accuracy | 8 | 30 |
+| Amulet of Strength | 50 | 85 |
+| Amulet of Power | 70 | 100 |
+| Amulet of Glory | 80 | 150 |
+| Amulet of Fury | 90 | 165 |
+
+*Gem Cutting*:
+| Gem | Level | XP |
+|-----|-------|-----|
+| Sapphire | 20 | 50 |
+| Emerald | 27 | 67.5 |
+| Ruby | 34 | 85 |
+| Diamond | 43 | 107.5 |
+| Dragonstone | 55 | 137.5 |
+| Onyx | 67 | 167.5 |
 
 **Runecrafting** (`recipes/runecrafting.json`):
 
-Runecrafting allows players to craft magical runes from essence at runecrafting altars.
+Runecrafting creates magic runes from essence at runecrafting altars:
 
-| Rune | Level | XP per Essence | Essence Types | Multi-Rune Levels |
-|------|-------|----------------|---------------|-------------------|
+| Rune | Level | XP/Essence | Essence Types | Multi-Rune Levels |
+|------|-------|------------|---------------|-------------------|
 | Air | 1 | 5.0 | Rune/Pure | 11, 22, 33, 44, 55, 66, 77, 88, 99 |
 | Mind | 2 | 5.5 | Rune/Pure | 14, 28, 42, 56, 70, 84, 98 |
 | Water | 5 | 6.0 | Rune/Pure | 19, 38, 57, 76, 95 |
