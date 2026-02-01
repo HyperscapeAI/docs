@@ -528,6 +528,91 @@ if (existingQty > 2147483647 - transferQuantity) {
 
 **Inventory Overflow**: If winner's inventory is full, items go to bank automatically.
 
+### Artisan Skills Architecture
+
+Hyperscape implements three OSRS-accurate artisan skills for creating equipment and items:
+
+#### Crafting System
+
+| System | Location | Purpose |
+|--------|----------|---------|
+| CraftingSystem | `shared/src/systems/shared/interaction/` | Tick-based crafting sessions, thread consumption, movement/combat cancellation |
+| TanningSystem | `shared/src/systems/shared/interaction/` | Instant hide-to-leather conversion at tanner NPCs |
+
+**Crafting Categories:**
+- **Leather Crafting** (needle + thread): Gloves, boots, vambraces, chaps, body, coif (levels 1-18)
+- **Dragonhide Crafting** (needle + thread): Green/blue/red/black d'hide armor (levels 57-84)
+- **Jewelry Crafting** (furnace + moulds): Gold/silver rings, necklaces, amulets, bracelets (levels 5-40)
+- **Gem Cutting** (chisel): Cut sapphire, emerald, ruby, diamond (levels 20-43)
+
+**Mechanics:**
+- Thread has 5 uses tracked in-memory per session
+- Movement or combat cancels crafting
+- Recipe filtering by input item
+- Make-X with quantity memory (1, 5, 10, All, custom)
+- Rate limiting and audit logging
+
+#### Fletching System
+
+| System | Location | Purpose |
+|--------|----------|---------|
+| FletchingSystem | `shared/src/systems/shared/interaction/` | Tick-based fletching sessions, multi-output support, item-on-item interactions |
+
+**Fletching Categories:**
+- **Arrow Shafts** (knife + logs): 15 shafts per log (levels 1-60)
+- **Headless Arrows** (arrow shafts + feathers): 15 per action (level 1)
+- **Arrows** (arrowtips + headless arrows): 15 per action (levels 1-75)
+- **Shortbows** (knife + logs): Unstrung shortbows (levels 5-70)
+- **Longbows** (knife + logs): Unstrung longbows (levels 10-85)
+- **Stringing** (bowstring + unstrung bow): Complete bows (levels 5-85)
+
+**Mechanics:**
+- Multi-output recipes (15 items per action for arrows/shafts)
+- Item-on-item interactions (bowstring + bow, arrowtips + arrows)
+- Knife required for cutting, no tool for stringing
+- Tick-based fletching (2-3 ticks per action)
+- Movement or combat cancels fletching
+- Recipe filtering by input item pair
+
+#### Runecrafting System
+
+| System | Location | Purpose |
+|--------|----------|---------|
+| RunecraftingSystem | `shared/src/systems/shared/interaction/` | Instant essence-to-rune conversion at altars, multi-rune multipliers |
+
+**Runecrafting Altars:**
+- **Basic Runes**: Air, Mind, Water, Earth, Fire, Body (levels 1-27)
+- **Advanced Runes**: Cosmic, Chaos, Nature, Law, Death (levels 27-65)
+
+**Mechanics:**
+- Instant conversion (no tick delay)
+- Multi-rune multipliers at specific levels (e.g., 2x air runes at level 11, 3x at level 22)
+- Two essence types: rune_essence (basic runes), pure_essence (all runes)
+- XP per essence consumed
+- No failure rate
+- Converts ALL essence in inventory at once
+
+#### ProcessingDataProvider
+
+Central data provider for all artisan skill recipes:
+
+| Method | Purpose |
+|--------|---------|
+| `getCraftingRecipe(outputItemId)` | Get crafting recipe by output item |
+| `getCraftingRecipesByStation(station)` | Filter recipes by station ("none" or "furnace") |
+| `getFletchingRecipe(recipeId)` | Get fletching recipe by unique ID (output:primaryInput) |
+| `getFletchingRecipesForInput(itemId)` | Get all recipes using a specific input |
+| `getFletchingRecipesForInputPair(itemA, itemB)` | Get recipes matching both inputs (item-on-item) |
+| `getRunecraftingRecipe(runeType)` | Get runecrafting recipe by rune type |
+| `getRunecraftingMultiplier(runeType, level)` | Calculate multi-rune multiplier for level |
+| `getTanningRecipe(inputItemId)` | Get tanning recipe by hide item ID |
+
+**Recipe Loading:**
+- Recipes loaded from JSON manifests in `packages/server/world/assets/manifests/recipes/`
+- Validation on load with detailed error reporting
+- Fallback to embedded item data for backwards compatibility
+- Singleton pattern with lazy initialization
+
 ### Manifest-Driven Content
 
 Game content is defined in JSON manifests at `packages/server/world/assets/manifests/`:
