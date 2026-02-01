@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with autonomous AI agents powered by ElizaOS.
+Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world.
 
 ## Essential Commands
 
@@ -149,101 +149,6 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 - Don't reinvent systems that Hyperscape already provides
 - Separation of concerns: core engine vs. game content
 
-## Game Systems
-
-### Skills System
-
-The game implements OSRS-style skills with XP progression and level requirements (1-99):
-
-**Combat Skills**: Attack, Strength, Defense, Constitution, Ranged, Magic, Prayer
-
-**Gathering Skills**: Woodcutting, Mining, Fishing
-
-**Production Skills**: 
-- **Cooking**: Food preparation at fires/ranges (tick-based, burn chance)
-- **Firemaking**: Lighting fires from logs (tick-based)
-- **Smithing**: Smelting ores → bars, forging bars → items at anvils (tick-based)
-- **Crafting**: Leather armor, jewelry, gem cutting (needle/chisel/furnace, tick-based)
-- **Fletching**: Bows, arrows, arrow shafts (knife + logs/bowstring, tick-based, multi-output)
-- **Runecrafting**: Converting essence → runes at altars (instant, multi-rune at higher levels)
-- **Agility**: Obstacle courses, shortcuts (tick-based)
-
-**Key Features**:
-- XP-based leveling (1-99) using OSRS XP table formula
-- Level requirements for items and activities
-- Skill guide panel showing unlocks at each level (click skill icon in skills panel)
-- Database persistence for all skills (17 skills total)
-- Combat level calculation from combat skills
-- Total level tracking (sum of all skill levels)
-
-**Skill Guide Panel** (new in #711):
-- Click any skill icon in the skills panel to open the guide
-- Shows all unlocks for that skill (items, abilities, locations)
-- Visual indicators: ✓ unlocked, ➤ next unlock, 🔒 locked
-- Displays levels to next unlock
-- Client-side data loading from skill-unlocks.ts manifest
-
-### Equipment System
-
-**11 Equipment Slots** (OSRS-accurate):
-- Weapon, Shield, Helmet, Body, Legs
-- Boots, Gloves, Cape, Amulet, Ring
-- Arrows (ammunition)
-
-**Combat Bonuses**:
-- Per-style attack bonuses: Stab, Slash, Crush, Magic, Ranged
-- Per-style defense bonuses: Stab, Slash, Crush, Magic, Ranged
-- Other bonuses: Melee Strength, Ranged Strength, Magic Damage, Prayer
-
-**Combat Triangle** (OSRS mechanics):
-- Weapon types have default attack styles (swords=slash, maces=crush, daggers=stab)
-- Armor provides different defense values per attack style
-- Equipment stats panel shows all bonuses
-
-**Features**:
-- Right-click to unequip
-- Automatic 2h weapon handling (unequips shield)
-- Level and skill requirements
-- Trade/death guards (can't change equipment during trades or while dead)
-- Idempotency checks to prevent duplicate equip/unequip (new in #697)
-
-### Processing Systems
-
-**Tick-Based Processing** (OSRS-style):
-- **Smelting**: Ores → bars at furnaces (4 ticks default, success rate varies by bar type)
-- **Smithing**: Bars → weapons/armor/tools at anvils (4 ticks default, multi-output for arrowtips: 15 per bar)
-- **Cooking**: Raw food → cooked food at fires/ranges (varies by food, burn chance until stop-burn level)
-- **Crafting**: Materials → leather/jewelry/gems (needle/chisel/furnace, 3 ticks, thread has 5 uses)
-- **Fletching**: Logs/materials → bows/arrows (knife + bowstring, 2-3 ticks, multi-output: 15 shafts per log)
-
-**Instant Processing**:
-- **Runecrafting**: Essence → runes at altars (instant conversion, multi-rune multiplier at higher levels)
-- **Tanning**: Hides → leather at tanner NPCs (instant, costs coins)
-
-**Common Features**:
-- Movement/combat cancellation (OSRS: any action interrupts skilling)
-- Level requirements and XP rewards
-- Material consumption and output production
-- Server-authoritative validation
-- Rate limiting and audit logging
-- Recipe data loaded from JSON manifests (data-driven)
-
-**ProcessingDataProvider** (new in #698, #699, #703):
-- Centralized recipe data provider for all processing skills
-- Loads recipes from `packages/server/world/assets/manifests/recipes/` JSON files
-- Provides lookup methods for recipes, level requirements, XP values
-- Supports multi-output recipes (e.g., 15 arrow shafts per log)
-- Handles consumables with limited uses (e.g., thread with 5 uses)
-- Validates recipe data on load with detailed error reporting
-
-**New Entities**:
-- **RunecraftingAltarEntity** (new in #703): Interactable altar for crafting runes, mystical particle effects, per-rune-type color palettes
-
-**Database Migrations**:
-- Migration 0029: Added crafting skill columns (craftingLevel, craftingXp)
-- Migration 0030: Added fletching skill columns (fletchingLevel, fletchingXp)
-- Migration 0031: Added runecrafting skill columns (runecraftingLevel, runecraftingXp)
-
 ## Critical Development Rules
 
 ### TypeScript Strong Typing
@@ -324,7 +229,6 @@ Before creating new abstractions, research existing Hyperscape systems:
 **Getting Systems:**
 ```typescript
 const combatSystem = world.getSystem('combat') as CombatSystem;
-const craftingSystem = world.getSystem('crafting') as CraftingSystem;
 ```
 
 **Entity Queries:**
@@ -337,19 +241,6 @@ const players = world.getEntitiesByType('Player');
 world.on('inventory:add', (event: InventoryAddEvent) => {
   // Handle event - assume properties exist
 });
-```
-
-**Processing System Pattern** (for new skills):
-```typescript
-// All processing systems follow this pattern:
-// 1. Listen for interaction events
-// 2. Validate player level and materials
-// 3. Create tick-based session
-// 4. Process on tick completion
-// 5. Cancel on movement/combat
-// 6. Grant XP and emit completion events
-
-// See CraftingSystem, FletchingSystem, SmithingSystem for examples
 ```
 
 ### Development Server
@@ -427,6 +318,74 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Testing**: Playwright, Vitest
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
+
+## Recent Major Features
+
+### New Skills (January 2026)
+
+Three new artisan skills were added with full OSRS-accurate mechanics:
+
+**Crafting** (PR #698):
+- Leather armor crafting (needle + thread + hides)
+- Dragonhide armor crafting (high-level ranged gear)
+- Jewelry crafting (furnace + moulds + gold bars)
+- Gem cutting (chisel + uncut gems)
+- Thread consumption system (5 uses per thread)
+- Tanning system (convert hides to leather at NPCs)
+- Auto-crafting with "Make X" quantity memory
+- Movement/combat cancellation
+
+**Fletching** (PR #699):
+- Arrow shaft creation (15 per log)
+- Bow crafting (shortbows, longbows, unstrung variants)
+- Bow stringing (item-on-item)
+- Arrow assembly (arrowtips + headless arrows)
+- Multi-output support (15 arrows per action)
+- Category grouping in UI (arrow_shafts, shortbows, longbows, stringing, arrows)
+- Auto-select for single-recipe interactions
+
+**Runecrafting** (PR #703):
+- Instant essence-to-rune conversion at altars
+- Two essence types (rune_essence for basic runes, pure_essence for all runes)
+- Multi-rune crafting at higher levels (e.g., 2x air runes at level 11)
+- Altar-specific rune types (air altar, water altar, etc.)
+- RunecraftingAltarEntity with mystical particle effects
+- Server-authoritative runeType validation
+
+### Visual Improvements (February 2026)
+
+**Fire Models** (PR #715):
+- Replaced orange cube placeholder with GLB fire model
+- Billboard particle system for realistic flames
+- Four particle layers: pillar, wisps, sparks, base
+- Color-baked glow textures for WebGPU compatibility
+- Mesh-aware particle spawning from actual geometry vertices
+
+**Ground Item Snapping** (PR #718):
+- Items now bbox-snap to terrain surface using bounding box calculation
+- Prevents items from floating or clipping through ground
+- Applies to all ground items and fire models
+- Uses `GROUND_ITEM_TERRAIN_OFFSET` constant (0.2m) for consistent placement
+
+**Mining Rock Materials** (PR #710):
+- PBR materials with metalness=0 for realistic rock appearance
+- Depleted rock models align to ground using bbox snapping
+- Headstone model replaced placeholder box
+
+### UI Enhancements (February 2026)
+
+**Skill Guide Panel** (PR #711):
+- Click-to-open from skills panel
+- Shows all unlocks for a skill sorted by level
+- Visual indicators: ✓ unlocked, ➤ next, 🔒 locked
+- Progress tracking (X/Y unlocked)
+- Levels to next unlock display
+- Client-side unlock data loading from skill-unlocks.json manifest
+
+### Bug Fixes (February 2026)
+
+- **Fishing spots** (PR #712): Aligned water threshold to 9.0m so spots spawn at shoreline instead of underwater
+- **Gathering emote** (PR #713): Prevented gathering animation from playing when player lacks required tool
 
 ## Troubleshooting
 
