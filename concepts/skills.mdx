@@ -10,7 +10,7 @@ Hyperscape features a RuneScape-inspired skill system with leveling, XP gain, an
 
 ## Available Skills
 
-Hyperscape has **12 skills** total:
+Hyperscape has **14 skills** total:
 
 ### Combat Skills
 
@@ -39,6 +39,9 @@ Hyperscape has **12 skills** total:
 | **Firemaking** | Create fires from logs |
 | **Cooking** | Prepare food from raw fish |
 | **Smithing** | Smelt ores into bars and smith equipment |
+| **Fletching** | Craft bows and arrows from logs |
+| **Crafting** | Create leather armor, jewelry, and cut gems |
+| **Runecrafting** | Craft elemental and combat runes at altars |
 
 ### Support Skills
 
@@ -203,6 +206,105 @@ Use raw fish on a fire or range to cook.
 <Warning>
   Cooking can fail at low levels, burning the food. Ranges reduce burn chance compared to fires.
 </Warning>
+
+### Fletching
+
+Craft bows and arrows from logs using a knife.
+
+**Arrow Shafts** (Knife + Logs):
+| Logs | Level | Shafts | XP |
+|------|-------|--------|-----|
+| Normal | 1 | 15 | 5 |
+| Oak | 15 | 30 | 10 |
+| Willow | 30 | 45 | 15 |
+| Maple | 45 | 60 | 20 |
+| Yew | 60 | 75 | 25 |
+| Magic | 75 | 90 | 30 |
+
+**Bows** (Knife + Logs, then String):
+| Bow | Level | XP (Cut) | XP (String) |
+|-----|-------|----------|-------------|
+| Shortbow | 5 | 5 | 5 |
+| Longbow | 10 | 10 | 10 |
+| Oak Shortbow | 20 | 16.5 | 16.5 |
+| Oak Longbow | 25 | 25 | 25 |
+| Willow Shortbow | 35 | 33.3 | 33.3 |
+| Willow Longbow | 40 | 41.5 | 41.5 |
+| Maple Shortbow | 50 | 50 | 50 |
+| Maple Longbow | 55 | 58.3 | 58.3 |
+| Yew Shortbow | 65 | 67.5 | 67.5 |
+| Yew Longbow | 70 | 75 | 75 |
+| Magic Shortbow | 80 | 83.3 | 83.3 |
+| Magic Longbow | 85 | 91.5 | 91.5 |
+
+**Arrows** (Arrowtips + Headless Arrows):
+| Arrow | Level | XP (per 15) |
+|-------|-------|-------------|
+| Bronze | 1 | 19.5 |
+| Iron | 15 | 37.5 |
+| Steel | 30 | 75 |
+| Mithril | 45 | 112.5 |
+| Adamant | 60 | 150 |
+| Rune | 75 | 187.5 |
+
+### Crafting
+
+Create leather armor, jewelry, and cut gems.
+
+**Leather Armor** (Needle + Thread + Leather):
+| Item | Level | XP |
+|------|-------|-----|
+| Leather Gloves | 1 | 13.8 |
+| Leather Boots | 7 | 16.3 |
+| Leather Cowl | 9 | 18.5 |
+| Leather Vambraces | 11 | 22 |
+| Leather Body | 14 | 25 |
+| Leather Chaps | 18 | 27 |
+| Coif | 38 | 37 |
+
+**Dragonhide Armor** (Needle + Thread + Dragon Leather):
+| Item | Level | Leather | XP |
+|------|-------|---------|-----|
+| Green D'hide Vambraces | 57 | 1 | 62 |
+| Green D'hide Chaps | 60 | 2 | 124 |
+| Green D'hide Body | 63 | 3 | 186 |
+
+**Jewelry** (Gold Bar + Gem at Furnace):
+| Item | Level | XP |
+|------|-------|-----|
+| Gold Ring | 5 | 15 |
+| Amulet of Accuracy | 8 | 30 |
+| Amulet of Strength | 50 | 85 |
+| Amulet of Power | 70 | 100 |
+| Amulet of Glory | 80 | 150 |
+| Amulet of Fury | 90 | 165 |
+
+**Gem Cutting** (Chisel + Uncut Gem):
+| Gem | Level | XP |
+|-----|-------|-----|
+| Sapphire | 20 | 50 |
+| Emerald | 27 | 67.5 |
+| Ruby | 34 | 85 |
+| Diamond | 43 | 107.5 |
+| Dragonstone | 55 | 137.5 |
+| Onyx | 67 | 167.5 |
+
+### Runecrafting
+
+Craft elemental and combat runes at runecrafting altars using essence.
+
+| Rune | Level | XP per Essence | Multi-Rune Levels |
+|------|-------|----------------|-------------------|
+| Air | 1 | 5.0 | 11, 22, 33, 44, 55, 66, 77, 88, 99 |
+| Mind | 2 | 5.5 | 14, 28, 42, 56, 70, 84, 98 |
+| Water | 5 | 6.0 | 19, 38, 57, 76, 95 |
+| Earth | 9 | 6.5 | 26, 52, 78 |
+| Fire | 14 | 7.0 | 35, 70, 95 |
+| Chaos | 35 | 8.5 | 74 |
+
+<Info>
+  Multi-rune levels allow you to craft multiple runes per essence. For example, at level 11 Runecrafting, you craft 2 air runes per essence instead of 1.
+</Info>
 
 ### Smithing
 
@@ -373,6 +475,8 @@ playerData.skills = {
   cooking: { level: 1, xp: 0 },
   smithing: { level: 1, xp: 0 },
   agility: { level: 1, xp: 0 },
+  fletching: { level: 1, xp: 0 },
+  runecrafting: { level: 1, xp: 0 },
 };
 ```
 
@@ -411,7 +515,7 @@ XP lamps are quest rewards that let you choose which skill receives XP:
 - Attack, Strength, Defense, Constitution
 - Ranged, Prayer
 - Mining, Smithing, Fishing, Cooking, Firemaking, Woodcutting
-- Agility
+- Agility, Fletching, Runecrafting
 
 <Info>
   XP lamps are commonly awarded as quest rewards, allowing you to boost the skill of your choice.
