@@ -153,26 +153,35 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 
 ### Skills System
 
-The game implements OSRS-style skills with XP progression and level requirements:
+The game implements OSRS-style skills with XP progression and level requirements (1-99):
 
 **Combat Skills**: Attack, Strength, Defense, Constitution, Ranged, Magic, Prayer
 
 **Gathering Skills**: Woodcutting, Mining, Fishing
 
 **Production Skills**: 
-- Cooking (food preparation at fires/ranges)
-- Firemaking (lighting fires from logs)
-- Smithing (smelting ores, forging metal items at anvils)
-- Crafting (leather armor, jewelry, gem cutting with needle/chisel/furnace)
-- Fletching (bows, arrows, arrow shafts with knife and bowstring)
-- Runecrafting (converting essence to runes at altars)
-- Agility (obstacle courses, shortcuts)
+- **Cooking**: Food preparation at fires/ranges (tick-based, burn chance)
+- **Firemaking**: Lighting fires from logs (tick-based)
+- **Smithing**: Smelting ores → bars, forging bars → items at anvils (tick-based)
+- **Crafting**: Leather armor, jewelry, gem cutting (needle/chisel/furnace, tick-based)
+- **Fletching**: Bows, arrows, arrow shafts (knife + logs/bowstring, tick-based, multi-output)
+- **Runecrafting**: Converting essence → runes at altars (instant, multi-rune at higher levels)
+- **Agility**: Obstacle courses, shortcuts (tick-based)
 
 **Key Features**:
-- XP-based leveling (1-99)
+- XP-based leveling (1-99) using OSRS XP table formula
 - Level requirements for items and activities
-- Skill guide panel showing unlocks at each level
-- Database persistence for all skills
+- Skill guide panel showing unlocks at each level (click skill icon in skills panel)
+- Database persistence for all skills (17 skills total)
+- Combat level calculation from combat skills
+- Total level tracking (sum of all skill levels)
+
+**Skill Guide Panel** (new in #711):
+- Click any skill icon in the skills panel to open the guide
+- Shows all unlocks for that skill (items, abilities, locations)
+- Visual indicators: ✓ unlocked, ➤ next unlock, 🔒 locked
+- Displays levels to next unlock
+- Client-side data loading from skill-unlocks.ts manifest
 
 ### Equipment System
 
@@ -196,20 +205,20 @@ The game implements OSRS-style skills with XP progression and level requirements
 - Automatic 2h weapon handling (unequips shield)
 - Level and skill requirements
 - Trade/death guards (can't change equipment during trades or while dead)
-- Idempotency checks to prevent duplicate equip/unequip
+- Idempotency checks to prevent duplicate equip/unequip (new in #697)
 
 ### Processing Systems
 
 **Tick-Based Processing** (OSRS-style):
-- Smelting: Ores → bars at furnaces
-- Smithing: Bars → weapons/armor/tools at anvils
-- Cooking: Raw food → cooked food at fires/ranges
-- Crafting: Materials → leather/jewelry/gems (needle/chisel/furnace)
-- Fletching: Logs/materials → bows/arrows (knife, bowstring)
+- **Smelting**: Ores → bars at furnaces (4 ticks default, success rate varies by bar type)
+- **Smithing**: Bars → weapons/armor/tools at anvils (4 ticks default, multi-output for arrowtips: 15 per bar)
+- **Cooking**: Raw food → cooked food at fires/ranges (varies by food, burn chance until stop-burn level)
+- **Crafting**: Materials → leather/jewelry/gems (needle/chisel/furnace, 3 ticks, thread has 5 uses)
+- **Fletching**: Logs/materials → bows/arrows (knife + bowstring, 2-3 ticks, multi-output: 15 shafts per log)
 
 **Instant Processing**:
-- Runecrafting: Essence → runes at altars (instant conversion)
-- Tanning: Hides → leather at tanner NPCs (instant, costs coins)
+- **Runecrafting**: Essence → runes at altars (instant conversion, multi-rune multiplier at higher levels)
+- **Tanning**: Hides → leather at tanner NPCs (instant, costs coins)
 
 **Common Features**:
 - Movement/combat cancellation (OSRS: any action interrupts skilling)
@@ -217,6 +226,23 @@ The game implements OSRS-style skills with XP progression and level requirements
 - Material consumption and output production
 - Server-authoritative validation
 - Rate limiting and audit logging
+- Recipe data loaded from JSON manifests (data-driven)
+
+**ProcessingDataProvider** (new in #698, #699, #703):
+- Centralized recipe data provider for all processing skills
+- Loads recipes from `packages/server/world/assets/manifests/recipes/` JSON files
+- Provides lookup methods for recipes, level requirements, XP values
+- Supports multi-output recipes (e.g., 15 arrow shafts per log)
+- Handles consumables with limited uses (e.g., thread with 5 uses)
+- Validates recipe data on load with detailed error reporting
+
+**New Entities**:
+- **RunecraftingAltarEntity** (new in #703): Interactable altar for crafting runes, mystical particle effects, per-rune-type color palettes
+
+**Database Migrations**:
+- Migration 0029: Added crafting skill columns (craftingLevel, craftingXp)
+- Migration 0030: Added fletching skill columns (fletchingLevel, fletchingXp)
+- Migration 0031: Added runecrafting skill columns (runecraftingLevel, runecraftingXp)
 
 ## Critical Development Rules
 
@@ -298,6 +324,7 @@ Before creating new abstractions, research existing Hyperscape systems:
 **Getting Systems:**
 ```typescript
 const combatSystem = world.getSystem('combat') as CombatSystem;
+const craftingSystem = world.getSystem('crafting') as CraftingSystem;
 ```
 
 **Entity Queries:**
@@ -310,6 +337,19 @@ const players = world.getEntitiesByType('Player');
 world.on('inventory:add', (event: InventoryAddEvent) => {
   // Handle event - assume properties exist
 });
+```
+
+**Processing System Pattern** (for new skills):
+```typescript
+// All processing systems follow this pattern:
+// 1. Listen for interaction events
+// 2. Validate player level and materials
+// 3. Create tick-based session
+// 4. Process on tick completion
+// 5. Cancel on movement/combat
+// 6. Grant XP and emit completion events
+
+// See CraftingSystem, FletchingSystem, SmithingSystem for examples
 ```
 
 ### Development Server
