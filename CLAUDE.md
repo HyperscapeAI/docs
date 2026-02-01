@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with AI agents powered by ElizaOS.
+Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with autonomous AI agents powered by ElizaOS.
 
 ## Essential Commands
 
@@ -102,8 +102,7 @@ packages/
 │   └── React UI components
 ├── server/              # Game server (Fastify + WebSockets)
 │   ├── World management
-│   ├── PostgreSQL persistence
-│   ├── ElizaOS agent integration
+│   ├── SQLite/PostgreSQL persistence
 │   └── LiveKit voice chat integration
 ├── client/              # Web client (Vite + React)
 │   ├── 3D rendering
@@ -111,7 +110,6 @@ packages/
 │   └── UI/HUD
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
-├── plugin-hyperscape/   # ElizaOS plugin for AI agents
 └── docs-site/           # Docusaurus documentation site
 ```
 
@@ -135,228 +133,6 @@ The RPG is built using Hyperscape's ECS architecture:
 
 All game logic runs through systems, not entity methods. Entities are just data containers.
 
-### Combat System Architecture
-
-Hyperscape implements OSRS-accurate combat with three attack types and the combat triangle:
-
-#### Attack Types
-- **MELEE**: Swords, axes, maces - cardinal-only range for distance 1, per-style bonuses (stab/slash/crush)
-- **RANGED**: Bows with arrows - Chebyshev distance, projectile system, ammunition consumption
-- **MAGIC**: Combat spells with runes - Chebyshev distance, autocast support, staffless casting
-
-#### Combat Triangle (OSRS-Accurate)
-
-The armor system implements per-style attack and defense bonuses:
-
-- **Melee Styles**: Stab, Slash, Crush (weapon type determines default style)
-- **Armor Defense**: Each armor piece has separate defense values for stab/slash/crush/ranged/magic
-- **Weapon Defaults**: Swords=slash, Daggers=stab, Maces=crush, Axes=slash, Spears=stab, Halberds=slash, Unarmed=crush
-
-**Armor Characteristics:**
-- **Melee Armor** (Bronze-Rune): High melee/ranged defense, negative magic attack/defense
-- **Ranged Armor** (Leather, D'hide): Positive ranged/magic defense, lower melee defense
-- **Magic Armor** (Wizard, Mystic): Positive magic attack/defense, minimal physical defense
-
-#### Key Combat Systems
-
-| System | Location | Purpose |
-|--------|----------|---------|
-| CombatSystem | `shared/src/systems/shared/combat/` | Main combat orchestration, per-style routing |
-| CombatStateManager | `shared/src/entities/managers/` | Attack timing, cooldowns, first-attack delay |
-| DamageCalculator | `shared/src/systems/shared/combat/` | OSRS damage formulas with per-style bonuses |
-| RangedDamageCalculator | `shared/src/systems/shared/combat/` | Ranged-specific formulas |
-| MagicDamageCalculator | `shared/src/systems/shared/combat/` | Magic-specific formulas |
-| ProjectileService | `shared/src/systems/shared/combat/` | Projectile tracking and hit delay |
-| AmmunitionService | `shared/src/systems/shared/combat/` | Arrow consumption |
-| RuneService | `shared/src/systems/shared/combat/` | Rune validation and consumption |
-| SpellService | `shared/src/systems/shared/combat/` | Spell data and validation |
-| AggroSystem | `shared/src/systems/shared/combat/` | Mob aggression with spatial indexing (21x21 tile regions) |
-| EquipmentSystem | `shared/src/systems/shared/character/` | 11-slot equipment with per-style bonus tracking |
-
-#### Combat Formulas
-
-All combat uses OSRS-accurate formulas:
-
-**Melee/Ranged Attack Roll:**
-```
-Effective Level = floor(level * prayer) + style + 8
-Attack Roll = Effective Level * (equipment + 64)
-```
-
-**Magic Attack Roll:**
-```
-Effective Level = floor(level * prayer) + style + 8
-Attack Roll = Effective Level * (magic attack + 64)
-```
-
-**Magic Defense (Players):**
-```
-Effective Defense = floor(0.7 * magic + 0.3 * defense) + 9
-Defense Roll = Effective Defense * (magic defense + 64)
-```
-
-**Hit Chance:**
-```
-If Attack > Defense: 1 - (Defense + 2) / (2 * (Attack + 1))
-If Attack ≤ Defense: Attack / (2 * (Defense + 1))
-```
-
-#### Projectile System
-
-Ranged and magic attacks use a projectile system with OSRS-accurate hit delays:
-
-**Ranged Hit Delay:**
-```
-delay = 1 + floor((3 + distance) / 6) ticks
-```
-
-**Magic Hit Delay:**
-```
-delay = 1 + floor((1 + distance) / 3) ticks
-```
-
-Projectiles are tracked server-side and rendered client-side with visual effects.
-
-### Crafting System Architecture
-
-The crafting skill allows players to create leather armor, dragonhide equipment, jewelry, and cut gems:
-
-#### Crafting Systems
-
-| System | Location | Purpose |
-|--------|----------|---------|
-| CraftingSystem | `shared/src/systems/shared/interaction/` | Tick-based crafting sessions, thread consumption, movement/combat cancellation |
-| TanningSystem | `shared/src/systems/shared/interaction/` | Instant hide-to-leather conversion at tanner NPCs |
-| ProcessingDataProvider | `shared/src/data/` | Recipe loading, filtering, and lookup |
-
-#### Crafting Categories
-
-**Leather Crafting** (needle + thread):
-- Gloves, boots, vambraces, chaps, body, coif
-- Thread has 5 uses before being consumed
-- Levels 1-18
-
-**Dragonhide Crafting** (needle + thread):
-- Green/blue/red/black d'hide vambraces, chaps, body
-- High-level ranged armor
-- Levels 57-84
-
-**Jewelry Crafting** (furnace + moulds):
-- Gold/silver rings, necklaces, amulets, bracelets
-- Requires specific mould in inventory
-- Levels 5-40
-
-**Gem Cutting** (chisel):
-- Cut sapphire, emerald, ruby, diamond
-- Used in jewelry crafting
-- Levels 20-43
-
-#### Crafting Mechanics
-
-**Thread Consumption:**
-- Thread has 5 uses tracked in-memory per crafting session
-- New thread consumed when uses depleted
-- Crafting stops when no thread available
-
-**Movement/Combat Cancellation:**
-- Crafting cancels on `MOVEMENT_CLICK_TO_MOVE` event
-- Crafting cancels on `COMBAT_STARTED` event
-- Matches OSRS behavior where any action interrupts skilling
-
-**Recipe Filtering:**
-- Recipes filter by input item (e.g., chisel + uncut sapphire shows only sapphire)
-- Furnace jewelry filters by equipped mould
-- Auto-selects single recipe to skip to quantity selection
-
-**Make-X Functionality:**
-- Craft 1, 5, 10, All, or custom quantity
-- Custom quantity remembered in localStorage
-- "All" sends -1 sentinel, server computes actual max based on materials
-
-**Performance Optimizations:**
-- Single inventory scan per tick (consolidated from 4 separate scans)
-- Reusable arrays to avoid per-tick allocations
-- Once-per-tick processing guard
-
-**Security Features:**
-- Rate limiting on crafting interact (prevents inventory scan spam)
-- Structured audit logging on craft completion
-- Monotonic counter for item IDs (prevents Date.now() collisions)
-- Input validation for triggerType and inputItemId
-
-### Persistence Architecture
-
-The game uses a multi-layered persistence system with crash-safe guarantees:
-
-#### Auto-Save System
-- Equipment: 5-second auto-save interval (parallelized with Promise.allSettled)
-- Inventory: 5-second auto-save interval
-- Bank: Immediate persistence on changes
-- Skills: Immediate persistence on XP gain (XP rounded to integer at DB boundary)
-
-#### Critical Operations
-Pickups and drops persist immediately to prevent item loss on server crashes.
-
-#### Transactional Safety
-- **Equipment saves**: Use database transactions with upsert pattern (prevents race conditions)
-- **Bank operations**: Unified atomic saves for items and tabs via `savePlayerBankComplete()`
-- **Inventory operations**: Transactional with FOR UPDATE locks
-- **Duel stakes**: Crash-safe design - items stay in inventory until duel completion, then atomic transfer
-
-#### Unified PLAYER_JOINED Payload
-
-Equipment and inventory data are loaded once during character selection and passed via the PLAYER_JOINED event payload:
-
-```typescript
-// From character-selection.ts
-world.emit(EventType.PLAYER_JOINED, {
-  playerId: socket.player.data.id,
-  player: socket.player,
-  equipment: equipmentRows,  // Pre-loaded from DB
-  inventory: inventoryRows,  // Pre-loaded from DB
-  isLoadTestBot,
-});
-```
-
-This eliminates race conditions where multiple systems query the database independently.
-
-#### EventBus Async Handler Tracking
-
-The EventBus now tracks pending async handlers for graceful shutdown:
-
-```typescript
-// From EventBus.ts
-private pendingAsyncHandlers: Set<Promise<unknown>> = new Set();
-
-async waitForPendingHandlers(timeout: number = 5000): Promise<void> {
-  // Waits for all async operations (like database saves) to complete
-}
-```
-
-This ensures all database writes complete before server shutdown.
-
-#### Graceful Shutdown Sequence
-
-The shutdown system ensures no data loss on server termination:
-
-1. Close HTTP server (stop accepting new connections)
-2. Shutdown embedded agents
-3. **Force-save all player data** (inventory, equipment, coins) - calls `destroyAsync()` directly on systems
-4. Wait for pending database operations
-5. Destroy world and all systems
-6. Close database connections
-7. Stop Docker containers (if started)
-8. Clear startup flag (for hot reload)
-9. Exit process (unless hot reload)
-
-**Critical Fix**: Player data is now saved BEFORE `world.destroy()` to prevent data loss. The `forcePlayerDataSave()` function directly calls `destroyAsync()` on inventory, equipment, and coin pouch systems, then awaits completion before proceeding.
-
-#### Write-Ahead Logging (Phase 2)
-PersistenceService provides WAL pattern for future crash recovery:
-- Located at `packages/server/src/persistence/PersistenceService.ts`
-- Currently scaffolding - not yet integrated into game systems
-- Will be wired to TradingSystem, BankSystem in future updates
-
 ### RPG Implementation Architecture
 
 **Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
@@ -372,6 +148,75 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 - Use existing Hyperscape abstractions (ECS, networking, physics)
 - Don't reinvent systems that Hyperscape already provides
 - Separation of concerns: core engine vs. game content
+
+## Game Systems
+
+### Skills System
+
+The game implements OSRS-style skills with XP progression and level requirements:
+
+**Combat Skills**: Attack, Strength, Defense, Constitution, Ranged, Magic, Prayer
+
+**Gathering Skills**: Woodcutting, Mining, Fishing
+
+**Production Skills**: 
+- Cooking (food preparation at fires/ranges)
+- Firemaking (lighting fires from logs)
+- Smithing (smelting ores, forging metal items at anvils)
+- Crafting (leather armor, jewelry, gem cutting with needle/chisel/furnace)
+- Fletching (bows, arrows, arrow shafts with knife and bowstring)
+- Runecrafting (converting essence to runes at altars)
+- Agility (obstacle courses, shortcuts)
+
+**Key Features**:
+- XP-based leveling (1-99)
+- Level requirements for items and activities
+- Skill guide panel showing unlocks at each level
+- Database persistence for all skills
+
+### Equipment System
+
+**11 Equipment Slots** (OSRS-accurate):
+- Weapon, Shield, Helmet, Body, Legs
+- Boots, Gloves, Cape, Amulet, Ring
+- Arrows (ammunition)
+
+**Combat Bonuses**:
+- Per-style attack bonuses: Stab, Slash, Crush, Magic, Ranged
+- Per-style defense bonuses: Stab, Slash, Crush, Magic, Ranged
+- Other bonuses: Melee Strength, Ranged Strength, Magic Damage, Prayer
+
+**Combat Triangle** (OSRS mechanics):
+- Weapon types have default attack styles (swords=slash, maces=crush, daggers=stab)
+- Armor provides different defense values per attack style
+- Equipment stats panel shows all bonuses
+
+**Features**:
+- Right-click to unequip
+- Automatic 2h weapon handling (unequips shield)
+- Level and skill requirements
+- Trade/death guards (can't change equipment during trades or while dead)
+- Idempotency checks to prevent duplicate equip/unequip
+
+### Processing Systems
+
+**Tick-Based Processing** (OSRS-style):
+- Smelting: Ores → bars at furnaces
+- Smithing: Bars → weapons/armor/tools at anvils
+- Cooking: Raw food → cooked food at fires/ranges
+- Crafting: Materials → leather/jewelry/gems (needle/chisel/furnace)
+- Fletching: Logs/materials → bows/arrows (knife, bowstring)
+
+**Instant Processing**:
+- Runecrafting: Essence → runes at altars (instant conversion)
+- Tanning: Hides → leather at tanner NPCs (instant, costs coins)
+
+**Common Features**:
+- Movement/combat cancellation (OSRS: any action interrupts skilling)
+- Level requirements and XP rewards
+- Material consumption and output production
+- Server-authoritative validation
+- Rate limiting and audit logging
 
 ## Critical Development Rules
 
@@ -467,270 +312,6 @@ world.on('inventory:add', (event: InventoryAddEvent) => {
 });
 ```
 
-### Duel System
-
-The duel arena implements OSRS-accurate dueling with crash-safe stake handling:
-
-#### Duel States
-1. **RULES** - Players negotiate combat rules (noFood, noPrayer, noRanged, etc.)
-2. **STAKES** - Players stake items from inventory
-3. **CONFIRMING** - Final review before fight
-4. **COUNTDOWN** - 3-2-1-FIGHT animation
-5. **FIGHTING** - Active combat
-6. **FINISHED** - Resolution pending (death animation delay)
-
-#### Crash-Safe Stakes
-
-Items remain in player inventory during staking (not removed until duel completion):
-
-```typescript
-// Stakes are tracked in-memory only during negotiation
-session.challengerStakes: StakedItem[] = [
-  { inventorySlot: 5, itemId: "dragon_scimitar", quantity: 1, value: 100000 }
-];
-
-// At duel completion, atomic database transaction transfers items
-// Uses Math.min(stake.quantity, dbItem.quantity) to handle consumed items
-```
-
-**Protection Mechanisms:**
-- **Slot Locking**: `getStakedSlots()` returns Set of locked inventory slots
-- **Trade Protection**: Cannot trade staked items
-- **Drop Protection**: All drops blocked during duels
-- **Move Protection**: Cannot move/swap staked items
-- **Use Protection**: Cannot consume staked items (food, potions)
-- **Equipment Protection**: Cannot equip/unequip during active duels
-- **Idempotency**: Duplicate equip/unequip requests blocked with 5s dedup window
-
-#### Settlement Safety
-
-The settlement transaction includes multiple safety checks:
-
-```typescript
-// Validate item exists and matches expected ID
-const dbItem = await pool.query(`SELECT itemId, quantity FROM inventory WHERE ...`);
-if (dbItem.itemId !== stake.itemId) {
-  // Security: Item ID mismatch - skip transfer
-  continue;
-}
-
-// Use actual remaining quantity (handles consumed food)
-const transferQuantity = Math.min(stake.quantity, dbItem.quantity);
-
-// Integer overflow protection
-if (existingQty > 2147483647 - transferQuantity) {
-  // Skip merge to prevent overflow
-  continue;
-}
-```
-
-**Deadlock Retry**: Settlement retries up to 3 times on PostgreSQL deadlock (error code 40P01).
-
-**Inventory Overflow**: If winner's inventory is full, items go to bank automatically.
-
-### Artisan Skills Architecture
-
-Hyperscape implements three OSRS-accurate artisan skills for creating equipment and items:
-
-#### Crafting System
-
-| System | Location | Purpose |
-|--------|----------|---------|
-| CraftingSystem | `shared/src/systems/shared/interaction/` | Tick-based crafting sessions, thread consumption, movement/combat cancellation |
-| TanningSystem | `shared/src/systems/shared/interaction/` | Instant hide-to-leather conversion at tanner NPCs |
-
-**Crafting Categories:**
-- **Leather Crafting** (needle + thread): Gloves, boots, vambraces, chaps, body, coif (levels 1-18)
-- **Dragonhide Crafting** (needle + thread): Green/blue/red/black d'hide armor (levels 57-84)
-- **Jewelry Crafting** (furnace + moulds): Gold/silver rings, necklaces, amulets, bracelets (levels 5-40)
-- **Gem Cutting** (chisel): Cut sapphire, emerald, ruby, diamond (levels 20-43)
-
-**Mechanics:**
-- Thread has 5 uses tracked in-memory per session
-- Movement or combat cancels crafting
-- Recipe filtering by input item
-- Make-X with quantity memory (1, 5, 10, All, custom)
-- Rate limiting and audit logging
-
-#### Fletching System
-
-| System | Location | Purpose |
-|--------|----------|---------|
-| FletchingSystem | `shared/src/systems/shared/interaction/` | Tick-based fletching sessions, multi-output support, item-on-item interactions |
-
-**Fletching Categories:**
-- **Arrow Shafts** (knife + logs): 15 shafts per log (levels 1-60)
-- **Headless Arrows** (arrow shafts + feathers): 15 per action (level 1)
-- **Arrows** (arrowtips + headless arrows): 15 per action (levels 1-75)
-- **Shortbows** (knife + logs): Unstrung shortbows (levels 5-70)
-- **Longbows** (knife + logs): Unstrung longbows (levels 10-85)
-- **Stringing** (bowstring + unstrung bow): Complete bows (levels 5-85)
-
-**Mechanics:**
-- Multi-output recipes (15 items per action for arrows/shafts)
-- Item-on-item interactions (bowstring + bow, arrowtips + arrows)
-- Knife required for cutting, no tool for stringing
-- Tick-based fletching (2-3 ticks per action)
-- Movement or combat cancels fletching
-- Recipe filtering by input item pair
-
-#### Runecrafting System
-
-| System | Location | Purpose |
-|--------|----------|---------|
-| RunecraftingSystem | `shared/src/systems/shared/interaction/` | Instant essence-to-rune conversion at altars, multi-rune multipliers |
-
-**Runecrafting Altars:**
-- **Basic Runes**: Air, Mind, Water, Earth, Fire, Body (levels 1-27)
-- **Advanced Runes**: Cosmic, Chaos, Nature, Law, Death (levels 27-65)
-
-**Mechanics:**
-- Instant conversion (no tick delay)
-- Multi-rune multipliers at specific levels (e.g., 2x air runes at level 11, 3x at level 22)
-- Two essence types: rune_essence (basic runes), pure_essence (all runes)
-- XP per essence consumed
-- No failure rate
-- Converts ALL essence in inventory at once
-
-#### ProcessingDataProvider
-
-Central data provider for all artisan skill recipes:
-
-| Method | Purpose |
-|--------|---------|
-| `getCraftingRecipe(outputItemId)` | Get crafting recipe by output item |
-| `getCraftingRecipesByStation(station)` | Filter recipes by station ("none" or "furnace") |
-| `getFletchingRecipe(recipeId)` | Get fletching recipe by unique ID (output:primaryInput) |
-| `getFletchingRecipesForInput(itemId)` | Get all recipes using a specific input |
-| `getFletchingRecipesForInputPair(itemA, itemB)` | Get recipes matching both inputs (item-on-item) |
-| `getRunecraftingRecipe(runeType)` | Get runecrafting recipe by rune type |
-| `getRunecraftingMultiplier(runeType, level)` | Calculate multi-rune multiplier for level |
-| `getTanningRecipe(inputItemId)` | Get tanning recipe by hide item ID |
-
-**Recipe Loading:**
-- Recipes loaded from JSON manifests in `packages/server/world/assets/manifests/recipes/`
-- Validation on load with detailed error reporting
-- Fallback to embedded item data for backwards compatibility
-- Singleton pattern with lazy initialization
-
-### Manifest-Driven Content
-
-Game content is defined in JSON manifests at `packages/server/world/assets/manifests/`:
-
-| Manifest | Purpose | Example |
-|----------|---------|---------|
-| `items/*.json` | Item definitions | Weapons, armor, food, resources |
-| `npcs.json` | NPC/mob definitions | Combat stats, loot tables, AI behavior |
-| `prayers.json` | Prayer definitions | Bonuses, drain rates, conflicts |
-| `ammunition.json` | Arrows and bolts | Ranged strength, requirements |
-| `runes.json` | Magic runes | Elemental staves, infinite runes |
-| `combat-spells.json` | Combat spells | Damage, XP, rune costs |
-| `banks-stores.json` | Shops and banks | Stock, prices, locations |
-| `recipes/crafting.json` | Crafting recipes | Leather, dragonhide, jewelry, gems |
-| `recipes/tanning.json` | Tanning recipes | Hide-to-leather conversion costs |
-| `recipes/fletching.json` | Fletching recipes | Bows, arrows, arrow shafts, multi-output |
-| `recipes/runecrafting.json` | Runecrafting recipes | Essence-to-rune conversion, multi-rune levels |
-| `recipes/smelting.json` | Smelting recipes | Ore-to-bar conversion |
-| `recipes/smithing.json` | Smithing recipes | Bar-to-equipment crafting |
-| `recipes/cooking.json` | Cooking recipes | Raw-to-cooked food |
-| `recipes/firemaking.json` | Firemaking recipes | Log burning XP |
-
-**Adding new content**: Edit the appropriate manifest file - no code changes required.
-
-### Combat System Implementation
-
-#### Ranged Combat
-- Weapons: Bows (shortbow, oak, willow, maple)
-- Ammunition: Arrows (bronze, iron, steel, mithril, adamant)
-- Styles: Accurate (+3 ranged), Rapid (-1 tick speed), Longrange (+2 range)
-- Consumption: 1 arrow per shot (no Ava's devices in F2P)
-
-#### Magic Combat
-- Weapons: Staves (staff, magic staff, elemental staves)
-- Spells: Strike tier (levels 1-13), Bolt tier (levels 17-35)
-- Runes: Air, water, earth, fire, mind, chaos
-- Elemental staves provide infinite runes for their element
-- Autocast: Select a spell to auto-cast on attack
-- Staffless casting: Can cast spells without a staff (lower accuracy)
-
-#### Attack Type Routing
-The combat system routes attacks based on weapon type and selected spell:
-1. If player has spell selected → MAGIC attack (regardless of weapon)
-2. Else if weapon is bow → RANGED attack
-3. Else → MELEE attack
-
-#### Armor System (69 Items)
-
-The armor system implements OSRS-accurate per-style defense bonuses:
-
-**Armor Categories:**
-- **Melee Armor** (24 items): Bronze, Iron, Steel, Mithril, Adamant, Rune (helmet, body, legs, shield per tier)
-  - High stab/slash/crush/ranged defense
-  - Negative magic attack and magic defense penalties
-  - Example: Rune platebody has +82 stab, +80 slash, +72 crush, +80 ranged, -6 magic defense, -30 magic attack
-
-- **Ranged Armor** (8 items): Leather, Studded leather, Green d'hide, Coif
-  - Positive ranged and magic defense
-  - Lower melee defense than plate armor
-  - Example: Green d'hide body has +40 stab, +32 slash, +45 crush, +40 ranged, +20 magic defense, +15 ranged attack
-
-- **Magic Armor** (8 items): Wizard robes, Mystic robes, boots, gloves
-  - Positive magic attack and magic defense
-  - Minimal physical defense
-  - Example: Mystic robe top has +20 magic attack, +20 magic defense
-
-**Per-Style Bonus Tracking:**
-
-Equipment bonuses are tracked in `PlayerEquipment.totalStats`:
-```typescript
-totalStats: {
-  // Generic bonuses (backward compatibility)
-  attack: number;
-  strength: number;
-  defense: number;
-  ranged: number;
-  
-  // Per-style melee attack bonuses
-  attackStab: number;
-  attackSlash: number;
-  attackCrush: number;
-  
-  // Per-style melee defense bonuses
-  defenseStab: number;
-  defenseSlash: number;
-  defenseCrush: number;
-  defenseRanged: number;
-  
-  // Magic/ranged bonuses
-  attackMagic: number;
-  attackRanged: number;
-  magicDefense: number;
-  rangedStrength: number;
-  meleeStrength: number;
-  magicDamage: number;
-}
-```
-
-**Weapon Attack Style Mapping:**
-
-Melee weapons have default attack styles that determine which per-style bonus is used:
-
-```typescript
-// From CombatConstants.ts
-export const WEAPON_DEFAULT_ATTACK_STYLE: Record<string, MeleeAttackStyle> = {
-  [WeaponType.SWORD]: "slash",
-  [WeaponType.SCIMITAR]: "slash",
-  [WeaponType.AXE]: "slash",
-  [WeaponType.MACE]: "crush",
-  [WeaponType.DAGGER]: "stab",
-  [WeaponType.SPEAR]: "stab",
-  [WeaponType.HALBERD]: "slash",
-  [WeaponType.NONE]: "crush", // unarmed = crush (fists)
-};
-```
-
-The DamageCalculator uses these mappings to select the appropriate attack/defense bonuses for combat calculations.
-
 ### Development Server
 
 The dev server provides:
@@ -802,84 +383,10 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Engine**: Three.js 0.180.0, PhysX (WASM)
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
-- **Database**: PostgreSQL (production via Neon), Docker for local dev
+- **Database**: SQLite (local), PostgreSQL (production via Neon)
 - **Testing**: Playwright, Vitest
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
-- **AI**: ElizaOS for autonomous agents
-
-## Database Schema
-
-### Core Tables
-
-| Table | Purpose | Key Columns |
-|-------|---------|-------------|
-| `users` | User accounts | id, wallet, privyId |
-| `characters` | Player characters | id, userId, username, position, skills, selectedSpell |
-| `inventory` | Player inventory | playerId, itemId, quantity, slotIndex |
-| `equipment` | Equipped items (11 slots) | playerId, slotType, itemId, quantity |
-| `bank_storage` | Bank items | playerId, itemId, quantity, slot, tabIndex |
-| `bank_tabs` | Bank tab icons | playerId, tabIndex, iconItemId |
-| `operations_log` | WAL for crash recovery | id, playerId, operationType, operationState |
-
-### Skills Columns
-
-All skill data is stored in the `characters` table:
-
-**Combat Skills:**
-- `attackLevel`, `attackXp`
-- `strengthLevel`, `strengthXp`
-- `defenseLevel`, `defenseXp`
-- `constitutionLevel`, `constitutionXp`
-- `rangedLevel`, `rangedXp`
-- `magicLevel`, `magicXp` (now persisted)
-- `prayerLevel`, `prayerXp` (now persisted)
-
-**Gathering Skills:**
-- `woodcuttingLevel`, `woodcuttingXp`
-- `miningLevel`, `miningXp`
-- `fishingLevel`, `fishingXp`
-
-**Artisan Skills:**
-- `cookingLevel`, `cookingXp`
-- `firemakingLevel`, `firemakingXp`
-- `smithingLevel`, `smithingXp`
-- `craftingLevel`, `craftingXp`
-- `fletchingLevel`, `fletchingXp`
-- `runecraftingLevel`, `runecraftingXp`
-
-**Other Skills:**
-- `agilityLevel`, `agilityXp`
-
-### Combat Preferences
-- `attackStyle` - Selected combat style (accurate, aggressive, defensive, controlled, rapid, longrange, autocast)
-- `autoRetaliate` - Auto-retaliate toggle (1=ON, 0=OFF)
-- `selectedSpell` - Autocast spell ID (null = no autocast, persisted across sessions)
-
-### Equipment Slots
-
-The equipment table supports 11 slots (OSRS-style paperdoll):
-- `weapon`, `shield`, `helmet`, `body`, `legs`
-- `boots`, `gloves`, `cape`, `amulet`, `ring`
-- `arrows` (ammunition slot for ranged combat)
-
-Each slot tracks `itemId` and `quantity` (for stackable items like arrows).
-
-**Arrow Quantity Tracking:**
-- Arrows are stored in the equipment slot with full quantity
-- `consumeArrow()` decrements quantity by 1 per shot
-- Auto-unequips when quantity reaches 0
-- Quantity persisted to database on equip/unequip/consume
-- Prevents arrow duplication on crashes
-
-### Migrations
-
-Run from `packages/server/`:
-```bash
-bunx drizzle-kit generate  # Create migration from schema changes
-bunx drizzle-kit migrate   # Apply pending migrations
-bunx drizzle-kit push      # Push schema directly (dev only)
-```
 
 ## Troubleshooting
 
@@ -918,63 +425,9 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Tests spawn their own Hyperscape instances
 - Visual tests require headless browser support
 
-### Database Issues
-
-**Schema out of sync after pulling updates:**
-```bash
-# Reset database (WARNING: deletes all local data)
-docker stop hyperscape-postgres 2>/dev/null
-docker rm hyperscape-postgres 2>/dev/null
-docker volume rm hyperscape-postgres-data 2>/dev/null
-bun run dev  # Starts fresh database
-```
-
-**Migration errors:**
-```bash
-cd packages/server
-bunx drizzle-kit push  # Force schema sync
-```
-
-## Recent Improvements
-
-### Mining Rock Material Fix (PR #710)
-
-Fixed PBR material rendering for mining rocks:
-
-**Issue:** Mining rocks were rendering with metallic appearance due to default metalness=1 in PBR materials.
-
-**Fix:** Force metalness=0 on all PBR materials for rock models to achieve correct stone appearance.
-
-**Implementation:**
-```typescript
-// In ResourceEntity.createMesh()
-child.traverse((node) => {
-  if (node instanceof THREE.Mesh && node.material) {
-    if (node.material.metalness !== undefined) {
-      node.material.metalness = 0; // Stone is not metallic
-    }
-  }
-});
-```
-
-**Additional Fix:** Depleted rock models now align to ground correctly using bounding box calculation.
-
-### Headstone Model Replacement
-
-Replaced placeholder box with proper headstone.glb model for death markers:
-
-**Changes:**
-- HeadstoneEntity now loads `headstone.glb` model
-- Model scaled to 0.5 for appropriate size
-- Aligned to ground using bounding box
-- Maintains collision and interaction functionality
-
-**Location:** `packages/shared/src/entities/world/HeadstoneEntity.ts`
-
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
-- [ARTISAN-SKILLS.md](ARTISAN-SKILLS.md) - Comprehensive artisan skills guide
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
