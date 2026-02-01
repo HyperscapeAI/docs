@@ -743,26 +743,58 @@ if (session && session.state !== "FINISHED") {
 
 ### Duel Arena Config
 
-**Location:** `packages/shared/src/data/duel-manifest.ts`
+**Location:** `manifests/duel-arenas.json`
 
-Centralized configuration for arena layout:
+Centralized configuration for arena layout and zones:
 
-```typescript
-export function getDuelArenaConfig() {
-  return {
-    arenaCount: 6,
-    columns: 2,
-    rows: 3,
-    baseX: 70,
-    baseZ: 90,
-    baseY: 0,
-    arenaWidth: 20,
-    arenaLength: 24,
-    arenaGap: 4,
-    spawnOffset: 8,
-  };
+```json
+{
+  "arenas": [
+    {
+      "arenaId": 1,
+      "center": { "x": 210, "z": 210 },
+      "size": 16,
+      "spawnPoints": [
+        { "x": 206, "y": 0, "z": 210 },
+        { "x": 214, "y": 0, "z": 210 }
+      ],
+      "trapdoorPositions": [
+        { "x": 203, "z": 206 },
+        { "x": 203, "z": 214 },
+        { "x": 217, "z": 206 },
+        { "x": 217, "z": 214 }
+      ]
+    }
+    // ... 5 more arenas (IDs 2-6)
+  ],
+  "lobby": {
+    "center": { "x": 250, "z": 295 },
+    "size": { "width": 60, "depth": 30 },
+    "spawnPoint": { "x": 250, "y": 0, "z": 295 }
+  },
+  "hospital": {
+    "center": { "x": 210, "z": 295 },
+    "size": { "width": 20, "depth": 15 },
+    "spawnPoint": { "x": 210, "y": 0, "z": 295 }
+  },
+  "constants": {
+    "arenaSize": 16,
+    "wallHeight": 2.5,
+    "wallThickness": 0.5,
+    "floorColor": "0xc2b280",
+    "wallColor": "0x8b7355",
+    "trapdoorColor": "0x4a3728"
+  }
 }
 ```
+
+**Arena Layout:**
+- 6 arenas arranged in a 2×3 grid
+- Each arena is 16×16 tiles
+- Spawn points positioned 4 tiles from center (north/south)
+- 4 trapdoor positions per arena (forfeit pillars)
+- Lobby area: 60×30 tiles at (250, 295)
+- Hospital area: 20×15 tiles at (210, 295)
 
 ### Rule Definitions
 
