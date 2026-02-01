@@ -692,6 +692,97 @@ interface VegetationLayer {
 
 ---
 
+## Recipe Manifests
+
+Recipe manifests define crafting, processing, and production activities for artisan skills. All recipes follow a consistent structure with inputs, outputs, tools, level requirements, and XP rewards.
+
+### Fletching Recipes
+
+The `recipes/fletching.json` manifest defines bow and arrow crafting:
+
+```typescript
+interface FletchingRecipe {
+  output: string;              // Item ID of crafted item
+  outputQuantity: number;      // Number of items produced
+  category: string;            // Recipe category
+  inputs: Array<{              // Required materials
+    item: string;
+    amount: number;
+  }>;
+  tools: string[];             // Required tools (e.g., "knife")
+  level: number;               // Fletching level required
+  xp: number;                  // XP awarded
+  ticks: number;               // Time to craft (game ticks)
+  skill: "fletching";
+}
+```
+
+**Recipe Categories**:
+- `arrow_shafts` - Knife + logs → arrow shafts (15-90 per log)
+- `headless_arrows` - Arrow shafts + feathers → headless arrows
+- `shortbows` - Knife + logs → unstrung shortbows
+- `longbows` - Knife + logs → unstrung longbows
+- `stringing` - Bowstring + unstrung bow → finished bow
+- `arrows` - Arrowtips + headless arrows → finished arrows
+
+### Crafting Recipes
+
+The `recipes/crafting.json` manifest defines leather, armor, and jewelry crafting:
+
+```typescript
+interface CraftingRecipe {
+  output: string;              // Item ID of crafted item
+  category: string;            // Recipe category
+  inputs: Array<{              // Required materials
+    item: string;
+    amount: number;
+  }>;
+  tools: string[];             // Required tools (e.g., "needle", "chisel")
+  consumables: Array<{         // Consumable items (e.g., thread)
+    item: string;
+    uses: number;              // Uses before consumed
+  }>;
+  level: number;               // Crafting level required
+  xp: number;                  // XP awarded
+  ticks: number;               // Time to craft
+  station: string;             // Required station ("none" or "furnace")
+}
+```
+
+**Recipe Categories**:
+- `leather` - Needle + thread + leather → leather armor
+- `studded` - Leather armor + steel studs → studded armor
+- `dragonhide` - Needle + thread + dragon leather → dragonhide armor
+- `jewelry` - Gold bar + gems + mould → jewelry (at furnace)
+- `gem_cutting` - Chisel + uncut gem → cut gem
+
+### Runecrafting Recipes
+
+The `recipes/runecrafting.json` manifest defines rune crafting at altars:
+
+```typescript
+interface RunecraftingRecipe {
+  runeType: string;            // Rune type identifier
+  runeItemId: string;          // Output rune item ID
+  levelRequired: number;       // Runecrafting level required
+  xpPerEssence: number;        // XP per essence used
+  essenceTypes: string[];      // Accepted essence types
+  multiRuneLevels: number[];   // Levels for multiple runes per essence
+}
+```
+
+**Rune Types**:
+- Air (level 1, 5.0 XP) - Accepts rune essence or pure essence
+- Mind (level 2, 5.5 XP) - Accepts rune essence or pure essence
+- Water (level 5, 6.0 XP) - Accepts rune essence or pure essence
+- Earth (level 9, 6.5 XP) - Accepts rune essence or pure essence
+- Fire (level 14, 7.0 XP) - Accepts rune essence or pure essence
+- Chaos (level 35, 8.5 XP) - Requires pure essence only
+
+**Multi-Rune System**: At specific level thresholds, players craft multiple runes per essence (e.g., 2 air runes at level 11, 3 at level 22, etc.)
+
+---
+
 ## Quests
 
 Quests are defined in `quests.json` and provide structured objectives for players:
