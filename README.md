@@ -16,79 +16,13 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 | Category | Features |
 |----------|----------|
-| **Combat** | Melee, ranged, and magic combat with OSRS-accurate formulas, per-style attack/defense bonuses (stab/slash/crush), combat triangle, projectile system, prayer bonuses |
-| **Equipment** | 11-slot equipment system (weapon, shield, helmet, body, legs, boots, gloves, cape, amulet, ring, arrows) with per-style bonuses and OSRS paperdoll layout |
-| **Skills** | Attack, Strength, Defence, Constitution, Ranged, Magic, Prayer, Woodcutting, Mining, Fishing, Cooking, Firemaking, Smithing, Agility, Crafting, Fletching, Runecrafting (17 skills total) |
-| **Artisan Skills** | Crafting (leather, dragonhide, jewelry, gems), Fletching (bows, arrows, multi-output), Runecrafting (instant essence-to-rune conversion, multi-rune multipliers) |
-| **Economy** | 480-slot bank with tabs, shops, item weights, loot drops, coin pouch system |
-| **PvP** | Duel arena with crash-safe staking, equipment restrictions, rule negotiation, idempotency protection |
+| **Combat** | Tick-based OSRS mechanics (600ms ticks), attack styles (stab/slash/crush), accuracy formulas, death/respawn system, per-style combat bonuses |
+| **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking, Smithing, Crafting, Fletching, Runecrafting, Agility + combat skills with XP/leveling |
+| **Equipment** | 11 equipment slots (weapon, shield, helmet, body, legs, boots, gloves, cape, amulet, ring, arrows), OSRS-style stat bonuses, combat triangle mechanics |
+| **Economy** | 480-slot bank, shops, item weights, loot drops, tanning, smelting |
 | **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
-| **Content** | JSON manifests for NPCs, items, stores, spells, ammunition, armor, crafting/fletching/runecrafting recipes—no code required |
-| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics, spatial indexing |
-
-### Combat System
-
-Hyperscape features a complete OSRS-style combat system with three attack types and the combat triangle:
-
-- **Melee Combat**: Swords, axes, maces with accurate/aggressive/defensive/controlled styles, per-style attack bonuses (stab/slash/crush)
-- **Ranged Combat**: Bows with arrows, accurate/rapid/longrange styles, ammunition consumption, projectile system
-- **Magic Combat**: Combat spells (Strike/Bolt tiers), rune consumption, autocast system, elemental staves, staffless casting
-
-All combat uses OSRS-accurate formulas for damage calculation, hit chance, and XP distribution. The system includes:
-- **Combat Triangle**: Per-style attack and defense bonuses (stab, slash, crush, magic, ranged)
-- **Armor System**: 69 OSRS-accurate armor items with per-style defense bonuses and negative magic penalties for melee armor
-- **Projectile System**: Visual projectiles with distance-based hit delays for ranged and magic attacks
-- **Prayer Bonuses**: Multipliers for all combat styles (melee, ranged, magic)
-- **Equipment Stats**: 11 equipment slots with comprehensive bonus tracking
-- **Combat Styles**: XP distribution and stat bonuses based on selected style
-
-### Artisan Skills
-
-Hyperscape features three artisan skills for creating equipment and items:
-
-#### Crafting
-Create leather armor, dragonhide equipment, jewelry, and cut gems:
-
-- **Leather Crafting**: Use needle + thread on leather to create gloves, boots, vambraces, chaps, body, coif
-- **Dragonhide Crafting**: Use needle + thread on dragon leather for high-level ranged armor
-- **Jewelry Crafting**: Use furnace + moulds to create rings, necklaces, amulets, bracelets from gold/silver bars
-- **Gem Cutting**: Use chisel on uncut gems to create cut gems for jewelry
-- **Tanning System**: Convert hides to leather at tanner NPCs for a coin fee
-
-**Mechanics:**
-- Thread has 5 uses before being consumed
-- Tick-based crafting (2-3 ticks per item)
-- Movement or combat cancels crafting
-- Make-X with quantity memory
-
-#### Fletching
-Create ranged weapons and ammunition:
-
-- **Arrow Shafts**: Use knife on logs (15 shafts per log)
-- **Headless Arrows**: Attach feathers to arrow shafts (15 per action)
-- **Arrows**: Attach arrowtips to headless arrows (15 per action)
-- **Bows**: Cut logs into unstrung bows, string with bowstring
-- **Crossbows**: Advanced ranged weapons (future)
-
-**Mechanics:**
-- Multi-output recipes (15 arrow shafts per log)
-- Item-on-item interactions (bowstring + unstrung bow)
-- Knife required for cutting, no tool for stringing
-- Tick-based fletching (2-3 ticks per action)
-
-#### Runecrafting
-Convert essence into runes at runecrafting altars:
-
-- **Instant Conversion**: Click altar to convert all essence at once
-- **Multi-Rune Crafting**: Higher levels produce multiple runes per essence (e.g., 2x air runes at level 11)
-- **Essence Types**: Rune essence (basic runes), pure essence (all runes)
-- **Altar Types**: Air, Mind, Water, Earth, Fire, Body, Cosmic, Chaos, Nature, Law, Death
-
-**Mechanics:**
-- Instant conversion (no tick delay)
-- Multi-rune multipliers at specific levels
-- XP per essence consumed
-- No failure rate
+| **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
+| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
 
 ## Quick Start
 
@@ -315,10 +249,7 @@ bun run build
 
 ## More Info
 
-- [CLAUDE.md](CLAUDE.md) - Development guidelines, architecture documentation, and coding standards
-- [ARTISAN-SKILLS.md](ARTISAN-SKILLS.md) - Comprehensive guide to Crafting, Fletching, and Runecrafting
-- [API-ARTISAN-SKILLS.md](API-ARTISAN-SKILLS.md) - Complete API reference for artisan skills systems
-- [MIGRATION-ARTISAN-SKILLS.md](MIGRATION-ARTISAN-SKILLS.md) - Migration guide for updating to artisan skills
+See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
 
 ## License
 
