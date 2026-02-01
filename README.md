@@ -315,7 +315,10 @@ bun run build
 
 ## More Info
 
-See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
+- [CLAUDE.md](CLAUDE.md) - Development guidelines, architecture documentation, and coding standards
+- [ARTISAN-SKILLS.md](ARTISAN-SKILLS.md) - Comprehensive guide to Crafting, Fletching, and Runecrafting
+- [API-ARTISAN-SKILLS.md](API-ARTISAN-SKILLS.md) - Complete API reference for artisan skills systems
+- [MIGRATION-ARTISAN-SKILLS.md](MIGRATION-ARTISAN-SKILLS.md) - Migration guide for updating to artisan skills
 
 ## License
 
