@@ -628,6 +628,8 @@ Game content is defined in JSON manifests at `packages/server/world/assets/manif
 | `banks-stores.json` | Shops and banks | Stock, prices, locations |
 | `recipes/crafting.json` | Crafting recipes | Leather, dragonhide, jewelry, gems |
 | `recipes/tanning.json` | Tanning recipes | Hide-to-leather conversion costs |
+| `recipes/fletching.json` | Fletching recipes | Bows, arrows, arrow shafts, multi-output |
+| `recipes/runecrafting.json` | Runecrafting recipes | Essence-to-rune conversion, multi-rune levels |
 | `recipes/smelting.json` | Smelting recipes | Ore-to-bar conversion |
 | `recipes/smithing.json` | Smithing recipes | Bar-to-equipment crafting |
 | `recipes/cooking.json` | Cooking recipes | Raw-to-cooked food |
