@@ -3,6 +3,55 @@ title: "January 2026"
 description: "Duel Arena, Prayer, Collision, Smithing, Website, and UI Improvements"
 ---
 
+## Week 5: January 29 - February 1
+
+### New Skills: Runecrafting, Fletching, Crafting
+
+*Commits: January 29 - February 1, 2026*
+
+Three major production skills added with OSRS-accurate mechanics:
+
+- **Runecrafting**: Craft elemental and combat runes at runecrafting altars
+  - Rune types: Air, Mind, Water, Earth, Fire, Chaos
+  - Multi-rune mechanics (craft multiple runes per essence at higher levels)
+  - Essence types: Rune essence, Pure essence
+  - XP scaling: 5.0-8.5 XP per essence
+  - Manifest: `recipes/runecrafting.json`
+
+- **Fletching**: Create bows and arrows from logs
+  - Arrow shafts (15-90 per log depending on tier)
+  - Headless arrows (shafts + feathers)
+  - Unstrung bows (shortbows and longbows)
+  - Bow stringing (bowstring + unstrung bow)
+  - Arrow tipping (arrowtips + headless arrows)
+  - Tiers: Normal, Oak, Willow, Maple, Yew, Magic
+  - Manifest: `recipes/fletching.json`
+
+- **Crafting**: Leather armor, dragonhide, jewelry, and gem cutting
+  - Leather armor: Gloves, boots, cowl, vambraces, body, chaps, coif
+  - Studded armor: Body and chaps (leather + steel studs)
+  - Dragonhide: Green d'hide vambraces, chaps, body
+  - Jewelry: Gold rings, amulets (accuracy, strength, power, glory, fury)
+  - Gem cutting: Sapphire, emerald, ruby, diamond, dragonstone, onyx
+  - Manifest: `recipes/crafting.json`
+
+---
+
+### Magic Staffs & Firemaking Models
+
+*Commits: February 1, 2026*
+
+New 3D models for magic combat and firemaking:
+
+- **Magic Staffs**: Air staff, Water staff, Earth staff, Fire staff
+  - Models: `models/magic-staffs/{element}-staff/`
+  - Aligned versions for proper equipment positioning
+  
+- **Firemaking Fire**: Animated fire model for firemaking skill
+  - Model: `models/firemaking-fire/firemaking-fire.glb`
+
+---
+
 ## Week 4: January 26-28
 
 ### Ranged & Magic Combat (PR #13)
