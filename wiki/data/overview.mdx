@@ -47,9 +47,34 @@ packages/shared/src/data/
 ```
 world/assets/manifests/
 ├── npcs.json             # NPC and mob definitions
-├── items.json            # Item definitions
+├── items/                # Item definitions by category
+│   ├── weapons.json      # Weapons (melee, ranged, magic)
+│   ├── armor.json        # Armor pieces (all combat styles)
+│   ├── tools.json        # Skilling tools
+│   ├── resources.json    # Gathered materials
+│   ├── food.json         # Consumable food
+│   ├── ammunition.json   # Arrows and ranged ammo
+│   ├── runes.json        # Magic runes
+│   └── misc.json         # Miscellaneous items
+├── recipes/              # Crafting recipes by skill
+│   ├── cooking.json      # Cooking recipes
+│   ├── firemaking.json   # Firemaking recipes
+│   ├── smelting.json     # Ore smelting recipes
+│   ├── smithing.json     # Smithing recipes
+│   ├── fletching.json    # Fletching recipes (NEW)
+│   ├── crafting.json     # Crafting recipes (NEW)
+│   ├── runecrafting.json # Runecrafting recipes (NEW)
+│   └── tanning.json      # Leather tanning recipes
+├── gathering/            # Gathering skill data
+│   ├── woodcutting.json  # Tree data
+│   ├── mining.json       # Rock data
+│   └── fishing.json      # Fishing spot data
 ├── stations.json         # Crafting stations (anvils, furnaces, ranges, banks)
 ├── quests.json           # Quest definitions and progression
+├── prayers.json          # Prayer definitions
+├── combat-spells.json    # Combat spell definitions
+├── tier-requirements.json # Equipment tier requirements
+├── skill-unlocks.json    # Skill progression milestones
 └── ... (other manifests)
 ```
 
