@@ -5,63 +5,78 @@ description: "Duel Arena, Prayer, Collision, Smithing, Website, and UI Improveme
 
 ## Week 5: January 31 - February 1
 
-### Runecrafting Skill (Commit 584b20c)
+### Firemaking Fire Model
 
-*Committed: January 31, 2026*
+*Merged: February 1, 2026*
 
-New runecrafting skill added to the game:
+Added 3D fire model for firemaking skill:
 
-- **Manifests**: Updated for new runecrafting skill
-- **Skill System**: Runecrafting integrated into skill progression
-- **Crafting**: Rune crafting mechanics and recipes
-
----
-
-### Fletching Skill (Commit 311c935)
-
-*Committed: January 31, 2026*
-
-Complete fletching implementation:
-
-- **Fletching System**: Create ranged weapons and ammunition
-- **Manifests**: Fletching recipes and requirements
-- **Items**: Fletching materials and products
+- **Fire Model**: New `firemaking-fire.glb` model for visual fire effects
+- **Model Path**: `models/firemaking-fire/firemaking-fire.glb`
+- **Integration**: Fire entities now display animated 3D fire models when logs are burned
 
 ---
 
-### Armor & Crafting Expansion (Commit f8016f2)
+### Runecrafting Skill Manifest
 
-*Committed: January 31, 2026*
+*Merged: January 31, 2026*
 
-Expanded armor system and crafting capabilities:
+Complete runecrafting recipe system with OSRS-accurate data:
 
-- **Armor Sets**: Additional armor tiers and types
-- **Crafting**: Enhanced crafting recipes
-- **Equipment**: New craftable equipment options
-
----
-
-### Firemaking Fire Model (Commit 706b31d)
-
-*Committed: February 1, 2026*
-
-Visual improvements to firemaking:
-
-- **Fire Model**: New 3D fire model for firemaking skill
-- **Visual Effects**: Enhanced fire appearance and animations
-- **Asset Updates**: Fire model assets added to repository
+- **Rune Types**: Air, mind, water, earth, fire, and chaos runes
+- **Essence Support**: Both rune essence and pure essence (chaos requires pure essence only)
+- **Multi-Rune Levels**: Progressive level thresholds for crafting multiple runes per essence
+- **XP Rates**: OSRS-accurate XP per essence (5.0 - 8.5 XP)
+- **Manifest**: `recipes/runecrafting.json` with full recipe definitions
 
 ---
 
-### Manifest Updates (Commits 2434a9f, e44ab91)
+### Fletching Skill Manifest
 
-*Committed: January 31 - February 1, 2026*
+*Merged: January 31, 2026*
 
-General manifest updates and improvements:
+Complete fletching recipe system with OSRS-accurate data:
 
-- **Data Sync**: Manifest updates for new content
-- **Configuration**: Updated game data configurations
-- **Asset Management**: Synchronized asset manifests
+- **Arrow Shafts**: Knife + logs → 15-90 shafts (varies by log tier)
+- **Headless Arrows**: Arrow shafts + feathers → headless arrows
+- **Shortbows**: Knife + logs → unstrung shortbows (normal, oak, willow, maple, yew, magic)
+- **Longbows**: Knife + logs → unstrung longbows (normal, oak, willow, maple, yew, magic)
+- **Bow Stringing**: Bowstring + unstrung bow → finished bow
+- **Arrow Tipping**: Arrowtips + headless arrows → finished arrows (bronze, iron, steel, mithril, adamant, rune)
+- **XP Rates**: OSRS-accurate XP per action (5 - 187.5 XP)
+- **Manifest**: `recipes/fletching.json` with 40+ recipes
+
+---
+
+### Crafting Skill Manifest
+
+*Merged: January 31, 2026*
+
+Complete crafting recipe system with OSRS-accurate data:
+
+- **Leather Armor**: Gloves, boots, cowl, vambraces, body, chaps (requires needle + thread)
+- **Studded Armor**: Studded body and chaps (leather armor + steel studs)
+- **Dragonhide Armor**: Green d'hide vambraces, chaps, body (requires needle + thread)
+- **Jewelry**: Gold rings, amulets (accuracy, strength, power, glory, fury) at furnace
+- **Gem Cutting**: Sapphire, emerald, ruby, diamond, dragonstone, onyx (requires chisel)
+- **XP Rates**: OSRS-accurate XP per craft (13.8 - 186 XP)
+- **Consumables**: Thread system with 5 uses per thread
+- **Manifest**: `recipes/crafting.json` with 25+ recipes
+
+---
+
+### Armor Manifest Updates
+
+*Merged: January 31, 2026*
+
+Comprehensive armor item definitions added to `items/armor.json`:
+
+- **Melee Armor**: Full helms, platebodies, platelegs, kiteshields (bronze → rune tiers)
+- **Ranged Armor**: Leather, studded, green dragonhide sets
+- **Magic Armor**: Wizard robes, mystic robes
+- **Accessories**: Boots, gloves, capes, amulets, rings for all combat styles
+- **Bonuses**: Complete OSRS-accurate stat bonuses for all armor pieces
+- **Requirements**: Skill requirements (defence, ranged, magic) per tier
 
 ---
 

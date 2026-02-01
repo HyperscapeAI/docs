@@ -1,0 +1,307 @@
+---
+title: "Crafting System"
+description: "OSRS-accurate crafting with leather, dragonhide, jewelry, and gem cutting"
+icon: "scissors"
+---
+
+# Crafting System
+
+The crafting system implements OSRS-accurate crafting mechanics for creating leather armor, dragonhide armor, jewelry, and cutting gems. Crafting uses manifest-driven recipes with tick-based timing.
+
+<Info>
+Crafting recipes are defined in `packages/server/world/assets/manifests/recipes/crafting.json` and processed by the `ProcessingDataProvider`.
+</Info>
+
+## Overview
+
+Crafting encompasses **four main categories**:
+
+1. **Leather Crafting** - Create basic ranged armor from leather
+2. **Studded Leather** - Upgrade leather armor with steel studs
+3. **Dragonhide Crafting** - Create high-level ranged armor from dragon leather
+4. **Jewelry** - Craft amulets and rings from gold bars and gems
+5. **Gem Cutting** - Cut uncut gems for use in jewelry
+
+All crafting:
+- Uses **tick-based timing** (3 ticks = 1.8 seconds for most actions, 2 ticks for gem cutting)
+- Grants **Crafting XP** per item created
+- Requires specific **tools** (needle for leather/dragonhide, moulds for jewelry, chisel for gems)
+- Some recipes require **consumables** (thread for sewing)
+
+---
+
+## Leather Crafting
+
+### Requirements
+
+- **Tool**: Needle (not consumed)
+- **Consumable**: Thread (5 uses per item)
+- **Station**: None (can craft anywhere)
+
+### Leather Recipes
+
+| Item | Level | Leather | XP | Ticks |
+|------|-------|---------|-----|-------|
+| Leather Gloves | 1 | 1 | 13.8 | 3 |
+| Leather Boots | 7 | 1 | 16.3 | 3 |
+| Leather Cowl | 9 | 1 | 18.5 | 3 |
+| Leather Vambraces | 11 | 1 | 22 | 3 |
+| Leather Body | 14 | 1 | 25 | 3 |
+| Leather Chaps | 18 | 1 | 27 | 3 |
+| Coif | 38 | 1 | 37 | 3 |
+
+<Info>
+Leather armor provides basic defense bonuses and is ideal for low-level ranged combat. The coif requires level 20 Ranged to equip.
+</Info>
+
+---
+
+## Studded Leather
+
+### Requirements
+
+- **Inputs**: Leather armor piece + Steel studs
+- **Tools**: None
+- **Station**: None
+
+### Studded Recipes
+
+| Item | Level | Inputs | XP | Ticks |
+|------|-------|--------|-----|-------|
+| Studded Body | 41 | Leather Body + Steel Studs | 40 | 3 |
+| Studded Chaps | 44 | Leather Chaps + Steel Studs | 42 | 3 |
+
+<Info>
+Studded armor provides better defense than regular leather and requires level 20 Ranged and Defence to equip.
+</Info>
+
+---
+
+## Dragonhide Crafting
+
+### Requirements
+
+- **Tool**: Needle (not consumed)
+- **Consumable**: Thread (5 uses per item)
+- **Station**: None
+
+### Green Dragonhide Recipes
+
+| Item | Level | Dragon Leather | XP | Ticks |
+|------|-------|----------------|-----|-------|
+| Green D'hide Vambraces | 57 | 1 | 62 | 3 |
+| Green D'hide Chaps | 60 | 2 | 124 | 3 |
+| Green D'hide Body | 63 | 3 | 186 | 3 |
+
+<Info>
+Green dragonhide armor requires level 40 Ranged and Defence to equip. It provides excellent ranged attack and defense bonuses with magic defense.
+</Info>
+
+---
+
+## Jewelry Crafting
+
+### Requirements
+
+- **Tool**: Ring mould or Amulet mould (not consumed)
+- **Station**: Furnace
+- **Inputs**: Gold bar + optional gem
+
+### Jewelry Recipes
+
+| Item | Level | Inputs | XP | Ticks |
+|------|-------|--------|-----|-------|
+| Gold Ring | 5 | 1 Gold Bar | 15 | 3 |
+| Amulet of Accuracy | 8 | 1 Gold Bar | 30 | 3 |
+| Amulet of Strength | 50 | 1 Gold Bar + 1 Ruby | 85 | 3 |
+| Amulet of Power | 70 | 1 Gold Bar + 1 Diamond | 100 | 3 |
+| Amulet of Glory | 80 | 1 Gold Bar + 1 Dragonstone | 150 | 3 |
+| Amulet of Fury | 90 | 1 Gold Bar + 1 Onyx | 165 | 3 |
+
+<Info>
+Jewelry provides combat bonuses and some pieces have special effects. Higher-tier jewelry requires cut gems, which must be obtained through gem cutting.
+</Info>
+
+---
+
+## Gem Cutting
+
+### Requirements
+
+- **Tool**: Chisel (not consumed)
+- **Station**: None
+- **Inputs**: Uncut gem
+
+### Gem Cutting Recipes
+
+| Gem | Level | Input | XP | Ticks |
+|-----|-------|-------|-----|-------|
+| Sapphire | 20 | Uncut Sapphire | 50 | 2 |
+| Emerald | 27 | Uncut Emerald | 67.5 | 2 |
+| Ruby | 34 | Uncut Ruby | 85 | 2 |
+| Diamond | 43 | Uncut Diamond | 107.5 | 2 |
+| Dragonstone | 55 | Uncut Dragonstone | 137.5 | 2 |
+| Onyx | 67 | Uncut Onyx | 167.5 | 2 |
+
+<Info>
+Gem cutting is faster than other crafting activities (2 ticks instead of 3). Cut gems are used in jewelry crafting and can be sold for profit.
+</Info>
+
+---
+
+## Crafting Recipe Structure
+
+Crafting recipes are defined in `manifests/recipes/crafting.json`:
+
+```json
+{
+  "output": "leather_gloves",
+  "category": "leather",
+  "inputs": [
+    { "item": "leather", "amount": 1 }
+  ],
+  "tools": ["needle"],
+  "consumables": [
+    { "item": "thread", "uses": 5 }
+  ],
+  "level": 1,
+  "xp": 13.8,
+  "ticks": 3,
+  "station": "none"
+}
+```
+
+### Recipe Properties
+
+```typescript
+interface CraftingRecipe {
+  output: string;                    // Item ID to create
+  category: string;                  // UI grouping (leather, studded, dragonhide, jewelry, gem_cutting)
+  inputs: Array<{                    // Materials consumed
+    item: string;
+    amount: number;
+  }>;
+  tools: string[];                   // Required tools (not consumed)
+  consumables: Array<{               // Items with limited uses
+    item: string;
+    uses: number;
+  }>;
+  level: number;                     // Crafting level required
+  xp: number;                        // XP per item
+  ticks: number;                     // Time in game ticks
+  station: string;                   // Required station ("none" or "furnace")
+}
+```
+
+---
+
+## Crafting Categories
+
+Recipes are organized into categories for UI display:
+
+| Category | Description | Examples |
+|----------|-------------|----------|
+| `leather` | Basic leather armor | Gloves, boots, cowl, body, chaps |
+| `studded` | Reinforced leather armor | Studded body, studded chaps |
+| `dragonhide` | High-level ranged armor | Green d'hide vambraces, chaps, body |
+| `jewelry` | Rings and amulets | Gold ring, amulets of power/glory/fury |
+| `gem_cutting` | Cut gems from uncut gems | Sapphire, ruby, diamond, dragonstone, onyx |
+
+---
+
+## Tools and Consumables
+
+### Required Tools
+
+| Tool | Used For | Consumed? |
+|------|----------|-----------|
+| Needle | Leather and dragonhide crafting | No |
+| Chisel | Gem cutting | No |
+| Ring Mould | Crafting rings | No |
+| Amulet Mould | Crafting amulets | No |
+
+### Consumables
+
+| Item | Used For | Uses Per Item |
+|------|----------|---------------|
+| Thread | Sewing leather/dragonhide | 5 uses |
+
+<Warning>
+Thread is consumed during crafting. Each spool of thread has multiple uses, but you'll need to restock periodically when crafting large quantities.
+</Warning>
+
+---
+
+## Crafting Stations
+
+Most crafting can be done anywhere, but jewelry requires a furnace:
+
+| Station | Required For |
+|---------|--------------|
+| None | Leather, studded, dragonhide, gem cutting |
+| Furnace | Jewelry (melting gold with gems) |
+
+---
+
+## Armor Tiers
+
+Crafting produces armor across multiple tiers:
+
+### Ranged Armor Tiers
+
+| Tier | Ranged Level | Defence Level | Crafting Level | Examples |
+|------|--------------|---------------|----------------|----------|
+| Leather | 1 | 1 | 1-18 | Leather gloves, body, chaps |
+| Studded | 20 | 20 | 41-44 | Studded body, studded chaps |
+| Green D'hide | 40 | 40 | 57-63 | Green d'hide vambraces, chaps, body |
+
+<Info>
+Higher-tier ranged armor provides better defense bonuses and ranged attack bonuses. Dragonhide armor also provides magic defense.
+</Info>
+
+---
+
+## XP Rates
+
+Crafting XP varies by item complexity and level requirement:
+
+| Activity | XP Range | Best XP/Hour |
+|----------|----------|--------------|
+| Leather Crafting | 13.8 - 37 | ~15,000 |
+| Studded Leather | 40 - 42 | ~20,000 |
+| Dragonhide | 62 - 186 | ~50,000 |
+| Jewelry | 15 - 165 | ~30,000 |
+| Gem Cutting | 50 - 167.5 | ~40,000 |
+
+<Info>
+XP rates assume continuous crafting with materials in inventory. Dragonhide crafting provides the best XP but requires high-level materials.
+</Info>
+
+---
+
+## Crafting Progression
+
+### Early Levels (1-40)
+
+- **1-18**: Craft leather armor for basic XP
+- **20-40**: Train through leather items and prepare for studded armor
+
+### Mid Levels (40-60)
+
+- **41-44**: Craft studded armor for better XP
+- **50+**: Begin jewelry crafting with gold bars
+
+### High Levels (60-99)
+
+- **57-63**: Craft green dragonhide armor for excellent XP
+- **70+**: Craft high-tier jewelry (amulets of power, glory, fury)
+- **80+**: Cut high-value gems (dragonstone, onyx)
+
+---
+
+## Related Documentation
+
+- [Skills System](/wiki/game-systems/skills) - XP and leveling
+- [Item Data Structure](/wiki/data/items) - Armor and jewelry items
+- [Smithing System](/wiki/game-systems/smithing) - Creating metal equipment
+- [Manifest Architecture](/guides/manifest-architecture) - Recipe definitions

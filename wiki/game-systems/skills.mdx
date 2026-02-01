@@ -41,8 +41,9 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | **Firemaking** | Light fires | Using tinderbox on logs |
 | **Cooking** | Cook food | Using raw food on fires/ranges |
 | **Smithing** | Smelt bars and smith equipment | Smelting ores at furnaces, smithing bars at anvils |
-| **Fletching** | Create ranged weapons and ammunition | Fletching logs into bows and arrows |
-| **Runecrafting** | Craft runes for magic | Crafting runes at runecrafting altars |
+| **Fletching** | Create bows and arrows | Using knife on logs, stringing bows, tipping arrows |
+| **Crafting** | Create leather armor and jewelry | Tanning hides, crafting leather, cutting gems |
+| **Runecrafting** | Create magic runes | Using essence at runecrafting altars |
 
 ### Support Skills
 
@@ -206,8 +207,7 @@ public getTotalLevel(stats: StatsComponent): number {
 
   const skills = [
     "attack", "strength", "defense", "constitution", "ranged", "prayer",
-    "woodcutting", "mining", "fishing", "firemaking", "cooking", "smithing", "agility",
-    "fletching", "runecrafting"
+    "woodcutting", "mining", "fishing", "firemaking", "cooking", "smithing", "crafting", "agility"
   ];
 
   for (const skill of skills) {
@@ -614,32 +614,142 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 | Magic | 75 | 303.8 |
 
 **Fletching** (`recipes/fletching.json`):
+
+Fletching is a three-stage process: creating arrow shafts, crafting unstrung bows, and finishing products.
+
+*Arrow Shafts* (Knife + Logs):
+| Logs | Level | Shafts | XP |
+|------|-------|--------|-----|
+| Normal | 1 | 15 | 5 |
+| Oak | 15 | 30 | 10 |
+| Willow | 30 | 45 | 15 |
+| Maple | 45 | 60 | 20 |
+| Yew | 60 | 75 | 25 |
+| Magic | 75 | 90 | 30 |
+
+*Shortbows* (Knife + Logs, then String):
+| Bow | Level | XP (Cut) | XP (String) | Total XP |
+|-----|-------|----------|-------------|----------|
+| Shortbow | 5 | 5 | 5 | 10 |
+| Oak shortbow | 20 | 16.5 | 16.5 | 33 |
+| Willow shortbow | 35 | 33.3 | 33.3 | 66.6 |
+| Maple shortbow | 50 | 50 | 50 | 100 |
+| Yew shortbow | 65 | 67.5 | 67.5 | 135 |
+| Magic shortbow | 80 | 83.3 | 83.3 | 166.6 |
+
+*Longbows* (Knife + Logs, then String):
+| Bow | Level | XP (Cut) | XP (String) | Total XP |
+|-----|-------|----------|-------------|----------|
+| Longbow | 10 | 10 | 10 | 20 |
+| Oak longbow | 25 | 25 | 25 | 50 |
+| Willow longbow | 40 | 41.5 | 41.5 | 83 |
+| Maple longbow | 55 | 58.3 | 58.3 | 116.6 |
+| Yew longbow | 70 | 75 | 75 | 150 |
+| Magic longbow | 85 | 91.5 | 91.5 | 183 |
+
+*Arrows* (Arrowtips + Headless Arrows):
+| Arrow | Level | XP (per 15) |
+|-------|-------|-------------|
+| Bronze | 1 | 19.5 |
+| Iron | 15 | 37.5 |
+| Steel | 30 | 75 |
+| Mithril | 45 | 112.5 |
+| Adamant | 60 | 150 |
+| Rune | 75 | 187.5 |
+
+**Crafting** (`recipes/crafting.json`):
+
+*Leather Armor* (Needle + Thread):
+| Item | Level | Leather | XP |
+|------|-------|---------|-----|
+| Leather gloves | 1 | 1 | 13.8 |
+| Leather boots | 7 | 1 | 16.3 |
+| Leather cowl | 9 | 1 | 18.5 |
+| Leather vambraces | 11 | 1 | 22 |
+| Leather body | 14 | 1 | 25 |
+| Leather chaps | 18 | 1 | 27 |
+| Coif | 38 | 1 | 37 |
+
+*Dragonhide Armor* (Needle + Thread):
+| Item | Level | Dragon Leather | XP |
+|------|-------|----------------|-----|
+| Green d'hide vambraces | 57 | 1 | 62 |
+| Green d'hide chaps | 60 | 2 | 124 |
+| Green d'hide body | 63 | 3 | 186 |
+
+*Jewelry* (Gold Bar + Gem at Furnace):
 | Item | Level | Materials | XP |
 |------|-------|-----------|-----|
-| Arrow shafts | 1 | 1 Log | 5 |
-| Shortbow (u) | 5 | 1 Log | 5 |
-| Shortbow | 5 | 1 Shortbow (u) + Bowstring | 5 |
-| Oak shortbow | 20 | 1 Oak log + Bowstring | 16.5 |
-| Willow shortbow | 35 | 1 Willow log + Bowstring | 41.5 |
-| Maple shortbow | 50 | 1 Maple log + Bowstring | 50 |
-| Yew shortbow | 65 | 1 Yew log + Bowstring | 67.5 |
-| Magic shortbow | 80 | 1 Magic log + Bowstring | 83.3 |
+| Gold ring | 5 | 1 gold bar | 15 |
+| Amulet of accuracy | 8 | 1 gold bar | 30 |
+| Amulet of strength | 50 | 1 gold bar + ruby | 85 |
+| Amulet of power | 70 | 1 gold bar + diamond | 100 |
+| Amulet of glory | 80 | 1 gold bar + dragonstone | 150 |
+| Amulet of fury | 90 | 1 gold bar + onyx | 165 |
+
+*Gem Cutting* (Chisel):
+**Crafting** (`recipes/crafting.json`):
+
+*Leather Armor*:
+| Item | Level | XP |
+|------|-------|-----|
+| Leather Gloves | 1 | 13.8 |
+| Leather Boots | 7 | 16.3 |
+| Leather Cowl | 9 | 18.5 |
+| Leather Vambraces | 11 | 22 |
+| Leather Body | 14 | 25 |
+| Leather Chaps | 18 | 27 |
+| Coif | 38 | 37 |
+
+*Studded Armor*:
+| Item | Level | XP |
+|------|-------|-----|
+| Studded Body | 41 | 40 |
+| Studded Chaps | 44 | 42 |
+
+*Dragonhide Armor*:
+| Item | Level | XP |
+|------|-------|-----|
+| Green D'hide Vambraces | 57 | 62 |
+| Green D'hide Chaps | 60 | 124 |
+| Green D'hide Body | 63 | 186 |
+
+*Jewelry*:
+| Item | Level | XP |
+|------|-------|-----|
+| Gold Ring | 5 | 15 |
+| Amulet of Accuracy | 8 | 30 |
+| Amulet of Strength | 50 | 85 |
+| Amulet of Power | 70 | 100 |
+| Amulet of Glory | 80 | 150 |
+| Amulet of Fury | 90 | 165 |
+
+*Gem Cutting*:
+| Gem | Level | XP |
+|-----|-------|-----|
+| Sapphire | 20 | 50 |
+| Emerald | 27 | 67.5 |
+| Ruby | 34 | 85 |
+| Diamond | 43 | 107.5 |
+| Dragonstone | 55 | 137.5 |
+| Onyx | 67 | 167.5 |
 
 **Runecrafting** (`recipes/runecrafting.json`):
-| Rune | Level | XP | Altar |
-|------|-------|-----|-------|
-| Air rune | 1 | 5 | Air altar |
-| Mind rune | 2 | 5.5 | Mind altar |
-| Water rune | 5 | 6 | Water altar |
-| Earth rune | 9 | 6.5 | Earth altar |
-| Fire rune | 14 | 7 | Fire altar |
-| Body rune | 20 | 7.5 | Body altar |
-| Cosmic rune | 27 | 8 | Cosmic altar |
-| Chaos rune | 35 | 8.5 | Chaos altar |
-| Nature rune | 44 | 9 | Nature altar |
-| Law rune | 54 | 9.5 | Law altar |
-| Death rune | 65 | 10 | Death altar |
-| Blood rune | 77 | 10.5 | Blood altar |
+
+Runecrafting creates magic runes from essence at runecrafting altars:
+
+| Rune | Level | XP/Essence | Essence Types | Multi-Rune Levels |
+|------|-------|------------|---------------|-------------------|
+| Air | 1 | 5.0 | Rune/Pure | 11, 22, 33, 44, 55, 66, 77, 88, 99 |
+| Mind | 2 | 5.5 | Rune/Pure | 14, 28, 42, 56, 70, 84, 98 |
+| Water | 5 | 6.0 | Rune/Pure | 19, 38, 57, 76, 95 |
+| Earth | 9 | 6.5 | Rune/Pure | 26, 52, 78 |
+| Fire | 14 | 7.0 | Rune/Pure | 35, 70, 95 |
+| Chaos | 35 | 8.5 | Pure only | 74 |
+
+<Info>
+**Multi-Rune Levels**: At certain levels, you craft multiple runes per essence. For example, at level 11 Runecrafting, you craft 2 air runes per essence instead of 1. Chaos runes require pure essence and cannot be crafted with regular rune essence.
+</Info>
 
 **Agility** (Movement-based):
 | Activity | XP Rate | Notes |

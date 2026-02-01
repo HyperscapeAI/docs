@@ -47,9 +47,34 @@ packages/shared/src/data/
 ```
 world/assets/manifests/
 ├── npcs.json             # NPC and mob definitions
-├── items.json            # Item definitions
+├── items/                # Item definitions by category
+│   ├── weapons.json      # Weapons (melee, ranged, magic)
+│   ├── armor.json        # Armor pieces (all combat styles)
+│   ├── tools.json        # Skilling tools
+│   ├── resources.json    # Gathered materials
+│   ├── food.json         # Consumable food
+│   ├── ammunition.json   # Arrows and ranged ammo
+│   ├── runes.json        # Magic runes
+│   └── misc.json         # Miscellaneous items
+├── recipes/              # Crafting recipes by skill
+│   ├── cooking.json      # Cooking recipes
+│   ├── firemaking.json   # Firemaking recipes
+│   ├── smelting.json     # Ore smelting recipes
+│   ├── smithing.json     # Smithing recipes
+│   ├── fletching.json    # Fletching recipes (NEW)
+│   ├── crafting.json     # Crafting recipes (NEW)
+│   ├── runecrafting.json # Runecrafting recipes (NEW)
+│   └── tanning.json      # Leather tanning recipes
+├── gathering/            # Gathering skill data
+│   ├── woodcutting.json  # Tree data
+│   ├── mining.json       # Rock data
+│   └── fishing.json      # Fishing spot data
 ├── stations.json         # Crafting stations (anvils, furnaces, ranges, banks)
 ├── quests.json           # Quest definitions and progression
+├── prayers.json          # Prayer definitions
+├── combat-spells.json    # Combat spell definitions
+├── tier-requirements.json # Equipment tier requirements
+├── skill-unlocks.json    # Skill progression milestones
 └── ... (other manifests)
 ```
 
@@ -665,6 +690,98 @@ interface VegetationLayer {
 - Mushroom vegetation added to all biomes with varying densities (2-30)
 - Tree density reduced in plains biome (8 → 5)
 - Mushroom clustering varies by biome (cluster size 3-8)
+- Firemaking fire 3D model added (`models/firemaking-fire/firemaking-fire.glb`)
+
+---
+
+## Recipe Manifests
+
+Recipe manifests define crafting, processing, and production activities for artisan skills. All recipes follow a consistent structure with inputs, outputs, tools, level requirements, and XP rewards.
+
+### Fletching Recipes
+
+The `recipes/fletching.json` manifest defines bow and arrow crafting:
+
+```typescript
+interface FletchingRecipe {
+  output: string;              // Item ID of crafted item
+  outputQuantity: number;      // Number of items produced
+  category: string;            // Recipe category
+  inputs: Array<{              // Required materials
+    item: string;
+    amount: number;
+  }>;
+  tools: string[];             // Required tools (e.g., "knife")
+  level: number;               // Fletching level required
+  xp: number;                  // XP awarded
+  ticks: number;               // Time to craft (game ticks)
+  skill: "fletching";
+}
+```
+
+**Recipe Categories**:
+- `arrow_shafts` - Knife + logs → arrow shafts (15-90 per log)
+- `headless_arrows` - Arrow shafts + feathers → headless arrows
+- `shortbows` - Knife + logs → unstrung shortbows
+- `longbows` - Knife + logs → unstrung longbows
+- `stringing` - Bowstring + unstrung bow → finished bow
+- `arrows` - Arrowtips + headless arrows → finished arrows
+
+### Crafting Recipes
+
+The `recipes/crafting.json` manifest defines leather, armor, and jewelry crafting:
+
+```typescript
+interface CraftingRecipe {
+  output: string;              // Item ID of crafted item
+  category: string;            // Recipe category
+  inputs: Array<{              // Required materials
+    item: string;
+    amount: number;
+  }>;
+  tools: string[];             // Required tools (e.g., "needle", "chisel")
+  consumables: Array<{         // Consumable items (e.g., thread)
+    item: string;
+    uses: number;              // Uses before consumed
+  }>;
+  level: number;               // Crafting level required
+  xp: number;                  // XP awarded
+  ticks: number;               // Time to craft
+  station: string;             // Required station ("none" or "furnace")
+}
+```
+
+**Recipe Categories**:
+- `leather` - Needle + thread + leather → leather armor
+- `studded` - Leather armor + steel studs → studded armor
+- `dragonhide` - Needle + thread + dragon leather → dragonhide armor
+- `jewelry` - Gold bar + gems + mould → jewelry (at furnace)
+- `gem_cutting` - Chisel + uncut gem → cut gem
+
+### Runecrafting Recipes
+
+The `recipes/runecrafting.json` manifest defines rune crafting at altars:
+
+```typescript
+interface RunecraftingRecipe {
+  runeType: string;            // Rune type identifier
+  runeItemId: string;          // Output rune item ID
+  levelRequired: number;       // Runecrafting level required
+  xpPerEssence: number;        // XP per essence used
+  essenceTypes: string[];      // Accepted essence types
+  multiRuneLevels: number[];   // Levels for multiple runes per essence
+}
+```
+
+**Rune Types**:
+- Air (level 1, 5.0 XP) - Accepts rune essence or pure essence
+- Mind (level 2, 5.5 XP) - Accepts rune essence or pure essence
+- Water (level 5, 6.0 XP) - Accepts rune essence or pure essence
+- Earth (level 9, 6.5 XP) - Accepts rune essence or pure essence
+- Fire (level 14, 7.0 XP) - Accepts rune essence or pure essence
+- Chaos (level 35, 8.5 XP) - Requires pure essence only
+
+**Multi-Rune System**: At specific level thresholds, players craft multiple runes per essence (e.g., 2 air runes at level 11, 3 at level 22, etc.)
 
 ---
 
@@ -755,13 +872,25 @@ interface QuestStage {
 
 ## Recent Changes
 
+### New Skills & Recipes (Week 5: Jan 31 - Feb 1, 2026)
+
+Three new artisan skills added with complete OSRS-accurate recipe manifests:
+
+- **Fletching**: Arrow shafts, headless arrows, shortbows, longbows, bow stringing, arrow tipping (40+ recipes)
+- **Crafting**: Leather armor, studded armor, dragonhide armor, jewelry, gem cutting (25+ recipes)
+- **Runecrafting**: Air, mind, water, earth, fire, chaos runes with multi-rune level thresholds
+
+**New Assets**:
+- Firemaking fire 3D model (`models/firemaking-fire/firemaking-fire.glb`)
+- Comprehensive armor manifest with 80+ armor pieces across all combat styles
+
 ### Manifest Refactor (PR #3)
 
 The manifest system was recently refactored for better scalability and organization:
 
-- **Items split by type**: Weapons, tools, resources, food, and misc are now in separate files
+- **Items split by type**: Weapons, tools, resources, food, ammunition, runes, armor, and misc are now in separate files
 - **Gathering resources**: Woodcutting, mining, and fishing data moved to dedicated files
-- **Recipe system**: New recipes directory for smelting, smithing, cooking, and firemaking
+- **Recipe system**: New recipes directory for smelting, smithing, cooking, firemaking, fletching, crafting, and runecrafting
 - **Centralized requirements**: `tier-requirements.json` provides OSRS-accurate level requirements
 - **Skill unlocks**: `skill-unlocks.json` documents progression milestones
 
