@@ -52,19 +52,19 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 | **Runecrafting** | Convert essence into runes | Clicking altars with essence in inventory |
 
 <Info>
-Smithing is a two-step process: first smelt ores into bars at a furnace, then smith bars into equipment at an anvil.
+Smithing is a two-step process: first smelt ores into bars at a furnace, then smith bars into equipment at an anvil. Smithing now supports outputQuantity for multi-output recipes (e.g., 15 arrowtips per bar).
 </Info>
 
 <Info>
-Crafting uses thread (5 uses per item) for leather/dragonhide armor. Tanning converts hides to leather at tanner NPCs for a coin fee.
+Crafting uses thread (5 uses per item) for leather/dragonhide armor. Tanning converts hides to leather at tanner NPCs for a coin fee. Crafting features auto-select when only one recipe matches the input item.
 </Info>
 
 <Info>
-Fletching produces multiple items per action (e.g., 15 arrow shafts per log). Quantity selection refers to actions, not output items.
+Fletching produces multiple items per action (e.g., 15 arrow shafts per log). Quantity selection refers to actions, not output items. Fletching UI groups recipes by category for easier navigation.
 </Info>
 
 <Info>
-Runecrafting is instant (no tick delay). Multi-rune multipliers grant additional runes per essence at higher levels (e.g., 2x air runes at level 11).
+Runecrafting is instant (no tick delay). Multi-rune multipliers grant additional runes per essence at higher levels (e.g., 2x air runes at level 11). Each altar is tied to a specific rune type and features mystical particle effects.
 </Info>
 
 ---
