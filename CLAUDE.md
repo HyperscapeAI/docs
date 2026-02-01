@@ -935,9 +935,46 @@ cd packages/server
 bunx drizzle-kit push  # Force schema sync
 ```
 
+## Recent Improvements
+
+### Mining Rock Material Fix (PR #710)
+
+Fixed PBR material rendering for mining rocks:
+
+**Issue:** Mining rocks were rendering with metallic appearance due to default metalness=1 in PBR materials.
+
+**Fix:** Force metalness=0 on all PBR materials for rock models to achieve correct stone appearance.
+
+**Implementation:**
+```typescript
+// In ResourceEntity.createMesh()
+child.traverse((node) => {
+  if (node instanceof THREE.Mesh && node.material) {
+    if (node.material.metalness !== undefined) {
+      node.material.metalness = 0; // Stone is not metallic
+    }
+  }
+});
+```
+
+**Additional Fix:** Depleted rock models now align to ground correctly using bounding box calculation.
+
+### Headstone Model Replacement
+
+Replaced placeholder box with proper headstone.glb model for death markers:
+
+**Changes:**
+- HeadstoneEntity now loads `headstone.glb` model
+- Model scaled to 0.5 for appropriate size
+- Aligned to ground using bounding box
+- Maintains collision and interaction functionality
+
+**Location:** `packages/shared/src/entities/world/HeadstoneEntity.ts`
+
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
+- [ARTISAN-SKILLS.md](ARTISAN-SKILLS.md) - Comprehensive artisan skills guide
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
