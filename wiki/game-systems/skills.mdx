@@ -612,6 +612,71 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 | Yew | 60 | 202.5 |
 | Magic | 75 | 303.8 |
 
+**Fletching** (`recipes/fletching.json`):
+
+Fletching is a three-stage process: creating arrow shafts, crafting unstrung bows, and finishing products.
+
+*Arrow Shafts* (Knife + Logs):
+| Logs | Level | Shafts | XP |
+|------|-------|--------|-----|
+| Normal | 1 | 15 | 5 |
+| Oak | 15 | 30 | 10 |
+| Willow | 30 | 45 | 15 |
+| Maple | 45 | 60 | 20 |
+| Yew | 60 | 75 | 25 |
+| Magic | 75 | 90 | 30 |
+
+*Shortbows* (Knife + Logs, then String):
+| Bow | Level | XP (Cut) | XP (String) |
+|-----|-------|----------|-------------|
+| Shortbow | 5 | 5 | 5 |
+| Oak shortbow | 20 | 16.5 | 16.5 |
+| Willow shortbow | 35 | 33.3 | 33.3 |
+| Maple shortbow | 50 | 50 | 50 |
+| Yew shortbow | 65 | 67.5 | 67.5 |
+| Magic shortbow | 80 | 83.3 | 83.3 |
+
+*Longbows* (Knife + Logs, then String):
+| Bow | Level | XP (Cut) | XP (String) |
+|-----|-------|----------|-------------|
+| Longbow | 10 | 10 | 10 |
+| Oak longbow | 25 | 25 | 25 |
+| Willow longbow | 40 | 41.5 | 41.5 |
+| Maple longbow | 55 | 58.3 | 58.3 |
+| Yew longbow | 70 | 75 | 75 |
+| Magic longbow | 85 | 91.5 | 91.5 |
+
+*Arrows* (Arrowtips + Headless Arrows):
+| Arrow | Level | XP (per 15) |
+|-------|-------|-------------|
+| Bronze | 1 | 19.5 |
+| Iron | 15 | 37.5 |
+| Steel | 30 | 75 |
+| Mithril | 45 | 112.5 |
+| Adamant | 60 | 150 |
+| Rune | 75 | 187.5 |
+
+<Info>
+Fletching follows OSRS mechanics: use a knife on logs to create arrow shafts or unstrung bows, then use bowstring to finish bows. Arrowtips are created through Smithing.
+</Info>
+
+**Runecrafting** (`recipes/runecrafting.json`):
+
+Runecrafting allows players to craft magical runes from essence at runecrafting altars.
+
+| Rune | Level | XP per Essence | Essence Types | Multi-Rune Levels |
+|------|-------|----------------|---------------|-------------------|
+| Air | 1 | 5.0 | Rune/Pure | 11, 22, 33, 44, 55, 66, 77, 88, 99 |
+| Mind | 2 | 5.5 | Rune/Pure | 14, 28, 42, 56, 70, 84, 98 |
+| Water | 5 | 6.0 | Rune/Pure | 19, 38, 57, 76, 95 |
+| Earth | 9 | 6.5 | Rune/Pure | 26, 52, 78 |
+| Fire | 14 | 7.0 | Rune/Pure | 35, 70, 95 |
+| Chaos | 35 | 8.5 | Pure only | 74 |
+
+<Info>
+**Multi-Rune Levels**: At certain levels, you craft multiple runes per essence. For example, at level 11 Runecrafting, you craft 2 air runes per essence instead of 1. Chaos runes require pure essence and cannot be crafted with regular rune essence.
+</Info>
+
 **Agility** (Movement-based):
 | Activity | XP Rate | Notes |
 |----------|---------|-------|
