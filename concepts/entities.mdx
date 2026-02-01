@@ -16,13 +16,21 @@ Entities are the core game objects in Hyperscape. Every player, mob, item, and r
 // ├── InteractableEntity (can be interacted with)
 // │   ├── ResourceEntity (trees, rocks, fishing spots)
 // │   ├── ItemEntity (ground items)
-// │   └── NPCEntity (dialogue, shops)
+// │   ├── NPCEntity (dialogue, shops)
+// │   ├── BankEntity (bank storage)
+// │   ├── AnvilEntity (smithing station)
+// │   ├── FurnaceEntity (smelting station)
+// │   ├── RangeEntity (cooking station)
+// │   ├── AltarEntity (prayer restoration)
+// │   ├── RunecraftingAltarEntity (rune crafting)
+// │   ├── FireEntity (player-lit fires for cooking)
+// │   └── StarterChestEntity (tutorial items)
 // ├── CombatantEntity (can fight)
 // │   ├── PlayerEntity (base player)
 // │   │   ├── PlayerLocal (client-side local player)
 // │   │   └── PlayerRemote (client-side remote players)
 // │   └── MobEntity (enemies)
-// └── HeadstoneEntity (player death markers)
+// └── HeadstoneEntity (player death markers with loot)
 ```
 
 ## Key Features
