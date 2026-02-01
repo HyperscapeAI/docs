@@ -1,0 +1,245 @@
+<Update label=\"Visual Polish & Bug Fixes\" description=\"February 2026\" date=\"2026-02-01\">
+
+### 🎨 Visual Improvements
+
+#### Firemaking Visual Upgrade (PR #715)
+
+- **GLB Fire Model**: Replaced orange cube placeholder with realistic 3D fire model
+  - Model: `firemaking-fire.glb` with scale 0.35
+  - Bbox-snapped to terrain surface (no floating fires)
+  - Pre-loaded during 3-second lighting animation (prevents visual pop)
+  - Proper lighting and shadow casting
+- **Billboard Particle System**: Realistic flame effects with 18 particles
+  - 5 color variations (orange #ff4400 to yellow #ffcc00 gradient)
+  - Additive blending for glow effects
+  - Camera-facing billboards with proper depth testing
+  - Particle lifecycle: fade in, rise, shrink, fade out
+  - Baked glow textures (64×64 DataTexture per color)
+  - Staggered particle ages for natural variation
+- **Performance Optimizations**:
+  - Shared geometry (single CircleGeometry for all particles)
+  - Lazy texture initialization (created on first use)
+  - Proper cleanup: cancelAnimationFrame + material disposal
+  - Pending model cache prevents duplicate loads during lighting
+- **Ashes Drop**: Fires now drop ashes when extinguished (OSRS-accurate)
+  - 2-minute despawn timer
+  - Server-authoritative spawning via GroundItemSystem
+
+#### Ground Item Bbox Snapping (PR #718)
+
+- **Automatic Terrain Alignment**: Items and fires snap to ground using bounding box
+  - Calculates `bbox.min.y` and offsets mesh position
+  - Compensates for GroundItemSystem's 0.2m terrain offset
+  - Named constant: `GROUND_ITEM_TERRAIN_OFFSET = 0.2`
+  - Applies to all ground items and fire models
+- **Grounded Items**: Items with `groundOffset ≤ 0` use bbox snapping
+  - No floating/spinning animation for grounded items
+  - Prevents clipping through terrain
+  - Configurable per-item via manifest
+- **Item Manifest Fields**:
+  - `modelScale`: Override default 0.3 scale for ground items
+  - `groundOffset`: Control Y positioning (≤0 = grounded, >0 = floating, undefined = 0.5 default)
+- **Network Sync**: modelScale and groundOffset serialized to clients
+- **Documentation**: Clarified groundOffset behavior with bullet-point format
+
+#### Bow Models & Arrow Sizing (PR #719)
+
+- **Bow Models**: All bow items now have equipped 3D models
+  - Shortbow, Oak shortbow, Willow shortbow, Maple shortbow, Yew longbow
+  - Proper hand-held positioning and scale
+  - Visible when equipped in weapon slot
+- **Arrow Projectile Resize**: Reduced arrow visual size for better proportions
+  - Length: 0.6 → 0.35 (42% reduction)
+  - Width: 0.15 → 0.08 (47% reduction)
+  - Applies to all 6 arrow types (default, bronze, iron, steel, mithril, adamant)
+  - More realistic arrow-to-bow scale ratio
+
+#### Mining Rock Materials (PR #710)
+
+- **PBR Material Fix**: Set metalness=0 on mining rock materials
+  - Prevents overly shiny/metallic appearance
+  - Proper roughness values for realistic stone
+  - Applies to all ore rock types
+- **Depleted Rock Alignment**: Bbox snapping for depleted rock models
+  - Stumps sit flush with ground
+  - Consistent with active rock placement
+  - No floating depleted rocks
+
+#### Headstone Model (PR #710)
+
+- **GLB Model**: Replaced placeholder box with headstone.glb
+  - Proper 3D gravestone model for player death markers
+  - Appropriate scale and positioning
+  - Visible at death locations
+
+### 🎮 UI & UX Improvements
+
+#### UI Theme Consistency (PR #701)
+
+- **Theme Standardization**: Updated quest and inventory panels to use theme colors
+  - Replaced hardcoded colors with `theme.colors` references
+  - Improved hover and selection styles in QuestListItem
+  - Consistent backgrounds and borders across all panels
+  - ConfirmScreen and StakesScreen now use defined gold color
+- **Gold Color Definition**: Added `gold` and `hover` properties to theme interface
+  - Centralized gold color usage (#d4af37)
+  - Type-safe theme access throughout codebase
+  - Consistent gold highlighting for important UI elements
+- **Mobile Breakpoint Fix**: Aligned mobile breakpoint from 1024px to 640px
+  - Matches specifications in breakpoints.md
+  - Updated in useViewportResize.ts and windowStore.ts
+  - Better mobile device detection
+
+#### Chat Panel Height Increase (PR #701)
+
+- **Improved Usability**: Increased default chat panel height
+  - Minimum height: 220px → 300px
+  - Base height: 280px → 380px (viewport-scaled)
+  - Better vertical space for reading messages and conversation history
+- **Layout Migration**: Window store migration v37 to reset layouts
+
+#### Action Bar Positioning Fix (PR #701)
+
+- **Bottom Anchoring**: Action bar now properly anchored to viewport bottom
+  - Fixed Y position recalculation when slot count changes
+  - Formula: `Y = viewportHeight - height` (maintains bottom-center anchor)
+  - Removed -1px offset that caused floating appearance
+  - Flush with bottom edge of viewport
+- **Schema Consolidation**: Merged layout migrations v16-v37 into single v16 migration
+  - Clears windows for fresh layout on schema updates
+  - Simplified migration history
+
+#### Skill Guide Panel (PR #711)
+
+- **Click-to-Open**: Click skill icon in skills panel to open guide
+  - Shows all unlocks for that skill sorted by level
+  - Visual indicators: ✓ unlocked, ➤ next, 🔒 locked
+  - Progress tracking (X/Y unlocked)
+  - Levels to next unlock display
+- **Client-Side Loading**: Unlock data loaded from skill-unlocks.json manifest
+  - No server round-trip required
+  - Instant panel opening
+  - Cached unlock data per skill
+- **ModalWindow Integration**: Consistent styling with other modals
+  - Themed colors and spacing
+  - Scrollable unlock list
+  - Loading state with spinner
+
+### 🐛 Bug Fixes
+
+- **Fishing Spots** (PR #712): Aligned water threshold to 9.0m
+  - Fishing spots now spawn at shoreline instead of underwater
+  - Proper water level detection
+  - Consistent with terrain system
+- **Gathering Emote** (PR #713): Prevented gathering animation without required tool
+  - Tool validation before emote trigger
+  - Prevents visual desync when clicking resources without proper equipment
+  - Applies to woodcutting, mining, and fishing
+
+### 🔧 Type Safety & Testing
+
+#### TypeScript Error Resolution (PR #701)
+
+- **60 TypeScript Errors Fixed**: Comprehensive type safety improvements
+  - Proper branded type usage (PlayerID, SlotNumber, ItemID)
+  - Type factory functions instead of unsafe casts (createPlayerID, createSlotNumber, createItemID)
+  - Literal type narrowing for event triggers
+  - Fixed schema imports to use named exports
+  - Proper typeof narrowing for component data access
+- **CharacterRepository**: Added magic, fletching, runecrafting to return type
+  - magicLevel/magicXp columns to skills query
+  - Proper type signatures for all skill fields
+- **DuelSystem**: Updated to use factory functions for branded types
+  - Fixed stamina component access with typeof narrowing
+  - Fixed Logger.error calls with proper error/data parameter order
+  - Added funWeapons to DuelRules in test fixtures
+  - Added challengerSocketId and challengerCombatLevel parameters to PendingDuelManager
+- **ServerNetwork**: Fixed schema type to use named exports
+  - Use literal union type narrowing for crafting/fletching triggers
+  - Use proper DuelRules and DuelEquipmentSlot types for handlers
+- **Test Improvements**:
+  - Updated createTestChallenge to accept dynamic combat level
+  - Added missing skills to client test fixtures (crafting, fletching, runecrafting)
+  - Fixed all 30 createChallenge calls in DuelSystem.test.ts
+  - Added proper type annotations for centers array
+  - Fixed DuelHUD useRef type to allow undefined
+  - Fixed RulesScreen to use DuelEquipmentSlot instead of EquipmentSlot
+  - Fixed EquipmentTooltip to use defenseMagic instead of magicDefense
+- **CI Workflow Updates**: Enhanced Claude code review workflow
+  - Switched to pull_request for better security
+  - Read-only permissions for pull requests
+  - Clearer review prompt guidance
+  - Updated model and allowed tools
+
+#### Database Migration Fixes (PR #701)
+
+- **Idempotent Migrations**: Added IF NOT EXISTS to migration 0027
+  - CREATE TABLE and CREATE INDEX statements
+  - ALTER TABLE ADD COLUMN statements
+  - Ensures clean runs on fresh databases
+  - Prevents duplicate object errors
+- **Migration Renumbering**: Runecrafting migration renumbered to 0032
+  - Avoided collision with 0031_add_operations_log_fk.sql
+  - Updated _journal.json with correct sequence
+  - Fixed journal idx from 30 to 29 for 0030_add_fletching_skill
+- **Operations Log FK**: Added foreign key constraint
+  - operations_log.playerId → characters.id
+  - Ensures orphaned records cleaned up on character deletion
+  - Idempotent DO block for safe migration
+- **Duplicate Migration Removal**: Removed 0026_add_magic_skill.sql
+  - Duplicated columns already in 0027_messy_dorian_gray.sql
+  - Fixed migration failures on fresh databases
+
+#### E2E Test Reliability (PR #701)
+
+- **Condition-Based Waits**: Replaced 14 waitForTimeout() calls in characterSelect.spec.ts
+  - Uses waitForFunction() with proper DOM element checks
+  - Reduces test flakiness in CI environments
+  - More reliable character selection flow
+- **Strengthened Assertions**: Weak assertions fixed
+  - Equipment slots: expect >= 1 (was >= 0, always passed)
+  - Combat buttons: expect >= 1 (was >= 0, always passed)
+  - Music toggle: expect >= 1 (was >= 0, always passed)
+  - Avatar options: expect >= 1 (was >= 0, always passed)
+  - Now properly validates UI elements exist
+
+#### Memory Leak Fix (PR #701)
+
+- **useViewportResize Hook**: Added mounted flag
+  - Prevents post-unmount timeout execution
+  - Ensures callback doesn't run after component unmounts
+  - Proper cleanup in useEffect return
+  - Fixes React warning about state updates on unmounted components
+
+#### Production Readiness Fixes (PR #701)
+
+- **Database Integrity**: Added foreign key constraint for operations_log
+  - Ensures orphaned records cleaned up on character deletion
+  - Migration 0031 with idempotent DO block
+  - Maintains referential integrity
+- **Type Safety**: Moved ActionBar payload types to shared package
+  - ActionBarSlotContent, ActionBarSlotUpdatePayload, ActionBarSlotSwapPayload
+  - Ensures type consistency across client/server boundary
+  - Re-exported from client types.ts for backward compatibility
+- **Test Reliability**: Fixed test suite issues
+  - Updated InventoryActionDispatcher tests for consolidated useItem message
+  - Fixed HomeTeleportManager tests for 5-second cooldown (dev mode)
+  - Updated WeaponStyleConfig tests for OSRS-accurate ranged/magic styles
+  - Increased performance test thresholds for CI variance
+  - Increased timeout for VegetationSystem weight distribution test
+  - Fixed quest integration test cache invalidation after mock injection
+  - Increased retry.test.ts timeout for max retries test
+
+### 🧹 Code Cleanup
+
+- **Dead Code Removal**: Removed unused files and imports
+  - ASSET-INVENTORY.md (PR #710)
+  - ProcessingSystemBase, FiremakingSystem, CookingSystem (PR #715)
+  - Unused panelStyles import from QuestsPanel
+  - Unused variables in useViewportResize, DuelChallengeModal, SpellsPanel
+- **Lint Fixes**: Resolved all unused variable warnings
+  - Prefixed unused parameters with underscore (_opponentLevel)
+  - Removed unused constants (HEADER_HEIGHT, newSkillsY)
+  - Updated eslint config for consistency
+
+</Update>
