@@ -23,6 +23,176 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Artisan Skills & Visual Upgrades" description="February 2026" date="2026-02-01">
+
+### 🎨 Three New Artisan Skills
+
+Complete implementation of Crafting, Fletching, and Runecrafting with OSRS-accurate mechanics:
+
+#### Crafting Skill (PR #698)
+
+- **Leather Armor**: Needle + thread + leather for basic armor
+  - 6 leather items: gloves, boots, cowl, vambraces, body, chaps
+  - Thread consumption system (5 uses per thread)
+  - Levels 1-18 for full leather set
+- **Dragonhide Armor**: High-level ranged gear from dragon leather
+  - Green d'hide vambraces (L57), chaps (L60), body (L63)
+  - Requires needle + thread + dragon leather
+- **Jewelry Crafting**: Gold bars + gems at furnaces
+  - Requires specific moulds (ring, necklace, amulet, bracelet)
+  - Moulds not consumed (permanent tools)
+  - 12 jewelry items from gold rings to diamond bracelets
+- **Gem Cutting**: Chisel + uncut gems
+  - 4 gem types: sapphire, emerald, ruby, diamond
+  - Levels 20-43 for all gems
+- **Tanning System**: Convert hides to leather at tanner NPCs
+  - Cowhide → leather (1 gp)
+  - Dragon hides → dragon leather (20 gp)
+  - Instant conversion, no XP granted
+- **UI Features**:
+  - Category grouping (leather, studded, dragonhide, jewelry, gem_cutting)
+  - Auto-select when only one recipe matches input item
+  - Make-X with quantity memory (localStorage)
+  - Thread usage tracking (5 uses before consumption)
+- **Database**: New `craftingLevel` and `craftingXp` columns (migration 0029)
+- **Testing**: 19 unit tests covering crafting lifecycle, cancellation, and edge cases
+
+#### Fletching Skill (PR #699)
+
+- **Arrow Crafting**: Multi-output arrow production
+  - Arrow shafts: 15 per log (knife + logs)
+  - Headless arrows: 15 per action (arrow shafts + feathers)
+  - Finished arrows: 15 per action (headless arrows + arrowtips)
+  - Bronze, Iron, Steel, Mithril, Adamant arrows
+- **Bow Crafting**: Shortbows and longbows
+  - Unstrung bows: knife + logs
+  - Strung bows: unstrung bow + bowstring (item-on-item)
+  - 5 wood types: normal, oak, willow, maple, yew
+- **Item-on-Item Interactions**: Stringing bows and assembling arrows
+  - Client interaction handler with raycast routing
+  - Server network handler with target validation
+  - Packet definition for secondary item ID
+- **Multi-Output Support**: outputQuantity field in recipes
+  - 15 arrow shafts per log
+  - 15 arrows per arrowtip set
+  - Quantity selection refers to actions, not output items
+- **UI Features**:
+  - Category grouping (arrow_shafts, shortbows, longbows, stringing, arrows)
+  - Output quantity display (e.g., "Arrow shafts (x15)")
+  - Auto-select for single-recipe interactions
+  - Make-X with quantity memory
+- **Database**: New `fletchingLevel` and `fletchingXp` columns (migration 0030)
+- **Smithing Integration**: 6 arrowtip recipes (15 per bar) added to smithing
+- **Testing**: 19 unit tests covering fletching system and multi-output recipes
+
+#### Runecrafting Skill (PR #703)
+
+- **Instant Conversion**: Click altar to convert ALL essence in inventory
+  - No tick delay (instant crafting)
+  - Server-authoritative runeType validation
+- **Two Essence Types**:
+  - Rune essence: basic runes only (air, mind, water, earth, fire, body)
+  - Pure essence: all runes (includes cosmic, chaos, nature, law, death)
+- **Multi-Rune Crafting**: Higher levels grant bonus runes per essence
+  - Air runes: 2x at L11, 3x at L22, up to 10x at L99
+  - Mind runes: 2x at L14, 3x at L28, up to 8x at L98
+  - Water runes: 2x at L19, 3x at L38, up to 6x at L95
+  - Earth runes: 2x at L26, 3x at L52, 4x at L78
+  - Fire runes: 2x at L35, 3x at L70
+- **Altar Entities**: RunecraftingAltarEntity with mystical particle effects
+  - Per-altar rune type (air altar, water altar, fire altar, etc.)
+  - Color-coded particle systems (4 layers: pillar, wisps, sparks, base)
+  - Mesh-aware particle spawning from actual geometry vertices
+  - Billboard particles with camera-facing orientation
+- **Database**: New `runecraftingLevel` and `runecraftingXp` columns (migration 0031)
+- **Testing**: 19 unit tests covering runecrafting system, multipliers, and validation
+
+### 🔥 Visual Improvements
+
+#### Fire Models (PR #715)
+
+- **GLB Fire Model**: Replaced orange cube placeholder with 3D fire model
+  - Model path: `fire.glb` with scale 1.0
+  - Proper lighting and shadows
+- **Billboard Particle System**: Realistic flame effects
+  - 4 particle layers: pillar, wisps, sparks, base
+  - Color-baked glow textures for WebGPU compatibility
+  - Mesh-aware particle spawning from actual geometry
+  - Camera-facing billboards with quaternion copy
+  - Additive blending for glow effects
+- **Particle State Management**: Efficient per-particle tracking
+  - Typed arrays for particle properties (ages, lifetimes, angles, speeds)
+  - Reusable geometry (shared CircleGeometry for all particles)
+  - Surface point sampling from fire model mesh
+  - Bounding box calculation for spawn area
+- **Performance**: Particles added to world.stage.scene (not entity node)
+  - Registered with world.setHot() for frame updates
+  - Proper cleanup in destroy() method
+
+#### Ground Item Snapping (PR #718)
+
+- **Bbox-Snap to Terrain**: Items now align to ground using bounding box
+  - Calculates bbox.min.y and offsets mesh position
+  - Compensates for GroundItemSystem's 0.2m terrain offset
+  - Named constant: `GROUND_ITEM_TERRAIN_OFFSET = 0.2`
+  - Applies to all ground items and fire models
+- **Grounded Items**: Items with `groundOffset ≤ 0` use bbox snapping
+  - No floating animation for grounded items
+  - Prevents clipping through terrain
+  - Consistent placement across all item types
+- **Documentation**: Clarified groundOffset behavior in ItemEntity.ts
+
+#### Mining Rock Materials (PR #710)
+
+- **PBR Materials**: Realistic rock appearance with metalness=0
+  - Prevents overly shiny/metallic rocks
+  - Proper roughness values for stone
+- **Depleted Rock Alignment**: Bbox snapping for depleted rock models
+  - Ensures stumps/depleted rocks sit flush with ground
+  - Consistent with active rock placement
+
+#### Headstone Model (PR #710)
+
+- **GLB Model**: Replaced placeholder box with headstone.glb
+  - Proper 3D gravestone model
+  - Scale and positioning for visibility
+
+### 🎮 UI Enhancements
+
+#### Skill Guide Panel (PR #711)
+
+- **Click-to-Open**: Click skill icon in skills panel to open guide
+  - Shows all unlocks for that skill sorted by level
+  - Visual indicators: ✓ unlocked, ➤ next, 🔒 locked
+  - Progress tracking (X/Y unlocked)
+  - Levels to next unlock display
+- **Client-Side Loading**: Unlock data loaded from skill-unlocks.json manifest
+  - No server round-trip required
+  - Instant panel opening
+  - Cached unlock data per skill
+- **ModalWindow Integration**: Consistent styling with other modals
+  - Themed colors and spacing
+  - Scrollable unlock list
+  - Loading state with spinner
+- **Unlock Types**: item, ability, area, quest, activity
+  - Type badges with color coding
+  - Next unlock highlighted with "NEXT" badge
+
+### 🐛 Bug Fixes
+
+- **Fishing Spots** (PR #712): Aligned water threshold to 9.0m so spots spawn at shoreline instead of underwater
+- **Gathering Emote** (PR #713): Prevented gathering animation from playing when player lacks required tool
+  - Tool validation before emote trigger
+  - Prevents visual desync
+
+### 🧹 Code Cleanup
+
+- **Dead Code Removal** (PR #715): Removed unused ProcessingSystemBase, FiremakingSystem, and CookingSystem
+  - Legacy systems replaced by unified ProcessingSystem
+  - Reduced codebase complexity
+
+</Update>
+
 <Update label="F2P Ranged & Magic Combat" description="January 2026" date="2026-01-28">
 
 ### ⚔️ Ranged Combat System
