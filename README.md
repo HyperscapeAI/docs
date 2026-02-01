@@ -42,9 +42,12 @@ All combat uses OSRS-accurate formulas for damage calculation, hit chance, and X
 - **Equipment Stats**: 11 equipment slots with comprehensive bonus tracking
 - **Combat Styles**: XP distribution and stat bonuses based on selected style
 
-### Crafting System
+### Artisan Skills
 
-The crafting skill allows players to create leather armor, dragonhide equipment, jewelry, and cut gems:
+Hyperscape features three artisan skills for creating equipment and items:
+
+#### Crafting
+Create leather armor, dragonhide equipment, jewelry, and cut gems:
 
 - **Leather Crafting**: Use needle + thread on leather to create gloves, boots, vambraces, chaps, body, coif
 - **Dragonhide Crafting**: Use needle + thread on dragon leather for high-level ranged armor
@@ -52,12 +55,40 @@ The crafting skill allows players to create leather armor, dragonhide equipment,
 - **Gem Cutting**: Use chisel on uncut gems to create cut gems for jewelry
 - **Tanning System**: Convert hides to leather at tanner NPCs for a coin fee
 
-**Crafting Mechanics:**
-- **Thread Consumption**: Thread has 5 uses before being consumed
-- **Tick-Based**: Each craft takes 2-3 ticks (1.2-1.8 seconds)
-- **Movement Cancellation**: Walking or entering combat cancels crafting
-- **Make-X**: Craft multiple items in one session with quantity memory
-- **Recipe Filtering**: Recipes filter by input item (e.g., chisel + uncut sapphire shows only sapphire)
+**Mechanics:**
+- Thread has 5 uses before being consumed
+- Tick-based crafting (2-3 ticks per item)
+- Movement or combat cancels crafting
+- Make-X with quantity memory
+
+#### Fletching
+Create ranged weapons and ammunition:
+
+- **Arrow Shafts**: Use knife on logs (15 shafts per log)
+- **Headless Arrows**: Attach feathers to arrow shafts (15 per action)
+- **Arrows**: Attach arrowtips to headless arrows (15 per action)
+- **Bows**: Cut logs into unstrung bows, string with bowstring
+- **Crossbows**: Advanced ranged weapons (future)
+
+**Mechanics:**
+- Multi-output recipes (15 arrow shafts per log)
+- Item-on-item interactions (bowstring + unstrung bow)
+- Knife required for cutting, no tool for stringing
+- Tick-based fletching (2-3 ticks per action)
+
+#### Runecrafting
+Convert essence into runes at runecrafting altars:
+
+- **Instant Conversion**: Click altar to convert all essence at once
+- **Multi-Rune Crafting**: Higher levels produce multiple runes per essence (e.g., 2x air runes at level 11)
+- **Essence Types**: Rune essence (basic runes), pure essence (all runes)
+- **Altar Types**: Air, Mind, Water, Earth, Fire, Body, Cosmic, Chaos, Nature, Law, Death
+
+**Mechanics:**
+- Instant conversion (no tick delay)
+- Multi-rune multipliers at specific levels
+- XP per essence consumed
+- No failure rate
 
 ## Quick Start
 
