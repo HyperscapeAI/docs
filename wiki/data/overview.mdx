@@ -779,13 +779,25 @@ interface QuestStage {
 
 ## Recent Changes
 
+### New Skills & Recipes (Week 5: Jan 31 - Feb 1, 2026)
+
+Three new artisan skills added with complete OSRS-accurate recipe manifests:
+
+- **Fletching**: Arrow shafts, headless arrows, shortbows, longbows, bow stringing, arrow tipping (40+ recipes)
+- **Crafting**: Leather armor, studded armor, dragonhide armor, jewelry, gem cutting (25+ recipes)
+- **Runecrafting**: Air, mind, water, earth, fire, chaos runes with multi-rune level thresholds
+
+**New Assets**:
+- Firemaking fire 3D model (`models/firemaking-fire/firemaking-fire.glb`)
+- Comprehensive armor manifest with 80+ armor pieces across all combat styles
+
 ### Manifest Refactor (PR #3)
 
 The manifest system was recently refactored for better scalability and organization:
 
-- **Items split by type**: Weapons, tools, resources, food, and misc are now in separate files
+- **Items split by type**: Weapons, tools, resources, food, ammunition, runes, armor, and misc are now in separate files
 - **Gathering resources**: Woodcutting, mining, and fishing data moved to dedicated files
-- **Recipe system**: New recipes directory for smelting, smithing, cooking, and firemaking
+- **Recipe system**: New recipes directory for smelting, smithing, cooking, firemaking, fletching, crafting, and runecrafting
 - **Centralized requirements**: `tier-requirements.json` provides OSRS-accurate level requirements
 - **Skill unlocks**: `skill-unlocks.json` documents progression milestones
 
