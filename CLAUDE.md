@@ -865,6 +865,13 @@ The equipment table supports 11 slots (OSRS-style paperdoll):
 
 Each slot tracks `itemId` and `quantity` (for stackable items like arrows).
 
+**Arrow Quantity Tracking:**
+- Arrows are stored in the equipment slot with full quantity
+- `consumeArrow()` decrements quantity by 1 per shot
+- Auto-unequips when quantity reaches 0
+- Quantity persisted to database on equip/unequip/consume
+- Prevents arrow duplication on crashes
+
 ### Migrations
 
 Run from `packages/server/`:
