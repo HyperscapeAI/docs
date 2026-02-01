@@ -18,7 +18,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 |----------|----------|
 | **Combat** | Melee, ranged, and magic combat with OSRS-accurate formulas, per-style attack/defense bonuses (stab/slash/crush), combat triangle, projectile system, prayer bonuses |
 | **Equipment** | 11-slot equipment system (weapon, shield, helmet, body, legs, boots, gloves, cape, amulet, ring, arrows) with per-style bonuses and OSRS paperdoll layout |
-| **Skills** | Attack, Strength, Defence, Constitution, Ranged, Magic, Prayer, Woodcutting, Mining, Fishing, Cooking, Firemaking, Smithing, Agility, Crafting (15 skills total) |
+| **Skills** | Attack, Strength, Defence, Constitution, Ranged, Magic, Prayer, Woodcutting, Mining, Fishing, Cooking, Firemaking, Smithing, Agility, Crafting, Fletching, Runecrafting (17 skills total) |
 | **Crafting** | Leather crafting, dragonhide armor, jewelry, gem cutting with needle/chisel/furnace, thread consumption, tanning system |
 | **Economy** | 480-slot bank with tabs, shops, item weights, loot drops, coin pouch system |
 | **PvP** | Duel arena with crash-safe staking, equipment restrictions, rule negotiation, idempotency protection |
