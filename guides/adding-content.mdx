@@ -287,6 +287,75 @@ World areas define zones with biomes and mob spawns:
 }
 ```
 
+### Crafting Recipe
+
+**File**: `packages/server/world/assets/manifests/recipes/crafting.json`
+
+```json
+{
+  "output": "leather_body",
+  "category": "leather",
+  "inputs": [
+    { "item": "leather", "amount": 1 }
+  ],
+  "tools": ["needle"],
+  "consumables": [
+    { "item": "thread", "uses": 5 }
+  ],
+  "level": 14,
+  "xp": 25,
+  "ticks": 3,
+  "station": "none"
+}
+```
+
+<Info>
+  Crafting recipes support consumables with limited uses (e.g., thread with 5 uses). Station can be "none" or "furnace" (for jewelry).
+</Info>
+
+### Fletching Recipe
+
+**File**: `packages/server/world/assets/manifests/recipes/fletching.json`
+
+```json
+{
+  "output": "arrow_shaft",
+  "outputQuantity": 15,
+  "category": "arrow_shafts",
+  "inputs": [
+    { "item": "logs", "amount": 1 }
+  ],
+  "tools": ["knife"],
+  "level": 1,
+  "xp": 5,
+  "ticks": 2,
+  "skill": "fletching"
+}
+```
+
+<Info>
+  Fletching recipes support multi-output via `outputQuantity` (e.g., 15 arrow shafts per log). Quantity selection refers to actions, not output items.
+</Info>
+
+### Runecrafting Recipe
+
+**File**: `packages/server/world/assets/manifests/recipes/runecrafting.json`
+
+```json
+{
+  "runeType": "air",
+  "runeItemId": "air_rune",
+  "levelRequired": 1,
+  "xpPerEssence": 5,
+  "essenceTypes": ["rune_essence", "pure_essence"],
+  "multiRuneLevels": [11, 22, 33, 44, 55, 66, 77, 88, 99]
+}
+```
+
+<Info>
+  Runecrafting is instant (no tick delay). Multi-rune levels grant +1 rune per essence at each threshold. Example: At level 22, you get 3 air runes per essence.
+</Info>
+
 ---
 
 ## Testing Changes
