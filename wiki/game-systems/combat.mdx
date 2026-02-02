@@ -968,6 +968,47 @@ Ranged attacks use Chebyshev distance and require:
 - A ranged weapon (bow)
 - Ammunition (arrows)
 
+**Arrow Visuals:**
+
+Arrows are rendered as 3D meshes with metal-colored tips and wooden shafts:
+
+```typescript
+// From spell-visuals.ts
+export const ARROW_VISUALS = {
+  default: {
+    shaftColor: 0x8b4513,    // Brown wood
+    headColor: 0xa0a0a0,     // Gray metal
+    fletchingColor: 0xffffff, // White feathers
+    length: 0.35,            // Reduced from 0.6 for better scale
+    width: 0.08,             // Reduced from 0.15
+    rotateToDirection: true,
+    arcHeight: 0,            // Straight trajectory
+  },
+  bronze_arrow: {
+    headColor: 0xcd7f32,     // Bronze
+    length: 0.35,
+    width: 0.08,
+  },
+  iron_arrow: {
+    headColor: 0x71797e,     // Iron gray
+    length: 0.35,
+    width: 0.08,
+  },
+  // ... steel, mithril, adamant arrows
+};
+```
+
+**Arrow Size Reduction:**
+
+Arrow projectiles were reduced in size (length: 0.6 → 0.35, width: 0.15 → 0.08) to better match the scale of player models and improve visual clarity during combat.
+
+**Bow Models:**
+
+All bow items now display 3D bow models when equipped:
+- Shortbow, Oak Shortbow, Willow Shortbow, Maple Shortbow
+- Models are properly rigged to the player's hand bones
+- Bows are visible during idle, walking, and combat animations
+
 ```typescript
 // Ranged range check
 export function isInAttackRange(
