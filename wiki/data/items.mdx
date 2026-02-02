@@ -805,8 +805,114 @@ Items equip to specific slots:
 
 ---
 
+---
+
+## Ground Item Display
+
+Items dropped on the ground can be configured for visual appearance using `modelScale` and `groundOffset` properties.
+
+### Model Scale
+
+Controls the size of the 3D model when displayed as a ground item:
+
+```json
+{
+  "id": "logs",
+  "modelScale": 0.4,  // 40% of original model size
+  // Default: 0.3 (30% scale)
+}
+```
+
+### Ground Offset
+
+Controls vertical positioning and animation behavior:
+
+```typescript
+/** Ground item Y positioning:
+ *  - When <= 0: model bottom is bbox-snapped to terrain with this as offset (0 = flush)
+ *  - When > 0: item floats at this height with bobbing animation
+ *  - When undefined: defaults to 0.5 (standard floating ground item)
+ */
+groundOffset?: number;
+```
+
+**Examples:**
+
+```json
+// Grounded item (sits on terrain, no animation)
+{
+  "id": "logs",
+  "groundOffset": 0,  // Model bottom flush with terrain
+  "modelScale": 0.4
+}
+
+// Grounded with slight offset
+{
+  "id": "fire",
+  "groundOffset": -0.05,  // Model bottom 0.05 units below terrain
+  "modelScale": 0.35
+}
+
+// Floating item (default behavior)
+{
+  "id": "coins",
+  "groundOffset": 0.5,  // Floats 0.5 units above terrain with bobbing
+  "modelScale": 0.3
+}
+
+// Floating at custom height
+{
+  "id": "rare_item",
+  "groundOffset": 0.8,  // Floats higher than normal
+  "modelScale": 0.35
+}
+```
+
+### Bounding Box Snapping
+
+When `groundOffset <= 0`, the system automatically calculates the model's bounding box and positions it flush with the terrain:
+
+```typescript
+// From ItemEntity.ts
+// Grounded items: compute bounding box and snap bottom to terrain level
+const gOffset = this.config.groundOffset;
+if (gOffset !== undefined && gOffset <= 0) {
+  const bbox = new THREE.Box3().setFromObject(this.mesh);
+  // 0.2 matches the yOffset passed to groundToTerrain() in GroundItemSystem
+  const GROUND_ITEM_TERRAIN_OFFSET = 0.2;
+  this.mesh.position.y = -bbox.min.y - GROUND_ITEM_TERRAIN_OFFSET + gOffset;
+}
+```
+
+**Benefits:**
+- Items sit naturally on terrain regardless of model pivot point
+- No manual Y-offset tuning required per item
+- Works correctly on slopes and uneven terrain
+- Fire models and other objects use the same system
+
+**Animation Behavior:**
+
+```typescript
+// Grounded items (groundOffset <= 0): no animation
+if (offset !== undefined && offset <= 0) {
+  // Y position set by createMesh bbox snap, no animation
+} else {
+  // Regular items: float and spin
+  const floatHeight = offset ?? 0.5;
+  this.mesh.position.y = floatHeight + Math.sin(time * 2) * 0.1;
+  this.mesh.rotation.y += deltaTime * 0.5;
+}
+```
+
+<Info>
+Grounded items (`groundOffset <= 0`) are static and do not float or spin. This is ideal for fires, logs, and other objects that should sit naturally on the ground.
+</Info>
+
+---
+
 ## Related Documentation
 
 - [NPC Data Structure](/wiki/data/npcs)
 - [Combat System](/wiki/game-systems/combat)
 - [Skills & Requirements](/wiki/game-systems/skills)
+- [Loot System](/wiki/game-systems/loot) (for ground item mechanics)
