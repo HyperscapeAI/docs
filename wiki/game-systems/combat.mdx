@@ -674,22 +674,116 @@ world.network.send("setAutocast", { spellId: null });
 
 ### Spell Projectiles
 
-Magic spells render as colored orbs:
+Magic spells render as multi-layer billboard meshes with WebGPU-compatible DataTextures:
 
 ```typescript
 // From spell-visuals.ts
-export const SPELL_VISUALS = {
-  wind_strike: { color: 0xcccccc, size: 0.25, glowIntensity: 0.25 },
-  water_strike: { color: 0x3b82f6, size: 0.25, glowIntensity: 0.35 },
-  earth_strike: { color: 0x8b4513, size: 0.25, glowIntensity: 0.2 },
-  fire_strike: { color: 0xff4500, size: 0.25, glowIntensity: 0.5 },
-  // Bolt spells are larger with more glow
-  wind_bolt: { color: 0xcccccc, size: 0.35, glowIntensity: 0.35 },
-  water_bolt: { color: 0x3b82f6, size: 0.35, glowIntensity: 0.45 },
-  earth_bolt: { color: 0x8b4513, size: 0.35, glowIntensity: 0.3 },
-  fire_bolt: { color: 0xff4500, size: 0.35, glowIntensity: 0.6 },
+// Strike spells (Level 1-13)
+const STRIKE_BASE: Partial<SpellVisualConfig> = {
+  size: 0.5,              // Increased from 0.25 for better visibility
+  glowIntensity: 0.7,     // Increased from 0.3-0.5
+  trailLength: 4,
+  trailFade: 0.5,
+  pulseSpeed: 0,          // No pulsing for strike tier
+  pulseAmount: 0,
+};
+
+// Bolt spells (Level 17-35) - larger with orbiting sparks
+const BOLT_BASE: Partial<SpellVisualConfig> = {
+  size: 0.7,              // Increased from 0.35
+  glowIntensity: 0.8,     // Increased from 0.5
+  trailLength: 5,
+  trailFade: 0.4,
+  pulseSpeed: 5,          // Pulsing outer glow
+  pulseAmount: 0.2,       // 20% scale variation
 };
 ```
+
+**Multi-Layer Projectile Structure:**
+
+Each spell projectile consists of multiple billboard meshes:
+
+1. **Outer Glow** (Layer 1): Soft, semi-transparent, 2.5× size
+2. **Core Orb** (Layer 2): Bright center, sharp glow
+3. **Orbiting Sparks** (Layer 3, bolt-tier only): 2 tiny particles that orbit the core
+
+```typescript
+// From ProjectileRenderer.ts
+// Layer 1: Outer glow — soft, larger, semi-transparent
+const outerMat = this.createGlowMaterial(palette.mid, 1.5, 0.6);
+const outerMesh = new THREE.Mesh(geom, outerMat);
+outerMesh.scale.set(config.size * 2.5, config.size * 2.5, config.size * 2.5);
+
+// Layer 2: Core orb — bright center, sharp
+const coreMat = this.createGlowMaterial(palette.core, 3.0, 0.9);
+const coreMesh = new THREE.Mesh(geom, coreMat);
+coreMesh.scale.set(config.size, config.size, config.size);
+
+// Layer 3: Orbiting sparks (bolt-tier only)
+if (config.pulseSpeed > 0) {
+  for (let i = 0; i < 2; i++) {
+    const sparkMat = this.createGlowMaterial(palette.core, 4.0, 0.8);
+    const sparkMesh = new THREE.Mesh(geom, sparkMat);
+    sparkMesh.scale.set(config.size * 0.3, config.size * 0.3, config.size * 0.3);
+  }
+}
+```
+
+**Impact Burst Particles:**
+
+When a spell hits its target, 4-6 particles burst outward:
+
+```typescript
+// Spawn impact burst on hit
+private spawnImpactBurst(proj: ActiveProjectile): void {
+  const count = 4 + Math.floor(Math.random() * 3); // 4-6 particles
+  
+  for (let i = 0; i < count; i++) {
+    // Random outward velocity in XZ + upward drift
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1.5 + Math.random() * 2.5;
+    const velocity = new THREE.Vector3(
+      Math.cos(angle) * speed,
+      1.0 + Math.random() * 1.5,
+      Math.sin(angle) * speed,
+    );
+    
+    const maxLife = 0.3 + Math.random() * 0.2; // 0.3-0.5s lifetime
+  }
+}
+```
+
+**WebGPU Compatibility:**
+
+The projectile system uses DataTextures with color baked directly into pixels (not via `material.color` tinting) for reliable rendering in WebGPU:
+
+```typescript
+// Create color-baked radial glow DataTexture
+private createColoredGlowTexture(
+  colorHex: number,
+  size: number,
+  sharpness: number,
+): THREE.DataTexture {
+  const r = (colorHex >> 16) & 0xff;
+  const g = (colorHex >> 8) & 0xff;
+  const b = colorHex & 0xff;
+  
+  // Bake color directly into RGBA pixels
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const falloff = Math.max(0, 1 - dist);
+      const strength = Math.pow(falloff, sharpness);
+      data[idx] = Math.round(r * strength);
+      data[idx + 1] = Math.round(g * strength);
+      data[idx + 2] = Math.round(b * strength);
+      data[idx + 3] = Math.round(255 * strength);
+    }
+  }
+}
+```
+
+Textures are cached and shared across projectiles for memory efficiency.
 
 **Hit Delay:**
 ```typescript
