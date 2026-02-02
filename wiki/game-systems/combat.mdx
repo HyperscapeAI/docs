@@ -717,6 +717,92 @@ export function tilesWithinMeleeRange(
 }
 ```
 
+### Combat Follow System
+
+<Info>
+**OSRS-Accurate**: Players continuously follow their combat target while in range, not just when out of range. This prevents the stutter pattern where players stand still until the target moves away.
+</Info>
+
+The combat system tracks target movement and maintains pursuit even when in attack range:
+
+```typescript
+// From CombatSystem.ts
+// Track last known target tile per attacker for persistent combat follow
+private lastCombatTargetTile = new Map<string, { x: number; z: number }>();
+
+// Detect target movement
+const lastKnown = this.lastCombatTargetTile.get(attackerId);
+const targetMoved = !lastKnown || 
+  lastKnown.x !== targetTile.x || 
+  lastKnown.z !== targetTile.z;
+
+if (targetMoved) {
+  // Update last known target tile
+  this.lastCombatTargetTile.set(attackerId, {
+    x: targetTile.x,
+    z: targetTile.z,
+  });
+}
+
+// Pre-compute follow path when target moves (even if in range)
+// This ensures zero-delay pursuit if target steps out of range next tick
+if (targetMoved) {
+  this.emitTypedEvent(EventType.COMBAT_FOLLOW_TARGET, {
+    playerId: attackerId,
+    targetId: targetId,
+    targetPosition: targetPos,
+    attackRange: combatRangeTiles,
+    attackType: attackType,
+  });
+}
+```
+
+**Benefits:**
+- Smooth pursuit of moving targets
+- Zero-delay response when target leaves range
+- Pre-computed pathfinding for responsive gameplay
+- Matches OSRS behavior where players "stick" to their target
+
+**Cleanup:**
+The `lastCombatTargetTile` map is automatically cleaned up when:
+- Combat ends naturally (timeout)
+- Player disengages from combat
+- Combat is forcibly stopped
+
+### Combat Rotation System
+
+Players automatically face their combat target during ranged and magic attacks:
+
+```typescript
+// From CombatSystem.ts
+// Emit COMBAT_FACE_TARGET for the attacker so the local player client
+// rotates toward the target. Essential for magic/ranged attacks where
+// the player is stationary (no movement to naturally rotate them).
+if (attackerType === "player") {
+  this.emitTypedEvent(EventType.COMBAT_FACE_TARGET, {
+    playerId: String(attackerId),
+    targetId: String(targetId),
+  });
+}
+```
+
+**Rotation Clearing:**
+Rotation tracking is cleared when:
+- Combat target dies
+- Player starts moving (movement takes priority)
+- Combat ends or is disengaged
+
+```typescript
+// From PlayerLocal.ts
+// Clear stored combat rotation when player starts moving
+if (isMoving) {
+  this._lastCombatRotation = null;
+  this._serverFaceTargetId = null;
+}
+```
+
+This prevents players from continuing to face dead targets or old combat directions.
+
 ### Ranged Combat
 
 Ranged attacks use Chebyshev distance and require:
