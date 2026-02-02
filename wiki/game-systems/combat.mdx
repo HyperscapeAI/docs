@@ -206,19 +206,84 @@ export const RANGED_STYLE_BONUSES = {
 
 ### Magic Styles
 
+<Info>
+**OSRS-Accurate**: Staves and wands have both melee and magic combat styles. When used without a spell selected, they function as crush weapons and grant melee XP.
+</Info>
+
+**Staff/Wand Melee Styles (no spell selected):**
+
+| Style | XP Distribution | Bonus |
+|-------|-----------------|-------|
+| **Accurate (Bash)** | Attack only | +3 Attack |
+| **Aggressive (Pound)** | Strength only | +3 Strength |
+| **Defensive (Focus)** | Defense only | +3 Defense |
+
+**Staff/Wand Magic Styles (with spell selected):**
+
 | Style | Accuracy | Range | XP Distribution |
 |-------|----------|-------|-----------------|
-| **Accurate** | +3 Magic | Normal | Magic + Constitution |
-| **Longrange** | +1 Magic | +2 tiles | Magic + Defense + Constitution |
 | **Autocast** | Normal | Normal | Magic + Constitution |
 
 ```typescript
 // From WeaponStyleConfig.ts
-export const MAGIC_STYLE_BONUSES = {
-  accurate: { attackBonus: 3, speedModifier: 0, rangeModifier: 0, xpSplit: "magic" },
-  longrange: { attackBonus: 1, speedModifier: 0, rangeModifier: 2, xpSplit: "magic_defence" },
-  autocast: { attackBonus: 0, speedModifier: 0, rangeModifier: 0, xpSplit: "magic" },
-};
+// Staves/wands have both melee and magic styles:
+//   Melee (crush): Bash=accurate, Pound=aggressive, Focus=defensive
+//   Magic: Spell=autocast (defensive autocast is a toggle, not a separate style)
+// @see https://oldschool.runescape.wiki/w/Staff
+[WeaponType.STAFF]: ["accurate", "aggressive", "defensive", "autocast"],
+[WeaponType.WAND]: ["accurate", "aggressive", "defensive", "autocast"],
+```
+
+**XP Grant Logic:**
+
+```typescript
+// From MobEntity.ts
+// Check if player has a spell selected (needed for magic detection)
+const selectedSpell = playerEntity?.data?.selectedSpell;
+
+if ((weaponType === "staff" || weaponType === "wand") && selectedSpell) {
+  // Magic weapon WITH active spell - use "magic" style for Magic XP
+  // OSRS-accurate: staffs used for melee (no spell) grant melee XP
+  attackStyle = "magic";
+} else {
+  // Melee attack (or staff/wand without a spell) - use player's selected attack style
+  // but only if it's a valid melee style; non-melee styles (longrange, autocast, rapid)
+  // would grant wrong XP type
+  const MELEE_STYLES = new Set(["accurate", "aggressive", "defensive", "controlled"]);
+  const playerStyle = attackStyleData?.id;
+  attackStyle = playerStyle && MELEE_STYLES.has(playerStyle) 
+    ? playerStyle 
+    : "aggressive";
+}
+```
+
+**Autocast Panel Behavior:**
+
+When selecting the "autocast" style, the Spells panel automatically opens for spell selection:
+
+```typescript
+// From CombatPanel.tsx
+// OSRS-accurate: selecting autocast opens the spells panel for spell selection
+if (next === "autocast") {
+  // Find or create spells window
+  const existing = windows.find(w => w.tabs.some(t => t.content === "spells"));
+  if (existing) {
+    // Activate spells tab and bring to front
+    store.updateWindow(existing.id, {
+      activeTabIndex: tabIndex,
+      visible: true,
+    });
+    store.bringToFront(existing.id);
+  } else {
+    // Create new spells window
+    store.createWindow({
+      id: `panel-spells-${Date.now()}`,
+      position: { x: centerX, y: centerY },
+      size: { width: 400, height: 350 },
+      tabs: [{ id: "spells", label: "Spells", content: "spells" }],
+    });
+  }
+}
 ```
 
 ---
