@@ -521,6 +521,85 @@ Food is consumed even at full health (OSRS-accurate). The eat delay and attack d
 | Yew | 60 | 202.5 |
 | Magic | 75 | 303.8 |
 
+### Firemaking Mechanics
+
+<Info>
+**OSRS-Accurate**: Players must stand still while lighting fires. Movement during the lighting animation cancels the action.
+</Info>
+
+**Lighting Process:**
+
+1. Player clicks logs with tinderbox (or tinderbox on logs)
+2. Player movement is stopped automatically
+3. Lighting animation plays (3 seconds)
+4. Fire spawns at the position where lighting began
+5. Logs are consumed, XP is granted
+
+**Movement Cancellation:**
+
+```typescript
+// From ProcessingSystem.ts
+// Stop player movement before lighting fire (OSRS: player stands still to light)
+this.tileMovementManager.stopPlayer(player.id);
+
+// Cancel firemaking when the player moves during the lighting animation
+private cancelFiremaking(playerId: string, action: ProcessingAction): void {
+  this.activeProcessing.delete(playerId);
+  this.releaseAction(action);
+  this.resetPlayerEmote(playerId);
+  
+  this.emitTypedEvent(EventType.FIRE_LIGHTING_CANCELLED, { playerId });
+  
+  this.emitTypedEvent(EventType.UI_MESSAGE, {
+    playerId,
+    message: "You move and stop trying to light the fire.",
+    type: "info",
+  });
+}
+```
+
+**Movement Detection:**
+
+The system monitors player position during the 3-second lighting animation:
+
+```typescript
+// Movement threshold: 0.5 world units (~half a tile)
+private static readonly FIREMAKING_MOVE_THRESHOLD_SQ = 0.25;
+
+// Check for movement in update loop
+const dx = player.node.position.x - action.startPosition.x;
+const dz = player.node.position.z - action.startPosition.z;
+const distSq = dx * dx + dz * dz;
+
+if (distSq > ProcessingSystem.FIREMAKING_MOVE_THRESHOLD_SQ) {
+  this.cancelFiremaking(playerId, action);
+}
+```
+
+**Fire Placement:**
+
+Fires spawn at the cached start position, not the player's current position:
+
+```typescript
+// Cache player start position for movement detection and fire placement
+const startPosition = {
+  x: player.node.position.x,
+  y: player.node.position.y,
+  z: player.node.position.z,
+};
+action.startPosition = startPosition;
+
+// Fire spawns where lighting began, not where player ended up
+this.completeFiremaking(playerId, processingAction, startPosition);
+```
+
+**Fire Lifecycle:**
+
+- Fires burn for a limited time (configurable per log type)
+- When fires extinguish, they spawn ashes as a ground item
+- Ashes despawn after 2 minutes
+- Fire models use bounding box snapping to sit flush on terrain
+
 ---
 
 ## Level Requirements
