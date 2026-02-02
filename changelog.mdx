@@ -23,6 +23,92 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Combat Polish & Visual Upgrades" description="February 2026" date="2026-02-02">
+
+### ⚔️ Combat System Improvements
+
+#### Persistent Combat Follow (PR #737)
+
+OSRS-accurate continuous target tracking during combat:
+
+- **Target Movement Detection**: Tracks last known target tile per attacker
+  - Pre-computes follow path when target moves (even if in range)
+  - Zero-delay pursuit when target steps out of range
+  - Prevents stutter pattern where players stand still until target escapes
+- **Race Condition Fixes**: 
+  - Clears action queue when clicking new target (prevents ground-click override)
+  - Stops active follow when switching targets
+  - Stops remaining walk path when entering combat range
+- **Memory Management**: `lastCombatTargetTile` map cleaned up on combat end/disengage
+
+#### Combat Rotation System (PR #732)
+
+Players now automatically face their combat target during ranged/magic attacks:
+
+- **Face Target Event**: `COMBAT_FACE_TARGET` network packet
+  - Server emits when attack is processed
+  - Client rotates player toward target
+  - Essential for stationary ranged/magic attacks
+- **Rotation Clearing**: Proper cleanup when combat ends
+  - Clears rotation when target dies
+  - Clears rotation when player starts moving
+  - Prevents facing dead targets or old combat directions
+
+#### Staff Melee/Magic XP (PR #734)
+
+OSRS-accurate staff combat mechanics:
+
+- **Dual Combat Styles**: Staves/wands now have both melee and magic styles
+  - Melee (no spell): Bash/Pound/Focus grant Attack/Strength/Defense XP
+  - Magic (with spell): Autocast grants Magic XP
+- **XP Grant Logic**: Validates attack style to prevent wrong XP type
+- **Autocast Panel**: Selecting autocast style automatically opens Spells panel
+- **Weapon Styles**: Updated for STAFF and WAND: `["accurate", "aggressive", "defensive", "autocast"]`
+
+### 🎨 Visual Enhancements
+
+#### Spell Projectile Upgrade (PR #722)
+
+Multi-layer spell projectiles with WebGPU-compatible rendering:
+
+- **Multi-Layer Structure**: Outer glow + core orb + orbiting sparks (bolt-tier)
+- **Impact Burst Particles**: 4-6 particles burst outward on spell hit
+- **WebGPU Compatibility**: DataTextures with color baked into pixels
+- **Visual Tuning**: Increased spell sizes and glow intensity
+  - Strike spells: 0.25 → 0.5 size, glow 0.3-0.5 → 0.7
+  - Bolt spells: 0.35 → 0.7 size, glow 0.5 → 0.8
+- **Trail System**: Element-colored billboard meshes replace white sprites
+
+#### Bow Models & Arrow Sizing (PR #719)
+
+- **Bow Models**: All bow items now display 3D models when equipped
+- **Arrow Size Reduction**: Length 0.6 → 0.35, width 0.15 → 0.08 for better scale
+
+#### Ground Item Snapping (PR #718)
+
+- **Bbox Snapping**: Automatic bottom-of-model alignment to terrain
+- **Ground Offset System**: New `groundOffset` and `modelScale` item properties
+- **Fire Models**: Fires now sit flush on terrain using bbox calculation
+- **Ashes Spawn**: Fires spawn ashes when they burn out (OSRS-accurate)
+
+### 🔧 Firemaking Improvements (PR #736)
+
+OSRS-accurate firemaking behavior:
+
+- **Movement Stopping**: Player movement automatically stopped before lighting
+- **Movement Cancellation**: Lighting cancelled if player moves (0.5 unit threshold)
+- **Fire Placement**: Fire spawns at cached start position, not current position
+- **Network Events**: New `FIRE_LIGHTING_CANCELLED` event
+
+### 🐛 Bug Fixes
+
+- **Mob Respawn** (PR #729): Mobs respawn at random spawn point instead of death location
+- **UI Theme** (PR #701): Fixed quest log black background, aligned all panel colors
+- **Mobile Breakpoint** (PR #701): Aligned with breakpoints.md (640px)
+- **Test Fixes** (PR #701): Updated 4078 tests to match current implementation
+
+</Update>
+
 <Update label="Artisan Skills & Visual Upgrades" description="February 2026" date="2026-02-01">
 
 ### 🎨 Three New Artisan Skills
