@@ -115,6 +115,10 @@ interface Item {
   firemaking?: FiremakingData;   // For logs
   smelting?: SmeltingData;       // For bars
   smithing?: SmithingData;       // For smithable items
+  
+  // Ground item display overrides
+  modelScale?: number;           // Scale for 3D model when displayed as ground item (default: 0.3)
+  groundOffset?: number;         // Ground item Y positioning (see below)
 }
 ```
 
