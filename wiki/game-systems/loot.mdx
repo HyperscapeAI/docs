@@ -323,6 +323,15 @@ Mob drops are configured via loot tables in the NPC manifest:
 }
 ```
 
+### Common Drop Models
+
+The most common loot items have dedicated 3D models:
+
+- **Bones** (`models/bones/bones.glb`) - Dropped by all mobs for Prayer training
+- **Coins** (`models/coin-pile/coin-pile.glb`) - Currency drops with visual pile representation
+
+These models enhance the visual feedback when looting defeated mobs.
+
 The `LootTableService.ts` rolls drops based on weights:
 
 ```typescript
