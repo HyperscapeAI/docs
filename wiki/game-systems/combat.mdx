@@ -73,6 +73,191 @@ export const COMBAT_CONSTANTS = {
 
 ---
 
+## Mob Combat
+
+### Mob Attack Types
+
+Mobs can use any of the three attack types: melee, ranged, or magic. This is configured in the NPC manifest:
+
+```json
+{
+  "id": "dark_wizard",
+  "combat": {
+    "attackType": "magic",
+    "spellId": "wind_strike",
+    "combatRange": 10,
+    "attackSpeedTicks": 5
+  },
+  "appearance": {
+    "heldWeaponModel": "asset://weapons/staff.glb"
+  }
+}
+```
+
+**Attack Type Configuration:**
+- `attackType`: `"melee"` (default), `"ranged"`, or `"magic"`
+- `spellId`: Required for magic mobs (e.g., `"wind_strike"`, `"fire_bolt"`)
+- `arrowId`: Required for ranged mobs (e.g., `"bronze_arrow"`, `"iron_arrow"`)
+- `heldWeaponModel`: Optional visual weapon GLB (bow, staff, etc.)
+
+### Mob Combat Mechanics
+
+**Mob Magic Attacks:**
+- Use mob's `magic` stat for damage calculation
+- No rune consumption (infinite resources)
+- Emit spell projectiles with correct visual effects
+- Play `SPELL_CAST` animation
+
+**Mob Ranged Attacks:**
+- Use mob's `ranged` stat for damage calculation
+- No arrow consumption (infinite resources)
+- Emit arrow projectiles with correct visuals
+- Play `RANGE` animation
+
+**Mob Melee Attacks:**
+- Use mob's `attack` and `strength` stats
+- Standard melee range (1 tile) or custom `combatRange`
+- Play `COMBAT` or `SWORD_SWING` animation
+
+### Held Weapon Visuals
+
+Mobs can display held weapons (bows, staves) using the same attachment system as player equipment:
+
+```typescript
+// From MobVisualManager.ts
+// Weapons are attached to VRM hand bones using Asset Forge metadata
+// Supports both V1 (direct attachment) and V2 (pre-baked matrix) formats
+// Weapons are cached and shared across mobs of the same type
+```
+
+**Weapon Cache:**
+- Static `_weaponCache` shares loaded GLB scenes across mob instances
+- `clone(true)` creates per-mob instances with shared geometry/materials
+- Cache cleared on world teardown via `MobNPCSpawnerSystem.destroy()`
+- Prevents duplicate network requests and GPU memory waste
+
+### Mob Damage Calculation
+
+Mobs use simplified damage formulas without equipment bonuses:
+
+```typescript
+// Magic damage for mobs
+const magicLevel = npcData.stats.magic ?? 1;
+const maxHit = spell.baseMaxHit;  // No equipment modifiers
+const damage = calculateMagicDamage({
+  magicLevel,
+  magicAttackBonus: 0,  // Mobs don't have equipment
+  spellBaseMaxHit: maxHit,
+  targetMagicDefenseBonus: targetStats.magicDefense,
+  // ... accuracy calculation
+});
+
+// Ranged damage for mobs
+const rangedLevel = npcData.stats.ranged ?? 1;
+const arrowStrength = ammunitionService.getArrowData(arrowId)?.rangedStrength ?? 7;
+const damage = calculateRangedDamage({
+  rangedLevel,
+  rangedAttackBonus: 0,  // Mobs don't have equipment
+  rangedStrengthBonus: arrowStrength,
+  targetRangedDefenseBonus: targetStats.defenseRanged,
+  // ... accuracy calculation
+});
+```
+
+### Mob Retaliation
+
+When a player attacks a ranged or magic mob, the mob retaliates with the correct attack type:
+
+```typescript
+// From CombatSystem.ts
+// Resolve retaliator's weapon type so auto-attack tick path uses correct handler
+let retaliatorWeaponType: AttackType = AttackType.MELEE;
+if (targetType === "mob" && targetEntity) {
+  const mobAttackType = getMobAttackType(targetEntity);
+  if (mobAttackType === "ranged") {
+    retaliatorWeaponType = AttackType.RANGED;
+  } else if (mobAttackType === "magic") {
+    retaliatorWeaponType = AttackType.MAGIC;
+  }
+}
+
+// Store weaponType in combat state for auto-attack ticks
+this.stateService.createRetaliatorState(
+  targetId,
+  attackerId,
+  targetType,
+  attackerType,
+  currentTick,
+  retaliationDelay,
+  targetAttackSpeedTicks,
+  retaliatorWeaponType,  // Ensures correct handler routing
+);
+```
+
+### Attack Handler Routing
+
+The combat system routes mob attacks through specialized handlers:
+
+```typescript
+// From CombatSystem.ts
+private handleMobAttack(data: {
+  mobId: string;
+  targetId: string;
+  attackType?: "melee" | "ranged" | "magic";
+  spellId?: string;
+  arrowId?: string;
+}): void {
+  switch (data.attackType) {
+    case AttackType.MAGIC:
+      this.magicHandler.handle(attackData);
+      break;
+    case AttackType.RANGED:
+      this.rangedHandler.handle(attackData);
+      break;
+    case AttackType.MELEE:
+    default:
+      // Intentional fallthrough: undefined/missing attackType defaults to melee
+      this.meleeHandler.handle(attackData);
+      break;
+  }
+}
+```
+
+**Dual Routing Paths:**
+1. **Initial attack**: `MobEntity.performAttackAction()` → `COMBAT_MOB_NPC_ATTACK` event → `handleMobAttack()` → handler
+2. **Auto-attack ticks**: `CombatTickProcessor` reads `combatState.weaponType` → `handleAttack()` → handler
+
+Both paths converge on the same handlers, ensuring consistent behavior.
+
+### Shared Attack Preparation
+
+The `prepareMobAttack()` utility in `AttackContext.ts` handles common validation for mob projectile attacks:
+
+```typescript
+// Shared preparation for magic and ranged mob attacks
+export function prepareMobAttack(
+  ctx: CombatAttackContext,
+  data: { attackerId: string; targetId: string; attackerType: "mob"; targetType: "player" | "mob" },
+  combatRange: number,
+  animationType: "melee" | "ranged" | "magic",
+  fallbackAttackSpeed: number,
+  preResolved?: { attacker: MobEntity; npcData: NPCData },
+): MobAttackContext | null;
+```
+
+**Validation Steps:**
+1. Resolve attacker and target entities
+2. Check both are alive
+3. Validate range (uses mob's `combatRange` from manifest)
+4. Check attack cooldown
+5. Claim cooldown slot
+6. Face target
+7. Play attack animation
+
+Returns `MobAttackContext` with all validated state, or `null` if any check fails.
+
+---
+
 ## Session Interruption
 
 ### Combat Closes Bank/Store/Dialogue
