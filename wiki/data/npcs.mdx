@@ -43,7 +43,33 @@ interface NPCData {
     strength: number;            // Strength level
     defense: number;             // Defense level
     health: number;              // Max HP
-    ranged?: number;             // Ranged level (optional)
+    ranged?: number;             // Ranged level (for ranged mobs)
+    magic?: number;              // Magic level (for magic mobs)
+  };
+
+  combat: {
+    attackable: boolean;         // Can be attacked by players
+    aggressive: boolean;         // Initiates combat
+    retaliates: boolean;         // Fights back when attacked
+    aggroRange: number;          // Detection range in tiles
+    combatRange: number;         // Attack range in tiles
+    leashRange: number;          // Max chase distance from spawn
+    attackSpeedTicks: number;    // Ticks between attacks
+    respawnTime: number;         // Respawn delay in ms
+    xpReward: number;            // XP granted on kill
+    poisonous: boolean;          // Can poison players
+    immuneToPoison: boolean;     // Immune to poison damage
+    attackType?: "melee" | "ranged" | "magic";  // Attack type (default: "melee")
+    spellId?: string;            // Spell ID for magic mobs (e.g., "wind_strike")
+    arrowId?: string;            // Arrow ID for ranged mobs (e.g., "bronze_arrow")
+  };
+
+  appearance: {
+    modelPath: string;           // Path to GLB/VRM model
+    iconPath?: string;           // Minimap icon
+    scale: number;               // Model scale multiplier
+    tint?: string;               // Hex color tint
+    heldWeaponModel?: string;    // Weapon GLB to attach to hand (e.g., "asset://weapons/bow.glb")
   };
 
   aggression: {
