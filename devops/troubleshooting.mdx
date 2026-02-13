@@ -150,6 +150,57 @@ npm test
 bun run dev:reset
 ```
 
+### Database Pool Starvation
+
+**Symptom**: "200 pending operations" warnings, game freezes during batch operations (fletching, smithing)
+
+**Cause**: Concurrent inventory writes exhausting database connection pool
+
+**Solution**: Update to latest code (PR #823 fixed this). The system now uses write coalescing:
+
+```typescript
+// Collapses N concurrent writes into ≤2 DB transactions per player
+// Before: 100 fletching completions = 200 sequential transactions
+// After: 100 fletching completions = 2 transactions per player
+```
+
+**Technical Details:**
+- Write coalescing keeps only the latest inventory snapshot
+- At most 2 transactions per player: one active + one queued
+- All waiting callers resolve when batch completes
+- Prevents PostgreSQL deadlocks and pool exhaustion
+
+**Verification:**
+Check `packages/server/src/systems/DatabaseSystem/index.ts` for `inventoryWriteActive` and `inventoryWriteQueued` maps.
+
+### Camera Facing Backwards on Fresh Load
+
+**Symptom**: Camera initializes in front of player, causing backwards movement controls
+
+**Cause**: Camera spherical coordinates initialized with `theta=0` instead of `theta=Math.PI`
+
+**Solution**: Update to latest code (PR #829 fixed this)
+
+**Technical Details:**
+- Camera uses spherical coordinates (radius, phi, theta)
+- `theta=0` places camera in front of player (incorrect)
+- `theta=Math.PI` places camera behind player (correct third-person view)
+- Fixed in `ClientCameraSystem.ts` initialization and reset methods
+
+### Entity Outlines Showing Wrong Colors
+
+**Symptom**: Entity highlights show incorrect color grading when hovering, even with post-processing disabled
+
+**Cause**: Post-processing outline pass shares shader pipeline with LUT color grading, causing stale LUT data to leak into outline-only rendering
+
+**Solution**: Update to latest code (PR #829 fixed this)
+
+**Technical Details:**
+- LUT intensity now zeroed when color grading is disabled
+- Rendering routes through composer even when post-processing is off
+- Ensures entity highlights work correctly without color grading artifacts
+- Fixed in `ClientGraphics.ts` and `PostProcessingFactory.ts`
+
 ## Logs
 
 ### Server Logs
