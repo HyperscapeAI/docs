@@ -106,14 +106,29 @@ Each NPC has these properties (from `types/entities/npc-mob-types.ts`):
 
 ### Available 3D Models
 
-**NPCs**:
+**Mobs** (`models/mobs/`):
 ```
-/assets/models/
-├── goblin/goblin_rigged.glb     → Goblins
-├── thug/thug_rigged.glb         → Bandits
-├── human/human_rigged.glb       → Guards, knights, warriors, rangers
-├── troll/troll_rigged.glb       → Hobgoblins
-└── imp/imp_rigged.glb           → Dark warriors
+├── goblin/
+│   ├── goblin.vrm                → Goblin (VRM format)
+│   ├── goblin_rigged.glb         → Goblin (GLB format)
+│   └── animations/
+│       ├── running.glb           → Running animation
+│       └── walking.glb           → Walking animation
+├── dark-ranger/
+│   └── dark-ranger.vrm           → Dark ranger
+└── dark-wizard/
+    └── dark-wizard.vrm           → Dark wizard
+```
+
+**NPCs** (`models/npcs/`):
+```
+├── banker/banker.vrm             → Banker
+├── captain-rowan/captain-rowan.vrm → Captain Rowan
+├── fisherman-pete/fisherman-pete.vrm → Fisherman Pete
+├── forester-wilma/forester-wilma.vrm → Forester Wilma
+├── shopkeeper/shopkeeper.vrm     → Shopkeeper
+├── tanner-ellis/tanner-ellis.vrm → Tanner Ellis
+└── torvin/torvin.vrm             → Torvin
 ```
 
 **Stations**:
