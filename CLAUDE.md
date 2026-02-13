@@ -319,6 +319,53 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
 
+## Combat System Architecture
+
+### Attack Types
+
+Hyperscape supports three attack types for both players and mobs:
+- **Melee**: Close-range combat (1-2 tiles depending on weapon)
+- **Ranged**: Bow and arrow combat (up to 10 tiles)
+- **Magic**: Spell casting (up to 10 tiles)
+
+### Mob Combat Configuration
+
+Mobs can be configured with any attack type via NPC manifest JSON:
+
+```json
+{
+  "combat": {
+    "attackType": "magic",
+    "spellId": "wind_strike",
+    "combatRange": 10,
+    "attackSpeedTicks": 5
+  },
+  "appearance": {
+    "heldWeaponModel": "asset://weapons/staff.glb"
+  }
+}
+```
+
+**Attack Type Fields:**
+- `attackType`: `"melee"` (default), `"ranged"`, or `"magic"`
+- `spellId`: Required for magic mobs (e.g., `"wind_strike"`)
+- `arrowId`: Required for ranged mobs (e.g., `"bronze_arrow"`)
+- `heldWeaponModel`: Optional visual weapon GLB (e.g., bow, staff)
+
+### Combat Handler Architecture
+
+The combat system uses specialized handlers:
+- `MeleeAttackHandler` - Melee combat for players and mobs
+- `RangedAttackHandler` - Ranged combat (bows/arrows) for players and mobs
+- `MagicAttackHandler` - Magic combat (spells) for players and mobs
+
+Each handler has separate paths for player attacks (with resource consumption, equipment bonuses) and mob attacks (infinite resources, stats from NPC manifest).
+
+**Key Combat Files:**
+- `packages/shared/src/systems/shared/combat/CombatSystem.ts` - Main combat orchestration
+- `packages/shared/src/systems/shared/combat/handlers/AttackContext.ts` - Shared attack preparation utilities
+- `packages/shared/src/constants/CombatConstants.ts` - Combat timing and range constants
+
 ## Troubleshooting
 
 ### Build Issues
