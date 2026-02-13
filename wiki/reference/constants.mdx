@@ -21,10 +21,15 @@ export const COMBAT_CONSTANTS = {
   MELEE_RANGE_STANDARD: 1,            // Cardinal only (N/S/E/W)
   MELEE_RANGE_HALBERD: 2,             // Can attack diagonally
   RANGED_RANGE: 10,                   // Maximum ranged attack distance
+  MAGIC_RANGE: 10,                    // Maximum magic attack distance
   PICKUP_RANGE: 2.5,                  // Item pickup range
 
   // === ATTACK SPEEDS (ticks) ===
   DEFAULT_ATTACK_SPEED_TICKS: 4,      // 2.4 seconds (standard sword)
+
+  // === PROJECTILE LAUNCH DELAYS (ms) ===
+  SPELL_LAUNCH_DELAY_MS: 600,         // Delay before spell projectile spawns (cast animation)
+  ARROW_LAUNCH_DELAY_MS: 400,         // Delay before arrow projectile spawns (draw animation)
 
   // === COMBAT TIMING (ticks) ===
   COMBAT_TIMEOUT_TICKS: 17,           // 10.2 seconds (OSRS-accurate)
