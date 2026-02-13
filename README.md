@@ -242,6 +242,9 @@ bun install
 bun run build
 ```
 
+**"200 pending operations" warnings or game freezes during batch operations:**
+This was caused by inventory write lock contention during batch operations (e.g., fletching 100 arrows). The system now uses write coalescing to collapse concurrent inventory writes into at most 2 database transactions per player. If you see this warning on older versions, update to the latest code.
+
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
