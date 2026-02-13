@@ -366,6 +366,58 @@ Each handler has separate paths for player attacks (with resource consumption, e
 - `packages/shared/src/systems/shared/combat/handlers/AttackContext.ts` - Shared attack preparation utilities
 - `packages/shared/src/constants/CombatConstants.ts` - Combat timing and range constants
 
+### Combat Constants
+
+Key constants from `CombatConstants.ts`:
+
+```typescript
+export const COMBAT_CONSTANTS = {
+  // Attack ranges (tiles)
+  MELEE_RANGE_STANDARD: 1,
+  MELEE_RANGE_HALBERD: 2,
+  RANGED_RANGE: 10,
+  MAGIC_RANGE: 10,
+  
+  // Projectile launch delays (ms)
+  SPELL_LAUNCH_DELAY_MS: 600,    // Spell cast animation wind-up
+  ARROW_LAUNCH_DELAY_MS: 400,    // Arrow draw animation wind-up
+  
+  // Attack speeds (ticks)
+  DEFAULT_ATTACK_SPEED_TICKS: 4,  // 2.4 seconds
+  TICK_DURATION_MS: 600,          // OSRS-accurate tick timing
+};
+```
+
+## Database System Architecture
+
+### Inventory Write Coalescing
+
+The database system uses **write coalescing** to prevent connection pool starvation during batch operations:
+
+```typescript
+// From DatabaseSystem/index.ts
+// Write coalescing collapses N concurrent inventory writes into at most
+// 2 DB transactions per player: one active + one queued with latest snapshot.
+// This prevents pool exhaustion during batch operations (e.g., fletching 100 arrows).
+
+private inventoryWriteActive = new Map<string, Promise<void>>();
+private inventoryWriteQueued = new Map<string, {
+  items: InventorySaveItem[];
+  waiters: Array<{ resolve: () => void; reject: (err: unknown) => void; }>;
+}>();
+```
+
+**How It Works:**
+1. First write executes immediately
+2. Concurrent writes queue with latest snapshot
+3. All waiters resolve when batch completes
+4. Prevents 200+ sequential transactions from batch operations
+
+**Performance Impact:**
+- Before: 100 fletching completions = 200 sequential DB transactions
+- After: 100 fletching completions = 2 DB transactions per player
+- Eliminates "200 pending operations" warnings and game freezes
+
 ## Troubleshooting
 
 ### Build Issues
@@ -406,6 +458,29 @@ See [Port Allocation](#port-allocation) section for full port list.
 ### Database Pool Starvation
 
 If you see "200 pending operations" warnings or game freezes during batch operations (fletching, smithing), this indicates database connection pool exhaustion. The inventory system uses write coalescing to prevent this—ensure you're on the latest version. The fix collapses concurrent inventory writes into at most 2 transactions per player instead of serializing all writes.
+
+**Symptoms:**
+- Game freezes during batch crafting (fletching 100 arrows)
+- Console warnings: "200 pending operations"
+- Database connection pool exhaustion
+- Slow inventory operations
+
+**Solution:**
+The `DatabaseSystem` now uses write coalescing (implemented in PR #823) which collapses N concurrent `savePlayerInventoryAsync` calls into at most 2 DB transactions per player. Update to the latest code if experiencing this issue.
+
+### Camera Facing Backwards on Fresh Load
+
+If the camera initializes facing the wrong direction (player appears to move backwards), this was fixed in PR #829. The camera now correctly initializes with `theta=Math.PI` for standard third-person behind-the-player view.
+
+**Technical Details:**
+- Camera uses spherical coordinates (radius, phi, theta)
+- `theta=0` places camera in front of player (incorrect)
+- `theta=Math.PI` places camera behind player (correct)
+- Fixed in `ClientCameraSystem.ts`
+
+### Post-Processing Color Grading Leaking
+
+If entity outlines show incorrect colors when color grading is disabled, ensure you're on the latest version. PR #829 fixed an issue where the LUT color grading shader pipeline leaked into outline-only rendering. The fix zeros LUT intensity when disabled so outline rendering stays clean.
 
 ## Additional Resources
 
