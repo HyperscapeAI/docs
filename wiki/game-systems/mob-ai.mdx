@@ -380,7 +380,11 @@ interface MobEntityConfig extends CombatantConfig {
   attackSpeed: number;           // Ticks between attacks
   defense: number;
   attackRange: number;           // Tiles
-  attackType: AttackType;        // melee, ranged, magic
+  attackType: "melee" | "ranged" | "magic";  // Attack type (default: "melee")
+  
+  // Projectile attack configuration
+  spellId?: string;              // Spell ID for magic mobs (e.g., "wind_strike")
+  arrowId?: string;              // Arrow ID for ranged mobs (e.g., "bronze_arrow")
   
   // AI behavior
   aggroRadius: number;           // Detection range in tiles
@@ -398,8 +402,44 @@ interface MobEntityConfig extends CombatantConfig {
   // Visual
   modelUrl?: string;             // GLB model path
   vrmUrl?: string;               // VRM avatar path
+  heldWeaponModel?: string;      // Weapon GLB to attach to hand
 }
 ```
+
+### Attack Type Behavior
+
+**Melee Mobs (default):**
+- Use `attack` and `strength` stats
+- Attack at close range (1-2 tiles)
+- Play `COMBAT` or `SWORD_SWING` animation
+- No projectiles
+
+**Ranged Mobs:**
+- Require `attackType: "ranged"` and `arrowId`
+- Use `ranged` stat for damage calculation
+- Attack at distance (typically 7-10 tiles)
+- Emit arrow projectiles
+- Play `RANGE` animation
+- Infinite arrows (no consumption)
+
+**Magic Mobs:**
+- Require `attackType: "magic"` and `spellId`
+- Use `magic` stat for damage calculation
+- Attack at distance (typically 10 tiles)
+- Emit spell projectiles with element-based visuals
+- Play `SPELL_CAST` animation
+- Infinite runes (no consumption)
+
+### Combat Range by Type
+
+```typescript
+// From CombatConstants.ts
+MELEE_RANGE_STANDARD: 1,    // Melee mobs
+RANGED_RANGE: 10,           // Ranged mobs (can be overridden in manifest)
+MAGIC_RANGE: 10,            // Magic mobs (can be overridden in manifest)
+```
+
+Mobs respect their configured `combatRange` from the NPC manifest, with fallbacks to these defaults if not specified.
 
 ---
 
