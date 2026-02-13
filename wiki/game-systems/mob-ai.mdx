@@ -170,6 +170,7 @@ class ChaseState implements AIState {
 - Uses `canAttack(currentTick)` for OSRS-accurate timing
 - Transitions to CHASE if target moves out of range
 - Transitions to RETURN if target dies or escapes
+- Attack type (melee/ranged/magic) determined by mob configuration
 
 ```typescript
 class AttackState implements AIState {
@@ -187,17 +188,19 @@ class AttackState implements AIState {
       return MobAIState.RETURN;
     }
     
-    // Check if still in range
+    // Check if still in range (uses mob's combatRange from config)
     const mobTile = worldToTile(position.x, position.z);
     const targetTile = worldToTile(target.position.x, target.position.z);
+    const distance = tileChebyshevDistance(mobTile, targetTile);
     
-    if (!tilesWithinMeleeRange(mobTile, targetTile, context.getCombatRange())) {
+    if (distance > context.getCombatRange() || distance === 0) {
       return MobAIState.CHASE;
     }
     
     // OSRS tick-based attack timing
     const currentTick = context.getCurrentTick();
     if (context.canAttack(currentTick)) {
+      // performAttack emits COMBAT_MOB_NPC_ATTACK with attackType, spellId, arrowId
       context.performAttack(targetId, currentTick);
     }
     
@@ -205,6 +208,25 @@ class AttackState implements AIState {
   }
 }
 ```
+
+**Attack Execution:**
+
+```typescript
+// From MobEntity.ts
+performAttackAction(targetId: string): void {
+  this.world.emit(EventType.COMBAT_MOB_NPC_ATTACK, {
+    mobId: this.id,
+    targetId: targetId,
+    attackerType: "mob",
+    targetType: "player",
+    attackType: this.config.attackType ?? "melee",
+    spellId: this.config.spellId,
+    arrowId: this.config.arrowId,
+  });
+}
+```
+
+The combat system routes this event to the appropriate handler (`MeleeAttackHandler`, `RangedAttackHandler`, or `MagicAttackHandler`) based on `attackType`.
 
 ### RETURN State
 
