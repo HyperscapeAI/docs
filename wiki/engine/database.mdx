@@ -399,6 +399,122 @@ export class CharacterRepository {
 
 ---
 
+## Performance Optimizations
+
+### Inventory Write Coalescing
+
+The `DatabaseSystem` uses **write coalescing** to prevent connection pool starvation during batch operations:
+
+```typescript
+// From DatabaseSystem/index.ts
+/**
+ * Write coalescing for inventory persistence.
+ * When multiple savePlayerInventoryAsync calls arrive for the same player,
+ * only the LATEST snapshot is written. At most 2 DB transactions run per
+ * player: one active + one queued batch with the newest data.
+ * Prevents both PostgreSQL deadlocks and connection pool starvation.
+ */
+private inventoryWriteActive = new Map<string, Promise<void>>();
+private inventoryWriteQueued = new Map<string, {
+  items: InventorySaveItem[];
+  waiters: Array<{ resolve: () => void; reject: (err: unknown) => void; }>;
+}>();
+```
+
+**How It Works:**
+
+1. **First write executes immediately** - No active write for this player, execute directly
+2. **Concurrent writes queue** - If a write is active, queue the latest snapshot
+3. **Latest snapshot wins** - New writes replace queued data (only newest matters)
+4. **All waiters resolve together** - When batch completes, all waiting promises resolve
+5. **Recursive drain** - After active write completes, drain queued batch if any
+
+**Performance Impact:**
+
+| Scenario | Before (Per-Player Lock) | After (Write Coalescing) |
+|----------|--------------------------|--------------------------|
+| Fletching 100 arrows | 200 sequential transactions | 2 transactions per player |
+| Batch smithing | N sequential transactions | ≤2 transactions per player |
+| Connection pool usage | Starves pool (200+ pending) | Minimal (2 active per player) |
+
+**Code Example:**
+
+```typescript
+async savePlayerInventoryAsync(
+  playerId: string,
+  items: InventorySaveItem[],
+): Promise<void> {
+  // If a write is already running for this player, coalesce into the queued batch
+  if (this.inventoryWriteActive.has(playerId)) {
+    return new Promise<void>((resolve, reject) => {
+      const queued = this.inventoryWriteQueued.get(playerId);
+      if (queued) {
+        // Replace items with the latest snapshot — only the newest matters
+        queued.items = items;
+        queued.waiters.push({ resolve, reject });
+      } else {
+        this.inventoryWriteQueued.set(playerId, {
+          items,
+          waiters: [{ resolve, reject }],
+        });
+      }
+    });
+  }
+
+  // No active write — execute immediately
+  await this.executeInventoryWrite(playerId, items);
+}
+
+private async executeInventoryWrite(
+  playerId: string,
+  items: InventorySaveItem[],
+): Promise<void> {
+  const writePromise = this.inventoryRepository.savePlayerInventoryAsync(playerId, items);
+  this.inventoryWriteActive.set(playerId, writePromise);
+
+  try {
+    await writePromise;
+  } finally {
+    this.inventoryWriteActive.delete(playerId);
+
+    // Drain the queued batch if any calls arrived while we were writing
+    const queued = this.inventoryWriteQueued.get(playerId);
+    if (queued) {
+      this.inventoryWriteQueued.delete(playerId);
+      try {
+        await this.executeInventoryWrite(playerId, queued.items);
+        for (const w of queued.waiters) w.resolve();
+      } catch (err) {
+        for (const w of queued.waiters) w.reject(err);
+      }
+    }
+  }
+}
+```
+
+**Graceful Shutdown:**
+
+On `DatabaseSystem.destroy()`, orphaned waiters are rejected to prevent hanging promises:
+
+```typescript
+destroy(): void {
+  this.inventoryWriteActive.clear();
+  // Reject any orphaned waiters so their promises don't hang forever
+  for (const [, queued] of this.inventoryWriteQueued) {
+    for (const w of queued.waiters) {
+      w.reject(new Error("DatabaseSystem destroyed"));
+    }
+  }
+  this.inventoryWriteQueued.clear();
+}
+```
+
+<Info>
+This optimization was added in PR #823 to fix "200 pending operations" warnings and game freezes during batch crafting operations like fletching.
+</Info>
+
+---
+
 ## Data Types
 
 ### Timestamps
