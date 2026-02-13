@@ -162,15 +162,34 @@ export function calculateNPCDrops(npcId: string): Array<{ itemId: string; quanti
 
 ## Available 3D Models
 
-NPCs use rigged GLB models from `/assets/world/forge/`:
+### Mobs
 
-| Model Path | Used For |
-|------------|----------|
-| `goblin/goblin_rigged.glb` | Goblins |
-| `thug/thug_rigged.glb` | Bandits, thugs |
-| `human/human_rigged.glb` | Guards, knights, shopkeepers |
-| `troll/troll_rigged.glb` | Hobgoblins |
-| `imp/imp_rigged.glb` | Dark warriors |
+Hostile NPCs use models from `models/mobs/`:
+
+| Model Path | Format | Used For |
+|------------|--------|----------|
+| `models/mobs/goblin/goblin.vrm` | VRM | Goblins |
+| `models/mobs/goblin/goblin_rigged.glb` | GLB | Goblins (legacy) |
+| `models/mobs/dark-ranger/dark-ranger.vrm` | VRM | Dark rangers |
+| `models/mobs/dark-wizard/dark-wizard.vrm` | VRM | Dark wizards |
+
+**Goblin Animations**:
+- `models/mobs/goblin/animations/running.glb` - Running animation
+- `models/mobs/goblin/animations/walking.glb` - Walking animation
+
+### NPCs
+
+Service NPCs use models from `models/npcs/`:
+
+| Model Path | NPC |
+|------------|-----|
+| `models/npcs/banker/banker.vrm` | Banker |
+| `models/npcs/captain-rowan/captain-rowan.vrm` | Captain Rowan |
+| `models/npcs/fisherman-pete/fisherman-pete.vrm` | Fisherman Pete |
+| `models/npcs/forester-wilma/forester-wilma.vrm` | Forester Wilma |
+| `models/npcs/shopkeeper/shopkeeper.vrm` | Shopkeeper |
+| `models/npcs/tanner-ellis/tanner-ellis.vrm` | Tanner Ellis |
+| `models/npcs/torvin/torvin.vrm` | Torvin |
 
 ---
 
