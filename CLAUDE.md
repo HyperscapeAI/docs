@@ -482,6 +482,44 @@ If the camera initializes facing the wrong direction (player appears to move bac
 
 If entity outlines show incorrect colors when color grading is disabled, ensure you're on the latest version. PR #829 fixed an issue where the LUT color grading shader pipeline leaked into outline-only rendering. The fix zeros LUT intensity when disabled so outline rendering stays clean.
 
+## Website & Solana Integration
+
+### Recent Updates (PR #822)
+
+The marketing website (`packages/website/`) has been refactored with improved architecture and Solana wallet integration:
+
+**Privy SDK Updates:**
+- Upgraded to `@privy-io/react-auth` v3.13.1 and `@privy-io/server-auth` v1.32.5
+- Enhanced multi-chain support with Solana RPC configuration
+- Improved wallet detection for embedded wallets
+
+**Solana Wallet Support:**
+- Replaced `@solana-mobile/wallet-adapter-mobile` with `@solana-mobile/wallet-standard-mobile`
+- Enhanced `SolanaWalletProvider` to support MWA on both Saga and Seeker devices
+- Added balance fetching and MWA detection in `AccountPanel` and `SettingsPanel`
+- Updated to `@solana-program/memo` v0.11.0 and `@solana/kit` v6.0.1
+
+**Website Improvements:**
+- Refactored GoldToken page into modular section components (TokenHero, ValueProps, HowItWorks)
+- Added error boundaries, loading states, and not-found page
+- Improved SEO with opengraph images and PWA manifest
+- Enhanced accessibility with semantic HTML and ARIA labels
+- Optimized CSS with variables for gold glow effects
+- Fixed clipboard API usage in CopyAddress component
+
+**Next.js Updates:**
+- Upgraded from Next.js 15.1.0 to 16.1.6
+- Added security headers in `next.config.ts`
+- Updated TypeScript configuration to use 'react-jsx'
+- Improved global styles with design tokens
+
+**Files Changed:**
+- `packages/client/src/auth/PrivyAuthProvider.tsx` - Multi-chain support
+- `packages/client/src/auth/SolanaWalletProvider.tsx` - MWA support
+- `packages/client/src/game/panels/AccountPanel.tsx` - Balance fetching
+- `packages/client/src/game/panels/SettingsPanel/` - MWA detection
+- `packages/website/` - Complete refactor with component modularization
+
 ## Minimap System
 
 ### RS3/OSRS Accuracy
