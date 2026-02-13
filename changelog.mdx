@@ -23,6 +23,112 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Mob Projectile Attacks & Performance Fixes" description="February 2026" date="2026-02-13">
+
+### ⚔️ Mob Magic & Ranged Attacks (PR #826)
+
+Mobs can now use magic and ranged attacks, not just melee:
+
+- **Attack Type Configuration**: NPC manifest fields for combat type
+  - `attackType`: `"melee"` (default), `"ranged"`, or `"magic"`
+  - `spellId`: Required for magic mobs (e.g., `"wind_strike"`, `"fire_bolt"`)
+  - `arrowId`: Required for ranged mobs (e.g., `"bronze_arrow"`, `"iron_arrow"`)
+  - `heldWeaponModel`: Optional weapon GLB (bow, staff) attached to hand bone
+- **Combat Handler Routing**: Mobs route through same handlers as players
+  - `MagicAttackHandler` - Mob magic path with infinite runes
+  - `RangedAttackHandler` - Mob ranged path with infinite arrows
+  - Separate damage calculation for mobs (no equipment bonuses)
+  - Uses mob's `magic` or `ranged` stat from NPC manifest
+- **Projectile System**: Spell and arrow projectiles for mobs
+  - OSRS-accurate hit delays based on distance
+  - Element-based spell visuals (air, water, earth, fire)
+  - Arrow projectiles with metal-colored tips
+  - Launch delays: 600ms for spells, 400ms for arrows
+- **Visual Weapon Attachment**: Held weapons on mob VRM avatars
+  - Static weapon cache shares GLB scenes across mob instances
+  - `clone(true)` for per-mob instances with shared geometry
+  - Proper cleanup on world teardown via `clearWeaponCache()`
+  - Supports Asset Forge V1 and V2 attachment metadata
+- **Animation System**: Attack-type-specific emotes
+  - Magic mobs: `SPELL_CAST` animation
+  - Ranged mobs: `RANGE` animation
+  - Melee mobs: `COMBAT` or `SWORD_SWING` animation
+  - Emote matching switched from substring to exact equality
+- **Auto-Attack Integration**: Tick-based follow-up attacks
+  - `weaponType` stored in combat state for auto-attack routing
+  - `CombatTickProcessor` routes by stored weapon type
+  - Retaliation uses correct attack type (magic/ranged mobs retaliate with projectiles)
+- **Shared Utilities**: `prepareMobAttack()` in `AttackContext.ts`
+  - Consolidates entity resolution, range checks, cooldown, animation
+  - Eliminates duplication between magic and ranged handlers
+  - Returns validated `MobAttackContext` or null
+- **Constants**: New combat constants in `CombatConstants.ts`
+  - `MAGIC_RANGE: 10` - Magic attack range in tiles
+  - `SPELL_LAUNCH_DELAY_MS: 600` - Spell cast animation wind-up
+  - `ARROW_LAUNCH_DELAY_MS: 400` - Arrow draw animation wind-up
+- **Testing**: 996 lines of integration tests
+  - Magic/ranged attack routing and projectile emission
+  - Missing spellId/arrowId graceful handling
+  - Out-of-range rejection
+  - Event-carried vs NPC-data spell/arrow resolution
+  - Auto-attack tick paths for both magic and ranged
+
+### 🗄️ Database Performance Fix (PR #823)
+
+Inventory write coalescing to prevent connection pool starvation:
+
+- **Write Coalescing**: Collapses concurrent inventory writes
+  - At most 2 DB transactions per player (one active + one queued)
+  - Latest snapshot wins (intermediate states discarded)
+  - All waiting callers resolve when batch completes
+- **Performance Impact**:
+  - Before: 100 fletching completions = 200 sequential transactions
+  - After: 100 fletching completions = 2 transactions per player
+  - Eliminates "200 pending operations" warnings
+  - Prevents game freezes during batch crafting
+- **Graceful Shutdown**: Orphaned waiters rejected on `DatabaseSystem.destroy()`
+- **Code Changes**:
+  - Replaced `inventoryWriteLocks` with `inventoryWriteActive` + `inventoryWriteQueued`
+  - Removed redundant `getPlayerAsync` checks (repository handles missing players)
+  - Recursive drain of queued batches after active write completes
+
+### 🎥 Client Rendering Fixes (PR #829)
+
+Camera and post-processing improvements:
+
+- **Camera Initialization Fix**: Camera now faces behind player on fresh load
+  - Changed `theta` from `0` to `Math.PI` in spherical coordinates
+  - Fixes backwards movement controls on first spawn
+  - Applied to both initial state and reset camera method
+- **Post-Processing Color Grading Fix**: LUT intensity zeroed when disabled
+  - Prevents color grading from leaking into outline-only rendering
+  - Entity highlights now work correctly with post-processing disabled
+  - Rendering routes through composer even when post-processing is off
+  - `intensityUniform.value = 0` when LUT is "none"
+
+### 🎨 UI Improvements
+
+- **Equipment Panel Icons** (PR #825): Shows actual item icons instead of SVG placeholders
+  - Uses `ItemIcon` component with proper asset URLs
+  - Consistent with inventory panel styling
+  - Fallback to placeholder only when icon missing
+
+### 🌐 Website Updates (PR #822)
+
+- **Gold Token Page**: Refactored into section components
+  - TokenHero, ValueProps, HowItWorks, OpenSource, GoldCTA
+  - Error boundaries and loading states
+  - SEO improvements with opengraph images
+  - Accessibility enhancements (semantic HTML, ARIA labels)
+- **Solana Wallet Integration**: Updated dependencies
+  - `@privy-io/react-auth` to 3.13.1
+  - `@privy-io/server-auth` to 1.32.5
+  - `@solana-mobile/wallet-standard-mobile` for MWA support
+  - Multi-chain wallet detection (Saga and Seeker devices)
+- **Code Review**: Updated to Claude Opus 4.6
+
+</Update>
+
 <Update label="Combat Polish & Visual Upgrades" description="February 2026" date="2026-02-02">
 
 ### ⚔️ Combat System Improvements
