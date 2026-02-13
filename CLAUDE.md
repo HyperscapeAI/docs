@@ -482,6 +482,52 @@ If the camera initializes facing the wrong direction (player appears to move bac
 
 If entity outlines show incorrect colors when color grading is disabled, ensure you're on the latest version. PR #829 fixed an issue where the LUT color grading shader pipeline leaked into outline-only rendering. The fix zeros LUT intensity when disabled so outline rendering stays clean.
 
+## Minimap System
+
+### RS3/OSRS Accuracy
+
+The minimap has been updated to match RS3 and OSRS visual standards:
+
+**Dot Colors (OSRS-accurate):**
+- White: Other players
+- Yellow: NPCs, mobs, and buildings
+- Red: Ground items and loot
+- White square: Local player (instead of circle)
+
+**Destination Marker:**
+- Red flag icon (RS3-style) instead of red dot
+- Persists until player reaches destination
+- Shared between world clicks and minimap clicks
+
+**Location Icons:**
+The minimap now displays icons for key locations instead of generic dots:
+- **Bank**: Gold coin ($) symbol
+- **Shop**: Open bag icon
+- **Altar**: White cross (prayer)
+- **Runecrafting Altar**: Purple circle with "R"
+- **Anvil**: Dark anvil silhouette (smithing)
+- **Furnace**: Orange circle with flame (smelting)
+- **Cooking Range**: Brown circle with steam
+- **Fishing Spot**: Cyan circle with fish
+- **Mining Rock**: Brown circle with pickaxe
+- **Tree**: Green circle (woodcutting)
+- **Quest NPC**: Cyan circle with "?" (quest givers)
+
+**Icon Detection:**
+Icons are automatically assigned based on:
+- Station types (bank, furnace, anvil, range, altar)
+- NPC service types (bank, shop, quest)
+- Resource types (fishing_spot, mining_rock, tree)
+
+**Size Hierarchy:**
+- Entity dots: 6px diameter (compact)
+- Location icons: 12px diameter (prominent for navigation)
+
+**Implementation:**
+- `packages/client/src/game/hud/Minimap.tsx` - Main minimap component
+- `drawMinimapIcon()` function - Renders location-specific icons
+- Entity subtype detection from config data
+
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
