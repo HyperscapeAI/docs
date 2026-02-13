@@ -299,14 +299,15 @@ export const NPC_SPAWN_CONSTANTS = {
 
 ---
 
-## Example NPC Definition
+## Example NPC Definitions
+
+### Melee Mob (Default)
 
 ```json
 {
   "id": "goblin_warrior",
   "name": "Goblin Warrior",
   "category": "mob",
-  "modelPath": "goblin/goblin_rigged.glb",
   "stats": {
     "level": 5,
     "attack": 5,
@@ -314,26 +315,133 @@ export const NPC_SPAWN_CONSTANTS = {
     "defense": 5,
     "health": 20
   },
+  "combat": {
+    "attackable": true,
+    "aggressive": true,
+    "retaliates": true,
+    "aggroRange": 4,
+    "combatRange": 1,
+    "leashRange": 10,
+    "attackSpeedTicks": 4,
+    "respawnTime": 30000,
+    "xpReward": 20,
+    "poisonous": false,
+    "immuneToPoison": false
+  },
+  "appearance": {
+    "modelPath": "goblin/goblin_rigged.glb",
+    "scale": 1.0
+  },
   "aggression": {
     "type": "aggressive"
   },
   "spawnBiomes": ["forest", "plains"],
-  "respawnTime": 30,
   "drops": {
     "defaultDrop": {
       "enabled": true,
-      "itemId": "coins",
-      "quantity": 10
+      "itemId": "bones",
+      "quantity": 1
     },
-    "always": [],
     "common": [
       { "itemId": "bronze_dagger", "minQuantity": 1, "maxQuantity": 1, "chance": 0.25 }
-    ],
-    "uncommon": [
-      { "itemId": "iron_dagger", "minQuantity": 1, "maxQuantity": 1, "chance": 0.1 }
-    ],
-    "rare": [],
-    "veryRare": []
+    ]
+  }
+}
+```
+
+### Magic Mob
+
+```json
+{
+  "id": "dark_wizard",
+  "name": "Dark Wizard",
+  "category": "mob",
+  "stats": {
+    "level": 20,
+    "attack": 1,
+    "strength": 1,
+    "defense": 10,
+    "health": 40,
+    "magic": 25
+  },
+  "combat": {
+    "attackable": true,
+    "aggressive": true,
+    "retaliates": true,
+    "aggroRange": 5,
+    "combatRange": 10,
+    "leashRange": 12,
+    "attackSpeedTicks": 5,
+    "respawnTime": 45000,
+    "xpReward": 50,
+    "poisonous": false,
+    "immuneToPoison": false,
+    "attackType": "magic",
+    "spellId": "fire_strike"
+  },
+  "appearance": {
+    "modelPath": "wizard/wizard_rigged.glb",
+    "scale": 1.0,
+    "heldWeaponModel": "asset://weapons/staff.glb"
+  },
+  "drops": {
+    "defaultDrop": {
+      "enabled": true,
+      "itemId": "bones",
+      "quantity": 1
+    },
+    "common": [
+      { "itemId": "fire_rune", "minQuantity": 5, "maxQuantity": 15, "chance": 0.4 },
+      { "itemId": "air_rune", "minQuantity": 10, "maxQuantity": 20, "chance": 0.4 }
+    ]
+  }
+}
+```
+
+### Ranged Mob
+
+```json
+{
+  "id": "dark_ranger",
+  "name": "Dark Ranger",
+  "category": "mob",
+  "stats": {
+    "level": 15,
+    "attack": 1,
+    "strength": 1,
+    "defense": 8,
+    "health": 35,
+    "ranged": 20
+  },
+  "combat": {
+    "attackable": true,
+    "aggressive": true,
+    "retaliates": true,
+    "aggroRange": 5,
+    "combatRange": 7,
+    "leashRange": 10,
+    "attackSpeedTicks": 4,
+    "respawnTime": 40000,
+    "xpReward": 40,
+    "poisonous": false,
+    "immuneToPoison": false,
+    "attackType": "ranged",
+    "arrowId": "bronze_arrow"
+  },
+  "appearance": {
+    "modelPath": "ranger/ranger_rigged.glb",
+    "scale": 1.0,
+    "heldWeaponModel": "asset://weapons/shortbow.glb"
+  },
+  "drops": {
+    "defaultDrop": {
+      "enabled": true,
+      "itemId": "bones",
+      "quantity": 1
+    },
+    "common": [
+      { "itemId": "bronze_arrow", "minQuantity": 5, "maxQuantity": 15, "chance": 0.5 }
+    ]
   }
 }
 ```
