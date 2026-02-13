@@ -403,6 +403,10 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Tests spawn their own Hyperscape instances
 - Visual tests require headless browser support
 
+### Database Pool Starvation
+
+If you see "200 pending operations" warnings or game freezes during batch operations (fletching, smithing), this indicates database connection pool exhaustion. The inventory system uses write coalescing to prevent this—ensure you're on the latest version. The fix collapses concurrent inventory writes into at most 2 transactions per player instead of serializing all writes.
+
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
