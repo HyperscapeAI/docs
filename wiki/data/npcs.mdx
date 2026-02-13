@@ -448,6 +448,53 @@ export const NPC_SPAWN_CONSTANTS = {
 
 ---
 
+## Combat Type Configuration
+
+### Attack Type Fields
+
+**For Melee Mobs (default):**
+- No special fields required
+- Uses `attack` and `strength` stats
+- `combatRange` defaults to 1 tile
+
+**For Ranged Mobs:**
+- `attackType`: `"ranged"`
+- `arrowId`: Required (e.g., `"bronze_arrow"`, `"iron_arrow"`)
+- `ranged`: Required stat for damage calculation
+- `combatRange`: Typically 7-10 tiles
+- `heldWeaponModel`: Optional bow GLB for visuals
+
+**For Magic Mobs:**
+- `attackType`: `"magic"`
+- `spellId`: Required (e.g., `"wind_strike"`, `"fire_bolt"`)
+- `magic`: Required stat for damage calculation
+- `combatRange`: Typically 10 tiles
+- `heldWeaponModel`: Optional staff GLB for visuals
+
+### Held Weapon Models
+
+The `heldWeaponModel` field attaches a 3D weapon to the mob's hand bone:
+
+```json
+{
+  "appearance": {
+    "heldWeaponModel": "asset://weapons/shortbow.glb"
+  }
+}
+```
+
+**Supported Formats:**
+- Uses Asset Forge attachment metadata (same as player equipment)
+- Supports V1 (direct attachment) and V2 (pre-baked matrix) formats
+- Weapons are cached and shared across mobs of the same type
+- Automatically attaches to VRM `rightHand` bone (or custom bone from metadata)
+
+**Available Weapon Models:**
+- `asset://weapons/shortbow.glb` - Shortbow
+- `asset://weapons/staff.glb` - Magic staff
+- `asset://weapons/sword.glb` - Sword
+- Custom weapons from Asset Forge
+
 ## Adding New NPCs
 
 <Steps>
@@ -456,6 +503,9 @@ export const NPC_SPAWN_CONSTANTS = {
   </Step>
   <Step title="Choose or Create Model">
     Use existing model or generate new one in 3D Asset Forge
+  </Step>
+  <Step title="Configure Combat Type">
+    Set `attackType`, `spellId`/`arrowId`, and `heldWeaponModel` if using ranged/magic
   </Step>
   <Step title="Restart Server">
     Server must restart to reload manifests
