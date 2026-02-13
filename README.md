@@ -245,6 +245,12 @@ bun run build
 **"200 pending operations" warnings or game freezes during batch operations:**
 This was caused by inventory write lock contention during batch operations (e.g., fletching 100 arrows). The system now uses write coalescing to collapse concurrent inventory writes into at most 2 database transactions per player. If you see this warning on older versions, update to the latest code.
 
+**Camera facing backwards on fresh load:**
+If the camera initializes facing the wrong direction (player appears to move backwards), this was fixed in recent updates. The camera now correctly initializes with `theta=Math.PI` for standard third-person behind-the-player view. Update to the latest code if experiencing this issue.
+
+**Entity outlines showing wrong colors when hovering:**
+If entity highlights show incorrect color grading when post-processing is disabled, update to the latest code. The post-processing system now correctly zeros LUT intensity when color grading is disabled, preventing shader pipeline leakage between outline and color grading passes.
+
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
