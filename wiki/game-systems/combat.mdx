@@ -321,9 +321,15 @@ The `prepareMobAttack()` utility in `AttackContext.ts` handles common validation
 
 ```typescript
 // Shared preparation for magic and ranged mob attacks
+// Eliminates ~150 lines of duplicated boilerplate between handlers
 export function prepareMobAttack(
   ctx: CombatAttackContext,
-  data: { attackerId: string; targetId: string; attackerType: "mob"; targetType: "player" | "mob" },
+  data: { 
+    attackerId: string; 
+    targetId: string; 
+    attackerType: "mob"; 
+    targetType: "player" | "mob" 
+  },
   combatRange: number,
   animationType: "melee" | "ranged" | "magic",
   fallbackAttackSpeed: number,
@@ -332,15 +338,22 @@ export function prepareMobAttack(
 ```
 
 **Validation Steps:**
-1. Resolve attacker and target entities
-2. Check both are alive
-3. Validate range (uses mob's `combatRange` from manifest)
-4. Check attack cooldown
-5. Claim cooldown slot
-6. Face target
-7. Play attack animation
+1. **Entity Resolution**: Resolve attacker and target entities (or use `preResolved` to avoid double lookup)
+2. **Alive Check**: Verify both entities are alive
+3. **NPC Data Lookup**: Get mob configuration from `getNPCById(mobData.type)`
+4. **Range Validation**: Check distance using `checkProjectileRange()` with mob's `combatRange`
+5. **Position Validation**: Get entity positions via `getEntityPosition()`
+6. **Cooldown Check**: Verify attack is not on cooldown
+7. **Cooldown Claim**: Set `nextAttackTicks` to prevent rapid-fire attacks
+8. **Face Target**: Rotate mob to face target via `rotationManager`
+9. **Play Animation**: Trigger attack animation via `animationManager`
 
-Returns `MobAttackContext` with all validated state, or `null` if any check fails.
+**Return Value:**
+- Returns `MobAttackContext` with all validated state if all checks pass
+- Returns `null` if any check fails (attack aborted, no error thrown)
+
+**Performance Optimization:**
+The `preResolved` parameter allows handlers to pass already-resolved mob entity and NPC data, avoiding redundant `entityResolver.resolve()` and `getNPCById()` calls when the handler needs this data for spell/arrow validation before calling `prepareMobAttack()`.
 
 ---
 
