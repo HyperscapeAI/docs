@@ -464,20 +464,34 @@ export const NPC_SPAWN_CONSTANTS = {
 - No special fields required
 - Uses `attack` and `strength` stats
 - `combatRange` defaults to 1 tile
+- Plays `COMBAT` or `SWORD_SWING` animation
+- Immediate hit (0 tick delay)
 
 **For Ranged Mobs:**
-- `attackType`: `"ranged"`
-- `arrowId`: Required (e.g., `"bronze_arrow"`, `"iron_arrow"`)
+- `attackType`: `"ranged"` (required)
+- `arrowId`: Required (e.g., `"bronze_arrow"`, `"iron_arrow"`, `"steel_arrow"`)
 - `ranged`: Required stat for damage calculation
 - `combatRange`: Typically 7-10 tiles
-- `heldWeaponModel`: Optional bow GLB for visuals
+- `attackSpeedTicks`: Typically 4 ticks (2.4 seconds)
+- `heldWeaponModel`: Optional bow GLB for visuals (e.g., `"asset://weapons/shortbow.glb"`)
+- Plays `RANGE` animation
+- Arrow launch delay: 400ms
+- Hit delay: `1 + floor((3 + distance) / 6)` ticks
 
 **For Magic Mobs:**
-- `attackType`: `"magic"`
-- `spellId`: Required (e.g., `"wind_strike"`, `"fire_bolt"`)
+- `attackType`: `"magic"` (required)
+- `spellId`: Required (e.g., `"wind_strike"`, `"fire_bolt"`, `"water_strike"`)
 - `magic`: Required stat for damage calculation
 - `combatRange`: Typically 10 tiles
-- `heldWeaponModel`: Optional staff GLB for visuals
+- `attackSpeedTicks`: Typically 5 ticks (3.0 seconds)
+- `heldWeaponModel`: Optional staff GLB for visuals (e.g., `"asset://weapons/staff.glb"`)
+- Plays `SPELL_CAST` animation
+- Spell launch delay: 600ms
+- Hit delay: `1 + floor((1 + distance) / 3)` ticks
+
+<Warning>
+**Missing Configuration**: If a mob has `attackType: "magic"` but no `spellId`, or `attackType: "ranged"` but no `arrowId`, the attack will be skipped with a console warning. Always configure both the attack type and the corresponding resource ID.
+</Warning>
 
 ### Held Weapon Models
 
