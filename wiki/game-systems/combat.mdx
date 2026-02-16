@@ -299,10 +299,21 @@ private handleMobAttack(data: {
 ```
 
 **Dual Routing Paths:**
-1. **Initial attack**: `MobEntity.performAttackAction()` → `COMBAT_MOB_NPC_ATTACK` event → `handleMobAttack()` → handler
-2. **Auto-attack ticks**: `CombatTickProcessor` reads `combatState.weaponType` → `handleAttack()` → handler
 
-Both paths converge on the same handlers, ensuring consistent behavior.
+1. **Initial attack** (first hit when entering combat):
+   - `MobEntity.performAttackAction()` emits `COMBAT_MOB_NPC_ATTACK` event
+   - Event carries `attackType`, `spellId`, `arrowId` from mob config
+   - `CombatSystem.handleMobAttack()` routes to appropriate handler
+   - Handler validates, calculates damage, emits projectile
+   - Calls `enterCombat()` with `weaponType` to store attack type
+
+2. **Auto-attack ticks** (subsequent attacks while in combat):
+   - `CombatTickProcessor.processAutoAttackOnTick()` reads `combatState.weaponType`
+   - Routes through `CombatSystem.handleAttack()` to appropriate handler
+   - Handler resolves `spellId`/`arrowId` from NPC data via `getNPCById()`
+   - No event data needed—attack type persisted in combat state
+
+Both paths converge on the same handlers (`MagicAttackHandler`, `RangedAttackHandler`, `MeleeAttackHandler`), ensuring consistent behavior.
 
 ### Shared Attack Preparation
 
