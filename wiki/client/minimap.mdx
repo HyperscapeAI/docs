@@ -1,0 +1,572 @@
+---
+title: "Minimap System"
+description: "RS3/OSRS-accurate minimap with location icons"
+icon: "map"
+---
+
+# Minimap System
+
+The minimap provides real-time navigation and entity tracking with RS3/OSRS-accurate dot colors and location icons.
+
+<Info>
+Minimap code lives in `packages/client/src/game/hud/Minimap.tsx` and renders entities, locations, and the destination marker on a 2D canvas overlay.
+</Info>
+
+## Entity Dot Colors
+
+The minimap uses RS3/OSRS standard color scheme:
+
+| Entity Type | Color | Description |
+|-------------|-------|-------------|
+| **Local Player** | White square | Your character (distinct square shape) |
+| **Other Players** | White dot | Other players in the area |
+| **NPCs/Mobs** | Yellow dot | All NPCs and hostile mobs |
+| **Ground Items** | Red dot | Loot and dropped items |
+| **Buildings/Stations** | Yellow icon | Banks, shops, altars, furnaces, etc. |
+| **Resources** | Yellow icon | Trees, mining rocks, fishing spots |
+
+<Info>
+**RS3/OSRS Accuracy**: The color scheme matches RuneScape 3 and Old School RuneScape conventions. White for players, yellow for NPCs, red for items.
+</Info>
+
+## Local Player Marker
+
+The local player renders as a **white square** instead of a circle:
+
+```typescript
+// From Minimap.tsx
+if (pip.isLocalPlayer) {
+  // RS3/OSRS: local player is a white square (slightly larger than dots)
+  const sqHalf = 2.5;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(x - sqHalf, y - sqHalf, sqHalf * 2, sqHalf * 2);
+}
+```
+
+This makes it easy to distinguish your character from other players at a glance.
+
+## Destination Marker
+
+When you click to move, a **red flag** appears at the destination:
+
+```typescript
+// RS3-style red flag destination marker
+function drawFlag(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
+  // Pole
+  ctx.strokeStyle = "#880000";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + 3);
+  ctx.lineTo(cx, cy - 5);
+  ctx.stroke();
+
+  // Flag (small filled triangle off the pole)
+  ctx.fillStyle = "#ff0000";
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 5);
+  ctx.lineTo(cx + 5, cy - 3);
+  ctx.lineTo(cx, cy - 1);
+  ctx.closePath();
+  ctx.fill();
+}
+```
+
+**Before**: Red dot (hard to see, not distinctive)
+
+**After**: Red flag with pole and triangle (RS3-style, highly visible)
+
+## Location Icons
+
+Key locations display custom icons instead of generic dots:
+
+### Bank Icon ($)
+
+```typescript
+case "bank":
+  ctx.fillStyle = "#daa520";  // Gold circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 10px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("$", cx + 0.5, cy + 1);
+  break;
+```
+
+### Shop Icon (Bag)
+
+```typescript
+case "shop":
+  ctx.fillStyle = "#daa520";  // Gold bag
+  ctx.beginPath();
+  ctx.moveTo(cx - 5, cy - 4);
+  ctx.lineTo(cx - 4, cy + 5);
+  ctx.lineTo(cx + 4, cy + 5);
+  ctx.lineTo(cx + 5, cy - 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  break;
+```
+
+### Prayer Altar Icon (Cross)
+
+```typescript
+case "altar":
+  ctx.fillStyle = "#ffffff";  // White cross
+  ctx.fillRect(cx - 1.5, cy - 6, 3, 12);      // Vertical bar
+  ctx.fillRect(cx - 5, cy - 2.5, 10, 3);      // Horizontal bar
+  ctx.strokeRect(cx - 1.5, cy - 6, 3, 12);
+  ctx.strokeRect(cx - 5, cy - 2.5, 10, 3);
+  break;
+```
+
+### Runecrafting Altar Icon (Purple R)
+
+```typescript
+case "runecrafting_altar":
+  ctx.fillStyle = "#7744cc";  // Purple circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 10px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("R", cx + 0.5, cy + 1);
+  break;
+```
+
+### Anvil Icon
+
+```typescript
+case "anvil":
+  ctx.fillStyle = "#666666";  // Dark gray anvil silhouette
+  ctx.beginPath();
+  ctx.moveTo(cx - 6, cy + 4);
+  ctx.lineTo(cx - 4, cy - 1);
+  ctx.lineTo(cx - 5, cy - 4);
+  ctx.lineTo(cx + 5, cy - 4);
+  ctx.lineTo(cx + 4, cy - 1);
+  ctx.lineTo(cx + 6, cy + 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  break;
+```
+
+### Furnace Icon (Flame)
+
+```typescript
+case "furnace":
+  ctx.fillStyle = "#dd5500";  // Orange circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  // Simple flame (inverted drop)
+  ctx.fillStyle = "#ffcc00";
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 4);
+  ctx.quadraticCurveTo(cx + 3, cy + 1, cx, cy + 4);
+  ctx.quadraticCurveTo(cx - 3, cy + 1, cx, cy - 4);
+  ctx.fill();
+  break;
+```
+
+### Cooking Range Icon (Steam)
+
+```typescript
+case "range":
+  ctx.fillStyle = "#8b5e3c";  // Brown circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  // Two short steam lines
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx - 2, cy + 1);
+  ctx.lineTo(cx - 2, cy - 3);
+  ctx.moveTo(cx + 2, cy + 1);
+  ctx.lineTo(cx + 2, cy - 3);
+  ctx.stroke();
+  break;
+```
+
+### Fishing Spot Icon (Fish)
+
+```typescript
+case "fishing":
+  ctx.fillStyle = "#2288cc";  // Cyan circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  // Tiny fish shape
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.ellipse(cx - 1, cy, 3.5, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Tail
+  ctx.beginPath();
+  ctx.moveTo(cx + 2.5, cy);
+  ctx.lineTo(cx + 5, cy - 2.5);
+  ctx.lineTo(cx + 5, cy + 2.5);
+  ctx.closePath();
+  ctx.fill();
+  break;
+```
+
+### Mining Rock Icon (Pickaxe)
+
+```typescript
+case "mining":
+  ctx.fillStyle = "#8b6914";  // Brown circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  // Diagonal pick handle
+  ctx.strokeStyle = "#dddddd";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - 3.5, cy + 3.5);
+  ctx.lineTo(cx + 3.5, cy - 3.5);
+  ctx.stroke();
+  // Pick head
+  ctx.beginPath();
+  ctx.moveTo(cx + 1, cy - 5);
+  ctx.lineTo(cx + 5, cy - 1);
+  ctx.stroke();
+  break;
+```
+
+### Tree Icon (Green Circle)
+
+```typescript
+case "tree":
+  ctx.fillStyle = "#228822";  // Green circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#115511";
+  ctx.stroke();
+  break;
+```
+
+### Quest NPC Icon (?)
+
+```typescript
+case "quest":
+  ctx.fillStyle = "#00bbdd";  // Cyan circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 10px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("?", cx + 0.5, cy + 1);
+  break;
+```
+
+## Icon Detection
+
+The minimap automatically detects entity subtypes to assign the correct icon:
+
+### Station Type Detection
+
+```typescript
+// From Minimap.tsx
+case "bank":
+  color = "#ffff00";
+  type = "building";
+  subType = "bank";
+  break;
+case "furnace":
+  color = "#ffff00";
+  type = "building";
+  subType = "furnace";
+  break;
+case "anvil":
+  color = "#ffff00";
+  type = "building";
+  subType = "anvil";
+  break;
+case "range":
+  color = "#ffff00";
+  type = "building";
+  subType = "range";
+  break;
+case "altar":
+  color = "#ffff00";
+  type = "building";
+  subType = "altar";
+  break;
+case "runecrafting_altar":
+  color = "#ffff00";
+  type = "building";
+  subType = "runecrafting_altar";
+  break;
+```
+
+### NPC Service Detection
+
+NPCs with services (bank, shop, quest) display the appropriate icon:
+
+```typescript
+case "npc": {
+  color = "#ffff00";  // Yellow for NPCs
+  type = "enemy";     // NPCs show as yellow dots like mobs
+  
+  // Detect NPC service type for minimap icons
+  const npcConfig = (entity as unknown as {
+    config?: { services?: { types?: string[] } };
+  }).config;
+  const serviceTypes = npcConfig?.services?.types;
+  
+  if (serviceTypes?.includes("bank")) {
+    subType = "bank";
+  } else if (serviceTypes?.includes("shop")) {
+    subType = "shop";
+  } else if (serviceTypes?.includes("quest")) {
+    subType = "quest";
+  }
+  break;
+}
+```
+
+### Resource Type Detection
+
+Resources (trees, rocks, fishing spots) display skill-specific icons:
+
+```typescript
+case "resource": {
+  color = "#ffff00";  // Yellow (same as NPCs)
+  type = "resource";
+  
+  // Detect resource subtype for minimap icons
+  const resConfig = (entity as unknown as {
+    config?: { resourceType?: string; harvestSkill?: string };
+  }).config;
+  
+  if (
+    resConfig?.resourceType === "fishing_spot" ||
+    resConfig?.harvestSkill === "fishing"
+  ) {
+    subType = "fishing";
+  } else if (
+    resConfig?.resourceType === "mining_rock" ||
+    resConfig?.harvestSkill === "mining"
+  ) {
+    subType = "mining";
+  } else if (
+    resConfig?.resourceType === "tree" ||
+    resConfig?.harvestSkill === "woodcutting"
+  ) {
+    subType = "tree";
+  }
+  break;
+}
+```
+
+## Size Hierarchy
+
+Icons use a size hierarchy for visual clarity:
+
+| Element | Size | Purpose |
+|---------|------|---------|
+| **Entity dots** | 6px diameter | Players, mobs, items (compact) |
+| **Location icons** | 12px diameter | Banks, shops, altars (larger for readability) |
+| **Local player** | 5px square | Your character (distinctive shape) |
+| **Quest markers** | 7-10px | Active quests (pulsing animation) |
+
+```typescript
+// From Minimap.tsx
+// RS3-style: dots are compact, icons are larger for readability
+let radius = 3;
+let borderColor = "#000000";
+let borderWidth = 1;
+
+switch (pip.type) {
+  case "player":
+    radius = pip.groupIndex !== undefined && pip.groupIndex >= 0 ? 4 : 3;
+    break;
+  case "enemy":
+    radius = 3;
+    break;
+  case "building":
+    radius = 3;
+    break;
+  case "item":
+    radius = 3;
+    break;
+  case "resource":
+    radius = 3;
+    break;
+  case "quest":
+    radius = pip.isActive ? 7 : 5;  // Larger for active quests
+    break;
+}
+```
+
+## Rendering Pipeline
+
+The minimap uses a multi-pass rendering approach:
+
+1. **Clear canvas** - Transparent background
+2. **Draw terrain** - Optional terrain overlay (future feature)
+3. **Draw entity dots** - Players, mobs, items
+4. **Draw location icons** - Banks, shops, altars, resources
+5. **Draw destination marker** - Red flag for movement target
+6. **Draw compass** - Optional compass overlay
+
+```typescript
+// From Minimap.tsx
+// Try subtype icon first (bank, shop, altar, etc.)
+if (pip.subType && drawMinimapIcon(ctx, x, y, pip.subType)) {
+  // Icon was drawn by drawMinimapIcon
+} else if (pip.isLocalPlayer) {
+  // RS3/OSRS: local player is a white square
+  const sqHalf = 2.5;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(x - sqHalf, y - sqHalf, sqHalf * 2, sqHalf * 2);
+} else if (pip.type === "quest" || pip.icon === "star") {
+  // Star for quest markers
+  drawStar(ctx, x, y, radius * pulseScale, 5);
+} else if (pip.icon === "diamond") {
+  // Diamond for special markers
+  drawDiamond(ctx, x, y, radius);
+} else {
+  // Circle for everything else (players, mobs, items)
+  ctx.arc(x, y, radius, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = borderWidth;
+  ctx.stroke();
+}
+```
+
+## Icon Drawing Function
+
+The `drawMinimapIcon()` function handles all location icon rendering:
+
+```typescript
+/**
+ * Draw minimap icon for a location type.
+ * Style: clean filled glyph with 1px dark outline, ~8px.
+ * Returns true if drawn, false for default dot fallback.
+ */
+function drawMinimapIcon(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  subType: string,
+): boolean {
+  ctx.save();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#000000";
+
+  switch (subType) {
+    case "bank":
+      // Draw bank icon ($)
+      return true;
+    case "shop":
+      // Draw shop icon (bag)
+      return true;
+    // ... other icons
+    default:
+      ctx.restore();
+      return false;  // No icon for this subtype, use default dot
+  }
+
+  ctx.restore();
+  return true;
+}
+```
+
+**Return Value:**
+- `true` if icon was drawn (skip default dot rendering)
+- `false` if no icon exists for this subtype (fall back to colored dot)
+
+## Entity Pip Structure
+
+Each entity on the minimap is represented by an `EntityPip`:
+
+```typescript
+interface EntityPip {
+  id: string;
+  type: "player" | "enemy" | "building" | "item" | "resource" | "quest";
+  position: THREE.Vector3;
+  color: string;
+  icon?: "star" | "circle" | "diamond";
+  groupIndex?: number;         // Group member index for color assignment
+  isLocalPlayer?: boolean;     // Whether this is the local player (renders as square)
+  subType?: string;            // Location subtype for minimap icons (bank, shop, altar, etc.)
+}
+```
+
+## Performance Optimizations
+
+The minimap uses several optimizations for smooth rendering:
+
+### Entity Caching
+
+```typescript
+// Cache entity pips to avoid recreating Vector3 objects every frame
+const entityCacheRef = useRef<Map<string, EntityPip>>(new Map());
+
+// Reuse existing pip if entity hasn't changed
+let entityPip = entityCacheRef.current.get(entity.id);
+if (entityPip) {
+  entityPip.position.set(pos.x, 0, pos.z);
+  entityPip.type = type;
+  entityPip.color = color;
+  entityPip.subType = subType;
+} else {
+  // New entity, create a new Vector3
+  entityPip = {
+    id: entity.id,
+    type,
+    position: new THREE.Vector3(pos.x, 0, pos.z),
+    color,
+    subType,
+  };
+  entityCacheRef.current.set(entity.id, entityPip);
+}
+```
+
+### Cleanup
+
+Entities that no longer exist are removed from the cache:
+
+```typescript
+// Clean up entities that no longer exist
+for (const [id, pip] of entityCacheRef.current) {
+  if (!seenIds.has(id)) {
+    entityCacheRef.current.delete(id);
+  }
+}
+```
+
+## Minimap Controls
+
+The minimap supports several user interactions:
+
+- **Click to move** - Click anywhere on the minimap to pathfind to that location
+- **Zoom** - Scroll wheel to zoom in/out
+- **Drag** - Drag the minimap window to reposition (edit mode)
+- **Resize** - Resize the minimap window (edit mode)
+
+## Related Documentation
+
+- [Client UI Systems](/wiki/client/ui-systems)
+- [HUD Components](/packages/client#hud-components)
+- [Movement System](/wiki/game-systems/movement)
