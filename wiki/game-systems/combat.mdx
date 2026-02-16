@@ -152,13 +152,42 @@ Mobs can display held weapons (bows, staves) using the same attachment system as
 // Weapons are attached to VRM hand bones using Asset Forge metadata
 // Supports both V1 (direct attachment) and V2 (pre-baked matrix) formats
 // Weapons are cached and shared across mobs of the same type
+
+// Static weapon cache with deduplication
+private static _weaponCache = new Map<string, THREE.Object3D>();
+private static _pendingLoads = new Map<string, Promise<THREE.Object3D>>();
+
+// Attach weapon to mob's hand bone
+private attachHeldWeapon(): void {
+  const weaponUrl = weaponModel.replace("asset://", `${assetsUrl}/`);
+  
+  // Load from cache or fetch
+  const scene = await loadWeapon(weaponUrl);
+  const weaponMesh = scene.clone(true);  // Shares geometry/materials
+  
+  // Attach to VRM hand bone
+  targetBone.add(weaponMesh);
+  this._heldWeapon = weaponMesh;
+}
 ```
 
-**Weapon Cache:**
+**Weapon Cache System:**
 - Static `_weaponCache` shares loaded GLB scenes across mob instances
+- `_pendingLoads` deduplicates concurrent fetches for the same URL
 - `clone(true)` creates per-mob instances with shared geometry/materials
 - Cache cleared on world teardown via `MobNPCSpawnerSystem.destroy()`
 - Prevents duplicate network requests and GPU memory waste
+- Proper cleanup: weapons removed from parent on mob destroy (geometry shared, not disposed)
+
+**Attachment Metadata:**
+Weapons use Asset Forge export metadata for bone attachment:
+- `vrmBoneName`: Target bone (default: `"rightHand"`)
+- `version`: Metadata format version (1 or 2)
+- `relativeMatrix`: Pre-baked 4×4 transform matrix (V2 format)
+
+**Supported Formats:**
+- **V1**: Direct attachment to bone (simple position/rotation)
+- **V2**: Pre-baked matrix with `EquipmentWrapper` group (advanced positioning)
 
 ### Mob Damage Calculation
 
