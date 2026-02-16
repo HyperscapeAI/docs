@@ -202,6 +202,7 @@ const damage = calculateMagicDamage({
   magicAttackBonus: 0,  // Mobs don't have equipment
   spellBaseMaxHit: maxHit,
   targetMagicDefenseBonus: targetStats.magicDefense,
+  targetPrayerBonuses: defenderPrayer,  // Players can use prayer defense
   // ... accuracy calculation
 });
 
@@ -213,9 +214,30 @@ const damage = calculateRangedDamage({
   rangedAttackBonus: 0,  // Mobs don't have equipment
   rangedStrengthBonus: arrowStrength,
   targetRangedDefenseBonus: targetStats.defenseRanged,
+  targetPrayerBonuses: defenderPrayer,  // Players can use prayer defense
+  // ... accuracy calculation
+});
+
+// Melee damage for mobs
+const attackLevel = npcData.stats.attack;
+const strengthLevel = npcData.stats.strength;
+const damage = calculateMeleeDamage({
+  attackLevel,
+  strengthLevel,
+  attackBonus: 0,  // Mobs don't have equipment
+  strengthBonus: 0,
+  targetDefenseBonus: targetStats.defense,
+  targetPrayerBonuses: defenderPrayer,
   // ... accuracy calculation
 });
 ```
+
+**Key Differences from Player Combat:**
+- Mobs have **zero equipment bonuses** (no attack/strength/defense from gear)
+- Mobs have **infinite resources** (no rune/arrow consumption)
+- Mobs use **stats from NPC manifest** (not dynamic equipment)
+- Players can still use **prayer bonuses** to defend against mob attacks
+- Damage formulas are otherwise **identical to player formulas** (OSRS-accurate)
 
 ### Mob Retaliation
 
