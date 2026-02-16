@@ -73,6 +73,60 @@ Mobs can now use magic and ranged attacks, not just melee:
   - Event-carried vs NPC-data spell/arrow resolution
   - Auto-attack tick paths for both magic and ranged
 
+### 🗺️ Minimap Visual Upgrade (PR #830)
+
+RS3/OSRS-accurate minimap with location icons and improved color scheme:
+
+- **Dot Color Update**: Swapped to RS3 standard colors
+  - White: Players (was green/blue)
+  - Yellow: NPCs and mobs (was red)
+  - Red: Ground items (was yellow)
+  - White square: Local player (was green circle)
+- **Destination Marker**: Red flag icon (RS3-style)
+  - Thin pole with filled triangle flag
+  - Replaces previous red dot marker
+  - More visible and distinctive
+- **Location Icons**: Custom icons for key locations
+  - Bank: Gold coin ($) symbol
+  - Shop: Open bag icon
+  - Prayer Altar: White cross
+  - Runecrafting Altar: Purple circle with "R"
+  - Anvil: Dark anvil silhouette
+  - Furnace: Orange circle with flame
+  - Cooking Range: Brown circle with steam
+  - Fishing Spot: Cyan circle with fish
+  - Mining Rock: Brown circle with pickaxe
+  - Tree: Green circle
+  - Quest NPC: Cyan circle with "?"
+- **Icon Detection**: Automatic subtype detection
+  - Station types (bank, furnace, anvil, range, altar)
+  - NPC service types (bank, shop, quest)
+  - Resource types (fishing_spot, mining_rock, tree)
+- **Size Hierarchy**: Compact dots (6px) for entities, larger icons (12px) for locations
+- **Implementation**: `drawMinimapIcon()` function with switch-based rendering
+  - Returns true if icon drawn, false for default dot fallback
+  - Clean filled glyphs with 1px dark outline
+  - ~8px icon size for readability
+
+### 🎨 Visual Polish
+
+- **Mob Sword Swing Animation** (PR #848): Mobs with held weapons use sword_swing emote
+  - Guards with bronze swords now play proper sword swing animation
+  - Replaces default punch animation for melee mobs with weapons
+  - Checks for `heldWeaponModel` in mob config
+- **Duel Stake Icons** (PR #846): Item icons in duel stake panels
+  - Replaced truncated text names with actual ItemIcon rendering
+  - Staked items in inventory appear dimmed (40% opacity)
+  - Visual indicator for offered items
+- **Arrow Projectile Spawn** (PR #845): Fixed arrow spawn position
+  - Arrows now spawn at bow position instead of player center
+  - Offset 1.2 units forward toward target
+  - Height adjusted to upper torso level (1.4m)
+  - Prevents arrows appearing to come from inside player's head
+- **Equipment Panel Icons** (PR #825): Shows actual item icons instead of SVG placeholders
+  - Uses `ItemIcon` component with proper asset URLs
+  - Consistent with inventory panel styling
+
 ### 🗄️ Database Performance Fix (PR #823)
 
 Inventory write coalescing to prevent connection pool starvation:
