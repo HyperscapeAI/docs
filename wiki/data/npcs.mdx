@@ -511,11 +511,31 @@ The `heldWeaponModel` field attaches a 3D weapon to the mob's hand bone:
 - Weapons are cached and shared across mobs of the same type
 - Automatically attaches to VRM `rightHand` bone (or custom bone from metadata)
 
+**Weapon Cache System:**
+- Static `_weaponCache` in `MobVisualManager` shares loaded GLB scenes
+- `_pendingLoads` map deduplicates concurrent fetches for the same URL
+- First mob to load a weapon caches the scene, subsequent mobs clone from cache
+- Eliminates duplicate network requests when multiple mobs of the same type spawn
+- Cache cleared on world teardown via `MobNPCSpawnerSystem.destroy()`
+- Weapons use `clone(true)` to share geometry/material buffers (GPU efficient)
+
 **Available Weapon Models:**
-- `asset://weapons/shortbow.glb` - Shortbow
-- `asset://weapons/staff.glb` - Magic staff
-- `asset://weapons/sword.glb` - Sword
+- `asset://weapons/shortbow.glb` - Shortbow (for ranged mobs)
+- `asset://weapons/staff.glb` - Magic staff (for magic mobs)
+- `asset://weapons/sword.glb` - Sword (for melee mobs)
 - Custom weapons from Asset Forge
+
+**Attachment Metadata:**
+Weapons exported from Asset Forge include attachment metadata:
+- `vrmBoneName`: Target bone name (default: `"rightHand"`)
+- `version`: Metadata format version (1 or 2)
+- `relativeMatrix`: Pre-baked 4×4 transform matrix (V2 format only)
+
+**Cleanup:**
+Weapons are properly cleaned up when mobs are destroyed:
+- `removeFromParent()` detaches weapon from bone
+- Geometry and materials are NOT disposed (shared across mob instances)
+- JavaScript garbage collection handles the rest
 
 ## Adding New NPCs
 
