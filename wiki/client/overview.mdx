@@ -193,8 +193,83 @@ Located in `packages/client/src/game/hud/`:
 - `XPProgressOrb.tsx` - XP tracking orb with skill icons
 - `ActionProgressBar.tsx` - Skilling action progress
 - `EntityContextMenu.tsx` - Right-click context menus
-- `Minimap.tsx` - Top-down map view
+- `Minimap.tsx` - RS3/OSRS-accurate top-down map view with location icons
 - `Nametags.ts` - Entity name/level labels
+
+### Minimap System
+
+The minimap provides RS3/OSRS-accurate navigation with location icons and entity tracking.
+
+**Visual Standards (OSRS-accurate):**
+- **White dots**: Other players
+- **Yellow dots**: NPCs, mobs, and buildings
+- **Red dots**: Ground items and loot
+- **White square**: Local player (distinct from other players)
+- **Red flag**: Destination marker (RS3-style)
+
+**Location Icons:**
+
+The minimap displays icons for key locations instead of generic dots:
+
+| Icon | Location Type | Visual |
+|------|---------------|--------|
+| **$** | Bank | Gold coin symbol on gold circle |
+| **Bag** | Shop | Open-top bag silhouette |
+| **Cross** | Prayer Altar | White cross (religious symbol) |
+| **R** | Runecrafting Altar | Purple circle with "R" |
+| **Anvil** | Smithing Station | Dark anvil silhouette |
+| **Flame** | Furnace | Orange circle with flame |
+| **Steam** | Cooking Range | Brown circle with steam lines |
+| **Fish** | Fishing Spot | Cyan circle with fish |
+| **Pickaxe** | Mining Rock | Brown circle with pickaxe |
+| **Tree** | Woodcutting | Green circle |
+| **?** | Quest NPC | Cyan circle with question mark |
+
+**Icon Detection:**
+
+Icons are automatically assigned based on entity configuration:
+
+```typescript
+// From Minimap.tsx
+// Detect NPC service type for minimap icons
+const npcConfig = entity.config;
+const serviceTypes = npcConfig?.services?.types;
+if (serviceTypes?.includes("bank")) {
+  subType = "bank";
+} else if (serviceTypes?.includes("shop")) {
+  subType = "shop";
+} else if (serviceTypes?.includes("quest")) {
+  subType = "quest";
+}
+
+// Detect resource subtype for minimap icons
+const resConfig = entity.config;
+if (resConfig?.resourceType === "fishing_spot" || resConfig?.harvestSkill === "fishing") {
+  subType = "fishing";
+} else if (resConfig?.resourceType === "mining_rock" || resConfig?.harvestSkill === "mining") {
+  subType = "mining";
+} else if (resConfig?.resourceType === "tree" || resConfig?.harvestSkill === "woodcutting") {
+  subType = "tree";
+}
+```
+
+**Size Hierarchy:**
+- Entity dots: 6px diameter (compact for clarity)
+- Location icons: 12px diameter (prominent for navigation)
+
+**Rendering:**
+- 3D terrain rendered via orthographic camera (throttled to ~15fps for performance)
+- 2D overlay canvas for entity pips and icons (60fps for smooth interaction)
+- Cached projection-view matrix keeps pips synced with throttled 3D render
+- Pre-allocated vectors avoid GC pressure in render loop
+
+**Features:**
+- Click-to-move on minimap
+- Scroll to zoom (20-1000 tile extent)
+- Rotates with main camera (RS3-style)
+- Destination marker persists until reached
+- Resizable and collapsible
+- Edit mode support for UI customization
 
 ---
 
