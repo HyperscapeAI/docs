@@ -75,20 +75,35 @@ export const COMBAT_CONSTANTS = {
 
 ## Mob Combat
 
+Mobs can use any of the three attack types: melee, ranged, or magic. This is configured in the NPC manifest and fully integrated with the combat system.
+
 ### Mob Attack Types
 
-Mobs can use any of the three attack types: melee, ranged, or magic. This is configured in the NPC manifest:
+Configure mob attack types via NPC manifest JSON:
 
 ```json
 {
   "id": "dark_wizard",
+  "name": "Dark Wizard",
+  "stats": {
+    "level": 20,
+    "attack": 1,
+    "strength": 1,
+    "defense": 10,
+    "health": 40,
+    "magic": 25
+  },
   "combat": {
     "attackType": "magic",
     "spellId": "wind_strike",
     "combatRange": 10,
-    "attackSpeedTicks": 5
+    "attackSpeedTicks": 5,
+    "attackable": true,
+    "aggressive": true,
+    "retaliates": true
   },
   "appearance": {
+    "modelPath": "wizard/wizard_rigged.glb",
     "heldWeaponModel": "asset://weapons/staff.glb"
   }
 }
@@ -99,6 +114,8 @@ Mobs can use any of the three attack types: melee, ranged, or magic. This is con
 - `spellId`: Required for magic mobs (e.g., `"wind_strike"`, `"fire_bolt"`)
 - `arrowId`: Required for ranged mobs (e.g., `"bronze_arrow"`, `"iron_arrow"`)
 - `heldWeaponModel`: Optional visual weapon GLB (bow, staff, etc.)
+- `combatRange`: Attack range in tiles (1 for melee, 7-10 for ranged/magic)
+- `attackSpeedTicks`: Ticks between attacks (4-5 typical)
 
 ### Mob Combat Mechanics
 
