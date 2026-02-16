@@ -1,0 +1,191 @@
+---
+title: "Recent Updates"
+description: "Latest features and improvements (February 2026)"
+icon: "sparkles"
+---
+
+# Recent Updates (February 2026)
+
+This page highlights the most recent features and improvements added to Hyperscape.
+
+## Mob Magic & Ranged Attacks
+
+Mobs can now use magic and ranged attacks, not just melee. This brings mob combat to parity with player combat capabilities.
+
+### Configuration
+
+Configure mob attack types via NPC manifest JSON:
+
+```json
+{
+  "id": "dark_wizard",
+  "stats": {
+    "magic": 25
+  },
+  "combat": {
+    "attackType": "magic",
+    "spellId": "fire_strike",
+    "combatRange": 10,
+    "attackSpeedTicks": 5
+  },
+  "appearance": {
+    "heldWeaponModel": "asset://weapons/staff.glb"
+  }
+}
+```
+
+### Features
+
+- **Three Attack Types**: Melee (default), Ranged, Magic
+- **Projectile System**: Spell and arrow projectiles with OSRS-accurate hit delays
+- **Visual Weapons**: Bows and staves attached to mob hand bones
+- **Infinite Resources**: Mobs don't consume runes or arrows
+- **Damage Calculation**: Uses mob's `magic` or `ranged` stat from manifest
+- **Auto-Attack Integration**: Mobs continue attacking with correct type on subsequent ticks
+- **Retaliation**: Mobs retaliate with their configured attack type
+
+**See**: [Combat System](/wiki/game-systems/combat#mob-combat) for complete documentation.
+
+---
+
+## Minimap Visual Upgrade
+
+The minimap has been updated to match RS3 and OSRS visual standards.
+
+### Color Scheme
+
+| Entity Type | Old Color | New Color | Shape |
+|-------------|-----------|-----------|-------|
+| Local Player | Green circle | White square | Square |
+| Other Players | Blue dot | White dot | Circle |
+| NPCs/Mobs | Red dot | Yellow dot | Circle |
+| Ground Items | Yellow dot | Red dot | Circle |
+
+### Location Icons
+
+The minimap now displays custom icons for key locations:
+
+- **Bank**: Gold coin ($) symbol
+- **Shop**: Open bag icon
+- **Prayer Altar**: White cross
+- **Runecrafting Altar**: Purple circle with "R"
+- **Anvil**: Dark anvil silhouette
+- **Furnace**: Orange circle with flame
+- **Cooking Range**: Brown circle with steam
+- **Fishing Spot**: Cyan circle with fish
+- **Mining Rock**: Brown circle with pickaxe
+- **Tree**: Green circle
+- **Quest NPC**: Cyan circle with "?"
+
+### Destination Marker
+
+Movement destination now shows a **red flag** (RS3-style) instead of a red dot:
+- Thin pole with filled triangle flag
+- More visible and distinctive
+- Persists until player reaches destination
+
+**See**: [Minimap System](/wiki/client/minimap) for complete documentation.
+
+---
+
+## Database Performance Optimization
+
+Inventory write coalescing prevents connection pool starvation during batch operations.
+
+### Problem
+
+Batch operations like fletching 100 arrows generated 200 sequential database transactions, each holding a connection for 20-50ms. This starved the connection pool and caused game freezes.
+
+### Solution
+
+Write coalescing collapses N concurrent inventory writes into at most 2 database transactions per player:
+1. One active write
+2. One queued batch with the latest snapshot
+
+### Performance Impact
+
+| Scenario | Before | After |
+|----------|--------|-------|
+| Fletching 100 arrows | 200 sequential transactions | 2 transactions per player |
+| Connection pool usage | Starved (200+ pending) | Minimal (2 active per player) |
+| Game freezes | Frequent during batch ops | Eliminated |
+
+### Implementation
+
+```typescript
+// From DatabaseSystem/index.ts
+private inventoryWriteActive = new Map<string, Promise<void>>();
+private inventoryWriteQueued = new Map<string, {
+  items: InventorySaveItem[];
+  waiters: Array<{ resolve: () => void; reject: (err: unknown) => void; }>;
+}>();
+```
+
+**See**: [Database Schema](/wiki/engine/database#inventory-write-coalescing) for complete documentation.
+
+---
+
+## Visual Improvements
+
+### Duel Stake Icons
+
+Duel stake panels now show actual item icons instead of truncated text names:
+- Uses `ItemIcon` component with proper asset URLs
+- Staked items in inventory appear dimmed (40% opacity)
+- Visual indicator for offered items
+
+### Arrow Projectile Spawn
+
+Arrow projectiles now spawn at the bow position instead of the player's center:
+- Offset 1.2 units forward toward target
+- Height adjusted to upper torso level (1.4m)
+- Prevents arrows appearing to come from inside player's head
+
+### Mob Sword Swing Animation
+
+Mobs with held weapons (e.g., guards with bronze swords) now play the `sword_swing` emote instead of the default punch animation:
+- Checks for `heldWeaponModel` in mob config
+- More realistic melee combat visuals
+- Consistent with player sword animations
+
+### Equipment Panel Icons
+
+Equipment panel now shows actual item icons instead of SVG placeholders:
+- Uses `ItemIcon` component with proper asset URLs
+- Consistent with inventory panel styling
+- Fallback to placeholder only when icon missing
+
+---
+
+## Bug Fixes
+
+### Camera Initialization
+
+Camera now correctly faces behind the player on fresh load:
+- Changed `theta` from `0` to `Math.PI` in spherical coordinates
+- Fixes backwards movement controls on first spawn
+- Applied to both initial state and reset camera method
+
+### Post-Processing Color Grading
+
+Fixed color grading leaking into outline-only rendering:
+- LUT intensity zeroed when color grading disabled
+- Entity highlights now work correctly with post-processing off
+- Rendering routes through composer even when post-processing disabled
+
+### Weapon Cache Cleanup
+
+Held weapon models are now properly cleaned up on world teardown:
+- `clearWeaponCache()` called from `MobNPCSpawnerSystem.destroy()`
+- Disposes geometry, materials, and textures
+- Prevents GPU memory leaks across world lifecycles
+
+---
+
+## Related Documentation
+
+- [Combat System](/wiki/game-systems/combat)
+- [NPC Data Structure](/wiki/data/npcs)
+- [Database Schema](/wiki/engine/database)
+- [Minimap System](/wiki/client/minimap)
+- [Changelog](/changelog)
