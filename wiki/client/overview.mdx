@@ -387,8 +387,17 @@ export class ClientCameraSystem extends SystemBase {
     zoomSpeed: 1.2,
     shoulderOffsetMax: 0.15, // Over-the-shoulder offset
   };
+  
+  // Camera spherical coordinates
+  private theta = Math.PI;   // Horizontal angle (Math.PI = behind player)
+  private phi = Math.PI * 0.4;  // Vertical angle (pitch)
+  private radius = 5.0;      // Distance from target
 }
 ```
+
+<Info>
+**Camera Initialization Fix (PR #829)**: The camera now correctly initializes with `theta=Math.PI` for standard third-person behind-the-player view. Previously, `theta=0` placed the camera in front of the player, causing backwards movement on fresh load.
+</Info>
 
 | Mode | Controls |
 |------|----------|
