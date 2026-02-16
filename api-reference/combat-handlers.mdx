@@ -1,0 +1,351 @@
+---
+title: "Combat Handlers API"
+description: "API reference for combat attack handlers and utilities"
+icon: "code"
+---
+
+# Combat Handlers API
+
+The combat system uses specialized handlers for each attack type, with shared utilities for common validation logic.
+
+## Attack Handlers
+
+### MagicAttackHandler
+
+Handles magic combat for both players and mobs.
+
+```typescript
+class MagicAttackHandler {
+  constructor(ctx: CombatAttackContext);
+  
+  async handle(data: {
+    attackerId: string;
+    targetId: string;
+    attackerType: "player" | "mob";
+    targetType: "player" | "mob";
+    spellId?: string;
+  }): Promise<void>;
+}
+```
+
+**Player Magic Path:**
+- Validates spell selection and rune requirements
+- Consumes runes (accounting for elemental staff infinite runes)
+- Applies equipment bonuses (magic attack, magic defense)
+- Grants XP: base spell XP + (2 × damage)
+
+**Mob Magic Path:**
+- Resolves spell from `npcData.combat.spellId`
+- No rune consumption (infinite resources)
+- Uses mob's `magic` stat for damage
+- No equipment bonuses
+- No XP granted
+
+### RangedAttackHandler
+
+Handles ranged combat for both players and mobs.
+
+```typescript
+class RangedAttackHandler {
+  constructor(ctx: CombatAttackContext);
+  
+  handle(data: {
+    attackerId: string;
+    targetId: string;
+    attackerType: "player" | "mob";
+    targetType: "player" | "mob";
+    arrowId?: string;
+  }): void;
+}
+```
+
+**Player Ranged Path:**
+- Validates bow and arrow equipment
+- Consumes 1 arrow per shot
+- Applies equipment bonuses (ranged attack, ranged strength)
+- Grants XP: 4 per damage to Ranged, 1.33 to Constitution
+
+**Mob Ranged Path:**
+- Resolves arrow from `npcData.combat.arrowId`
+- No arrow consumption (infinite resources)
+- Uses mob's `ranged` stat for damage
+- No equipment bonuses
+- No XP granted
+
+### MeleeAttackHandler
+
+Handles melee combat for both players and mobs.
+
+```typescript
+class MeleeAttackHandler {
+  constructor(ctx: CombatAttackContext);
+  
+  handle(data: {
+    attackerId: string;
+    targetId: string;
+    attackerType: "player" | "mob";
+    targetType: "player" | "mob";
+  }): void;
+}
+```
+
+**Features:**
+- Per-style attack bonuses (stab, slash, crush)
+- Per-style defense bonuses
+- Combat style bonuses (accurate, aggressive, defensive, controlled)
+- Prayer multipliers for both attacker and defender
+
+## Shared Utilities
+
+### prepareMobAttack()
+
+Shared validation and preparation for mob projectile attacks (magic and ranged).
+
+```typescript
+function prepareMobAttack(
+  ctx: CombatAttackContext,
+  data: {
+    attackerId: string;
+    targetId: string;
+    attackerType: "mob";
+    targetType: "player" | "mob";
+  },
+  combatRange: number,
+  animationType: "melee" | "ranged" | "magic",
+  fallbackAttackSpeed: number,
+  preResolved?: { attacker: MobEntity; npcData: NPCData },
+): MobAttackContext | null;
+```
+
+**Parameters:**
+- `ctx` - Combat attack context with access to systems and services
+- `data` - Attack data with entity IDs and types
+- `combatRange` - Fallback range if NPC manifest omits `combatRange`
+- `animationType` - Animation to play ("melee", "ranged", or "magic")
+- `fallbackAttackSpeed` - Fallback attack speed if NPC manifest omits `attackSpeedTicks`
+- `preResolved` - Optional pre-resolved mob entity and NPC data (avoids double lookup)
+
+**Returns:**
+- `MobAttackContext` with validated state if all checks pass
+- `null` if any validation fails (attack aborted)
+
+**Validation Steps:**
+1. Entity resolution (or use `preResolved`)
+2. Alive check for both entities
+3. NPC data lookup via `getNPCById()`
+4. Range validation via `checkProjectileRange()`
+5. Position validation via `getEntityPosition()`
+6. Cooldown check
+7. Cooldown claim (set `nextAttackTicks`)
+8. Face target via `rotationManager`
+9. Play animation via `animationManager`
+
+**MobAttackContext:**
+
+```typescript
+interface MobAttackContext {
+  attacker: Entity | MobEntity;
+  target: Entity | MobEntity;
+  attackerId: string;
+  targetId: string;
+  attackerType: "player" | "mob";
+  targetType: "player" | "mob";
+  typedAttackerId: EntityID;
+  npcData: NPCData;
+  attackerPos: Position3D;
+  targetPos: Position3D;
+  distance: number;
+  currentTick: number;
+  attackSpeedTicks: number;
+}
+```
+
+### checkProjectileRange()
+
+Shared range validation for ranged and magic attacks.
+
+```typescript
+function checkProjectileRange(
+  ctx: CombatAttackContext,
+  attackerId: string,
+  targetId: string,
+  attacker: Entity | MobEntity,
+  target: Entity | MobEntity,
+  attackRange: number,
+): number;
+```
+
+**Parameters:**
+- `ctx` - Combat attack context
+- `attackerId` - Attacker entity ID
+- `targetId` - Target entity ID
+- `attacker` - Attacker entity
+- `target` - Target entity
+- `attackRange` - Maximum attack range in tiles
+
+**Returns:**
+- Chebyshev distance if in range
+- `-1` if out of range (emits `COMBAT_ATTACK_FAILED` event)
+
+**Validation:**
+- Converts positions to tiles via `tilePool`
+- Calculates Chebyshev distance
+- Checks `distance > attackRange` or `distance === 0` (same tile)
+- Emits failure event if out of range
+
+## Combat Attack Context
+
+The `CombatAttackContext` interface provides handlers with access to combat systems and services.
+
+```typescript
+interface CombatAttackContext {
+  // Core
+  readonly world: World;
+  readonly logger: SystemLogger;
+  readonly antiCheat: CombatAntiCheat;
+  readonly entityIdValidator: EntityIdValidator;
+  readonly rateLimiter: CombatRateLimiter;
+  readonly entityResolver: CombatEntityResolver;
+
+  // Combat services
+  readonly animationManager: CombatAnimationManager;
+  readonly rotationManager: CombatRotationManager;
+  readonly projectileService: ProjectileService;
+
+  // Cached systems
+  playerSystem?: PlayerSystem;
+  prayerSystem?: PrayerSystem | null;
+  equipmentSystem?: EquipmentSystem;
+  inventorySystem?: InventorySystem;
+  terrainSystem?: TerrainSystem;
+
+  // Mutable state
+  nextAttackTicks: Map<EntityID, number>;
+  readonly playerEquipmentStats: Map<string, EquipmentStatsCache>;
+  readonly _attackerTile: PooledTile;
+  readonly _targetTile: PooledTile;
+
+  // Delegated methods
+  validateAttackerPosition(attackerId: string, targetId: string, attackType: string, currentTick: number): boolean;
+  checkAttackCooldown(typedAttackerId: EntityID, currentTick: number): boolean;
+  applyDamage(targetId: string, targetType: "player" | "mob", damage: number, attackerId: string): void;
+  enterCombat(attackerId: EntityID, targetId: EntityID, speed: number, type?: AttackType): void;
+  emitTypedEvent(type: string, data: Record<string, unknown>): void;
+  calculateMeleeDamage(attacker: Entity | MobEntity, target: Entity | MobEntity, style: CombatStyle): number;
+  handleMeleeAttack(data: MeleeAttackData): void;
+  getPlayerSkillLevel(playerId: string, skill: "ranged" | "magic" | "defense"): number;
+  getEquippedWeapon(playerId: string): Item | null;
+  getEquippedArrows(playerId: string): EquipmentSlot | null;
+}
+```
+
+## Type Guards
+
+### getMobAttackType()
+
+Get mob attack type from entity config safely.
+
+```typescript
+function getMobAttackType(
+  entity: unknown
+): "melee" | "ranged" | "magic" | undefined;
+```
+
+**Returns:**
+- Mob's configured `attackType` from `entity.config.attackType`
+- `undefined` if not a mob or not configured
+
+**Usage:**
+
+```typescript
+const mobAttackType = getMobAttackType(targetEntity);
+if (mobAttackType === "ranged") {
+  retaliatorWeaponType = AttackType.RANGED;
+} else if (mobAttackType === "magic") {
+  retaliatorWeaponType = AttackType.MAGIC;
+}
+```
+
+## Projectile Service
+
+### createProjectile()
+
+Create a projectile for damage application at a future tick.
+
+```typescript
+interface CreateProjectileParams {
+  sourceId: string;
+  targetId: string;
+  attackType: AttackType;
+  damage: number;
+  currentTick: number;
+  sourcePosition: { x: number; z: number };
+  targetPosition: { x: number; z: number };
+  spellId?: string;
+  arrowId?: string;
+  xpReward: number;
+}
+
+class ProjectileService {
+  createProjectile(params: CreateProjectileParams): void;
+}
+```
+
+**Behavior:**
+- Schedules damage application at calculated hit delay tick
+- Stores projectile data for visual synchronization
+- Emits `COMBAT_PROJECTILE_LAUNCHED` event for client rendering
+
+## Animation Manager
+
+### setCombatEmote()
+
+Set combat animation for an entity.
+
+```typescript
+class CombatAnimationManager {
+  setCombatEmote(
+    entityId: string,
+    entityType: "player" | "mob",
+    currentTick: number,
+    attackSpeedTicks: number,
+    attackType?: "melee" | "ranged" | "magic",
+  ): void;
+}
+```
+
+**Behavior:**
+- Players: Sets combat emote via player system
+- Mobs: Sets server emote based on attack type
+  - `attackType === "magic"` → `Emotes.SPELL_CAST`
+  - `attackType === "ranged"` → `Emotes.RANGE`
+  - Default → `Emotes.COMBAT`
+- Holds combat pose until 1 tick before next attack
+
+## Rotation Manager
+
+### rotateTowardsTarget()
+
+Rotate entity to face target.
+
+```typescript
+class CombatRotationManager {
+  rotateTowardsTarget(
+    attackerId: string,
+    targetId: string,
+    attackerType: "player" | "mob",
+    targetType: "player" | "mob",
+  ): void;
+}
+```
+
+**Behavior:**
+- Emits `COMBAT_FACE_TARGET` event for players
+- Updates mob rotation directly for mobs
+- Essential for stationary ranged/magic attacks
+
+## Related Documentation
+
+- [Combat System](/wiki/game-systems/combat)
+- [Combat Constants](/wiki/reference/combat-constants)
+- [NPC Data Structure](/wiki/data/npcs)
