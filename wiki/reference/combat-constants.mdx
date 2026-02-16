@@ -1,0 +1,370 @@
+---
+title: "Combat Constants Reference"
+description: "Complete reference for all combat timing, range, and damage constants"
+icon: "list-checks"
+---
+
+# Combat Constants Reference
+
+All combat constants are defined in `packages/shared/src/constants/CombatConstants.ts`.
+
+## Attack Ranges
+
+```typescript
+export const COMBAT_CONSTANTS = {
+  // Ranges (tiles)
+  RANGED_RANGE: 10,              // Maximum ranged attack distance
+  MAGIC_RANGE: 10,               // Maximum magic attack distance
+  MELEE_RANGE_STANDARD: 1,       // Standard melee (cardinal only)
+  MELEE_RANGE_HALBERD: 2,        // Halberd/spear (includes diagonal)
+  PICKUP_RANGE: 2.5,             // Item pickup range
+};
+```
+
+## Tick System
+
+```typescript
+export const COMBAT_CONSTANTS = {
+  // Tick timing (OSRS-accurate)
+  TICK_DURATION_MS: 600,         // 0.6 seconds per tick
+  
+  // Attack speeds (ticks)
+  DEFAULT_ATTACK_SPEED_TICKS: 4, // 2.4 seconds (standard sword)
+  
+  // Combat timing
+  COMBAT_TIMEOUT_TICKS: 17,      // 10.2 seconds out of combat
+  LOGOUT_PREVENTION_TICKS: 16,   // 9.6 seconds after damage
+  HEALTH_REGEN_COOLDOWN_TICKS: 17, // 10.2 seconds after damage
+  HEALTH_REGEN_INTERVAL_TICKS: 100, // 60 seconds between regen
+  AFK_DISABLE_RETALIATE_TICKS: 2000, // 20 minutes AFK threshold
+};
+```
+
+## Food Consumption
+
+```typescript
+export const COMBAT_CONSTANTS = {
+  // Food consumption (OSRS-accurate)
+  EAT_DELAY_TICKS: 3,            // 1.8 seconds between foods
+  EAT_ATTACK_DELAY_TICKS: 3,     // Added to attack cooldown when eating mid-combat
+  MAX_HEAL_AMOUNT: 99,           // Security cap on healing
+};
+```
+
+## Projectile Launch Delays
+
+```typescript
+export const COMBAT_CONSTANTS = {
+  // Projectile launch delays (ms)
+  SPELL_LAUNCH_DELAY_MS: 600,    // Delay before spell projectile spawns (cast animation)
+  ARROW_LAUNCH_DELAY_MS: 400,    // Delay before arrow projectile spawns (draw animation)
+};
+```
+
+**Purpose:**
+- Allows attack animation wind-up before projectile appears
+- Spell: 600ms for staff raise and cast gesture
+- Arrow: 400ms for bow draw animation
+- Visual projectile arrival coincides with server-side damage splat
+
+## Hit Delay Formulas
+
+```typescript
+export const COMBAT_CONSTANTS = {
+  HIT_DELAY: {
+    // Melee
+    MELEE_BASE: 0,               // Immediate hit
+    
+    // Ranged: 1 + floor((3 + distance) / 6)
+    RANGED_BASE: 1,
+    RANGED_DISTANCE_OFFSET: 3,
+    RANGED_DISTANCE_DIVISOR: 6,
+    
+    // Magic: 1 + floor((1 + distance) / 3)
+    MAGIC_BASE: 1,
+    MAGIC_DISTANCE_OFFSET: 1,
+    MAGIC_DISTANCE_DIVISOR: 3,
+    
+    MAX_HIT_DELAY: 10,           // Cap at 10 ticks
+  },
+};
+```
+
+**Hit Delay Examples:**
+
+| Attack Type | Distance | Delay (ticks) | Delay (seconds) |
+|-------------|----------|---------------|-----------------|
+| Melee | Any | 0 | 0.0s |
+| Ranged | 1 | 1 | 0.6s |
+| Ranged | 5 | 2 | 1.2s |
+| Ranged | 10 | 3 | 1.8s |
+| Magic | 1 | 1 | 0.6s |
+| Magic | 5 | 3 | 1.8s |
+| Magic | 10 | 4 | 2.4s |
+
+## Damage Formulas
+
+```typescript
+export const COMBAT_CONSTANTS = {
+  // Damage calculation constants
+  BASE_CONSTANT: 64,
+  EFFECTIVE_LEVEL_CONSTANT: 8,
+  DAMAGE_DIVISOR: 640,
+  MIN_DAMAGE: 0,
+  MAX_DAMAGE: 200,
+};
+```
+
+**Max Hit Formula:**
+```
+maxHit = floor(0.5 + (effectiveStrength × (strengthBonus + 64)) / 640)
+```
+
+**Effective Level Formula:**
+```
+effectiveLevel = (baseLevel × prayerMultiplier) + 8 + styleBonus
+```
+
+## XP Rates
+
+```typescript
+export const COMBAT_CONSTANTS = {
+  XP: {
+    COMBAT_XP_PER_DAMAGE: 4,          // 4 XP per damage for main skill
+    HITPOINTS_XP_PER_DAMAGE: 1.33,    // 1.33 XP for Constitution
+    CONTROLLED_XP_PER_DAMAGE: 1.33,   // Split across all combat skills
+  },
+};
+```
+
+## Visual Rotation
+
+```typescript
+export const COMBAT_CONSTANTS = {
+  ROTATION: {
+    // Combat facing slerp speed — ~95% convergence in 150ms
+    COMBAT_SLERP_SPEED: 20.0,
+    
+    // Movement facing slerp speed — ~90% convergence in 200ms
+    MOVEMENT_SLERP_SPEED: 12.0,
+    
+    // Max distance (tiles) to resolve a combat facing target
+    FACING_MAX_DISTANCE: 20,
+    
+    // Min squared distance (tiles²) to rotate toward target
+    // Prevents flips when overlapping (0.5² = half-tile)
+    MIN_ROTATION_DISTANCE_SQ: 0.25,
+  },
+};
+```
+
+## Animation
+
+```typescript
+export const COMBAT_CONSTANTS = {
+  ANIMATION: {
+    HIT_FRAME_RATIO: 0.5,          // Damage applies at 50% through animation
+    MIN_ANIMATION_TICKS: 2,        // Minimum animation duration
+    HITSPLAT_DELAY_TICKS: 0,       // Hitsplat shows immediately on hit
+    HITSPLAT_DURATION_TICKS: 2,    // Hitsplat visible for 1.2 seconds
+    EMOTE_COMBAT: "combat",
+    EMOTE_SWORD_SWING: "sword_swing",
+    EMOTE_RANGED: "ranged",
+    EMOTE_MAGIC: "magic",
+    EMOTE_IDLE: "idle",
+    CROSSFADE_DURATION: 0.35,      // 350ms animation crossfade (RS3-style)
+  },
+};
+```
+
+## Death & Loot
+
+```typescript
+export const COMBAT_CONSTANTS = {
+  // Death & loot (ticks)
+  RESPAWN_TICKS_RANDOMNESS: 8,
+  GRAVESTONE_TICKS: 1500,          // 15 minutes
+  GROUND_ITEM_DESPAWN_TICKS: 6000, // 60 minutes (OSRS-accurate)
+  UNTRADEABLE_DESPAWN_TICKS: 6000, // 60 minutes (OSRS-accurate)
+  LOOT_PROTECTION_TICKS: 100,      // 1 minute killer protection
+  CORPSE_DESPAWN_TICKS: 200,       // 2 minutes
+  
+  DEATH: {
+    ANIMATION_TICKS: 7,            // 4.2 seconds death animation
+    COOLDOWN_TICKS: 17,            // 10.2 seconds between deaths
+    RECONNECT_RESPAWN_DELAY_TICKS: 1,
+    STALE_LOCK_AGE_TICKS: 3000,    // 30 minutes stale lock cleanup
+    DEFAULT_RESPAWN_POSITION: { x: 0, y: 0, z: 0 } as const,
+    DEFAULT_RESPAWN_TOWN: "Central Haven",
+  } as const,
+};
+```
+
+## Manifest Defaults
+
+```typescript
+export const COMBAT_CONSTANTS = {
+  DEFAULTS: {
+    NPC: {
+      ATTACK_SPEED_TICKS: 4,
+      AGGRO_RANGE: 4,
+      COMBAT_RANGE: 1,
+      LEASH_RANGE: 42,             // Extended from OSRS default of 7
+      RESPAWN_TICKS: 25,
+      WANDER_RADIUS: 5,
+    },
+    ITEM: {
+      ATTACK_SPEED: 4,
+      ATTACK_RANGE: 1,
+    },
+  } as const,
+};
+```
+
+## Aggro Constants
+
+```typescript
+export const AGGRO_CONSTANTS = {
+  DEFAULT_BEHAVIOR: "passive" as const,
+  AGGRO_UPDATE_INTERVAL_MS: 100,
+  ALWAYS_AGGRESSIVE_LEVEL: 999,  // Level threshold for always_aggressive
+};
+```
+
+## Level Constants
+
+```typescript
+export const LEVEL_CONSTANTS = {
+  DEFAULT_COMBAT_LEVEL: 3,
+  MIN_COMBAT_LEVEL: 3,
+  MAX_LEVEL: 99,
+  
+  XP_BASE: 50,
+  XP_GROWTH_FACTOR: 8,
+  
+  COMBAT_LEVEL_WEIGHTS: {
+    DEFENSE_WEIGHT: 0.25,
+    OFFENSE_WEIGHT: 0.325,
+    RANGED_MULTIPLIER: 1.5,
+  },
+};
+```
+
+## Combat Styles
+
+### Ranged Style Bonuses
+
+```typescript
+export const RANGED_STYLE_BONUSES = {
+  accurate: {
+    attackBonus: 3,
+    speedModifier: 0,
+    rangeModifier: 0,
+    xpSplit: "ranged" as const,
+  },
+  rapid: {
+    attackBonus: 0,
+    speedModifier: -1,           // 1 tick faster
+    rangeModifier: 0,
+    xpSplit: "ranged" as const,
+  },
+  longrange: {
+    attackBonus: 0,
+    speedModifier: 0,
+    rangeModifier: 2,            // +2 tile range
+    xpSplit: "ranged_defence" as const,
+  },
+};
+```
+
+### Magic Style Bonuses
+
+```typescript
+export const MAGIC_STYLE_BONUSES = {
+  accurate: {
+    attackBonus: 3,
+    speedModifier: 0,
+    rangeModifier: 0,
+    xpSplit: "magic" as const,
+  },
+  longrange: {
+    attackBonus: 1,
+    speedModifier: 0,
+    rangeModifier: 2,            // +2 tile range
+    xpSplit: "magic_defence" as const,
+  },
+  autocast: {
+    attackBonus: 0,
+    speedModifier: 0,
+    rangeModifier: 0,
+    xpSplit: "magic" as const,
+  },
+};
+```
+
+## Usage Examples
+
+### Check Attack Range
+
+```typescript
+import { COMBAT_CONSTANTS } from "@hyperscape/shared";
+
+const distance = tileChebyshevDistance(attackerTile, targetTile);
+const inRange = distance <= COMBAT_CONSTANTS.RANGED_RANGE && distance > 0;
+```
+
+### Calculate Hit Delay
+
+```typescript
+const { HIT_DELAY, TICK_DURATION_MS } = COMBAT_CONSTANTS;
+
+// Ranged hit delay
+const rangedHitDelayTicks = Math.min(
+  HIT_DELAY.MAX_HIT_DELAY,
+  HIT_DELAY.RANGED_BASE + Math.floor((HIT_DELAY.RANGED_DISTANCE_OFFSET + distance) / HIT_DELAY.RANGED_DISTANCE_DIVISOR),
+);
+
+// Magic hit delay
+const magicHitDelayTicks = Math.min(
+  HIT_DELAY.MAX_HIT_DELAY,
+  HIT_DELAY.MAGIC_BASE + Math.floor((HIT_DELAY.MAGIC_DISTANCE_OFFSET + distance) / HIT_DELAY.MAGIC_DISTANCE_DIVISOR),
+);
+```
+
+### Calculate Projectile Travel Time
+
+```typescript
+// Spell projectile
+const spellLaunchDelayMs = COMBAT_CONSTANTS.SPELL_LAUNCH_DELAY_MS;
+const travelDurationMs = Math.max(
+  200,
+  magicHitDelayTicks * COMBAT_CONSTANTS.TICK_DURATION_MS - spellLaunchDelayMs,
+);
+
+// Arrow projectile
+const arrowLaunchDelayMs = COMBAT_CONSTANTS.ARROW_LAUNCH_DELAY_MS;
+const travelDurationMs = Math.max(
+  200,
+  rangedHitDelayTicks * COMBAT_CONSTANTS.TICK_DURATION_MS - arrowLaunchDelayMs,
+);
+```
+
+### Check Combat Timeout
+
+```typescript
+const ticksSinceLastHit = currentTick - lastAttackTick;
+const combatEnded = ticksSinceLastHit >= COMBAT_CONSTANTS.COMBAT_TIMEOUT_TICKS;
+```
+
+### Calculate Retaliation Delay
+
+```typescript
+// OSRS-accurate: ceil(attackSpeed / 2) + 1 ticks
+const retaliationDelay = Math.ceil(attackSpeedTicks / 2) + 1;
+```
+
+## Related Documentation
+
+- [Combat System](/wiki/game-systems/combat)
+- [NPC Data Structure](/wiki/data/npcs)
+- [Damage Calculation](/wiki/game-systems/combat#damage-calculation)
