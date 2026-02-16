@@ -23,7 +23,144 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Mob Projectile Attacks & Performance Fixes" description="February 2026" date="2026-02-16">
+<Update label="Trading System & UI Polish" description="February 2026" date="2026-02-16">
+
+### 🤝 Player-to-Player Trading (PR #850)
+
+Complete trading system with OSRS-style two-screen confirmation flow:
+
+- **Trade Panel Integration**: TradePanel wired into modal system
+  - Trade event handlers in `useModalPanels` hook (trade, tradeUpdate, tradeConfirm, tradeClose)
+  - Rendered in `InterfaceModals` following DuelPanel pattern
+  - Server emits `UI_UPDATE` events with trade data
+  - TradePanel component already built, now fully connected
+- **Trade Flow**: Request → Offer Screen → Confirm Screen → Complete
+  - Screen 1: Add/remove items, accept offers
+  - Screen 2: Final confirmation with value totals
+  - Both players must accept on each screen
+  - Acceptance resets when either player modifies offer
+- **UI Components**: 
+  - `TradePanel.tsx` - Main trade window with two screens
+  - `TradeRequestModal.tsx` - Incoming trade request modal
+  - `components/TradeSlot.tsx` - Individual trade offer slots
+  - `components/InventoryMiniPanel.tsx` - Inventory grid for item selection
+  - `modals/QuantityPrompt.tsx` - Offer-X quantity input
+  - `hooks/useRemovedItemTracking.ts` - Anti-scam tracking for removed items
+- **Anti-Scam Features**:
+  - Wealth transfer indicators (value difference warnings)
+  - Removed item tracking (highlights items opponent removed)
+  - Screen 2 shows final offer values
+  - Both players must re-accept after any modification
+- **Network Events**: `trade`, `tradeUpdate`, `tradeConfirm`, `tradeClose`
+  - Server-authoritative trade state management
+  - Real-time offer synchronization
+  - Proximity validation (2-tile range)
+  - Interface blocking during trade
+
+### 🎨 Visual Polish
+
+- **Mob Sword Swing Animation** (PR #848): Mobs with held weapons use sword_swing emote
+  - Guards with bronze swords now play proper sword swing animation
+  - Replaces default punch animation for melee mobs with weapons
+  - Checks for `heldWeaponModel` in mob config
+- **Duel Stake Icons** (PR #846): Item icons in duel stake panels
+  - Replaced truncated text names with actual ItemIcon rendering
+  - Staked items in inventory appear dimmed (40% opacity)
+  - Visual indicator for offered items
+- **Arrow Projectile Spawn** (PR #845): Fixed arrow spawn position
+  - Arrows now spawn at bow position instead of player center
+  - Offset 1.2 units forward toward target
+  - Height adjusted to upper torso level (1.4m)
+  - Prevents arrows appearing to come from inside player's head
+- **Equipment Panel Icons** (PR #825): Shows actual item icons instead of SVG placeholders
+  - Uses `ItemIcon` component with proper asset URLs
+  - Consistent with inventory panel styling
+
+### 🗺️ Minimap Visual Upgrade (PR #830)
+
+RS3/OSRS-accurate minimap with location icons and improved color scheme:
+
+- **Dot Color Update**: Swapped to RS3 standard colors
+  - White: Players (was green/blue)
+  - Yellow: NPCs and mobs (was red)
+  - Red: Ground items (was yellow)
+  - White square: Local player (was green circle)
+- **Destination Marker**: Red flag icon (RS3-style)
+  - Thin pole with filled triangle flag
+  - Replaces previous red dot marker
+  - More visible and distinctive
+- **Location Icons**: Custom icons for key locations
+  - Bank: Gold coin ($) symbol
+  - Shop: Open bag icon
+  - Prayer Altar: White cross
+  - Runecrafting Altar: Purple circle with "R"
+  - Anvil: Dark anvil silhouette
+  - Furnace: Orange circle with flame
+  - Cooking Range: Brown circle with steam
+  - Fishing Spot: Cyan circle with fish
+  - Mining Rock: Brown circle with pickaxe
+  - Tree: Green circle
+  - Quest NPC: Cyan circle with "?"
+- **Icon Detection**: Automatic subtype detection
+  - Station types (bank, furnace, anvil, range, altar)
+  - NPC service types (bank, shop, quest)
+  - Resource types (fishing_spot, mining_rock, tree)
+- **Size Hierarchy**: Compact dots (6px) for entities, larger icons (12px) for locations
+- **Implementation**: `drawMinimapIcon()` function with switch-based rendering
+  - Returns true if icon drawn, false for default dot fallback
+  - Clean filled glyphs with 1px dark outline
+  - ~8px icon size for readability
+
+### 🗄️ Database Performance Fix (PR #823)
+
+Inventory write coalescing to prevent connection pool starvation:
+
+- **Write Coalescing**: Collapses concurrent inventory writes
+  - At most 2 DB transactions per player (one active + one queued)
+  - Latest snapshot wins (intermediate states discarded)
+  - All waiting callers resolve when batch completes
+- **Performance Impact**:
+  - Before: 100 fletching completions = 200 sequential transactions
+  - After: 100 fletching completions = 2 transactions per player
+  - Eliminates "200 pending operations" warnings
+  - Prevents game freezes during batch crafting
+- **Graceful Shutdown**: Orphaned waiters rejected on `DatabaseSystem.destroy()`
+- **Code Changes**:
+  - Replaced `inventoryWriteLocks` with `inventoryWriteActive` + `inventoryWriteQueued`
+  - Removed redundant `getPlayerAsync` checks (repository handles missing players)
+  - Recursive drain of queued batches after active write completes
+
+### 🎥 Client Rendering Fixes (PR #829)
+
+Camera and post-processing improvements:
+
+- **Camera Initialization Fix**: Camera now faces behind player on fresh load
+  - Changed `theta` from `0` to `Math.PI` in spherical coordinates
+  - Fixes backwards movement controls on first spawn
+  - Applied to both initial state and reset camera method
+- **Post-Processing Color Grading Fix**: LUT intensity zeroed when disabled
+  - Prevents color grading from leaking into outline-only rendering
+  - Entity highlights now work correctly with post-processing disabled
+  - Rendering routes through composer even when post-processing is off
+  - `intensityUniform.value = 0` when LUT is "none"
+
+### 🌐 Website Updates (PR #822)
+
+- **Gold Token Page**: Refactored into section components
+  - TokenHero, ValueProps, HowItWorks, OpenSource, GoldCTA
+  - Error boundaries and loading states
+  - SEO improvements with opengraph images
+  - Accessibility enhancements (semantic HTML, ARIA labels)
+- **Solana Wallet Integration**: Updated dependencies
+  - `@privy-io/react-auth` to 3.13.1
+  - `@privy-io/server-auth` to 1.32.5
+  - `@solana-mobile/wallet-standard-mobile` for MWA support
+  - Multi-chain wallet detection (Saga and Seeker devices)
+- **Code Review**: Updated to Claude Opus 4.6
+
+</Update>
+
+<Update label="Mob Projectile Attacks & Performance Fixes" description="February 2026" date="2026-02-13">
 
 ### ⚔️ Mob Magic & Ranged Attacks (PR #826)
 
