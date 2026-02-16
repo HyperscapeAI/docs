@@ -239,6 +239,78 @@ const damage = calculateMeleeDamage({
 - Players can still use **prayer bonuses** to defend against mob attacks
 - Damage formulas are otherwise **identical to player formulas** (OSRS-accurate)
 
+### Projectile Emission
+
+Both magic and ranged attacks emit projectile events for client-side visuals:
+
+```typescript
+// From MagicAttackHandler.ts and RangedAttackHandler.ts
+// Shared projectile emission methods (used by both player and mob paths)
+
+private emitMagicProjectile(
+  attackerId: string,
+  targetId: string,
+  spell: Spell,
+  attackerPos: Position3D,
+  targetPos: Position3D,
+  distance: number,
+): void {
+  const magicHitDelayTicks = Math.min(
+    HIT_DELAY.MAX_HIT_DELAY,
+    HIT_DELAY.MAGIC_BASE + Math.floor((HIT_DELAY.MAGIC_DISTANCE_OFFSET + distance) / HIT_DELAY.MAGIC_DISTANCE_DIVISOR),
+  );
+  const spellLaunchDelayMs = COMBAT_CONSTANTS.SPELL_LAUNCH_DELAY_MS;  // 600ms
+  const travelDurationMs = Math.max(200, magicHitDelayTicks * TICK_DURATION_MS - spellLaunchDelayMs);
+
+  this.ctx.emitTypedEvent(EventType.COMBAT_PROJECTILE_LAUNCHED, {
+    attackerId,
+    targetId,
+    projectileType: spell.element,  // "air", "water", "earth", "fire"
+    sourcePosition: attackerPos,
+    targetPosition: targetPos,
+    spellId: spell.id,
+    delayMs: spellLaunchDelayMs,
+    travelDurationMs,
+  });
+}
+
+private emitRangedProjectile(
+  attackerId: string,
+  targetId: string,
+  arrowId: string | undefined,
+  attackerPos: Position3D,
+  targetPos: Position3D,
+  distance: number,
+): void {
+  const rangedHitDelayTicks = Math.min(
+    HIT_DELAY.MAX_HIT_DELAY,
+    HIT_DELAY.RANGED_BASE + Math.floor((HIT_DELAY.RANGED_DISTANCE_OFFSET + distance) / HIT_DELAY.RANGED_DISTANCE_DIVISOR),
+  );
+  const arrowLaunchDelayMs = COMBAT_CONSTANTS.ARROW_LAUNCH_DELAY_MS;  // 400ms
+  const travelDurationMs = Math.max(200, rangedHitDelayTicks * TICK_DURATION_MS - arrowLaunchDelayMs);
+
+  this.ctx.emitTypedEvent(EventType.COMBAT_PROJECTILE_LAUNCHED, {
+    attackerId,
+    targetId,
+    projectileType: "arrow",
+    sourcePosition: attackerPos,
+    targetPosition: targetPos,
+    arrowId,
+    delayMs: arrowLaunchDelayMs,
+    travelDurationMs,
+  });
+}
+```
+
+**Projectile Timing:**
+- `delayMs`: Time after attack start before projectile appears (animation wind-up)
+- `travelDurationMs`: How long the projectile flies (derived from hit delay formula)
+- Visual arrival coincides with server-side damage splat
+
+**Launch Delays:**
+- Spell projectiles: 600ms delay (allows staff raise and cast gesture)
+- Arrow projectiles: 400ms delay (allows bow draw animation)
+
 ### Mob Retaliation
 
 When a player attacks a ranged or magic mob, the mob retaliates with the correct attack type:
