@@ -307,6 +307,32 @@ export class ClientGraphics extends SystemBase {
 }
 ```
 
+**Post-Processing Pipeline:**
+
+The post-processing system shares the shader pipeline between outline rendering and LUT color grading:
+
+```typescript
+// From ClientGraphics.ts
+// Route rendering through composer even when post-processing is off
+// so entity highlights still work
+if (this.postProcessingEnabled || this.outlineEnabled) {
+  this.composer.render();
+} else {
+  this.renderer.render(this.world.stage.scene, this.world.camera);
+}
+
+// Zero LUT intensity when color grading disabled
+// Prevents stale LUT data from leaking into outline-only rendering
+if (!this.colorGradingEnabled) {
+  this.lutPass.intensity = 0.0;
+}
+```
+
+**Fix Applied (PR #829):**
+- **Issue**: When LUT was "none" but hover triggered outline, the full pipeline ran including stale LUT data
+- **Solution**: Zero LUT intensity when disabled so outline-only rendering stays clean
+- **Benefit**: Entity highlights work correctly even when color grading is disabled
+
 ### Rendering Pipeline
 
 1. **Pre-render**: Update matrices, frustum culling
