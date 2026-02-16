@@ -16,12 +16,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 | Category | Features |
 |----------|----------|
-| **Combat** | Tick-based OSRS mechanics (600ms ticks), melee/ranged/magic combat for players AND mobs, attack styles, accuracy formulas, projectile system (spells, arrows), death/respawn system |
-| **Skills** | 17 skills: Combat (Attack, Strength, Defense, Constitution, Ranged, Magic, Prayer), Gathering (Woodcutting, Mining, Fishing), Artisan (Firemaking, Cooking, Smithing, Crafting, Fletching, Runecrafting), Support (Agility) |
-| **Economy** | 480-slot bank, shops, item weights, loot drops |
-| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
-| **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
-| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
+| **Combat** | Tick-based OSRS mechanics (600ms ticks), melee/ranged/magic combat for players AND mobs, attack styles, accuracy formulas, projectile system (spells, arrows), held weapon visuals, death/respawn system |\n| **Skills** | 17 skills: Combat (Attack, Strength, Defense, Constitution, Ranged, Magic, Prayer), Gathering (Woodcutting, Mining, Fishing), Artisan (Firemaking, Cooking, Smithing, Crafting, Fletching, Runecrafting), Support (Agility) |\n| **Economy** | 480-slot bank with write coalescing, shops, item weights, loot drops |\n| **UI** | RS3/OSRS-accurate minimap with location icons, resizable panels, drag-and-drop inventory |\n| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |\n| **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |\n| **Tech** | VRM avatars, WebSocket networking, PostgreSQL with write coalescing, PhysX physics, WebGPU rendering |
 
 ## Quick Start
 
