@@ -1,0 +1,506 @@
+---
+title: "Combat Utilities"
+description: "Shared combat utilities and helper functions"
+icon: "code"
+---
+
+# Combat Utilities
+
+This page documents shared combat utilities used across attack handlers and combat systems.
+
+## prepareMobAttack
+
+Shared mob projectile attack preparation for Magic and Ranged handlers. Validates entities, resolves NPC data, checks range/cooldown, faces target, and plays animation.
+
+**Location**: `packages/shared/src/systems/shared/combat/handlers/AttackContext.ts`
+
+### Signature
+
+```typescript
+export function prepareMobAttack(
+  ctx: CombatAttackContext,
+  data: {
+    attackerId: string;
+    targetId: string;
+    attackerType: "mob";
+    targetType: "player" | "mob";
+  },
+  combatRange: number,
+  animationType: "melee" | "ranged" | "magic",
+  fallbackAttackSpeed: number,
+  preResolved?: { attacker: MobEntity; npcData: NPCData },
+): MobAttackContext | null;
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ctx` | `CombatAttackContext` | Combat system context with access to services |
+| `data` | `object` | Attack data with entity IDs and types |
+| `data.attackerId` | `string` | Attacking mob entity ID |
+| `data.targetId` | `string` | Target entity ID |
+| `data.attackerType` | `"mob"` | Must be `"mob"` (type narrowing) |
+| `data.targetType` | `"player" \| "mob"` | Target entity type |
+| `combatRange` | `number` | Fallback combat range if NPC manifest omits it |
+| `animationType` | `"melee" \| "ranged" \| "magic"` | Animation to play |
+| `fallbackAttackSpeed` | `number` | Fallback attack speed in ticks if NPC manifest omits it |
+| `preResolved` | `object` (optional) | Pre-resolved mob entity and NPC data to avoid double lookup |
+| `preResolved.attacker` | `MobEntity` | Already-resolved mob entity |
+| `preResolved.npcData` | `NPCData` | Already-resolved NPC configuration |
+
+### Return Value
+
+Returns `MobAttackContext` if all validation passes, or `null` if any check fails (attack aborted).
+
+```typescript
+interface MobAttackContext {
+  attacker: Entity | MobEntity;
+  target: Entity | MobEntity;
+  attackerId: string;
+  targetId: string;
+  attackerType: "player" | "mob";
+  targetType: "player" | "mob";
+  typedAttackerId: EntityID;
+  npcData: NPCData;
+  attackerPos: Position3D;
+  targetPos: Position3D;
+  distance: number;
+  currentTick: number;
+  attackSpeedTicks: number;
+}
+```
+
+### Validation Steps
+
+The function performs the following checks in order:
+
+1. **Entity Resolution** - Resolve attacker and target entities (or use `preResolved` to skip)
+2. **Alive Check** - Verify both entities are alive
+3. **NPC Data Lookup** - Get mob configuration from `getNPCById(mobData.type)`
+4. **Range Validation** - Check distance using `checkProjectileRange()` with mob's `combatRange`
+5. **Position Validation** - Get entity positions via `getEntityPosition()`
+6. **Cooldown Check** - Verify attack is not on cooldown
+7. **Cooldown Claim** - Set `nextAttackTicks` to prevent rapid-fire attacks
+8. **Face Target** - Rotate mob to face target via `rotationManager`
+9. **Play Animation** - Trigger attack animation via `animationManager`
+
+If any step fails, the function returns `null` and the attack is aborted (no error thrown).
+
+### Usage Example
+
+```typescript
+// From MagicAttackHandler.ts
+private handleMobMagicAttack(data: {
+  attackerId: string;
+  targetId: string;
+  attackerType: "mob";
+  targetType: "player" | "mob";
+  spellId?: string;
+}): void {
+  // Resolve spell before preparation (needed for fallback attack speed)
+  const mobEntity = this.ctx.entityResolver.resolve(data.attackerId, data.attackerType) as MobEntity | null;
+  if (!mobEntity) return;
+  
+  const mobData = mobEntity.getMobData();
+  const npcData = getNPCById(mobData.type);
+  if (!npcData) return;
+  
+  const spellId = data.spellId ?? npcData.combat.spellId;
+  if (!spellId) {
+    console.warn(`[MagicAttackHandler] Mob ${data.attackerId} has no spellId configured`);
+    return;
+  }
+  
+  const spell = spellService.getSpell(spellId);
+  if (!spell) return;
+
+  // Shared mob attack preparation
+  // Pass pre-resolved mob + NPC data to avoid redundant entity lookups
+  const mobCtx = prepareMobAttack(
+    this.ctx,
+    data,
+    COMBAT_CONSTANTS.MAGIC_RANGE,  // Fallback if NPC manifest omits combatRange
+    "magic",
+    spell.attackSpeed,  // Fallback attack speed from spell data
+    { attacker: mobEntity, npcData },  // Pre-resolved to avoid double lookup
+  );
+  
+  if (!mobCtx) return;  // Attack aborted (out of range, on cooldown, etc.)
+
+  // Calculate damage using mob's magic stat
+  const magicLevel = mobCtx.npcData.stats.magic ?? 1;
+  const damage = this.calculateMobMagicDamage(
+    mobCtx.target,
+    mobCtx.targetType,
+    magicLevel,
+    spell,
+  );
+
+  // Create projectile and enter combat
+  // ... rest of handler logic
+}
+```
+
+### Performance Optimization
+
+The `preResolved` parameter allows handlers to pass already-resolved mob entity and NPC data:
+
+**Without `preResolved`** (double lookup):
+```typescript
+// Handler resolves mob entity to get spellId
+const mobEntity = this.ctx.entityResolver.resolve(attackerId, "mob");
+const npcData = getNPCById(mobEntity.getMobData().type);
+const spellId = npcData.combat.spellId;
+
+// prepareMobAttack resolves the same entity again
+const mobCtx = prepareMobAttack(ctx, data, range, "magic", speed);
+// ^ Calls entityResolver.resolve() and getNPCById() again
+```
+
+**With `preResolved`** (single lookup):
+```typescript
+// Handler resolves once
+const mobEntity = this.ctx.entityResolver.resolve(attackerId, "mob");
+const npcData = getNPCById(mobEntity.getMobData().type);
+const spellId = npcData.combat.spellId;
+
+// Pass pre-resolved data to skip redundant lookups
+const mobCtx = prepareMobAttack(
+  ctx,
+  data,
+  range,
+  "magic",
+  speed,
+  { attacker: mobEntity, npcData },  // Skip resolution step
+);
+```
+
+This eliminates redundant `Map.get()` calls when the handler needs NPC data for spell/arrow validation before calling `prepareMobAttack()`.
+
+---
+
+## checkProjectileRange
+
+Shared projectile range check for Ranged and Magic handlers. Eliminates code duplication between attack handlers.
+
+**Location**: `packages/shared/src/systems/shared/combat/handlers/AttackContext.ts`
+
+### Signature
+
+```typescript
+export function checkProjectileRange(
+  ctx: CombatAttackContext,
+  attackerId: string,
+  targetId: string,
+  attacker: Entity | MobEntity,
+  target: Entity | MobEntity,
+  attackRange: number,
+): number;
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ctx` | `CombatAttackContext` | Combat system context |
+| `attackerId` | `string` | Attacking entity ID |
+| `targetId` | `string` | Target entity ID |
+| `attacker` | `Entity \| MobEntity` | Attacking entity |
+| `target` | `Entity \| MobEntity` | Target entity |
+| `attackRange` | `number` | Maximum attack range in tiles |
+
+### Return Value
+
+Returns the **Chebyshev distance** (tile distance) if in range, or **-1** if out of range.
+
+When returning -1, the function automatically emits a `COMBAT_ATTACK_FAILED` event with reason `"out_of_range"`.
+
+### Usage Example
+
+```typescript
+// From MagicAttackHandler.ts
+const distance = checkProjectileRange(
+  this.ctx,
+  attackerId,
+  targetId,
+  attacker,
+  target,
+  COMBAT_CONSTANTS.MAGIC_RANGE,  // 10 tiles
+);
+
+if (distance < 0) {
+  // Out of range - event already emitted, abort attack
+  return;
+}
+
+// In range - proceed with attack
+// distance value is used for hit delay calculation
+```
+
+### Implementation Details
+
+```typescript
+export function checkProjectileRange(
+  ctx: CombatAttackContext,
+  attackerId: string,
+  targetId: string,
+  attacker: Entity | MobEntity,
+  target: Entity | MobEntity,
+  attackRange: number,
+): number {
+  const attackerPos = getEntityPosition(attacker);
+  const targetPos = getEntityPosition(target);
+  if (!attackerPos || !targetPos) return -1;
+
+  // Convert positions to tiles using pooled tile objects (zero allocation)
+  tilePool.setFromPosition(ctx._attackerTile, attackerPos);
+  tilePool.setFromPosition(ctx._targetTile, targetPos);
+  
+  // Calculate Chebyshev distance (max of dx, dz)
+  const distance = tileChebyshevDistance(ctx._attackerTile, ctx._targetTile);
+
+  // Validate range (must be > 0 to prevent self-targeting)
+  if (distance > attackRange || distance === 0) {
+    ctx.emitTypedEvent(EventType.COMBAT_ATTACK_FAILED, {
+      attackerId,
+      targetId,
+      reason: "out_of_range",
+    });
+    return -1;
+  }
+
+  return distance;
+}
+```
+
+**Performance Notes:**
+- Uses pooled `TileCoord` objects from `ctx._attackerTile` and `ctx._targetTile`
+- Zero heap allocations per call
+- Chebyshev distance is O(1) calculation
+
+---
+
+## CombatAttackContext
+
+Interface that attack handlers receive to interact with the combat system. Provides access to services, systems, and mutable state without coupling to the full `CombatSystem` class.
+
+**Location**: `packages/shared/src/systems/shared/combat/handlers/AttackContext.ts`
+
+### Interface Definition
+
+```typescript
+export interface CombatAttackContext {
+  // Core
+  readonly world: World;
+  readonly logger: SystemLogger;
+  readonly antiCheat: CombatAntiCheat;
+  readonly entityIdValidator: EntityIdValidator;
+  readonly rateLimiter: CombatRateLimiter;
+  readonly entityResolver: CombatEntityResolver;
+
+  // Combat services
+  readonly animationManager: CombatAnimationManager;
+  readonly rotationManager: CombatRotationManager;
+  readonly projectileService: ProjectileService;
+
+  // Cached systems
+  playerSystem?: PlayerSystem;
+  prayerSystem?: PrayerSystem | null;
+  equipmentSystem?: EquipmentSystem;
+  inventorySystem?: InventorySystem;
+  terrainSystem?: TerrainSystem;
+
+  // Mutable state
+  nextAttackTicks: Map<EntityID, number>;
+  readonly playerEquipmentStats: Map<string, EquipmentStatsCache>;
+  readonly _attackerTile: PooledTile;
+  readonly _targetTile: PooledTile;
+
+  // Delegated methods
+  validateAttackerPosition(attackerId: string, targetId: string, attackType: string, currentTick: number): boolean;
+  checkAttackCooldown(typedAttackerId: EntityID, currentTick: number): boolean;
+  applyDamage(targetId: string, targetType: "player" | "mob", damage: number, attackerId: string): void;
+  enterCombat(attackerId: EntityID, targetId: EntityID, speed: number, type?: AttackType): void;
+  emitTypedEvent(type: string, data: Record<string, unknown>): void;
+  calculateMeleeDamage(attacker: Entity | MobEntity, target: Entity | MobEntity, style: CombatStyle): number;
+  handleMeleeAttack(data: MeleeAttackData): void;
+  getPlayerSkillLevel(playerId: string, skill: "ranged" | "magic" | "defense"): number;
+  getEquippedWeapon(playerId: string): Item | null;
+  getEquippedArrows(playerId: string): EquipmentSlot | null;
+}
+```
+
+### Usage
+
+Attack handlers receive this context in their constructor:
+
+```typescript
+export class MagicAttackHandler {
+  constructor(private readonly ctx: CombatAttackContext) {}
+
+  async handle(data: AttackData): Promise<void> {
+    // Access world
+    const currentTick = this.ctx.world.currentTick ?? 0;
+
+    // Use services
+    const distance = checkProjectileRange(this.ctx, ...);
+    this.ctx.animationManager.setCombatEmote(...);
+    this.ctx.rotationManager.rotateTowardsTarget(...);
+
+    // Access systems
+    const magicLevel = this.ctx.getPlayerSkillLevel(playerId, "magic");
+    const weapon = this.ctx.getEquippedWeapon(playerId);
+
+    // Mutate state
+    this.ctx.nextAttackTicks.set(typedAttackerId, currentTick + attackSpeed);
+
+    // Emit events
+    this.ctx.emitTypedEvent(EventType.COMBAT_PROJECTILE_LAUNCHED, {...});
+  }
+}
+```
+
+### Benefits
+
+- **Decoupling**: Handlers don't depend on the full `CombatSystem` class
+- **Testability**: Easy to mock the context for unit tests
+- **Type Safety**: All methods and properties are strongly typed
+- **Performance**: Pooled tile objects (`_attackerTile`, `_targetTile`) avoid allocations
+
+---
+
+## MobAttackContext
+
+Result type returned by `prepareMobAttack()` containing all validated state needed for a mob projectile attack.
+
+### Interface Definition
+
+```typescript
+export interface MobAttackContext {
+  attacker: Entity | MobEntity;        // Resolved attacker entity
+  target: Entity | MobEntity;          // Resolved target entity
+  attackerId: string;                  // Attacker entity ID
+  targetId: string;                    // Target entity ID
+  attackerType: "player" | "mob";      // Attacker type
+  targetType: "player" | "mob";        // Target type
+  typedAttackerId: EntityID;           // Typed entity ID for combat state
+  npcData: NPCData;                    // NPC configuration from manifest
+  attackerPos: Position3D;             // Attacker world position
+  targetPos: Position3D;               // Target world position
+  distance: number;                    // Chebyshev distance in tiles
+  currentTick: number;                 // Current game tick
+  attackSpeedTicks: number;            // Attack speed from NPC manifest
+}
+```
+
+### Usage Example
+
+```typescript
+const mobCtx = prepareMobAttack(ctx, data, range, "magic", speed, preResolved);
+if (!mobCtx) return;  // Attack aborted
+
+// All state is validated and ready to use
+const { attacker, target, npcData, attackerPos, targetPos, distance } = mobCtx;
+
+// Calculate damage using mob's magic stat
+const magicLevel = npcData.stats.magic ?? 1;
+const damage = calculateMobMagicDamage(target, targetType, magicLevel, spell);
+
+// Create projectile
+const projectileParams = {
+  sourceId: mobCtx.attackerId,
+  targetId: mobCtx.targetId,
+  attackType: AttackType.MAGIC,
+  damage,
+  currentTick: mobCtx.currentTick,
+  sourcePosition: { x: mobCtx.attackerPos.x, z: mobCtx.attackerPos.z },
+  targetPosition: { x: mobCtx.targetPos.x, z: mobCtx.targetPos.z },
+  spellId: spell.id,
+  xpReward: 0,  // Mobs don't earn XP
+};
+```
+
+---
+
+## EquipmentStatsCache
+
+Cached equipment stats for a player, used by combat handlers to avoid repeated equipment system queries.
+
+### Interface Definition
+
+```typescript
+export interface EquipmentStatsCache {
+  attack: number;
+  strength: number;
+  defense: number;
+  ranged: number;
+  rangedAttack: number;
+  rangedStrength: number;
+  magicAttack: number;
+  magicDefense: number;
+  defenseStab: number;
+  defenseSlash: number;
+  defenseCrush: number;
+  defenseRanged: number;
+  attackStab: number;
+  attackSlash: number;
+  attackCrush: number;
+}
+```
+
+### Usage
+
+```typescript
+// From CombatSystem.ts
+// Cache is populated once per player and reused across all attacks
+private readonly playerEquipmentStats = new Map<string, EquipmentStatsCache>();
+
+// Handlers access cached stats
+const equipmentStats = this.ctx.playerEquipmentStats.get(attackerId);
+const magicAttackBonus = equipmentStats?.magicAttack ?? 0;
+```
+
+**Cache Invalidation:**
+- Cache is cleared when player equips/unequips items
+- Cache is cleared when player changes combat style
+- Cache is rebuilt on next attack
+
+---
+
+## AttackValidationResult
+
+Result type for attack validation checks.
+
+### Interface Definition
+
+```typescript
+export interface AttackValidationResult {
+  valid: boolean;
+  attacker: Entity | MobEntity | null;
+  target: Entity | MobEntity | null;
+  typedAttackerId: EntityID | null;
+  typedTargetId: EntityID | null;
+}
+```
+
+### Usage Example
+
+```typescript
+const validation = this.validateAttack(attackerId, targetId, attackerType, targetType);
+if (!validation.valid) {
+  // Attack failed validation
+  return;
+}
+
+// Use validated entities
+const { attacker, target, typedAttackerId, typedTargetId } = validation;
+```
+
+---
+
+## Related Documentation
+
+- [Combat System](/wiki/game-systems/combat)
+- [NPC Data Structure](/wiki/data/npcs)
+- [Combat Constants](/wiki/reference/constants)
