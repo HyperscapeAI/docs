@@ -1,0 +1,287 @@
+---
+title: "NPC Manifest Migration Guide"
+description: "Upgrading NPCs to support magic and ranged attacks"
+icon: "arrow-right-arrow-left"
+---
+
+# NPC Manifest Migration Guide
+
+This guide covers migrating existing NPC manifests to support the new magic and ranged attack system introduced in February 2026.
+
+## What Changed
+
+NPCs can now use magic and ranged attacks, not just melee. This requires new fields in the NPC manifest.
+
+## New Fields
+
+### Combat Configuration
+
+```json
+{
+  "combat": {
+    "attackType": "magic",        // NEW: "melee" (default), "ranged", or "magic"
+    "spellId": "wind_strike",     // NEW: Required for magic mobs
+    "arrowId": "bronze_arrow",    // NEW: Required for ranged mobs
+    // ... existing fields
+  }
+}
+```
+
+### Appearance Configuration
+
+```json
+{
+  "appearance": {
+    "heldWeaponModel": "asset://weapons/staff.glb"  // NEW: Optional weapon GLB
+    // ... existing fields
+  }
+}
+```
+
+### Stats Configuration
+
+```json
+{
+  "stats": {
+    "magic": 25,    // NEW: Required for magic mobs
+    "ranged": 20,   // NEW: Required for ranged mobs
+    // ... existing fields
+  }
+}
+```
+
+## Migration Steps
+
+### Step 1: Identify Mob Type
+
+Determine which attack type your mob should use:
+
+- **Melee**: Close-range physical combat (swords, fists)
+- **Ranged**: Bow and arrow combat (archers, rangers)
+- **Magic**: Spell casting (wizards, mages)
+
+### Step 2: Add Required Fields
+
+<Tabs>
+  <Tab title="Melee Mob (No Changes)">
+    Melee mobs work without any changes. The system defaults to melee if `attackType` is not specified.
+    
+    ```json
+    {
+      "id": "goblin_warrior",
+      "combat": {
+        "attackable": true,
+        "aggressive": true,
+        "combatRange": 1,
+        "attackSpeedTicks": 4
+        // No attackType needed - defaults to "melee"
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Magic Mob">
+    Magic mobs require `attackType`, `spellId`, and `magic` stat:
+    
+    ```json
+    {
+      "id": "dark_wizard",
+      "stats": {
+        "level": 20,
+        "attack": 1,
+        "strength": 1,
+        "defense": 10,
+        "health": 40,
+        "magic": 25          // Required for damage calculation
+      },
+      "combat": {
+        "attackable": true,
+        "aggressive": true,
+        "combatRange": 10,   // Magic range (typically 10 tiles)
+        "attackSpeedTicks": 5,
+        "attackType": "magic",
+        "spellId": "fire_strike"  // Must be valid spell ID
+      },
+      "appearance": {
+        "modelPath": "wizard/wizard_rigged.glb",
+        "heldWeaponModel": "asset://weapons/staff.glb"  // Optional visual
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Ranged Mob">
+    Ranged mobs require `attackType`, `arrowId`, and `ranged` stat:
+    
+    ```json
+    {
+      "id": "dark_ranger",
+      "stats": {
+        "level": 15,
+        "attack": 1,
+        "strength": 1,
+        "defense": 8,
+        "health": 35,
+        "ranged": 20         // Required for damage calculation
+      },
+      "combat": {
+        "attackable": true,
+        "aggressive": true,
+        "combatRange": 7,    // Ranged range (typically 7-10 tiles)
+        "attackSpeedTicks": 4,
+        "attackType": "ranged",
+        "arrowId": "bronze_arrow"  // Must be valid arrow ID
+      },
+      "appearance": {
+        "modelPath": "ranger/ranger_rigged.glb",
+        "heldWeaponModel": "asset://weapons/shortbow.glb"  // Optional visual
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Step 3: Configure Combat Range
+
+Set appropriate `combatRange` for the attack type:
+
+| Attack Type | Typical Range | Notes |
+|-------------|---------------|-------|
+| Melee | 1 tile | Standard melee range |
+| Ranged | 7-10 tiles | Shortbow: 7, Longbow: 10 |
+| Magic | 10 tiles | Standard magic range |
+
+### Step 4: Add Held Weapon (Optional)
+
+For visual fidelity, add a held weapon model:
+
+```json
+{
+  "appearance": {
+    "heldWeaponModel": "asset://weapons/shortbow.glb"
+  }
+}
+```
+
+**Available Weapon Models:**
+- `asset://weapons/shortbow.glb` - Shortbow (ranged)
+- `asset://weapons/staff.glb` - Magic staff (magic)
+- `asset://weapons/sword.glb` - Sword (melee)
+
+## Validation
+
+The system validates NPC configuration at runtime:
+
+<Warning>
+**Missing Configuration Errors:**
+- Magic mob without `spellId` → Attack skipped with console warning
+- Ranged mob without `arrowId` → Attack skipped with console warning
+- Invalid `spellId` → Attack skipped (spell not found)
+- Invalid `arrowId` → Attack skipped (arrow not found)
+</Warning>
+
+## Testing Your Changes
+
+After updating NPC manifests:
+
+1. **Restart the server** - Manifests are loaded at startup
+2. **Spawn the mob** - Use admin commands or wait for natural spawn
+3. **Verify attack type** - Mob should use correct attack animation
+4. **Check projectiles** - Magic/ranged mobs should emit projectiles
+5. **Verify damage** - Damage should use correct stat (magic/ranged)
+
+## Example: Converting Goblin to Archer
+
+**Before (Melee):**
+
+```json
+{
+  "id": "goblin_warrior",
+  "stats": {
+    "level": 5,
+    "attack": 5,
+    "strength": 5,
+    "defense": 5,
+    "health": 20
+  },
+  "combat": {
+    "combatRange": 1,
+    "attackSpeedTicks": 4
+  }
+}
+```
+
+**After (Ranged):**
+
+```json
+{
+  "id": "goblin_archer",
+  "stats": {
+    "level": 5,
+    "attack": 1,
+    "strength": 1,
+    "defense": 5,
+    "health": 20,
+    "ranged": 10          // Added ranged stat
+  },
+  "combat": {
+    "combatRange": 7,     // Increased for ranged
+    "attackSpeedTicks": 4,
+    "attackType": "ranged",  // Added attack type
+    "arrowId": "bronze_arrow"  // Added arrow ID
+  },
+  "appearance": {
+    "modelPath": "goblin/goblin_rigged.glb",
+    "heldWeaponModel": "asset://weapons/shortbow.glb"  // Added bow visual
+  }
+}
+```
+
+## Backward Compatibility
+
+<Info>
+**Fully Backward Compatible**: Existing NPC manifests without `attackType` continue to work as melee mobs. No breaking changes.
+</Info>
+
+All existing melee mobs work without modification:
+- `attackType` defaults to `"melee"` if not specified
+- `spellId` and `arrowId` are optional
+- `heldWeaponModel` is optional
+- `magic` and `ranged` stats default to 1 if not specified
+
+## Common Issues
+
+### Mob Not Attacking
+
+**Symptom**: Mob aggros but doesn't attack
+
+**Possible Causes:**
+1. Missing `spellId` for magic mob → Check console for warning
+2. Missing `arrowId` for ranged mob → Check console for warning
+3. `combatRange` too low → Increase to 7-10 for projectile attacks
+4. Invalid spell/arrow ID → Verify ID exists in spell/ammunition manifest
+
+### Weapon Not Showing
+
+**Symptom**: Mob attacks correctly but no weapon visible
+
+**Possible Causes:**
+1. `heldWeaponModel` path incorrect → Verify `asset://` prefix
+2. Weapon GLB not found → Check asset CDN for file
+3. VRM model missing hand bones → Verify model has `rightHand` bone
+4. Weapon cache not loading → Check browser console for GLTFLoader errors
+
+### Wrong Animation Playing
+
+**Symptom**: Mob uses wrong attack animation
+
+**Possible Causes:**
+1. `attackType` not set → Defaults to melee (`COMBAT` animation)
+2. Typo in `attackType` → Must be exactly `"melee"`, `"ranged"`, or `"magic"`
+3. Animation not in emote map → Verify mob model has required animation
+
+## Related Documentation
+
+- [NPC Data Structure](/wiki/data/npcs)
+- [Combat System](/wiki/game-systems/combat)
+- [Combat Handlers API](/api-reference/combat-handlers)
