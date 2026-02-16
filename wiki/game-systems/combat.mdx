@@ -885,6 +885,29 @@ const hitDelayTicks = 1 + Math.floor((3 + distance) / 6);
 - Rotates to face travel direction
 - Delayed hit based on distance
 
+**Arrow Spawn Position:**
+
+Arrow projectiles spawn offset from the attacker's center to the bow position for natural appearance:
+
+```typescript
+// From ProjectileService.ts
+// Offset arrow spawn 1.2 units forward toward target and adjust height to upper torso
+const direction = new THREE.Vector3()
+  .subVectors(targetPosition, attackerPosition)
+  .normalize();
+
+const spawnOffset = direction.multiplyScalar(1.2);
+const adjustedSpawnPos = {
+  x: attackerPosition.x + spawnOffset.x,
+  y: attackerPosition.y + 1.4,  // Upper torso height (bow position)
+  z: attackerPosition.z + spawnOffset.z,
+};
+```
+
+**Before Fix**: Arrows spawned at center of attacker model (appeared to come from inside player's head)
+
+**After Fix**: Arrows spawn 1.2 units forward and at upper torso level for natural bow-firing appearance
+
 ### Ammunition Consumption
 
 Arrows are consumed on every shot:
