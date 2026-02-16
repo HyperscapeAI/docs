@@ -119,22 +119,29 @@ Configure mob attack types via NPC manifest JSON:
 
 ### Mob Combat Mechanics
 
+Mobs use the same combat handlers as players but with simplified resource management:
+
 **Mob Magic Attacks:**
 - Use mob's `magic` stat for damage calculation
 - No rune consumption (infinite resources)
-- Emit spell projectiles with correct visual effects
+- Emit spell projectiles with correct visual effects (element-based colors)
 - Play `SPELL_CAST` animation
+- Spell launch delay: 600ms (allows cast animation wind-up)
+- Hit delay formula: `1 + floor((1 + distance) / 3)` ticks
 
 **Mob Ranged Attacks:**
 - Use mob's `ranged` stat for damage calculation
 - No arrow consumption (infinite resources)
-- Emit arrow projectiles with correct visuals
+- Emit arrow projectiles with correct visuals (metal-tipped arrows)
 - Play `RANGE` animation
+- Arrow launch delay: 400ms (allows draw animation wind-up)
+- Hit delay formula: `1 + floor((3 + distance) / 6)` ticks
 
 **Mob Melee Attacks:**
 - Use mob's `attack` and `strength` stats
 - Standard melee range (1 tile) or custom `combatRange`
 - Play `COMBAT` or `SWORD_SWING` animation
+- Immediate hit (0 tick delay)
 
 ### Held Weapon Visuals
 
