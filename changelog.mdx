@@ -23,6 +23,47 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Multiplayer Sync & Duel Fixes" description="February 2026" date="2026-02-17">
+
+### 🔄 Multiplayer Position & Equipment Sync (PR #875)
+
+Critical fixes for multiplayer synchronization issues affecting remote player rendering and equipment visibility:
+
+- **Position Sync Fix**: Remote players now face correct direction
+  - Sync `base.quaternion` in `PlayerRemote` to fix sideways-facing players
+  - Force transform update after async avatar load to prevent T-pose ghosts
+  - Update spatial index after teleport/respawn so `sendToNearby` reaches players at new location
+  - Broadcast authoritative position to all players on join
+  - Fixes invisible combat movement in duels (players couldn't see opponent moving)
+- **Equipment Visibility on Load**: Equipment now appears when VRM loads
+  - Added `getAvatar()` helper to resolve VRM from both `PlayerLocal` and `PlayerRemote`
+  - Subscribe to `AVATAR_LOAD_COMPLETE` to replay cached equipment when VRM loads
+  - Re-send equipment on socket reconnect (packets lost during disconnect)
+  - Send existing players' equipment to joiner and broadcast joiner's equipment
+  - Use all 11 `EQUIPMENT_SLOT_NAMES` instead of hardcoded 6 slots
+  - Gate equipment `UI_UPDATE` to local player only (prevents duplicate UI updates)
+- **PvP Ranged XP Fix**: Ranged attacks now grant correct XP in duels
+  - Detect weapon type (bow/crossbow/staff) in `PlayerDeathSystem` for PvP kills
+  - Previously used player's melee attack style, incorrectly granting Strength XP for ranged kills
+  - Now matches `MobEntity` logic: inspect actual weapon type for XP calculation
+  - Fixes ranged attacks incorrectly granting Strength XP in duels
+
+### 🛡️ Duel Health Restore Fix (PR #875)
+
+Fixed critical bug where duel losers could get stuck in arena with frozen physics:
+
+- **Split Health Restores**: Individual try/catch blocks for winner and loser
+  - Previously both `restorePlayerHealth` calls were in single try/catch
+  - If winner's restore triggered exception in any `PLAYER_RESPAWNED` handler, loser's restore was skipped
+  - Left loser with frozen physics, `isDying=true`, and no `playerRespawned`/`playerSetDead` packets
+  - `playerTeleport` still arrived (separate try/catch) but client couldn't act on it
+- **Error Isolation**: Each restore individually wrapped, matching teleport pattern
+  - Winner restore failure no longer affects loser
+  - Both players guaranteed to receive health restoration
+  - Prevents players stuck in arena unable to move or respawn
+
+</Update>
+
 <Update label="Trading System & UI Polish" description="February 2026" date="2026-02-16">
 
 ### 🤝 Player-to-Player Trading (PR #850)
