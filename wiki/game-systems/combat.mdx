@@ -1631,6 +1631,37 @@ if (style === "longrange") {
 Magic grants XP even on a splash (0 damage). You still get the base spell XP, just no damage bonus.
 </Info>
 
+### PvP XP Calculation
+
+In player-versus-player combat (duels), XP is granted based on the **actual weapon type** used, not the player's selected attack style:
+
+```typescript
+// From PlayerDeathSystem.ts
+// Detect weapon type for PvP kills to grant correct XP
+const weapon = equipmentSystem.getPlayerEquipment(killerId)?.weapon?.item;
+const weaponType = weapon?.weaponType?.toLowerCase();
+
+let attackStyle: string;
+if ((weaponType === "bow" || weaponType === "crossbow") && weapon) {
+  // Ranged weapon - grant Ranged XP
+  attackStyle = "ranged";
+} else if ((weaponType === "staff" || weaponType === "wand") && selectedSpell) {
+  // Magic weapon WITH active spell - grant Magic XP
+  attackStyle = "magic";
+} else {
+  // Melee attack (or staff/wand without spell) - use player's attack style
+  const MELEE_STYLES = new Set(["accurate", "aggressive", "defensive", "controlled"]);
+  const playerStyle = attackStyleData?.id;
+  attackStyle = playerStyle && MELEE_STYLES.has(playerStyle) 
+    ? playerStyle 
+    : "aggressive";
+}
+```
+
+<Info>
+**Fixed in PR #875**: Previously, PvP kills always used the player's melee attack style, causing ranged attacks to incorrectly grant Strength XP. Now the system inspects the actual weapon type, matching the logic used for mob kills.
+</Info>
+
 ---
 
 ## Food & Combat Interaction
