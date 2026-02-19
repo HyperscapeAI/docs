@@ -1879,6 +1879,70 @@ Multiple prayers of the same type do NOT stack. The system uses the highest mult
 
 ---
 
+## Combat Visual Synchronization
+
+### Mob Combat Rotation
+
+Mobs properly clear their combat rotation flag when movement starts to prevent stuck facing:
+
+```typescript
+// From TileInterpolator.ts (PR #884)
+// Clear inCombatRotation flag on movement start
+// Was never cleared, causing mobs to keep combat-facing after combat ended
+if (this.inCombatRotation) {
+  this.inCombatRotation = false;
+}
+```
+
+**Before Fix**: Mobs kept combat rotation after combat ended, appearing stuck facing old target direction
+
+**After Fix**: Combat rotation cleared on movement start, mobs return to normal AI-driven rotation
+
+### Damage Splat Positioning
+
+Damage splats now use entity visual position instead of server position for accurate placement:
+
+```typescript
+// From DamageSplatSystem.ts
+// Prefer entity visual position over server position
+// so damage splats appear where the mob visually is
+const visualPos = entity.node?.position || entity.position;
+```
+
+This prevents damage splats from appearing at the mob's server position when the client-side visual is interpolating to a different location.
+
+### Movement Packet Optimization
+
+The server sends `emote` on `tileMovementEnd` instead of redundant `entityModified` (PR #884):
+
+```typescript
+// Replaces redundant entityModified with emote on tileMovementEnd packet
+this.sendToNearby(position, "tileMovementEnd", {
+  entityId: playerId,
+  position: finalPosition,
+  emote: "idle",
+});
+```
+
+**Movement Cancellation:**
+
+`cancelMovement` now sends `tileMovementEnd` so client `TileInterpolator` properly stops interpolating:
+
+```typescript
+// Send tileMovementEnd so client TileInterpolator stops interpolating old path
+this.sendToNearby(position, "tileMovementEnd", {
+  entityId: playerId,
+  position: currentPosition,
+  emote: state.isRunning ? "run" : "walk",
+});
+```
+
+**Before Fix**: `entityModified` sent on cancel, client kept interpolating old path
+
+**After Fix**: `tileMovementEnd` sent, client properly stops interpolation
+
+---
+
 ## Related Documentation
 
 - [Prayer System](/wiki/game-systems/prayer) (Prayer mechanics, drain, altars, bone burying)
