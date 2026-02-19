@@ -1259,6 +1259,97 @@ export function tilesWithinMeleeRange(
 }
 ```
 
+### Combat Pathfinding
+
+Combat movement uses **multi-destination BFS** with **line-of-sight validation** for OSRS-accurate pathfinding:
+
+```typescript
+// From tile-movement.ts
+// Generate ALL valid attack tiles
+let validTiles: TileCoord[];
+if (attackType === AttackType.RANGED || attackType === AttackType.MAGIC) {
+  validTiles = getValidRangedTiles(
+    targetTile,
+    attackRange,
+    (tile) => this.isTileWalkable(tile),
+    (x, z) => this.world.collision.hasFlags(x, z, CollisionMask.BLOCKS_RANGED),
+  );
+} else {
+  validTiles = getValidMeleeTiles(
+    targetTile,
+    attackRange,
+    (tile) => this.isTileWalkable(tile),
+  );
+}
+
+// Multi-destination BFS: finds shortest path to ANY valid tile
+path = this.pathfinder.findPathToAny(
+  state.currentTile,
+  validTiles,
+  (tile) => this.isTileWalkable(tile),
+);
+```
+
+**Key Features:**
+- **BFS as primary pathfinder**: Player movement uses BFS ("smartpathing") instead of naive diagonal-first
+- **Multi-destination search**: Generates all valid attack tiles and finds shortest path to any of them
+- **Line of sight**: Ranged/magic attacks verify LoS via Bresenham line trace against `BLOCKS_RANGED` collision flags
+- **Optimal pathing**: Naturally selects the closest reachable attack position
+- **Obstacle handling**: Automatically routes around walls and blocked tiles
+
+**Line of Sight Check:**
+
+```typescript
+/**
+ * OSRS-accurate Line of Sight check for ranged/magic combat.
+ * Traces a line between two tiles using Bresenham's algorithm.
+ */
+export function hasLineOfSight(
+  from: TileCoord,
+  to: TileCoord,
+  hasBlockingFlags: (x: number, z: number) => boolean,
+): boolean;
+
+// Usage in combat
+const hasLoS = hasLineOfSight(
+  attackerTile,
+  targetTile,
+  (x, z) => world.collision.hasFlags(x, z, CollisionMask.BLOCKS_RANGED),
+);
+```
+
+**Collision Masks:**
+```typescript
+// From CollisionFlags.ts
+export const CollisionMask = {
+  BLOCK_LOS: 0x02000000,      // Walls, solid objects
+  BLOCKED: 0x00200000,        // Trees, rocks, stations
+  BLOCKS_RANGED: BLOCK_LOS | BLOCKED,  // Combined mask for LoS checks
+};
+```
+
+<Warning>
+**Breaking Change (PR #886)**: Ranged and magic attacks now require line of sight. You cannot attack through walls even if the target is within Chebyshev range.
+</Warning>
+
+**Benefits:**
+- Eliminates visible diagonal zigzag when walking to attack targets
+- Prevents attacking through walls when in Chebyshev range
+- Finds optimal path to closest reachable attack position
+- Matches OSRS smartpathing behavior for players
+
+**NPC Chase Pathfinding:**
+
+NPCs still use naive diagonal pathing (not BFS) to enable safespotting:
+
+```typescript
+// From ChasePathfinding.ts
+// NPCs use "dumb" diagonal-first pathing (OSRS-accurate for safespotting)
+const path = pathfinder.findNaivePath(mobTile, targetTile, isWalkable);
+```
+
+This intentional difference allows players to safespot mobs by positioning themselves where naive pathing cannot reach, matching OSRS mechanics.
+
 ### Combat Follow System
 
 <Info>
