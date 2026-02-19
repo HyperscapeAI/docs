@@ -23,30 +23,93 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Multiplayer Sync & Duel Fixes" description="February 2026" date="2026-02-17">
+<Update label="Mob Combat & Multiplayer Fixes" description="February 2026" date="2026-02-19">
 
-### 🔄 Multiplayer Position & Equipment Sync (PR #875)
+### ⚔️ Mob Magic & Ranged Attacks (PR #826)
 
-Critical fixes for multiplayer synchronization issues affecting remote player rendering and equipment visibility:
+Mobs can now use magic and ranged attacks with full projectile support and visual weapon attachments:
 
-- **Position Sync Fix**: Remote players now face correct direction
+- **Attack Type Configuration**: NPC manifest fields for combat type
+  - `attackType`: `\"melee\"` (default), `\"ranged\"`, or `\"magic\"`
+  - `spellId`: Required for magic mobs (e.g., `\"wind_strike\"`, `\"fire_bolt\"`)
+  - `arrowId`: Required for ranged mobs (e.g., `\"bronze_arrow\"`, `\"iron_arrow\"`)
+  - `heldWeaponModel`: Optional weapon GLB (bow, staff) attached to hand bone
+  - `combatRange`: Attack range in tiles (1 for melee, 7-10 for ranged/magic)
+- **Combat Handler Routing**: Mobs route through same handlers as players
+  - `MagicAttackHandler` - Mob magic path with infinite runes, no equipment bonuses
+  - `RangedAttackHandler` - Mob ranged path with infinite arrows, no equipment bonuses
+  - Separate damage calculation using mob's `magic` or `ranged` stat from manifest
+  - Players can still use prayer bonuses to defend against mob attacks
+- **Projectile System**: Spell and arrow projectiles for mobs
+  - OSRS-accurate hit delays based on distance
+  - Element-based spell visuals (air, water, earth, fire)
+  - Arrow projectiles with metal-colored tips
+  - Launch delays: 600ms for spells, 400ms for arrows
+  - Shared `emitMagicProjectile()` and `emitRangedProjectile()` methods
+- **Visual Weapon Attachment**: Held weapons on mob VRM avatars
+  - Static weapon cache shares GLB scenes across mob instances
+  - `clone(true)` for per-mob instances with shared geometry/materials
+  - Proper cleanup on world teardown via `clearWeaponCache()`
+  - Supports Asset Forge V1 and V2 attachment metadata
+  - Deduplicates concurrent fetches via `_pendingLoads` map
+  - Prevents weapon attachment to destroyed mobs via `_destroyed` flag
+- **Animation System**: Attack-type-specific emotes
+  - Magic mobs: `SPELL_CAST` animation
+  - Ranged mobs: `RANGE` animation
+  - Melee mobs with weapons: `SWORD_SWING` animation
+  - Emote matching switched from substring to exact equality (more robust)
+- **Auto-Attack Integration**: Tick-based follow-up attacks
+  - `weaponType` stored in combat state for auto-attack routing
+  - `CombatTickProcessor` routes by stored weapon type
+  - Retaliation uses correct attack type (magic/ranged mobs retaliate with projectiles)
+  - Mob retaliators resolve weapon type from config for proper handler routing
+- **Shared Utilities**: `prepareMobAttack()` in `AttackContext.ts`
+  - Consolidates entity resolution, range checks, cooldown, animation
+  - Eliminates ~150 lines of duplication between magic and ranged handlers
+  - Returns validated `MobAttackContext` or null
+  - Accepts `preResolved` parameter to avoid redundant entity lookups
+- **Constants**: New combat constants in `CombatConstants.ts`
+  - `MAGIC_RANGE: 10` - Magic attack range in tiles
+  - `SPELL_LAUNCH_DELAY_MS: 600` - Spell cast animation wind-up
+  - `ARROW_LAUNCH_DELAY_MS: 400` - Arrow draw animation wind-up
+- **Testing**: 996 lines of integration tests
+  - Magic/ranged attack routing and projectile emission
+  - Missing spellId/arrowId graceful handling with console warnings
+  - Out-of-range rejection
+  - Event-carried vs NPC-data spell/arrow resolution
+  - Auto-attack tick paths for both magic and ranged
+  - Default-to-melee fallback when attackType missing
+
+### 🔄 Multiplayer Sync Fixes (PR #875, #882, #884)
+
+Critical fixes for multiplayer synchronization affecting remote player rendering and combat:
+
+- **Position Sync Fix** (PR #875, #882): Remote players now face correct direction
   - Sync `base.quaternion` in `PlayerRemote` to fix sideways-facing players
   - Force transform update after async avatar load to prevent T-pose ghosts
+  - Position and animate remote avatar before making visible (prevents 1-frame flash at origin)
   - Update spatial index after teleport/respawn so `sendToNearby` reaches players at new location
   - Broadcast authoritative position to all players on join
   - Fixes invisible combat movement in duels (players couldn't see opponent moving)
-- **Equipment Visibility on Load**: Equipment now appears when VRM loads
+- **Equipment Visibility on Load** (PR #875): Equipment now appears when VRM loads
   - Added `getAvatar()` helper to resolve VRM from both `PlayerLocal` and `PlayerRemote`
   - Subscribe to `AVATAR_LOAD_COMPLETE` to replay cached equipment when VRM loads
   - Re-send equipment on socket reconnect (packets lost during disconnect)
   - Send existing players' equipment to joiner and broadcast joiner's equipment
   - Use all 11 `EQUIPMENT_SLOT_NAMES` instead of hardcoded 6 slots
   - Gate equipment `UI_UPDATE` to local player only (prevents duplicate UI updates)
-- **PvP Ranged XP Fix**: Ranged attacks now grant correct XP in duels
+- **PvP Ranged XP Fix** (PR #875): Ranged attacks now grant correct XP in duels
   - Detect weapon type (bow/crossbow/staff) in `PlayerDeathSystem` for PvP kills
   - Previously used player's melee attack style, incorrectly granting Strength XP for ranged kills
   - Now matches `MobEntity` logic: inspect actual weapon type for XP calculation
   - Fixes ranged attacks incorrectly granting Strength XP in duels
+- **Mob Position Desync Fix** (PR #884): Mobs no longer get stuck facing combat direction
+  - Clear `inCombatRotation` flag on movement start in `TileInterpolator`
+  - Only route `entityModified` to `setCombatRotation` for players, not mobs
+  - Mobs handle combat rotation locally in `MobEntity.clientUpdate()`
+  - Prefer entity visual position over server position in `DamageSplatSystem`
+  - Replace redundant `entityModified` with `emote` on `tileMovementEnd` packet
+  - Fix `cancelMovement` to send `tileMovementEnd` instead of `entityModified`
 
 ### 🛡️ Duel Health Restore Fix (PR #875)
 
