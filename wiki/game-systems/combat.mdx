@@ -1628,6 +1628,37 @@ handlePlayerDeath(playerId: string, deathPosition: Position3D): void {
 }
 ```
 
+### Duel Death Handling
+
+Duel deaths use individual try/catch blocks to prevent one player's failure from affecting the other:
+
+```typescript
+// From DuelCombatResolver.ts
+// Restore health — wrapped individually so one player failing
+// doesn't prevent the other from being restored
+try {
+  this.restorePlayerHealth(winnerId, LOBBY_SPAWN_WINNER);
+} catch (err) {
+  Logger.error("DuelCombatResolver", "Winner health restoration failed", err);
+}
+
+try {
+  this.restorePlayerHealth(loserId, LOBBY_SPAWN_LOSER);
+} catch (err) {
+  Logger.error("DuelCombatResolver", "Loser health restoration failed", err);
+}
+```
+
+**Critical Fix (PR #875):**
+
+Both `restorePlayerHealth` calls were previously in a single try/catch. If the winner's restore triggered an exception in any `PLAYER_RESPAWNED` handler, the loser's restore was skipped—leaving them with:
+- Frozen physics (`isDying=true`)
+- No `playerRespawned`/`playerSetDead` packets sent
+- Client unable to act on `playerTeleport` (which still arrived)
+- Player stuck in arena with death animation
+
+Now each restore is individually wrapped, matching the pattern already used for teleports. This ensures both players are properly restored even if one fails.
+
 ### Mob Death
 
 When a mob dies:
