@@ -252,6 +252,18 @@ If remote players flash at (0,0,0) in T-pose for one frame when joining, or appe
 **Equipment not visible on other players:**
 If you can't see other players' weapons/armor, or your equipment doesn't show for others, update to the latest code. The equipment system now broadcasts equipment on join, re-sends on reconnect, and properly handles VRM avatar loading with equipment replay.
 
+**Mobs stuck facing combat direction after combat ends:**
+If mobs continue facing their last combat target after combat ends, update to the latest code (PR #884). The `TileInterpolator` now clears the `inCombatRotation` flag on movement start, allowing mobs to return to normal AI-driven rotation.
+
+**Damage splats appearing at wrong position:**
+If damage numbers appear at the mob's server position instead of where they visually are, update to the latest code (PR #884). The `DamageSplatSystem` now prefers entity visual position over server position for accurate splat placement during movement interpolation.
+
+**Equipping stackable items causes inventory flash:**
+When equipping arrows (or other stackables) that match what's already equipped, the system now merges quantities directly instead of unequip→inventory→re-equip cycle (PR #887). This eliminates the brief inventory flash showing combined count before equip.
+
+**Duel loser stuck in arena after duel:**
+If the duel loser remains frozen in the arena with `isDying=true` after a duel, update to the latest code (PR #875). Health restoration for both players now uses individual try/catch blocks to prevent one player's failure from affecting the other.
+
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
