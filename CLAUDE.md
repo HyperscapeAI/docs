@@ -544,6 +544,159 @@ if (weaponType === "bow" || weaponType === "crossbow") {
 
 This matches the logic used for mob kills and ensures correct XP distribution in PvP combat.
 
+### Mob Position Desync and Stuck Combat Rotation
+
+If mobs appear to be in the wrong position or continue facing their combat target after combat ends, update to the latest code (PR #884). Several fixes were applied:
+
+**Combat Rotation Clearing:**
+- `TileInterpolator` now clears `inCombatRotation` flag on movement start
+- Prevents mobs from staying locked in combat-facing after combat ends
+- Only routes `entityModified` to `setCombatRotation` for players, not mobs
+- Mobs handle combat rotation locally in `MobEntity.clientUpdate()`
+
+**Position Synchronization:**
+- `DamageSplatSystem` prefers entity visual position over server position
+- Damage splats now appear where the mob visually is during interpolation
+- Prevents splats from appearing at stale server positions
+
+**Movement Packet Optimization:**
+- Replaced redundant `entityModified` with `emote` on `tileMovementEnd` packet
+- `cancelMovement` sends `tileMovementEnd` instead of `entityModified`
+- Client `TileInterpolator` properly stops interpolating old paths
+
+### Stackable Item Equipping Flash
+
+When equipping arrows (or other stackables) that match what's already equipped, the system now merges quantities directly instead of the unequip→inventory→re-equip cycle (PR #887). This eliminates the brief inventory flash showing combined count before equip.
+
+**Before:**
+1. Unequip current arrows (e.g., 50) → inventory shows 50
+2. Inventory combines with new arrows (e.g., 25) → shows 75
+3. Re-equip combined stack → shows 75 in equipment slot
+4. Brief flash of 75 in inventory before re-equip
+
+**After:**
+1. Detect same stackable type already equipped
+2. Add new quantity directly to equipped stack
+3. No inventory flash, seamless merge
+
+### Trade Panel Integration
+
+The trade panel is now fully integrated into the modal system (PR #850). Player-to-player trading UI opens automatically when trade requests are received:
+
+**Trade Event Handlers:**
+- `trade` - Opens trade panel with initial state
+- `tradeUpdate` - Updates trade offer items
+- `tradeConfirm` - Shows confirmation state
+- `tradeClose` - Closes trade panel
+
+**Implementation:**
+- Added to `useModalPanels` hook following `DuelPanel` pattern
+- Rendered in `InterfaceModals` component
+- Server already emitted `UI_UPDATE` events for trade
+- This PR connects the UI to the existing backend
+
+### Duel Arena Health Restoration
+
+Duel health restoration now uses individual try/catch blocks for winner and loser (PR #875). This prevents one player's restoration failure from leaving the other stuck in the arena:
+
+**Before:**
+- Both `restorePlayerHealth` calls in single try/catch
+- If winner's restore threw exception, loser's restore skipped
+- Loser left with frozen physics, `isDying=true`, no respawn packets
+- Player stuck in arena unable to move
+
+**After:**
+- Each `restorePlayerHealth` wrapped individually
+- Matches pattern already used for teleports
+- Both players restored even if one fails
+- Proper error logging for each restoration
+
+### Minimap Quest Icons
+
+The minimap now displays quest-state-aware icons for quest giver NPCs (PR #885):
+
+**Quest Icon States:**
+- Blue "!" for available quests (not started)
+- Blue "?" for quests in progress
+- No icon when all quests completed
+
+**Implementation:**
+- Added `questIds` field to `NPCEntityConfig`
+- Passed through spawn → network → client pipeline
+- Minimap fetches quest statuses from server via `getQuestList`
+- Icons update in real-time on quest events
+- Fixed broken NPC service detection (`services` is `string[]`, not `{ types: string[] }`)
+
+**NPC Configuration:**
+```json
+{
+  "services": {
+    "types": ["quest"],
+    "questIds": ["cooks_assistant", "sheep_shearer"]
+  }
+}
+```
+
+### Combat Pathfinding Improvements
+
+Combat movement now uses OSRS-accurate BFS pathfinding with line-of-sight validation (PR #886):
+
+**BFS as Primary Pathfinder:**
+- Player movement uses BFS ("smartpathing") instead of naive diagonal-first
+- Eliminates visible diagonal zigzag when walking to attack targets
+- Finds optimal paths around obstacles
+
+**Multi-Destination Combat BFS:**
+- Generates all valid attack tiles (considering range and LoS)
+- Uses `findPathToAny()` to find shortest path to any valid tile
+- Naturally selects closest reachable position
+- No need to pre-pick "best" tile with heuristics
+
+**Line of Sight for Ranged/Magic:**
+- Ranged and magic attacks now require LoS via Bresenham line trace
+- Checks `BLOCKS_RANGED` collision flags (walls, solid objects)
+- Prevents attacking through walls when in Chebyshev range
+
+**NPC Chase Pathfinding:**
+- NPCs still use naive diagonal pathing (not BFS)
+- Enables safespotting mechanics (OSRS-accurate)
+- Players can position where naive pathing cannot reach
+
+**Key Functions:**
+- `hasLineOfSight()` - Bresenham line trace for LoS validation
+- `getValidRangedTiles()` - Generate all valid ranged/magic attack tiles with LoS
+- `getValidMeleeTiles()` - Generate all valid melee attack tiles (cardinal for range 1)
+- `findPathToAny()` - Multi-destination BFS for combat movement
+
+### Mob Sword Swing Animation
+
+Mobs with held weapons now play the sword swing animation instead of default punch (PR #848):
+
+```typescript
+// Mobs with heldWeaponModel (e.g., guard with bronze sword) play sword_swing
+// instead of default punch animation
+if (mobConfig.heldWeaponModel) {
+  emote = Emotes.SWORD_SWING;
+} else {
+  emote = Emotes.COMBAT;
+}
+```
+
+### Duel Stake Visual Improvements
+
+Duel stake panels now show item icons instead of truncated text names (PR #846):
+
+**Visual Improvements:**
+- Actual `ItemIcon` rendering in stake grids
+- Staked items in inventory appear dimmed (40% opacity)
+- Visual indication of which items have been offered
+- Consistent with inventory panel styling
+
+**Implementation:**
+- Replaced text-based stake display with `ItemIcon` components
+- Added opacity styling to staked inventory items
+- Improved visual clarity during stake negotiation
+
 ## Website & Solana Integration
 
 ### Recent Updates (PR #822)
