@@ -482,6 +482,68 @@ If the camera initializes facing the wrong direction (player appears to move bac
 
 If entity outlines show incorrect colors when color grading is disabled, ensure you're on the latest version. PR #829 fixed an issue where the LUT color grading shader pipeline leaked into outline-only rendering. The fix zeros LUT intensity when disabled so outline rendering stays clean.
 
+### Remote Players Appearing in T-Pose or Wrong Position
+
+If remote players flash at (0,0,0) in T-pose for one frame when joining, or appear sideways/incorrectly oriented, update to the latest code (PR #882). The avatar loading system now:
+- Positions and animates avatars **before** making them visible
+- Syncs both position AND quaternion to base transform
+- Calls `instance.move()` and `instance.update(0)` before setting `visible=true`
+
+**Before Fix:**
+- VRM avatar set to `visible=true` before `instance.move()` positioned it
+- Avatar flashed at (0,0,0) in T-pose for one frame
+- `base.quaternion` not synced, causing sideways-facing avatars
+
+**After Fix:**
+- Avatar positioned and animated into idle pose before visibility enabled
+- Both position and quaternion synced to base transform for correct orientation
+
+### Equipment Not Visible on Other Players
+
+If you can't see other players' weapons/armor, or your equipment doesn't show for others, update to the latest code (PR #875). The equipment system now:
+- Broadcasts equipment on player join (both directions)
+- Re-sends equipment on socket reconnect (packets may be lost during disconnect)
+- Uses all 11 equipment slots instead of hardcoded 6
+- Properly handles VRM avatar loading with equipment replay via `AVATAR_LOAD_COMPLETE` event
+- Provides `getAvatar()` helper to resolve VRM from both `PlayerLocal` and `PlayerRemote`
+
+**Equipment Sync Flow:**
+1. On player join: Server sends existing players' equipment to joiner
+2. On player join: Server broadcasts joiner's equipment to all other players
+3. On equipment change: Server broadcasts update to all nearby players
+4. On reconnect: Server re-sends all equipment
+5. On VRM load: Equipment system replays cached equipment from pending queue
+
+### Spatial Index Not Updated After Teleport
+
+If combat movement broadcasts don't reach players after teleporting (e.g., invisible combat follow in duels), update to the latest code (PR #875). The spatial index is now updated after teleport and respawn:
+
+```typescript
+// Update spatial index so sendToNearby() finds players at new location
+this.spatialIndex.updatePlayerPosition(playerId, position.x, position.z);
+```
+
+Without this, `sendToNearby()` uses stale positions and post-teleport tile movement broadcasts won't reach players whose spatial index is still at their pre-teleport position.
+
+### PvP Ranged Attacks Granting Wrong XP
+
+If ranged attacks in duels grant Strength XP instead of Ranged XP, update to the latest code (PR #875). The PvP XP calculation now inspects the actual weapon type (bow/crossbow/staff) instead of using the player's melee attack style:
+
+```typescript
+// Detect weapon type for PvP kills
+const weaponType = weapon?.weaponType?.toLowerCase();
+if (weaponType === "bow" || weaponType === "crossbow") {
+  attackStyle = "ranged";  // Grant Ranged XP
+} else if ((weaponType === "staff" || weaponType === "wand") && selectedSpell) {
+  attackStyle = "magic";   // Grant Magic XP
+} else {
+  // Melee attack - use player's attack style
+  attackStyle = playerStyle || "aggressive";
+}
+```
+
+This matches the logic used for mob kills and ensures correct XP distribution in PvP combat.
+
 ## Website & Solana Integration
 
 ### Recent Updates (PR #822)
