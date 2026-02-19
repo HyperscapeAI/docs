@@ -254,6 +254,42 @@ When health reaches zero:
 3. Headstone persists for item retrieval
 4. Other players cannot loot your headstone
 
+## Mob Combat
+
+Mobs can use melee, ranged, or magic attacks configured via NPC manifest:
+
+### Attack Types
+
+| Type | Configuration | Behavior |
+|------|---------------|----------|
+| **Melee** | Default, no special fields | Uses `attack`/`strength` stats, 1-2 tile range, immediate hit |
+| **Ranged** | `attackType: "ranged"`, `arrowId` required | Uses `ranged` stat, 7-10 tile range, arrow projectiles, infinite arrows |
+| **Magic** | `attackType: "magic"`, `spellId` required | Uses `magic` stat, 10 tile range, spell projectiles, infinite runes |
+
+### Mob Projectile Attacks
+
+Ranged and magic mobs emit projectiles with OSRS-accurate hit delays:
+
+```typescript
+// Magic hit delay: 1 + floor((1 + distance) / 3) ticks
+// Ranged hit delay: 1 + floor((3 + distance) / 6) ticks
+
+// Launch delays (animation wind-up):
+SPELL_LAUNCH_DELAY_MS: 600,  // Spell cast animation
+ARROW_LAUNCH_DELAY_MS: 400,  // Arrow draw animation
+```
+
+**Mob Damage Calculation:**
+- Mobs have **zero equipment bonuses** (no attack/strength/defense from gear)
+- Mobs have **infinite resources** (no rune/arrow consumption)
+- Uses mob's `magic` or `ranged` stat from NPC manifest
+- Players can still use prayer bonuses to defend
+
+**Visual Weapons:**
+- `heldWeaponModel` field attaches bow/staff GLB to mob's hand bone
+- Weapons cached and shared across mob instances (GPU efficient)
+- Supports Asset Forge V1 and V2 attachment metadata
+
 ## Mob Aggression
 
 ```typescript
