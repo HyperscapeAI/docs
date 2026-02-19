@@ -223,7 +223,89 @@ The minimap displays icons for key locations instead of generic dots:
 | **Fish** | Fishing Spot | Cyan circle with fish |
 | **Pickaxe** | Mining Rock | Brown circle with pickaxe |
 | **Tree** | Woodcutting | Green circle |
-| **?** | Quest NPC | Cyan circle with question mark |
+| **!** | Quest Available | Blue circle with white "!" |
+| **?** | Quest In Progress | Blue circle with white "?" |
+
+**Quest Icon States:**
+
+Quest giver NPCs display state-aware icons based on quest progress:
+
+```typescript
+// From Minimap.tsx
+// Quest icon with state awareness
+if (serviceTypes?.includes("quest")) {
+  const questIds = npcConfig?.questIds;
+  const statuses = questStatusesRef.current;
+  
+  if (questIds && questIds.length > 0 && statuses.size > 0) {
+    let hasAvailable = false;
+    let hasActive = false;
+    let allCompleted = true;
+    
+    for (const qid of questIds) {
+      const state = statuses.get(qid);
+      if (state === "available") hasAvailable = true;
+      else if (state === "active") hasActive = true;
+      if (state !== "completed") allCompleted = false;
+    }
+    
+    if (hasAvailable) {
+      subType = "quest_available";  // Blue "!"
+    } else if (hasActive) {
+      subType = "quest_in_progress";  // Blue "?"
+    }
+    // If all completed, no quest icon (shows bank/shop icon if applicable)
+  }
+}
+```
+
+**Quest Status Synchronization:**
+
+The minimap fetches quest statuses from the server and updates icons in real-time:
+
+```typescript
+// Fetch quest list from server
+world.network?.send("getQuestList", {});
+
+// Listen for quest status updates
+world.network?.on("questList", (data) => {
+  const mapped = data.quests.map((q) => ({
+    id: q.id,
+    state: mapStatus(q.status),  // "not_started" → "available", etc.
+  }));
+  
+  // Update ref for synchronous access in entity loop
+  questStatusesRef.current = new Map(mapped.map(q => [q.id, q.state]));
+});
+
+// Re-fetch on quest events
+world.on(EventType.QUEST_STARTED, fetchQuestList);
+world.on(EventType.QUEST_PROGRESSED, fetchQuestList);
+world.on(EventType.QUEST_COMPLETED, fetchQuestList);
+```
+
+**Icon Behavior:**
+- **Blue "!"**: NPC has at least one available quest (not started)
+- **Blue "?"**: NPC has at least one quest in progress
+- **No icon**: All quests completed (shows bank/shop icon if NPC provides those services)
+- Icons disappear when all of an NPC's quests are completed
+
+**NPC Configuration:**
+
+Quest giver NPCs must have `questIds` field in their configuration:
+
+```json
+{
+  "id": "quest_giver_lumbridge",
+  "name": "Quest Giver",
+  "services": {
+    "types": ["quest"],
+    "questIds": ["cooks_assistant", "sheep_shearer"]
+  }
+}
+```
+
+The `questIds` field is passed through the spawn → network → client pipeline so the minimap can identify quest giver NPCs and display appropriate icons.
 
 **Icon Detection:**
 
@@ -233,14 +315,13 @@ Icons are automatically assigned based on entity configuration:
 // From Minimap.tsx
 // Detect NPC service type for minimap icons
 const npcConfig = entity.config;
-const serviceTypes = npcConfig?.services?.types;
+const serviceTypes = npcConfig?.services;  // Fixed: services is string[], not { types: string[] }
 if (serviceTypes?.includes("bank")) {
   subType = "bank";
 } else if (serviceTypes?.includes("shop")) {
   subType = "shop";
-} else if (serviceTypes?.includes("quest")) {
-  subType = "quest";
 }
+// Quest icon detection (with state awareness) shown above
 
 // Detect resource subtype for minimap icons
 const resConfig = entity.config;
@@ -252,6 +333,10 @@ if (resConfig?.resourceType === "fishing_spot" || resConfig?.harvestSkill === "f
   subType = "tree";
 }
 ```
+
+<Info>
+**Bug Fix (PR #885)**: Fixed broken NPC service detection cast. The `services` field is `string[]`, not `{ types: string[] }`. This also fixed bank/shop icon detection which was previously broken.
+</Info>
 
 **Size Hierarchy:**
 - Entity dots: 6px diameter (compact for clarity)
