@@ -549,12 +549,33 @@ The minimap now displays icons for key locations instead of generic dots:
 - **Fishing Spot**: Cyan circle with fish
 - **Mining Rock**: Brown circle with pickaxe
 - **Tree**: Green circle (woodcutting)
-- **Quest NPC**: Cyan circle with "?" (quest givers)
+- **Quest Available**: Blue circle with white "!" (quest not started)
+- **Quest In Progress**: Blue circle with white "?" (quest active)
+
+**Quest Icon States:**
+Quest giver NPCs display state-aware icons based on quest progress:
+- Blue "!" for available quests (not started)
+- Blue "?" for quests in progress
+- No icon when all quests completed (shows bank/shop icon if applicable)
+- Icons update in real-time as quests are started/completed
+- Fetches quest statuses from server via `getQuestList` message
+- Listens to `QUEST_STARTED`, `QUEST_PROGRESSED`, `QUEST_COMPLETED` events
+
+**NPC Configuration:**
+Quest giver NPCs must have `questIds` field:
+```json
+{
+  "services": {
+    "types": ["quest"],
+    "questIds": ["cooks_assistant", "sheep_shearer"]
+  }
+}
+```
 
 **Icon Detection:**
 Icons are automatically assigned based on:
 - Station types (bank, furnace, anvil, range, altar)
-- NPC service types (bank, shop, quest)
+- NPC service types (bank, shop, quest) with quest state awareness
 - Resource types (fishing_spot, mining_rock, tree)
 
 **Size Hierarchy:**
@@ -565,6 +586,10 @@ Icons are automatically assigned based on:
 - `packages/client/src/game/hud/Minimap.tsx` - Main minimap component
 - `drawMinimapIcon()` function - Renders location-specific icons
 - Entity subtype detection from config data
+- Quest status synchronization via network messages
+
+**Bug Fix (PR #885):**
+Fixed broken NPC service detection. The `services` field is `string[]`, not `{ types: string[] }`. This also fixed bank/shop icon detection which was previously broken.
 
 ## Additional Resources
 
