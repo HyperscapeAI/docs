@@ -463,6 +463,64 @@ MAGIC_RANGE: 10,            // Magic mobs (can be overridden in manifest)
 
 Mobs respect their configured `combatRange` from the NPC manifest, with fallbacks to these defaults if not specified.
 
+### Held Weapon Visuals
+
+Mobs can display held weapons (bows, staves, swords) using the `heldWeaponModel` field:
+
+```json
+{
+  "id": "dark_ranger",
+  "appearance": {
+    "modelPath": "ranger/ranger_rigged.glb",
+    "heldWeaponModel": "asset://weapons/oak_shortbow.glb"
+  },
+  "combat": {
+    "attackType": "ranged",
+    "arrowId": "bronze_arrow",
+    "combatRange": 7
+  }
+}
+```
+
+**Weapon Attachment System:**
+- Weapons loaded as GLB models and attached to VRM hand bones
+- Uses same Asset Forge attachment metadata as player equipment
+- Supports both V1 (direct) and V2 (pre-baked matrix) attachment formats
+- Static weapon cache shares loaded models across mob instances
+- `clone(true)` creates per-mob instances with shared geometry/materials
+- Weapons removed from parent on mob destroy (geometry shared, not disposed)
+- Cache cleared on world teardown to free GPU resources
+
+**Weapon Cache Performance:**
+- First mob of a type loads the weapon GLB from network
+- Subsequent mobs clone from cached scene (no network request)
+- Deduplicates concurrent fetches via `_pendingLoads` promise cache
+- Prevents duplicate geometry and GPU memory waste
+
+**Supported Weapon Types:**
+- Bows (shortbow, oak shortbow, willow shortbow, etc.)
+- Staves (staff of air, staff of fire, etc.)
+- Swords (bronze sword, iron sword, etc.)
+- Any GLB model with Asset Forge attachment metadata
+
+**Animation Integration:**
+
+Mobs with held weapons play appropriate attack animations:
+
+```typescript
+// From MobVisualManager.ts
+// Mobs with heldWeaponModel play sword_swing instead of default punch
+if (config.heldWeaponModel && attackType === "melee") {
+  emote = Emotes.SWORD_SWING;
+} else if (attackType === "magic") {
+  emote = Emotes.SPELL_CAST;
+} else if (attackType === "ranged") {
+  emote = Emotes.RANGE;
+} else {
+  emote = Emotes.COMBAT;  // Default punch animation
+}
+```
+
 ---
 
 ## AI Events
