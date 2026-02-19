@@ -89,6 +89,177 @@ getNetworkData(): Record<string, unknown> {
 | Combat state | On change |
 | Chat | Immediate |
 
+### Equipment Synchronization
+
+Equipment visibility is synchronized across all players with proper VRM avatar loading:
+
+```typescript
+// From character-selection.ts
+// Send existing players' equipment to the new player
+const equipSys = world.getSystem("equipment");
+if (equipSys?.getPlayerEquipment && world.entities?.items) {
+  for (const [entityId, entity] of world.entities.items.entries()) {
+    if (entityId !== socket.player.id && entity.type === "player") {
+      const eq = equipSys.getPlayerEquipment(entityId);
+      if (eq) {
+        sendToFn(socket.id, "equipmentUpdated", {
+          playerId: entityId,
+          equipment: eq,
+        });
+      }
+    }
+  }
+}
+
+// Broadcast this player's equipment to all other players
+if (Object.keys(equipmentData).length > 0) {
+  sendFn("equipmentUpdated", {
+    playerId: socket.player.id,
+    equipment: equipmentData,
+  }, socket.id);
+}
+```
+
+**Equipment Sync Flow:**
+1. **On player join**: Server sends existing players' equipment to joiner
+2. **On player join**: Server broadcasts joiner's equipment to all other players
+3. **On equipment change**: Server broadcasts update to all nearby players
+4. **On reconnect**: Server re-sends all equipment (packets may be lost during disconnect)
+
+**VRM Avatar Loading:**
+
+Equipment is cached and replayed when VRM avatars finish loading:
+
+```typescript
+// From EquipmentVisualSystem.ts
+// Subscribe to AVATAR_LOAD_COMPLETE to replay cached equipment
+this.subscribe(EventType.AVATAR_LOAD_COMPLETE, (data) => {
+  if (!data.success) return;
+
+  // Replay pending equipment from queue
+  const pending = this.pendingEquipment.get(data.playerId);
+  if (pending && pending.length > 0) {
+    for (const { slot, itemId } of pending) {
+      this.handleEquipmentChange({ playerId: data.playerId, slot, itemId });
+    }
+  }
+
+  // Safety net: replay from network cache
+  const cached = network?.lastEquipmentByPlayerId?.[data.playerId];
+  if (cached) {
+    for (const slot of EQUIPMENT_SLOT_NAMES) {
+      const itemId = cached[slot]?.itemId || cached[slot]?.item?.id;
+      if (itemId && String(itemId) !== "0") {
+        this.handleEquipmentChange({ playerId: data.playerId, slot, itemId });
+      }
+    }
+  }
+});
+```
+
+**Equipment Slot Coverage:**
+
+The system now uses all 11 equipment slots instead of hardcoded 6:
+
+```typescript
+// From EquipmentConstants.ts
+export const EQUIPMENT_SLOT_NAMES = [
+  "weapon", "shield", "helmet", "body", "legs", "gloves", "boots",
+  "cape", "amulet", "ring", "arrows"
+];
+```
+
+**Avatar Helper:**
+
+The `getAvatar()` helper resolves VRM from both `PlayerLocal` and `PlayerRemote`:
+
+```typescript
+// PlayerLocal exposes VRM via _avatar getter
+// PlayerRemote stores VRM in avatar property
+function getAvatar(player: PlayerWithAvatar): AvatarLike | undefined {
+  return player._avatar || player.avatar;
+}
+```
+
+This ensures equipment visuals work correctly for both local and remote players.
+
+### Position Synchronization
+
+Player positions are synchronized with spatial index updates to ensure proper network visibility:
+
+```typescript
+// From ServerNetwork/index.ts
+// Update spatial index after teleport/respawn
+this.spatialIndex.updatePlayerPosition(playerId, position.x, position.z);
+
+// CRITICAL: Without this, sendToNearby() uses stale position
+// Post-teleport tile movement broadcasts (e.g., combat follow) won't reach
+// players whose spatial index is still at their pre-teleport position
+```
+
+**Spatial Index Integration:**
+
+The spatial index tracks player positions for efficient `sendToNearby()` queries:
+
+```typescript
+// Update spatial index on position changes
+this.spatialIndex.updatePlayerPosition(playerId, position.x, position.z);
+
+// Send messages to nearby players only
+this.sendToNearby(position, "entityModified", data);
+```
+
+**Critical Fixes (PR #875):**
+- Spatial index now updated after teleport (fixes invisible combat movement in duels)
+- Spatial index updated after respawn (fixes missing entity broadcasts)
+- Authoritative position broadcast to all players on join (fixes initial transform sync)
+
+### Remote Avatar Transform Sync
+
+Remote player avatars are positioned and animated **before** being made visible to prevent T-pose flashing:
+
+```typescript
+// From PlayerRemote.ts
+// CRITICAL: Sync base transform and position the avatar BEFORE making it visible.
+// Without this, the avatar appears at (0,0,0) in T-pose for one frame because
+// instance.move() normally only runs in update() on the next frame.
+this.base.position.copy(this.node.position);
+this.base.quaternion.copy(this.node.quaternion);
+this.base.updateTransform();
+
+if (avatarWithInstance.instance?.move) {
+  avatarWithInstance.instance.move(this.base.matrixWorld);
+}
+if (avatarWithInstance.instance?.update) {
+  avatarWithInstance.instance.update(0);
+}
+
+// NOW make avatar visible — it's already positioned and in idle pose
+if (this.avatar?.instance?.raw?.scene) {
+  this.avatar.instance.raw.scene.visible = true;
+}
+```
+
+**Before Fix**: VRM avatar set to `visible=true` before `instance.move()` positioned it, causing one frame of T-pose at (0,0,0)
+
+**After Fix**: Avatar positioned and animated into idle pose before visibility enabled
+
+**Quaternion Sync:**
+
+Remote player quaternions are now properly synced to prevent sideways-facing avatars:
+
+```typescript
+// Sync both position AND rotation to base transform
+this.base.position.copy(this.lerpPosition.value);
+this.base.quaternion.copy(this.lerpQuaternion.value);  // Added
+this.node.quaternion.copy(this.lerpQuaternion.value);
+this.base.updateTransform();
+```
+
+**Before Fix**: `base.quaternion` not synced, causing remote players to face sideways
+
+**After Fix**: Both position and quaternion synced to base transform for correct orientation
+
 ## WebSocket Protocol
 
 ### Connection
