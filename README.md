@@ -246,6 +246,12 @@ If the camera initializes facing the wrong direction (player appears to move bac
 **Entity outlines showing wrong colors when hovering:**
 If entity highlights show incorrect color grading when post-processing is disabled, update to the latest code. The post-processing system now correctly zeros LUT intensity when color grading is disabled, preventing shader pipeline leakage between outline and color grading passes.
 
+**Remote players appearing in T-pose or at wrong position:**
+If remote players flash at (0,0,0) in T-pose for one frame when joining, or appear sideways/incorrectly oriented, update to the latest code. The avatar loading system now positions and animates avatars before making them visible, and properly syncs quaternions to the base transform.
+
+**Equipment not visible on other players:**
+If you can't see other players' weapons/armor, or your equipment doesn't show for others, update to the latest code. The equipment system now broadcasts equipment on join, re-sends on reconnect, and properly handles VRM avatar loading with equipment replay.
+
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
