@@ -315,6 +315,40 @@ World areas define zones with biomes and mob spawns:
 }
 ```
 
+### Runecrafting Recipe
+
+**File**: `packages/server/world/assets/manifests/recipes/runecrafting.json`
+
+```json
+{
+  "output": "air_rune",
+  "inputs": [
+    { "item": "rune_essence", "amount": 1 }
+  ],
+  "level": 1,
+  "xp": 5,
+  "ticks": 3,
+  "altar": "air_altar"
+}
+```
+
+### Fletching Recipe
+
+**File**: `packages/server/world/assets/manifests/recipes/fletching.json`
+
+```json
+{
+  "output": "oak_shortbow",
+  "inputs": [
+    { "item": "oak_logs", "amount": 1 }
+  ],
+  "level": 20,
+  "xp": 16.5,
+  "ticks": 3,
+  "category": "bows"
+}
+```
+
 ---
 
 ## Testing Changes
