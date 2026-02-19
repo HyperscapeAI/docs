@@ -171,6 +171,188 @@ export const CARDINAL_DIRECTIONS = [
 
 ---
 
+## Pathfinding
+
+### BFS Pathfinder (OSRS "Smartpathing")
+
+Hyperscape uses **BFS (Breadth-First Search)** as the primary pathfinding algorithm for all player movement, matching OSRS "smartpathing":
+
+```typescript
+// From BFSPathfinder.ts
+export class BFSPathfinder {
+  /**
+   * Find optimal path from start to end using BFS.
+   * BFS is the primary pathfinder for all player movement.
+   */
+  findPath(
+    start: TileCoord,
+    end: TileCoord,
+    isWalkable: WalkabilityChecker,
+  ): TileCoord[];
+
+  /**
+   * Multi-destination BFS: find shortest path to ANY destination tile.
+   * Used for combat pathfinding — finds the closest reachable attack position.
+   */
+  findPathToAny(
+    start: TileCoord,
+    destinations: TileCoord[],
+    isWalkable: WalkabilityChecker,
+  ): TileCoord[];
+
+  /**
+   * Naive diagonal pathing — "dumb pathfinding" for NPC chase systems.
+   * Moves diagonally toward target first, then cardinally.
+   * NOT used for player movement (players use BFS).
+   */
+  findNaivePath(
+    start: TileCoord,
+    end: TileCoord,
+    isWalkable: WalkabilityChecker,
+  ): TileCoord[];
+}
+```
+
+<Info>
+**OSRS Accuracy**: Player movement uses BFS ("smartpathing") which finds optimal paths around obstacles. NPC chase movement uses naive diagonal pathing, which enables safespotting mechanics.
+</Info>
+
+### Multi-Destination BFS for Combat
+
+Combat movement uses `findPathToAny()` to find the shortest path to **any** valid attack tile:
+
+```typescript
+// Generate all valid attack tiles
+const validTiles = attackType === AttackType.MELEE
+  ? getValidMeleeTiles(targetTile, attackRange, isWalkable)
+  : getValidRangedTiles(targetTile, attackRange, isWalkable, hasBlockingFlags);
+
+// Find shortest path to ANY valid tile
+const path = pathfinder.findPathToAny(
+  currentTile,
+  validTiles,
+  isWalkable,
+);
+```
+
+**Benefits:**
+- Naturally selects the **closest reachable** attack position
+- No need to pre-pick a "best" tile then pathfind to it
+- Terminates as soon as any valid tile is reached
+- Handles obstacles and blocked tiles automatically
+
+**Example:**
+```
+Target at (10, 10)
+Valid melee tiles: (9,10), (11,10), (10,9), (10,11)
+Player at (5, 10)
+
+BFS explores: (6,10) → (7,10) → (8,10) → (9,10) ✓
+Stops immediately — found a valid attack tile
+Path: [(6,10), (7,10), (8,10), (9,10)]
+```
+
+### Line of Sight for Ranged/Magic
+
+Ranged and magic attacks now require **line of sight** to prevent attacking through walls:
+
+```typescript
+/**
+ * OSRS-accurate Line of Sight check for ranged/magic combat.
+ * Traces a line between two tiles using Bresenham's algorithm.
+ */
+export function hasLineOfSight(
+  from: TileCoord,
+  to: TileCoord,
+  hasBlockingFlags: (x: number, z: number) => boolean,
+): boolean;
+```
+
+**Collision Mask:**
+```typescript
+// From CollisionFlags.ts
+export const CollisionMask = {
+  BLOCK_LOS: 0x02000000,      // Walls, solid objects
+  BLOCKED: 0x00200000,        // Trees, rocks, stations
+  BLOCKS_RANGED: BLOCK_LOS | BLOCKED,  // Combined mask for LoS checks
+};
+```
+
+**Usage in Combat:**
+```typescript
+// Check if ranged/magic attack has line of sight
+const hasLoS = hasLineOfSight(
+  attackerTile,
+  targetTile,
+  (x, z) => world.collision.hasFlags(x, z, CollisionMask.BLOCKS_RANGED),
+);
+
+if (!hasLoS) {
+  // Attack blocked by wall/obstacle
+  return;
+}
+```
+
+<Warning>
+**Breaking Change**: Ranged and magic attacks now require line of sight. You cannot attack through walls even if the target is within Chebyshev range.
+</Warning>
+
+### Valid Combat Tile Generation
+
+The tile system provides helpers to generate all valid attack positions:
+
+```typescript
+/**
+ * Generate all valid tiles for ranged/magic combat within Chebyshev range
+ * that also have line of sight to the target.
+ */
+export function getValidRangedTiles(
+  target: TileCoord,
+  combatRange: number,
+  isWalkable: (tile: TileCoord) => boolean,
+  hasBlockingFlags: (x: number, z: number) => boolean,
+): TileCoord[];
+
+/**
+ * Generate all valid tiles for melee combat.
+ * Range 1 (standard): cardinal only (N/S/E/W).
+ * Range 2+ (halberd): all Chebyshev tiles within range.
+ */
+export function getValidMeleeTiles(
+  target: TileCoord,
+  meleeRange: number,
+  isWalkable: (tile: TileCoord) => boolean,
+): TileCoord[];
+```
+
+**Example: Ranged Combat Positioning**
+```typescript
+// Player wants to attack target at (10, 10) with bow (range 7)
+const validTiles = getValidRangedTiles(
+  { x: 10, z: 10 },
+  7,
+  (tile) => world.collision.isWalkable(tile),
+  (x, z) => world.collision.hasFlags(x, z, CollisionMask.BLOCKS_RANGED),
+);
+
+// Returns all tiles 1-7 tiles away with clear line of sight
+// Example result: [(10,3), (10,4), (11,5), (9,5), ...] (tiles with LoS)
+// Excludes: tiles behind walls, blocked tiles, tiles at distance 0 or > 7
+```
+
+**Example: Melee Combat Positioning**
+```typescript
+// Player wants to attack target at (10, 10) with sword (range 1)
+const validTiles = getValidMeleeTiles(
+  { x: 10, z: 10 },
+  1,
+  (tile) => world.collision.isWalkable(tile),
+);
+
+// Returns cardinal tiles only: [(9,10), (11,10), (10,9), (10,11)]
+// Excludes diagonal tiles for range 1 (OSRS-accurate)
+```
+
 ## Combat Positioning
 
 ### Melee Range
@@ -199,42 +381,77 @@ export function tilesWithinMeleeRange(
 }
 ```
 
-### Best Combat Tile
+### Combat Movement Algorithm
+
+Combat movement now uses **multi-destination BFS** instead of pre-selecting a single "best" tile:
 
 ```typescript
-// Find the best tile to stand on for melee combat
-export function getBestMeleeTile(
-  target: TileCoord,
-  attacker: TileCoord,
-  meleeRange: number = 1,
-  isWalkable?: (tile: TileCoord) => boolean,
-): TileCoord | null {
-  // If already in range, stay put
-  if (tilesWithinMeleeRange(attacker, target, meleeRange)) {
-    return attacker;
+// From tile-movement.ts
+// OLD APPROACH (removed):
+// 1. Pick "best" combat tile using heuristics
+// 2. Pathfind to that specific tile
+// 3. If blocked, fail
+
+// NEW APPROACH (current):
+// 1. Generate ALL valid attack tiles
+// 2. Use findPathToAny() to find shortest path to ANY of them
+// 3. Naturally selects closest reachable position
+
+if (attackRange > 0) {
+  // Generate ALL valid destination tiles
+  let validTiles: TileCoord[];
+  if (attackType === AttackType.RANGED || attackType === AttackType.MAGIC) {
+    validTiles = getValidRangedTiles(
+      targetTile,
+      attackRange,
+      (tile) => this.isTileWalkable(tile),
+      (x, z) => this.world.collision.hasFlags(x, z, CollisionMask.BLOCKS_RANGED),
+    );
+  } else {
+    validTiles = getValidMeleeTiles(
+      targetTile,
+      attackRange,
+      (tile) => this.isTileWalkable(tile),
+    );
   }
 
-  // For range 1: CARDINAL ONLY
-  if (meleeRange === 1) {
-    const cardinalTiles = [
-      { x: target.x - 1, z: target.z }, // West
-      { x: target.x + 1, z: target.z }, // East
-      { x: target.x, z: target.z - 1 }, // South
-      { x: target.x, z: target.z + 1 }, // North
-    ];
-
-    // Find closest walkable tile
-    return cardinalTiles
-      .filter((tile) => !isWalkable || isWalkable(tile))
-      .sort((a, b) =>
-        tileChebyshevDistance(a, attacker) - tileChebyshevDistance(b, attacker)
-      )[0] ?? null;
+  if (validTiles.length === 0) {
+    return; // No valid combat position found
   }
 
-  // For range 2+: All tiles within Chebyshev distance
-  // ... implementation for halberd range
+  // Multi-destination BFS: finds shortest path to ANY valid tile
+  path = this.pathfinder.findPathToAny(
+    state.currentTile,
+    validTiles,
+    (tile) => this.isTileWalkable(tile),
+  );
 }
 ```
+
+**Advantages:**
+- **Optimal pathing**: Always finds the shortest path to a valid attack position
+- **Obstacle handling**: Automatically routes around walls and blocked tiles
+- **Natural selection**: Closest reachable tile is chosen without heuristics
+- **Line of sight**: Ranged/magic tiles pre-filtered for LoS before pathfinding
+
+### Naive Diagonal Pathing (NPCs Only)
+
+NPC chase movement uses naive diagonal pathing to enable safespotting:
+
+```typescript
+// From ChasePathfinding.ts
+// NPCs use "dumb" diagonal-first pathing (OSRS-accurate for safespotting)
+const path = pathfinder.findNaivePath(mobTile, targetTile, isWalkable);
+
+// Naive algorithm:
+// 1. Move diagonally toward target (both X and Z changing)
+// 2. Then move cardinally (only X or Z) for remaining distance
+// 3. If blocked, do nothing (enables safespotting)
+```
+
+<Info>
+**Safespotting**: The naive diagonal pathing used by NPCs allows players to position themselves where mobs cannot reach them, matching OSRS mechanics. Players use BFS which finds optimal paths, while mobs use naive pathing which can be exploited.
+</Info>
 
 ---
 
