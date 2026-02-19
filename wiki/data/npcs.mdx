@@ -64,10 +64,55 @@ interface NPCData {
 
 | Category | Description | Example |
 |----------|-------------|---------|
-| `mob` | Hostile enemy | Goblin, Bandit |
+| `mob` | Hostile enemy | Goblin, Bandit, Dark Wizard, Dark Ranger, Barbarian, Guard, Cow |
 | `boss` | Powerful enemy | Giant Spider, Dragon |
-| `neutral` | Non-combat NPC | Shopkeeper, Banker |
-| `quest` | Quest giver/target | Quest NPC, Guard |
+| `neutral` | Non-combat NPC | Shopkeeper, Banker, Captain Rowan, Forester Wilma, Fisherman Pete, Torvin, Zamorin, Lowe, Horvik, Dommik, Ellis |
+| `quest` | Quest giver/target | Quest NPCs with dialogue systems |
+
+## New Mobs (February 2026)
+
+### Combat Mobs
+
+- **Cow** (Level 2): Docile animal that drops cowhide for tanning
+- **Bandit** (Level 7): Aggressive outlaw with bronze sword
+- **Barbarian** (Level 14): Fierce desert warrior with iron equipment
+- **Guard** (Level 21): Town guard with bronze sword, drops iron equipment
+- **Dark Ranger** (Level 33): Ranged attacker using bronze arrows
+- **Dark Wizard** (Level 42): Magic attacker using Wind Strike spell
+
+### Quest NPCs
+
+- **Captain Rowan**: Town guard captain, starts "Goblin Slayer" quest
+- **Forester Wilma**: Woodcutting trainer, starts "Lumberjack's First Lesson" quest
+- **Fisherman Pete**: Fishing trainer and shop owner, starts "Fresh Catch" quest
+- **Torvin**: Dwarven smith, starts "Torvin's Tools" quest
+- **Wizard Zamorin**: Magic shop owner, starts "Rune Mysteries" quest
+- **Lowe**: Bowyer and fletcher, starts "Fletcher's Introduction" quest
+- **Dommik**: Crafting supplier, starts "Crafting Basics" quest
+- **Ellis**: Tanner who converts hides to leather
+
+## Dialogue System
+
+NPCs now support quest-aware dialogue with stage-specific responses:
+
+```typescript
+interface DialogueNode {
+  id: string;
+  text: string;
+  responses?: DialogueResponse[];
+}
+
+interface DialogueResponse {
+  text: string;
+  nextNodeId: string;
+  effect?: string; // "openBank", "openStore", "startQuest:quest_id", "completeQuest:quest_id"
+}
+```
+
+**Quest Overrides**: NPCs can have different dialogue based on quest progress:
+- `in_progress`: Shown while quest is active
+- `ready_to_complete`: Shown when quest objectives are met
+- `completed`: Shown after quest completion
 
 ---
 
@@ -162,15 +207,27 @@ export function calculateNPCDrops(npcId: string): Array<{ itemId: string; quanti
 
 ## Available 3D Models
 
-NPCs use rigged GLB models from `/assets/world/forge/`:
+NPCs use rigged VRM models from `/assets/models/`:
 
 | Model Path | Used For |
 |------------|----------|
-| `goblin/goblin_rigged.glb` | Goblins |
-| `thug/thug_rigged.glb` | Bandits, thugs |
-| `human/human_rigged.glb` | Guards, knights, shopkeepers |
-| `troll/troll_rigged.glb` | Hobgoblins |
-| `imp/imp_rigged.glb` | Dark warriors |
+| `models/mobs/goblin/goblin.vrm` | Goblins |
+| `models/mobs/bandit/bandit.vrm` | Bandits |
+| `models/mobs/barbarian/barbarian.vrm` | Barbarians |
+| `models/mobs/gaurd/gaurd.vrm` | Town guards |
+| `models/mobs/dark-wizard/dark-wizard.vrm` | Dark wizards (magic combat) |
+| `models/mobs/dark-ranger/dark-ranger.vrm` | Dark rangers (ranged combat) |
+| `models/npcs/captain-rowan/captain-rowan.vrm` | Captain Rowan (quest NPC) |
+| `models/npcs/forester-wilma/forester-wilma.vrm` | Forester Wilma (woodcutting trainer) |
+| `models/npcs/fisherman-pete/fisherman-pete.vrm` | Fisherman Pete (fishing trainer) |
+| `models/npcs/torvin/torvin.vrm` | Torvin (smithing trainer) |
+| `models/npcs/Zamorin/Zamorin.vrm` | Wizard Zamorin (magic shop) |
+| `models/npcs/Lowe/Lowe.vrm` | Lowe (bowyer/fletcher) |
+| `models/npcs/horvik/Horvik.vrm` | Horvik (armorer) |
+| `models/npcs/dommik/Dommik.vrm` | Dommik (crafting supplier) |
+| `models/npcs/tanner-ellis/tanner-ellis.vrm` | Ellis (tanner) |
+| `models/npcs/banker/banker.vrm` | Bank clerks |
+| `models/npcs/shopkeeper/shopkeeper.vrm` | General shopkeepers |
 
 ---
 
