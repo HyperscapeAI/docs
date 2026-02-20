@@ -841,6 +841,60 @@ export function dispatchInventoryAction(
 
 ---
 
+---
+
+## Equipment Interaction Optimizations
+
+### Stackable Equipment Merge (PR #887)
+
+When equipping stackable items (like arrows) that match what's already equipped, the system now merges quantities directly instead of unequipping and re-equipping:
+
+```typescript
+// From EquipmentSystem.ts
+// Same-type stackable merge: if equipping the same stackable item that's
+// already in the slot (e.g. adding arrows to an existing arrow stack),
+// just merge the quantity directly. Avoids the unequip→inventory flash→re-equip cycle.
+const isSameStackableMerge =
+  itemData.stackable &&
+  equipmentSlot.itemId !== null &&
+  String(equipmentSlot.itemId) === String(data.itemId);
+
+if (!isSameStackableMerge) {
+  // Different item or empty slot — unequip current item first if any
+  if (equipmentSlot.itemId) {
+    await this.unequipItem({
+      playerId: data.playerId,
+      slot: data.slot,
+    });
+  }
+}
+
+// Later in the function...
+if (isSameStackableMerge) {
+  // Merge quantity into already-equipped stack
+  equipmentSlot.quantity = (equipmentSlot.quantity ?? 0) + quantityToEquip;
+} else {
+  // Now safe to equip - item has been removed from inventory
+  equipmentSlot.itemId = data.itemId;
+  equipmentSlot.item = itemData;
+  equipmentSlot.quantity = quantityToEquip;
+}
+```
+
+**Benefits:**
+- Eliminates brief inventory flash showing combined arrow count before equip
+- Reduces network packets and database writes
+- Improves responsiveness when equipping arrows
+- Maintains transaction safety (lock still held throughout)
+
+**Example Scenario:**
+1. Player has 50 bronze arrows equipped
+2. Player equips 100 bronze arrows from inventory
+3. Old behavior: Unequip 50 → inventory shows 150 → equip 150 (visible flash)
+4. New behavior: Directly merge to 150 equipped (no flash)
+
+---
+
 ## Related Documentation
 
 - [Context Menu System](/wiki/game-systems/context-menus)
