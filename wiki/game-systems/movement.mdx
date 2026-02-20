@@ -175,9 +175,9 @@ export const CARDINAL_DIRECTIONS = [
 
 ### BFS Pathfinder (OSRS "Smartpathing")
 
-<Info>
-**Recent Update (PR #886)**: Player movement now uses BFS as the primary pathfinder instead of naive diagonal-first. This eliminates visible diagonal zigzag when walking to attack targets and matches OSRS "smartpathing" behavior.
-</Info>
+<Warning>
+**Breaking Change (PR #886)**: Player movement now uses BFS as the primary pathfinder instead of naive diagonal-first. This is a significant change that affects all player movement and combat positioning.
+</Warning>
 
 Hyperscape uses **BFS (Breadth-First Search)** as the primary pathfinding algorithm for all player movement, matching OSRS "smartpathing":
 
