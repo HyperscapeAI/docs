@@ -23,6 +23,200 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Melee Weapon Overhaul & Combat Pathfinding" description="February 2026" date="2026-02-20">
+
+### ⚔️ Melee Weapon System Overhaul (PR #894)
+
+Major weapon categorization update with shortsword rename, 2H weapon support, and batch export workflow:
+
+- **Shortsword Rename**: Generic sword items renamed to shortsword across entire codebase
+  - Item IDs: `bronze_sword` → `bronze_shortsword`, `iron_sword` → `iron_shortsword`, etc.
+  - Display names updated: "Bronze Sword" → "Bronze Shortsword"
+  - All tests updated (72 files changed with 1888 additions, 522 deletions)
+  - Affects: inventory, bank, duel, quest, smithing, and combat systems
+- **2H Sword Combat Emotes**: New two-handed weapon animations
+  - `2h_idle` stance emote for idle state
+  - `2h_slash` attack emote for combat
+  - Full client pipeline integration with emote system
+  - Weapon-aware idle emote reset (2H weapons return to `2h_idle` instead of `idle`)
+- **Weapon Type Expansion**: New weapon categories in `WeaponType` enum
+  - `SHORTSWORD`: One-handed short blades (bronze, iron, steel, mithril, adamant, rune)
+  - `LONGSWORD`: One-handed long blades (future content)
+  - `SCIMITAR`: Curved one-handed blades (future content)
+  - `2H_SWORD`: Two-handed great swords (future content)
+- **Combat Animation Mapping**: All melee weapon types now map to `sword_swing` animation
+  - Unified animation system in `CombatAnimationManager`
+  - Consistent attack visuals across weapon types
+  - Replaces weapon-specific animation routing
+- **Weapon Style Configuration**: Updated size and proportion constants
+  - `MIN_WEAPON_SIZES`: Shortsword 0.35m, Longsword 0.5m, Scimitar 0.45m, 2H Sword 0.8m
+  - `MAX_WEAPON_SIZES`: Shortsword 2.0m, Longsword 3.0m, Scimitar 2.5m, 2H Sword 4.5m
+  - `BASE_WEAPON_PROPORTIONS`: Shortsword 45% of height, Longsword 65%, Scimitar 55%, 2H Sword 90%
+
+**Asset Forge Batch Workflow** (Equipment Viewer):
+
+- **Batch Apply Fitting**: Apply fitting configuration to all weapons of same subtype
+  - New `/api/assets/batch-apply-fitting` endpoint
+  - Applies `hyperscapeAttachment` metadata to multiple assets in one operation
+  - Updates position, rotation, scale, grip point, and avatar height for all selected weapons
+  - Progress overlay with current asset name and completion percentage
+- **Batch Review & Export**: Step through weapons and export aligned GLBs
+  - New batch review mode with navigation bar (prev/next/skip)
+  - Visual mesh swapping without reloading transforms (preserves fitting)
+  - Export current weapon or export all remaining weapons
+  - Progress tracking with green checkmarks for exported weapons
+  - Auto-advance to next un-exported weapon after export
+- **Weapon Subtype Grouping**: Equipment list now groups weapons by subtype
+  - Collapsible sections: Shortswords, Longswords, Scimitars, 2H Swords, etc.
+  - Chevron icons for expand/collapse
+  - Counts displayed per group
+- **Geometry Normalization**: Advanced transform flattening for batch consistency
+  - `flattenSceneTransforms()`: Bakes all intermediate node transforms into mesh geometry
+  - Eliminates GLTF hierarchy differences between weapons
+  - Axis alignment: Rotates geometry so longest axis matches reference weapon
+  - Flip detection: Uses vertex centroid bias to detect 180° flips
+  - Position alignment: Shifts bbox center to match reference weapon
+  - Ensures consistent grip offset across all weapons in batch
+- **Swap Equipment Content**: New `swapEquipmentContent()` method on `EquipmentViewerRef`
+  - Replaces visual mesh without touching transforms
+  - Preserves normalization state (grip offset, bbox center, longest axis)
+  - Enables batch review without full reload
+  - Maintains scale, rotation, and position from original weapon
+- **Save Aligned GLB**: New `/api/assets/:id/save-aligned` endpoint
+  - Saves aligned (fitted) GLB model to server
+  - Updates metadata.json with `alignedModelPath` and `alignedAt` timestamp
+  - Returns relative path for download
+- **UI Components**:
+  - `BatchProgressOverlay`: Simple spinner for batch apply fitting
+  - `BatchReviewBar`: Navigation bar with prev/next/export controls
+  - Progress dots showing current weapon and export status
+  - Export All button with remaining count
+  - Done button to exit review mode
+
+### 🎯 OSRS-Accurate Combat Pathfinding (PR #886)
+
+BFS primary pathfinding with multi-destination search and line-of-sight validation:
+
+- **BFS as Primary Pathfinder**: Player movement now uses BFS instead of naive diagonal-first
+  - Eliminates visible diagonal zigzag when walking to attack targets
+  - Matches OSRS \"smartpathing\" behavior
+  - Optimal paths around obstacles
+  - `findPath()` now calls `findBFSPath()` directly (no naive fallback)
+- **Multi-Destination BFS**: New `findPathToAny()` method for combat
+  - Generates ALL valid attack tiles (melee cardinal, ranged/magic with LoS)
+  - Terminates at first valid tile reached
+  - Naturally finds shortest path to closest reachable position
+  - No need to pre-pick \"best\" tile with heuristics
+- **Line of Sight**: Ranged and magic attacks now require LoS
+  - Bresenham line trace against `BLOCKS_RANGED` collision flags
+  - Prevents attacking through walls when in Chebyshev range
+  - `hasLineOfSight()` function in `TileSystem.ts`
+  - Used by both pathfinding and attack validation
+- **Valid Tile Generation**: New helper functions
+  - `getValidRangedTiles()`: All tiles in range with LoS to target
+  - `getValidMeleeTiles()`: Cardinal tiles for range 1, Chebyshev for range 2+
+  - Pre-filters tiles before pathfinding for efficiency
+- **NPC Chase Pathfinding**: NPCs still use naive diagonal pathing
+  - `findNaivePath()` exposed publicly for `ChasePathfinding.ts`
+  - Enables safespotting mechanics (OSRS-accurate)
+  - Players use BFS, mobs use naive (intentional difference)
+- **Pending Attack Manager**: Updated range checks with LoS validation
+  - Ranged/magic attacks verify LoS before executing
+  - Melee attacks use cardinal-only for range 1
+  - Prevents attacks through walls
+- **Collision Masks**: New `BLOCKS_RANGED` mask
+  - Combines `BLOCK_LOS` and `BLOCKED` flags
+  - Used for LoS checks in combat and pathfinding
+- **Testing**: All 608 combat tests pass (1 pre-existing unrelated failure)
+
+**Breaking Changes:**
+- Ranged and magic attacks now require line of sight (cannot attack through walls)
+- Player movement paths may differ from previous naive diagonal-first behavior
+
+### 🗺️ Quest Minimap Icons (PR #885)
+
+Quest-state-aware icons on minimap for quest giver NPCs:
+
+- **Quest Icon System**: Blue icons for quest NPCs
+  - Blue "!" for available quests (not started)
+  - Blue "?" for in-progress quests
+  - Icons disappear when all quests completed
+- **NPC Quest Configuration**: New `questIds` field in `NPCEntityConfig`
+  - Array of quest IDs the NPC offers
+  - Passed through spawn → network → client pipeline
+  - Minimap fetches quest statuses from server
+- **Quest Status Sync**: Client requests quest statuses for minimap
+  - New `getQuestStatuses` network message
+  - Server responds with status map (not_started, in_progress, completed)
+  - Minimap updates icons based on quest state
+- **Service Detection Fix**: Fixed broken NPC service detection in Minimap
+  - `services` is `string[]`, not `{ types: string[] }`
+  - Also fixes bank/shop icon detection
+  - Proper type casting for service array
+- **Icon Rendering**: Quest icons drawn with filled circle and symbol
+  - "!" symbol for available quests
+  - "?" symbol for in-progress quests
+  - Cyan color (#00ffff) for visibility
+
+### 🔧 Instant Item & Coin Pickup (PR #888)
+
+Visually instant pickup by deferring database persistence:
+
+- **Item Pickup**: Ground entity removed before database write
+  - `addItem()` now accepts `silent` flag to skip DB persist and emit
+  - `pickupItem()` adds to memory, removes ground entity, emits update, THEN awaits DB persist
+  - Player sees instant feedback while persistence is still guaranteed
+  - No item loss or duplication risk (pickup lock held throughout)
+- **Coin Pickup**: Same responsive pattern for coins
+  - `addCoins()` now accepts `skipPersist` flag
+  - Coin ground entity removed before database write
+  - `persistCoinsImmediate()` made public for manual persistence
+  - Coin persist happens after removal, still guaranteed before lock release
+- **Performance Impact**: Eliminates 500ms+ database round-trip blocking visual feedback
+- **Security**: DB persist still awaited (not fire-and-forget), pickup lock prevents races
+- **Testing**: All 58 inventory tests pass (pickup, moveItem, transactionLock, coinPersistence, coinPouch)
+
+### 🎒 Stackable Equipment Merge (PR #887)
+
+Direct quantity merge when equipping same stackable item already equipped:
+
+- **Optimization**: Arrows (or other stackables) that match equipped slot merge directly
+  - Eliminates unequip → inventory → re-equip cycle
+  - Prevents brief inventory flash showing combined count before equip
+  - Adds quantity directly to equipped stack
+- **Same-Type Detection**: `isSameStackableMerge` flag checks:
+  - Item is stackable
+  - Slot already has an item
+  - Item IDs match (String comparison for safety)
+- **Conditional Unequip**: Only unequip if NOT a same-type stackable merge
+  - Different item or empty slot → unequip current item first
+  - Same stackable → merge quantity directly
+- **Code Path**: Simplified equipment flow with early merge detection
+  - Reduces network packets and database writes
+  - Improves responsiveness for arrow equipping
+
+### 🐛 Multiplayer Sync Fixes (PR #884)
+
+Mob position desync and stuck combat rotation fixes:
+
+- **Combat Rotation Clearing**: Clear `inCombatRotation` flag on movement start in `TileInterpolator`
+  - Was never cleared, causing mobs to keep combat-facing after combat ended
+  - Mobs now return to normal AI-driven rotation when moving
+- **Mob Rotation Routing**: Only route `entityModified` to `setCombatRotation` for players, not mobs
+  - Mobs handle combat rotation locally in `MobEntity.clientUpdate()`
+  - Prevents server rotation packets from conflicting with client-side mob AI
+- **Damage Splat Positioning**: Prefer entity visual position over server position
+  - Damage splats appear where mob visually is (interpolated position)
+  - Fixes splats appearing at server position during client interpolation
+- **Movement Packet Optimization**: Replace redundant `entityModified` with `emote` on `tileMovementEnd`
+  - Reduces packet duplication
+  - Cleaner network protocol
+- **Movement Cancellation Fix**: `cancelMovement` sends `tileMovementEnd` instead of `entityModified`
+  - Client `TileInterpolator` properly stops interpolating old path
+  - Fixes visual desync when movement is cancelled
+
+</Update>
+
 <Update label="Mob Combat & Multiplayer Fixes" description="February 2026" date="2026-02-19">
 
 ### ⚔️ Mob Magic & Ranged Attacks (PR #826)
