@@ -158,6 +158,86 @@ bun run check:deps       # Check dependencies (depcheck)
 bun run check:all        # Full check (knip)
 ```
 
+## Equipment Fitting Workflow
+
+Asset Forge includes a comprehensive equipment fitting system for weapons and armor:
+
+### Equipment Viewer
+
+The Equipment Viewer (`/equipment` page) provides tools for fitting weapons to VRM avatars:
+
+**Features:**
+- **Grip Detection**: Automatic weapon handle detection using AI vision
+  - Analyzes weapon geometry to find grip point
+  - Normalizes weapon position so grip is at origin
+  - Enables consistent hand placement across all weapons
+- **Manual Adjustment**: Fine-tune position, rotation, and scale
+  - 3-axis position controls (X, Y, Z in meters)
+  - 3-axis rotation controls (X, Y, Z in degrees)
+  - Scale override for weapon size
+  - Real-time preview with VRM avatar
+- **Bone Attachment**: Attach to VRM hand bones
+  - Right hand (default) or left hand
+  - Supports Asset Forge V1 and V2 metadata formats
+  - Pre-baked matrix transforms for advanced positioning
+- **Export Options**:
+  - Save configuration to metadata.json
+  - Export aligned GLB model (weapon with baked transforms)
+  - Export equipped avatar (VRM with weapon attached)
+
+### Batch Workflow (New in PR #894)
+
+For processing multiple weapons of the same type efficiently:
+
+**1. Batch Apply Fitting:**
+- Select a weapon and configure fitting (position, rotation, scale, grip)
+- Click "Apply Fitting to All [subtype]s" button
+- Applies configuration to all weapons of same subtype (e.g., all shortswords)
+- Progress overlay shows current asset and completion percentage
+- Updates `hyperscapeAttachment` metadata for all selected weapons
+
+**2. Batch Review & Export:**
+- Click "Review & Export All [subtype]s" button
+- Enters review mode with navigation bar at bottom
+- Step through weapons using prev/next buttons
+- Visual mesh swaps without reloading transforms (preserves fitting)
+- Export current weapon or skip to next
+- Export All button processes remaining weapons automatically
+- Progress dots show current weapon and export status (green checkmarks)
+- Done button exits review mode and restores original weapon
+
+**Geometry Normalization:**
+- Flattens all intermediate GLTF node transforms into mesh geometry
+- Eliminates hierarchy differences between weapons from different sources
+- Axis alignment: Rotates geometry so longest axis matches reference weapon
+- Flip detection: Uses vertex centroid bias to detect 180° orientation flips
+- Position alignment: Shifts bbox center to match reference weapon
+- Ensures consistent grip offset across all weapons in batch
+
+**API Endpoints:**
+- `POST /api/assets/batch-apply-fitting` - Apply config to multiple assets
+- `POST /api/assets/:id/save-aligned` - Save aligned GLB model
+
+**UI Components:**
+- `BatchProgressOverlay` - Progress spinner for batch operations
+- `BatchReviewBar` - Navigation bar with export controls
+- Weapon subtype grouping with collapsible sections
+
+### Weapon Subtypes
+
+Weapons are now organized by subtype for batch operations:
+
+- **Shortsword**: One-handed short blades (bronze, iron, steel, mithril, adamant, rune)
+- **Longsword**: One-handed long blades
+- **Scimitar**: Curved one-handed blades
+- **2H Sword**: Two-handed great swords
+- **Axe**: One-handed and two-handed axes
+- **Mace**: Blunt weapons
+- **Dagger**: Short stabbing weapons
+- **Spear**: Piercing polearms
+
+Each subtype has specific size constraints and proportions defined in `equipment.ts` constants.
+
 ## Asset Pipeline
 
 ```mermaid
@@ -165,8 +245,9 @@ flowchart LR
     A[Concept/Prompt] --> B[GPT-4 Design]
     B --> C[MeshyAI 3D]
     C --> D[Preview/Edit]
-    D --> E[Export GLB]
-    E --> F[Game Assets]
+    D --> E[Batch Fitting]
+    E --> F[Export GLB]
+    F --> G[Game Assets]
 ```
 
 ## Output Formats
