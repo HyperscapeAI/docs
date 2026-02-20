@@ -274,8 +274,12 @@ async dropItem(data: { playerId: string; slot: number; quantity: number }): Prom
 
 ### Pickup Items
 
+<Info>
+**Performance Update (PR #888)**: Item and coin pickup is now visually instant. The ground entity is removed before the database write, eliminating the 500ms+ delay players previously experienced.
+</Info>
+
 ```typescript
-// Pickup ground item - with race condition protection
+// Pickup ground item - with instant visual feedback
 async pickupItem(data: { playerId: string; entityId: string }): Promise<void> {
   // Prevent double-pickup via locks
   if (this.pickupLocks.has(data.entityId)) return;
@@ -297,11 +301,52 @@ async pickupItem(data: { playerId: string; entityId: string }): Promise<void> {
       return;
     }
     
-    // Try to add to inventory
-    const success = await this.addItem(data.playerId, groundItem.itemId, groundItem.quantity);
+    // RESPONSIVE PICKUP: Add to memory first (silent = skip DB persist + emit),
+    // remove ground entity and emit inventory update immediately so the player
+    // sees instant feedback, THEN await the DB persist (still guaranteed, just
+    // doesn't block the visible actions). Pickup lock is held throughout.
+    const added = await this.addItem({
+      playerId: data.playerId,
+      itemId: groundItem.itemId,
+      quantity: groundItem.quantity,
+      silent: true,  // We'll emit update + persist ourselves after world removal
+    });
     
-    if (success) {
-      groundItemSystem.removeGroundItem(data.entityId);
+    if (added) {
+      // Remove ground entity IMMEDIATELY (before DB persist)
+      const removed = groundItemSystem.removeGroundItem(data.entityId);
+      
+      if (!removed) {
+        // Rollback: remove from inventory if ground entity removal failed
+        await this.removeItem({
+          playerId: data.playerId,
+          itemId: groundItem.itemId,
+          quantity: groundItem.quantity,
+        });
+        this.emitTypedEvent(EventType.UI_MESSAGE, {
+          playerId: data.playerId,
+          message: "Failed to pick up item. Please try again.",
+          type: "warning",
+        });
+      } else {
+        // Success: emit inventory update to client IMMEDIATELY (no DB wait)
+        const playerIdKey = toPlayerID(data.playerId);
+        if (playerIdKey) {
+          this.emitInventoryUpdate(playerIdKey);
+        }
+        
+        // Await DB persist — item is already visible to client and ground entity
+        // is destroyed, but we still guarantee persistence before releasing the
+        // pickup lock to prevent any race conditions.
+        if (itemId === "coins") {
+          const coinSystem = this.getCoinPouchSystem();
+          if (coinSystem) {
+            await coinSystem.persistCoinsImmediate(data.playerId);
+          }
+        } else {
+          await this.persistInventoryImmediate(data.playerId);
+        }
+      }
     } else {
       this.emitTypedEvent(EventType.UI_MESSAGE, {
         playerId: data.playerId,
@@ -314,6 +359,19 @@ async pickupItem(data: { playerId: string; entityId: string }): Promise<void> {
   }
 }
 ```
+
+**Key Changes:**
+- `addItem()` now accepts `silent` flag to skip DB persist and event emission
+- Ground entity removed before database write (instant visual feedback)
+- Inventory update emitted immediately after ground entity removal
+- Database persist happens afterward (still guaranteed before lock release)
+- No item loss or duplication risk (pickup lock held throughout)
+- Coin pickup uses same pattern with `skipPersist` flag on `addCoins()`
+
+**Performance Impact:**
+- Before: 500ms+ database round-trip blocked visual feedback
+- After: Ground item vanishes instantly, DB persist happens in background
+- Security: DB persist still awaited (not fire-and-forget)
 
 ---
 
