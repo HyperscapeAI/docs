@@ -182,6 +182,34 @@ packages/shared/src/systems/shared/
 └── interaction/    # Player interactions
 ```
 
+### GPU-Instanced Particle System
+
+The shared package includes a centralized particle system that uses GPU instancing for high-performance visual effects:
+
+**Architecture:**
+- **ParticleManager**: Central router that dispatches particle events to specialized sub-managers
+- **WaterParticleManager**: GPU-instanced fishing spot effects (4 InstancedMeshes)
+- **GlowParticleManager**: Instanced glow billboards for altars, fires, torches
+
+**Performance Benefits:**
+- Reduces ~150 draw calls to 4 per fishing spot
+- FPS improvement: 65-70 → 120 on reference hardware
+- GPU-driven animations (parabolic arcs, wobble, twinkle, ring expansion)
+- ~450 lines of CPU animation code eliminated
+
+**Location:**
+```
+packages/shared/src/entities/managers/particleManager/
+├── ParticleManager.ts        # Central router with ownership tracking
+├── WaterParticleManager.ts   # Fishing spot particles (splash, bubble, shimmer, ripple)
+└── GlowParticleManager.ts    # Glow billboards (altar, fire, torch presets)
+```
+
+**Integration:**
+- ResourceSystem creates ParticleManager on client startup
+- ResourceEntity delegates particle lifecycle to ParticleManager
+- Per-frame update driven by ResourceSystem.update()
+
 ### Manifest-Driven Content
 
 Game content is defined in JSON manifest files in `packages/server/world/assets/manifests/`:
