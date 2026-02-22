@@ -414,6 +414,153 @@ export class DuelCombatResolver {
 }
 ```
 
+### DuelCombatAI
+
+Tick-based combat AI for streaming duels with trash talk system:
+
+**Location:** `packages/server/src/arena/DuelCombatAI.ts`
+
+```typescript
+export class DuelCombatAI {
+  constructor(
+    service: EmbeddedHyperscapeService,
+    opponentId: string,
+    options: { useLlmTactics?: boolean },
+    runtime?: IAgentRuntime,
+    sendChatMessage?: (text: string) => void
+  );
+
+  setContext(agentName: string, opponentLevel: number, opponentName: string): void;
+  start(): void;
+  stop(): void;
+  externalTick(): Promise<void>;
+  getStats(): { attacksLanded: number; healsUsed: number; totalDamageDealt: number };
+}
+```
+
+**Features:**
+
+#### Health Threshold Taunts
+
+Triggered at 75%, 50%, 25%, 10% HP milestones:
+
+```typescript
+// Own HP low taunts
+const OWN_LOW_TAUNTS = [
+  "Not even close!",
+  "I've had worse",
+  "Is that all?",
+  "Still standing",
+  "Barely a scratch",
+  "You'll have to do better"
+];
+
+// Opponent HP low taunts
+const OPPONENT_LOW_TAUNTS = [
+  "GG soon",
+  "You're done!",
+  "Sit down",
+  "Almost there",
+  "One more hit",
+  "Time to finish this"
+];
+```
+
+**Behavior:**
+- Fires once per threshold per fight (prevents spam)
+- Compares previous vs current HP to detect threshold crossings
+- Tracks fired thresholds in `firedOwnThresholds` and `firedOpponentThresholds` sets
+- 8-second cooldown between messages (`TRASH_TALK_COOLDOWN_MS`)
+
+#### Ambient Periodic Taunts
+
+Random taunts every 15-25 ticks:
+
+```typescript
+const AMBIENT_TAUNTS = [
+  "Let's go!",
+  "Fight me!",
+  "Too slow",
+  "Bring it",
+  "Come on",
+  "Show me what you got",
+  "Is that your best?",
+  "Pathetic"
+];
+```
+
+**Behavior:**
+- Scheduled via tick counter with randomized intervals
+- Adds personality to prolonged fights
+- Respects 8-second cooldown between all messages
+
+#### LLM-Generated Taunts
+
+Uses agent character bio/style via TEXT_SMALL model:
+
+```typescript
+// Prompt includes:
+// - Agent bio (first 200 chars)
+// - Communication style hints (first 3)
+// - Current HP percentages
+// - Fight situation (own HP low, opponent HP low, or general)
+
+const prompt = `You are ${agentName} in a duel against ${opponentName}.
+Your HP: ${ownHpPercent}%
+Opponent HP: ${opponentHpPercent}%
+
+Generate a short trash talk message (under 40 characters).
+${situation === 'own_low' ? 'You are low on health but still confident.' : ''}
+${situation === 'opponent_low' ? 'Your opponent is almost defeated.' : ''}
+Be creative and match your personality.`;
+```
+
+**Configuration:**
+- 30-token limit for overhead chat bubble
+- 3-second LLM timeout with scripted fallback
+- Temperature 0.9 for creative, varied responses
+- Fire-and-forget (never blocks combat tick loop)
+- In-flight flag prevents overlapping LLM calls
+
+**Fallback:**
+- Uses scripted taunt pools when LLM unavailable
+- Ensures trash talk works without LLM access
+- Used when LLM call fails or times out
+
+#### Integration with DuelOrchestrator
+
+```typescript
+// From DuelOrchestrator.ts
+const ai1 = new DuelCombatAI(
+  service1,
+  agent2.characterId,
+  { useLlmTactics: llmTacticsEnabled && !!runtime1 },
+  runtime1 ?? undefined,
+  // Trash talk callback
+  (text) => {
+    service1.sendChatMessage(text).catch(() => {});
+  }
+);
+ai1.setContext(agent1.name, agent2.combatLevel, agent2.name);
+ai1.start();
+```
+
+**Combat Loop:**
+- DuelOrchestrator drives AI ticks via `externalTick()`
+- Runs every 600ms (game tick duration)
+- Synchronized with combat system tick cadence
+- Stats logged on AI stop (attacks, heals, damage dealt)
+
+#### Social System Update
+
+CHAT_MESSAGE action now allowed during combat:
+
+```typescript
+// From packages/plugin-hyperscape/src/actions/social.ts
+// Previously blocked in combat state
+// Now enables trash talk without breaking combat flow
+```
+
 ---
 
 ## Duel Session Structure
