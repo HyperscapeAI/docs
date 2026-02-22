@@ -441,6 +441,40 @@ docker logs hyperscape-postgres
 docker logs hyperscape-cdn
 ```
 
+### Database Prepared Statements Error (XX000)
+
+**Symptom**: Database queries fail with error code `XX000` when using Supabase Supavisor pooler
+
+**Cause**: Supavisor connection pooler doesn't support prepared statements in transaction mode
+
+**Solution**: Update to latest code (commits 8aaaf28, f7ab9f7 fixed this). Prepared statements are now disabled for Supavisor:
+
+```typescript
+// From packages/server/src/database/client.ts
+const client = postgres(connectionString, {
+  prepare: false,  // Disable prepared statements for Supavisor compatibility
+  // ... other options
+});
+```
+
+**Technical Details:**
+- Supavisor pooler operates in transaction mode
+- Transaction mode doesn't support prepared statements (PostgreSQL limitation)
+- Disabling prepared statements trades minor performance for compatibility
+- Only affects Supabase deployments using Supavisor pooler
+- Local PostgreSQL and other providers unaffected
+
+**When to Disable:**
+- Using Supabase with Supavisor pooler
+- Getting XX000 errors on database queries
+- Connection string contains `pooler.supabase.com`
+
+**When to Keep Enabled:**
+- Local PostgreSQL development
+- Direct PostgreSQL connections (no pooler)
+- PgBouncer in statement mode
+- Neon, Railway, or other providers without transaction pooling
+
 ## Deployment Issues
 
 ### Docker Build Failures
