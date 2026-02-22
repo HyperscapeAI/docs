@@ -216,6 +216,21 @@ Migrations are stored in `packages/server/src/database/migrations/`:
 
 | Migration | Description |
 |-----------|-------------|
+| `0051_add_arena_composite_indexes.sql` | Added composite indexes for arena queries |
+| `0050_broken_krista_starr.sql` | Arena betting and staking tables (fixed in commit e4b6489) |
+| `0049_make_arena_fee_share_bet_unique.sql` | Unique constraint on arena fee shares |
+| `0048_restore_arena_multiplier_floor_at_1k.sql` | Arena points multiplier floor |
+| `0047_add_arena_staking_points_wallet_period_unique.sql` | Unique constraint on staking points |
+| `0046_fix_arena_multiplier_defaults.sql` | Arena points multiplier defaults |
+| `0045_add_arena_chain_fees_and_wallet_links.sql` | Arena chain fees and wallet linking |
+| `0044_add_arena_staking_points.sql` | Arena staking points system |
+| `0043_add_arena_invite_and_fee_share_tracking.sql` | Arena invite and fee share tracking |
+| `0042_convert_active_prayers_to_jsonb.sql` | Convert activePrayers to JSONB |
+| `0041_add_failed_transactions.sql` | Failed transaction tracking |
+| `0040_validate_constraints_and_add_agent_checks.sql` | Constraint validation and agent checks |
+| `0039_add_agent_duel_stats.sql` | Agent duel statistics tracking |
+| `0038_odd_luke_cage.sql` | Combat stats and onchain outbox |
+| `0037_track_player_combat_stats_and_onchain_outbox.sql` | Player combat stats tracking |
 | `0027_messy_dorian_gray.sql` | Added operations_log table for write-ahead logging and crash recovery |
 | `0026_add_magic_skill.sql` | Added magicLevel, magicXp, and selectedSpell columns for magic combat |
 | `0023_rapid_scorpion.sql` | Added action_bar_storage table for action bar persistence |
@@ -223,12 +238,6 @@ Migrations are stored in `packages/server/src/database/migrations/`:
 | `0016_add_prayer_system.sql` | Added prayer skill, points, and active prayers tracking |
 | `0015_add_smithing_skill.sql` | Added smithingLevel and smithingXp columns |
 | `0014_add_mining_skill.sql` | Added miningLevel and miningXp columns |
-| `0013_add_auto_retaliate.sql` | Added autoRetaliate preference |
-| `0012_add_bank_placeholders.sql` | Added bank placeholder support |
-| `0011_add_bank_tabs.sql` | Added bank tab system |
-| `0010_add_player_deaths.sql` | Added death tracking |
-| `0009_add_inventory_slot_constraint.sql` | Added unique slot constraint |
-| `0008_add_bank_storage.sql` | Added bank storage system |
 
 ### Migration Format
 
@@ -242,6 +251,43 @@ ALTER TABLE "characters" ADD COLUMN IF NOT EXISTS "activePrayers" text DEFAULT '
 ```
 
 Migrations use `IF NOT EXISTS` to be idempotent and safe to re-run.
+
+### Migration 0050 Fix (commit e4b6489)
+
+Migration 0050 was fixed to add `IF NOT EXISTS` guards to prevent errors on fresh databases:
+
+**Problem:**
+- Migration 0050 duplicated CREATE TABLE statements from earlier migrations
+- `agent_duel_stats` table was created in both migration 0039 and 0050
+- On fresh databases, running all migrations sequentially caused 42P07 errors
+- Same table created twice without IF NOT EXISTS protection
+
+**Solution:**
+```sql
+-- Before (caused errors)
+CREATE TABLE agent_duel_stats (...);
+CREATE INDEX idx_agent_duel_stats_character_id ON agent_duel_stats(character_id);
+
+-- After (fixed in commit e4b6489)
+CREATE TABLE IF NOT EXISTS agent_duel_stats (...);
+CREATE INDEX IF NOT EXISTS idx_agent_duel_stats_character_id ON agent_duel_stats(character_id);
+```
+
+**Affected Tables:**
+- `agent_duel_stats`
+- `arena_fee_shares`
+- `arena_staking_points`
+- `wallet_links`
+
+**Impact:**
+- Fresh database installations now complete all migrations successfully
+- Prevents "relation already exists" errors (42P07)
+- Allows clean database setup from scratch
+- Fixes CI integration test failures
+
+<Info>
+  All migrations should use `IF NOT EXISTS` guards to be idempotent and safe to re-run.
+</Info>
 
 <Info>
 The `activePrayers` column stores a JSON array of prayer IDs. Format: `'["thick_skin", "burst_of_strength"]'`. Empty array when no prayers are active: `'[]'`.
