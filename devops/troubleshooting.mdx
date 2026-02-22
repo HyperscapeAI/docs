@@ -207,6 +207,7 @@ cd packages/physx-js-webidl
 - Stale test data
 - Port conflicts
 - CI environment variance (slower than local)
+- Missing WebGPU mocks for Three.js WebGPU renderer
 
 **Solution**:
 
@@ -231,6 +232,55 @@ Recent commits have adjusted test timeouts for CI reliability:
 - **Performance tests**: Adjusted heap growth and scaling thresholds for parallel test contention
 
 If tests pass locally but fail in CI, check if timeouts need adjustment for your specific test.
+
+### Integration Tests Fail with "anvil: command not found"
+
+**Symptom**: Integration tests fail because the anvil binary is missing
+
+**Cause**: Foundry toolchain not installed in CI environment
+
+**Solution**: Update to latest code (commit b344d9e fixed this):
+
+```yaml
+# .github/workflows/integration.yml now includes:
+- name: Install Foundry
+  uses: foundry-rs/foundry-toolchain@v1
+```
+
+**For local development**, install Foundry:
+
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
+```
+
+### Test Suite Fails with WebGPU Errors
+
+**Symptom**: Tests fail with "GPUShaderStage is not defined" or similar WebGPU errors
+
+**Cause**: Three.js WebGPU renderer expects browser globals that don't exist in test environment
+
+**Solution**: Update to latest code (commit 25ba63c fixed this):
+
+**Technical Details:**
+- Added `vitest.setup.ts` to mock WebGPU browser globals
+- Mocks: GPUShaderStage, GPUBufferUsage, GPUTextureUsage, etc.
+- Required by Three.js WebGPU renderer in tests
+- Fixed in `packages/server/vitest.setup.ts`
+
+### ArenaService Tests Fail After Refactor
+
+**Symptom**: ArenaService tests fail with "Cannot spy on private method" errors
+
+**Cause**: Refactored ArenaService architecture moved methods to sub-services
+
+**Solution**: Update to latest code (commit 25ba63c fixed this):
+
+**Technical Details:**
+- Added protected passthrough methods on ArenaService for test spying
+- Methods: getDb, getEligibleAgents, findReferralMappingForWalletNetwork, etc.
+- Database mock helper: `setDbMock` properly configures world.getSystem("database") mock
+- Some tests skipped pending deeper refactoring (85 skipped, 1569 passing)
 
 ### WebSocket Connection Failed
 
