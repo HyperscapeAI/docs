@@ -86,6 +86,88 @@ services:
       - ./world/assets:/usr/share/nginx/html:ro
 ```
 
+## Production Docker Images
+
+### Server Image
+
+The server Dockerfile includes all dependencies for production deployment:
+
+```dockerfile
+FROM node:20-bookworm-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git-lfs \
+    python3 \
+    python3-pip \
+    unzip
+
+# Install Bun
+RUN curl -fsSL https://bun.sh/install | bash
+
+# Set CI=true to skip asset download
+ENV CI=true
+
+# Copy application
+COPY . /app
+WORKDIR /app
+
+# Install dependencies and build
+RUN bun install
+RUN bun run build
+
+# Start server
+CMD ["bun", "start"]
+```
+
+**Key Features:**
+- **bookworm-slim**: Debian 12 base for Python 3.11+ support
+- **build-essential**: Required for native module compilation (PhysX, etc.)
+- **git-lfs**: Asset validation and checks
+- **CI=true**: Skips asset download in production (assets served from CDN)
+
+### Vast.ai Keeper Image
+
+The vast-keeper package uses a specialized image for GPU instance provisioning:
+
+```dockerfile
+FROM node:20-bookworm-slim
+
+# Install Python 3.11+ and vastai SDK
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    build-essential \
+    git-lfs \
+    unzip
+
+# Install vastai SDK with --break-system-packages for Debian 12 (PEP 668)
+RUN pip3 install --break-system-packages vastai
+
+# Generate SSH keys for secure instance access
+RUN ssh-keygen -t rsa -b 4096 -f /root/.ssh/id_rsa -N ""
+
+# Install Bun
+RUN curl -fsSL https://bun.sh/install | bash
+
+# Copy application
+COPY . /app
+WORKDIR /app
+
+# Install dependencies
+RUN bun install
+
+# Start keeper service
+CMD ["bun", "run", "start"]
+```
+
+**Key Features:**
+- **Python 3.11+**: Required for vastai-sdk (needs Python 3.10+)
+- **--break-system-packages**: Required for pip3 on Debian 12 due to PEP 668
+- **SSH key generation**: Enables secure access to provisioned instances
+- **vastai CLI**: Installed as Python package (not binary)
+
 ## Resetting Containers
 
 ### Reset Database
