@@ -173,6 +173,41 @@ Set `DATABASE_URL` in environment:
 DATABASE_URL=postgresql://user:pass@host:5432/hyperscape
 ```
 
+### Connection Pooling (Supabase)
+
+When using Supabase with the Supavisor connection pooler, prepared statements must be disabled (fixed in commits 8aaaf28, f7ab9f7):
+
+```typescript
+// From packages/server/src/database/client.ts
+const client = postgres(connectionString, {
+  prepare: false,  // Disable prepared statements for Supavisor compatibility
+  max: 10,
+  idle_timeout: 20,
+  connect_timeout: 10
+});
+```
+
+**Why This Is Needed:**
+- Supavisor operates in **transaction mode** for connection pooling
+- Transaction mode doesn't support prepared statements (PostgreSQL limitation)
+- Attempting to use prepared statements causes `XX000` errors: "prepared statement does not exist"
+- Disabling prepared statements trades minor performance for compatibility
+
+**When to Disable:**
+- Using Supabase with Supavisor pooler
+- Getting XX000 errors on database queries
+- Connection string contains `pooler.supabase.com`
+
+**When to Keep Enabled:**
+- Local PostgreSQL development
+- Direct PostgreSQL connections (no pooler)
+- PgBouncer in statement mode
+- Neon, Railway, or other providers without transaction pooling
+
+<Warning>
+  If you see `XX000` errors, check if your connection string uses a pooler and set `prepare: false`.
+</Warning>
+
 ## Migrations
 
 Migrations are stored in `packages/server/src/database/migrations/`:
