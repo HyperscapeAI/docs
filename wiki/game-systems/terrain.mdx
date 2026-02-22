@@ -49,50 +49,69 @@ All terrain generation constants are centralized in `TerrainHeightParams.ts` to 
 
 ```typescript
 // From TerrainHeightParams.ts
-export const TERRAIN_HEIGHT_PARAMS = {
-  // Noise layers
-  continentScale: 0.002,
-  continentWeight: 0.35,
-  ridgeScale: 0.008,
-  ridgeWeight: 0.15,
-  hillScale: 0.02,        // Synced: was 0.012 in worker, 0.02 in main
-  hillWeight: 0.25,
-  erosionScale: 0.04,
-  erosionWeight: 0.10,
-  detailScale: 0.1,
-  detailWeight: 0.08,
-  persistence: 0.6,       // Synced: was 0.5 in worker
-  
-  // Island configuration
-  islandCenterX: 5000,
-  islandCenterZ: 5000,
-  islandRadius: 3500,
-  islandFalloffStart: 0.7,
-  islandFalloffPower: 3.0,
-  
-  // Pond configuration
-  pondCenterX: 5000,
-  pondCenterZ: 5000,
-  pondRadius: 800,
-  pondDepth: 15,
-  pondFalloffPower: 2.0,
-  
-  // Coastline adjustment
-  coastlineStart: 0.15,
-  coastlineEnd: 0.35,
-  coastlineDepth: 8,
-  
-  // Mountain boost
-  mountainBoostThreshold: 0.7,
-  mountainBoostMultiplier: 1.5,
+export interface NoiseLayerDef {
+  scale: number;
+  weight: number;
+  octaves?: number;
+  persistence?: number;
+  lacunarity?: number;
+  iterations?: number;  // For erosion noise
+}
+
+export const CONTINENT_LAYER: NoiseLayerDef = {
+  scale: 0.0008,
+  octaves: 5,
+  persistence: 0.7,
+  lacunarity: 2.0,
+  weight: 0.35,
 };
+
+export const HILL_LAYER: NoiseLayerDef = {
+  scale: 0.02,
+  octaves: 4,
+  persistence: 0.6,
+  lacunarity: 2.2,
+  weight: 0.25,
+};
+
+// Island configuration
+export const ISLAND_RADIUS = 350;
+export const ISLAND_FALLOFF = 100;
+export const BASE_ELEVATION = 0.42;
+export const OCEAN_FLOOR_HEIGHT = 0.05;
+
+// Pond configuration
+export const POND_RADIUS = 50;
+export const POND_DEPTH = 0.55;
+export const POND_CENTER_X = -80;
+export const POND_CENTER_Z = 60;
+
+// Coastline noise for irregular shorelines
+export const COASTLINE_CIRCLE_SAMPLE_RADIUS = 2;
+export const COAST_LARGE = {
+  octaves: 3,
+  persistence: 0.5,
+  lacunarity: 2.0,
+  weight: 0.2,
+};
+
+// Mountain boost
+export const MOUNTAIN_BOOST_MAX_NORM_DIST = 2.5;
+export const MOUNTAIN_BOOST_GAUSSIAN_COEFF = 0.3;
+
+// Worker code generation
+export function buildGetBaseHeightAtJS(): string {
+  // Injects all constants into worker string
+  return `function getBaseHeightAt(worldX, worldZ) { ... }`;
+}
 ```
 
 **Implementation:**
 - `TerrainSystem` imports params as TypeScript constants
-- `TerrainWorker` injects params into inline worker string via `buildGetBaseHeightAtJS()`
+- `TerrainWorker` receives params via `buildGetBaseHeightAtJS()` injection
 - Single source of truth prevents parameter drift
 - Worker and main thread produce identical heights
+- All numeric constants baked into worker code at runtime
 
 ### Worker Height Computation
 
