@@ -24,7 +24,8 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **AI Combat** | DuelCombatAI with LLM tactics, health-triggered trash talk, weapon speed awareness |
 | **Streaming** | Live AI duels with trash talk, RTMP multi-platform streaming, HLS playback |
 | **Betting** | Solana CLOB market integration for duel betting (mainnet ready) |
-| **Rendering** | GPU-instanced particle system (97% draw call reduction), TSL shaders, WebGPU support |
+| **Rendering** | GPU-instanced ParticleManager (97% draw call reduction), TSL shaders, WebGPU support |
+| **Performance** | Fishing spot particles: 150→4 draw calls, 65→120 FPS improvement |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
 | **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
 
