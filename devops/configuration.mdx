@@ -190,6 +190,87 @@ The F5 keybind was added to match Minecraft's familiar debug screen shortcut.
   Without Privy, the game runs in anonymous mode with temporary identities.
 </Info>
 
+## Security Updates
+
+### Dependency Vulnerability Fixes (commit a390b79)
+
+Resolved 14 of 16 npm audit vulnerabilities in February 2026:
+
+**Playwright** (high severity):
+```json
+{
+  "playwright": "^1.55.1"  // Fixes GHSA-7mvr-c777-76hp
+}
+```
+
+**Vite** (multiple vulnerabilities):
+```json
+{
+  "vite": "^6.4.1"  // Fixes GHSA-g4jq-h2w9-997c, GHSA-jqfw-vq24-v9c3, GHSA-93m4-6634-74q7
+}
+```
+
+**ajv** (schema validation):
+```json
+{
+  "ajv": "^8.18.0"  // Fixes GHSA-2g4f-4pwh-qvx6
+}
+```
+
+**Root Overrides** (transitive dependencies):
+```json
+{
+  "overrides": {
+    "@trpc/server": "^11.0.0",
+    "minimatch": "^10.0.1",
+    "cookie": "^1.0.2",
+    "undici": "^7.2.0",
+    "jsondiffpatch": "^0.6.0",
+    "tmp": "^0.2.3",
+    "diff": "^7.0.0",
+    "bn.js": "^5.2.1",
+    "ai": "^4.0.38"
+  }
+}
+```
+
+**Remaining Vulnerabilities:**
+- `bigint-buffer`: No patched version available upstream
+- `elliptic`: No patched version available upstream
+
+**Audit Threshold:**
+```bash
+# CI now only fails on critical vulnerabilities
+bun audit --audit-level=critical
+```
+
+### ESLint ajv Compatibility (commit b344d9e)
+
+Fixed ESLint crash caused by forcing ajv@8 on @eslint/eslintrc:
+
+**Problem:**
+- Forcing `ajv>=8.18.0` override caused TypeError crash
+- @eslint/eslintrc requires ajv@6 for JSON Schema Draft-04 support
+- ajv@8 removed Draft-04 support, breaking ESLint initialization
+
+**Solution:**
+```json
+{
+  "overrides": {
+    // ❌ Removed - causes ESLint crash
+    // "ajv": ">=8.18.0"
+    
+    // ✅ Only override ajv in packages that support ajv@8
+    "ajv": "^8.18.0"  // Applied only to packages/shared
+  }
+}
+```
+
+**Impact:**
+- ESLint now works correctly
+- Security fix for ajv (GHSA-2g4f-4pwh-qvx6) still applied where compatible
+- @eslint/eslintrc uses ajv@6 as required
+
 ## Content Security Policy
 
 ### CSP Headers
