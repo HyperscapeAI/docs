@@ -179,6 +179,66 @@ RUN ssh-keygen -t rsa -b 4096 -f /root/.ssh/id_rsa -N ""
 Debian 12+ requires `--break-system-packages` flag for pip3 due to PEP 668 externally-managed-environment restrictions.
 </Info>
 
+## CI/CD Configuration
+
+### GitHub Actions
+
+The repository includes several CI/CD workflows:
+
+#### Build and Test (`.github/workflows/ci.yml`)
+
+Runs on every push to main:
+- Installs Foundry for MUD contracts tests
+- Runs all package tests with increased timeouts for CI
+- Validates manifest JSON files
+- Checks TypeScript compilation
+
+**Key Features:**
+- Caches dependencies for faster builds
+- Runs tests in parallel across packages
+- Fails fast on first error
+
+#### Deployment Workflows
+
+- **Railway**: `.github/workflows/deploy-railway.yml`
+- **Cloudflare**: `.github/workflows/deploy-cloudflare.yml`
+- **Vast.ai**: `.github/workflows/deploy-vast.yml`
+
+**Environment Variables Required:**
+- `RAILWAY_TOKEN` - Railway API token
+- `CLOUDFLARE_API_TOKEN` - Cloudflare API token
+- `VAST_API_KEY` - Vast.ai API key
+
+### Docker Build Configuration
+
+**Server Dockerfile:**
+```dockerfile
+FROM node:20-bookworm-slim
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git-lfs \
+    python3 \
+    python3-pip
+
+# Install Bun
+RUN curl -fsSL https://bun.sh/install | bash
+
+# Set CI=true to skip asset download in production
+ENV CI=true
+
+# Build application
+RUN bun install
+RUN bun run build
+```
+
+**Key Points:**
+- Uses bookworm-slim for Python 3.11+ support
+- Includes build-essential for native module compilation
+- Sets CI=true to skip asset download (assets served from CDN)
+- Installs git-lfs for asset checks
+
 ## Production Checklist
 
 - [ ] PostgreSQL database provisioned
@@ -188,3 +248,5 @@ Debian 12+ requires `--break-system-packages` flag for pip3 due to PEP 668 exter
 - [ ] WebSocket URL configured
 - [ ] SSL/TLS enabled
 - [ ] Vast.ai API key configured (if using GPU deployment)
+- [ ] CI/CD workflows configured with required secrets
+- [ ] DNS configured (Google DNS for Vast.ai instances)
