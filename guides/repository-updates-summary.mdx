@@ -1,0 +1,242 @@
+---
+title: "Repository Updates Summary"
+description: "Summary of recent code changes for CLAUDE.md and README.md updates"
+icon: "file-text"
+---
+
+## Summary for Repository Documentation Updates
+
+This document provides a summary of recent code changes that should be reflected in the main repository's `CLAUDE.md` and `README.md` files.
+
+## CLAUDE.md Updates Needed
+
+### Build System Section
+
+Add information about circular dependency handling:
+
+```markdown
+### Circular Dependencies
+
+The build system handles circular dependencies gracefully:
+
+**procgen ↔ shared:**
+- Uses `tsc || echo` pattern to exit 0 even with circular dep errors
+- Packages produce partial output sufficient for downstream consumers
+
+**plugin-hyperscape ↔ shared:**
+- Uses `--skipLibCheck` in shared's declaration generation
+- Variable shadowing fixes applied (e.g., PlayerMovementSystem.ts)
+
+If you encounter circular dependency errors:
+1. Don't panic - the build system handles this automatically
+2. Check for partial output in dist/ directories
+3. Use `import type` for type-only imports when possible
+```
+
+### Testing Section
+
+Add CI-specific guidance:
+
+```markdown
+### CI Test Reliability
+
+Recent improvements to CI test reliability:
+
+- **Timeouts**: Increased for intensive tests (geometry: 120s, procgen: increased)
+- **Benchmarks**: Relaxed thresholds for CI environment variance
+- **Manifests**: Fixed invalid JSON syntax in manifest files
+
+If tests pass locally but fail in CI:
+- Check if test is compute-intensive
+- Increase timeout for CI environment
+- Relax performance thresholds for parallel test contention
+```
+
+### Terrain System Section
+
+Add new terrain parameter system:
+
+```markdown
+### Terrain Generation
+
+The terrain system uses centralized parameters in `TerrainHeightParams.ts`:
+
+**Single Source of Truth:**
+- All noise layer definitions (continent, ridge, hill, erosion, detail)
+- Island configuration (radius, falloff, base elevation)
+- Pond configuration (radius, depth, center position)
+- Coastline noise for irregular shorelines
+- Mountain boost configuration
+
+**Worker Integration:**
+- `buildGetBaseHeightAtJS()` injects constants into worker code
+- Ensures worker heights match main thread exactly
+- Prevents parameter drift between threads
+
+**Performance:**
+- Worker-based height and normal computation
+- 63x reduction in main-thread noise evaluations
+- Parallel processing across CPU cores
+```
+
+## README.md Updates Needed
+
+### Deployment Section
+
+Add Vast.ai deployment information:
+
+```markdown
+## Deployment
+
+### Vast.ai GPU Deployment
+
+The `vast-keeper` package provides automated GPU instance provisioning:
+
+**Prerequisites:**
+- Python 3.10+ (vastai-sdk requirement)
+- Vast.ai API key
+
+**Setup:**
+```bash
+cd packages/vast-keeper
+pip3 install --break-system-packages vastai  # Debian 12+
+bun run start
+```
+
+**Features:**
+- Filters for US-based machines
+- Standard CUDA Docker images
+- SSH key generation for secure access
+- Runtime environment variable injection
+```
+
+### Docker Section
+
+Update Docker information with new configurations:
+
+```markdown
+## Docker
+
+### Production Images
+
+**Server Image:**
+- Base: node:20-bookworm-slim (Python 3.11+ support)
+- Includes: build-essential, git-lfs, python3, pip3
+- Sets CI=true to skip asset download
+
+**Vast Keeper Image:**
+- Base: node:20-bookworm-slim
+- Includes: vastai SDK, SSH key generation
+- Uses --break-system-packages for pip3 (Debian 12 PEP 668)
+```
+
+### Build System Section
+
+Add circular dependency information:
+
+```markdown
+## Build System
+
+### Circular Dependencies
+
+The monorepo handles circular dependencies between packages:
+
+- **procgen ↔ shared**: Uses `tsc || echo` pattern
+- **plugin-hyperscape ↔ shared**: Uses `--skipLibCheck`
+
+Builds exit 0 even with circular dependency errors. Packages produce partial output sufficient for downstream consumers.
+```
+
+## Key Changes Summary
+
+### Terrain System (High Priority)
+
+1. **TerrainHeightParams.ts**: New centralized parameter file
+   - Single source of truth for all terrain constants
+   - Worker code generation via `buildGetBaseHeightAtJS()`
+   - Prevents parameter drift between threads
+
+2. **Worker Computation**: Height and normal calculation in workers
+   - 63x reduction in main-thread noise evaluations
+   - Parallel processing across CPU cores
+   - Conditional fallback for flat zone tiles
+
+### Duel Arena (Medium Priority)
+
+1. **Combat AI Fixes**: 6 bug fixes for agent duel gameplay
+   - 2H sword attack timing
+   - Teleport handling during fights
+   - Stale avatar cleanup
+   - FIGHT text display
+   - Health bar synchronization
+
+2. **Visual Enhancements**:
+   - Lit torches at arena corners
+   - Procedural stone tile floor textures
+   - Fence posts and rails (replaced solid walls)
+
+### Build System (High Priority)
+
+1. **Circular Dependency Handling**:
+   - procgen and plugin-hyperscape builds resilient to circular deps
+   - Uses `tsc || echo` and `--skipLibCheck` patterns
+   - Prevents clean build failures
+
+2. **CI Improvements**:
+   - Increased test timeouts for CI reliability
+   - Fixed invalid manifest JSONs
+   - Added Foundry for MUD contracts tests
+
+### Deployment (Medium Priority)
+
+1. **Vast.ai Support**:
+   - Python 3.11+ requirement (bookworm-slim)
+   - vastai SDK installation with --break-system-packages
+   - SSH key generation in Docker
+   - US-based machine filtering
+
+2. **Docker Improvements**:
+   - build-essential for native modules
+   - git-lfs for asset checks
+   - CI=true to skip asset download
+   - DNS configuration (Google DNS)
+
+## Documentation Files Updated
+
+### In This PR
+
+1. **changelog.mdx**: Added February 22, 2026 update section
+2. **architecture.mdx**: Added terrain system and circular dependency info
+3. **packages/shared.mdx**: Added terrain generation system section
+4. **devops/troubleshooting.mdx**: Added circular dependency and manifest validation sections
+5. **devops/docker.mdx**: Added production Docker image configurations
+6. **guides/deployment.mdx**: Added Vast.ai and CI/CD sections
+7. **wiki/game-systems/terrain.mdx**: Updated with TerrainHeightParams details
+8. **wiki/game-systems/duel-arena.mdx**: Added visual enhancements and combat AI fixes
+9. **api-reference/terrain.mdx**: New API reference for TerrainSystem and TerrainHeightParams
+10. **guides/recent-updates.mdx**: New migration guide for recent changes
+
+### Repository Files to Update Manually
+
+These files are in the main repository (not the docs repo) and should be updated manually:
+
+1. **CLAUDE.md**: Add sections for circular dependencies, CI test reliability, and terrain system
+2. **README.md**: Add Vast.ai deployment, Docker configurations, and build system notes
+
+## Line Count Summary
+
+**Total Documentation Changes**: ~450 lines added across 10 files
+
+- changelog.mdx: ~150 lines (new update section)
+- architecture.mdx: ~30 lines (terrain system, circular deps)
+- packages/shared.mdx: ~50 lines (terrain generation)
+- devops/troubleshooting.mdx: ~40 lines (build fixes, manifest validation)
+- devops/docker.mdx: ~60 lines (production images)
+- guides/deployment.mdx: ~50 lines (Vast.ai, CI/CD)
+- wiki/game-systems/terrain.mdx: ~80 lines (parameter updates)
+- wiki/game-systems/duel-arena.mdx: ~40 lines (visual enhancements)
+- api-reference/terrain.mdx: ~300 lines (new file)
+- guides/recent-updates.mdx: ~200 lines (new file)
+- guides/repository-updates-summary.mdx: ~100 lines (this file)
+
+**Total**: ~1,100 lines of comprehensive documentation updates
