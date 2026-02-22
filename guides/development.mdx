@@ -54,6 +54,30 @@ This scans `world/assets/models/**/*.glb` and generates `world/assets/manifests/
 - Outputs cached between builds
 - Configured in `packages/server/turbo.json`
 
+### Circular Dependency Handling
+
+The build system handles circular dependencies between packages using resilient build patterns:
+
+```typescript
+// From packages/procgen/package.json and packages/plugin-hyperscape/package.json
+// Use 'tsc || echo' pattern so build exits 0 even with circular dep errors
+"build": "tsc || echo 'Build completed with warnings'"
+```
+
+**Circular Dependencies:**
+- `@hyperscape/shared` ↔ `@hyperscape/procgen` (shared imports from procgen, procgen peer-depends on shared)
+- `@hyperscape/shared` ↔ `@hyperscape/plugin-hyperscape` (similar circular dependency)
+
+**Build Strategy:**
+- When turbo runs a clean build, tsc fails because the other package's `dist/` doesn't exist yet
+- The `|| echo` pattern allows the build to exit 0 even with circular dep errors
+- Packages still produce partial output which is sufficient for downstream consumers
+- Shared package always uses `--skipLibCheck` in declaration generation to handle circular dependencies
+
+<Info>
+This is a known limitation of the current architecture. The packages produce working output despite TypeScript errors during clean builds.
+</Info>
+
 ## Port Allocation
 
 | Port | Service | Started By |
