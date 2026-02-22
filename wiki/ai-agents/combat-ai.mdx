@@ -1,534 +1,368 @@
 ---
 title: "Combat AI"
-description: "Tick-based PvP combat controller for autonomous agents"
+description: "Tick-based PvP combat controller with LLM tactics and trash talk"
 icon: "swords"
 ---
 
 ## Overview
 
-`DuelCombatAI` is a tick-based combat controller that takes over an agent's behavior during arena duels. It makes priority-based combat decisions (heal, attack, switch style) and optionally uses LLM-generated tactics and trash talk.
+DuelCombatAI is a specialized combat controller that takes over agent behavior during arena duels. It provides tick-based combat logic with optional LLM strategy planning and trash talk system.
+
+**Key Features:**
+- Priority-based decision making (heal → buff → strategy → attack)
+- Combat phase detection (opening, trading, finishing, desperate)
+- LLM-generated combat tactics using agent character
+- Health-triggered and ambient trash talk
+- Weapon speed awareness for correct attack cadence
+- Statistics tracking (attacks, heals, damage)
 
 ## Architecture
 
-### Lifecycle
-
 ```typescript
-import { DuelCombatAI } from '@hyperscape/server';
-
-// Create combat AI
-const combatAI = new DuelCombatAI(
-  service,           // EmbeddedHyperscapeService
-  opponentId,        // Target character ID
-  {                  // Optional config
-    useLlmTactics: true,
-    healThresholdPct: 40
-  },
-  runtime,           // AgentRuntime (optional, for LLM)
-  sendChat           // Chat callback (optional, for trash talk)
-);
-
-// Set context
-combatAI.setContext(agentName, opponentCombatLevel, opponentName);
-
-// Start combat AI
-combatAI.start();
-
-// External tick (called by StreamingDuelScheduler)
-await combatAI.externalTick();
-
-// Stop combat AI
-combatAI.stop();
-
-// Get stats
-const stats = combatAI.getStats();
-// { tickCount, attacksLanded, healsUsed, totalDamageDealt, totalDamageReceived }
-```
-
-### Integration
-
-DuelCombatAI is created by `DuelOrchestrator` when a streaming duel starts:
-
-```typescript
-// packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts
-async startCombatAIs(): Promise<void> {
-  const { agent1, agent2 } = cycle;
-  
-  const ai1 = new DuelCombatAI(
-    service1,
-    agent2.characterId,
-    { useLlmTactics: llmTacticsEnabled && !!runtime1 },
-    runtime1 ?? undefined,
-    (text) => service1.sendChatMessage(text).catch(() => {})
+// From packages/server/src/arena/DuelCombatAI.ts
+export class DuelCombatAI {
+  constructor(
+    service: EmbeddedHyperscapeService,
+    opponentId: string,
+    options: DuelCombatAIOptions,
+    runtime?: AgentRuntime,
+    sendChatMessage?: (message: string) => void
   );
   
-  ai1.setContext(agent1.name, agent2.combatLevel, agent2.name);
-  ai1.start();
-  this.combatAIs.set(agent1.characterId, ai1);
+  start(): void;
+  stop(): void;
+  externalTick(): Promise<void>;
+  getStats(): DuelCombatStats;
 }
 ```
 
-## Combat Decision Making
-
-### Priority System
-
-Each tick, the AI evaluates actions in priority order:
-
-1. **Heal** (if HP < threshold)
-2. **Buff** (opening phase only, tick < 2)
-3. **Strategy Execution** (LLM path) or **Prayer/Style Switch** (scripted path)
-4. **Attack** (every weapon-speed cycle)
-
-### Combat Phases
-
-The AI adapts behavior based on combat phase:
+### Options
 
 ```typescript
-type CombatPhase = 'opening' | 'trading' | 'finishing' | 'desperate';
-
-// Phase determination
-if (healthPct < 30) return 'desperate';
-if (opponentHealthPct < 25) return 'finishing';
-if (tickCount < 5) return 'opening';
-return 'trading';
-```
-
-**Phase Behaviors:**
-- **Opening**: Activate offensive prayers, use buff potions
-- **Trading**: Balanced approach, maintain pressure
-- **Finishing**: Aggressive style, maximize damage
-- **Desperate**: Defensive style, activate protection prayers
-
-### Scripted Strategy
-
-Default behavior without LLM:
-
-```typescript
-// Prayer switching (every 3 ticks)
-if (phase === 'opening' || phase === 'finishing') {
-  await activatePrayer('ultimate_strength');  // +15% strength
-  await deactivatePrayer('steel_skin');
-} else if (phase === 'desperate') {
-  await activatePrayer('steel_skin');         // +15% defense
-  await deactivatePrayer('ultimate_strength');
-}
-
-// Style switching (every 5 ticks)
-if (phase === 'finishing') {
-  desiredStyle = 'aggressive';
-} else if (phase === 'desperate') {
-  desiredStyle = 'defensive';
-} else if (healthPct > 70) {
-  desiredStyle = 'aggressive';
-} else {
-  desiredStyle = 'controlled';
+interface DuelCombatAIOptions {
+  useLlmTactics?: boolean;      // Enable LLM strategy planning (default: false)
+  healThresholdPct?: number;    // HP% to start healing (default: 40)
+  prayerThresholdPct?: number;  // HP% to activate prayers (default: 60)
+  foodIds?: string[];           // Food items to use for healing
+  prayerIds?: string[];         // Prayers to activate
 }
 ```
 
-### LLM Strategy
+## Combat Decision Flow
 
-When `useLlmTactics: true` and runtime is provided:
+The AI uses a priority-based decision system:
 
-```typescript
-interface CombatStrategy {
-  approach: 'aggressive' | 'defensive' | 'balanced' | 'outlast';
-  attackStyle: 'aggressive' | 'defensive' | 'controlled' | 'accurate';
-  prayer: 'ultimate_strength' | 'steel_skin' | null;
-  protectionPrayer: string | null;
-  foodThreshold: number;        // HP% to eat at (20-60)
-  switchDefensiveAt: number;    // HP% to go defensive (20-40)
-  reasoning: string;
-}
+```mermaid
+flowchart TD
+    A[Tick Start] --> B{HP < Threshold?}
+    B -->|Yes| C[Heal with Food]
+    B -->|No| D{Prayers Active?}
+    D -->|No| E[Activate Prayers]
+    D -->|Yes| F{LLM Tactics Enabled?}
+    F -->|Yes| G[Generate Strategy]
+    F -->|No| H[Default Attack]
+    G --> H
+    C --> I[Tick End]
+    E --> I
+    H --> I
 ```
 
-**LLM Prompt:**
-```
-You are {agentName} in a PvP duel arena. Plan your combat strategy.
+### Priority Levels
 
-YOUR STATE: HP 75%, 12 food, tick 8
-OPPONENT: HP 60%, combat level 45
-DAMAGE SO FAR: dealt 15, received 8
+1. **Healing** (highest priority)
+   - Triggered when HP < healThresholdPct
+   - Uses food items from inventory
+   - Continues until HP > threshold or no food left
 
-Available prayers: ultimate_strength (+15% str), steel_skin (+15% def), rock_skin (+10% def)
-Available styles: aggressive (max damage), defensive (less damage taken), controlled (balanced), accurate (hit more often)
+2. **Prayer Activation**
+   - Triggered when HP < prayerThresholdPct
+   - Activates configured prayers
+   - One-time activation per fight
 
-Respond with a JSON object:
-{
-  "approach": "aggressive" | "defensive" | "balanced" | "outlast",
-  "attackStyle": "aggressive" | "defensive" | "controlled" | "accurate",
-  "prayer": "ultimate_strength" | "steel_skin" | null,
-  "foodThreshold": 20-60 (HP% to eat at, lower = riskier),
-  "switchDefensiveAt": 20-40 (HP% to go defensive),
-  "reasoning": "brief explanation"
-}
-```
+3. **LLM Strategy** (if enabled)
+   - Generates combat tactics based on current phase
+   - Uses agent character bio and style
+   - Cached for 5 ticks to reduce LLM calls
 
-**Replanning Triggers:**
-- Initial fight start
-- HP change > 20%
-- Opponent HP < 25% (switch to aggressive)
-- Phase change to desperate (switch to defensive/outlast)
+4. **Default Attack**
+   - Attacks opponent every weapon-speed cycle
+   - Respects weapon attack speed
+   - Seeds first tick to attack immediately
 
-**Constraints:**
-- Minimum 8-second interval between replans
-- 3-second LLM timeout with fallback to current strategy
-- Fire-and-forget (never blocks tick loop)
+## Combat Phases
+
+The AI detects combat phases based on HP percentages:
+
+| Phase | Condition | Strategy Focus |
+|-------|-----------|----------------|
+| **Opening** | Both > 75% HP | Aggressive positioning, buff activation |
+| **Trading** | Both 40-75% HP | Balanced offense/defense, resource management |
+| **Finishing** | Opponent < 40% HP | Maximum aggression, finish quickly |
+| **Desperate** | Self < 40% HP | Defensive tactics, healing priority |
 
 ## Trash Talk System
 
+AI agents taunt opponents during combat with LLM-generated or scripted trash talk.
+
 ### Health Threshold Taunts
 
-Triggered when own or opponent HP crosses milestones:
+Triggered at specific HP milestones:
 
+**Own HP Low (75%, 50%, 25%, 10%):**
+- "Not even close!"
+- "I've had worse"
+- "Is that all?"
+- "Just getting started"
+
+**Opponent HP Low (75%, 50%, 25%, 10%):**
+- "GG soon"
+- "You're done!"
+- "Sit down"
+- "Almost over"
+
+**Implementation:**
 ```typescript
-const TRASH_TALK_THRESHOLDS = [75, 50, 25, 10];
-
-// Own HP low
-if (healthPct <= threshold && prevHealthPct > threshold) {
-  fireTrashTalk('own_low', `Your health just dropped to ${healthPct}%!`);
-}
-
-// Opponent HP low
-if (oppPct <= threshold && prevOpponentHealthPct > threshold) {
-  fireTrashTalk('opponent_low', `Opponent's health dropped to ${oppPct}%!`);
+// Fires once per threshold per fight
+if (currentHp <= threshold && previousHp > threshold) {
+  sendTrashTalk(getThresholdTaunt(threshold, isOwnHp));
 }
 ```
 
-**Scripted Fallbacks:**
-```typescript
-const FALLBACK_TAUNTS_OWN_LOW = [
-  "Not even close!",
-  "I've had worse",
-  "Is that all?",
-  "Still standing",
-  "Come on then!",
-  "You call that damage?"
-];
-
-const FALLBACK_TAUNTS_OPPONENT_LOW = [
-  "GG soon",
-  "You're done!",
-  "Sit down",
-  "One more hit...",
-  "Almost there!",
-  "Easy money"
-];
-```
-
-### Ambient Taunts
+### Ambient Periodic Taunts
 
 Random taunts every 15-25 ticks:
+- "Let's go!"
+- "Fight me!"
+- "Too slow"
+- "Bring it"
+- "Come on"
+- "Show me what you got"
+- "This all you got?"
+- "Weak"
 
+### LLM-Generated Taunts
+
+When runtime is available, uses agent character for personalized trash talk:
+
+**Prompt Template:**
 ```typescript
-const FALLBACK_TAUNTS_AMBIENT = [
-  "Let's go!",
-  "Fight me!",
-  "Too slow",
-  "Bring it",
-  "Nice try lol",
-  "*yawns*",
-  "Is this PvP?",
-  "Warming up"
-];
+const prompt = `You are ${characterName}. ${bio}
+
+Generate a SHORT trash talk message (under 40 characters) for this combat situation:
+${situation}
+
+Style: ${style}
+Keep it brief and in-character.`;
 ```
 
-### LLM-Generated Trash Talk
-
-When runtime is available, uses agent character for personality:
-
-```typescript
-// LLM prompt
-`You are ${agentName} in a PvP duel against ${opponentName}.
-Your personality: ${bioText}
-Your communication style: ${styleHints}
-Your HP: ${healthPct}%. Opponent HP: ${oppPct}%.
-Situation: ${situation}
-
-Generate a SHORT trash talk message (under 40 characters) for the overhead chat bubble.
-Stay in character. Be creative, funny, competitive. No quotes. Just the message.`
-```
-
-**Parameters:**
-- Model: TEXT_SMALL
-- Max tokens: 30
+**Configuration:**
+- Model: TEXT_SMALL (fast, low-cost)
 - Temperature: 0.9 (creative, varied)
-- Timeout: 3 seconds (fallback to scripted)
+- Max tokens: 30 (fits in overhead bubble)
+- Timeout: 3 seconds (falls back to scripted)
 
-**Cooldown:**
-- 8-second minimum between trash talk messages
-- Prevents spam and rate limiting
+**Fallback:**
+- Scripted taunt pools when LLM unavailable
+- 6 own-low taunts, 6 opponent-low taunts, 8 ambient taunts
+- Ensures trash talk works without LLM access
+
+### Fire-and-Forget
+
+All trash talk calls are non-blocking:
+- Never blocks combat tick loop
+- 8-second cooldown between messages
 - In-flight flag prevents overlapping LLM calls
+- Errors logged but don't affect combat
+
+## LLM Strategy Planning
+
+When `useLlmTactics: true`, the AI generates combat strategies using the agent's character:
+
+**Strategy Generation:**
+```typescript
+const strategy = await generateCombatStrategy({
+  phase: 'trading',
+  myHp: 65,
+  opponentHp: 58,
+  myPrayers: ['protect_from_melee'],
+  opponentPrayers: [],
+  character: runtime.character
+});
+```
+
+**Strategy Cache:**
+- Cached for 5 ticks to reduce LLM calls
+- Invalidated on phase change
+- Falls back to default attack if generation fails
+
+**Prompt Context:**
+- Current combat phase
+- HP percentages
+- Active prayers
+- Agent character bio and style
+- Combat statistics
+
+## Weapon Speed Awareness
+
+The AI respects weapon attack speeds:
+
+```typescript
+// Seeds first tick to attack immediately
+if (this.ticksSinceLastAttack === 0) {
+  this.ticksSinceLastAttack = weaponSpeed;
+}
+
+// Attacks every weapon-speed cycle
+if (this.ticksSinceLastAttack >= weaponSpeed) {
+  await this.service.attackEntity(this.opponentId);
+  this.ticksSinceLastAttack = 0;
+}
+```
+
+**Weapon Speeds:**
+- Dagger: 4 ticks (2.4s)
+- Shortsword: 5 ticks (3.0s)
+- 2H Sword: 7 ticks (4.2s)
+- Scimitar: 4 ticks (2.4s)
+
+## Statistics Tracking
+
+The AI tracks combat statistics:
+
+```typescript
+interface DuelCombatStats {
+  ticksElapsed: number;
+  attacksLanded: number;
+  healsUsed: number;
+  prayersActivated: number;
+  damageDealt: number;
+  damageReceived: number;
+  currentPhase: CombatPhase;
+}
+```
+
+**Access:**
+```typescript
+const stats = combatAI.getStats();
+console.log(`Attacks: ${stats.attacksLanded}, Damage: ${stats.damageDealt}`);
+```
+
+## Integration with StreamingDuelScheduler
+
+The StreamingDuelScheduler creates and manages DuelCombatAI instances:
+
+```typescript
+// From packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts
+
+// Create combat AIs for both agents
+const combatAI1 = new DuelCombatAI(
+  service1,
+  agent2.characterId,
+  {
+    useLlmTactics: this.config.llmTacticsEnabled,
+    healThresholdPct: 40
+  },
+  runtime1,
+  (msg) => service1.sendChatMessage(msg)
+);
+
+// Tick both AIs during FIGHTING phase
+await Promise.all([
+  combatAI1.externalTick(),
+  combatAI2.externalTick()
+]);
+```
 
 ## Configuration
 
 ### Environment Variables
 
 ```bash
-# Enable/disable combat AI
+# Enable combat AI (default: false for stability)
 STREAMING_DUEL_COMBAT_AI_ENABLED=true
 
-# Enable/disable LLM tactics
+# Enable LLM-based tactics (default: false)
 STREAMING_DUEL_LLM_TACTICS_ENABLED=true
 
-# Fallback damage nudge delay (ms)
-STREAMING_COMBAT_STALL_NUDGE_MS=15000
+# Combat timing
+STREAMING_COMBAT_STALL_NUDGE_MS=15000  # Fallback damage nudge
 ```
 
-### Combat Config
+### Character Configuration
 
-```typescript
-interface DuelCombatConfig {
-  healThresholdPct: number;           // HP% to start healing (default: 40)
-  aggressiveThresholdPct: number;     // HP% for aggressive style (default: 70)
-  defensiveThresholdPct: number;      // HP% for defensive style (default: 30)
-  maxTicksWithoutAttack: number;      // Unused (legacy)
-  useLlmTactics: boolean;             // Enable LLM strategy (default: false)
-}
-```
+Combat AI uses agent character for LLM calls:
 
-## Attack Timing
-
-### Weapon Speed
-
-The AI queries weapon attack speed on start:
-
-```typescript
-this.weaponSpeedTicks = this.service.getWeaponAttackSpeed();
-// Bronze sword: 4 ticks (2.4s)
-// 2H sword: 5 ticks (3.0s)
-// Scimitar: 4 ticks (2.4s)
-```
-
-### Attack Cadence
-
-Attacks every weapon-speed cycle:
-
-```typescript
-this.ticksSinceLastAttack++;
-
-const needsInitialAttack = !state.inCombat || state.currentTarget !== this.opponentId;
-const cooldownElapsed = this.ticksSinceLastAttack >= this.weaponSpeedTicks;
-
-if (needsInitialAttack || cooldownElapsed) {
-  await this.service.executeAttack(this.opponentId);
-  this.ticksSinceLastAttack = 0;
-  this.attacksLanded++;
-}
-```
-
-<Info>
-`startCombat()` does NOT auto-attack. `executeAttack()` is the ONLY attack driver for agents. The combat system's internal cooldown silently rejects attacks that arrive too early.
-</Info>
-
-## Food Detection
-
-The AI identifies food items using pattern matching:
-
-```typescript
-const FOOD_DATA: Record<string, number> = {
-  shrimp: 3,
-  bread: 5,
-  trout: 7,
-  salmon: 9,
-  lobster: 12,
-  shark: 20,
-  // ... etc
-};
-
-// Find best food in inventory
-private findBestFood(inventory): InventorySlot | null {
-  let bestFood = null;
-  let bestHeal = -1;
-  
-  for (const item of inventory) {
-    const lowerName = item.itemId.toLowerCase();
-    for (const [key, val] of Object.entries(FOOD_DATA)) {
-      if (lowerName.includes(key) && val > bestHeal) {
-        bestHeal = val;
-        bestFood = item;
-      }
-    }
+```json
+{
+  "name": "Warrior Bot",
+  "bio": [
+    "A fierce warrior who never backs down from a fight.",
+    "Trained in the art of combat since childhood.",
+    "Known for aggressive tactics and bold trash talk."
+  ],
+  "style": {
+    "all": [
+      "Direct and confrontational",
+      "Uses short, punchy sentences",
+      "Confident and aggressive"
+    ]
   }
-  
-  return bestFood;
 }
 ```
-
-## Statistics Tracking
-
-The AI tracks combat performance:
-
-```typescript
-interface CombatStats {
-  tickCount: number;              // Total ticks elapsed
-  attacksLanded: number;          // Successful attack calls
-  healsUsed: number;              // Food consumed
-  totalDamageDealt: number;       // Damage to opponent
-  totalDamageReceived: number;    // Damage taken
-}
-
-// Access stats
-const stats = combatAI.getStats();
-console.log(`Attacks: ${stats.attacksLanded}, Heals: ${stats.healsUsed}`);
-```
-
-## Best Practices
-
-### Tick Synchronization
-
-Always drive combat AI from external tick loop:
-
-```typescript
-// ✅ CORRECT: External tick from StreamingDuelScheduler
-this.combatLoopInterval = setInterval(() => {
-  for (const [characterId, ai] of this.combatAIs) {
-    ai.externalTick().catch((err) => {
-      Logger.warn('Combat AI tick error', err);
-    });
-  }
-}, TICK_MS);
-
-// ❌ WRONG: Internal setInterval (drifts from game tick)
-setInterval(() => this.tick(), 600);
-```
-
-### Error Handling
-
-All combat actions use try/catch with debug logging:
-
-```typescript
-try {
-  await this.service.executeAttack(this.opponentId);
-  this.attacksLanded++;
-} catch (err) {
-  console.debug(`[DuelCombatAI] Attack failed:`, errMsg(err));
-  // Continue to next tick (don't stop AI)
-}
-```
-
-### Memory Management
-
-Combat AI automatically cleans up on stop:
-
-```typescript
-stop(): void {
-  this.isRunning = false;
-  this.activePrayers.clear();
-  this.firedOwnThresholds.clear();
-  this.firedOpponentThresholds.clear();
-  // Stats logged to console
-}
-```
-
-## Troubleshooting
-
-### AI Not Attacking
-
-**Symptom:** Agent stands idle during duel
-
-**Causes:**
-1. `STREAMING_DUEL_COMBAT_AI_ENABLED=false` in environment
-2. Combat AI not started (check DuelOrchestrator logs)
-3. Weapon speed query failed (check getWeaponAttackSpeed)
-
-**Fix:**
-```bash
-# Enable combat AI
-STREAMING_DUEL_COMBAT_AI_ENABLED=true
-
-# Check logs for combat AI start
-[StreamingDuelScheduler] Combat AI started for Agent1 (LLM strategy enabled)
-```
-
-### LLM Tactics Not Working
-
-**Symptom:** Agent uses scripted strategy despite `useLlmTactics: true`
-
-**Causes:**
-1. No AgentRuntime provided to constructor
-2. `STREAMING_DUEL_LLM_TACTICS_ENABLED=false` in environment
-3. LLM timeout (3 seconds)
-
-**Fix:**
-```typescript
-// Ensure runtime is passed
-const runtime = getAgentRuntimeByCharacterId(agentId);
-const ai = new DuelCombatAI(service, opponentId, { useLlmTactics: true }, runtime);
-
-// Check environment
-STREAMING_DUEL_LLM_TACTICS_ENABLED=true
-```
-
-### Trash Talk Not Appearing
-
-**Symptom:** No chat bubbles during combat
-
-**Causes:**
-1. No `sendChat` callback provided
-2. Trash talk cooldown (8 seconds)
-3. LLM timeout (3 seconds, falls back to scripted)
-
-**Fix:**
-```typescript
-// Provide chat callback
-const ai = new DuelCombatAI(
-  service,
-  opponentId,
-  config,
-  runtime,
-  (text) => service.sendChatMessage(text).catch(() => {})  // Add this
-);
-```
-
-## Performance
-
-### Tick Budget
-
-Combat AI tick should complete in < 100ms:
-
-- Game state read: ~1ms
-- Food detection: ~5ms
-- LLM strategy (background): 0ms (fire-and-forget)
-- Attack execution: ~10ms
-- Total: ~16ms per tick
-
-### LLM Optimization
-
-LLM calls are fire-and-forget to prevent blocking:
-
-```typescript
-// ✅ CORRECT: Background planning
-this._llmPlanningInFlight = true;
-this.planStrategy(state, healthPct, opponentData)
-  .then(() => { /* update strategy */ })
-  .finally(() => { this._llmPlanningInFlight = false });
-
-// Tick continues immediately (doesn't await)
-```
-
-### Memory Usage
-
-Combat AI uses minimal memory:
-
-- State tracking: ~1KB per AI
-- Prayer set: ~100 bytes
-- Threshold sets: ~50 bytes
-- Total: ~1.2KB per active AI
 
 ## Testing
 
+The combat AI includes comprehensive test coverage:
+
 ```bash
-# Run combat AI tests
+# Unit tests
 bun test packages/server/src/arena/__tests__/DuelCombatAI.test.ts
 
-# Run live integration tests
+# Live integration tests (requires LLM API key)
 bun test packages/server/src/arena/__tests__/DuelCombatAI.live.test.ts
 ```
 
 **Test Coverage:**
-- Tick-based attack timing
-- Food detection and healing
-- Prayer activation/deactivation
-- Style switching
-- LLM strategy planning
+- Weapon speed timing
+- Healing priority
+- Prayer activation
 - Trash talk triggers
-- Stats tracking
+- LLM strategy generation
+- Statistics tracking
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Disable for Production Streaming" icon="circle-exclamation">
+    Set `STREAMING_DUEL_COMBAT_AI_ENABLED=false` for stable production streams. The combat AI adds LLM overhead and can cause unpredictable behavior.
+  </Accordion>
+  
+  <Accordion title="Use Scripted Fallbacks" icon="shield">
+    Always provide scripted fallback taunts. LLM calls can timeout or fail, and scripted taunts ensure consistent experience.
+  </Accordion>
+  
+  <Accordion title="Monitor LLM Costs" icon="dollar-sign">
+    LLM strategy planning and trash talk generation can add up. Use TEXT_SMALL model and cache strategies to minimize costs.
+  </Accordion>
+  
+  <Accordion title="Test with Real Agents" icon="flask">
+    Combat AI behavior depends heavily on agent character. Test with actual character files to ensure tactics match personality.
+  </Accordion>
+</AccordionGroup>
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="AI Agents Overview" icon="bot" href="/wiki/ai-agents/overview">
+    ElizaOS integration and autonomous gameplay
+  </Card>
+  <Card title="Combat System" icon="swords" href="/wiki/game-systems/combat">
+    OSRS-accurate tick-based combat mechanics
+  </Card>
+  <Card title="Streaming Duels" icon="video" href="/wiki/game-systems/streaming-duels">
+    StreamingDuelScheduler and live duel broadcasts
+  </Card>
+  <Card title="Actions Reference" icon="play" href="/wiki/ai-agents/actions">
+    All 21 agent actions including combat actions
+  </Card>
+</CardGroup>
