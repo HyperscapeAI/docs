@@ -146,7 +146,14 @@ session.state = "COUNTDOWN";
 
 ### 6. Fighting
 
-Active combat with rule enforcement:
+Active combat with rule enforcement and real-time health synchronization:
+
+**Combat AI Improvements:**
+- **2H Sword Attack Timing**: DuelCombatAI attacks every weapon-speed cycle (no re-engagement delay)
+- **First Tick Attack**: Seeds first tick to attack immediately since startCombat() has no auto-attack
+- **Health Bar Sync**: Inline HP sync in handleEntityDamaged + updateContestantHp before broadcasts
+- **Teleport Handling**: Health restore with quiet parameter skips visual events during fight-start HP sync
+- **Countdown Display**: CountdownOverlay stays mounted 2.5s into FIGHTING phase with fade-out animation
 
 **Rule Enforcement:**
 ```typescript
