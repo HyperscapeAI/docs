@@ -131,11 +131,12 @@ actions: [
 
 ### World State Access (Providers)
 
-Agents query world state via 6 providers:
+Agents query world state via 7 providers:
 
 ```typescript
-// From packages/plugin-hyperscape/src/index.ts (lines 148-156)
+// From packages/plugin-hyperscape/src/index.ts
 providers: [
+  goalProvider,             // Current goal and progress
   gameStateProvider,        // Health, stamina, position, combat status
   inventoryProvider,        // Items, coins, free slots
   nearbyEntitiesProvider,   // Players, NPCs, resources nearby
