@@ -87,8 +87,19 @@ See [Combat AI Documentation](/wiki/ai-agents/combat-ai) for complete reference.
 AI agents have 21 actions across 8 categories:
 
 ```typescript
-// From packages/plugin-hyperscape/src/index.ts (lines 161-188)
+// From packages/plugin-hyperscape/src/index.ts
 actions: [
+  // Goal-Oriented (2 actions)
+  setGoalAction,
+  navigateToAction,
+
+  // Autonomous Behavior (5 actions)
+  autonomousAttackAction,
+  exploreAction,
+  fleeAction,
+  idleAction,
+  approachEntityAction,
+
   // Movement (3 actions)
   moveToAction,
   followEntityAction,
