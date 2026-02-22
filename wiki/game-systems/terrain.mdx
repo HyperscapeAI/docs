@@ -1,0 +1,322 @@
+---
+title: "Terrain System"
+description: "Procedural terrain generation with worker-based height and normal computation"
+icon: "mountain"
+---
+
+# Terrain System
+
+The terrain system generates procedural 3D terrain using multi-layer Perlin noise with support for flat zones under stations and buildings. The system uses **worker-based computation** for height and normal calculations to maximize performance.
+
+<Info>
+Location: `packages/shared/src/systems/shared/world/TerrainSystem.ts`
+</Info>
+
+## Architecture
+
+### Worker-Based Computation
+
+The terrain system offloads height and normal calculations to a Web Worker for optimal performance:
+
+```typescript
+// From TerrainSystem.ts
+// Height and normal computation happens in TerrainWorker
+// Main thread only recomputes for tiles overlapping flat zones
+private async generateTileGeometry(tileX: number, tileZ: number): Promise<void> {
+  // Request worker computation
+  const workerResult = await this.terrainWorker.computeTile(tileX, tileZ);
+  
+  // Use worker heights + normals directly for tiles without flat zones
+  if (!this.tileOverlapsFlatZone(tileX, tileZ)) {
+    this.applyWorkerResults(workerResult);
+    return;
+  }
+  
+  // Fall back to main-thread recomputation only for flat zone tiles
+  this.recomputeWithFlatZones(tileX, tileZ);
+}
+```
+
+**Performance Benefits:**
+- Zero noise calls on main thread for non-flat-zone tiles
+- Parallel computation across multiple tiles
+- Normals computed in worker with centered finite differences
+- Main thread only handles flat zone blending
+
+### Height Parameter Synchronization
+
+All terrain generation constants are centralized in `TerrainHeightParams.ts` to prevent parameter drift between main thread and worker:
+
+```typescript
+// From TerrainHeightParams.ts
+export const TERRAIN_HEIGHT_PARAMS = {
+  // Noise layers
+  continentScale: 0.002,
+  continentWeight: 0.35,
+  ridgeScale: 0.008,
+  ridgeWeight: 0.15,
+  hillScale: 0.02,        // Synced: was 0.012 in worker, 0.02 in main
+  hillWeight: 0.25,
+  erosionScale: 0.04,
+  erosionWeight: 0.10,
+  detailScale: 0.1,
+  detailWeight: 0.08,
+  persistence: 0.6,       // Synced: was 0.5 in worker
+  
+  // Island configuration
+  islandCenterX: 5000,
+  islandCenterZ: 5000,
+  islandRadius: 3500,
+  islandFalloffStart: 0.7,
+  islandFalloffPower: 3.0,
+  
+  // Pond configuration
+  pondCenterX: 5000,
+  pondCenterZ: 5000,
+  pondRadius: 800,
+  pondDepth: 15,
+  pondFalloffPower: 2.0,
+  
+  // Coastline adjustment
+  coastlineStart: 0.15,
+  coastlineEnd: 0.35,
+  coastlineDepth: 8,
+  
+  // Mountain boost
+  mountainBoostThreshold: 0.7,
+  mountainBoostMultiplier: 1.5,
+};
+```
+
+**Implementation:**
+- `TerrainSystem` imports params as TypeScript constants
+- `TerrainWorker` injects params into inline worker string via `buildGetBaseHeightAtJS()`
+- Single source of truth prevents parameter drift
+- Worker and main thread produce identical heights
+
+### Worker Height Computation
+
+The worker computes fully correct heights including shoreline adjustments:
+
+```typescript
+// From TerrainWorker (injected into worker string)
+function getBaseHeightAt(x: number, z: number): number {
+  // 1. Multi-layer Perlin noise
+  let height = 0;
+  height += perlin(x * continentScale, z * continentScale) * continentWeight;
+  height += perlin(x * ridgeScale, z * ridgeScale) * ridgeWeight;
+  height += perlin(x * hillScale, z * hillScale) * hillWeight;
+  height += perlin(x * erosionScale, z * erosionScale) * erosionWeight;
+  height += perlin(x * detailScale, z * detailScale) * detailWeight;
+  
+  // 2. Island mask
+  const islandMask = calculateIslandMask(x, z);
+  height *= islandMask;
+  
+  // 3. Pond depression
+  const pondMask = calculatePondMask(x, z);
+  height -= pondMask;
+  
+  // 4. Shoreline adjustment
+  const slope = calculateBaseSlopeAt(x, z);
+  height = adjustHeightForShoreline(height, slope);
+  
+  // 5. Mountain boost
+  if (height > mountainBoostThreshold) {
+    height = mountainBoostThreshold + 
+      (height - mountainBoostThreshold) * mountainBoostMultiplier;
+  }
+  
+  return height * MAX_HEIGHT;
+}
+```
+
+### Normal Computation in Worker
+
+Normals are computed in the worker using centered finite differences on an overflow grid:
+
+```typescript
+// Worker computes (resolution+2)² grid with 1-tile border
+// Allows centered finite differences at all vertices
+const gridSize = resolution + 2;
+const heights = new Float32Array(gridSize * gridSize);
+
+// Sample heights with overflow
+for (let z = -1; z <= resolution; z++) {
+  for (let x = -1; x <= resolution; x++) {
+    const worldX = tileWorldX + x * step;
+    const worldZ = tileWorldZ + z * step;
+    heights[(z + 1) * gridSize + (x + 1)] = getBaseHeightAt(worldX, worldZ);
+  }
+}
+
+// Compute normals with centered finite differences
+for (let z = 0; z < resolution; z++) {
+  for (let x = 0; x < resolution; x++) {
+    const hL = heights[(z + 1) * gridSize + x];
+    const hR = heights[(z + 1) * gridSize + (x + 2)];
+    const hD = heights[z * gridSize + (x + 1)];
+    const hU = heights[(z + 2) * gridSize + (x + 1)];
+    
+    const nx = (hL - hR) / (2 * step);
+    const nz = (hD - hU) / (2 * step);
+    const ny = 1.0;
+    
+    // Normalize
+    const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    normals[idx] = nx / len;
+    normals[idx + 1] = ny / len;
+    normals[idx + 2] = nz / len;
+  }
+}
+```
+
+**Benefits:**
+- Accurate normals at tile boundaries (no edge artifacts)
+- Centered differences produce smoother lighting
+- Worker handles all computation (zero main thread cost)
+
+## World Specs
+
+```typescript
+// From TerrainSystem.ts CONFIG
+const CONFIG = {
+  TILE_SIZE: 100,           // 100m × 100m tiles
+  WORLD_SIZE: 100,          // 100×100 grid = 10km × 10km world
+  TILE_RESOLUTION: 64,      // 64×64 vertices per tile
+  MAX_HEIGHT: 50,           // 50m max height variation
+  WATER_THRESHOLD: 9.0,     // Water appears below 9m
+  CAMERA_FAR: 400,          // Draw distance
+};
+```
+
+## Noise Layers
+
+Terrain height is generated from multiple Perlin noise layers:
+
+| Layer | Scale | Weight | Purpose |
+|-------|-------|--------|---------|
+| Continent | 0.002 | 0.35 | Large-scale landmasses |
+| Ridge | 0.008 | 0.15 | Mountain ridges |
+| Hill | 0.02 | 0.25 | Rolling hills |
+| Erosion | 0.04 | 0.10 | Weathering patterns |
+| Detail | 0.1 | 0.08 | Local bumps and variation |
+
+Combined height is normalized to [0, 1] then scaled by `MAX_HEIGHT`.
+
+## Flat Zones
+
+Flat zones create level terrain under stations and buildings with smooth blending to procedural terrain.
+
+### How It Works
+
+**Height Calculation Priority**:
+1. Flat zones checked before procedural terrain
+2. **Core Flat Area**: Inside the zone, terrain returns exact height value
+3. **Blend Area**: Within `blendRadius` of zone edge, smoothstep interpolation blends to procedural terrain
+4. **Spatial Indexing**: Terrain tiles (100m) used for O(1) lookup
+5. **Manifest-Driven**: Stations with `flattenGround: true` automatically create flat zones
+
+**Blend Formula:**
+
+```typescript
+// Smoothstep interpolation from flat to procedural
+const t = smoothstep(0, blendRadius, distanceFromEdge);
+const blendedHeight = flatHeight * (1 - t) + proceduralHeight * t;
+```
+
+### Flat Zone Registration
+
+When a station spawns, `TerrainSystem` registers a flat zone:
+
+**Dimensions calculated from:**
+- Station footprint (from model bounds)
+- `flattenPadding` (extra space around footprint)
+- `flattenBlendRadius` (smooth transition zone)
+
+**Height sampled from:**
+- Procedural terrain at station center
+- Ensures flat zone matches surrounding terrain elevation
+
+```typescript
+// From StationSpawnerSystem.ts
+terrainSystem.registerFlatZone({
+  id: `station_${stationId}`,
+  centerX: position.x,
+  centerZ: position.z,
+  width: footprint.width + flattenPadding * 2,
+  depth: footprint.depth + flattenPadding * 2,
+  height: terrainSystem.getHeightAt(position.x, position.z),
+  blendRadius: flattenBlendRadius,
+});
+```
+
+### Height Calculation
+
+When terrain height is requested, flat zones are checked first:
+
+```typescript
+getHeightAt(worldX: number, worldZ: number): number {
+  // 1. Check flat zones (O(1) via spatial index)
+  const flatHeight = getFlatZoneHeight(worldX, worldZ);
+  if (flatHeight !== null) {
+    return flatHeight;
+  }
+  
+  // 2. Fall back to procedural height
+  return getProceduralHeightWithBoost(worldX, worldZ);
+}
+```
+
+### TerrainSystem API
+
+```typescript
+// Register a flat zone (for dynamic structures)
+terrainSystem.registerFlatZone({
+  id: "player_house_1",
+  centerX: 50.0,
+  centerZ: 50.0,
+  width: 10.0,
+  depth: 10.0,
+  height: 42.5,
+  blendRadius: 1.0,
+});
+
+// Remove a flat zone
+terrainSystem.unregisterFlatZone("player_house_1");
+
+// Query flat zone at position
+const zone = terrainSystem.getFlatZoneAt(worldX, worldZ);
+if (zone) {
+  console.log(`Standing on flat zone: ${zone.id}`);
+}
+```
+
+## Console Logging
+
+`TerrainSystem` logs flat zone activity:
+
+```
+[TerrainSystem] Registered flat zone "station_bank_lumbridge_1" -> tile keys: [0_-1, 0_0]
+[TerrainSystem] FLAT ZONE HIT: "station_bank_lumbridge_1" at (2.5, -24.8) -> height=42.15
+[TerrainSystem] Flat zone stats: 5 zones registered, 12 tile keys in spatial index, 1247 height lookups used flat zones
+```
+
+## Performance Characteristics
+
+**Worker-Based Computation:**
+- Height calculation: ~0ms on main thread (worker handles all noise)
+- Normal calculation: ~0ms on main thread (worker computes with overflow grid)
+- Tile generation: ~5-10ms total (worker + transfer + geometry build)
+- Flat zone tiles: ~15-20ms (requires main thread recomputation)
+
+**Spatial Indexing:**
+- Flat zone lookup: O(1) via tile-based spatial index
+- Typical world: 5-10 flat zones, 10-20 tile keys
+- Negligible memory overhead (~1KB per zone)
+
+## Related Systems
+
+- [Movement System](/wiki/game-systems/movement) - Uses terrain heights for collision
+- [Collision System](/wiki/game-systems/collision) - Integrates with flat zones
+- [World Generation](/wiki/game-systems/overview) - Terrain is part of world initialization
