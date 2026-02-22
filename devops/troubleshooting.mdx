@@ -446,6 +446,94 @@ fastify.register(cors, {
 - Allow hyperscape-betting.pages.dev origin (commit fb3b9cd)
 - Allow pointer events on stream-bg for Twitch embed interaction (commit 0925171)
 
+## Streaming Issues
+
+### WebGPU Crashes on RTX 5060 Ti
+
+**Symptom**: Chrome crashes or freezes when using WebGPU on RTX 5060 Ti GPUs
+
+**Cause**: Broken Vulkan ICD on RTX 5060 Ti
+
+**Solution**: Use GL ANGLE backend instead of Vulkan:
+
+```bash
+# Set environment variable
+CHROME_BACKEND=angle
+
+# Or use Chrome flags
+--use-gl=angle --use-angle=gl
+```
+
+**Recent Fixes:**
+- Removed RTX 5060 Ti from GPU search (commit 30cacb0)
+- Switch to GL ANGLE backend for RTX 5060 Ti (commit 0257563)
+- WebGPU-safe Chrome flags (removed aggressive GPU opts) (commit f3aa787)
+
+### FFmpeg SIGSEGV in Static Builds
+
+**Symptom**: FFmpeg crashes with segmentation fault when using static builds
+
+**Cause**: Static FFmpeg builds incompatible with some system configurations
+
+**Solution**: Use system FFmpeg instead:
+
+```bash
+# Install system FFmpeg
+apt-get install -y ffmpeg
+
+# Verify installation
+ffmpeg -version
+```
+
+**Recent Fixes:**
+- Use system FFmpeg to avoid static build SIGSEGV (commits 55a07bd, 536763d)
+
+### Streaming Black Screen
+
+**Symptom**: Stream shows black screen instead of game
+
+**Causes**:
+1. GPU not accessible in headless mode
+2. Wrong Chrome backend
+3. Missing Xvfb for headful mode
+
+**Solutions**:
+
+```bash
+# Try headful mode with Xvfb
+Xvfb :99 -screen 0 1920x1080x24 &
+export DISPLAY=:99
+bun run dev:streaming
+
+# Or use swiftshader CPU fallback
+CHROME_BACKEND=swiftshader bun run dev:streaming
+```
+
+**Recent Fixes:**
+- Switch back to headful mode for GPU compositing with Xvfb (commit 5e4c6f1)
+- Use swiftshader + headless + WebGL for stable streaming (commit ae42beb)
+
+### Chrome Dev Channel Not Found
+
+**Symptom**: Cannot find Chrome Dev channel executable on Vast.ai
+
+**Cause**: Chrome Dev not installed or wrong path
+
+**Solution**: Install Chrome Dev channel:
+
+```bash
+wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+apt-get update
+apt-get install -y google-chrome-unstable
+
+# Use in Playwright
+executablePath: '/usr/bin/google-chrome-unstable'
+```
+
+**Recent Fixes:**
+- Use Chrome Dev channel for WebGPU support on Vast.ai (commits ba8bd53, d824163)
+
 ## Getting Help
 
 1. Check [GitHub Issues](https://github.com/HyperscapeAI/hyperscape/issues)
