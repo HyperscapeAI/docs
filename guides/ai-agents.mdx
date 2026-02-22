@@ -19,11 +19,72 @@ This starts:
 - Client on port 3333
 - ElizaOS runtime on port 4001
 
+## Combat AI System
+
+Hyperscape includes a specialized combat AI controller for autonomous PvP duels:
+
+### DuelCombatAI
+
+Tick-based combat controller that takes over agent behavior during arena duels:
+
+```typescript
+// From packages/server/src/arena/DuelCombatAI.ts
+const combatAI = new DuelCombatAI(
+  service,           // EmbeddedHyperscapeService
+  opponentId,        // Target character ID
+  {
+    useLlmTactics: true,      // Enable LLM strategy planning
+    healThresholdPct: 40      // HP% to start healing
+  },
+  runtime,           // AgentRuntime for LLM calls
+  sendChat           // Callback for trash talk
+);
+
+combatAI.start();
+await combatAI.externalTick();  // Called by StreamingDuelScheduler
+combatAI.stop();
+```
+
+**Features:**
+- Priority-based decisions (heal → buff → strategy → attack)
+- Combat phase detection (opening, trading, finishing, desperate)
+- LLM strategy planning using agent character
+- Health-triggered and ambient trash talk
+- Weapon speed awareness for correct attack cadence
+- Statistics tracking (attacks, heals, damage)
+
+### Trash Talk System
+
+AI agents taunt opponents during combat:
+
+**Health Threshold Taunts:**
+- Triggered at 75%, 50%, 25%, 10% HP milestones
+- Own HP low: "Not even close!", "I've had worse"
+- Opponent HP low: "GG soon", "You're done!"
+
+**Ambient Taunts:**
+- Random taunts every 15-25 ticks
+- "Let's go!", "Fight me!", "Too slow"
+
+**LLM-Generated:**
+- Uses agent character bio and communication style
+- 30-token limit for overhead chat bubbles
+- 3-second timeout with scripted fallback
+- 8-second cooldown between messages
+
+**Configuration:**
+```bash
+STREAMING_DUEL_COMBAT_AI_ENABLED=true       # Enable combat AI
+STREAMING_DUEL_LLM_TACTICS_ENABLED=true     # Enable LLM strategy
+```
+
+See [Combat AI Documentation](/wiki/ai-agents/combat-ai) for complete reference.
+
 ## Agent Capabilities
 
 ### Available Actions
 
-AI agents have 17 actions across 6 categories:
+AI agents have 21 actions across 8 categories:
 
 ```typescript
 // From packages/plugin-hyperscape/src/index.ts (lines 161-188)
