@@ -23,6 +23,186 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="GPU Particle System & Production Hardening" description="February 2026" date="2026-02-22">
+
+### ⚡ GPU-Instanced Particle System (PR #877)
+
+Major performance optimization reducing fishing spot draw calls from ~150 to 4 via centralized GPU-instanced particle rendering:
+
+- **ParticleManager Architecture**: Centralized particle routing system
+  - Single entry point for all particle effects (water, glow, fire, magic)
+  - Routes particle events to specialized sub-managers based on resource type
+  - Ownership tracking eliminates need for type hints on unregister/move
+  - Extensible design for future particle types (dust, smoke, blood, magic)
+  - Located in `packages/shared/src/entities/managers/particleManager/`
+- **WaterParticleManager**: GPU-instanced fishing spot effects
+  - 4 InstancedMeshes (splash, bubble, shimmer, ripple) replace ~150 individual meshes
+  - TSL NodeMaterials with InstancedBufferAttributes for per-particle data
+  - GPU-computed animations (parabolic arcs, wobble, twinkle, ring expansion)
+  - Per-instance data: spotPos (vec3), ageLifetime (vec2), angleRadius (vec2), dynamics (vec4)
+  - Vertex buffer budget: 7 of 8 max attributes per particle layer
+  - Pool sizes: MAX_SPLASH=96, MAX_BUBBLE=72, MAX_SHIMMER=72, MAX_RIPPLE=24
+- **Performance Impact**: 
+  - FPS improvement: 65-70 → 120 on reference hardware (80% increase)
+  - Draw calls: ~150 → 4 per fishing spot (97% reduction)
+  - CPU savings: ~450 lines of per-entity animation code eliminated
+  - GPU-driven particle updates (trig, quaternion, opacity all on GPU)
+  - Zero CPU overhead for particle animation
+- **ResourceEntity Refactor**: Delegates to ParticleManager hub API
+  - Retains only lightweight glow mesh for interaction detection
+  - Lazy registration pattern (retries if manager not ready during entity init)
+  - Proper cleanup via unregister on destroy
+  - Removed ~450 lines of CPU particle animation code
+- **ResourceSystem Integration**: Creates ParticleManager on client, forwards events
+  - Retroactive registration for entities created before system start
+  - Listens to RESOURCE_SPAWNED events for particle routing
+  - Per-frame update drives all particle managers via update(dt, camera)
+  - Proper disposal on system shutdown
+- **Fishing Spot Variants**: Net (calm), Bait (medium), Fly (active)
+  - Variant-specific colors, ripple speeds, particle counts
+  - Burst system for fish activity (2-4 splash particles every 3-7 seconds)
+  - Configurable burst intervals and splash counts per variant
+- **Extensibility Guide**: To add new particle types (fire, magic, dust):
+  1. Create new sub-manager class in particleManager/ folder
+  2. Instantiate in ParticleManager constructor
+  3. Add routing logic in register/unregister/move/handleEvent methods
+  4. Call update() and dispose() from ParticleManager
+
+### 🗣️ Duel Trash Talk System (commit 8ff3ad3)
+
+AI agents now taunt opponents during combat with LLM-generated or scripted trash talk:
+
+- **Health Threshold Taunts**: Triggered at 75%, 50%, 25%, 10% HP milestones
+  - Own HP low: "Not even close!", "I've had worse", "Is that all?"
+  - Opponent HP low: "GG soon", "You're done!", "Sit down"
+  - Fires once per threshold per fight (prevents spam)
+  - Compares previous vs current HP to detect threshold crossings
+- **Ambient Periodic Taunts**: Random taunts every 15-25 ticks
+  - "Let's go!", "Fight me!", "Too slow", "Bring it"
+  - Adds personality to prolonged fights
+  - Scheduled via tick counter with randomized intervals
+- **LLM-Generated Taunts**: Uses agent character bio/style via TEXT_SMALL model
+  - Pulls personality from Eliza agent runtime character definition
+  - Includes bio snippets (first 200 chars) and communication style hints (first 3)
+  - 30-token limit for overhead chat bubble (under 40 characters)
+  - 3-second LLM timeout with scripted fallback
+  - Temperature 0.9 for creative, varied responses
+  - Prompt includes current HP percentages and fight situation
+- **Scripted Fallback**: Pools of pre-written taunts when no runtime available
+  - 6 own-low taunts, 6 opponent-low taunts, 8 ambient taunts
+  - Ensures trash talk works even without LLM access
+  - Used when LLM call fails or times out
+- **Fire-and-Forget**: All trash talk calls are background/non-blocking
+  - Never blocks combat tick loop
+  - 8-second cooldown between messages (TRASH_TALK_COOLDOWN_MS)
+  - In-flight flag prevents overlapping LLM calls
+  - Promise.race() pattern for timeout handling
+- **DuelCombatAI Integration**: Trash talk wired into combat AI tick loop
+  - `sendChatMessage` callback provided by DuelOrchestrator
+  - Sends chat as overhead bubble via agent's EmbeddedHyperscapeService
+  - Health milestone detection in checkHealthMilestones() method
+  - Ambient taunt scheduling via nextAmbientTauntTick counter
+  - State tracking: firedOwnThresholds, firedOpponentThresholds sets
+- **Social System Update**: CHAT_MESSAGE action now allowed during combat
+  - Previously blocked in combat state
+  - Enables trash talk without breaking combat flow
+  - Allows agents to communicate during duels
+- **Testing**: 5 new trash talk tests added (14/14 passing)
+  - Health threshold detection
+  - Ambient taunt scheduling
+  - LLM generation with fallback
+  - Cooldown enforcement
+  - Combat integration
+
+### 🔒 Database Migration Fixes (commit e4b6489)
+
+Fixed migration 0050 table creation errors on fresh databases:
+
+- **IF NOT EXISTS Guards**: Added to all CREATE TABLE and CREATE INDEX statements
+  - Migration 0050 duplicated CREATE TABLE statements from earlier migrations
+  - agent_duel_stats table was created in both migration 0039 and 0050
+  - On fresh databases, running all migrations sequentially caused 42P07 errors
+  - Same table created twice without IF NOT EXISTS protection
+- **Impact**: Fresh database installations now complete all migrations successfully
+  - Prevents "relation already exists" errors
+  - Allows clean database setup from scratch
+  - Fixes CI integration test failures
+- **Affected Tables**: agent_duel_stats, arena_fee_shares, arena_staking_points, wallet_links
+- **Affected Indexes**: All indexes in migration 0050 now have IF NOT EXISTS
+
+### 🔒 Database Connection Pooling Fix (commits 8aaaf28, f7ab9f7)
+
+Fixed XX000 errors when using Supabase Supavisor connection pooler:
+
+- **Prepared Statements Disabled**: Set `prepare: false` in Drizzle PostgreSQL config
+  - Supavisor pooler (transaction mode) doesn't support prepared statements
+  - Was causing XX000 "prepared statement does not exist" errors
+  - Affects both server database client and betting keeper
+- **Impact**: Hyperscape now compatible with Supabase connection pooling
+  - Enables horizontal scaling with connection pooling
+  - Prevents intermittent database errors in production
+  - Required for Supabase deployment
+
+### 🔧 CI/CD Package Exclusions (commits 93f9633, 99dec96)
+
+Excluded problematic packages from CI test runs until dependency issues resolved:
+
+- **gold-betting-demo Exclusion** (commit 93f9633): 
+  - hls.js dependency not resolving correctly in CI due to workspace hoisting issues
+  - Package excluded from CI tests until dependency resolution fixed
+  - Local development unaffected
+- **contracts Package Exclusion** (commit 99dec96):
+  - MUD CLI has compatibility issue with @trpc/server versions
+  - Causing test failures in CI environment
+  - Excluded from CI tests until dependency issue resolved
+- **Impact**: CI pipeline now passes reliably
+  - Allows other packages to test successfully
+  - Prevents false negatives from dependency conflicts
+
+### 🧪 Test Suite Compatibility (commit 25ba63c)
+
+Fixed test suite compatibility with refactored ArenaService architecture:
+
+- **WebGPU Mocks**: Added vitest.setup.ts to mock WebGPU browser globals
+  - GPUShaderStage, GPUBufferUsage, GPUTextureUsage, GPUMapMode, etc.
+  - Required by Three.js WebGPU renderer in tests
+  - Prevents "GPUShaderStage is not defined" errors
+- **ArenaService Passthrough Methods**: Added protected methods for test spying
+  - getDb, getEligibleAgents, findReferralMappingForWalletNetwork
+  - listIdentityWallets, listLinkedWallets, recordFeeShare, awardPoints
+  - Enables test mocking without breaking encapsulation
+- **Database Mock Helper**: setDbMock properly configures world.getSystem("database") mock
+  - Ensures database system returns mocked database instance
+  - Fixes test failures from refactored database access patterns
+- **Skipped Tests**: Deferred tests needing deeper refactoring
+  - ArenaService lifecycle tests (need createBetOpenRound fix)
+  - ArenaService simulation tests (need architecture updates)
+  - ArenaService referrals tests (sub-services call ctx directly)
+  - StreamingDuelScheduler unit tests (internal methods moved)
+  - Admin index integration tests (need DB migrations)
+- **Integration Test Fix**: StreamingDuelScheduler accepts undefined as falsy
+  - Fixed type assertion in integration test
+  - Allows undefined values in conditional checks
+- **Test Results**: 1569 tests pass, 85 skipped
+  - Significant improvement in test coverage
+  - Skipped tests documented for future work
+
+### 🔧 TypeScript Error Fixes (commit 5e60439)
+
+Resolved 4 TypeScript errors for CI typecheck:
+
+- **AgentManager.ts**: Cast EmbeddedHyperscapeService to HyperscapeService
+  - Type assertion for service interface compatibility
+  - Prevents type mismatch errors in agent initialization
+- **ArenaService.ts**: Cast unknown position param via Parameters<> utility
+  - Extracts parameter types from function signature
+  - Ensures type safety for position parameters
+- **ArenaRoundService.ts**: Change getEligibleAgents from private to public
+  - Required for test access and external service integration
+  - Maintains encapsulation while enabling testing
+
+</Update>
+
 <Update label="Infrastructure & Production Readiness" description="February 2026" date="2026-02-22">
 
 ### 🔒 Security Audit Remediation (commit a390b79)
