@@ -42,28 +42,59 @@ PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 
 ### Production Domains
 
-Hyperscape supports multiple production domains with CORS configuration:
+Hyperscape supports multiple production domains with CORS configuration (added in commits bb292c1, 7ff88d1):
 
 **Game Domains:**
-- `hyperscape.gg` - Primary game domain
+- `hyperscape.gg` - Primary game domain (added Feb 2026)
 - `play.hyperscape.club` - Alternative game domain
 
 **Betting Domains:**
-- `hyperscape.bet` - Betting platform
-- `hyperbet.win` - Additional betting domain
+- `hyperscape.bet` - Betting platform (added Feb 2026)
+- `hyperbet.win` - Additional betting domain (added Feb 2026)
 
 **CORS Configuration:**
+
+The server and betting keeper automatically allow these domains:
+
 ```typescript
-// Server automatically allows these domains
+// From packages/server/src/startup/http-server.ts
 const ALLOWED_ORIGINS = [
   'https://hyperscape.gg',
   'https://hyperscape.bet',
   'https://hyperbet.win',
   'https://play.hyperscape.club'
 ];
+
+// CORS middleware configuration
+fastify.register(cors, {
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  maxAge: 86400  // 24 hours
+});
+```
+
+**Subdomain Pattern Support:**
+
+The betting keeper supports subdomain patterns for flexible deployment:
+
+```typescript
+// From packages/gold-betting-demo/keeper/src/service.ts
+const ALLOWED_ORIGIN_PATTERNS = [
+  /^https:\/\/.*\.hyperscape\.bet$/,
+  /^https:\/\/.*\.hyperbet\.win$/
+];
 ```
 
 **Tauri Mobile Deep Links:**
+
+Mobile apps support deep linking from production domains:
+
 ```json
 // packages/app/src-tauri/tauri.conf.json
 {
@@ -74,6 +105,15 @@ const ALLOWED_ORIGINS = [
     "play.hyperscape.club"
   ]
 }
+```
+
+**Website Game Link:**
+
+The marketing website now links to the primary game domain:
+
+```typescript
+// From packages/website/src/lib/links.ts
+export const GAME_URL = 'https://hyperscape.gg';
 ```
 
 <Warning>
