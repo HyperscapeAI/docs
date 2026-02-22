@@ -82,6 +82,14 @@ ELIZAOS_PORT=4001
 # LLM Providers (at least one required)
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
+
+# Streaming Duel Configuration
+STREAMING_DUEL_COMBAT_AI_ENABLED=true          # Enable DuelCombatAI for agents
+STREAMING_DUEL_LLM_TACTICS_ENABLED=true        # Enable LLM-based combat strategy
+STREAMING_COMBAT_STALL_NUDGE_MS=15000          # Fallback damage nudge delay (ms)
+SPAWN_MODEL_AGENTS=false                        # Auto-spawn model agents on startup
+MAX_MODEL_AGENTS=10                             # Maximum concurrent model agents
+MEMORY_RESTART_THRESHOLD_MB=2048                # Memory threshold for agent restart
 ```
 
 ## AssetForge Environment
