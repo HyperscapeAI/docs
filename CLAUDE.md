@@ -57,6 +57,38 @@ npm test --workspace=packages/server
 # Visual testing with screenshots and Three.js scene introspection
 ```
 
+**Test Suite Status (as of Feb 22, 2026):**
+- ✅ 1569 tests passing
+- ⏭️ 85 tests skipped (pending deeper refactoring)
+- 🔧 WebGPU mocks added for Three.js WebGPU renderer compatibility
+
+**Recent Test Infrastructure Improvements:**
+
+- **WebGPU Mocks** (commit 25ba63c): Added `vitest.setup.ts` to mock WebGPU browser globals
+  - Mocks: GPUShaderStage, GPUBufferUsage, GPUTextureUsage, GPUTextureFormat, etc.
+  - Required by Three.js WebGPU renderer in test environment
+  - Prevents \"GPUShaderStage is not defined\" errors
+  - Location: `packages/server/vitest.setup.ts`
+
+- **ArenaService Test Helpers** (commit 25ba63c): Added protected passthrough methods for test spying
+  - Methods: getDb, getEligibleAgents, findReferralMappingForWalletNetwork
+  - Methods: listIdentityWallets, listLinkedWallets, recordFeeShare, awardPoints
+  - Database mock helper: `setDbMock` properly configures world.getSystem(\"database\") mock
+
+- **Skipped Tests** (pending refactoring):
+  - ArenaService lifecycle tests (need createBetOpenRound fix)
+  - ArenaService simulation tests (need architecture updates)
+  - ArenaService referrals tests (sub-services call ctx directly)
+  - StreamingDuelScheduler unit tests (internal methods moved)
+  - Admin index integration tests (need DB migrations)
+
+- **CI Reliability Improvements**:
+  - Foundry toolchain installed for anvil binary (commit b344d9e)
+  - Chain setup skipped when CI=true (commit 034f9c9)
+  - EVM contracts excluded from turbo test filter
+  - Docs update failures handled gracefully (continue-on-error)
+  - Assets directory removed before clone to avoid conflicts (commit 6ce05cc)
+
 ### Mobile Development
 ```bash
 # iOS
