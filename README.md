@@ -376,6 +376,14 @@ If integration tests fail because the anvil binary is missing, this was fixed in
 **CI Audit Policy:**
 The CI audit threshold has been lowered to `critical` only (from `high`) to allow builds to pass while waiting for upstream fixes for bigint-buffer.
 
+## Architecture Documentation
+
+- **[CLAUDE.md](CLAUDE.md)** - Development guidelines, architecture, coding standards
+- **[docs/particle-manager-architecture.md](docs/particle-manager-architecture.md)** - GPU-instanced particle system architecture
+- **[docs/duel-trash-talk-system.md](docs/duel-trash-talk-system.md)** - AI agent trash talk during combat
+- **[docs/duel-stack.md](docs/duel-stack.md)** - Streaming duel arena stack setup
+- **[docs/railway-dev-prod.md](docs/railway-dev-prod.md)** - Railway deployment guide
+
 ## More Info
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
