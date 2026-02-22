@@ -7,16 +7,24 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 ## What Makes Hyperscape Unique
 
 - **AI Agents as Players**: Autonomous agents powered by ElizaOS that fight, skill, trade, and make decisions using LLMs
-- **True OSRS Mechanics**: Authentic tick-based combat (600ms ticks), BFS pathfinding with line-of-sight, safespotting, tile-based movement, and classic progression systems
+- **True OSRS Mechanics**: Authentic tick-based combat (600ms ticks), safespotting, tile-based movement, and classic progression systems
 - **Manifest-Driven Design**: Add NPCs, items, and content by editing JSON files—no code changes required
 - **Spectator Mode**: Watch agents play in real-time and observe their decision-making process
+- **Live Streaming Duels**: AI vs AI combat streamed to Twitch/YouTube with real-time betting
 - **Open Source**: Built on open technology with extensible architecture
 
 ## Core Features
 
 | Category | Features |
 |----------|----------|
-| **Combat** | Tick-based OSRS mechanics (600ms ticks), melee/ranged/magic combat for players AND mobs, attack styles, accuracy formulas, projectile system (spells, arrows), held weapon visuals, death/respawn system |\n| **Skills** | 17 skills: Combat (Attack, Strength, Defense, Constitution, Ranged, Magic, Prayer), Gathering (Woodcutting, Mining, Fishing), Artisan (Firemaking, Cooking, Smithing, Crafting, Fletching, Runecrafting), Support (Agility) |\n| **Economy** | 480-slot bank with write coalescing, shops, item weights, loot drops |\n| **UI** | RS3/OSRS-accurate minimap with location icons, resizable panels, drag-and-drop inventory |\n| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |\n| **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |\n| **Tech** | VRM avatars, WebSocket networking, PostgreSQL with write coalescing, PhysX physics, WebGPU rendering |
+| **Combat** | Tick-based OSRS mechanics (600ms ticks), attack styles, accuracy formulas, death/respawn system |
+| **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking + combat skills with XP/leveling |
+| **Economy** | 480-slot bank, shops, item weights, loot drops |
+| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
+| **Streaming** | Live AI duels with trash talk, RTMP multi-platform streaming, HLS playback |
+| **Betting** | Solana CLOB market integration for duel betting (mainnet ready) |
+| **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
+| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
 
 ## Quick Start
 
@@ -101,6 +109,7 @@ packages/
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── asset-forge/         # AI asset generation tools
+├── gold-betting-demo/   # Solana betting integration
 └── docs-site/           # Documentation (Docusaurus)
 ```
 
@@ -115,6 +124,7 @@ Build order: `physx-js-webidl` → `shared` → everything else (handled automat
 | `bun start` | Start production server |
 | `bun test` | Run test suite |
 | `bun run lint` | Lint codebase |
+| `bun run duel` | Start full duel arena stack (game + bots + streaming + betting) |
 
 ### What `bun run dev` starts
 
@@ -135,6 +145,41 @@ bun run dev:forge     # AssetForge tools (ports 3400, 3401)
 bun run docs:dev      # Documentation site (port 3402)
 bun run dev:all       # Everything: game + AI + AssetForge
 ```
+
+### Streaming Duel Arena
+
+Start the complete streaming duel stack with one command:
+
+```bash
+bun run duel          # Full stack: game + bots + RTMP streaming + betting app
+```
+
+This starts:
+- Game server with streaming duel scheduler
+- Duel matchmaker bots (AI agents fighting each other)
+- RTMP bridge for multi-platform streaming (Twitch, YouTube, etc.)
+- Local HLS stream for web playback
+- Betting app with Solana integration (devnet)
+- Keeper bot for automated market operations
+
+**Streaming Options:**
+```bash
+bun run duel --bots=8              # Start with 8 duel bots
+bun run duel --skip-betting        # Skip betting app (stream only)
+bun run duel --skip-stream         # Skip RTMP/HLS (betting only)
+bun run duel --with-mm             # Enable market maker bots
+bun run duel --fresh               # Force fresh restart
+bun run duel --verify              # Run startup verification
+```
+
+**RTMP Configuration:**
+Set stream keys in `packages/server/.env`:
+```bash
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+```
+
+See `packages/server/.env.example` for full RTMP configuration options.
 
 ### Docker services
 
@@ -174,7 +219,7 @@ bun run assets:sync    # Pull latest assets from repo (local dev only)
 Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.privy.io).
 
 **Optional configuration** - see `.env.example` files for all options:
-- `packages/server/.env.example` - Database, ports, LiveKit voice chat
+- `packages/server/.env.example` - Database, ports, LiveKit voice chat, RTMP streaming
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
@@ -190,6 +235,59 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 3401 | AssetForge API | `bun run dev:forge` |
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
+| 4179 | Betting App | `bun run duel` |
+| 8765 | RTMP Bridge | `bun run duel` |
+
+## Deployment
+
+### Production Domains
+
+Hyperscape is deployed across multiple domains:
+
+- **hyperscape.gg** - Main game client (Cloudflare Pages)
+- **hyperscape.bet** - Betting platform (Cloudflare Pages)
+- **hyperbet.win** - Alternative betting domain
+- **hyperscape.club** - Marketing website
+
+All domains have CORS configured on the game server for cross-origin requests.
+
+### Railway Deployment
+
+Railway deployment is set up for separate development and production targets:
+
+- `main` branch deploys to `prod`
+- `develop` or `dev` branch deploys to `dev`
+
+For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps for `hyperscape.gg`), see:
+
+- `docs/railway-dev-prod.md`
+
+### Solana Mainnet
+
+The betting system is configured for Solana mainnet with CLOB (Central Limit Order Book) market program:
+
+**Mainnet Program IDs:**
+- Fight Oracle: `Fg6PaFpoGXkYsidMpWxTWqkY8B4sT2u7hN8sV5kP6h1`
+- GOLD CLOB Market: `GCLoBfbkz8Z4xz3yzs9gpump` (example)
+- GOLD Token Mint: `DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump`
+
+See `packages/gold-betting-demo/anchor/programs/` for program source code.
+
+## Native App Distribution
+
+- Desktop and mobile build artifacts are published from tagged releases (`v*`) via `.github/workflows/build-app.yml`.
+- Public download portal: [https://hyperscapeai.github.io/hyperscape/](https://hyperscapeai.github.io/hyperscape/)
+- Release assets and notes: [https://github.com/HyperscapeAI/hyperscape/releases](https://github.com/HyperscapeAI/hyperscape/releases)
+- Release setup details and required secrets: `docs/native-release.md`
+
+### Creating a tagged app release
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+That tag triggers cross-platform native packaging and publishes installers to a GitHub Release.
 
 ## Troubleshooting
 
@@ -237,36 +335,33 @@ bun install
 bun run build
 ```
 
-**"200 pending operations" warnings or game freezes during batch operations:**
-This was caused by inventory write lock contention during batch operations (e.g., fletching 100 arrows). The system now uses write coalescing to collapse concurrent inventory writes into at most 2 database transactions per player. If you see this warning on older versions, update to the latest code.
+**ESLint crashes with ajv TypeError:**
+If ESLint crashes with `TypeError: Class extends value undefined is not a constructor or null` related to ajv, this was fixed in commit `b344d9e`. The issue was caused by forcing ajv@8 on @eslint/eslintrc which requires ajv@6 for Draft-04 schema support. Update to the latest code to resolve.
 
-**Camera facing backwards on fresh load:**
-If the camera initializes facing the wrong direction (player appears to move backwards), this was fixed in recent updates. The camera now correctly initializes with `theta=Math.PI` for standard third-person behind-the-player view. Update to the latest code if experiencing this issue.
-
-**Entity outlines showing wrong colors when hovering:**
-If entity highlights show incorrect color grading when post-processing is disabled, update to the latest code. The post-processing system now correctly zeros LUT intensity when color grading is disabled, preventing shader pipeline leakage between outline and color grading passes.
-
-**Remote players appearing in T-pose or at wrong position:**
-If remote players flash at (0,0,0) in T-pose for one frame when joining, or appear sideways/incorrectly oriented, update to the latest code. The avatar loading system now positions and animates avatars before making them visible, and properly syncs quaternions to the base transform.
-
-**Equipment not visible on other players:**
-If you can't see other players' weapons/armor, or your equipment doesn't show for others, update to the latest code. The equipment system now broadcasts equipment on join, re-sends on reconnect, and properly handles VRM avatar loading with equipment replay.
-
-**Mobs stuck facing combat direction after combat ends:**
-If mobs continue facing their last combat target after combat ends, update to the latest code (PR #884). The `TileInterpolator` now clears the `inCombatRotation` flag on movement start, allowing mobs to return to normal AI-driven rotation.
-
-**Damage splats appearing at wrong position:**
-If damage numbers appear at the mob's server position instead of where they visually are, update to the latest code (PR #884). The `DamageSplatSystem` now prefers entity visual position over server position for accurate splat placement during movement interpolation.
-
-**Equipping stackable items causes inventory flash:**
-When equipping arrows (or other stackables) that match what's already equipped, the system now merges quantities directly instead of unequip→inventory→re-equip cycle (PR #887). This eliminates the brief inventory flash showing combined count before equip.
-
-**Duel loser stuck in arena after duel:**
-If the duel loser remains frozen in the arena with `isDying=true` after a duel, update to the latest code (PR #875). Health restoration for both players now uses individual try/catch blocks to prevent one player's failure from affecting the other.
+**Integration tests fail with "anvil: command not found":**
+If integration tests fail because the anvil binary is missing, this was fixed in commit `b344d9e`. The CI workflow now installs `foundry-rs/foundry-toolchain` before running integration tests. For local development, install Foundry: `curl -L https://foundry.paradigm.xyz | bash && foundryup`
 
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
+
+## Security
+
+### Recent Vulnerability Fixes
+
+**Resolved in commit `a390b79` (Feb 22, 2026):**
+- ✅ Fixed 14 of 16 security audit vulnerabilities
+- ✅ Upgraded Playwright to ^1.55.1 (fixes GHSA-7mvr-c777-76hp, high severity)
+- ✅ Upgraded Vite to ^6.4.1 (fixes GHSA-g4jq-h2w9-997c, GHSA-jqfw-vq24-v9c3, GHSA-93m4-6634-74q7)
+- ✅ Upgraded ajv to ^8.18.0 (fixes GHSA-2g4f-4pwh-qvx6)
+- ✅ Added root overrides for: @trpc/server, minimatch, cookie, undici, jsondiffpatch, tmp, diff, bn.js, ai
+
+**Remaining vulnerabilities (no upstream patches available):**
+- ⚠️ bigint-buffer (high severity) - no patched version available
+- ⚠️ elliptic (moderate severity) - no patched version available
+
+**CI Audit Policy:**
+The CI audit threshold has been lowered to `critical` only (from `high`) to allow builds to pass while waiting for upstream fixes for bigint-buffer.
 
 ## More Info
 
