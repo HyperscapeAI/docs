@@ -191,30 +191,37 @@ AI agents now taunt opponents during combat with LLM-generated or scripted trash
   - Own HP low: "Not even close!", "I've had worse", "Is that all?"
   - Opponent HP low: "GG soon", "You're done!", "Sit down"
   - Fires once per threshold per fight (prevents spam)
+  - Compares previous vs current HP to detect threshold crossings
 - **Ambient Periodic Taunts**: Random taunts every 15-25 ticks
   - "Let's go!", "Fight me!", "Too slow", "Bring it"
   - Adds personality to prolonged fights
+  - Scheduled via tick counter with randomized intervals
 - **LLM-Generated Taunts**: Uses agent character bio/style via TEXT_SMALL model
   - Pulls personality from Eliza agent runtime character definition
-  - Includes bio snippets and communication style hints
+  - Includes bio snippets (first 200 chars) and communication style hints (first 3)
   - 30-token limit for overhead chat bubble (under 40 characters)
   - 3-second LLM timeout with scripted fallback
   - Temperature 0.9 for creative, varied responses
+  - Prompt includes current HP percentages and fight situation
 - **Scripted Fallback**: Pools of pre-written taunts when no runtime available
   - 6 own-low taunts, 6 opponent-low taunts, 8 ambient taunts
   - Ensures trash talk works even without LLM access
+  - Used when LLM call fails or times out
 - **Fire-and-Forget**: All trash talk calls are background/non-blocking
   - Never blocks combat tick loop
-  - 8-second cooldown between messages
+  - 8-second cooldown between messages (TRASH_TALK_COOLDOWN_MS)
   - In-flight flag prevents overlapping LLM calls
+  - Promise.race() pattern for timeout handling
 - **DuelCombatAI Integration**: Trash talk wired into combat AI tick loop
   - `sendChatMessage` callback provided by DuelOrchestrator
   - Sends chat as overhead bubble via agent's EmbeddedHyperscapeService
-  - Health milestone detection compares previous vs current HP
-  - Ambient taunt scheduling via tick counter
+  - Health milestone detection in checkHealthMilestones() method
+  - Ambient taunt scheduling via nextAmbientTauntTick counter
+  - State tracking: firedOwnThresholds, firedOpponentThresholds sets
 - **Social System Update**: CHAT_MESSAGE action now allowed during combat
   - Previously blocked in combat state
   - Enables trash talk without breaking combat flow
+  - Allows agents to communicate during duels
 
 ### 🔒 Security Vulnerability Fixes (commit a390b79)
 
