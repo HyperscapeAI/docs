@@ -596,6 +596,18 @@ PRIVY_APP_SECRET=...             # For Privy auth
 PUBLIC_PRIVY_APP_ID=...          # Must match server's PRIVY_APP_ID
 PUBLIC_API_URL=https://...       # Point to your server
 PUBLIC_WS_URL=wss://...          # Point to your server WebSocket
+
+# AI Agent Configuration (duel stack and streaming)
+SPAWN_MODEL_AGENTS=false         # Enable heavyweight model-agent spawner (default: false)
+MAX_MODEL_AGENTS=0               # Maximum number of model agents to spawn (default: 0)
+MEMORY_RESTART_THRESHOLD_MB=12288 # Memory threshold for auto-restart in MB (default: 12288)
+
+# Duel stack defaults (scripts/duel-stack.mjs)
+AUTO_START_AGENTS=true           # Auto-load embedded agents (default: true for duel stack)
+AUTO_START_AGENTS_MAX=10         # Max embedded agents to start (default: 10)
+EMBEDDED_AGENT_AUTONOMY_ENABLED=false  # Enable background questing/pathing (default: false for streaming)
+STREAMING_DUEL_LLM_TACTICS_ENABLED=false  # Enable LLM-based combat tactics (default: false for stability)
+STREAMING_DUEL_COMBAT_AI_ENABLED=false    # Enable per-agent DuelCombatAI (default: false)
 ```
 
 **Duel Stack Environment Variables:**
