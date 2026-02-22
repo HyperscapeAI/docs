@@ -322,6 +322,75 @@ Resolved 4 TypeScript errors for CI typecheck:
 - **ArenaService.ts**: Cast unknown position param via Parameters<> utility
 - **ArenaRoundService.ts**: Change getEligibleAgents from private to public
 
+### 🔧 CI/CD Reliability Improvements (commits 99dec96, b5d2494, 034f9c9)
+
+Enhanced CI pipeline stability and test coverage:
+
+- **Contracts Package Exclusion** (commit 99dec96): Exclude @hyperscape/contracts from CI test run
+  - MUD CLI has compatibility issue with @trpc/server versions
+  - Prevents test failures until dependency issue resolved
+- **Drizzle Migration Fix** (commit b5d2494): Remove drizzle-kit push from integration workflow
+  - Server handles migrations during startup
+  - Running drizzle-kit push separately creates tables without populating migration journal
+  - Causes server's migration code to fail on re-creation attempts
+- **Chain Setup Skip** (commit 034f9c9): Skip chain setup in CI environment
+  - setup-chain.mjs skips when CI=true (anvil/mud not available in CI)
+  - Exclude @hyperscape/evm-contracts from turbo test filter
+  - Add continue-on-error for Mintlify API calls in update-docs.yml
+
+### 🌐 Production Domain Support (commits bb292c1, 7ff88d1)
+
+Added CORS support for production domains:
+
+- **hyperscape.gg**: Primary game domain
+  - CORS support in main server and betting keeper
+  - Deep link support in Tauri mobile config
+  - Website game link updated to hyperscape.gg
+- **hyperscape.bet**: Betting platform domain
+  - CORS support in main server and betting keeper
+  - Subdomain pattern support
+- **hyperbet.win**: Additional betting domain
+  - CORS support in main server and betting keeper
+  - Subdomain pattern support
+
+### 🎮 Solana CLOB Market Mainnet Migration (commits dba3e03, 35c14f9)
+
+Adapted betting infrastructure for CLOB market program on Solana mainnet:
+
+- **Program Address Updates**: Updated declare_id! in fight_oracle and gold_clob_market to mainnet addresses
+- **IDL Updates**: All IDL files updated with mainnet program addresses
+  - Replaced keeper binary market IDL with CLOB market IDL
+- **Bot Rewrite**: Adapted for CLOB market instructions
+  - initializeConfig, initializeMatch, initializeOrderBook, resolveMatch
+  - Removed binary market seeding/vault logic
+- **Server Config**: Updated arena config fallback to mainnet fight oracle
+- **Keeper Common**: Updated fallback program IDs to mainnet
+- **Frontend Config**: Updated .env.mainnet with all VITE_ vars
+
+### 🎥 Streaming Infrastructure Stability (commits ba8bd53-59204671)
+
+Multiple fixes for stable streaming on Vast.ai RTX 5060 Ti GPUs:
+
+- **Chrome Dev Channel** (commits ba8bd53, d824163): Use Chrome Dev for WebGPU support on Vast.ai
+- **GL ANGLE Backend** (commit 0257563): Switch to GL ANGLE backend (Vulkan ICD broken on RTX 5060 Ti)
+- **System FFmpeg** (commits 55a07bd, 536763d): Use system FFmpeg to avoid static build SIGSEGV
+- **WebGPU-Safe Chrome Flags** (commit f3aa787): Removed aggressive GPU opts that crash RTX 5060 Ti
+- **Headful Mode** (commit 5e4c6f1): Switched back to headful mode for GPU compositing with Xvfb
+- **Swiftshader Fallback** (commit ae42beb): Use swiftshader + headless + WebGL for stable streaming
+- **RTX 5060 Ti Exclusion** (commit 30cacb0): Removed RTX 5060 Ti from GPU search (broken Vulkan ICD)
+- **Playwright Dependencies** (commit 59204671): Added playwright deps and ffmpeg for streaming
+
+### 🔧 Vast.ai Keeper Infrastructure (commits 621ae67-3ce7d64)
+
+Improved Vast.ai GPU server provisioning:
+
+- **Python 3.11+ Support** (commit 621ae67): Upgraded to bookworm-slim for vastai-sdk compatibility
+- **PEP 668 Compliance** (commit d9e9111): Added --break-system-packages for pip3 on Debian 12
+- **CLI Package** (commits 987e037, 781f3d7): Installed vastai CLI package and reverted to binary invocation
+- **Virtual Environment** (commit 5c2a561): Use python venv for vastai install to guarantee binary on PATH
+- **Module Invocation** (commit 63374bb): Use python3 -m vastai instead of vastai binary
+- **SSH Key Generation** (commit 3ce7d64): Ensured vastai CLI on PATH and generated SSH keys in Docker
+
 </Update>
 
 <Update label="Terrain System Refactor & Duel Arena Polish" description="February 2026" date="2026-02-22">
