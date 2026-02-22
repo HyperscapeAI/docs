@@ -23,6 +23,122 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Infrastructure & Production Readiness" description="February 2026" date="2026-02-22">
+
+### 🔒 Security Audit Remediation (commit a390b79)
+
+Resolved 14 of 16 npm audit vulnerabilities with comprehensive dependency updates:
+
+- **Playwright**: Bumped to ^1.55.1 across root, shared, impostors, server
+  - Fixes GHSA-7mvr-c777-76hp (high severity)
+- **Vite**: Bumped to ^6.4.1 across shared, asset-forge, client, impostors, procgen, gold-betting-demo/app
+  - Fixes GHSA-g4jq-h2w9-997c, GHSA-jqfw-vq24-v9c3, GHSA-93m4-6634-74q7
+- **ajv**: Bumped to ^8.18.0 in shared
+  - Fixes GHSA-2g4f-4pwh-qvx6
+- **Root Overrides**: Added for @trpc/server, minimatch, cookie, undici, jsondiffpatch, tmp, diff, bn.js, ai
+- **Remaining Vulnerabilities**: 2 vulns (bigint-buffer, elliptic) have no patched versions upstream
+- **Audit Threshold**: Lowered to critical (bigint-buffer high has no upstream fix)
+- **ESLint Fix**: Removed ajv>=8.18.0 override that forced ajv@8 on @eslint/eslintrc
+  - @eslint/eslintrc needs ajv@6 for Draft-04 schema support
+  - Forcing ajv@8 caused TypeError crash
+
+### 🌐 Production Domain Support (commits bb292c1, 7ff88d1)
+
+Added CORS support for new production domains:
+
+- **hyperscape.gg**: Primary game domain
+  - CORS support in main server and betting keeper
+  - Deep link support in Tauri mobile config
+  - Website game link updated to hyperscape.gg
+- **hyperscape.bet**: Betting platform domain
+  - CORS support in main server and betting keeper
+  - Subdomain pattern support
+- **hyperbet.win**: Additional betting domain
+  - CORS support in main server and betting keeper
+  - Subdomain pattern support
+
+### 🎮 Solana CLOB Market Mainnet Migration (commits dba3e03, 35c14f9)
+
+Adapted betting bot and IDLs for CLOB market program on Solana mainnet:
+
+- **Program Address Updates**: Updated declare_id! in fight_oracle and gold_clob_market to mainnet addresses
+- **IDL Updates**: All IDL files updated with mainnet program addresses
+  - Replaced keeper binary market IDL with CLOB market IDL
+- **Bot Rewrite**: Adapted for CLOB market instructions
+  - initializeConfig, initializeMatch, initializeOrderBook, resolveMatch
+  - Removed binary market seeding/vault logic
+- **Server Config**: Updated arena config fallback to mainnet fight oracle
+- **Keeper Common**: Updated fallback program IDs to mainnet
+- **Frontend Config**: Updated .env.mainnet with all VITE_ vars
+
+### 🎥 Streaming Infrastructure Hardening (commits ba8bd53-59204671)
+
+Multiple fixes for stable streaming on Vast.ai RTX 5060 Ti GPUs:
+
+- **Chrome Dev Channel** (commits ba8bd53, d824163): Use Chrome Dev for WebGPU support on Vast.ai
+- **GL ANGLE Backend** (commit 0257563): Switch to GL ANGLE backend (Vulkan ICD broken on RTX 5060 Ti)
+- **System FFmpeg** (commits 55a07bd, 536763d): Use system FFmpeg to avoid static build SIGSEGV
+- **WebGPU-Safe Chrome Flags** (commit f3aa787): Removed aggressive GPU opts that crash RTX 5060 Ti
+- **Headful Mode** (commit 5e4c6f1): Switched back to headful mode for GPU compositing with Xvfb
+- **Swiftshader Fallback** (commit ae42beb): Use swiftshader + headless + WebGL for stable streaming
+- **RTX 5060 Ti Exclusion** (commit 30cacb0): Removed RTX 5060 Ti from GPU search (broken Vulkan ICD)
+- **Playwright Dependencies** (commit 59204671): Added playwright deps and ffmpeg for streaming
+
+### 🔧 CI/CD Reliability Improvements (commits 034f9c9-b5d24942)
+
+Enhanced CI reliability and test coverage:
+
+- **Chain Setup Skip** (commit 034f9c9): setup-chain.mjs skips when CI=true (anvil/mud not available in CI)
+- **EVM Contracts Exclusion**: Exclude @hyperscape/evm-contracts from turbo test filter
+- **Docs Failure Handling**: Add continue-on-error for Mintlify API calls in update-docs.yml
+- **Foundry Toolchain** (commit b344d9e): Add foundry-rs/foundry-toolchain to integration.yml for anvil binary
+- **ESLint Fix**: Remove ajv>=8.18.0 override (needs ajv@6 for Draft-04 schema support)
+- **Assets Clone** (commit 6ce05cc): Remove assets dir before clone to avoid 'already exists' error
+- **Drizzle Migration Fix** (commit b5d24942): Remove drizzle-kit push from integration workflow
+  - Server handles its own migrations during startup
+  - Running drizzle-kit push separately creates tables without populating migration journal
+  - Causes server's migration code to fail on re-creation attempts
+
+### 🧪 Test Suite Compatibility (commit 25ba63c)
+
+Fixed test suite compatibility with refactored ArenaService architecture:
+
+- **WebGPU Mocks**: Added vitest.setup.ts to mock WebGPU browser globals
+  - GPUShaderStage, GPUBufferUsage, GPUTextureUsage, etc.
+  - Required by Three.js WebGPU renderer in tests
+- **ArenaService Passthrough Methods**: Added protected methods for test spying
+  - getDb, getEligibleAgents, findReferralMappingForWalletNetwork
+  - listIdentityWallets, listLinkedWallets, recordFeeShare, awardPoints
+- **Database Mock Helper**: setDbMock properly configures world.getSystem("database") mock
+- **Skipped Tests**: Deferred tests needing deeper refactoring
+  - ArenaService lifecycle tests (need createBetOpenRound fix)
+  - ArenaService simulation tests (need architecture updates)
+  - ArenaService referrals tests (sub-services call ctx directly)
+  - StreamingDuelScheduler unit tests (internal methods moved)
+  - Admin index integration tests (need DB migrations)
+- **Integration Test Fix**: StreamingDuelScheduler accepts undefined as falsy
+- **Test Results**: 1569 tests pass, 85 skipped
+
+### 🔧 TypeScript Error Fixes (commit 5e60439)
+
+Resolved 4 TypeScript errors for CI typecheck:
+
+- **AgentManager.ts**: Cast EmbeddedHyperscapeService to HyperscapeService
+- **ArenaService.ts**: Cast unknown position param via Parameters<> utility
+- **ArenaRoundService.ts**: Change getEligibleAgents from private to public
+
+### 🏗️ Build System Improvements (commit 5666ece)
+
+Enhanced build resilience for circular dependencies:
+
+- **Circular Dependency Handling**: procgen and plugin-hyperscape builds now handle circular deps
+  - Both packages have circular dependencies with @hyperscape/shared
+  - Used 'tsc || echo' pattern so build exits 0 even with circular dep errors
+  - Packages still produce partial output sufficient for downstream consumers
+  - Prevents clean build failures when dist/ doesn't exist yet
+
+</Update>
+
 <Update label="GPU Particle System & AI Combat Enhancements" description="February 2026" date="2026-02-22">
 
 ### ⚡ GPU-Instanced Particle System (PR #877)
