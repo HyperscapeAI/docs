@@ -94,6 +94,37 @@ This starts the game server plus the ElizaOS agent runtime. The AI agent will co
   You need ElizaOS configured with an LLM provider (OpenAI, Anthropic, or OpenRouter) in your environment variables.
 </Info>
 
+## Running Streaming Duel Arena
+
+To run the complete streaming duel stack with AI vs AI combat:
+
+```bash
+bun run duel
+```
+
+This starts:
+- Game server with streaming duel scheduler
+- Duel matchmaker bots (AI agents fighting each other)
+- RTMP bridge for multi-platform streaming (Twitch, YouTube)
+- Local HLS stream for web playback
+- Betting app with Solana integration (devnet)
+- Keeper bot for automated market operations
+
+**Streaming Options:**
+```bash
+bun run duel --bots=8              # Start with 8 duel bots
+bun run duel --skip-betting        # Skip betting app (stream only)
+bun run duel --skip-stream         # Skip RTMP/HLS (betting only)
+bun run duel --with-mm             # Enable market maker bots
+```
+
+**RTMP Configuration:**
+Set stream keys in `packages/server/.env`:
+```bash
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+```
+
 ## What Gets Started
 
 | Service | Port | Description |
