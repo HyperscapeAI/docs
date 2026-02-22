@@ -98,6 +98,68 @@ Terrain generation offloaded to web workers for parallel processing:
 - **Conditional Fallback**: Main-thread recomputation only for tiles with flat zones (buildings/stations)
 - **Parallel Processing**: Utilizes multiple CPU cores while keeping main thread free
 
+## Particle System
+
+The shared package includes a centralized GPU-instanced particle system for high-performance visual effects:
+
+### ParticleManager
+
+Unified particle routing system that dispatches particle events to specialized sub-managers:
+
+```typescript
+// From packages/shared/src/entities/managers/particleManager/
+export { ParticleManager } from './ParticleManager';
+export { WaterParticleManager } from './WaterParticleManager';
+export { GlowParticleManager } from './GlowParticleManager';
+```
+
+**Architecture:**
+- **ParticleManager**: Central router with ownership tracking
+- **WaterParticleManager**: GPU-instanced fishing spot effects (splash, bubble, shimmer, ripple)
+- **GlowParticleManager**: Instanced glow billboards (altar, fire, torch presets)
+
+**Performance Benefits:**
+- Reduces ~150 draw calls to 4 per fishing spot
+- GPU-driven particle animations (parabolic arcs, wobble, twinkle)
+- FPS improvement: 65-70 → 120 on reference hardware
+- ~450 lines of CPU animation code eliminated
+
+**Usage:**
+```typescript
+import { ParticleManager } from '@hyperscape/shared';
+
+// ResourceSystem creates ParticleManager on client
+const particleManager = new ParticleManager(scene);
+
+// Register water particles (fishing spot)
+particleManager.register('entity-123', {
+  type: 'water',
+  position: { x: 10, y: 0, z: 20 },
+  resourceId: 'fishing_spot_net'
+});
+
+// Register glow particles (altar, fire, torch)
+particleManager.register('entity-456', {
+  type: 'glow',
+  preset: 'altar',
+  position: { x: 15, y: 1, z: 25 },
+  color: 0x00ffff,
+  meshRoot: altarMesh
+});
+
+// Per-frame update
+particleManager.update(deltaTime, camera);
+
+// Cleanup
+particleManager.unregister('entity-123');
+particleManager.dispose();
+```
+
+**Particle Presets:**
+- `altar`: Mesh-aware sparks sampling geometry vertices (12 particles)
+- `fire`: Rising flame particles with spread (8 particles)
+- `torch`: Concentrated flame effect with tight spread (6 particles)
+
 ## Key Exports
 
 ### Entity Hierarchy
