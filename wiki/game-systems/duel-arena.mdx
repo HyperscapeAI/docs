@@ -189,18 +189,24 @@ if (duelSystem.canEatFood(playerId)) {
 
 ### 7. Result
 
-Duel resolution and stake transfer:
+Duel resolution and stake transfer with proper cleanup:
 
 ```typescript
 // Combat resolver handles:
 // 1. Determine winner/loser
 // 2. Transfer stakes to winner
-// 3. Restore both players to full health
+// 3. Restore both players to full health (individual try/catch blocks)
 // 4. Teleport to lobby
 // 5. Release arena
 // 6. Emit completion event
 combatResolver.resolveDuel(session, winnerId, loserId, reason);
 ```
+
+**Cycle Management:**
+- `endCycle()` chains cleanup→delay→new cycle via .finally()
+- INTER_CYCLE_DELAY_MS ensures proper cleanup before next cycle
+- Cleanup always teleports both agents to lobby
+- Prevents stale avatars stuck in arena between cycles
 
 **Result Modal:**
 - Victory trophy (🏆) or defeat skull (💀)
