@@ -1943,6 +1943,134 @@ this.sendToNearby(position, "tileMovementEnd", {
 
 ---
 
+## Duel Arena Combat
+
+### AI Combat Timing
+
+The `DuelCombatAI` system manages automated agent duels with proper attack timing:
+
+```typescript
+// From DuelCombatAI.ts
+// Attack every weapon-speed cycle instead of waiting for re-engagement interval
+// Seeds first tick to attack immediately since startCombat() has no auto-attack
+private async attackCycle(): Promise<void> {
+  const weaponSpeed = this.getWeaponSpeed();
+  
+  // Seed first tick to attack immediately
+  await this.performAttack();
+  
+  // Continue attacking every weapon-speed cycle
+  while (this.isInCombat()) {
+    await this.sleep(weaponSpeed);
+    await this.performAttack();
+  }
+}
+```
+
+**Key Improvements:**
+- **Immediate first attack**: Seeds first tick to attack immediately (no delay waiting for re-engagement)
+- **Weapon-speed cycles**: Attacks every weapon-speed interval (e.g., 2.4s for longsword, 3.6s for 2H sword)
+- **2H sword fix**: 2H swords now attack at correct 6-tick (3.6s) intervals instead of waiting for re-engagement
+
+### Teleport Suppression
+
+Duel arena teleports can be suppressed to prevent visual effects during fight cleanup:
+
+```typescript
+// From DuelCombatResolver.ts
+// Suppress teleport effects for proximity corrections and cleanup teleports
+this.teleportPlayer(playerId, position, { 
+  suppressEffect: true  // No visual effect for cleanup teleports
+});
+```
+
+**Use Cases:**
+- **Fight-start HP sync**: `restoreHealth()` with `quiet` param skips `PLAYER_RESPAWNED`/`PLAYER_SET_DEAD` events
+- **Proximity corrections**: Teleports to fix position without visual disruption
+- **Cleanup teleports**: Return players to lobby without teleport animation
+
+### Cycle Cleanup Chaining
+
+The duel scheduler chains cleanup → delay → new cycle via `.finally()` to prevent stale avatars:
+
+```typescript
+// From StreamingDuelScheduler.ts
+private async endCycle(): Promise<void> {
+  await this.cleanup()
+    .finally(async () => {
+      await this.sleep(INTER_CYCLE_DELAY_MS);
+      await this.startNewCycle();
+    });
+}
+```
+
+**Benefits:**
+- Cleanup always teleports both agents (even if errors occur)
+- Delay ensures clean state before next cycle
+- Prevents stale avatars from previous fights
+
+### Countdown Overlay
+
+The countdown overlay stays mounted 2.5s into FIGHTING phase with fade-out animation:
+
+```typescript
+// From CountdownOverlay.tsx
+// Stay mounted 2.5s into FIGHTING phase with fade-out
+const shouldShow = phase === 'COUNTDOWN' || 
+  (phase === 'FIGHTING' && timeSinceFightStart < 2500);
+
+// Fade-out animation (opacity + scale)
+<div style={{
+  opacity: phase === 'FIGHTING' ? 0 : 1,
+  transform: phase === 'FIGHTING' ? 'scale(1.2)' : 'scale(1)',
+  transition: 'opacity 0.5s, transform 0.5s',
+}}>
+  FIGHT!
+</div>
+```
+
+### Arena Visuals
+
+**Fence Design:**
+- Replaced solid walls with fence posts + rails for better visibility
+- Allows spectators to see into the arena
+- Maintains collision boundaries
+
+**Floor Textures:**
+- Procedural sandstone tile pattern for OSRS medieval aesthetic
+- Each arena gets unique randomized texture with grout lines, color variation, and speckle noise
+- Canvas-generated at runtime (no texture files needed)
+
+**Lighting:**
+- Lit torches with fire particles at all 4 corners of each arena
+- PointLights with flicker animation
+- "torch" glow preset (6 riseSpread particles per torch, tight 0.08 spread)
+
+### Health Bar Synchronization
+
+Health bars are synchronized inline in `handleEntityDamaged` before every broadcast:
+
+```typescript
+// From DuelCombatResolver.ts
+// Inline HP sync before broadcast
+private handleEntityDamaged(event: EntityDamagedEvent): void {
+  this.updateContestantHp(event.entityId, event.remainingHealth);
+  
+  // Broadcast to spectators
+  this.broadcastToSpectators({
+    type: 'ENTITY_DAMAGED',
+    data: event,
+  });
+}
+```
+
+**Benefits:**
+- Health bars always reflect current HP
+- No race conditions between damage and HP updates
+- Spectators see accurate health in real-time
+
+---
+
 ## Related Documentation
 
 - [Prayer System](/wiki/game-systems/prayer) (Prayer mechanics, drain, altars, bone burying)
