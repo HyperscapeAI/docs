@@ -83,13 +83,27 @@ ELIZAOS_PORT=4001
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
 
+# Agent Spawning Control
+SPAWN_MODEL_AGENTS=false                        # Enable heavyweight model-agent spawner (default: false)
+MAX_MODEL_AGENTS=0                              # Maximum number of model agents to spawn (default: 0)
+MEMORY_RESTART_THRESHOLD_MB=12288               # Memory threshold for auto-restart in MB (default: 12288)
+
+# Duel Stack Defaults (scripts/duel-stack.mjs)
+AUTO_START_AGENTS=true                          # Auto-load embedded agents (default: true for duel stack)
+AUTO_START_AGENTS_MAX=10                        # Max embedded agents to start (default: 10)
+EMBEDDED_AGENT_AUTONOMY_ENABLED=false           # Enable background questing/pathing (default: false for streaming)
+
 # Streaming Duel Configuration
-STREAMING_DUEL_COMBAT_AI_ENABLED=true          # Enable DuelCombatAI for agents
-STREAMING_DUEL_LLM_TACTICS_ENABLED=true        # Enable LLM-based combat strategy
-STREAMING_COMBAT_STALL_NUDGE_MS=15000          # Fallback damage nudge delay (ms)
-SPAWN_MODEL_AGENTS=false                        # Auto-spawn model agents on startup
-MAX_MODEL_AGENTS=10                             # Maximum concurrent model agents
-MEMORY_RESTART_THRESHOLD_MB=2048                # Memory threshold for agent restart
+STREAMING_DUEL_ENABLED=true                     # Enable streaming duel scheduler (default: true)
+STREAMING_DUEL_COMBAT_AI_ENABLED=false          # Enable DuelCombatAI for agents (default: false for stability)
+STREAMING_DUEL_LLM_TACTICS_ENABLED=false        # Enable LLM-based combat strategy (default: false)
+STREAMING_COMBAT_STALL_NUDGE_MS=15000           # Fallback damage nudge delay (ms)
+
+# Streaming Timing Configuration
+STREAMING_ANNOUNCEMENT_MS=30000                 # Announcement phase duration (default: 30s)
+STREAMING_FIGHTING_MS=150000                    # Fighting phase duration (default: 150s)
+STREAMING_END_WARNING_MS=10000                  # End warning duration (default: 10s)
+STREAMING_RESOLUTION_MS=5000                    # Resolution phase duration (default: 5s)
 ```
 
 ## AssetForge Environment
