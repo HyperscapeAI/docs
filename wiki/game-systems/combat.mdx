@@ -2071,6 +2071,203 @@ private handleEntityDamaged(event: EntityDamagedEvent): void {
 
 ---
 
+## AI Agent Trash Talk System
+
+The `DuelCombatAI` system includes an integrated trash talk feature that allows AI agents to taunt opponents during combat:
+
+### Trash Talk Triggers
+
+**Health Threshold Taunts**: Triggered when HP crosses specific milestones (75%, 50%, 25%, 10%):
+
+```typescript
+// From DuelCombatAI.ts
+const TRASH_TALK_THRESHOLDS = [75, 50, 25, 10] as const;
+
+// Check if own or opponent health crossed a threshold
+private checkHealthMilestones(
+  healthPct: number,
+  prevHealthPct: number,
+  opponentData: OpponentData | null,
+  prevOpponentHealthPct: number,
+): void {
+  // Own health thresholds
+  for (const threshold of TRASH_TALK_THRESHOLDS) {
+    if (
+      healthPct <= threshold &&
+      prevHealthPct > threshold &&
+      !this.firedOwnThresholds.has(threshold)
+    ) {
+      this.firedOwnThresholds.add(threshold);
+      this.fireTrashTalk("own_low", situation, healthPct, opponentData);
+      return; // One per tick maximum
+    }
+  }
+  
+  // Opponent health thresholds
+  // ... similar logic for opponent HP
+}
+```
+
+**Ambient Periodic Taunts**: Random taunts every 15-25 ticks to add personality:
+
+```typescript
+const AMBIENT_TAUNT_MIN_TICKS = 15;
+const AMBIENT_TAUNT_MAX_TICKS = 25;
+
+// Schedule next ambient taunt
+this.nextAmbientTauntTick =
+  this.tickCount +
+  AMBIENT_TAUNT_MIN_TICKS +
+  Math.floor(Math.random() * (AMBIENT_TAUNT_MAX_TICKS - AMBIENT_TAUNT_MIN_TICKS));
+```
+
+### LLM-Generated Taunts
+
+When an Eliza runtime is available, trash talk uses the agent's character personality:
+
+```typescript
+// Pull character bio/personality from Eliza agent runtime
+const character = this.runtime.character;
+const bioText = character?.bio
+  ? Array.isArray(character.bio)
+    ? character.bio.slice(0, 3).join(" ")
+    : String(character.bio).slice(0, 200)
+  : "";
+const styleHints = character?.style?.all?.slice(0, 3).join(", ") || "";
+
+const prompt = [
+  `You are ${this.agentName} in a PvP duel${this.opponentName ? ` against ${this.opponentName}` : ""}.`,
+  bioText ? `Your personality: ${bioText}` : "",
+  styleHints ? `Your communication style: ${styleHints}` : "",
+  `Your HP: ${healthPct.toFixed(0)}%. Opponent HP: ${oppPctStr}.`,
+  `Situation: ${situation}`,
+  ``,
+  `Generate a SHORT trash talk message (under 40 characters) for the overhead chat bubble.`,
+  `Stay in character. Be creative, funny, competitive. No quotes. Just the message.`,
+].filter(Boolean).join("\\n");
+
+// Use TEXT_SMALL model with 30-token limit, temperature 0.9
+const response = await this.runtime.useModel(ModelType.TEXT_SMALL, {
+  prompt,
+  maxTokens: 30,
+  temperature: 0.9,
+});
+```
+
+**LLM Timeout Handling**: 3-second timeout with scripted fallback:
+
+```typescript
+const LLM_TIMEOUT_MS = 3000;
+
+// Race LLM call against timeout
+Promise.race([llmPromise, timeoutPromise])
+  .then((response) => {
+    const text = (typeof response === "string" ? response : "")
+      .trim()
+      .replace(/^[\"']|[\"']$/g, "");
+    if (text && text.length <= 60) {
+      sendChat(text);
+    }
+  })
+  .catch(() => {
+    // On failure, use scripted fallback
+    const msg = pool[Math.floor(Math.random() * pool.length)];
+    sendChat(msg);
+  });
+```
+
+### Scripted Fallback Taunts
+
+When no LLM runtime is available or LLM calls fail, the system uses pre-written taunt pools:
+
+```typescript
+const FALLBACK_TAUNTS_OWN_LOW = [
+  "Not even close!",
+  "I've had worse",
+  "Is that all?",
+  "Still standing",
+  "Come on then!",
+  "You call that damage?",
+];
+
+const FALLBACK_TAUNTS_OPPONENT_LOW = [
+  "GG soon",
+  "You're done!",
+  "Sit down",
+  "One more hit...",
+  "Almost there!",
+  "Easy money",
+];
+
+const FALLBACK_TAUNTS_AMBIENT = [
+  "Let's go!",
+  "Fight me!",
+  "Too slow",
+  "Bring it",
+  "Nice try lol",
+  "*yawns*",
+  "Is this PvP?",
+  "Warming up",
+];
+```
+
+### Fire-and-Forget Architecture
+
+All trash talk calls are background/non-blocking to prevent combat tick delays:
+
+```typescript
+const TRASH_TALK_COOLDOWN_MS = 8_000; // 8 seconds between messages
+
+// Check cooldown and in-flight status
+if (now - this.lastTrashTalkTime < TRASH_TALK_COOLDOWN_MS) return;
+if (this._trashTalkInFlight) return;
+
+// Mark in-flight and update timestamp
+this._trashTalkInFlight = true;
+this.lastTrashTalkTime = Date.now();
+
+// Fire LLM call in background (never blocks tick)
+Promise.race([llmPromise, timeoutPromise])
+  .then(/* ... */)
+  .finally(() => {
+    this._trashTalkInFlight = false;
+  });
+```
+
+**Key Features:**
+- Never blocks combat tick loop
+- 8-second cooldown prevents spam
+- In-flight flag prevents overlapping LLM calls
+- Failures are silent (trash talk is optional flavor)
+
+### Integration with DuelOrchestrator
+
+The trash talk system is wired into the combat AI via a callback:
+
+```typescript
+// From DuelOrchestrator.ts
+const sendChatMessage = (text: string) => {
+  try {
+    this.agentService.executeChat(agentId, text);
+  } catch (err) {
+    // Swallow — chat failure must not break combat
+  }
+};
+
+// Pass callback to DuelCombatAI
+const combatAI = new DuelCombatAI(
+  service,
+  opponentId,
+  config,
+  runtime,
+  sendChatMessage, // Trash talk callback
+);
+```
+
+**Social System Update**: CHAT_MESSAGE action now allowed during combat (previously blocked).
+
+---
+
 ## Related Documentation
 
 - [Prayer System](/wiki/game-systems/prayer) (Prayer mechanics, drain, altars, bone burying)
@@ -2079,3 +2276,4 @@ private handleEntityDamaged(event: EntityDamagedEvent): void {
 - [Skills & Progression](/wiki/game-systems/skills)
 - [NPC Data Structure](/wiki/data/npcs)
 - [Item Stats](/wiki/data/items)
+- [AI Agents](/wiki/ai-agents/overview) (ElizaOS integration and agent actions)
