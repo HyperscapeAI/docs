@@ -1,0 +1,389 @@
+---
+title: "Terrain System API"
+description: "TerrainSystem and TerrainHeightParams API reference"
+icon: "mountain"
+---
+
+## TerrainSystem
+
+The main terrain orchestrator that manages procedural terrain generation, flat zones, and resource placement.
+
+**Location**: `packages/shared/src/systems/shared/world/TerrainSystem.ts`
+
+### Public Methods
+
+#### getHeightAt()
+
+Get terrain height at a world position. Checks flat zones first, then falls back to cached or computed height.
+
+```typescript
+getHeightAt(worldX: number, worldZ: number): number
+```
+
+**Parameters:**
+- `worldX` - World X coordinate
+- `worldZ` - World Z coordinate
+
+**Returns**: Height in meters
+
+**Example:**
+```typescript
+const terrainSystem = world.getSystem('terrain') as TerrainSystem;
+const height = terrainSystem.getHeightAt(100, 200);
+console.log(`Terrain height at (100, 200): ${height}m`);
+```
+
+#### getProceduralHeightAt()
+
+Get procedural terrain height bypassing flat zones. Useful for positioning objects above terrain.
+
+```typescript
+getProceduralHeightAt(worldX: number, worldZ: number): number
+```
+
+**Parameters:**
+- `worldX` - World X coordinate
+- `worldZ` - World Z coordinate
+
+**Returns**: Procedural height in meters (ignores flat zones)
+
+#### registerFlatZone()
+
+Register a flat zone for terrain flattening under buildings/stations.
+
+```typescript
+registerFlatZone(zone: FlatZone): void
+```
+
+**Parameters:**
+- `zone.id` - Unique identifier
+- `zone.centerX` - Center X coordinate
+- `zone.centerZ` - Center Z coordinate
+- `zone.width` - Width in meters
+- `zone.depth` - Depth in meters
+- `zone.height` - Flat height in meters
+- `zone.blendRadius` - Smooth transition radius
+
+**Example:**
+```typescript
+terrainSystem.registerFlatZone({
+  id: 'player_house_1',
+  centerX: 50.0,
+  centerZ: 50.0,
+  width: 10.0,
+  depth: 10.0,
+  height: 42.5,
+  blendRadius: 1.0,
+});
+```
+
+**Side Effects:**
+- Updates spatial index for O(1) lookups
+- Regenerates affected terrain tiles to reflect flat zone heights
+- Emits `TERRAIN_TILE_REGENERATED` events for affected tiles
+
+#### unregisterFlatZone()
+
+Remove a flat zone by ID.
+
+```typescript
+unregisterFlatZone(id: string): void
+```
+
+#### isInFlatZone()
+
+Check if a position is inside a flat zone's core area (not blend area).
+
+```typescript
+isInFlatZone(worldX: number, worldZ: number): boolean
+```
+
+**Used by**: ProceduralGrassSystem to exclude grass from artificial flat areas
+
+#### getTerrainColorAt()
+
+Get terrain color at a position by sampling nearest terrain tile vertex.
+
+```typescript
+getTerrainColorAt(worldX: number, worldZ: number): { r: number; g: number; b: number } | null
+```
+
+**Returns**: RGB color (0-1 range) or null if no terrain data available
+
+**Used by**: ProceduralGrassSystem to match grass color to terrain
+
+#### prefetchTile()
+
+Request speculative loading of a terrain tile.
+
+```typescript
+prefetchTile(tileX: number, tileZ: number): void
+```
+
+**Used by**: VegetationSystem to pre-generate tiles in player movement direction
+
+#### getTerrainGenerator()
+
+Get the unified terrain generator for standalone terrain queries.
+
+```typescript
+getTerrainGenerator(): TerrainGenerator
+```
+
+**Returns**: TerrainGenerator instance from `@hyperscape/procgen`
+
+#### isReady()
+
+Check if terrain system is ready for player spawning.
+
+```typescript
+isReady(): boolean
+```
+
+**Returns**: true if initial tiles loaded and noise initialized
+
+#### getTileSize()
+
+Get the terrain tile size in meters.
+
+```typescript
+getTileSize(): number
+```
+
+**Returns**: 100 (meters)
+
+#### getBiomeData()
+
+Get biome configuration by ID.
+
+```typescript
+getBiomeData(biomeId: string): BiomeData | null
+```
+
+**Used by**: VegetationSystem to get vegetation config for biomes
+
+## TerrainHeightParams
+
+Centralized terrain generation constants ensuring consistency between main thread and web workers.
+
+**Location**: `packages/shared/src/systems/shared/world/TerrainHeightParams.ts`
+
+### Noise Layer Definitions
+
+#### NoiseLayerDef Interface
+
+```typescript
+export interface NoiseLayerDef {
+  scale: number;
+  weight: number;
+  octaves?: number;
+  persistence?: number;
+  lacunarity?: number;
+  iterations?: number;  // For erosion noise only
+}
+```
+
+#### Noise Layers
+
+```typescript
+export const CONTINENT_LAYER: NoiseLayerDef = {
+  scale: 0.0008,
+  octaves: 5,
+  persistence: 0.7,
+  lacunarity: 2.0,
+  weight: 0.35,
+};
+
+export const RIDGE_LAYER: NoiseLayerDef = {
+  scale: 0.003,
+  weight: 0.15,
+};
+
+export const HILL_LAYER: NoiseLayerDef = {
+  scale: 0.02,
+  octaves: 4,
+  persistence: 0.6,
+  lacunarity: 2.2,
+  weight: 0.25,
+};
+
+export const EROSION_LAYER: NoiseLayerDef = {
+  scale: 0.005,
+  iterations: 3,
+  weight: 0.1,
+};
+
+export const DETAIL_LAYER: NoiseLayerDef = {
+  scale: 0.04,
+  octaves: 2,
+  persistence: 0.3,
+  lacunarity: 2.5,
+  weight: 0.08,
+};
+```
+
+### Island Configuration
+
+```typescript
+export const ISLAND_RADIUS = 350;
+export const ISLAND_FALLOFF = 100;
+export const ISLAND_DEEP_OCEAN_BUFFER = 50;
+export const BASE_ELEVATION = 0.42;
+export const OCEAN_FLOOR_HEIGHT = 0.05;
+export const HEIGHT_TERRAIN_MIX = 0.2;
+```
+
+### Pond Configuration
+
+```typescript
+export const POND_RADIUS = 50;
+export const POND_DEPTH = 0.55;
+export const POND_CENTER_X = -80;
+export const POND_CENTER_Z = 60;
+```
+
+### Coastline Noise
+
+```typescript
+export const COASTLINE_CIRCLE_SAMPLE_RADIUS = 2;
+
+export const COAST_LARGE = {
+  octaves: 3,
+  persistence: 0.5,
+  lacunarity: 2.0,
+  weight: 0.2,
+};
+
+export const COAST_MEDIUM = {
+  freqMultiplier: 3,
+  octaves: 2,
+  persistence: 0.5,
+  lacunarity: 2.0,
+  weight: 0.08,
+};
+
+export const COAST_SMALL = {
+  freqMultiplier: 8,
+  weight: 0.02,
+};
+```
+
+### Mountain Boost
+
+```typescript
+export const MOUNTAIN_BOOST_MAX_NORM_DIST = 2.5;
+export const MOUNTAIN_BOOST_GAUSSIAN_COEFF = 0.3;
+```
+
+### Worker Code Generation
+
+#### buildGetBaseHeightAtJS()
+
+Generate JavaScript source for `getBaseHeightAt()` to embed in worker string.
+
+```typescript
+export function buildGetBaseHeightAtJS(): string
+```
+
+**Returns**: JavaScript function string with all constants baked in
+
+**Usage**: Called by TerrainWorker to inject constants into inline worker code
+
+**Example Output:**
+```javascript
+function getBaseHeightAt(worldX, worldZ) {
+  var cN = noise.fractal2D(worldX * 0.0008, worldZ * 0.0008, 5, 0.7, 2.0);
+  var rN = noise.ridgeNoise2D(worldX * 0.003, worldZ * 0.003);
+  var hN = noise.fractal2D(worldX * 0.02, worldZ * 0.02, 4, 0.6, 2.2);
+  // ... (full implementation with all constants injected)
+  return height * MAX_HEIGHT;
+}
+```
+
+## Usage Examples
+
+### Custom Terrain Parameters
+
+To modify terrain generation, edit `TerrainHeightParams.ts`:
+
+```typescript
+// Increase hill prominence
+export const HILL_LAYER: NoiseLayerDef = {
+  scale: 0.02,
+  octaves: 4,
+  persistence: 0.6,
+  lacunarity: 2.2,
+  weight: 0.35,  // Increased from 0.25
+};
+
+// Make island larger
+export const ISLAND_RADIUS = 500;  // Increased from 350
+```
+
+Changes automatically apply to both main thread and workers.
+
+### Querying Terrain
+
+```typescript
+const terrainSystem = world.getSystem('terrain') as TerrainSystem;
+
+// Get height at position
+const height = terrainSystem.getHeightAt(100, 200);
+
+// Check if in flat zone
+const inFlatZone = terrainSystem.isInFlatZone(100, 200);
+
+// Get terrain color for grass matching
+const color = terrainSystem.getTerrainColorAt(100, 200);
+if (color) {
+  console.log(`Terrain color: rgb(${color.r}, ${color.g}, ${color.b})`);
+}
+
+// Prefetch tiles for smooth streaming
+terrainSystem.prefetchTile(5, 5);
+```
+
+### Creating Flat Zones
+
+```typescript
+// Register flat zone for a building
+terrainSystem.registerFlatZone({
+  id: 'castle_courtyard',
+  centerX: 250,
+  centerZ: 300,
+  width: 50,
+  depth: 50,
+  height: 45,
+  blendRadius: 5,
+});
+
+// Check if position is in flat zone
+const zone = terrainSystem.getFlatZoneAt(250, 300);
+if (zone) {
+  console.log(`In flat zone: ${zone.id}`);
+}
+
+// Remove flat zone when building destroyed
+terrainSystem.unregisterFlatZone('castle_courtyard');
+```
+
+## Performance Characteristics
+
+### Worker-Based Computation
+
+- **Height calculation**: ~0ms on main thread (worker handles all noise)
+- **Normal calculation**: ~0ms on main thread (worker computes with overflow grid)
+- **Tile generation**: ~5-10ms total (worker + transfer + geometry build)
+- **Flat zone tiles**: ~15-20ms (requires main thread recomputation)
+
+### Spatial Indexing
+
+- **Flat zone lookup**: O(1) via tile-based spatial index
+- **Typical world**: 5-10 flat zones, 10-20 tile keys
+- **Memory overhead**: ~1KB per zone
+
+## Related Documentation
+
+- [Terrain System Guide](/wiki/game-systems/terrain)
+- [World Generation](/wiki/game-systems/overview)
+- [Collision System](/wiki/game-systems/collision)
