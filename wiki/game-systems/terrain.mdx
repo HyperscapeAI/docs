@@ -211,17 +211,24 @@ const CONFIG = {
 
 ## Noise Layers
 
-Terrain height is generated from multiple Perlin noise layers:
+Terrain height is generated from multiple Perlin noise layers defined in `TerrainHeightParams.ts`:
 
-| Layer | Scale | Weight | Purpose |
-|-------|-------|--------|---------|
-| Continent | 0.002 | 0.35 | Large-scale landmasses |
-| Ridge | 0.008 | 0.15 | Mountain ridges |
-| Hill | 0.02 | 0.25 | Rolling hills |
-| Erosion | 0.04 | 0.10 | Weathering patterns |
-| Detail | 0.1 | 0.08 | Local bumps and variation |
+| Layer | Scale | Weight | Octaves | Persistence | Lacunarity | Purpose |
+|-------|-------|--------|---------|-------------|------------|---------|
+| Continent | 0.0008 | 0.35 | 5 | 0.7 | 2.0 | Large-scale landmasses |
+| Ridge | 0.003 | 0.15 | - | - | - | Mountain ridges |
+| Hill | 0.02 | 0.25 | 4 | 0.6 | 2.2 | Rolling hills |
+| Erosion | 0.005 | 0.1 | 3 iterations | - | - | Weathering patterns |
+| Detail | 0.04 | 0.08 | 2 | 0.3 | 2.5 | Local bumps and variation |
 
-Combined height is normalized to [0, 1] then scaled by `MAX_HEIGHT`.
+Combined height is normalized to [0, 1], raised to power curve (1.1), then scaled by `MAX_HEIGHT` (50m).
+
+**Coastline Variation:**
+Natural irregular shorelines created by sampling noise on a circle around the island:
+- Large-scale: 3 octaves, weight 0.2
+- Medium-scale: 3x frequency, 2 octaves, weight 0.08
+- Small-scale: 8x frequency, weight 0.02
+- Varies island radius by ±20% for organic coastlines
 
 ## Flat Zones
 
