@@ -182,53 +182,81 @@ packages/shared/src/systems/shared/
 └── interaction/    # Player interactions
 ```
 
-### GPU-Instanced Particle System
+### GPU-Instanced Particle System (PR #877)
 
-The shared package includes a centralized particle system that uses GPU instancing for high-performance visual effects:
+The shared package includes a centralized particle system that uses GPU instancing for high-performance visual effects. Introduced in February 2026, this system provides dramatic performance improvements for fishing spots and other particle-heavy entities.
 
 **Architecture:**
 - **ParticleManager**: Central router that dispatches particle events to specialized sub-managers
-- **WaterParticleManager**: GPU-instanced fishing spot effects (4 InstancedMeshes with TSL shaders)
-- **GlowParticleManager**: Instanced glow billboards for altars, fires, torches
+  - Single entry point for all particle systems
+  - Type-based routing to appropriate sub-manager
+  - Ownership tracking for efficient lifecycle management
+  - Extensible design for future particle types
+- **WaterParticleManager**: GPU-instanced fishing spot effects
+  - 4 InstancedMeshes (splash, bubble, shimmer, ripple) with TSL shaders
+  - GPU-computed animations (parabolic arcs, wobble, twinkle, ring expansion)
+  - Per-instance data via InstancedBufferAttributes
+  - Fishing spot variant system (net, bait, fly)
 
 **Performance Benefits:**
-- Reduces ~150 draw calls to 4 per fishing spot (97% reduction)
-- FPS improvement: 65-70 → 120 on reference hardware (80% increase)
-- GPU-driven animations (parabolic arcs, wobble, twinkle, ring expansion)
-- ~450 lines of CPU animation code eliminated
-- Zero CPU overhead for particle updates (all on GPU via TSL shaders)
+- **Draw Call Reduction**: ~150 → 4 per fishing spot (97% reduction)
+- **FPS Improvement**: 65-70 → 120 on reference hardware (80% increase)
+- **CPU Savings**: ~450 lines of per-entity animation code eliminated
+- **GPU-Driven**: All particle updates computed on GPU via TSL shaders
+- **Zero CPU Overhead**: No per-frame CPU particle animation
 
 **Location:**
 ```
 packages/shared/src/entities/managers/particleManager/
 ├── ParticleManager.ts        # Central router with ownership tracking
 ├── WaterParticleManager.ts   # Fishing spot particles (splash, bubble, shimmer, ripple)
-└── GlowParticleManager.ts    # Glow billboards (altar, fire, torch presets)
+└── index.ts                  # Public exports
 ```
 
 **Technical Implementation:**
-- **InstancedBufferAttributes**: Per-particle data (spotPos, ageLifetime, angleRadius, dynamics)
+- **InstancedBufferAttributes**: Per-particle data storage
+  - spotPos (vec3): fishing spot world center
+  - ageLifetime (vec2): current age, total lifetime
+  - angleRadius (vec2): polar angle, radial distance
+  - dynamics (vec4): peakHeight, size, speed, direction
 - **TSL NodeMaterials**: GPU-computed particle animations using Three.js Shading Language
+  - Billboard orientation via camera right/up vectors
+  - Parabolic arc trajectories for splash particles
+  - Wobble and drift patterns for bubbles
+  - Twinkle effects for shimmer particles
+  - Ring expansion and fade for ripples
 - **Vertex Buffer Budget**: 7 of 8 max attributes per particle layer
+  - position(1) + uv(1) + instanceMatrix(1) + spotPos(1) + ageLifetime(1) + angleRadius(1) + dynamics(1)
 - **Pool Sizes**: MAX_SPLASH=96, MAX_BUBBLE=72, MAX_SHIMMER=72, MAX_RIPPLE=24
-- **Fishing Variants**: Net (calm), Bait (medium), Fly (active) with different particle counts
-- **Burst System**: Fish activity bursts fire 2-4 splash particles every 3-7 seconds
+- **Fishing Variants**: Net (calm), Bait (medium), Fly (active)
+  - Variant-specific colors, ripple speeds, particle counts
+  - Burst intervals: Net 5-10s, Bait 3-7s, Fly 2-5s
+  - Burst splash counts: Net 2, Bait 3, Fly 4
+- **Burst System**: Fish activity bursts fire splash particles simultaneously
+  - Burst center randomized within 0.05-0.15 radius
+  - Burst particles have higher peak heights (0.25-0.6 vs 0.12-0.32)
+  - Burst particles cluster around burst center with 0.06 spread
 
 **Integration:**
-- ResourceSystem creates ParticleManager on client startup
-- ResourceEntity delegates particle lifecycle to ParticleManager
-- Per-frame update driven by ResourceSystem.update()
-- Lazy registration pattern (retries if manager not ready during entity init)
-- Proper cleanup via unregister on entity destroy
+- **ResourceSystem**: Creates ParticleManager on client startup
+  - Retroactive registration for entities created before system start
+  - Listens to RESOURCE_SPAWNED events for particle routing
+  - Per-frame update drives all particle managers via update(dt, camera)
+  - Proper disposal on system shutdown
+- **ResourceEntity**: Delegates particle lifecycle to ParticleManager
+  - Lazy registration pattern (retries if manager not ready during entity init)
+  - Retains only lightweight glow mesh for interaction detection
+  - Proper cleanup via unregister on entity destroy
+  - Removed ~450 lines of CPU particle animation code
 
 **Extensibility:**
-To add new particle types (fire, magic, dust):
-1. Create new sub-manager class in particleManager/ folder
+To add new particle types (fire, magic, dust, blood):
+1. Create new sub-manager class in `particleManager/` folder
 2. Instantiate in ParticleManager constructor
 3. Add routing logic in register/unregister/move/handleEvent methods
 4. Call update() and dispose() from ParticleManager
 
-See [Particle System Documentation](/wiki/engine/particles) for complete API reference.
+See [Particle System Documentation](/wiki/engine/particles) for complete API reference and implementation details.
 
 ### Manifest-Driven Content
 
