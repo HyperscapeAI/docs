@@ -60,6 +60,32 @@ docker volume rm server_postgres-data
 bun run dev
 ```
 
+### Manifest Validation Errors
+
+**Symptom**: DataManager validation errors about invalid JSON in manifest files
+
+**Cause**: Invalid JSON syntax in manifest files (trailing commas, missing quotes, etc.)
+
+**Solution**: Recent commits fixed several manifest JSON errors. Update to latest code:
+
+```bash
+git pull origin main
+bun install
+bun run build
+```
+
+If you're editing manifests manually, validate JSON syntax:
+
+```bash
+# Validate a manifest file
+cat packages/server/world/assets/manifests/npcs.json | jq .
+```
+
+**Common Issues:**
+- Trailing commas in JSON arrays/objects
+- Missing quotes around property names
+- Incorrect .gitignore negation for manifest files
+
 ### Port Conflicts
 
 **Symptom**: "Port already in use" errors
