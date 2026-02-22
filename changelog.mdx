@@ -23,6 +23,142 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Terrain System Refactor & Duel Arena Polish" description="February 2026" date="2026-02-22">
+
+### 🏔️ Terrain Height Parameter Refactoring (commit e54476f)
+
+Extracted all terrain generation constants to single source of truth for consistency between main thread and web workers:
+
+- **TerrainHeightParams.ts**: New centralized parameter file
+  - All noise layer definitions (continent, ridge, hill, erosion, detail)
+  - Island configuration (radius, falloff, base elevation)
+  - Pond configuration (radius, depth, center position)
+  - Coastline noise parameters for irregular shorelines
+  - Mountain boost configuration
+- **Worker Code Generation**: `buildGetBaseHeightAtJS()` function
+  - Injects TypeScript constants into inline worker string
+  - Ensures worker heights match main thread exactly
+  - Prevents parameter drift between threads
+- **Synchronized Parameters**: TerrainSystem imports constants directly
+  - Worker receives same values via code injection
+  - Eliminates manual synchronization errors
+  - Single source of truth for all terrain generation
+
+### ⚡ Terrain Worker Performance Optimization (commit ef54a70)
+
+Moved height and normal computation to web workers for 63x reduction in main-thread noise evaluations:
+
+- **Worker Height Computation**: Full height calculation in worker threads
+  - Synced noise weights to match TerrainSystem (hillScale 0.012→0.02, persistence 0.5→0.6)
+  - Added shoreline adjustment to worker (calculateBaseSlopeAt, adjustHeightForShoreline)
+  - Worker heights now fully correct for tiles without flat zones
+- **Worker Normal Computation**: Normals computed in worker via overflow grid
+  - (resolution+2)² overflow grid with centered finite differences
+  - Eliminates ~16,384 noise calls per tile on main thread
+  - 63x reduction in noise evaluations for normal calculation
+- **Conditional Fallback**: Main-thread recomputation only for tiles with flat zones
+  - Tiles without flat zones use worker data directly (zero noise calls)
+  - Tiles overlapping buildings/stations recompute on main thread
+  - Ensures flat zone heights are respected in final geometry
+- **Performance Impact**: Terrain generation now runs in parallel across CPU cores
+  - Main thread free for rendering and input handling
+  - Smooth frame rates during terrain streaming
+
+### 🎮 Duel Arena Gameplay Fixes (commit 5e5c7c9)
+
+Resolved 6 critical bugs affecting agent duel gameplay:
+
+- **2H Sword Attack Timing**: DuelCombatAI now attacks every weapon-speed cycle
+  - Previously waited for re-engagement interval between attacks
+  - Seeds first tick to attack immediately (startCombat() has no auto-attack)
+  - Fixes slow 2H weapon attacks in duels
+- **Teleport During Fight**: Health restore now has quiet parameter
+  - Skips PLAYER_RESPAWNED/PLAYER_SET_DEAD events during fight-start HP sync
+  - Added suppressEffect flag to teleportPlayer/teleportToArena
+  - Prevents visual teleport effects during proximity corrections
+- **Stale Avatars**: endCycle() chains cleanup→delay→new cycle via .finally()
+  - INTER_CYCLE_DELAY_MS ensures proper cleanup before next cycle
+  - Cleanup always teleports both agents to lobby
+  - Prevents avatars stuck in arena between cycles
+- **FIGHT Text Display**: CountdownOverlay stays mounted 2.5s into FIGHTING phase
+  - Fade-out animation (opacity + scale)
+  - Ensures "FIGHT" text visible at combat start
+- **Arena Fences**: Replaced solid walls with fence posts + rails
+  - Better visibility into arena
+  - Maintains collision boundaries
+- **Health Bars**: Inline HP sync in handleEntityDamaged
+  - updateContestantHp called before every broadcast
+  - Eliminates health bar desync during combat
+
+### 🎨 Duel Arena Visual Enhancements
+
+#### Lit Torches with Fire Particles (commit cef09c5)
+
+- **Torch Placement**: Torches at all 4 corners of each arena
+  - PointLights with flicker animation
+  - "torch" glow preset (6 riseSpread particles per torch)
+  - Tight 0.08 spread for concentrated flame effect
+- **Preset-Aware Respawn**: Particle spread varies by preset type
+  - Torch particles use tight spread
+  - Other presets use default spread values
+
+#### Procedural Stone Tile Texture (commit f8c585e)
+
+- **Arena Floor Texture**: Canvas-generated sandstone tile pattern
+  - Replaces flat-colored arena floors
+  - OSRS medieval aesthetic
+  - Each arena gets unique randomized texture
+  - Grout lines, color variation, and speckle noise
+  - Procedurally generated per arena for variety
+
+### 🔧 Build System Improvements
+
+#### Circular Dependency Resilience (commit 5666ece)
+
+- **Build Resilience**: procgen and plugin-hyperscape builds now handle circular deps
+  - Both packages have circular dependencies with @hyperscape/shared
+  - Used 'tsc || echo' pattern so build exits 0 even with circular dep errors
+  - Packages still produce partial output sufficient for downstream consumers
+  - Prevents clean build failures when dist/ doesn't exist yet
+
+#### CI Test Reliability
+
+- **Benchmark Thresholds** (commit 98ebfa7): Relaxed NPCTickProcessor thresholds for CI variance
+- **Geometry Validation** (commit 04248b7): Increased timeout to 120s for CI
+- **Intensive Generation Tests** (commit 832286c): Increased timeouts for procgen tests
+- **Vitest Timeout** (commit 7e4d2cc): Global timeout increase to fix CI flakiness
+- **RoadNetworkSystem Performance** (commit 474d29d): Fixed flaky performance test
+- **Manifest Validation** (commit aa1ea2d, 1f4551c, 6f1d3a7): Fixed invalid manifest JSONs causing DataManager errors
+  - Corrected .gitignore manifest negation
+  - Fixed JSON syntax errors in manifest files
+  - Ensures CI tests have valid data
+
+### 🚀 Deployment & Infrastructure
+
+#### Vast.ai GPU Server Deployment
+
+- **Python 3.11+ Support** (commit 621ae67): Upgraded to bookworm-slim for vastai-sdk compatibility
+- **PEP 668 Compliance** (commit d9e9111): Added --break-system-packages for pip3 on Debian 12
+- **CLI Package** (commit 781f3d7): Installed vastai CLI package and reverted to binary invocation
+- **SSH Key Generation** (commit 3ce7d64): Ensured vastai CLI on PATH and generated SSH keys in Docker
+- **US-Based Filtering** (commit 48bd8e7): Filter for US-based machines for lower latency
+- **CUDA Docker Image** (commit c6540358): Switched from KVM to standard CUDA image
+- **Runtime Environment** (commit dc9b475): Inject all runtime env vars into provisioned game server
+
+#### CI/CD Enhancements
+
+- **Foundry Installation** (commit 8083993): Install Foundry for MUD contracts tests
+- **Playwright Dependencies** (commit 59204671): Added playwright deps and ffmpeg for streaming
+- **DNS Configuration** (commit fd172485): Overwrite resolv.conf with Google DNS instead of appending
+- **Build Chain** (commit cbcbb2f, f0d2fae): Added all internal packages to build chain including decimation
+- **Asset Checks** (commit 87b3c1a): Added git-lfs for asset checks
+- **Native Modules** (commit bd2aad9): Added build-essential for native module compilation on minimal Docker images
+- **Declaration Generation** (commit eb722bb): Always use --skipLibCheck for circular dependency handling
+- **CI Environment** (commit 28bf9fb): Set CI=true to skip asset download in production
+- **CORS Configuration** (commit 7256b07, fb3b9cd): Allow all origins and add CORS max-age for betting app
+
+</Update>
+
 <Update label="Melee Weapon Overhaul & Combat Pathfinding" description="February 2026" date="2026-02-20">
 
 ### ⚔️ Melee Weapon System Overhaul (PR #894)
