@@ -23,6 +23,184 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="GPU Particle System & AI Combat Enhancements" description="February 2026" date="2026-02-22">
+
+### ⚡ GPU-Instanced Particle System (PR #877)
+
+Major performance optimization reducing fishing spot draw calls from ~150 to 4 via centralized GPU-instanced particle rendering:
+
+- **ParticleManager Architecture**: Centralized particle routing system
+  - Single entry point for all particle effects (water, glow, fire, magic)
+  - Routes particle events to specialized sub-managers based on type
+  - Ownership tracking eliminates need for type hints on unregister/move
+  - Extensible design for future particle types (dust, smoke, blood)
+- **WaterParticleManager**: GPU-instanced fishing spot effects
+  - 4 InstancedMeshes (splash, bubble, shimmer, ripple) replace ~150 individual meshes
+  - TSL NodeMaterials with InstancedBufferAttributes for per-particle data
+  - GPU-computed animations (parabolic arcs, wobble, twinkle, ring expansion)
+  - Per-instance data: spotPos (vec3), ageLifetime (vec2), angleRadius (vec2), dynamics (vec4)
+  - Vertex buffer budget: 7 of 8 max attributes per particle layer
+- **GlowParticleManager**: Instanced glow billboards for altars, fires, torches
+  - Preset system: altar, fire, torch with configurable particle counts and spread
+  - Mesh-aware spark placement (samples geometry vertices for altar preset)
+  - Color override support (single hex or three-tone palette)
+  - Billboard orientation via camera right/up vectors
+- **Performance Impact**: 
+  - FPS improvement: 65-70 → 120 on reference hardware
+  - Draw calls: ~150 → 4 per fishing spot
+  - CPU savings: ~450 lines of per-entity animation code eliminated
+  - GPU-driven particle updates (trig, quaternion, opacity all on GPU)
+- **ResourceEntity Refactor**: Delegates to ParticleManager hub API
+  - Retains only lightweight glow mesh for interaction detection
+  - Lazy registration pattern (retries if manager not ready during entity init)
+  - Proper cleanup via unregister on destroy
+- **ResourceSystem Integration**: Creates ParticleManager on client, forwards events
+  - Retroactive registration for entities created before system start
+  - Listens to RESOURCE_SPAWNED events for particle routing
+  - Per-frame update drives all particle managers
+- **Discriminated Union API**: Type-safe particle configuration
+  - `WaterParticleConfig` for fishing spots (resourceId-based variants)
+  - `GlowParticleConfig` for altars/fires/torches (preset-based)
+  - `ParticleConfig = WaterParticleConfig | GlowParticleConfig`
+- **Fishing Spot Variants**: Net (calm), Bait (medium), Fly (active)
+  - Variant-specific colors, ripple speeds, particle counts
+  - Burst system for fish activity (2-4 splash particles every 3-7 seconds)
+  - Configurable burst intervals and splash counts per variant
+
+### 🗣️ Duel Trash Talk System (commit 8ff3ad3)
+
+AI agents now taunt opponents during combat with LLM-generated or scripted trash talk:
+
+- **Health Threshold Taunts**: Triggered at 75%, 50%, 25%, 10% HP milestones
+  - Own HP low: "Not even close!", "I've had worse", "Is that all?"
+  - Opponent HP low: "GG soon", "You're done!", "Sit down"
+  - Fires once per threshold per fight (prevents spam)
+- **Ambient Periodic Taunts**: Random taunts every 15-25 ticks
+  - "Let's go!", "Fight me!", "Too slow", "Bring it"
+  - Adds personality to prolonged fights
+- **LLM-Generated Taunts**: Uses agent character bio/style via TEXT_SMALL model
+  - Pulls personality from Eliza agent runtime character definition
+  - Includes bio snippets and communication style hints
+  - 30-token limit for overhead chat bubble (under 40 characters)
+  - 3-second LLM timeout with scripted fallback
+  - Temperature 0.9 for creative, varied responses
+- **Scripted Fallback**: Pools of pre-written taunts when no runtime available
+  - 6 own-low taunts, 6 opponent-low taunts, 8 ambient taunts
+  - Ensures trash talk works even without LLM access
+- **Fire-and-Forget**: All trash talk calls are background/non-blocking
+  - Never blocks combat tick loop
+  - 8-second cooldown between messages
+  - In-flight flag prevents overlapping LLM calls
+- **DuelCombatAI Integration**: Trash talk wired into combat AI tick loop
+  - `sendChatMessage` callback provided by DuelOrchestrator
+  - Sends chat as overhead bubble via agent's EmbeddedHyperscapeService
+  - Health milestone detection compares previous vs current HP
+  - Ambient taunt scheduling via tick counter
+- **Social System Update**: CHAT_MESSAGE action now allowed during combat
+  - Previously blocked in combat state
+  - Enables trash talk without breaking combat flow
+
+### 🔒 Security Vulnerability Fixes (commit a390b79)
+
+Resolved 14 of 16 npm audit vulnerabilities with dependency updates:
+
+- **Playwright**: Bumped to ^1.55.1 across root, shared, impostors, server
+  - Fixes GHSA-7mvr-c777-76hp (high severity)
+- **Vite**: Bumped to ^6.4.1 across shared, asset-forge, client, impostors, procgen, gold-betting-demo/app
+  - Fixes GHSA-g4jq-h2w9-997c, GHSA-jqfw-vq24-v9c3, GHSA-93m4-6634-74q7
+- **ajv**: Bumped to ^8.18.0 in shared
+  - Fixes GHSA-2g4f-4pwh-qvx6
+- **Root Overrides**: Added for @trpc/server, minimatch, cookie, undici, jsondiffpatch, tmp, diff, bn.js, ai
+- **Remaining Vulnerabilities**: 2 vulns (bigint-buffer, elliptic) have no patched versions upstream
+- **Audit Threshold**: Lowered to critical (bigint-buffer high has no upstream fix)
+- **ESLint Fix**: Removed ajv>=8.18.0 override that forced ajv@8 on @eslint/eslintrc
+  - @eslint/eslintrc needs ajv@6 for Draft-04 schema support
+  - Forcing ajv@8 caused TypeError crash
+
+### 🌐 Domain Support Expansion (commits bb292c1, 7ff88d1)
+
+Added CORS support for new production domains:
+
+- **hyperscape.gg**: Primary game domain
+  - CORS support in main server and betting keeper
+  - Deep link support in Tauri mobile config
+  - Website game link updated to hyperscape.gg
+- **hyperscape.bet**: Betting platform domain
+  - CORS support in main server and betting keeper
+  - Subdomain pattern support
+- **hyperbet.win**: Additional betting domain
+  - CORS support in main server and betting keeper
+  - Subdomain pattern support
+
+### 🎮 Solana CLOB Market Mainnet Migration (commits dba3e03, 35c14f9)
+
+Adapted betting bot and IDLs for CLOB market program on Solana mainnet:
+
+- **Program Address Updates**: Updated declare_id! in fight_oracle and gold_clob_market to mainnet addresses
+- **IDL Updates**: All IDL files updated with mainnet program addresses
+  - Replaced keeper binary market IDL with CLOB market IDL
+- **Bot Rewrite**: Adapted for CLOB market instructions
+  - initializeConfig, initializeMatch, initializeOrderBook, resolveMatch
+  - Removed binary market seeding/vault logic
+- **Server Config**: Updated arena config fallback to mainnet fight oracle
+- **Keeper Common**: Updated fallback program IDs to mainnet
+- **Frontend Config**: Updated .env.mainnet with all VITE_ vars
+
+### 🎥 Streaming Infrastructure Improvements
+
+Multiple fixes for stable streaming on Vast.ai RTX 5060 Ti GPUs:
+
+- **Chrome Dev Channel** (commits ba8bd53, d824163): Use Chrome Dev for WebGPU support on Vast.ai
+- **GL ANGLE Backend** (commit 0257563): Switch to GL ANGLE backend (Vulkan ICD broken on RTX 5060 Ti)
+- **System FFmpeg** (commits 55a07bd, 536763d): Use system FFmpeg to avoid static build SIGSEGV
+- **WebGPU-Safe Chrome Flags** (commit f3aa787): Removed aggressive GPU opts that crash RTX 5060 Ti
+- **Headful Mode** (commit 5e4c6f1): Switched back to headful mode for GPU compositing with Xvfb
+- **Swiftshader Fallback** (commit ae42beb): Use swiftshader + headless + WebGL for stable streaming
+- **RTX 5060 Ti Exclusion** (commit 30cacb0): Removed RTX 5060 Ti from GPU search (broken Vulkan ICD)
+- **Playwright Dependencies** (commit 59204671): Added playwright deps and ffmpeg for streaming
+
+### 🔧 CI/CD Improvements (commits 034f9c9, b344d9e, 8083993, 6ce05cc, 19bebe2)
+
+Enhanced CI reliability and test coverage:
+
+- **Chain Setup Skip**: setup-chain.mjs skips when CI=true (anvil/mud not available in CI)
+- **EVM Contracts Exclusion**: Exclude @hyperscape/evm-contracts from turbo test filter
+- **Docs Failure Handling**: Add continue-on-error for Mintlify API calls in update-docs.yml
+- **Foundry Toolchain**: Add foundry-rs/foundry-toolchain to integration.yml for anvil binary
+- **ESLint Fix**: Remove ajv>=8.18.0 override (needs ajv@6 for Draft-04 schema support)
+- **Assets Clone**: Remove assets dir before clone to avoid 'already exists' error
+- **Audit Threshold**: Lower to critical (bigint-buffer high has no upstream fix)
+
+### 🧪 Test Suite Compatibility (commit 25ba63c)
+
+Fixed test suite compatibility with refactored ArenaService architecture:
+
+- **WebGPU Mocks**: Added vitest.setup.ts to mock WebGPU browser globals
+  - GPUShaderStage, GPUBufferUsage, GPUTextureUsage, etc.
+  - Required by Three.js WebGPU renderer in tests
+- **ArenaService Passthrough Methods**: Added protected methods for test spying
+  - getDb, getEligibleAgents, findReferralMappingForWalletNetwork
+  - listIdentityWallets, listLinkedWallets, recordFeeShare, awardPoints
+- **Database Mock Helper**: setDbMock properly configures world.getSystem("database") mock
+- **Skipped Tests**: Deferred tests needing deeper refactoring
+  - ArenaService lifecycle tests (need createBetOpenRound fix)
+  - ArenaService simulation tests (need architecture updates)
+  - ArenaService referrals tests (sub-services call ctx directly)
+  - StreamingDuelScheduler unit tests (internal methods moved)
+  - Admin index integration tests (need DB migrations)
+- **Integration Test Fix**: StreamingDuelScheduler accepts undefined as falsy
+- **Test Results**: 1569 tests pass, 85 skipped
+
+### 🔧 TypeScript Error Fixes (commit 5e60439)
+
+Resolved 4 TypeScript errors for CI typecheck:
+
+- **AgentManager.ts**: Cast EmbeddedHyperscapeService to HyperscapeService
+- **ArenaService.ts**: Cast unknown position param via Parameters<> utility
+- **ArenaRoundService.ts**: Change getEligibleAgents from private to public
+
+</Update>
+
 <Update label="Terrain System Refactor & Duel Arena Polish" description="February 2026" date="2026-02-22">
 
 ### 🏔️ Terrain Height Parameter Refactoring (commit e54476f)
