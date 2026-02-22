@@ -275,6 +275,117 @@ RUN bun run build
 - Sets CI=true to skip asset download (assets served from CDN)
 - Installs git-lfs for asset checks
 
+## Streaming Infrastructure
+
+### Browser Capture Configuration
+
+The streaming system uses Playwright with Chrome for game capture:
+
+**Chrome Flags for WebGPU:**
+```typescript
+// Stable configuration for RTX 5060 Ti and similar GPUs
+const chromeFlags = [
+  '--use-gl=angle',              // Use ANGLE backend (Vulkan ICD broken on some GPUs)
+  '--use-angle=gl',              // Force OpenGL backend
+  '--disable-gpu-sandbox',       // Required for headless GPU access
+  '--enable-unsafe-webgpu',      // Enable WebGPU in headless mode
+  '--no-sandbox',                // Required for Docker
+  '--disable-setuid-sandbox'
+];
+```
+
+**FFmpeg Configuration:**
+```bash
+# Use system FFmpeg (static builds cause SIGSEGV on some systems)
+apt-get install -y ffmpeg
+
+# Verify installation
+ffmpeg -version
+```
+
+**Playwright Dependencies:**
+```bash
+# Install Playwright browsers and system dependencies
+npx playwright install --with-deps chromium
+
+# Or install manually
+apt-get install -y \
+  libnss3 \
+  libnspr4 \
+  libatk1.0-0 \
+  libatk-bridge2.0-0 \
+  libcups2 \
+  libdrm2 \
+  libxkbcommon0 \
+  libxcomposite1 \
+  libxdamage1 \
+  libxfixes3 \
+  libxrandr2 \
+  libgbm1 \
+  libasound2
+```
+
+### GPU Compatibility
+
+**Tested Configurations:**
+- ✅ RTX 3060 Ti (Vulkan)
+- ✅ RTX 4090 (Vulkan)
+- ⚠️ RTX 5060 Ti (GL ANGLE only, Vulkan ICD broken)
+
+**Fallback Modes:**
+1. **WebGPU + Vulkan** (preferred, best performance)
+2. **WebGPU + GL ANGLE** (RTX 5060 Ti, stable)
+3. **WebGL + Swiftshader** (CPU fallback, lowest performance)
+
+**Environment Variables:**
+```bash
+# Force specific rendering backend
+CHROME_BACKEND=angle        # Use GL ANGLE
+CHROME_BACKEND=vulkan       # Use Vulkan (default)
+CHROME_BACKEND=swiftshader  # Use CPU fallback
+```
+
+### Xvfb Configuration
+
+For headful mode with GPU compositing:
+
+```bash
+# Start Xvfb
+Xvfb :99 -screen 0 1920x1080x24 &
+export DISPLAY=:99
+
+# Run game server with GPU acceleration
+bun run dev:streaming
+```
+
+**Docker Configuration:**
+```dockerfile
+# Install Xvfb for headful GPU compositing
+RUN apt-get install -y xvfb
+
+# Start Xvfb in entrypoint
+CMD Xvfb :99 -screen 0 1920x1080x24 & \
+    export DISPLAY=:99 && \
+    bun run start
+```
+
+### Chrome Dev Channel
+
+For latest WebGPU features on Vast.ai:
+
+```bash
+# Install Chrome Dev channel
+wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+apt-get update
+apt-get install -y google-chrome-unstable
+
+# Use in Playwright
+const browser = await chromium.launch({
+  executablePath: '/usr/bin/google-chrome-unstable'
+});
+```
+
 ## Production Checklist
 
 - [ ] PostgreSQL database provisioned
