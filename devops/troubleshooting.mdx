@@ -350,6 +350,102 @@ docker logs hyperscape-postgres
 docker logs hyperscape-cdn
 ```
 
+## Deployment Issues
+
+### Docker Build Failures
+
+**Symptom**: Native module compilation fails in minimal Docker images
+
+**Cause**: Missing build tools in base image
+
+**Solution**: Ensure `build-essential` is installed:
+
+```dockerfile
+# From Dockerfile.server
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git-lfs \
+    python3 \
+    python3-pip
+```
+
+**Recent Fixes:**
+- Added `build-essential` for native module compilation (commit bd2aad9)
+- Added `git-lfs` for asset checks (commit 87b3c1a)
+- Added `unzip` for bun install (commit 18d6126)
+
+### DNS Resolution Failures
+
+**Symptom**: Cannot resolve external domains in Docker containers
+
+**Cause**: Default DNS servers not working in container environment
+
+**Solution**: Overwrite `resolv.conf` with Google DNS:
+
+```bash
+# From deploy scripts
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
+echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+```
+
+**Recent Fix:**
+- Changed from appending to overwriting `resolv.conf` (commit fd17248)
+
+### Asset Download in Production
+
+**Symptom**: Production builds try to download assets from Git LFS
+
+**Cause**: Asset download script runs in production environment
+
+**Solution**: Set `CI=true` to skip asset download:
+
+```bash
+# In production environment
+CI=true bun run build
+```
+
+**Recent Fix:**
+- Added `CI=true` check to skip asset download in production (commit 28bf9fb)
+
+### Streaming Dependencies Missing
+
+**Symptom**: Streaming mode fails with missing Playwright or ffmpeg
+
+**Cause**: Playwright dependencies and ffmpeg not installed in deployment image
+
+**Solution**: Install required dependencies:
+
+```dockerfile
+# Add to Dockerfile
+RUN npx playwright install-deps
+RUN apt-get install -y ffmpeg
+```
+
+**Recent Fix:**
+- Added Playwright deps and ffmpeg for streaming (commit 5920467)
+
+### CORS Issues in Betting Service
+
+**Symptom**: Preflight OPTIONS requests fail from betting frontend
+
+**Cause**: Missing CORS configuration or max-age header
+
+**Solution**: Configure CORS to allow all origins with max-age:
+
+```typescript
+// From keeper CORS config
+fastify.register(cors, {
+  origin: true,  // Allow all origins
+  credentials: true,
+  maxAge: 86400,  // 24 hours
+});
+```
+
+**Recent Fixes:**
+- Allow all origins and add CORS max-age (commit 7256b07)
+- Allow hyperscape-betting.pages.dev origin (commit fb3b9cd)
+- Allow pointer events on stream-bg for Twitch embed interaction (commit 0925171)
+
 ## Getting Help
 
 1. Check [GitHub Issues](https://github.com/HyperscapeAI/hyperscape/issues)
