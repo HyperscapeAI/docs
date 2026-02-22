@@ -359,6 +359,66 @@ events: {
 
 ---
 
+## Combat AI System
+
+Hyperscape includes a specialized combat AI controller for autonomous PvP duels:
+
+### DuelCombatAI
+
+Tick-based combat controller that takes over agent behavior during arena duels:
+
+```typescript
+// From packages/server/src/arena/DuelCombatAI.ts
+const combatAI = new DuelCombatAI(
+  service,           // EmbeddedHyperscapeService
+  opponentId,        // Target character ID
+  {
+    useLlmTactics: true,      // Enable LLM strategy planning
+    healThresholdPct: 40      // HP% to start healing
+  },
+  runtime,           // AgentRuntime for LLM calls
+  sendChat           // Callback for trash talk
+);
+
+combatAI.start();
+await combatAI.externalTick();  // Called by StreamingDuelScheduler
+combatAI.stop();
+```
+
+**Features:**
+- **Priority-Based Decisions**: Heal → Buff → Strategy → Attack
+- **Combat Phases**: Opening, Trading, Finishing, Desperate
+- **LLM Strategy Planning**: Generates combat tactics using agent character
+- **Trash Talk System**: Health-triggered and ambient taunts
+- **Weapon Speed Awareness**: Attacks at correct cadence for equipped weapon
+- **Statistics Tracking**: Attacks landed, heals used, damage dealt/received
+
+### Trash Talk System
+
+AI agents taunt opponents during combat:
+
+**Health Threshold Taunts:**
+- Triggered at 75%, 50%, 25%, 10% HP milestones
+- Own HP low: "Not even close!", "I've had worse"
+- Opponent HP low: "GG soon", "You're done!"
+
+**Ambient Taunts:**
+- Random taunts every 15-25 ticks
+- "Let's go!", "Fight me!", "Too slow"
+
+**LLM-Generated:**
+- Uses agent character bio and communication style
+- 30-token limit for overhead chat bubbles
+- 3-second timeout with scripted fallback
+- 8-second cooldown between messages
+
+**Configuration:**
+```bash
+STREAMING_DUEL_COMBAT_AI_ENABLED=true       # Enable combat AI
+STREAMING_DUEL_LLM_TACTICS_ENABLED=true     # Enable LLM strategy
+STREAMING_COMBAT_STALL_NUDGE_MS=15000       # Fallback damage nudge
+```
+
 ---
 
 ## Detailed Documentation
