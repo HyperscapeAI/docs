@@ -119,10 +119,18 @@ export { GlowParticleManager } from './GlowParticleManager';
 - **GlowParticleManager**: Instanced glow billboards (altar, fire, torch presets)
 
 **Performance Benefits:**
-- Reduces ~150 draw calls to 4 per fishing spot
+- Reduces ~150 draw calls to 4 per fishing spot (97% reduction)
 - GPU-driven particle animations (parabolic arcs, wobble, twinkle)
-- FPS improvement: 65-70 → 120 on reference hardware
+- FPS improvement: 65-70 → 120 on reference hardware (80% increase)
 - ~450 lines of CPU animation code eliminated
+- Zero CPU overhead for particle updates (all on GPU via TSL shaders)
+
+**Technical Implementation:**
+- **InstancedMeshes**: 4 layers per fishing spot (splash, bubble, shimmer, ripple)
+- **TSL NodeMaterials**: GPU-computed animations using Three.js Shading Language
+- **InstancedBufferAttributes**: Per-particle data (spotPos, ageLifetime, angleRadius, dynamics)
+- **Vertex Buffer Budget**: 7 of 8 max attributes per particle layer
+- **Pool Sizes**: MAX_SPLASH=96, MAX_BUBBLE=72, MAX_SHIMMER=72, MAX_RIPPLE=24
 
 **Usage:**
 ```typescript
@@ -132,9 +140,10 @@ import { ParticleManager } from '@hyperscape/shared';
 const particleManager = new ParticleManager(scene);
 
 // Register water particles (fishing spot)
-particleManager.register('entity-123', {
-  type: 'water',
+particleManager.registerSpot({
+  entityId: 'entity-123',
   position: { x: 10, y: 0, z: 20 },
+  resourceType: 'fishing_spot',
   resourceId: 'fishing_spot_net'
 });
 
@@ -151,14 +160,28 @@ particleManager.register('entity-456', {
 particleManager.update(deltaTime, camera);
 
 // Cleanup
-particleManager.unregister('entity-123');
+particleManager.unregisterSpot('entity-123', 'fishing_spot');
 particleManager.dispose();
 ```
 
-**Particle Presets:**
+**Fishing Spot Variants:**
+- **Net**: Calm, gentle ripples (4 splash, 3 bubble, 3 shimmer, burst every 5-10s)
+- **Bait**: Medium activity (5 splash, 4 bubble, 4 shimmer, burst every 3-7s)
+- **Fly**: Active river fishing (8 splash, 5 bubble, 5 shimmer, burst every 2-5s)
+
+**Glow Particle Presets:**
 - `altar`: Mesh-aware sparks sampling geometry vertices (12 particles)
 - `fire`: Rising flame particles with spread (8 particles)
 - `torch`: Concentrated flame effect with tight spread (6 particles)
+
+**Extensibility:**
+To add new particle types (magic, dust, blood):
+1. Create new sub-manager class in `particleManager/` folder
+2. Instantiate in ParticleManager constructor
+3. Add routing logic in register/unregister/move/handleEvent methods
+4. Call update() and dispose() from ParticleManager
+
+See [Particle System Documentation](/wiki/engine/particles) for complete API reference and GPU implementation details.
 
 ## Key Exports
 
