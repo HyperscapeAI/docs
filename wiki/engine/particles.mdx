@@ -1,0 +1,434 @@
+---
+title: "Particle system"
+description: "GPU-instanced particle rendering for high-performance visual effects"
+icon: "sparkles"
+---
+
+## Overview
+
+The Hyperscape particle system uses GPU instancing to render thousands of particles with minimal draw calls. The centralized `ParticleManager` routes particle events to specialized sub-managers based on particle type.
+
+## Architecture
+
+### ParticleManager
+
+Central router that manages all particle systems in the game:
+
+```typescript
+import { ParticleManager } from '@hyperscape/shared';
+
+const particleManager = new ParticleManager(scene);
+
+// Register particles with discriminated union config
+particleManager.register('entity-id', {
+  type: 'water',
+  position: { x: 10, y: 0, z: 20 },
+  resourceId: 'fishing_spot_net'
+});
+
+// Per-frame update
+particleManager.update(deltaTime, camera);
+
+// Cleanup
+particleManager.unregister('entity-id');
+particleManager.dispose();
+```
+
+**Key Features:**
+- Ownership tracking (no type hints needed for unregister/move)
+- Automatic routing to correct sub-manager based on particle type
+- Extensible design for future particle types
+
+### WaterParticleManager
+
+GPU-instanced fishing spot effects using 4 InstancedMeshes:
+
+**Particle Layers:**
+- **Splash**: Water droplets with parabolic arc trajectories
+- **Bubble**: Rising bubbles with lateral wobble
+- **Shimmer**: Surface glints with twinkle animation
+- **Ripple**: Expanding ring waves
+
+**Per-Instance Data:**
+- `spotPos` (vec3): Fishing spot world center
+- `ageLifetime` (vec2): Current age, total lifetime
+- `angleRadius` (vec2): Polar angle, radial distance
+- `dynamics` (vec4): Peak height, size, speed, direction
+
+**Fishing Spot Variants:**
+```typescript
+// Net fishing (calm, gentle ripples)
+{
+  splashCount: 4,
+  bubbleCount: 3,
+  shimmerCount: 3,
+  rippleCount: 2,
+  rippleSpeed: 0.8,
+  burstIntervalMin: 5,
+  burstIntervalMax: 10
+}
+
+// Fly fishing (active, moving water)
+{
+  splashCount: 8,
+  bubbleCount: 5,
+  shimmerCount: 5,
+  rippleCount: 2,
+  rippleSpeed: 1.5,
+  burstIntervalMin: 2,
+  burstIntervalMax: 5
+}
+
+// Bait fishing (medium activity)
+{
+  splashCount: 5,
+  bubbleCount: 4,
+  shimmerCount: 4,
+  rippleCount: 2,
+  rippleSpeed: 1.0,
+  burstIntervalMin: 3,
+  burstIntervalMax: 7
+}
+```
+
+**Burst System:**
+- Random fish activity bursts every 3-7 seconds
+- Fires 2-4 splash particles simultaneously from random point
+- Adds visual interest to prolonged fishing
+
+### GlowParticleManager
+
+Instanced glow billboards for altars, fires, and torches:
+
+**Presets:**
+```typescript
+// Altar preset (mesh-aware sparks)
+{
+  type: 'glow',
+  preset: 'altar',
+  position: { x: 10, y: 1, z: 20 },
+  color: 0x00ffff,
+  meshRoot: altarMesh,
+  modelScale: 1.0,
+  modelYOffset: 0.0
+}
+
+// Fire preset (rising flame particles)
+{
+  type: 'glow',
+  preset: 'fire',
+  position: { x: 15, y: 0, z: 25 },
+  color: { core: 0xffaa00, mid: 0xff6600, outer: 0xff3300 }
+}
+
+// Torch preset (concentrated flame)
+{
+  type: 'glow',
+  preset: 'torch',
+  position: { x: 20, y: 2, z: 30 },
+  color: 0xff8800
+}
+```
+
+**Particle Counts:**
+- Altar: 12 particles (samples mesh geometry vertices)
+- Fire: 8 particles (rising with spread)
+- Torch: 6 particles (tight 0.08 spread)
+
+**Color Override:**
+- Single hex: `color: 0x00ffff`
+- Three-tone palette: `color: { core: 0xffaa00, mid: 0xff6600, outer: 0xff3300 }`
+
+## Performance
+
+### Before Optimization
+
+- ~150 draw calls per fishing spot
+- ~450 lines of CPU animation code per entity
+- FPS: 65-70 on reference hardware
+- Per-frame CPU work: trig, quaternion copies, opacity writes
+
+### After Optimization
+
+- 4 draw calls per fishing spot (one per particle layer)
+- GPU-driven animations via TSL NodeMaterials
+- FPS: 120 on reference hardware
+- Zero CPU animation overhead
+
+**Draw Call Reduction:**
+```
+10 fishing spots × 15 particles each = 150 meshes
+→ 4 InstancedMeshes (shared across all spots)
+```
+
+## TSL Shaders
+
+Particles use Three.js Shading Language (TSL) for GPU-computed animations:
+
+### Splash Particles
+
+```typescript
+// Parabolic arc trajectory
+const arcY = mul(peakHeight, mul(float(4), mul(t, sub(float(1), t)))));
+const ox = mul(cos(angle), radius);
+const oz = mul(sin(angle), radius);
+particleCenter = add(spotPos, vec3(ox, add(float(0.08), arcY), oz));
+
+// Fade in/out
+const fadeIn = min(mul(t, float(12)), float(1));
+const fadeOut = pow(sub(float(1), t), float(1.2));
+material.opacityNode = mul(texAlpha, mul(float(0.9), mul(fadeIn, fadeOut)));
+```
+
+### Bubble Particles
+
+```typescript
+// Rising with wobble
+const riseY = mul(t, peakHeight);
+const wobbleFreq = mul(direction, float(4.0));
+const drift = mul(sin(add(angle, mul(t, wobbleFreq))), radius);
+particleCenter = add(spotPos, vec3(drift, add(float(0.03), riseY), driftZ));
+```
+
+### Shimmer Particles
+
+```typescript
+// Surface twinkle
+const twinkle = max(
+  float(0),
+  mul(
+    sin(add(mul(time, float(8)), mul(angle, float(5)))),
+    sin(add(mul(time, float(13)), mul(angle, float(3))))
+  )
+);
+const envelope = mul(
+  min(mul(t, float(4)), float(1)),
+  min(mul(sub(float(1), t), float(4)), float(1))
+);
+material.opacityNode = mul(texAlpha, mul(float(0.85), mul(twinkle, envelope)));
+```
+
+### Ripple Rings
+
+```typescript
+// Expanding ring with fade
+const phase = fract(add(mul(time, mul(rippleSpeed, float(0.5))), phaseOffset));
+const scale = add(float(0.15), mul(phase, float(1.3)));
+
+// Opacity fade (early + late)
+const earlyFade = mul(div(phase, float(0.15)), float(0.55));
+const lateFade = mul(
+  float(0.55),
+  pow(sub(float(1), div(sub(phase, float(0.15)), float(0.85))), float(1.5))
+);
+const s = step(float(0.15), phase);
+const rippleOpacity = mix(earlyFade, lateFade, s);
+```
+
+## Integration
+
+### ResourceSystem
+
+Creates and manages ParticleManager on client:
+
+```typescript
+// packages/shared/src/systems/shared/entities/ResourceSystem.ts
+export class ResourceSystem extends SystemBase {
+  public particleManager?: ParticleManager;
+
+  start(): void {
+    if (!this.world.isServer) {
+      const scene = this.world.stage?.scene;
+      if (scene) {
+        this.particleManager = new ParticleManager(scene);
+        
+        // Retroactive registration for entities created before system start
+        const existingEntities = this.world.entities?.getByType?.('resource') || [];
+        for (const entity of existingEntities) {
+          if (entity instanceof ResourceEntity && 
+              entity.config?.resourceType === 'fishing_spot') {
+            entity.tryRegisterWithParticleManager();
+          }
+        }
+      }
+      
+      // Listen for resource events
+      this.subscribe(EventType.RESOURCE_SPAWNED, (data) => {
+        this.particleManager?.handleResourceEvent(data);
+      });
+    }
+  }
+
+  update(dt: number): void {
+    if (this.particleManager) {
+      const camera = this.world.camera;
+      if (camera) {
+        this.particleManager.update(dt, camera);
+      }
+    }
+  }
+}
+```
+
+### ResourceEntity
+
+Delegates particle lifecycle to ParticleManager:
+
+```typescript
+// packages/shared/src/entities/world/ResourceEntity.ts
+export class ResourceEntity extends InteractableEntity {
+  private _registeredWithParticleManager = false;
+
+  private createFishingSpotVisual(): void {
+    // Create glow indicator (interaction hitbox)
+    this.createGlowIndicator();
+    
+    // Register with centralized particle manager
+    this.tryRegisterWithParticleManager();
+    
+    // Register for frame updates (glow pulse)
+    this.world.setHot(this, true);
+  }
+
+  public tryRegisterWithParticleManager(): boolean {
+    if (this._registeredWithParticleManager) return true;
+    
+    const pm = this.getParticleManager();
+    if (!pm) return false;
+    
+    const pos = this.getPosition();
+    pm.registerSpot({
+      entityId: this.id,
+      position: { x: pos.x, y: pos.y, z: pos.z },
+      resourceType: this.config.resourceType || '',
+      resourceId: this.config.resourceId || ''
+    });
+    this._registeredWithParticleManager = true;
+    return true;
+  }
+
+  private getParticleManager(): ParticleManager | undefined {
+    const sys = this.world.getSystem('resource') as {
+      particleManager?: ParticleManager;
+    } | null;
+    return sys?.particleManager;
+  }
+}
+```
+
+## Adding New Particle Types
+
+To add a new particle type (e.g., fire, magic, dust):
+
+1. **Create Sub-Manager**: Implement specialized manager class
+   ```typescript
+   // packages/shared/src/entities/managers/particleManager/FireParticleManager.ts
+   export class FireParticleManager {
+     constructor(scene: THREE.Scene) { /* ... */ }
+     registerFire(id: string, config: FireConfig): void { /* ... */ }
+     unregisterFire(id: string): void { /* ... */ }
+     update(dt: number, camera: THREE.Camera): void { /* ... */ }
+     dispose(): void { /* ... */ }
+   }
+   ```
+
+2. **Add to ParticleManager**: Instantiate and route
+   ```typescript
+   export class ParticleManager {
+     private fireManager: FireParticleManager;
+     
+     constructor(scene: THREE.Scene) {
+       this.waterManager = new WaterParticleManager(scene);
+       this.glowManager = new GlowParticleManager(scene);
+       this.fireManager = new FireParticleManager(scene);  // Add here
+     }
+     
+     register(id: string, config: ParticleConfig): void {
+       switch (config.type) {
+         case 'water': /* ... */ break;
+         case 'glow': /* ... */ break;
+         case 'fire':  // Add routing
+           this.fireManager.registerFire(id, config);
+           this.ownership.set(id, 'fire');
+           break;
+       }
+     }
+     
+     update(dt: number, camera: THREE.Camera): void {
+       this.waterManager.update(dt, camera);
+       this.glowManager.update(dt, camera);
+       this.fireManager.update(dt, camera);  // Add here
+     }
+   }
+   ```
+
+3. **Update Types**: Add to discriminated union
+   ```typescript
+   export interface FireParticleConfig {
+     type: 'fire';
+     position: { x: number; y: number; z: number };
+     intensity: number;
+   }
+   
+   export type ParticleConfig = 
+     | WaterParticleConfig 
+     | GlowParticleConfig 
+     | FireParticleConfig;  // Add here
+   ```
+
+## Vertex Buffer Budget
+
+InstancedMesh has a maximum of 8 vertex attributes. Particle layers use 7:
+
+1. `position` (built-in)
+2. `uv` (built-in)
+3. `instanceMatrix` (built-in)
+4. `spotPos` (custom, vec3)
+5. `ageLifetime` (custom, vec2)
+6. `angleRadius` (custom, vec2)
+7. `dynamics` (custom, vec4)
+
+Ripple layer uses 5 (simpler data):
+1. `position` (built-in)
+2. `uv` (built-in)
+3. `instanceMatrix` (built-in)
+4. `spotPos` (custom, vec3)
+5. `rippleParams` (custom, vec2)
+
+<Warning>
+Adding more custom attributes requires removing existing ones or splitting into multiple InstancedMeshes.
+</Warning>
+
+## Testing
+
+The particle system includes comprehensive tests:
+
+```bash
+# Run particle system tests
+bun test packages/shared/src/entities/managers/particleManager/
+```
+
+**Test Coverage:**
+- Particle registration and lifecycle
+- GPU instancing correctness
+- TSL shader compilation
+- Performance benchmarks
+- Memory leak detection
+
+## Performance Monitoring
+
+Monitor particle system performance:
+
+```typescript
+// Check draw calls (should be 4 per fishing spot)
+console.log(renderer.info.render.calls);
+
+// Check instance counts
+console.log(waterParticleManager.splashLayer.mesh.count);
+console.log(waterParticleManager.bubbleLayer.mesh.count);
+```
+
+**Expected Metrics:**
+- Draw calls: 4 per fishing spot (splash, bubble, shimmer, ripple)
+- FPS: 120+ with 10 fishing spots on reference hardware
+- Memory: ~2MB for 100 fishing spots (vs ~50MB with individual meshes)
