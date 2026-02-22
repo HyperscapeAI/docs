@@ -212,6 +212,21 @@ Add new content by editing these JSON files—no code changes required.
 
 ## Build Pipeline
 
+### Circular Dependency Handling
+
+The build system handles circular dependencies between packages gracefully:
+
+**procgen ↔ shared circular dependency:**
+- `@hyperscape/shared` imports from `@hyperscape/procgen` for terrain generation
+- `@hyperscape/procgen` peer-depends on `@hyperscape/shared` for types
+- Build uses `tsc || echo` pattern to exit 0 even with circular dep errors
+- Packages produce partial output sufficient for downstream consumers
+- Prevents clean build failures when dist/ doesn't exist yet
+
+**plugin-hyperscape ↔ shared circular dependency:**
+- Similar pattern with `--skipLibCheck` in shared's declaration generation
+- Variable shadowing fixes (e.g., PlayerMovementSystem.ts tile redeclaration)
+
 ### Automated Model Bounds Extraction
 
 The server package includes a build-time task that automatically extracts collision footprints from 3D models:
