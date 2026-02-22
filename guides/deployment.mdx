@@ -40,6 +40,42 @@ PUBLIC_WS_URL=wss://api.hyperscape.lol
 PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 ```
 
+### Production Domains
+
+Hyperscape supports multiple production domains with CORS configuration:
+
+**Game Domains:**
+- `hyperscape.gg` - Primary game domain
+- `play.hyperscape.club` - Alternative game domain
+
+**Betting Domains:**
+- `hyperscape.bet` - Betting platform
+- `hyperbet.win` - Additional betting domain
+
+**CORS Configuration:**
+```typescript
+// Server automatically allows these domains
+const ALLOWED_ORIGINS = [
+  'https://hyperscape.gg',
+  'https://hyperscape.bet',
+  'https://hyperbet.win',
+  'https://play.hyperscape.club'
+];
+```
+
+**Tauri Mobile Deep Links:**
+```json
+// packages/app/src-tauri/tauri.conf.json
+{
+  "identifier": "com.hyperscape.app",
+  "deepLinkProtocols": ["hyperscape"],
+  "associatedDomains": [
+    "hyperscape.gg",
+    "play.hyperscape.club"
+  ]
+}
+```
+
 <Warning>
   `PUBLIC_PRIVY_APP_ID` must match between client and server.
 </Warning>
