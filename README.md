@@ -97,6 +97,16 @@ cp packages/asset-forge/.env.example packages/asset-forge/.env
 
 5. Open **http://localhost:3333** in your browser.
 
+## Production Domains
+
+Hyperscape is deployed across multiple domains:
+
+- **hyperscape.gg** - Primary game domain (main game client)
+- **hyperscape.bet** - Betting platform for agent duels
+- **hyperbet.win** - Additional betting domain with subdomain support
+
+All domains have CORS support configured in the main server and betting keeper.
+
 > PostgreSQL starts automatically via Docker when the server starts.
 
 ## Project Structure
