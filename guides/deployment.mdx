@@ -426,6 +426,85 @@ const browser = await chromium.launch({
 });
 ```
 
+## Solana Betting Infrastructure
+
+### CLOB Market Mainnet Migration
+
+The betting system migrated to CLOB (Central Limit Order Book) market program on Solana mainnet in February 2026 (commits dba3e03, 35c14f9):
+
+**Program Address Updates:**
+
+```rust
+// From packages/gold-betting-demo/anchor/programs/fight_oracle/src/lib.rs
+declare_id!("FightOracle111111111111111111111111111111111");  // Mainnet address
+
+// From packages/gold-betting-demo/anchor/programs/gold_clob_market/src/lib.rs
+declare_id!("GoldCLOB1111111111111111111111111111111111111");  // Mainnet address
+```
+
+**IDL Updates:**
+
+All IDL files updated with mainnet program addresses:
+
+```json
+// From packages/gold-betting-demo/keeper/src/idl/fight_oracle.json
+{
+  "address": "FightOracle111111111111111111111111111111111",
+  "metadata": {
+    "name": "fight_oracle",
+    "version": "0.1.0"
+  }
+}
+```
+
+**Bot Rewrite for CLOB Instructions:**
+
+The betting bot was rewritten to use CLOB market instructions instead of binary market:
+
+```typescript
+// From packages/gold-betting-demo/keeper/src/bot.ts
+
+// CLOB market instructions
+await program.methods.initializeConfig(/* ... */).rpc();
+await program.methods.initializeMatch(/* ... */).rpc();
+await program.methods.initializeOrderBook(/* ... */).rpc();
+await program.methods.resolveMatch(/* ... */).rpc();
+
+// Removed binary market instructions:
+// - seedMarket
+// - createVault
+// - placeBet
+```
+
+**Server Configuration:**
+
+Arena config fallback updated to mainnet fight oracle:
+
+```typescript
+// From packages/server/src/arena/config.ts
+const DEFAULT_FIGHT_ORACLE = "FightOracle111111111111111111111111111111111";
+```
+
+**Frontend Configuration:**
+
+Updated `.env.mainnet` with all VITE_ environment variables:
+
+```bash
+# packages/gold-betting-demo/app/.env.mainnet
+VITE_FIGHT_ORACLE_PROGRAM_ID=FightOracle111111111111111111111111111111111
+VITE_GOLD_CLOB_MARKET_PROGRAM_ID=GoldCLOB1111111111111111111111111111111111111
+VITE_SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+```
+
+**Migration Checklist:**
+- [ ] Update program addresses in Rust code
+- [ ] Regenerate IDL files with `anchor build`
+- [ ] Update keeper bot logic for CLOB instructions
+- [ ] Update server arena config with mainnet program IDs
+- [ ] Update frontend .env.mainnet with all VITE_ vars
+- [ ] Test on devnet before mainnet deployment
+- [ ] Verify program deployment on Solana Explorer
+
 ## Production Checklist
 
 - [ ] PostgreSQL database provisioned
@@ -437,3 +516,5 @@ const browser = await chromium.launch({
 - [ ] Vast.ai API key configured (if using GPU deployment)
 - [ ] CI/CD workflows configured with required secrets
 - [ ] DNS configured (Google DNS for Vast.ai instances)
+- [ ] Solana program addresses updated for mainnet (if using betting)
+- [ ] CORS domains configured for production domains
