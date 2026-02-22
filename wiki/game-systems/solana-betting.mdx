@@ -1,0 +1,414 @@
+---
+title: "Solana Betting System"
+description: "CLOB market integration for duel betting on Solana mainnet"
+icon: "coins"
+---
+
+## Overview
+
+Hyperscape integrates with Solana's Central Limit Order Book (CLOB) market program for decentralized duel betting. The system supports both devnet (testing) and mainnet (production) deployments.
+
+**Key Features:**
+- CLOB (Central Limit Order Book) market for price discovery
+- Mainnet-ready with production program IDs
+- Automated keeper bot for market operations
+- Multi-chain support (Solana + EVM)
+- Real-time order book updates
+- Market maker bot integration
+
+## Architecture
+
+```
+packages/gold-betting-demo/
+├── anchor/                  # Solana programs (Rust)
+│   ├── programs/
+│   │   ├── fight_oracle/    # Fight outcome oracle
+│   │   └── gold_clob_market/ # CLOB market program
+│   └── tests/               # Program tests
+├── app/                     # Betting frontend (React + Vite)
+│   ├── src/
+│   │   ├── components/      # UI components
+│   │   ├── lib/             # Solana client logic
+│   │   └── idl/             # Program IDLs
+│   └── tests/               # E2E tests
+└── keeper/                  # Automated market operations
+    └── src/
+        ├── bot.ts           # CLOB market bot
+        ├── resolve.ts       # Fight resolution
+        └── service.ts       # Keeper service
+```
+
+## Mainnet Configuration
+
+### Program IDs
+
+**Mainnet Addresses** (updated in commit dba3e03):
+
+```rust
+// packages/gold-betting-demo/anchor/programs/fight_oracle/src/lib.rs
+declare_id!("Fg6PaFpoGXkYsidMpWxTWqkY8B4sT2u7hN8sV5kP6h1");
+
+// packages/gold-betting-demo/anchor/programs/gold_clob_market/src/lib.rs
+declare_id!("GCLoBfbkz8Z4xz3yzs9gpump");  // Example mainnet address
+```
+
+**IDL Files:**
+- `packages/gold-betting-demo/app/src/idl/fight_oracle.json`
+- `packages/gold-betting-demo/app/src/idl/gold_clob_market.json`
+- `packages/gold-betting-demo/keeper/src/idl/fight_oracle.json`
+
+All IDL files updated with mainnet program addresses.
+
+### Environment Configuration
+
+**Frontend (.env.mainnet):**
+```bash
+VITE_SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+VITE_FIGHT_ORACLE_PROGRAM_ID=Fg6PaFpoGXkYsidMpWxTWqkY8B4sT2u7hN8sV5kP6h1
+VITE_GOLD_CLOB_MARKET_PROGRAM_ID=GCLoBfbkz8Z4xz3yzs9gpump
+VITE_GOLD_TOKEN_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump
+```
+
+**Keeper Bot:**
+```bash
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+FIGHT_ORACLE_PROGRAM_ID=Fg6PaFpoGXkYsidMpWxTWqkY8B4sT2u7hN8sV5kP6h1
+GOLD_CLOB_MARKET_PROGRAM_ID=GCLoBfbkz8Z4xz3yzs9gpump
+KEEPER_WALLET_PRIVATE_KEY=your-base58-private-key
+```
+
+**Server Arena Config:**
+```typescript
+// Fallback to mainnet fight oracle
+const MAINNET_FIGHT_ORACLE = 'Fg6PaFpoGXkYsidMpWxTWqkY8B4sT2u7hN8sV5kP6h1';
+```
+
+## CLOB Market Instructions
+
+The keeper bot was rewritten for CLOB market instructions (commit dba3e03):
+
+### Market Initialization
+
+```typescript
+// Initialize market configuration
+await program.methods
+  .initializeConfig({
+    authority: keeperPublicKey,
+    feeRecipient: feeRecipientPublicKey,
+    feeBps: 100  // 1% fee
+  })
+  .accounts({
+    config: configPda,
+    authority: keeperPublicKey,
+    systemProgram: SystemProgram.programId
+  })
+  .rpc();
+```
+
+### Match Lifecycle
+
+```typescript
+// 1. Initialize match
+await program.methods
+  .initializeMatch({
+    matchId: 'duel_123',
+    agent1: agent1PublicKey,
+    agent2: agent2PublicKey,
+    startTime: Date.now() / 1000
+  })
+  .accounts({
+    match: matchPda,
+    config: configPda,
+    authority: keeperPublicKey
+  })
+  .rpc();
+
+// 2. Initialize order book
+await program.methods
+  .initializeOrderBook({
+    matchId: 'duel_123'
+  })
+  .accounts({
+    orderBook: orderBookPda,
+    match: matchPda,
+    authority: keeperPublicKey
+  })
+  .rpc();
+
+// 3. Resolve match (after fight ends)
+await program.methods
+  .resolveMatch({
+    matchId: 'duel_123',
+    winner: 1  // 1 for agent1, 2 for agent2
+  })
+  .accounts({
+    match: matchPda,
+    orderBook: orderBookPda,
+    oracle: oraclePda,
+    authority: keeperPublicKey
+  })
+  .rpc();
+```
+
+### Removed Features
+
+The CLOB market migration removed binary market logic:
+- ❌ Binary market seeding/vault logic
+- ❌ Keeper binary market IDL
+- ✅ Replaced with CLOB market instructions
+
+## Market Maker Integration
+
+The market maker bot provides liquidity to the CLOB:
+
+**Configuration:**
+```bash
+# packages/market-maker-bot/.env
+MM_DUEL_STATE_API_URL=http://localhost:5555/api/streaming/state
+MM_ENABLE_DUEL_SIGNAL=true
+MM_DUEL_SIGNAL_WEIGHT=0.9
+MM_DUEL_HP_EDGE_MULTIPLIER=0.49
+ORDER_SIZE_MIN=40
+ORDER_SIZE_MAX=140
+MAX_ORDERS_PER_SIDE=6
+```
+
+**Duel Signal Integration:**
+- Fetches real-time HP data from streaming duel API
+- Adjusts order prices based on HP edge
+- 90% weight on duel signal, 10% on random walk
+- 2.5s fetch timeout with graceful fallback
+
+**Startup Modes:**
+```bash
+# Single bot (default)
+bun run start
+
+# Multi-bot with wallet config
+bun run start:multi -- --config wallets.generated.json --stagger-ms 900
+```
+
+## Keeper Bot
+
+The keeper bot automates market operations:
+
+**Responsibilities:**
+1. Monitor game server for fight state changes
+2. Initialize matches when fights start
+3. Create order books for betting
+4. Resolve matches when fights end
+5. Distribute payouts to winners
+
+**Configuration:**
+```bash
+GAME_URL=http://localhost:5555
+GAME_STATE_POLL_INTERVAL_MS=3000
+GAME_STATE_POLL_TIMEOUT_MS=5000
+KEEPER_WALLET_PRIVATE_KEY=base58-encoded-key
+```
+
+**Polling Strategy:**
+- Polls `/api/streaming/state` every 3 seconds
+- 5-second timeout per request
+- Backs off when signer funding is low
+- Warns and continues on transient errors
+
+## Frontend Integration
+
+### Chain Selector
+
+The betting app supports multiple chains:
+
+```typescript
+// From packages/gold-betting-demo/app/src/lib/chainConfig.ts
+export const SUPPORTED_CHAINS = [
+  {
+    id: 'solana-mainnet',
+    name: 'Solana',
+    rpcUrl: 'https://api.mainnet-beta.solana.com',
+    programId: 'GCLoBfbkz8Z4xz3yzs9gpump'
+  },
+  {
+    id: 'base-mainnet',
+    name: 'Base',
+    rpcUrl: 'https://mainnet.base.org',
+    contractAddress: '0x...'
+  }
+];
+```
+
+### Order Book Component
+
+Real-time order book display:
+
+```typescript
+// From packages/gold-betting-demo/app/src/components/OrderBook.tsx
+<OrderBook
+  matchId="duel_123"
+  programId={GOLD_CLOB_MARKET_PROGRAM_ID}
+  connection={connection}
+/>
+```
+
+**Features:**
+- Live order updates via WebSocket
+- Bid/ask spread visualization
+- Order depth chart
+- Recent trades list
+
+### Betting Panel
+
+```typescript
+// From packages/gold-betting-demo/app/src/components/SolanaClobPanel.tsx
+<SolanaClobPanel
+  matchId="duel_123"
+  agent1={agent1Data}
+  agent2={agent2Data}
+  onPlaceBet={handlePlaceBet}
+/>
+```
+
+## Testing
+
+### Local Development
+
+```bash
+# Start local Solana validator
+solana-test-validator
+
+# Deploy programs to localnet
+cd packages/gold-betting-demo/anchor
+anchor build
+anchor deploy
+
+# Run betting app in devnet mode
+cd ../app
+bun run dev --mode devnet
+```
+
+### E2E Tests
+
+```bash
+# Run E2E tests against localnet
+cd packages/gold-betting-demo/app
+bun run test:e2e:local
+
+# Run E2E tests against public devnet
+bun run test:e2e:public
+```
+
+**Test Coverage:**
+- CLOB market initialization
+- Order placement and matching
+- Match resolution and payouts
+- UI interactions and wallet connections
+
+### Simulation Tests
+
+```bash
+# Run CLOB market simulation
+cd packages/gold-betting-demo/anchor
+bun run simulate:clob:localnet
+```
+
+**Simulation Output:**
+- PnL tracking for all participants
+- Order book state snapshots
+- Match resolution verification
+- Saved to `simulations/solana-clob-localnet-pnl.json`
+
+## Deployment
+
+### Mainnet Deployment Checklist
+
+- [ ] Update program IDs in all IDL files
+- [ ] Update declare_id! in Rust programs
+- [ ] Deploy programs to mainnet
+- [ ] Update frontend .env.mainnet with program IDs
+- [ ] Update keeper bot with mainnet RPC and program IDs
+- [ ] Update server arena config with mainnet oracle
+- [ ] Test with small amounts before full launch
+- [ ] Monitor keeper bot logs for errors
+- [ ] Verify CORS configuration for betting domains
+
+### Program Deployment
+
+```bash
+# Build programs
+cd packages/gold-betting-demo/anchor
+anchor build
+
+# Deploy to mainnet (requires funded deployer wallet)
+anchor deploy --provider.cluster mainnet
+
+# Verify deployment
+solana program show <PROGRAM_ID> --url mainnet-beta
+```
+
+### Frontend Deployment
+
+```bash
+# Build for mainnet
+cd packages/gold-betting-demo/app
+bun run build --mode mainnet
+
+# Deploy to Cloudflare Pages
+wrangler pages deploy dist
+```
+
+## Security Considerations
+
+<Warning>
+  Always test on devnet before deploying to mainnet. Solana transactions are irreversible.
+</Warning>
+
+**Best Practices:**
+1. Use separate wallets for keeper bot and deployer
+2. Fund keeper wallet with minimal SOL (auto-refill recommended)
+3. Monitor keeper bot logs for unusual activity
+4. Set conservative order size limits in market maker
+5. Enable CORS only for known betting domains
+6. Use rate limiting on betting API endpoints
+7. Validate all fight outcomes before resolution
+
+## Monitoring
+
+### Keeper Bot Health
+
+```bash
+# Check keeper bot logs
+docker logs keeper-bot
+
+# Monitor wallet balance
+solana balance <KEEPER_WALLET_ADDRESS> --url mainnet-beta
+
+# Check program accounts
+solana program show <PROGRAM_ID> --url mainnet-beta
+```
+
+### Market Maker Health
+
+```bash
+# Check market maker logs
+docker logs market-maker
+
+# Monitor order book depth
+curl http://localhost:5555/api/betting/orderbook/duel_123
+```
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Duel Arena System" icon="swords" href="/wiki/game-systems/duel-arena">
+    PvP duel mechanics and arena system
+  </Card>
+  <Card title="Streaming Duels" icon="video" href="/wiki/game-systems/streaming-duels">
+    Live streaming infrastructure for AI duels
+  </Card>
+  <Card title="Market Maker Bot" icon="robot" href="/wiki/game-systems/market-maker">
+    Automated liquidity provision for betting markets
+  </Card>
+  <Card title="Deployment Guide" icon="rocket" href="/guides/deployment">
+    Production deployment configuration
+  </Card>
+</CardGroup>
