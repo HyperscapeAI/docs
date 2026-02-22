@@ -45,6 +45,59 @@ packages/shared/
 └── index.client.ts     # Client exports
 ```
 
+## Terrain Generation System
+
+The shared package includes a sophisticated procedural terrain generation system with multi-threaded performance:
+
+### TerrainHeightParams.ts
+
+Single source of truth for all terrain generation parameters. Both `TerrainSystem` (main thread) and `TerrainWorker` (web worker) consume these values to ensure identical terrain generation:
+
+```typescript
+// Noise layer definitions
+export const CONTINENT_LAYER: NoiseLayerDef = {
+  scale: 0.0008,
+  octaves: 5,
+  persistence: 0.7,
+  lacunarity: 2.0,
+  weight: 0.35,
+};
+
+export const HILL_LAYER: NoiseLayerDef = {
+  scale: 0.02,
+  octaves: 4,
+  persistence: 0.6,
+  lacunarity: 2.2,
+  weight: 0.25,
+};
+
+// Island configuration
+export const ISLAND_RADIUS = 350;
+export const ISLAND_FALLOFF = 100;
+export const BASE_ELEVATION = 0.42;
+
+// Worker code generation
+export function buildGetBaseHeightAtJS(): string {
+  // Injects constants into worker string
+}
+```
+
+**Key Features:**
+- Prevents parameter drift between main thread and workers
+- TypeScript constants injected into worker code at runtime
+- Changing a constant automatically updates both threads
+- Includes noise layers, island mask, pond, coastline, and mountain boost
+
+### Web Worker Terrain Generation
+
+Terrain generation offloaded to web workers for parallel processing:
+
+- **Worker Height Computation**: Full height calculation including shoreline adjustment
+- **Worker Normal Computation**: Normals computed via (resolution+2)² overflow grid
+- **Performance**: 63x reduction in main-thread noise evaluations
+- **Conditional Fallback**: Main-thread recomputation only for tiles with flat zones (buildings/stations)
+- **Parallel Processing**: Utilizes multiple CPU cores while keeping main thread free
+
 ## Key Exports
 
 ### Entity Hierarchy
