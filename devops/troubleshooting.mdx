@@ -86,6 +86,11 @@ cat packages/server/world/assets/manifests/npcs.json | jq .
 - Missing quotes around property names
 - Incorrect .gitignore negation for manifest files
 
+**Recent Fixes:**
+- Fixed invalid manifest JSONs causing DataManager validation errors (commit aa1ea2d)
+- Corrected .gitignore manifest negation to properly track manifest files (commit 1f4551c)
+- All manifest files now tracked in git for CI test data availability (commit 2dddf28)
+
 ### Port Conflicts
 
 **Symptom**: "Port already in use" errors
