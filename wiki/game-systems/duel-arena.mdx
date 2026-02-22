@@ -233,6 +233,44 @@ const ARENA_CONFIG = {
 - Lit torches at all 4 corners with fire particles
 - Procedural stone tile floor texture (unique per arena)
 
+### Visual Enhancements
+
+#### Lit Torches
+
+Each arena has 4 lit torches at the fence corners:
+
+```typescript
+// Torch configuration
+const TORCH_GLOW_PRESET = {
+  particleCount: 6,
+  spread: 0.08,  // Tight spread for concentrated flame
+  riseSpeed: 0.5,
+  lifetime: 1.0,
+};
+```
+
+**Features:**
+- PointLights with flicker animation
+- Fire particles using "torch" glow preset
+- Tight particle spread (0.08) for concentrated flame effect
+- Preset-aware particle respawn system
+
+#### Procedural Stone Tile Texture
+
+Arena floors use canvas-generated sandstone tile patterns:
+
+```typescript
+// Each arena gets unique randomized texture
+const texture = generateStoneTileTexture(arenaId);
+```
+
+**Features:**
+- OSRS medieval aesthetic
+- Grout lines between tiles
+- Color variation for natural stone look
+- Speckle noise for texture detail
+- Unique texture per arena (seeded by arena ID)
+
 ### Spawn Points
 
 Each arena has 2 spawn points (north and south):
