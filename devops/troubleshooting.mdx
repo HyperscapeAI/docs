@@ -117,6 +117,47 @@ bun install
 bun run build
 ```
 
+### ESLint Crashes with ajv TypeError
+
+**Symptom**: ESLint crashes with `TypeError: Class extends value undefined is not a constructor or null` related to ajv
+
+**Cause**: Forcing ajv@8 on @eslint/eslintrc which requires ajv@6 for Draft-04 schema support
+
+**Solution**: Update to latest code (commit b344d9e fixed this):
+
+```bash
+git pull origin main
+bun install
+```
+
+**Technical Details:**
+- Removed `ajv>=8.18.0` override from root package.json
+- @eslint/eslintrc needs ajv@6 for JSON Schema Draft-04 support
+- Forcing ajv@8 caused TypeError crash in ESLint initialization
+- Security fix for ajv (GHSA-2g4f-4pwh-qvx6) applied only to packages that support ajv@8
+
+### Drizzle Migration Failures in CI
+
+**Symptom**: Server migration code fails with "table already exists" errors in CI
+
+**Cause**: Running `drizzle-kit push` separately creates tables without populating migration journal, causing server's migration code to fail on re-creation attempts
+
+**Solution**: Remove `drizzle-kit push` from CI workflow (commit b5d24942 fixed this):
+
+```yaml
+# ❌ Don't do this in CI
+- run: bunx drizzle-kit push
+
+# ✅ Let server handle migrations during startup
+- run: bun run start
+```
+
+**Technical Details:**
+- Server handles its own migrations during startup via `migrate()` function
+- Running `drizzle-kit push` separately bypasses migration journal
+- Server's migration code then tries to re-create tables, causing conflicts
+- CI should only run tests, not push schema changes
+
 ### Circular Dependency Build Errors
 
 **Symptom**: TypeScript errors about missing types from `@hyperscape/shared` or `@hyperscape/procgen`
