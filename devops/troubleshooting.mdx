@@ -134,6 +134,7 @@ cd packages/physx-js-webidl
 - Server running during tests
 - Stale test data
 - Port conflicts
+- CI environment variance (slower than local)
 
 **Solution**:
 
@@ -147,6 +148,17 @@ ls /logs/
 # Run tests
 npm test
 ```
+
+**CI-Specific Issues:**
+
+Recent commits have adjusted test timeouts for CI reliability:
+
+- **Geometry validation**: Increased to 120s for intensive procgen tests
+- **Benchmark thresholds**: Relaxed for NPCTickProcessor to account for CI variance
+- **Vitest timeout**: Global timeout increased to prevent flaky failures
+- **Performance tests**: Adjusted heap growth and scaling thresholds for parallel test contention
+
+If tests pass locally but fail in CI, check if timeouts need adjustment for your specific test.
 
 ### WebSocket Connection Failed
 
