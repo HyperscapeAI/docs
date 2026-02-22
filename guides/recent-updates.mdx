@@ -1,0 +1,327 @@
+---
+title: "Recent Updates Guide"
+description: "Summary of recent code changes and their impact"
+icon: "sparkles"
+---
+
+## February 2026 Updates
+
+This guide summarizes recent code changes pushed to main and their implications for developers.
+
+### Terrain System Refactoring
+
+#### TerrainHeightParams.ts - Single Source of Truth
+
+**What Changed:**
+- Extracted all terrain generation constants to `packages/shared/src/systems/shared/world/TerrainHeightParams.ts`
+- Created `buildGetBaseHeightAtJS()` function to inject constants into worker code
+- Synchronized noise weights between main thread and worker (hillScale 0.012→0.02, persistence 0.5→0.6)
+
+**Why It Matters:**
+- Prevents parameter drift between main thread and web workers
+- Changing a constant automatically updates both threads
+- Eliminates manual synchronization errors
+- Single source of truth for all terrain generation
+
+**Developer Impact:**
+- To modify terrain generation, edit `TerrainHeightParams.ts` instead of `TerrainSystem.ts`
+- Worker code automatically receives updated constants
+- No need to manually sync parameters between files
+
+**Example:**
+```typescript
+// Before: Parameters duplicated in TerrainSystem.ts and TerrainWorker.ts
+// After: Single source in TerrainHeightParams.ts
+import { HILL_LAYER, CONTINENT_LAYER } from './TerrainHeightParams';
+
+// Modify terrain generation
+export const HILL_LAYER: NoiseLayerDef = {
+  scale: 0.02,
+  octaves: 4,
+  persistence: 0.6,
+  lacunarity: 2.2,
+  weight: 0.35,  // Increased from 0.25 for more prominent hills
+};
+```
+
+#### Worker Height and Normal Computation
+
+**What Changed:**
+- Moved height computation to web workers (including shoreline adjustment)
+- Moved normal computation to web workers (using overflow grid)
+- Main thread only recomputes for tiles overlapping flat zones (buildings/stations)
+
+**Performance Impact:**
+- 63x reduction in main-thread noise evaluations for normals
+- Zero noise calls on main thread for non-flat-zone tiles
+- Parallel computation across multiple CPU cores
+- Smooth frame rates during terrain streaming
+
+**Developer Impact:**
+- Terrain generation is now asynchronous (uses workers)
+- Flat zone registration may trigger tile regeneration
+- Worker results cached in `pendingWorkerResults` map
+
+### Duel Arena Improvements
+
+#### Combat AI Fixes
+
+**What Changed:**
+- DuelCombatAI now attacks every weapon-speed cycle (no re-engagement delay)
+- Seeds first tick to attack immediately
+- Health restore has quiet parameter to skip visual events during fight-start HP sync
+- CountdownOverlay stays mounted 2.5s into FIGHTING phase with fade-out animation
+- endCycle() chains cleanup→delay→new cycle via .finally()
+
+**Why It Matters:**
+- Fixes slow 2H weapon attacks in duels
+- Prevents stale avatars stuck in arena between cycles
+- Ensures "FIGHT" text visible at combat start
+- Eliminates health bar desync during combat
+
+**Developer Impact:**
+- When implementing combat AI, use weapon-speed cycle for attack timing
+- Use quiet parameter when restoring health during non-death scenarios
+- Chain cleanup operations with .finally() for proper sequencing
+
+#### Visual Enhancements
+
+**What Changed:**
+- Added lit torches at all 4 corners of each arena
+- Replaced solid walls with fence posts + rails
+- Added procedural stone tile floor texture (unique per arena)
+
+**Why It Matters:**
+- Better visibility into arena during spectator mode
+- More authentic OSRS medieval aesthetic
+- Each arena visually distinct
+
+**Developer Impact:**
+- Torch particles use "torch" glow preset (6 particles, 0.08 spread)
+- Stone texture generated via canvas with grout lines and color variation
+- Fence collision boundaries maintained (movement still blocked)
+
+### Build System Improvements
+
+#### Circular Dependency Handling
+
+**What Changed:**
+- procgen and plugin-hyperscape builds now use `tsc || echo` pattern
+- shared package uses `--skipLibCheck` for declaration generation
+- Builds exit 0 even with circular dependency errors
+
+**Why It Matters:**
+- Prevents clean build failures when dist/ doesn't exist yet
+- Packages produce partial output sufficient for downstream consumers
+- Turbo can build packages in parallel without deadlocks
+
+**Developer Impact:**
+- Clean builds (`bun run clean && bun run build`) now work reliably
+- No need to manually build packages in specific order
+- Circular dependency warnings are expected and safe to ignore
+
+**Affected Packages:**
+- `@hyperscape/shared` ↔ `@hyperscape/procgen`
+- `@hyperscape/shared` ↔ `@hyperscape/plugin-hyperscape`
+
+### CI/CD Improvements
+
+#### Test Reliability
+
+**What Changed:**
+- Increased timeouts for intensive tests (geometry validation: 120s, procgen: increased)
+- Relaxed benchmark thresholds for CI environment variance
+- Fixed invalid manifest JSONs causing DataManager validation errors
+- Corrected .gitignore manifest negation
+
+**Why It Matters:**
+- Tests now pass reliably in CI environment
+- Prevents flaky test failures due to slower CI machines
+- Ensures manifest data is valid for all tests
+
+**Developer Impact:**
+- If adding intensive tests, use appropriate timeouts for CI
+- Validate manifest JSON syntax before committing
+- Check .gitignore negation patterns for manifest files
+
+#### Deployment Infrastructure
+
+**What Changed:**
+- Vast.ai GPU server deployment configuration
+- Foundry installation for MUD contracts tests
+- Playwright dependencies and ffmpeg for streaming
+- DNS configuration improvements
+- Build chain includes all internal packages
+
+**Why It Matters:**
+- Enables GPU-accelerated game server deployment
+- Supports streaming mode with video encoding
+- Ensures all packages build correctly in CI
+
+**Developer Impact:**
+- Vast.ai deployment requires Python 3.11+ (bookworm-slim base image)
+- Use `--break-system-packages` for pip3 on Debian 12
+- Runtime env vars automatically injected into provisioned servers
+
+## Migration Guide
+
+### Updating Terrain Generation
+
+If you have custom terrain modifications, migrate to the new parameter system:
+
+**Before:**
+```typescript
+// TerrainSystem.ts
+private getBaseHeightAt(x: number, z: number): number {
+  const hillNoise = this.noise.fractal2D(x * 0.012, z * 0.012, 4, 0.5, 2.2);
+  // ...
+}
+```
+
+**After:**
+```typescript
+// TerrainHeightParams.ts
+export const HILL_LAYER: NoiseLayerDef = {
+  scale: 0.02,  // Updated from 0.012
+  octaves: 4,
+  persistence: 0.6,  // Updated from 0.5
+  lacunarity: 2.2,
+  weight: 0.25,
+};
+
+// TerrainSystem.ts
+import { HILL_LAYER } from './TerrainHeightParams';
+const hillNoise = this.noise.fractal2D(
+  x * HILL_LAYER.scale,
+  z * HILL_LAYER.scale,
+  HILL_LAYER.octaves!,
+  HILL_LAYER.persistence!,
+  HILL_LAYER.lacunarity!
+);
+```
+
+### Handling Circular Dependencies
+
+If you encounter circular dependency errors during build:
+
+1. **Don't panic** - The build system handles this automatically
+2. **Check for partial output** - Packages still produce usable dist/ directories
+3. **Use `--skipLibCheck`** if adding new cross-package imports
+4. **Consider refactoring** if the circular dependency is complex
+
+**Example Fix:**
+```typescript
+// Before: Direct import causes circular dependency
+import { SomeType } from '@hyperscape/shared';
+
+// After: Use type-only import
+import type { SomeType } from '@hyperscape/shared';
+```
+
+### Updating Duel Combat AI
+
+If you're implementing custom duel combat AI:
+
+**Attack Timing:**
+```typescript
+// Use weapon-speed cycle, not re-engagement interval
+const attackInterval = this.getWeaponSpeed(weapon);
+this.attackTimer += deltaTime;
+if (this.attackTimer >= attackInterval) {
+  this.performAttack();
+  this.attackTimer = 0;
+}
+```
+
+**Health Restoration:**
+```typescript
+// Use quiet parameter to skip visual events during non-death scenarios
+restoreHealth(playerId, { quiet: true });
+```
+
+**Cleanup Sequencing:**
+```typescript
+// Chain cleanup operations with .finally()
+async endCycle() {
+  await this.cleanup()
+    .finally(() => this.delay(INTER_CYCLE_DELAY_MS))
+    .finally(() => this.startNewCycle());
+}
+```
+
+## Breaking Changes
+
+### None
+
+All recent changes are backwards compatible. Existing code continues to work without modifications.
+
+## Deprecations
+
+### None
+
+No APIs or features have been deprecated in recent commits.
+
+## New Features
+
+### TerrainHeightParams API
+
+New centralized parameter system for terrain generation:
+
+```typescript
+import {
+  CONTINENT_LAYER,
+  HILL_LAYER,
+  ISLAND_RADIUS,
+  buildGetBaseHeightAtJS,
+} from '@hyperscape/shared/systems/shared/world/TerrainHeightParams';
+```
+
+See [Terrain System API](/api-reference/terrain) for complete reference.
+
+### Duel Arena Visual Enhancements
+
+New visual features for duel arenas:
+
+- Lit torches at arena corners
+- Procedural stone tile floor textures
+- Fence posts and rails (replaced solid walls)
+
+See [Duel Arena](/wiki/game-systems/duel-arena) for implementation details.
+
+## Performance Improvements
+
+### Terrain Generation
+
+- **Worker-based computation**: 63x reduction in main-thread noise evaluations
+- **Parallel processing**: Utilizes multiple CPU cores
+- **Conditional fallback**: Only recomputes for flat zone tiles
+
+### Build System
+
+- **Circular dependency handling**: Prevents build failures
+- **Partial output**: Downstream consumers can use incomplete builds
+- **Turbo caching**: Faster incremental builds
+
+## Testing Updates
+
+### CI Reliability
+
+Recent commits improved CI test reliability:
+
+- Increased timeouts for intensive tests
+- Relaxed benchmark thresholds for CI variance
+- Fixed manifest validation errors
+- Corrected .gitignore patterns
+
+**If your tests fail in CI but pass locally:**
+1. Check if test is compute-intensive (geometry, procgen, etc.)
+2. Increase timeout for CI environment
+3. Relax performance thresholds to account for parallel test contention
+
+## Related Documentation
+
+- [Terrain System](/wiki/game-systems/terrain)
+- [Terrain System API](/api-reference/terrain)
+- [Duel Arena](/wiki/game-systems/duel-arena)
+- [Architecture](/architecture)
+- [Troubleshooting](/devops/troubleshooting)
