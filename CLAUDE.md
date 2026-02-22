@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world.
+Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with AI agents, live streaming duels, and Solana betting integration.
 
 ## Essential Commands
 
@@ -30,6 +30,20 @@ npm run lint
 
 # Clean build artifacts
 npm run clean
+```
+
+### Streaming Duel Arena
+```bash
+# Start full duel stack (game + bots + streaming + betting)
+bun run duel
+
+# Options
+bun run duel --bots=8              # Start with 8 duel bots
+bun run duel --skip-betting        # Skip betting app (stream only)
+bun run duel --skip-stream         # Skip RTMP/HLS (betting only)
+bun run duel --with-mm             # Enable market maker bots
+bun run duel --fresh               # Force fresh restart
+bun run duel --verify              # Run startup verification
 ```
 
 ### Package-Specific Commands
@@ -102,7 +116,8 @@ packages/
 │   └── React UI components
 ├── server/              # Game server (Fastify + WebSockets)
 │   ├── World management
-│   ├── SQLite/PostgreSQL persistence
+│   ├── PostgreSQL persistence
+│   ├── Streaming duel scheduler
 │   └── LiveKit voice chat integration
 ├── client/              # Web client (Vite + React)
 │   ├── 3D rendering
@@ -110,6 +125,11 @@ packages/
 │   └── UI/HUD
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
+├── gold-betting-demo/   # Solana betting integration
+│   ├── anchor/          # Solana programs (Fight Oracle, CLOB Market)
+│   ├── app/             # Betting UI (React + Vite)
+│   └── keeper/          # Automated market operations
+├── market-maker-bot/    # CLOB market maker bots
 └── docs-site/           # Docusaurus documentation site
 ```
 
@@ -148,6 +168,283 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 - Use existing Hyperscape abstractions (ECS, networking, physics)
 - Don't reinvent systems that Hyperscape already provides
 - Separation of concerns: core engine vs. game content
+
+## Particle System Architecture
+
+### ParticleManager (Unified Particle System)
+
+**Location:** `packages/shared/src/entities/managers/particleManager/`
+
+The particle system was refactored in commit `4168f2f` to centralize GPU-instanced particle rendering:
+
+**Architecture:**
+- **ParticleManager** - Central router that dispatches particle events to specialized sub-managers
+- **WaterParticleManager** - Handles fishing spot particles (splash, bubble, shimmer, ripple)
+- **GlowParticleManager** - Handles instanced glow billboards (altar, fire, torch)
+
+**Performance Impact:**
+- Reduced ~150 draw calls to 4 InstancedMeshes
+- Removed ~450 lines of per-entity CPU particle animation code
+- All particle animation runs in GPU via TSL NodeMaterials
+
+**Usage:**
+```typescript
+// Register water particles (fishing spot)
+particleManager.register('fishing_spot_1', {
+  type: 'water',
+  position: { x: 10, y: 0, z: 20 },
+  resourceId: 'fishing_spot_net'
+});
+
+// Register glow particles (altar, fire, torch)
+particleManager.register('altar_1', {
+  type: 'glow',
+  preset: 'altar',
+  position: { x: 5, y: 0, z: 10 },
+  color: 0x88ccff
+});
+
+// Move particle emitter
+particleManager.move('fishing_spot_1', { x: 12, y: 0, z: 22 });
+
+// Unregister (automatic cleanup)
+particleManager.unregister('fishing_spot_1');
+```
+
+**Glow Presets:**
+- `altar` - Geometry-aware sparks rising from altar mesh
+- `fire` - Campfire with rising embers and heat distortion
+- `torch` - Tight cluster of 6 particles with flicker animation
+
+**Implementation Details:**
+- Uses InstancedBufferAttributes for per-instance data (position, age, dynamics)
+- TSL NodeMaterials for GPU-driven animation
+- Vertex buffer budget: 7 of 8 max attributes per particle layer
+- Ripple layer: 5 of 8 max attributes
+
+## AI Combat System
+
+### DuelCombatAI (Trash Talk System)
+
+**Location:** `packages/server/src/arena/DuelCombatAI.ts`
+
+Added in commit `8ff3ad3` - AI agents now generate trash talk during combat using LLMs or scripted fallbacks.
+
+**Features:**
+- Health threshold detection at 75%, 50%, 25%, 10% for self and opponent
+- LLM-generated taunts using agent character bio/style via TEXT_SMALL model
+- Scripted fallback taunt pools when no runtime available
+- Ambient periodic taunts every 15-25 ticks
+- 8-second cooldown between messages
+- All trash talk is fire-and-forget (never blocks combat tick)
+
+**Trash Talk Triggers:**
+1. **Own Health Milestones** - When agent's HP crosses threshold (descending)
+2. **Opponent Health Milestones** - When opponent's HP crosses threshold
+3. **Ambient Taunts** - Random periodic taunts during combat
+
+**LLM Integration:**
+```typescript
+// Trash talk uses agent character personality from ElizaOS runtime
+const character = runtime.character;
+const bioText = character?.bio; // Agent backstory
+const styleHints = character?.style?.all; // Communication style
+
+// Generates short messages (under 40 chars) for overhead chat bubble
+// Temperature: 0.9 for creative, varied responses
+// Timeout: 3 seconds (falls back to scripted on timeout)
+```
+
+**Scripted Fallbacks:**
+- Own low HP: "Not even close!", "I've had worse", "Is that all?"
+- Opponent low HP: "GG soon", "You're done!", "Sit down"
+- Ambient: "Let's go!", "Fight me!", "Too slow"
+
+**Configuration:**
+```typescript
+// In DuelOrchestrator, wire sendChatMessage callback:
+const combatAI = new DuelCombatAI(
+  service,
+  opponentId,
+  config,
+  runtime,
+  (text) => this.sendChatMessage(agentId, text) // Callback for chat
+);
+```
+
+**Combat Allowed:**
+The `CHAT_MESSAGE` action is now allowed during combat (previously blocked). This enables trash talk without breaking combat state.
+
+## Streaming Infrastructure
+
+### RTMP Multi-Platform Streaming
+
+**Location:** `packages/server/src/streaming/`
+
+The streaming system supports simultaneous broadcast to multiple platforms:
+
+**Supported Platforms:**
+- Twitch
+- YouTube
+- Kick
+- Pump.fun (limited access)
+- X/Twitter (requires Premium)
+- Custom RTMP destinations
+- RTMP multiplexer services (Restream, Livepeer)
+
+**Capture Modes:**
+- `cdp` - Chrome DevTools Protocol (default on macOS)
+- `webcodecs` - WebCodecs API (default on Linux, lower CPU)
+
+**Rendering Backends:**
+- `vulkan` - Vulkan (default, best performance)
+- `metal` - Metal (macOS)
+- `gl` - OpenGL ANGLE (fallback for broken Vulkan ICD)
+- `swiftshader` - Software rendering (CPU fallback)
+
+**Environment Variables:**
+```bash
+# Capture configuration
+STREAM_CAPTURE_MODE=webcodecs        # cdp | webcodecs
+STREAM_CAPTURE_CHANNEL=chrome        # chrome | chromium
+STREAM_CAPTURE_ANGLE=vulkan          # vulkan | metal | gl | swiftshader
+STREAM_CAPTURE_DISABLE_WEBGPU=false  # Force WebGL fallback
+STREAM_CAPTURE_HEADLESS=true         # Headless mode (Linux default)
+
+# HLS output
+HLS_OUTPUT_PATH=packages/server/public/live/stream.m3u8
+HLS_SEGMENT_PATTERN=packages/server/public/live/stream-%09d.ts
+HLS_TIME_SECONDS=2
+HLS_LIST_SIZE=24
+HLS_DELETE_THRESHOLD=96
+HLS_START_NUMBER=1700000000
+HLS_FLAGS=delete_segments+append_list+independent_segments+program_date_time+omit_endlist+temp_file
+
+# RTMP destinations
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+```
+
+**Stability Fixes (commits `f3aa787`, `ae42beb`, `5e4c6f1`):**
+- Removed aggressive GPU flags that crash RTX 5060 Ti
+- Use GL ANGLE backend when Vulkan ICD is broken
+- Use system FFmpeg to avoid static build SIGSEGV
+- Switch to headful mode with Xvfb for GPU compositing on Linux
+
+**Chrome Channel Selection (commits `ba8bd53`, `d824163`):**
+- Use Chrome Dev channel for WebGPU support on Vast.ai
+- Stable Chrome lacks WebGPU on some cloud GPU instances
+
+## Solana Betting Integration
+
+### CLOB Market Mainnet Migration
+
+**Commits:** `dba3e03`, `35c14f9`
+
+The betting system has been migrated from binary market to CLOB (Central Limit Order Book) market on Solana mainnet:
+
+**Program Updates:**
+- Fight Oracle: `Fg6PaFpoGXkYsidMpWxTWqkY8B4sT2u7hN8sV5kP6h1` (mainnet)
+- GOLD CLOB Market: Updated to mainnet program ID
+- GOLD Token: `DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump`
+
+**Bot Rewrite:**
+The keeper bot (`packages/gold-betting-demo/keeper/src/bot.ts`) was completely rewritten for CLOB instructions:
+- `initializeConfig` - Initialize market configuration
+- `initializeMatch` - Create new match/duel
+- `initializeOrderBook` - Set up order book for match
+- `resolveMatch` - Settle match and distribute payouts
+
+**Removed:**
+- Binary market seeding/vault logic
+- Old binary market IDL files
+
+**Updated Files:**
+- `packages/gold-betting-demo/anchor/programs/fight_oracle/src/lib.rs` - Mainnet program ID
+- `packages/gold-betting-demo/anchor/programs/gold_clob_market/src/lib.rs` - Mainnet program ID
+- `packages/gold-betting-demo/keeper/src/bot.ts` - CLOB instruction rewrite
+- `packages/gold-betting-demo/keeper/src/common.ts` - Mainnet fallback program IDs
+- `packages/server/src/arena/config.ts` - Mainnet fight oracle fallback
+- `packages/gold-betting-demo/app/.env.mainnet` - All VITE_ vars for mainnet
+
+### Market Maker Bot
+
+**Location:** `packages/market-maker-bot/`
+
+Automated market making for CLOB betting markets with duel signal integration:
+
+**Environment Variables:**
+```bash
+MM_DUEL_STATE_API_URL=http://localhost:5555/api/streaming/state
+MM_ENABLE_DUEL_SIGNAL=true
+MM_DUEL_SIGNAL_WEIGHT=0.9
+MM_DUEL_HP_EDGE_MULTIPLIER=0.49
+MM_DUEL_SIGNAL_FETCH_TIMEOUT_MS=2500
+MM_TAKER_INTERVAL_CYCLES=1
+ORDER_SIZE_MIN=40
+ORDER_SIZE_MAX=140
+MM_TAKER_SIZE_MIN=20
+MM_TAKER_SIZE_MAX=80
+MAX_ORDERS_PER_SIDE=6
+CANCEL_STALE_AGE_MS=12000
+```
+
+**Modes:**
+- `single` - Single wallet market maker
+- `multi` - Multiple wallets with staggered startup
+
+**Usage:**
+```bash
+# Single wallet
+bun run --cwd packages/market-maker-bot start
+
+# Multiple wallets
+bun run --cwd packages/market-maker-bot start:multi -- \
+  --config wallets.generated.json \
+  --stagger-ms 900
+```
+
+## Test Suite Improvements
+
+### WebGPU Test Support
+
+**Commit:** `25ba63c`
+
+Added `vitest.setup.ts` to mock WebGPU browser globals for test compatibility:
+
+**Mocked Globals:**
+- `GPUShaderStage` - Shader stage constants
+- `GPUBufferUsage` - Buffer usage flags
+- `GPUTextureUsage` - Texture usage flags
+- Other WebGPU constants required by Three.js WebGPU renderer
+
+**Test Fixes:**
+- Added protected passthrough methods on ArenaService for test spying
+- Updated ArenaService.referrals.test.ts to use `setDbMock` helper
+- Fixed StreamingDuelScheduler integration test to accept undefined as falsy
+
+**Test Results:**
+- 1569 tests passing
+- 85 tests skipped (need deeper refactoring)
+
+**Skipped Tests:**
+- ArenaService lifecycle tests (need createBetOpenRound fix)
+- ArenaService simulation tests (need architecture updates)
+- ArenaService referrals tests (sub-services call ctx directly)
+- StreamingDuelScheduler unit tests (internal methods moved)
+- Admin index integration tests (need DB migrations)
+
+### Build Resilience
+
+**Commit:** `5666ece`
+
+Made procgen and plugin-hyperscape builds resilient to circular dependencies:
+
+**Issue:**
+Both packages have circular dependencies with @hyperscape/shared. When turbo runs a clean build, tsc fails because the other package's dist/ doesn't exist yet.
+
+**Solution:**
+Use `tsc || echo` pattern so builds exit 0 even with circular dep errors. Packages still produce partial output sufficient for downstream consumers.
 
 ## Critical Development Rules
 
@@ -256,6 +553,7 @@ The dev server provides:
 bun run dev        # Core game (client + server + shared)
 bun run dev:forge  # AssetForge (standalone)
 bun run docs:dev   # Documentation site (standalone)
+bun run duel       # Full duel stack (game + bots + streaming + betting)
 ```
 
 ### Port Allocation
@@ -268,7 +566,10 @@ All services have unique default ports to avoid conflicts:
 | 3400 | AssetForge UI | `ASSET_FORGE_PORT` | `bun run dev:forge` |
 | 3401 | AssetForge API | `ASSET_FORGE_API_PORT` | `bun run dev:forge` |
 | 3402 | Docusaurus | (hardcoded) | `bun run docs:dev` |
+| 4001 | ElizaOS API | - | `bun run dev:ai` |
+| 4179 | Betting App | - | `bun run duel` |
 | 5555 | Game Server | `PORT` | `bun run dev` |
+| 8765 | RTMP Bridge | `RTMP_BRIDGE_PORT` | `bun run duel` |
 
 ### Environment Variables
 
@@ -281,6 +582,7 @@ All services have unique default ports to avoid conflicts:
 | Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
+| Betting Demo | `packages/gold-betting-demo/app/.env.example` | Betting app deployment |
 
 **Common variables**:
 ```bash
@@ -294,6 +596,31 @@ PRIVY_APP_SECRET=...             # For Privy auth
 PUBLIC_PRIVY_APP_ID=...          # Must match server's PRIVY_APP_ID
 PUBLIC_API_URL=https://...       # Point to your server
 PUBLIC_WS_URL=wss://...          # Point to your server WebSocket
+```
+
+**Duel Stack Environment Variables:**
+
+Added in commit `68c0020`:
+```bash
+# Agent spawning control
+SPAWN_MODEL_AGENTS=false         # Disable heavyweight model agent spawner
+MAX_MODEL_AGENTS=0               # Max model agents to spawn
+AUTO_START_AGENTS=true           # Auto-load embedded agents from DB
+AUTO_START_AGENTS_MAX=10         # Max embedded agents to auto-start
+
+# Memory management
+MEMORY_RESTART_THRESHOLD_MB=12288  # Restart threshold (12GB)
+
+# Combat AI configuration
+STREAMING_DUEL_LLM_TACTICS_ENABLED=false      # Use LLM for combat strategy
+STREAMING_DUEL_COMBAT_AI_ENABLED=false        # Enable per-agent DuelCombatAI
+EMBEDDED_AGENT_AUTONOMY_ENABLED=false         # Disable background questing during duels
+
+# Streaming timing
+STREAMING_ANNOUNCEMENT_MS=30000    # Announcement phase duration
+STREAMING_FIGHTING_MS=150000       # Combat phase duration
+STREAMING_END_WARNING_MS=10000     # End warning duration
+STREAMING_RESOLUTION_MS=5000       # Resolution phase duration
 ```
 
 **Split deployment** (client and server on different hosts):
@@ -314,109 +641,12 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Engine**: Three.js 0.180.0, PhysX (WASM)
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
-- **Database**: SQLite (local), PostgreSQL (production via Neon)
+- **Database**: PostgreSQL (production via Neon)
+- **Blockchain**: Solana (mainnet), Anchor framework
 - **Testing**: Playwright, Vitest
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
-
-## Combat System Architecture
-
-### Attack Types
-
-Hyperscape supports three attack types for both players and mobs:
-- **Melee**: Close-range combat (1-2 tiles depending on weapon)
-- **Ranged**: Bow and arrow combat (up to 10 tiles)
-- **Magic**: Spell casting (up to 10 tiles)
-
-### Mob Combat Configuration
-
-Mobs can be configured with any attack type via NPC manifest JSON:
-
-```json
-{
-  "combat": {
-    "attackType": "magic",
-    "spellId": "wind_strike",
-    "combatRange": 10,
-    "attackSpeedTicks": 5
-  },
-  "appearance": {
-    "heldWeaponModel": "asset://weapons/staff.glb"
-  }
-}
-```
-
-**Attack Type Fields:**
-- `attackType`: `"melee"` (default), `"ranged"`, or `"magic"`
-- `spellId`: Required for magic mobs (e.g., `"wind_strike"`)
-- `arrowId`: Required for ranged mobs (e.g., `"bronze_arrow"`)
-- `heldWeaponModel`: Optional visual weapon GLB (e.g., bow, staff)
-
-### Combat Handler Architecture
-
-The combat system uses specialized handlers:
-- `MeleeAttackHandler` - Melee combat for players and mobs
-- `RangedAttackHandler` - Ranged combat (bows/arrows) for players and mobs
-- `MagicAttackHandler` - Magic combat (spells) for players and mobs
-
-Each handler has separate paths for player attacks (with resource consumption, equipment bonuses) and mob attacks (infinite resources, stats from NPC manifest).
-
-**Key Combat Files:**
-- `packages/shared/src/systems/shared/combat/CombatSystem.ts` - Main combat orchestration
-- `packages/shared/src/systems/shared/combat/handlers/AttackContext.ts` - Shared attack preparation utilities
-- `packages/shared/src/constants/CombatConstants.ts` - Combat timing and range constants
-
-### Combat Constants
-
-Key constants from `CombatConstants.ts`:
-
-```typescript
-export const COMBAT_CONSTANTS = {
-  // Attack ranges (tiles)
-  MELEE_RANGE_STANDARD: 1,
-  MELEE_RANGE_HALBERD: 2,
-  RANGED_RANGE: 10,
-  MAGIC_RANGE: 10,
-  
-  // Projectile launch delays (ms)
-  SPELL_LAUNCH_DELAY_MS: 600,    // Spell cast animation wind-up
-  ARROW_LAUNCH_DELAY_MS: 400,    // Arrow draw animation wind-up
-  
-  // Attack speeds (ticks)
-  DEFAULT_ATTACK_SPEED_TICKS: 4,  // 2.4 seconds
-  TICK_DURATION_MS: 600,          // OSRS-accurate tick timing
-};
-```
-
-## Database System Architecture
-
-### Inventory Write Coalescing
-
-The database system uses **write coalescing** to prevent connection pool starvation during batch operations:
-
-```typescript
-// From DatabaseSystem/index.ts
-// Write coalescing collapses N concurrent inventory writes into at most
-// 2 DB transactions per player: one active + one queued with latest snapshot.
-// This prevents pool exhaustion during batch operations (e.g., fletching 100 arrows).
-
-private inventoryWriteActive = new Map<string, Promise<void>>();
-private inventoryWriteQueued = new Map<string, {
-  items: InventorySaveItem[];
-  waiters: Array<{ resolve: () => void; reject: (err: unknown) => void; }>;
-}>();
-```
-
-**How It Works:**
-1. First write executes immediately
-2. Concurrent writes queue with latest snapshot
-3. All waiters resolve when batch completes
-4. Prevents 200+ sequential transactions from batch operations
-
-**Performance Impact:**
-- Before: 100 fletching completions = 200 sequential DB transactions
-- After: 100 fletching completions = 2 DB transactions per player
-- Eliminates "200 pending operations" warnings and game freezes
+- **Streaming**: FFmpeg, Playwright, WebCodecs
 
 ## Troubleshooting
 
@@ -444,6 +674,8 @@ cd packages/physx-js-webidl
 # Kill processes on common Hyperscape ports
 lsof -ti:3333 | xargs kill -9  # Game Client
 lsof -ti:5555 | xargs kill -9  # Game Server
+lsof -ti:4179 | xargs kill -9  # Betting App
+lsof -ti:8765 | xargs kill -9  # RTMP Bridge
 ```
 
 See [Port Allocation](#port-allocation) section for full port list.
@@ -455,356 +687,124 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Tests spawn their own Hyperscape instances
 - Visual tests require headless browser support
 
-### Database Pool Starvation
+### ESLint Crashes with ajv TypeError
 
-If you see "200 pending operations" warnings or game freezes during batch operations (fletching, smithing), this indicates database connection pool exhaustion. The inventory system uses write coalescing to prevent this—ensure you're on the latest version. The fix collapses concurrent inventory writes into at most 2 transactions per player instead of serializing all writes.
+**Fixed in commit `b344d9e`**
 
-**Symptoms:**
-- Game freezes during batch crafting (fletching 100 arrows)
-- Console warnings: "200 pending operations"
-- Database connection pool exhaustion
-- Slow inventory operations
+If ESLint crashes with `TypeError: Class extends value undefined is not a constructor or null` related to ajv:
+
+**Cause:**
+Forcing ajv@8 on @eslint/eslintrc which requires ajv@6 for Draft-04 schema support.
 
 **Solution:**
-The `DatabaseSystem` now uses write coalescing (implemented in PR #823) which collapses N concurrent `savePlayerInventoryAsync` calls into at most 2 DB transactions per player. Update to the latest code if experiencing this issue.
+Remove ajv>=8.18.0 override from package.json. The fix is already applied in the latest code.
 
-### Camera Facing Backwards on Fresh Load
+### Integration Tests Fail with "anvil: command not found"
 
-If the camera initializes facing the wrong direction (player appears to move backwards), this was fixed in PR #829. The camera now correctly initializes with `theta=Math.PI` for standard third-person behind-the-player view.
+**Fixed in commit `b344d9e`**
 
-**Technical Details:**
-- Camera uses spherical coordinates (radius, phi, theta)
-- `theta=0` places camera in front of player (incorrect)
-- `theta=Math.PI` places camera behind player (correct)
-- Fixed in `ClientCameraSystem.ts`
+**Cause:**
+Integration tests start a local Ethereum node with anvil, but the binary wasn't available in CI.
 
-### Post-Processing Color Grading Leaking
+**Solution:**
+CI workflow now installs `foundry-rs/foundry-toolchain` before running integration tests.
 
-If entity outlines show incorrect colors when color grading is disabled, ensure you're on the latest version. PR #829 fixed an issue where the LUT color grading shader pipeline leaked into outline-only rendering. The fix zeros LUT intensity when disabled so outline rendering stays clean.
-
-### Remote Players Appearing in T-Pose or Wrong Position
-
-If remote players flash at (0,0,0) in T-pose for one frame when joining, or appear sideways/incorrectly oriented, update to the latest code (PR #882). The avatar loading system now:
-- Positions and animates avatars **before** making them visible
-- Syncs both position AND quaternion to base transform
-- Calls `instance.move()` and `instance.update(0)` before setting `visible=true`
-
-**Before Fix:**
-- VRM avatar set to `visible=true` before `instance.move()` positioned it
-- Avatar flashed at (0,0,0) in T-pose for one frame
-- `base.quaternion` not synced, causing sideways-facing avatars
-
-**After Fix:**
-- Avatar positioned and animated into idle pose before visibility enabled
-- Both position and quaternion synced to base transform for correct orientation
-
-### Equipment Not Visible on Other Players
-
-If you can't see other players' weapons/armor, or your equipment doesn't show for others, update to the latest code (PR #875). The equipment system now:
-- Broadcasts equipment on player join (both directions)
-- Re-sends equipment on socket reconnect (packets may be lost during disconnect)
-- Uses all 11 equipment slots instead of hardcoded 6
-- Properly handles VRM avatar loading with equipment replay via `AVATAR_LOAD_COMPLETE` event
-- Provides `getAvatar()` helper to resolve VRM from both `PlayerLocal` and `PlayerRemote`
-
-**Equipment Sync Flow:**
-1. On player join: Server sends existing players' equipment to joiner
-2. On player join: Server broadcasts joiner's equipment to all other players
-3. On equipment change: Server broadcasts update to all nearby players
-4. On reconnect: Server re-sends all equipment
-5. On VRM load: Equipment system replays cached equipment from pending queue
-
-### Spatial Index Not Updated After Teleport
-
-If combat movement broadcasts don't reach players after teleporting (e.g., invisible combat follow in duels), update to the latest code (PR #875). The spatial index is now updated after teleport and respawn:
-
-```typescript
-// Update spatial index so sendToNearby() finds players at new location
-this.spatialIndex.updatePlayerPosition(playerId, position.x, position.z);
+**Local Development:**
+Install Foundry:
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
 ```
 
-Without this, `sendToNearby()` uses stale positions and post-teleport tile movement broadcasts won't reach players whose spatial index is still at their pre-teleport position.
+### Streaming Crashes on Vast.ai RTX 5060 Ti
 
-### PvP Ranged Attacks Granting Wrong XP
+**Fixed in commits `f3aa787`, `ae42beb`, `5e4c6f1`, `30cacb0`**
 
-If ranged attacks in duels grant Strength XP instead of Ranged XP, update to the latest code (PR #875). The PvP XP calculation now inspects the actual weapon type (bow/crossbow/staff) instead of using the player's melee attack style:
+**Symptoms:**
+- Chrome crashes with Vulkan ICD errors
+- Static FFmpeg build causes SIGSEGV
+- WebGPU not available in stable Chrome
 
-```typescript
-// Detect weapon type for PvP kills
-const weaponType = weapon?.weaponType?.toLowerCase();
-if (weaponType === "bow" || weaponType === "crossbow") {
-  attackStyle = "ranged";  // Grant Ranged XP
-} else if ((weaponType === "staff" || weaponType === "wand") && selectedSpell) {
-  attackStyle = "magic";   // Grant Magic XP
-} else {
-  // Melee attack - use player's attack style
-  attackStyle = playerStyle || "aggressive";
-}
+**Solutions Applied:**
+1. Use GL ANGLE backend instead of Vulkan when ICD is broken
+2. Use system FFmpeg instead of static build
+3. Use Chrome Dev channel for WebGPU support
+4. Remove RTX 5060 Ti from GPU search in vast-keeper
+5. Switch to headful mode with Xvfb for GPU compositing
+
+**Environment Variables:**
+```bash
+STREAM_CAPTURE_ANGLE=gl          # Use OpenGL ANGLE instead of Vulkan
+STREAM_CAPTURE_CHANNEL=chrome    # Use Chrome Dev for WebGPU
+STREAM_CAPTURE_HEADLESS=false    # Use headful with Xvfb
 ```
 
-This matches the logic used for mob kills and ensures correct XP distribution in PvP combat.
+### Vast.ai Keeper Setup
 
-### Mob Position Desync and Stuck Combat Rotation
+**Commits:** `3ce7d64`, `63374bb`, `621ae67`, `d9e9111`, `987e037`, `5c2a561`
 
-If mobs appear to be in the wrong position or continue facing their combat target after combat ends, update to the latest code (PR #884). Several fixes were applied:
+The vast-keeper package automates Vast.ai GPU instance management for streaming:
 
-**Combat Rotation Clearing:**
-- `TileInterpolator` now clears `inCombatRotation` flag on movement start
-- Prevents mobs from staying locked in combat-facing after combat ends
-- Only routes `entityModified` to `setCombatRotation` for players, not mobs
-- Mobs handle combat rotation locally in `MobEntity.clientUpdate()`
+**Fixes Applied:**
+1. Install vastai CLI via pip3 in Docker
+2. Use `python3 -m vastai` instead of binary invocation
+3. Upgrade to bookworm-slim for Python 3.11+ (vastai-sdk requires 3.10+)
+4. Add `--break-system-packages` for pip3 on Debian 12 (PEP 668)
+5. Use python venv for vastai install to guarantee binary on PATH
+6. Generate SSH keys in Docker for instance access
 
-**Position Synchronization:**
-- `DamageSplatSystem` prefers entity visual position over server position
-- Damage splats now appear where the mob visually is during interpolation
-- Prevents splats from appearing at stale server positions
+**Docker Configuration:**
+```dockerfile
+# Install Python and vastai CLI
+RUN apt-get update && apt-get install -y python3 python3-pip python3-venv
+RUN python3 -m venv /opt/vastai-venv
+RUN /opt/vastai-venv/bin/pip install --break-system-packages vastai
+ENV PATH="/opt/vastai-venv/bin:$PATH"
+```
 
-**Movement Packet Optimization:**
-- Replaced redundant `entityModified` with `emote` on `tileMovementEnd` packet
-- `cancelMovement` sends `tileMovementEnd` instead of `entityModified`
-- Client `TileInterpolator` properly stops interpolating old paths
+### Deployment DNS Configuration
 
-### Stackable Item Equipping Flash
+**Commit:** `fd17248`
 
-When equipping arrows (or other stackables) that match what's already equipped, the system now merges quantities directly instead of the unequip→inventory→re-equip cycle (PR #887). This eliminates the brief inventory flash showing combined count before equip.
+**Issue:**
+Docker containers on some hosts use broken DNS resolvers that fail to resolve external domains.
 
-**Before:**
-1. Unequip current arrows (e.g., 50) → inventory shows 50
-2. Inventory combines with new arrows (e.g., 25) → shows 75
-3. Re-equip combined stack → shows 75 in equipment slot
-4. Brief flash of 75 in inventory before re-equip
+**Solution:**
+Overwrite `/etc/resolv.conf` with Google DNS instead of appending:
+```bash
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
+echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+```
 
-**After:**
-1. Detect same stackable type already equipped
-2. Add new quantity directly to equipped stack
-3. No inventory flash, seamless merge
+### Circular Dependency Build Errors
 
-### Trade Panel Integration
+**Commit:** `5666ece`
 
-The trade panel is now fully integrated into the modal system (PR #850). Player-to-player trading UI opens automatically when trade requests are received:
+**Affected Packages:**
+- `packages/procgen` - Circular dependency with @hyperscape/shared
+- `packages/plugin-hyperscape` - Circular dependency with @hyperscape/shared
 
-**Trade Event Handlers:**
-- `trade` - Opens trade panel with initial state
-- `tradeUpdate` - Updates trade offer items
-- `tradeConfirm` - Shows confirmation state
-- `tradeClose` - Closes trade panel
+**Solution:**
+Use `tsc || echo` pattern in build scripts so builds exit 0 even with circular dep errors. Packages still produce partial output sufficient for downstream consumers.
 
-**Implementation:**
-- Added to `useModalPanels` hook following `DuelPanel` pattern
-- Rendered in `InterfaceModals` component
-- Server already emitted `UI_UPDATE` events for trade
-- This PR connects the UI to the existing backend
-
-### Duel Arena Health Restoration
-
-Duel health restoration now uses individual try/catch blocks for winner and loser (PR #875). This prevents one player's restoration failure from leaving the other stuck in the arena:
-
-**Before:**
-- Both `restorePlayerHealth` calls in single try/catch
-- If winner's restore threw exception, loser's restore skipped
-- Loser left with frozen physics, `isDying=true`, no respawn packets
-- Player stuck in arena unable to move
-
-**After:**
-- Each `restorePlayerHealth` wrapped individually
-- Matches pattern already used for teleports
-- Both players restored even if one fails
-- Proper error logging for each restoration
-
-### Minimap Quest Icons
-
-The minimap now displays quest-state-aware icons for quest giver NPCs (PR #885):
-
-**Quest Icon States:**
-- Blue "!" for available quests (not started)
-- Blue "?" for quests in progress
-- No icon when all quests completed
-
-**Implementation:**
-- Added `questIds` field to `NPCEntityConfig`
-- Passed through spawn → network → client pipeline
-- Minimap fetches quest statuses from server via `getQuestList`
-- Icons update in real-time on quest events
-- Fixed broken NPC service detection (`services` is `string[]`, not `{ types: string[] }`)
-
-**NPC Configuration:**
+**Example:**
 ```json
 {
-  "services": {
-    "types": ["quest"],
-    "questIds": ["cooks_assistant", "sheep_shearer"]
+  "scripts": {
+    "build": "tsc || echo 'Build completed with circular dependency warnings'"
   }
 }
 ```
 
-### Combat Pathfinding Improvements
+### TypeScript Errors in CI
 
-Combat movement now uses OSRS-accurate BFS pathfinding with line-of-sight validation (PR #886):
+**Commit:** `5e60439`
 
-**BFS as Primary Pathfinder:**
-- Player movement uses BFS ("smartpathing") instead of naive diagonal-first
-- Eliminates visible diagonal zigzag when walking to attack targets
-- Finds optimal paths around obstacles
+Fixed 4 TypeScript errors for CI typecheck:
 
-**Multi-Destination Combat BFS:**
-- Generates all valid attack tiles (considering range and LoS)
-- Uses `findPathToAny()` to find shortest path to any valid tile
-- Naturally selects closest reachable position
-- No need to pre-pick "best" tile with heuristics
-
-**Line of Sight for Ranged/Magic:**
-- Ranged and magic attacks now require LoS via Bresenham line trace
-- Checks `BLOCKS_RANGED` collision flags (walls, solid objects)
-- Prevents attacking through walls when in Chebyshev range
-
-**NPC Chase Pathfinding:**
-- NPCs still use naive diagonal pathing (not BFS)
-- Enables safespotting mechanics (OSRS-accurate)
-- Players can position where naive pathing cannot reach
-
-**Key Functions:**
-- `hasLineOfSight()` - Bresenham line trace for LoS validation
-- `getValidRangedTiles()` - Generate all valid ranged/magic attack tiles with LoS
-- `getValidMeleeTiles()` - Generate all valid melee attack tiles (cardinal for range 1)
-- `findPathToAny()` - Multi-destination BFS for combat movement
-
-### Mob Sword Swing Animation
-
-Mobs with held weapons now play the sword swing animation instead of default punch (PR #848):
-
-```typescript
-// Mobs with heldWeaponModel (e.g., guard with bronze sword) play sword_swing
-// instead of default punch animation
-if (mobConfig.heldWeaponModel) {
-  emote = Emotes.SWORD_SWING;
-} else {
-  emote = Emotes.COMBAT;
-}
-```
-
-### Duel Stake Visual Improvements
-
-Duel stake panels now show item icons instead of truncated text names (PR #846):
-
-**Visual Improvements:**
-- Actual `ItemIcon` rendering in stake grids
-- Staked items in inventory appear dimmed (40% opacity)
-- Visual indication of which items have been offered
-- Consistent with inventory panel styling
-
-**Implementation:**
-- Replaced text-based stake display with `ItemIcon` components
-- Added opacity styling to staked inventory items
-- Improved visual clarity during stake negotiation
-
-## Website & Solana Integration
-
-### Recent Updates (PR #822)
-
-The marketing website (`packages/website/`) has been refactored with improved architecture and Solana wallet integration:
-
-**Privy SDK Updates:**
-- Upgraded to `@privy-io/react-auth` v3.13.1 and `@privy-io/server-auth` v1.32.5
-- Enhanced multi-chain support with Solana RPC configuration
-- Improved wallet detection for embedded wallets
-
-**Solana Wallet Support:**
-- Replaced `@solana-mobile/wallet-adapter-mobile` with `@solana-mobile/wallet-standard-mobile`
-- Enhanced `SolanaWalletProvider` to support MWA on both Saga and Seeker devices
-- Added balance fetching and MWA detection in `AccountPanel` and `SettingsPanel`
-- Updated to `@solana-program/memo` v0.11.0 and `@solana/kit` v6.0.1
-
-**Website Improvements:**
-- Refactored GoldToken page into modular section components (TokenHero, ValueProps, HowItWorks)
-- Added error boundaries, loading states, and not-found page
-- Improved SEO with opengraph images and PWA manifest
-- Enhanced accessibility with semantic HTML and ARIA labels
-- Optimized CSS with variables for gold glow effects
-- Fixed clipboard API usage in CopyAddress component
-
-**Next.js Updates:**
-- Upgraded from Next.js 15.1.0 to 16.1.6
-- Added security headers in `next.config.ts`
-- Updated TypeScript configuration to use 'react-jsx'
-- Improved global styles with design tokens
-
-**Files Changed:**
-- `packages/client/src/auth/PrivyAuthProvider.tsx` - Multi-chain support
-- `packages/client/src/auth/SolanaWalletProvider.tsx` - MWA support
-- `packages/client/src/game/panels/AccountPanel.tsx` - Balance fetching
-- `packages/client/src/game/panels/SettingsPanel/` - MWA detection
-- `packages/website/` - Complete refactor with component modularization
-
-## Minimap System
-
-### RS3/OSRS Accuracy
-
-The minimap has been updated to match RS3 and OSRS visual standards:
-
-**Dot Colors (OSRS-accurate):**
-- White: Other players
-- Yellow: NPCs, mobs, and buildings
-- Red: Ground items and loot
-- White square: Local player (instead of circle)
-
-**Destination Marker:**
-- Red flag icon (RS3-style) instead of red dot
-- Persists until player reaches destination
-- Shared between world clicks and minimap clicks
-
-**Location Icons:**
-The minimap now displays icons for key locations instead of generic dots:
-- **Bank**: Gold coin ($) symbol
-- **Shop**: Open bag icon
-- **Altar**: White cross (prayer)
-- **Runecrafting Altar**: Purple circle with "R"
-- **Anvil**: Dark anvil silhouette (smithing)
-- **Furnace**: Orange circle with flame (smelting)
-- **Cooking Range**: Brown circle with steam
-- **Fishing Spot**: Cyan circle with fish
-- **Mining Rock**: Brown circle with pickaxe
-- **Tree**: Green circle (woodcutting)
-- **Quest Available**: Blue circle with white "!" (quest not started)
-- **Quest In Progress**: Blue circle with white "?" (quest active)
-
-**Quest Icon States:**
-Quest giver NPCs display state-aware icons based on quest progress:
-- Blue "!" for available quests (not started)
-- Blue "?" for quests in progress
-- No icon when all quests completed (shows bank/shop icon if applicable)
-- Icons update in real-time as quests are started/completed
-- Fetches quest statuses from server via `getQuestList` message
-- Listens to `QUEST_STARTED`, `QUEST_PROGRESSED`, `QUEST_COMPLETED` events
-
-**NPC Configuration:**
-Quest giver NPCs must have `questIds` field:
-```json
-{
-  "services": {
-    "types": ["quest"],
-    "questIds": ["cooks_assistant", "sheep_shearer"]
-  }
-}
-```
-
-**Icon Detection:**
-Icons are automatically assigned based on:
-- Station types (bank, furnace, anvil, range, altar)
-- NPC service types (bank, shop, quest) with quest state awareness
-- Resource types (fishing_spot, mining_rock, tree)
-
-**Size Hierarchy:**
-- Entity dots: 6px diameter (compact)
-- Location icons: 12px diameter (prominent for navigation)
-
-**Implementation:**
-- `packages/client/src/game/hud/Minimap.tsx` - Main minimap component
-- `drawMinimapIcon()` function - Renders location-specific icons
-- Entity subtype detection from config data
-- Quest status synchronization via network messages
-
-**Bug Fix (PR #885):**
-Fixed broken NPC service detection. The `services` field is `string[]`, not `{ types: string[] }`. This also fixed bank/shop icon detection which was previously broken.
+1. **AgentManager.ts** - Cast EmbeddedHyperscapeService to HyperscapeService
+2. **ArenaService.ts** - Cast unknown position param via `Parameters<>` utility
+3. **ArenaRoundService.ts** - Change `getEligibleAgents` from private to public
 
 ## Additional Resources
 
@@ -812,3 +812,5 @@ Fixed broken NPC service detection. The `services` field is `string[]`, not `{ t
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
+- Duel Stack Documentation: See `docs/duel-stack.md`
+- Streaming Mode Plan: See `STREAMING_MODE_PLAN.md`
