@@ -86,6 +86,33 @@ bun install
 bun run build
 ```
 
+### Circular Dependency Build Errors
+
+**Symptom**: TypeScript errors about missing types from `@hyperscape/shared` or `@hyperscape/procgen`
+
+**Cause**: Circular dependencies between packages during clean builds
+
+**Solution**: The build system handles this automatically with resilient patterns:
+
+- **procgen ↔ shared**: Uses `tsc || echo` to exit 0 even with circular dep errors
+- **plugin-hyperscape ↔ shared**: Uses `--skipLibCheck` in declaration generation
+- Packages produce partial output sufficient for downstream consumers
+
+If you still see errors:
+
+```bash
+# Build shared first to create dist/ directory
+cd packages/shared
+bun run build
+
+# Then build dependent packages
+cd ../procgen
+bun run build
+
+cd ../plugin-hyperscape
+bun run build
+```
+
 ### PhysX Build Fails
 
 **Symptom**: Errors during PhysX compilation
