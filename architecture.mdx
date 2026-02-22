@@ -188,14 +188,15 @@ The shared package includes a centralized particle system that uses GPU instanci
 
 **Architecture:**
 - **ParticleManager**: Central router that dispatches particle events to specialized sub-managers
-- **WaterParticleManager**: GPU-instanced fishing spot effects (4 InstancedMeshes)
+- **WaterParticleManager**: GPU-instanced fishing spot effects (4 InstancedMeshes with TSL shaders)
 - **GlowParticleManager**: Instanced glow billboards for altars, fires, torches
 
 **Performance Benefits:**
-- Reduces ~150 draw calls to 4 per fishing spot
-- FPS improvement: 65-70 → 120 on reference hardware
+- Reduces ~150 draw calls to 4 per fishing spot (97% reduction)
+- FPS improvement: 65-70 → 120 on reference hardware (80% increase)
 - GPU-driven animations (parabolic arcs, wobble, twinkle, ring expansion)
 - ~450 lines of CPU animation code eliminated
+- Zero CPU overhead for particle updates (all on GPU via TSL shaders)
 
 **Location:**
 ```
@@ -205,10 +206,29 @@ packages/shared/src/entities/managers/particleManager/
 └── GlowParticleManager.ts    # Glow billboards (altar, fire, torch presets)
 ```
 
+**Technical Implementation:**
+- **InstancedBufferAttributes**: Per-particle data (spotPos, ageLifetime, angleRadius, dynamics)
+- **TSL NodeMaterials**: GPU-computed particle animations using Three.js Shading Language
+- **Vertex Buffer Budget**: 7 of 8 max attributes per particle layer
+- **Pool Sizes**: MAX_SPLASH=96, MAX_BUBBLE=72, MAX_SHIMMER=72, MAX_RIPPLE=24
+- **Fishing Variants**: Net (calm), Bait (medium), Fly (active) with different particle counts
+- **Burst System**: Fish activity bursts fire 2-4 splash particles every 3-7 seconds
+
 **Integration:**
 - ResourceSystem creates ParticleManager on client startup
 - ResourceEntity delegates particle lifecycle to ParticleManager
 - Per-frame update driven by ResourceSystem.update()
+- Lazy registration pattern (retries if manager not ready during entity init)
+- Proper cleanup via unregister on entity destroy
+
+**Extensibility:**
+To add new particle types (fire, magic, dust):
+1. Create new sub-manager class in particleManager/ folder
+2. Instantiate in ParticleManager constructor
+3. Add routing logic in register/unregister/move/handleEvent methods
+4. Call update() and dispose() from ParticleManager
+
+See [Particle System Documentation](/wiki/engine/particles) for complete API reference.
 
 ### Manifest-Driven Content
 
