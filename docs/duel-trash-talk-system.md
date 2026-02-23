@@ -2,342 +2,347 @@
 
 ## Overview
 
-The duel trash talk system enables AI agents to generate contextual taunts during arena combat. Agents yap at health milestones, respond to opponent damage, and periodically fire ambient taunts to create engaging spectator experiences.
-
-**Implementation**: `packages/server/src/arena/DuelCombatAI.ts`
+The Duel Trash Talk System (commit 8ff3ad3) enables AI agents to taunt each other during combat using LLM-generated or scripted messages. This adds personality and entertainment value to streamed duel arena matches.
 
 ## Features
 
-- **Health Milestone Taunts**: Triggered when own or opponent HP crosses 75%, 50%, 25%, or 10%
-- **Ambient Periodic Taunts**: Random taunts every 15-25 ticks (9-15 seconds)
-- **LLM-Generated**: Uses agent character bio/style for personality-driven trash talk
-- **Scripted Fallbacks**: Pre-written taunts when no LLM runtime available
-- **Fire-and-Forget**: Never blocks combat tick loop (all async, background)
-- **Cooldown Protection**: 8-second minimum between messages
-- **Combat-Allowed**: `CHAT_MESSAGE` action now permitted during combat (see `packages/shared/src/systems/shared/combat/handlers/social.ts`)
+- **Health Threshold Detection**: Triggers taunts at 75%, 50%, 25%, 10% HP for self and opponent
+- **LLM-Generated Taunts**: Uses agent character bio/style via TEXT_SMALL model
+- **Scripted Fallback Pools**: Pre-written taunts when no LLM runtime available
+- **Ambient Periodic Taunts**: Random taunts every 15-25 ticks (no trigger)
+- **8-Second Cooldown**: Prevents message spam
+- **Fire-and-Forget**: Non-blocking message delivery (doesn't affect combat performance)
+- **Combat-Enabled Chat**: CHAT_MESSAGE action now allowed during combat
 
 ## Architecture
 
-### Trash Talk State
+```
+DuelOrchestrator
+├── Creates DuelCombatAI instances for each fighter
+├── Wires sendChatMessage callbacks
+└── Passes messages to social system
 
-```typescript
-class DuelCombatAI {
-  private sendChat: ((text: string) => void) | null;
-  private firedOwnThresholds: Set<number>;      // Tracks 75/50/25/10% milestones
-  private firedOpponentThresholds: Set<number>;
-  private lastTrashTalkTime: number;            // Cooldown timestamp
-  private _trashTalkInFlight: boolean;          // Prevents overlapping LLM calls
-  private nextAmbientTauntTick: number;         // Scheduled ambient taunt
-}
+DuelCombatAI
+├── Health monitoring (self + opponent)
+├── Threshold tracking (75%, 50%, 25%, 10%)
+├── LLM taunt generation (character-specific)
+├── Scripted fallback pools
+├── Ambient taunt timer (15-25 ticks)
+└── 8-second cooldown enforcement
+
+Social System
+└── Broadcasts CHAT_MESSAGE to spectators + participants
 ```
 
-### Trigger Points
+## Implementation
 
-#### 1. Health Milestones
+### DuelCombatAI
 
-Checked every tick in `checkHealthMilestones()`:
+**Location**: `packages/server/src/arena/DuelCombatAI.ts`
 
+**Health Monitoring:**
 ```typescript
-const TRASH_TALK_THRESHOLDS = [75, 50, 25, 10] as const;
+// Track health thresholds for self and opponent
+private lastSelfHealthThreshold = 100;
+private lastOpponentHealthThreshold = 100;
+private lastTauntTime = 0;
+private ambientTauntTimer = 0;
 
-// Own health drops below threshold
-if (healthPct <= threshold && prevHealthPct > threshold && !this.firedOwnThresholds.has(threshold)) {
-  this.firedOwnThresholds.add(threshold);
-  this.fireTrashTalk("own_low", `Your health just dropped to ${healthPct}%!`, ...);
-}
-
-// Opponent health drops below threshold
-if (oppPct <= threshold && prevOpponentHealthPct > threshold && !this.firedOpponentThresholds.has(threshold)) {
-  this.firedOpponentThresholds.add(threshold);
-  this.fireTrashTalk("opponent_low", `Opponent's health dropped to ${oppPct}%!`, ...);
-}
+// Health thresholds that trigger taunts
+private readonly HEALTH_THRESHOLDS = [75, 50, 25, 10];
+private readonly TAUNT_COOLDOWN_MS = 8000;
+private readonly AMBIENT_TAUNT_INTERVAL_MIN = 15; // ticks
+private readonly AMBIENT_TAUNT_INTERVAL_MAX = 25; // ticks
 ```
 
-#### 2. Ambient Taunts
-
-Periodic taunts with randomized timing:
-
+**Taunt Generation:**
 ```typescript
-const AMBIENT_TAUNT_MIN_TICKS = 15;  // 9 seconds at 600ms/tick
-const AMBIENT_TAUNT_MAX_TICKS = 25;  // 15 seconds
+private async generateTaunt(context: string): Promise<string> {
+  // Try LLM generation first
+  if (this.runtime) {
+    try {
+      const prompt = `You are ${this.agentName}, a fighter in a duel arena.
+Character: ${this.characterBio}
+Context: ${context}
+Generate a short, in-character taunt (1-2 sentences max).`;
 
-// Schedule next ambient taunt
-this.nextAmbientTauntTick = this.tickCount + 
-  AMBIENT_TAUNT_MIN_TICKS + 
-  Math.floor(Math.random() * (AMBIENT_TAUNT_MAX_TICKS - AMBIENT_TAUNT_MIN_TICKS));
+      const response = await generateText({
+        runtime: this.runtime,
+        context: prompt,
+        modelClass: ModelClass.TEXT_SMALL,
+      });
 
-// Fire when tick count reaches scheduled time
-if (this.tickCount >= this.nextAmbientTauntTick) {
-  this.fireTrashTalk("ambient", "It's an ongoing duel — taunt your opponent!", ...);
-}
-```
-
-### Cooldown System
-
-Prevents message spam:
-
-```typescript
-const TRASH_TALK_COOLDOWN_MS = 8_000;  // 8 seconds
-
-// Check cooldown before firing
-const now = Date.now();
-if (now - this.lastTrashTalkTime < TRASH_TALK_COOLDOWN_MS) return;
-if (this._trashTalkInFlight) return;  // Skip if LLM call in progress
-
-// Update timestamp immediately to prevent overlapping calls
-this.lastTrashTalkTime = Date.now();
-```
-
-## LLM Integration
-
-### Prompt Construction
-
-Trash talk prompts include agent personality and combat context:
-
-```typescript
-const character = this.runtime.character;
-const bioText = Array.isArray(character.bio) 
-  ? character.bio.slice(0, 3).join(" ")
-  : String(character.bio).slice(0, 200);
-const styleHints = character.style?.all?.slice(0, 3).join(", ") || "";
-
-const prompt = [
-  `You are ${this.agentName} in a PvP duel${this.opponentName ? ` against ${this.opponentName}` : ""}.`,
-  bioText ? `Your personality: ${bioText}` : "",
-  styleHints ? `Your communication style: ${styleHints}` : "",
-  `Your HP: ${healthPct.toFixed(0)}%. Opponent HP: ${oppPctStr}.`,
-  `Situation: ${situation}`,
-  ``,
-  `Generate a SHORT trash talk message (under 40 characters) for the overhead chat bubble.`,
-  `Stay in character. Be creative, funny, competitive. No quotes. Just the message.`
-].filter(Boolean).join("\n");
-```
-
-### LLM Call with Timeout
-
-Prevents indefinite blocking:
-
-```typescript
-const LLM_TIMEOUT_MS = 3000;
-
-const llmPromise = this.runtime.useModel(ModelType.TEXT_SMALL, {
-  prompt,
-  maxTokens: 30,
-  temperature: 0.9
-});
-
-const timeoutPromise = new Promise((_, reject) => {
-  setTimeout(() => reject(new Error("Trash talk LLM timeout")), LLM_TIMEOUT_MS);
-});
-
-Promise.race([llmPromise, timeoutPromise])
-  .then(response => {
-    const text = response.trim().replace(/^["']|["']$/g, "");
-    if (text && text.length <= 60) {
-      sendChat(text);
+      return response.trim();
+    } catch (error) {
+      console.warn(`[DuelCombatAI] LLM taunt generation failed:`, error);
     }
-  })
-  .catch(() => {
-    // Fallback to scripted taunt
-    const msg = FALLBACK_TAUNTS[Math.floor(Math.random() * FALLBACK_TAUNTS.length)];
-    sendChat(msg);
-  });
-```
+  }
 
-## Scripted Fallbacks
-
-When no LLM runtime is available, the system uses pre-written taunt pools:
-
-```typescript
-const FALLBACK_TAUNTS_OWN_LOW = [
-  "Not even close!",
-  "I've had worse",
-  "Is that all?",
-  "Still standing",
-  "Come on then!",
-  "You call that damage?"
-];
-
-const FALLBACK_TAUNTS_OPPONENT_LOW = [
-  "GG soon",
-  "You're done!",
-  "Sit down",
-  "One more hit...",
-  "Almost there!",
-  "Easy money"
-];
-
-const FALLBACK_TAUNTS_AMBIENT = [
-  "Let's go!",
-  "Fight me!",
-  "Too slow",
-  "Bring it",
-  "Nice try lol",
-  "*yawns*",
-  "Is this PvP?",
-  "Warming up"
-];
-```
-
-## Integration with DuelOrchestrator
-
-The `StreamingDuelScheduler` wires trash talk into combat AIs:
-
-```typescript
-// packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts
-
-const sendChatA = (text: string) => {
-  this.world.emit(EventType.CHAT_MESSAGE, {
-    playerId: agentA.id,
-    message: text,
-    channel: "local"
-  });
-};
-
-const combatAIA = new DuelCombatAI(
-  serviceA,
-  agentB.id,
-  config,
-  runtimeA,
-  sendChatA  // Pass chat callback
-);
-
-combatAIA.setContext(
-  agentA.name,
-  agentB.combatLevel,
-  agentB.name  // Opponent name for personalized taunts
-);
-```
-
-## Chat System Changes
-
-To allow trash talk during combat, the social action handler was updated:
-
-**File**: `packages/shared/src/systems/shared/combat/handlers/social.ts`
-
-```typescript
-// CHAT_MESSAGE now allowed during combat
-case "CHAT_MESSAGE":
-  // No combat state check — agents can taunt while fighting
-  break;
-```
-
-Previously, chat was blocked during combat to prevent action queue conflicts. The trash talk system uses fire-and-forget messaging that doesn't interfere with combat actions.
-
-## Performance Considerations
-
-### Non-Blocking Design
-
-All trash talk operations are fire-and-forget:
-
-```typescript
-// ❌ WRONG: Blocking tick loop
-async tick() {
-  const taunt = await generateTrashTalk();  // Blocks for 1-3 seconds!
-  sendChat(taunt);
-  await this.tryAttack();  // Combat delayed
+  // Fallback to scripted taunts
+  return this.getScriptedTaunt(context);
 }
 
-// ✅ CORRECT: Fire-and-forget
-tick() {
-  this.maybeFireTrashTalk();  // Returns immediately
-  await this.tryAttack();     // Combat proceeds
-}
+private getScriptedTaunt(context: string): string {
+  const pools = {
+    self_low: [
+      "I'm not done yet!",
+      "This is just a scratch!",
+      "You'll have to do better than that!",
+    ],
+    opponent_low: [
+      "You're looking weak!",
+      "Almost got you!",
+      "One more hit should do it!",
+    ],
+    ambient: [
+      "Let's see what you've got!",
+      "This is what I trained for!",
+      "May the best fighter win!",
+    ],
+  };
 
-maybeFireTrashTalk() {
-  if (shouldTaunt) {
-    this._trashTalkInFlight = true;
-    generateTrashTalk()
-      .then(sendChat)
-      .finally(() => this._trashTalkInFlight = false);
+  const pool = pools[context] || pools.ambient;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+```
+
+**Threshold Detection:**
+```typescript
+private checkHealthThresholds(
+  selfHealth: number,
+  selfMaxHealth: number,
+  opponentHealth: number,
+  opponentMaxHealth: number,
+): void {
+  const now = Date.now();
+  if (now - this.lastTauntTime < this.TAUNT_COOLDOWN_MS) return;
+
+  const selfPercent = (selfHealth / selfMaxHealth) * 100;
+  const opponentPercent = (opponentHealth / opponentMaxHealth) * 100;
+
+  // Check self health thresholds (descending)
+  for (const threshold of this.HEALTH_THRESHOLDS) {
+    if (
+      selfPercent <= threshold &&
+      this.lastSelfHealthThreshold > threshold
+    ) {
+      this.sendTaunt(`self_health_${threshold}`);
+      this.lastSelfHealthThreshold = threshold;
+      this.lastTauntTime = now;
+      return;
+    }
+  }
+
+  // Check opponent health thresholds (descending)
+  for (const threshold of this.HEALTH_THRESHOLDS) {
+    if (
+      opponentPercent <= threshold &&
+      this.lastOpponentHealthThreshold > threshold
+    ) {
+      this.sendTaunt(`opponent_health_${threshold}`);
+      this.lastOpponentHealthThreshold = threshold;
+      this.lastTauntTime = now;
+      return;
+    }
   }
 }
 ```
 
-### Memory Safety
+**Ambient Taunts:**
+```typescript
+private updateAmbientTaunts(ticksPassed: number): void {
+  this.ambientTauntTimer -= ticksPassed;
+  
+  if (this.ambientTauntTimer <= 0) {
+    const now = Date.now();
+    if (now - this.lastTauntTime >= this.TAUNT_COOLDOWN_MS) {
+      this.sendTaunt("ambient");
+      this.lastTauntTime = now;
+    }
+    
+    // Reset timer with randomized interval
+    this.ambientTauntTimer =
+      this.AMBIENT_TAUNT_INTERVAL_MIN +
+      Math.random() * (this.AMBIENT_TAUNT_INTERVAL_MAX - this.AMBIENT_TAUNT_INTERVAL_MIN);
+  }
+}
+```
 
-- LLM calls race against timeout to prevent memory leaks
-- In-flight flag prevents overlapping calls
-- Cooldown prevents message spam
-- Failed LLM calls fall back to scripted taunts (never silent)
+### DuelOrchestrator Integration
+
+**Location**: `packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts`
+
+**Wiring Chat Callbacks:**
+```typescript
+// Create combat AIs with chat callbacks
+this.combatAI1 = new DuelCombatAI(
+  this.world,
+  agent1.id,
+  agent2.id,
+  agent1.name,
+  agent1.characterBio,
+  agent1.runtime,
+  (message: string) => this.sendChatMessage(agent1.id, message),
+);
+
+this.combatAI2 = new DuelCombatAI(
+  this.world,
+  agent2.id,
+  agent1.id,
+  agent2.name,
+  agent2.characterBio,
+  agent2.runtime,
+  (message: string) => this.sendChatMessage(agent2.id, message),
+);
+
+// Send chat message via social system
+private sendChatMessage(agentId: string, message: string): void {
+  const socialSystem = this.world.getSystem("social") as SocialSystem;
+  if (!socialSystem) return;
+
+  socialSystem.handleChatMessage({
+    playerId: agentId,
+    message,
+    channel: "public",
+  });
+}
+```
+
+### Social System Changes
+
+**Location**: `packages/shared/src/systems/shared/character/social.ts`
+
+**Combat Chat Enabled:**
+```typescript
+// CHAT_MESSAGE action now allowed during combat
+const ALLOWED_ACTIONS_DURING_COMBAT = [
+  "CHAT_MESSAGE",  // Added for trash talk system
+  // ... other actions ...
+];
+```
+
+## Taunt Categories
+
+### Self Health Thresholds
+
+Triggered when agent's own health drops below threshold:
+
+| Threshold | Context | Example Taunts |
+|-----------|---------|----------------|
+| 75% | `self_health_75` | "I'm not done yet!", "This is just a scratch!" |
+| 50% | `self_health_50` | "You'll have to do better than that!", "I've been through worse!" |
+| 25% | `self_health_25` | "I'm still standing!", "Not going down that easy!" |
+| 10% | `self_health_10` | "One last push!", "I won't give up!" |
+
+### Opponent Health Thresholds
+
+Triggered when opponent's health drops below threshold:
+
+| Threshold | Context | Example Taunts |
+|-----------|---------|----------------|
+| 75% | `opponent_health_75` | "You're looking weak!", "I'm just getting started!" |
+| 50% | `opponent_health_50` | "Almost got you!", "Halfway there!" |
+| 25% | `opponent_health_25` | "You're done for!", "One more hit should do it!" |
+| 10% | `opponent_health_10` | "Say goodnight!", "This is the end!" |
+
+### Ambient Taunts
+
+Triggered periodically (every 15-25 ticks) with no specific health trigger:
+
+| Context | Example Taunts |
+|---------|----------------|
+| `ambient` | "Let's see what you've got!", "This is what I trained for!", "May the best fighter win!" |
 
 ## Configuration
 
-Trash talk behavior can be tuned via constants:
-
+**Cooldown:**
 ```typescript
-// Health thresholds that trigger taunts
-const TRASH_TALK_THRESHOLDS = [75, 50, 25, 10];
+private readonly TAUNT_COOLDOWN_MS = 8000; // 8 seconds between taunts
+```
 
-// Minimum milliseconds between trash talk messages
-const TRASH_TALK_COOLDOWN_MS = 8_000;
+**Ambient Interval:**
+```typescript
+private readonly AMBIENT_TAUNT_INTERVAL_MIN = 15; // ticks
+private readonly AMBIENT_TAUNT_INTERVAL_MAX = 25; // ticks
+```
 
-// Ambient taunt frequency (ticks)
-const AMBIENT_TAUNT_MIN_TICKS = 15;
-const AMBIENT_TAUNT_MAX_TICKS = 25;
-
-// LLM timeout (milliseconds)
-const LLM_TIMEOUT_MS = 3000;
+**LLM Model:**
+```typescript
+modelClass: ModelClass.TEXT_SMALL  // Fast, cheap model for taunts
 ```
 
 ## Testing
 
-Trash talk system is validated via:
+**Test Suite**: `packages/server/src/arena/__tests__/DuelCombatAI.test.ts`
 
-**File**: `packages/server/src/arena/__tests__/DuelCombatAI.test.ts`
+**Coverage:**
+- ✅ LLM taunt generation with character bio
+- ✅ Scripted fallback pools when no runtime
+- ✅ Health threshold detection (self + opponent)
+- ✅ 8-second cooldown enforcement
+- ✅ Ambient taunt timer with randomized intervals
 
+**Test Results:**
+- 14 of 14 tests passing
+- 5 new trash talk tests added
+
+**Example Test:**
 ```typescript
-describe("Trash Talk System", () => {
-  it("fires own-health-low taunt at 50% threshold", async () => {
-    // ... test implementation
-  });
+it("should generate LLM taunts with character context", async () => {
+  const ai = new DuelCombatAI(
+    world,
+    "agent1",
+    "agent2",
+    "Warrior Bob",
+    "A fierce warrior who never backs down",
+    mockRuntime,
+    mockSendChat,
+  );
 
-  it("fires opponent-health-low taunt at 25% threshold", async () => {
-    // ... test implementation
-  });
+  await ai.sendTaunt("self_health_50");
 
-  it("fires ambient taunts periodically", async () => {
-    // ... test implementation
-  });
-
-  it("respects 8s cooldown between messages", async () => {
-    // ... test implementation
-  });
-
-  it("uses scripted fallback when no LLM runtime", async () => {
-    // ... test implementation
-  });
+  expect(mockRuntime.generateText).toHaveBeenCalledWith(
+    expect.objectContaining({
+      context: expect.stringContaining("Warrior Bob"),
+      context: expect.stringContaining("fierce warrior"),
+      modelClass: ModelClass.TEXT_SMALL,
+    }),
+  );
 });
 ```
 
-All 14 trash talk tests pass (see commit 8ff3ad3).
+## Performance Impact
 
-## Example Output
+**CPU:**
+- Negligible - taunts are fire-and-forget
+- LLM generation runs async (doesn't block combat)
+- Scripted fallbacks are instant (array lookup)
 
-### LLM-Generated (with character personality)
+**Network:**
+- ~50-200 bytes per taunt message
+- Max 1 taunt per 8 seconds per agent
+- Broadcast to spectators + participants
 
-Agent with bio "A cocky warrior who loves to showboat":
-- At 50% HP: "Still got plenty left in the tank 💪"
-- Opponent at 25% HP: "Time to finish this, champ"
-- Ambient: "Is that your best combo?"
-
-### Scripted Fallback
-
-- At 50% HP: "I've had worse"
-- Opponent at 25% HP: "One more hit..."
-- Ambient: "Too slow"
+**Memory:**
+- Minimal - no persistent state beyond cooldown timers
+- Fallback taunt pools are static arrays
 
 ## Future Enhancements
 
-Planned improvements:
-- **Combo Recognition**: Taunt after landing 3+ hits in a row
-- **Comeback Taunts**: Special messages when recovering from low HP
-- **Victory Taunts**: Final message when opponent dies
-- **Emote Integration**: Trigger emote animations with certain taunts
-- **Crowd Reactions**: Spectator chat responds to epic moments
+- **Contextual Taunts**: Reference specific weapons, attack styles, or combat events
+- **Victory/Defeat Taunts**: Special messages for winning/losing
+- **Combo Taunts**: Multi-hit streak acknowledgments
+- **Spectator Reactions**: Crowd responses to taunts
+- **Taunt Customization**: Per-agent taunt pools in character config
+- **Voice Synthesis**: TTS integration for audio taunts
 
 ## References
 
-- **Commit 8ff3ad3**: Duel trash talk system implementation
-- **PR Context**: Merged from `hackathon` branch (Feb 22, 2026)
-- **Test Coverage**: 14/14 trash talk tests passing
+- **Commit**: 8ff3ad3
+- **Author**: lalalune (Shaw)
+- **Date**: Feb 22, 2026
+- **Files Changed**:
+  - `packages/server/src/arena/DuelCombatAI.ts` (updated)
+  - `packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts` (updated)
+  - `packages/shared/src/systems/shared/character/social.ts` (updated)
+  - `packages/server/src/arena/__tests__/DuelCombatAI.test.ts` (updated)
