@@ -2278,37 +2278,98 @@ Promise.race([llmPromise, timeoutPromise])
 - In-flight flag prevents overlapping LLM calls
 - Failures are silent (trash talk is optional flavor)
 
-### Combat Role System (PR #933, commit 82ff784)
+### Combat Role System
 
-The duel system now supports three combat roles with automatic gear provisioning:
+The duel system supports three combat roles with automatic gear provisioning and weighted random selection:
 
 **Combat Roles:**
 - **Melee** (50% weight): Bronze weapons (longsword, scimitar, 2h sword)
 - **Ranged** (25% weight): Shortbow + bronze arrows (500 qty), uses "rapid" attack style
 - **Mage** (25% weight): Staff of air + wind strike autocast + runes (500 mind, 500 air)
 
+**Role Selection:**
+```typescript
+// From DuelOrchestrator.ts
+const DUEL_COMBAT_ROLE_WEIGHTS: Record<DuelCombatRole, number> = {
+  melee: 50,
+  ranged: 25,
+  mage: 25,
+};
+
+// Weighted random selection
+pickCombatRole(): DuelCombatRole {
+  const totalWeight = 100;
+  let roll = Math.random() * totalWeight;
+  for (const [role, weight] of Object.entries(DUEL_COMBAT_ROLE_WEIGHTS)) {
+    roll -= weight;
+    if (roll <= 0) return role;
+  }
+  return "melee";
+}
+```
+
 **DuelCombatAI Adaptation:**
-- Melee: Uses existing phase-based style switching (aggressive/controlled/defensive)
-- Ranged: Forces "rapid" style for faster attack speed (-1 tick)
-- Mage: Skips style switching entirely (magic auto-casts via selectedSpell)
+- **Melee**: Uses existing phase-based style switching (aggressive/controlled/defensive)
+- **Ranged**: Forces "rapid" style for faster attack speed (-1 tick), skips melee style switching
+- **Mage**: Skips style switching entirely (magic auto-casts via selectedSpell)
+
+```typescript
+// From DuelCombatAI.ts
+// Mage agents skip style switching — magic auto-casts via selectedSpell
+if (this.config.combatRole === "mage") return;
+
+// Ranged agents use "rapid" for faster attack speed
+const desiredStyle =
+  this.config.combatRole === "ranged"
+    ? "rapid"
+    : this.strategy.attackStyle || "aggressive";
+```
 
 **Gear Lifecycle:**
-1. Pre-duel: Role selected → gear equipped → food filled → health restored
-2. Post-duel: Gear removed → food removed → health restored → teleport back
+1. **Pre-duel**: Role selected → gear equipped → food filled → health restored
+2. **During duel**: Combat AI adapts behavior based on assigned role
+3. **Post-duel**: Gear removed → runes removed → food removed → health restored → teleport back
 
-### Critical Bug Fixes (PR #933)
+**Gear Provisioning Methods:**
+- `equipMeleeWeapon()`: Random bronze weapon from pool (longsword, scimitar, 2h sword)
+- `equipRangedGear()`: Shortbow + bronze arrows (500 qty)
+- `equipMageGear()`: Staff of air + wind strike autocast + runes (500 mind, 500 air)
+- `cleanupAgentCombatSetup()`: Unequips all combat gear, clears autocast, removes leftover runes
 
-**Combat State Key Mismatch (commit 82ff784):**
+**Weapon Pool Filtering:**
+Only weapons with new models in `swords/` directory are eligible for duel arenas:
+```typescript
+const DUEL_WEAPON_TYPES = new Set(["LONGSWORD", "SCIMITAR", "TWO_HAND_SWORD"]);
+const DUEL_BRONZE_WEAPON_IDS = [
+  "bronze_longsword",
+  "bronze_scimitar",
+  "bronze_2h_sword",
+];
+```
+
+### Critical Bug Fixes
+
+**Combat State Key Mismatch:**
 - **Issue**: CombatStateService syncs abbreviated keys (`data.c`/`data.ct`) but `getGameState()` only read full keys (`data.inCombat`/`data.combatTarget`)
 - **Impact**: DuelCombatAI always saw `inCombat=false` and flooded `executeAttack` every tick instead of letting auto-attacks drive combat
-- **Fix**: EmbeddedHyperscapeService now reads both abbreviated and full keys: `data.c || data.inCombat` and `data.ct || data.combatTarget`
+- **Fix**: EmbeddedHyperscapeService now reads both abbreviated and full keys:
+  ```typescript
+  inCombat: !!(data.inCombat || data.combatTarget || data.c || data.ct),
+  currentTarget: (data.combatTarget as string) || (data.ct as string) || null,
+  ```
 - **File**: `packages/server/src/eliza/EmbeddedHyperscapeService.ts`
 
-**Magic Attack TOCTOU Race (commit 82ff784):**
-- **Issue**: Cooldown was checked early but claimed after async `consumeRunesForSpell` call. With bug #1 flooding attacks, two concurrent invocations could both pass the cooldown check before either claimed it
+**Magic Attack TOCTOU Race:**
+- **Issue**: Cooldown was checked early but claimed after async `consumeRunesForSpell` call. With the combat state bug flooding attacks, two concurrent invocations could both pass the cooldown check before either claimed it
 - **Impact**: Duplicate magic projectiles, double rune consumption
 - **Fix**: Moved cooldown claim and `enterCombat` before async rune consumption to close the race window
 - **File**: `packages/shared/src/systems/shared/combat/CombatSystem.ts` (handleMagicAttack)
+
+**Duel Arena Terrain Sinking:**
+- **Issue**: Players/agents were sinking ~0.4m into duel arena floors because flat zones were removed from the terrain system, causing `getHeightAt()` to return raw procedural terrain height instead of floor-level height
+- **Impact**: Players appeared to sink through arena floors, grass grew through floor surfaces
+- **Fix**: DuelArenaVisualsSystem now registers flat zones programmatically for all 8 floor areas (6 arenas + lobby + hospital) so terrain height queries return correct floor-level values
+- **File**: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
 
 ### Integration with DuelOrchestrator
 
