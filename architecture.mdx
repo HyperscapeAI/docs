@@ -163,6 +163,75 @@ Marketing website built with:
 - `/` - Landing page with hero, features, and CTA
 - `/gold` - $GOLD token page with tokenomics
 
+## Recent Dependency Updates (February 2026)
+
+The following major dependencies were updated in late February 2026:
+
+### Core Dependencies
+
+| Package | Old Version | New Version | Update Type |
+|---------|-------------|-------------|-------------|
+| `three` | 0.182.0 | 0.183.1 | Minor |
+| `@types/three` | 0.180.0 | 0.183.1 | Minor |
+| `three-mesh-bvh` | 0.8.3 | 0.9.8 | Minor |
+| `react` | 19.2.2 | 19.2.4 | Patch |
+| `react-dom` | 19.2.2 | 19.2.4 | Patch |
+
+### ElizaOS Ecosystem
+
+| Package | Old Version | New Version | Update Type |
+|---------|-------------|-------------|-------------|
+| `@elizaos/core` | 2.0.0-alpha.11 | 2.0.0-alpha.26 | Patch |
+| `@coral-xyz/anchor` | 0.31.1 | 0.32.1 | Minor |
+
+### Development Tools
+
+| Package | Old Version | New Version | Update Type |
+|---------|-------------|-------------|-------------|
+| `eslint` | 9.39.3 | 10.0.2 | Major |
+| `typescript` | 5.9.2 | 5.9.3 | Patch |
+| `@playwright/test` | 1.54.2 | 1.58.2 | Minor |
+| `@types/node` | 24.8.0 | 25.3.0 | Major |
+| `@types/chai` | 4.3.17 | 5.2.3 | Major |
+| `chai` | 4.5.0 | 6.2.2 | Major |
+
+### UI Libraries
+
+| Package | Old Version | New Version | Update Type |
+|---------|-------------|-------------|-------------|
+| `framer-motion` | 11.18.2 | 12.34.3 | Major |
+| `lucide-react` | 0.553.0 | 0.575.0 | Minor |
+| `@ai-sdk/anthropic` | 1.2.12 | 3.0.46 | Major |
+| `zod` | 3.25.76 | 4.3.6 | Major |
+| `@vitejs/plugin-react` | 5.0.4 | 5.1.4 | Minor |
+| `vite-plugin-node-polyfills` | 0.24.0 | 0.25.0 | Minor |
+| `dotenv` | 16.6.1 | 17.3.1 | Major |
+| `@capacitor/cli` | 7.5.0 | 8.1.0 | Major |
+
+### Breaking Changes
+
+**React 19.2.4 Unification (commit 3322e78):**
+- All packages now use React 19.2.4 (previously mixed 19.2.2 and 19.2.4)
+- Fixes client exception caused by version mismatch between packages
+- Unified via root package.json overrides
+
+**Playwright Override Removed (commit 64db27f):**
+- Removed npm override for `playwright >= 1.55.1`
+- Conflicted with direct dependency `^1.55.1` in Cloudflare build environment
+- Caused EOVERRIDE error during deployment
+
+**ESLint 10.0.2 (Major):**
+- Breaking changes in configuration format
+- All packages updated simultaneously to maintain consistency
+
+**Zod 4.3.6 (Major):**
+- Breaking changes in schema validation API
+- Updated across all packages using Zod schemas
+
+<Warning>
+When updating dependencies, ensure all packages use the same React version to avoid runtime errors.
+</Warning>
+
 ## Key Patterns
 
 ### Entity Component System
