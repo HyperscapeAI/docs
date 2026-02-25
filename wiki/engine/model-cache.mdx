@@ -1,0 +1,394 @@
+---
+title: "Model Cache System"
+description: "3D model loading, caching, and optimization"
+icon: "box"
+---
+
+# Model Cache System
+
+The Model Cache system provides efficient loading and caching of 3D models (GLB/GLTF files) with automatic material setup, LOD generation, and persistent IndexedDB storage.
+
+<Info>
+Model cache code lives in `packages/shared/src/utils/rendering/ModelCache.ts`.
+</Info>
+
+## Overview
+
+The cache prevents loading the same GLB file multiple times by:
+- **In-memory caching**: Loaded models are cached and cloned for new instances
+- **Material sharing**: All instances of a model share the same materials (reduces draw calls)
+- **IndexedDB persistence**: Processed models are stored in IndexedDB to skip GLTF parsing on subsequent sessions
+- **Automatic LOD generation**: Optional decimated meshes and octahedral impostors for distant rendering
+
+## Basic Usage
+
+```typescript
+import { modelCache } from "@hyperscape/shared";
+
+// Load a model
+const { scene, animations, fromCache } = await modelCache.loadModel(
+  "asset://models/tree/tree.glb",
+  world,
+  {
+    shareMaterials: true,  // Share materials across instances (default)
+    generateLODs: false,   // Generate LOD levels (optional)
+  }
+);
+
+// Add to scene
+world.scene.add(scene);
+```
+
+## Processed Model Cache (IndexedDB)
+
+The cache stores processed models in IndexedDB to skip expensive GLTF parsing on subsequent loads.
+
+### What Gets Cached
+
+**Geometry Data:**
+- Vertex positions, normals, UVs, colors
+- Index buffers
+- Skinning data (weights, indices)
+
+**Material Properties:**
+- Colors (base, emissive)
+- PBR values (roughness, metalness)
+- Texture pixel data (RGBA arrays)
+- Transparency, alpha test, side
+
+**Scene Hierarchy:**
+- Node tree structure
+- Mesh-to-node mapping
+- Bone hierarchy (for skinned meshes)
+
+**Animations:**
+- Keyframe tracks (position, rotation, scale)
+- Track timing and interpolation
+
+**Metadata:**
+- Collision data from GLB extras
+- Cache version and timestamp
+
+### Cache Version
+
+The cache uses version `3` (as of Feb 2026). When the version changes, all cached entries are automatically invalidated.
+
+```typescript
+const PROCESSED_CACHE_VERSION = 3;
+```
+
+**Version History:**
+- **v1**: Initial implementation
+- **v2**: Added texture caching
+- **v3**: Fixed missing objects bug (identity-based mesh mapping) and texture restoration bug (DataTexture pixel extraction)
+
+### Cache Invalidation
+
+Cached models are invalidated when:
+- Cache version changes (code update)
+- Source GLB file size changes (asset update)
+- IndexedDB is cleared by browser
+
+## Bug Fixes (PR #935)
+
+### Missing Objects Bug
+
+**Issue**: Models with duplicate mesh names (e.g., multiple meshes named "Cube") had missing objects after cache restoration. Only the last mesh with each name appeared in the scene.
+
+**Root Cause**: `serializeNode()` used `findIndex`-by-name to map hierarchy nodes to mesh data. When multiple meshes shared the same name, they all resolved to the same index. During deserialization, Three.js `add()` auto-removes children from their previous parent, so only the last reference survived.
+
+**Fix**: Use object-identity mapping instead of name-based lookup:
+
+```typescript
+// Build identity map during traversal
+const meshNodeToIndex = new Map<THREE.Object3D, number>();
+
+scene.traverse((node) => {
+  if (node instanceof THREE.Mesh || node instanceof THREE.SkinnedMesh) {
+    meshNodeToIndex.set(node, meshes.length);  // Identity-based
+    meshes.push(serializeMesh(node));
+  }
+});
+
+// Use identity map for hierarchy serialization
+const hierarchy = this.serializeNode(scene, meshNodeToIndex);
+```
+
+**Impact**: Altars, complex buildings, and multi-part models now restore correctly from cache.
+
+### Lost Textures Bug
+
+**Issue**: Textures appeared white or wrong colors after browser restart. Models loaded correctly on first load but lost textures when restored from IndexedDB cache.
+
+**Root Cause**: Textures were serialized as ephemeral `blob:` URLs but never reloaded during deserialization. The blob URLs became invalid after page refresh.
+
+**Fix**: Extract raw RGBA pixel data synchronously and restore as DataTexture:
+
+```typescript
+// Serialize: Extract pixels via canvas
+private textureToPixelData(texture: THREE.Texture): SerializedTextureData | null {
+  const image = texture.source?.data ?? texture.image;
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(image, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  
+  return {
+    pixels: imageData.data.buffer,  // Raw RGBA bytes
+    width: canvas.width,
+    height: canvas.height,
+  };
+}
+
+// Deserialize: Restore as DataTexture
+const restoreTex = (td: SerializedTextureData, srgb: boolean): THREE.DataTexture => {
+  const tex = new THREE.DataTexture(
+    new Uint8ClampedArray(td.pixels),
+    td.width,
+    td.height,
+    THREE.RGBAFormat,
+  );
+  tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+};
+```
+
+**Benefits:**
+- Synchronous restoration (no async loading race conditions)
+- No network requests for cached textures
+- Textures persist across browser restarts
+
+### Grey Tree Materials Bug
+
+**Issue**: Trees appeared grey in WebGPU builds after cache restoration.
+
+**Root Cause**: `createDissolveMaterial()` used `instanceof MeshStandardMaterial` which fails for `MeshStandardNodeMaterial` in WebGPU builds (separate classes).
+
+**Fix**: Duck-type property check instead of instanceof:
+
+```typescript
+// Before: instanceof check fails in WebGPU
+if (source instanceof THREE.MeshStandardMaterial) {
+  material.color.copy(source.color);
+  // ...
+}
+
+// After: Duck-type check for PBR properties
+const src = source as THREE.MeshStandardMaterial & {
+  map?: THREE.Texture | null;
+  // ... other properties
+};
+if (src.color && src.roughness !== undefined) {
+  material.color.copy(src.color);
+  // ...
+}
+```
+
+## Disabling the Cache
+
+For debugging or testing, you can disable the processed model cache:
+
+```typescript
+// In browser console or before loading models
+localStorage.setItem('disable-model-cache', 'true');
+
+// Re-enable
+localStorage.removeItem('disable-model-cache');
+```
+
+When disabled, models are always loaded from GLTF (no IndexedDB reads/writes).
+
+## Error Handling
+
+The cache includes comprehensive error logging:
+
+```typescript
+// IndexedDB put failures
+putReq.onerror = () =>
+  console.warn(`[ModelCache] IndexedDB put failed for ${url}:`, putReq.error);
+
+// Transaction failures
+tx.onerror = () =>
+  console.warn(`[ModelCache] IndexedDB tx failed for ${url}:`, tx.error);
+```
+
+**Failure Modes:**
+- IndexedDB unavailable → Falls back to GLTF parsing
+- Deserialization error → Clears cache entry and retries
+- Corrupted cache entry → Automatically invalidated on version mismatch
+
+## Performance
+
+**Cache Hit Benefits:**
+- Skips GLTF binary parsing (~20-100ms per model)
+- Skips texture decoding (already in RGBA format)
+- Immediate geometry reconstruction from typed arrays
+- No network requests for textures
+
+**Typical Savings:**
+- Small models (items): 20-40ms
+- Medium models (NPCs): 40-80ms
+- Large models (buildings): 80-150ms
+
+## Material Sharing
+
+By default, all instances of a model share the same materials:
+
+```typescript
+// Shared materials (default)
+const { scene } = await modelCache.loadModel(url, world, {
+  shareMaterials: true,  // All instances use same material
+});
+
+// Unique materials (for custom tinting)
+const { scene } = await modelCache.loadModel(url, world, {
+  shareMaterials: false,  // Each instance gets new materials
+});
+```
+
+**Benefits of Sharing:**
+- Reduces draw calls (GPU can batch instances)
+- Lower memory usage (one material per model type)
+- Faster cloning (no material creation)
+
+**When to Disable:**
+- Custom per-instance colors
+- Dynamic material properties
+- Instance-specific textures
+
+## LOD Integration
+
+The cache integrates with the LOD system for automatic level-of-detail generation:
+
+```typescript
+const { scene, lodBundle } = await modelCache.loadModel(url, world, {
+  generateLODs: true,
+  lodCategory: "tree",  // Preset for trees
+  lodOptions: {
+    generateLOD1: true,   // 50% decimation
+    generateLOD2: true,   // 25% decimation
+    generateImpostor: true,  // Octahedral billboard
+  },
+});
+
+// LOD bundle contains decimated meshes
+if (lodBundle) {
+  const lod = new THREE.LOD();
+  lod.addLevel(scene, 0);                    // Full detail
+  lod.addLevel(lodBundle.lod1, 20);          // 50% at 20 units
+  lod.addLevel(lodBundle.lod2, 40);          // 25% at 40 units
+  lod.addLevel(lodBundle.impostor, 80);      // Billboard at 80 units
+}
+```
+
+See [LOD System](/wiki/engine/lod) for complete details.
+
+## Cache Statistics
+
+```typescript
+const stats = modelCache.getStats();
+
+console.log(`Cached models: ${stats.total}`);
+console.log(`Total clones: ${stats.totalClones}`);
+console.log(`Materials saved: ${stats.materialsSaved}`);
+console.log(`Paths: ${stats.paths.join(", ")}`);
+```
+
+## Cache Management
+
+```typescript
+// Clear entire cache (hot reload)
+modelCache.clear();
+
+// Remove specific model
+modelCache.remove("asset://models/tree/tree.glb");
+
+// Check if cached
+if (modelCache.has("asset://models/tree/tree.glb")) {
+  // Model is cached
+}
+```
+
+## Preloading
+
+Preload multiple models in parallel for faster initial load:
+
+```typescript
+// Preload with progress tracking
+await modelCache.preloadModels(
+  [
+    "asset://models/tree1.glb",
+    "asset://models/tree2.glb",
+    "asset://models/rock1.glb",
+  ],
+  world,
+  {
+    shareMaterials: true,
+    onProgress: (loaded, total, path) => {
+      console.log(`Loaded ${loaded}/${total}: ${path}`);
+    },
+  }
+);
+
+// Warmup cache with priority
+await modelCache.warmupCache(
+  [
+    { path: "asset://models/player.glb", priority: 10 },
+    { path: "asset://models/tree.glb", priority: 5 },
+    { path: "asset://models/rock.glb", priority: 1 },
+  ],
+  world
+);
+```
+
+## WebGPU Compatibility
+
+All cached materials are converted to `MeshStandardNodeMaterial` for WebGPU/TSL support:
+
+```typescript
+// Automatic conversion during cache
+private convertToStandardMaterial(
+  mat: THREE.Material,
+  hasVertexColors: boolean,
+): MeshStandardNodeMaterial {
+  const newMat = new MeshStandardNodeMaterial();
+  
+  // Copy all properties from original material
+  newMat.color = originalMat.color?.clone() || new THREE.Color(0xffffff);
+  newMat.roughness = originalMat.roughness ?? 0.7;
+  newMat.metalness = originalMat.metalness ?? 0.0;
+  // ... copy all textures and properties
+  
+  return newMat;
+}
+```
+
+This ensures:
+- Proper PBR lighting with sun/moon
+- WebGPU-native TSL dissolve effects
+- Consistent material behavior across renderers
+
+## Collision Data
+
+Models can embed collision data in GLB extras (injected by `inject-model-collision.ts`):
+
+```typescript
+const { scene, collision } = await modelCache.loadModel(url, world);
+
+if (collision) {
+  console.log(`Footprint: ${collision.footprint.width}x${collision.footprint.depth} tiles`);
+  console.log(`Bounds:`, collision.bounds);
+  console.log(`Dimensions:`, collision.dimensions);
+}
+```
+
+The collision data travels with the asset and is automatically extracted during loading.
+
+## Related Documentation
+
+- [LOD System](/wiki/engine/lod) - Level-of-detail generation and management
+- [Client Loader](/wiki/client/loader) - Asset loading and priority system
+- [Three.js Integration](/wiki/engine/threejs) - Three.js setup and WebGPU compatibility
