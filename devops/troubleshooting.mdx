@@ -745,6 +745,33 @@ ls packages/server/world/assets/manifests/
 # items/, gathering/, recipes/, npcs.json, stores.json, etc.
 ```
 
+### Model Cache Issues
+
+**Symptom**: Missing objects in models (e.g., altars), white/wrong colored textures after restart, or grey trees in WebGPU builds
+
+**Cause**: Bugs in IndexedDB processed model cache (fixed in PR #935)
+
+**Solution**: Update to latest code. The cache now uses:
+- Object-identity mapping instead of name-based lookup (fixes missing objects)
+- Raw RGBA pixel extraction for textures (fixes lost textures)
+- Duck-type property checks for materials (fixes grey trees in WebGPU)
+
+**Temporary Workaround**: Disable the cache:
+```typescript
+// In browser console
+localStorage.setItem('disable-model-cache', 'true');
+```
+
+**Technical Details:**
+- **Missing objects**: Models with duplicate mesh names (e.g., "Cube") had only the last mesh appear. Fixed by using `Map<Object3D, number>` identity map instead of `findIndex`-by-name
+- **Lost textures**: Textures serialized as ephemeral `blob:` URLs became invalid after page refresh. Fixed by extracting raw RGBA pixels via canvas `getImageData` and restoring as `DataTexture`
+- **Grey trees**: `instanceof MeshStandardMaterial` check failed for `MeshStandardNodeMaterial` in WebGPU builds. Fixed with duck-type property check
+- Cache version bumped to 3 to invalidate broken entries
+- File: `packages/shared/src/utils/rendering/ModelCache.ts`
+- Commit: c98f1cc (Feb 25, 2026)
+
+See [Model Cache System](/wiki/engine/model-cache) for complete details.
+
 ### Mage Agents Not Attacking in Duels
 
 **Symptom**: Mage agents stand idle during duels, no spell projectiles visible
