@@ -432,6 +432,42 @@ The CI audit threshold has been lowered to `critical` only (from `high`) to allo
 
 See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
 
+### Duel System Improvements
+
+**Combat Roles (PR #933, commit 82ff784):**
+- Added weighted random combat role selection: 50% melee, 25% ranged, 25% mage
+- Full gear equip/cleanup lifecycle in DuelOrchestrator
+- Melee: Random bronze weapon (longsword, scimitar, 2h sword)
+- Ranged: Shortbow + bronze arrows (500 qty), uses "rapid" attack style
+- Mage: Staff of air + wind strike autocast + runes (500 mind, 500 air)
+- DuelCombatAI adapts style switching based on combat role
+- Gear cleanup after duel: unequips weapons/arrows, clears autocast, removes leftover runes
+
+**Critical Bug Fixes (PR #933, commit 82ff784):**
+
+1. **Combat State Key Mismatch:**
+   - Issue: CombatStateService syncs abbreviated keys (`data.c`/`data.ct`) but `getGameState()` only read full keys (`data.inCombat`/`data.combatTarget`)
+   - Impact: DuelCombatAI always saw `inCombat=false` and flooded `executeAttack` every tick
+   - Fix: EmbeddedHyperscapeService now reads both abbreviated and full keys
+   - File: `packages/server/src/eliza/EmbeddedHyperscapeService.ts`
+
+2. **Magic Attack TOCTOU Race:**
+   - Issue: Cooldown checked early but claimed after async `consumeRunesForSpell` call
+   - Impact: Duplicate magic projectiles, double rune consumption
+   - Fix: Moved cooldown claim and `enterCombat` before async rune consumption
+   - File: `packages/shared/src/systems/shared/combat/CombatSystem.ts`
+
+**Terrain Flat Zones for Duel Arenas (commit 7a60135):**
+- Fixed players/agents sinking ~0.4m into duel arena floors
+- DuelArenaVisualsSystem now registers flat zones programmatically for all 8 floor areas (6 arenas + lobby + hospital)
+- Terrain height queries return correct floor-level values
+- Terrain mesh carved under floors to prevent grass/vegetation clipping
+
+**Arena Click Targeting & Minimap (commit 24354238):**
+- Fixed click target going underground in duel arenas (skip building footprint validation for arena-floor raycast hits)
+- Fixed minimap showing duel arenas as black holes (enable layer 0 on arena/lobby/hospital floor meshes)
+- Removed 96 non-functional wall sconce meshes from arena fences
+
 ### Database & CI Improvements
 
 **Migration 0050 Idempotency Fix (commit e4b6489):**
