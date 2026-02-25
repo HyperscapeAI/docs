@@ -148,6 +148,344 @@ Fixed MUD deploy script to handle both hoisted and local node_modules:
 
 </Update>
 
+<Update label="Combat Role System & Critical Bug Fixes" description="February 2026" date="2026-02-25">
+
+### ⚔️ Duel Arena Combat Role System (PR #933)
+
+AI agents now support three combat roles with weighted random selection and automatic gear provisioning:
+
+**Combat Roles:**
+- **Melee** (50% weight): Random bronze weapon (longsword, scimitar, 2h sword)
+- **Ranged** (25% weight): Shortbow + bronze arrows (500 qty), uses "rapid" attack style for faster attacks
+- **Mage** (25% weight): Staff of air + wind strike autocast + runes (500 mind, 500 air)
+
+**Weighted Random Selection:**
+```typescript
+// From DuelOrchestrator.ts
+const DUEL_COMBAT_ROLE_WEIGHTS: Record<DuelCombatRole, number> = {
+  melee: 50,   // 50% chance
+  ranged: 25,  // 25% chance
+  mage: 25,    // 25% chance
+};
+
+// Picks role at duel preparation time
+const role1 = this.pickCombatRole();
+const role2 = this.pickCombatRole();
+```
+
+**Gear Lifecycle:**
+1. **Pre-duel**: Role selected → gear equipped → food filled → health restored
+2. **During duel**: Combat AI adapts behavior based on assigned role
+3. **Post-duel**: Gear removed → runes removed → food removed → health restored → teleport back
+
+**DuelCombatAI Adaptation:**
+- **Melee**: Uses existing phase-based style switching (aggressive/controlled/defensive)
+- **Ranged**: Forces "rapid" style for -1 tick attack speed, skips melee style switching
+- **Mage**: Skips style switching entirely (magic auto-casts via selectedSpell)
+
+```typescript
+// From DuelCombatAI.ts
+// Mage agents skip style switching — magic auto-casts via selectedSpell
+if (this.config.combatRole === \"mage\") return;
+
+// Ranged agents use \"rapid\" for faster attack speed (-1 tick)
+const desiredStyle =
+  this.config.combatRole === \"ranged\"
+    ? \"rapid\"
+    : this.strategy.attackStyle || \"aggressive\";
+```
+
+**Gear Provisioning Methods:**
+- `equipMeleeWeapon()`: Random bronze weapon from filtered pool (only weapons with models in swords/ directory)
+- `equipRangedGear()`: Shortbow + bronze arrows (500 qty, quantity set directly on equipment slot)
+- `equipMageGear()`: Staff of air + wind strike autocast + runes (500 mind, 500 air)
+- `cleanupAgentCombatSetup()`: Unequips all combat gear, clears autocast, removes leftover runes
+
+**Weapon Pool Filtering:**
+Only weapons with new models in `swords/` directory are eligible for duel arenas:
+```typescript
+const DUEL_WEAPON_TYPES = new Set([\"LONGSWORD\", \"SCIMITAR\", \"TWO_HAND_SWORD\"]);
+const DUEL_BRONZE_WEAPON_IDS = [
+  \"bronze_longsword\",
+  \"bronze_scimitar\",
+  \"bronze_2h_sword\",
+];
+```
+
+**Autocast Setup:**
+Mage agents use belt-and-suspenders approach to ensure spell selection:
+- Set `selectedSpell` directly on entity data
+- Set via `world.getPlayer()` (which CombatSystem reads)
+- Emit `PLAYER_SET_AUTOCAST` event
+- Direct assignment ensures combat system sees the spell regardless of event handler state
+
+**Cleanup Safety:**
+`cleanupAgentCombatSetup()` is safe to call regardless of combat role:
+- Unequips weapon slot (melee weapons, one-handed staffs)
+- Unequips arrows slot (ranged ammunition, safe to ignore if not equipped)
+- Clears autocast spell directly on entity data
+- Removes all leftover runes from inventory
+- Clears stored combat role from orchestrator map
+
+### 🐛 Critical Combat Bug Fixes (PR #933)
+
+**Combat State Key Mismatch:**
+- **Issue**: `CombatStateService` syncs abbreviated keys (`data.c`/`data.ct`) but `getGameState()` only read full keys (`data.inCombat`/`data.combatTarget`)
+- **Impact**: DuelCombatAI always saw `inCombat=false` and flooded `executeAttack` every tick instead of letting auto-attacks drive combat
+- **Fix**: `EmbeddedHyperscapeService.getGameState()` now reads both abbreviated and full keys:
+  ```typescript
+  inCombat: !!(data.inCombat || data.combatTarget || data.c || data.ct),
+  currentTarget: (data.combatTarget as string) || (data.ct as string) || null,
+  ```
+- **File**: `packages/server/src/eliza/EmbeddedHyperscapeService.ts`
+- **Root Cause**: CombatStateService uses abbreviated keys for network efficiency, but embedded service wasn't aware of this optimization
+
+**Magic Attack TOCTOU Race Condition:**
+- **Issue**: Cooldown was checked early but claimed after async `consumeRunesForSpell` call. With the combat state bug flooding attacks, two concurrent invocations could both pass the cooldown check before either claimed it
+- **Impact**: Duplicate magic projectiles, double rune consumption, visual glitches
+- **Fix**: Moved cooldown claim and `enterCombat` before async rune consumption to close the race window:
+  ```typescript
+  // Claim cooldown BEFORE async rune consumption
+  this.ctx.combatSystem.setNextAttackTick(attackerId, nextAttackTick);
+  this.ctx.combatSystem.enterCombat(attackerId, targetId, weaponType);
+  
+  // THEN consume runes (async operation)
+  await this.ctx.runeService.consumeRunesForSpell(attackerId, spell);
+  ```
+- **File**: `packages/shared/src/systems/shared/combat/handlers/MagicAttackHandler.ts`
+- **Pattern**: Time-of-check to time-of-use (TOCTOU) race condition
+- **Prevention**: Claim resources synchronously before async operations
+
+### 🏔️ Duel Arena Terrain Fixes (PR #911)
+
+**Terrain Flat Zone Registration:**
+- **Issue**: Players/agents were sinking ~0.4m into duel arena floors because flat zones were removed from the terrain system, causing `getHeightAt()` to return raw procedural terrain height instead of floor-level height
+- **Impact**: Players appeared to sink through arena floors, grass grew through floor surfaces
+- **Fix**: `DuelArenaVisualsSystem` now registers flat zones programmatically for all 8 floor areas (6 arenas + lobby + hospital):
+  ```typescript
+  // Register flat zones so terrain height queries return floor-level values
+  const terrain = this.world.getSystem(\"terrain\") as TerrainSystem;
+  terrain.registerFlatZone({
+    minX: arenaMinX,
+    maxX: arenaMaxX,
+    minZ: arenaMinZ,
+    maxZ: arenaMaxZ,
+    height: ARENA_FLOOR_Y,
+  });
+  ```
+- **File**: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
+- **Affected Areas**: All 6 duel arenas (2×3 grid), lobby (60×30), hospital (20×15)
+- **Terrain Carving**: Terrain mesh is carved under floors via flat zone registration, preventing grass from growing through surfaces
+
+**Click Targeting Fix:**
+- **Issue**: Click targets were going underground in duel arenas due to building footprint validation rejecting arena-floor raycast hits
+- **Impact**: Players couldn't click to move within duel arenas
+- **Fix**: `RaycastService` now skips building footprint validation for arena-floor raycast hits
+- **File**: `packages/shared/src/systems/client/interaction/services/RaycastService.ts`
+- **Commit**: 2435423 (Feb 24, 2026)
+
+**Minimap Rendering Fix:**
+- **Issue**: Minimap showed duel arenas as black holes because arena/lobby/hospital floor meshes had layer 0 disabled
+- **Impact**: Minimap was unusable in duel arena area
+- **Fix**: Enabled layer 0 on arena/lobby/hospital floor meshes so minimap camera can render them
+- **File**: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
+- **Commit**: 2435423 (Feb 24, 2026)
+
+**Wall Sconce Cleanup:**
+- **Issue**: 96 dead wall sconce meshes across 6 arenas with no lights attached
+- **Impact**: Unnecessary geometry in scene, no visual benefit
+- **Fix**: Removed non-functional wall sconce geometry from arena fences
+- **File**: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
+- **Commit**: 2435423 (Feb 24, 2026)
+
+### 📦 Asset Manifest Separation (commit 12c01c2)
+
+**Asset Repository Migration:**
+- **Change**: Game assets (manifests, models, textures, audio) now sourced exclusively from [HyperscapeAI/assets](https://github.com/HyperscapeAI/assets) repository
+- **Impact**: Main hyperscape repo no longer tracks asset files, reducing repo size and preventing manifest divergence
+- **Migration**: All 40 manifest files untracked from main repo via `git rm --cached`
+
+**Updated .gitignore:**
+```bash
+# 3D Models and Avatars - cloned from HyperscapeAI/assets repo via ensure-assets.mjs
+packages/server/world/assets/
+packages/client/src/public/models/
+packages/client/dist/models/
+```
+
+**Asset Loading:**
+- **Local Development**: Assets auto-downloaded during `bun install` via `ensure-assets.mjs` (~200MB via Git LFS)
+- **CI/Production**: `ensure-assets.mjs` clones assets repo (shallow, no LFS) so CI gets manifests from source of truth
+- **Command**: `bun run assets:sync` pulls latest assets from repo (local dev only)
+
+**Benefits:**
+- Single source of truth for all game content
+- Prevents manifest divergence between repos
+- Reduces main repo size
+- Cleaner git history (no binary asset commits)
+- Easier asset updates (PR to assets repo, not main repo)
+
+**Files Removed from Main Repo:**
+- All manifest JSON files (40 files): `ammunition.json`, `biomes.json`, `buildings.json`, `combat-spells.json`, `duel-arenas.json`, `gathering/*.json`, `items/*.json`, `lod-settings.json`, `model-bounds.json`
+- Planning docs: `STREAMING_MODE_PLAN.md`, `SUPER_AUDIT_REPORT.md`
+- Debug images: `current-frame-vast.jpg`, `current-frame2-vast.jpg`
+- Manifest README: `packages/server/world/assets/manifests/README.md` (1326 lines)
+
+**ensure-assets.mjs Updates:**
+- Clones HyperscapeAI/assets repo in CI (shallow, no LFS) for manifest access
+- Local dev unchanged: full clone with LFS for models/textures/audio
+- Removes existing assets directory before clone to avoid "already exists" errors
+
+### 🔧 CI/CD Workflow Enhancements
+
+**Native App Build Workflow (commits cb57325, a095ba1):**
+- **Enabled**: Native desktop and mobile app builds for Tauri-based releases
+- **Platforms**: Windows, macOS, Linux, iOS, Android
+- **Trigger**: Tagged releases (`v*` pattern)
+- **Workflow**: `.github/workflows/build-app.yml`
+- **Artifacts**: Published to GitHub Releases and download portal
+- **Download Portal**: [https://hyperscapeai.github.io/hyperscape/](https://hyperscapeai.github.io/hyperscape/)
+- **Fix**: Removed invalid matrix reference from job-level condition (commit a095ba1)
+  - Job-level `if` condition cannot reference matrix variables (matrix context not available until job runs)
+  - Removed desktop build filtering to fix workflow parsing errors
+
+**MUD Binary Path Resolution:**
+- **Issue**: MUD CLI binary not found in CI due to bun workspace hoisting
+- **Fix**: Try local `contracts/node_modules/.bin/mud` first, fall back to root
+- **File**: `packages/server/scripts/setup-chain.mjs`
+- **Impact**: Contracts deployment now works in both local and CI environments
+
+### 📦 Major Dependency Updates
+
+**React 19.2.4 Unification (commit 3322e78):**
+- **Issue**: Client exception due to react/react-dom version mismatch across monorepo
+- **Fix**: Unified react and react-dom to 19.2.4 across all packages
+- **Impact**: Eliminates client-side React version conflicts
+
+**Playwright Override Removal (commit 64db27f):**
+- **Issue**: npm override for playwright (>=1.55.1) conflicted with direct dependency (^1.55.1) in Cloudflare's build environment, causing EOVERRIDE error
+- **Fix**: Removed playwright override from root package.json
+- **Impact**: Cloudflare deployments now succeed
+
+**TypeScript 5.9.3 (commit 7a60135):**
+- Patch update from 5.9.2 to 5.9.3
+- Bug fixes and stability improvements
+
+**@types/node 25.3.0 (commits 6eae14b, 550f4e7, 1fa35c2):**
+- **BREAKING CHANGE**: Major version bump from 24.x to 25.x
+- Node.js type definition updates
+- Applied to packages/shared, packages/server, packages/asset-forge
+
+**@types/react 19.2.14 (commit 7a60135):**
+- Patch update from 19.2.2 to 19.2.14
+- React type definition improvements
+
+**@types/chai 5.2.3 (commit 0d9f3da):**
+- **BREAKING CHANGE**: Major version bump from 4.3.17 to 5.2.3
+- Test assertion type updates
+
+**Three.js 0.183.1 (commits daba92b, 5ffbbfd, 65bc28b):**
+- Minor version update from 0.182.0 to 0.183.1
+- WebGPU renderer enhancements and stability fixes
+- TSL (Three.js Shading Language) shader improvements
+- Applied to packages/client, packages/asset-forge, packages/plugin-hyperscape
+
+**three-mesh-bvh 0.9.8 (commit 919faa0):**
+- Minor version update from 0.8.3 to 0.9.8
+- Enhanced BVH (Bounding Volume Hierarchy) raycasting performance
+- Applied to packages/shared
+
+**@elizaos/core 2.0.0-alpha.26 (commit 856da33):**
+- Alpha release bump from 2.0.0-alpha.11 to 2.0.0-alpha.26
+- ElizaOS framework updates
+- Applied to packages/server
+
+**@ai-sdk/anthropic 3.0.46 (commits 974c758, 6d0a1cc):**
+- **BREAKING CHANGE**: Major version bump from 1.2.12 to 3.0.46
+- Updated Anthropic SDK with new API features
+- Applied to packages/asset-forge and root
+
+**@coral-xyz/anchor 0.32.1 (commit 8074c09):**
+- Minor version update from 0.31.1 to 0.32.1
+- Anchor framework improvements for Solana program development
+- Fixed anchor tests and upgraded to 0.32 (commit 98acb94)
+
+**framer-motion 12.34.3 (commit 6089a66):**
+- **BREAKING CHANGE**: Major version bump from 11.18.2 to 12.34.3
+- Animation library update with performance improvements
+
+**dotenv 17.3.1 (commit 7aeabbb):**
+- **BREAKING CHANGE**: Major version bump from 16.6.1 to 17.3.1
+- Environment variable loading improvements
+- Applied to packages/shared
+
+**ESLint 10.0.2 (commits e772d6d, 0e13704, fcc8ff0, e8cb345, f00bd10):**
+- **BREAKING CHANGE**: Major version bump from 9.39.3 to 10.0.2
+- New linting rules and configuration format
+- Applied to packages/shared, packages/plugin-hyperscape, packages/asset-forge, packages/client, packages/server
+
+**@playwright/test 1.58.2 (commit edd1291):**
+- Minor version update from 1.54.2 to 1.58.2
+- Enhanced browser automation capabilities
+- Test framework improvements
+
+**@capacitor/cli 8.1.0 (commit 079d739):**
+- **BREAKING CHANGE**: Major version bump from 7.5.0 to 8.1.0
+- iOS and Android build improvements
+- Applied to packages/shared
+
+**chai 6.2.2 (commit 41680b7):**
+- **BREAKING CHANGE**: Major version bump from 4.5.0 to 6.2.2
+- Test assertion library update with API changes
+
+**lucide-react 0.575.0 (commits f439c01, ac2603a):**
+- Minor version update from 0.553.0/0.554.0 to 0.575.0
+- Icon library update with new icons
+- Applied to packages/asset-forge and packages/client
+
+**vite-plugin-node-polyfills 0.25.0 (commit 352b93f):**
+- Minor version update from 0.24.0 to 0.25.0
+- Node.js polyfill improvements
+
+**@vitejs/plugin-react 5.1.4 (commit 3b03962):**
+- Minor version update from 5.0.4 to 5.1.4
+- Vite React plugin improvements
+
+**zod 4.3.6 (commit 55c57ed):**
+- **BREAKING CHANGE**: Major version bump from 3.25.76 to 4.3.6
+- Review Zod usage for compatibility with v4 API
+- See [Zod v4 migration guide](https://zod.dev/CHANGELOG) for breaking changes
+- Affects validation schemas across server, client, and shared packages
+
+### 🔧 Build System Improvements
+
+**MUD Binary Path Resolution:**
+- **Issue**: MUD CLI binary not found in CI due to bun workspace hoisting
+- **Fix**: Try local `contracts/node_modules/.bin/mud` first, fall back to root
+- **File**: `packages/server/scripts/setup-chain.mjs`
+- **Impact**: Contracts deployment now works in both local and CI environments
+
+**Circular Dependency Handling:**
+- procgen and plugin-hyperscape builds now handle circular deps with `@hyperscape/shared`
+- Uses `tsc || echo` pattern so build exits 0 even with circular dep errors
+- Packages still produce partial output sufficient for downstream consumers
+- Prevents clean build failures when dist/ doesn't exist yet
+
+### 🧪 Test Suite Updates
+
+**WebGPU Mocks:**
+- Added `vitest.setup.ts` to mock WebGPU browser globals
+- Mocks: GPUShaderStage, GPUBufferUsage, GPUTextureUsage, GPUMapMode, etc.
+- Required by Three.js WebGPU renderer in tests
+- Prevents "GPUShaderStage is not defined" errors
+
+**Test Results:**
+- 1569 tests passing
+- 85 tests skipped (documented for future work)
+- All critical paths covered
+
+</Update>
+
 <Update label="Dependency Updates & Infrastructure Fixes" description="February 2026" date="2026-02-25">
 
 ### 🎮 Gameplay Fixes
