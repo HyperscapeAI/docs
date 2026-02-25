@@ -265,7 +265,59 @@ Manages InstancedMesh pools for placeholder resources (trees/ores with missing m
   - Sanitize in ResourceSystem + createVisualStrategy factory
   - Fixed woodcutting.json to use null instead of "null" string
 
-### GPU-Instanced Particle System Architecture
+### GPU-Instanced Rendering Architecture
+
+**Duel Arena InstancedMesh Optimization** (commit c20d0fc, PR #938, Feb 25 2026) - 97% draw call reduction
+
+Converted the duel arena from individual meshes to InstancedMesh architecture, eliminating the rendering bottleneck caused by 28 dynamic PointLights and ~846 individual draw calls.
+
+**Performance Impact:**
+- Draw calls: 846 → 22 (97% reduction)
+- Removed all 28 dynamic PointLights (primary FPS killer — each light forced expensive per-pixel shading passes)
+- Replaced with single GPU-driven TSL emissive material on brazier bowls
+- Significant FPS improvement in duel arenas, especially with multiple active duels
+
+**InstancedMesh Batching:**
+- Fence posts: 288 instances → 1 draw call
+- Fence caps: 288 instances → 1 draw call
+- Fence rails (X-axis): 36 instances → 1 draw call
+- Fence rails (Z-axis): 36 instances → 1 draw call
+- Pillar bases: 32 instances → 1 draw call
+- Pillar shafts: 32 instances → 1 draw call
+- Pillar capitals: 32 instances → 1 draw call
+- Brazier bowls: 24 instances → 1 draw call (with TSL glow)
+- Border strips (N/S): 12 instances → 1 draw call
+- Border strips (E/W): 12 instances → 1 draw call
+- Banner poles: 12 instances → 1 draw call
+
+**TSL Brazier Glow Material:**
+- GPU-animated emissive flicker replaces 28 CPU-animated PointLights
+- Per-instance phase offset derived from world position (quantized so all vertices of one brazier share same phase)
+- Multi-frequency sine flicker + high-freq noise matches old PointLight behavior
+- Only top face (fire opening) glows; outer shell stays dark via normal-based masking
+- Zero CPU cost per frame — all animation runs on GPU via `emissiveNode`
+
+**Enhanced Fire Particle Preset:**
+- Removed `"torch"` preset, unified on enhanced `"fire"` preset
+- Smooth value noise fragment shader (bilinear interpolated hash lattice) for organic flame shapes
+- Soft radial falloff designed for additive blending — overlapping particles merge into cohesive flame body
+- Per-particle turbulent vertex motion for natural flickering
+- Height-based color gradient (white-yellow core → orange-red tips)
+- Scrolling noise gives organic edges and upward motion feel
+
+**Individual Meshes (still needed for raycasting):**
+- Arena floors: 6 meshes (need per-floor arenaId and layer 0+2 for click-to-move)
+- Forfeit pillars: 12 meshes (need unique entityId userData for interaction)
+- Banner cloths: 12 meshes (3 shared color materials)
+
+**Removed Dead Code:**
+- `createArenaMarker()` — arena number markers were unused
+- `createAmbientDust()` — ambient dust particles were unused
+- `createLobbyBenches()` — lobby benches were unused
+
+**Files**: 
+- `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts` (arena rendering)
+- `packages/shared/src/entities/managers/particleManager/GlowParticleManager.ts` (fire particles)
 
 **ParticleManager** (commit 4168f2f, PR #877) - Centralized GPU-instanced particle rendering
 
