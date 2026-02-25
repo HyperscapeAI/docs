@@ -838,6 +838,42 @@ curl -L https://foundry.paradigm.xyz | bash
 foundryup
 ```
 
+### Asset Management
+
+**Asset Manifest Migration** (commit 12c01c2) - HyperscapeAI/assets as source of truth
+
+Manifests were previously committed directly to the hyperscape repo to fix CI, causing divergence with the assets repo. The assets directory is now fully gitignored and populated exclusively by cloning HyperscapeAI/assets.
+
+**Changes:**
+- Untracked all 40+ manifest files (git rm --cached)
+- Updated `.gitignore` to ignore entire `packages/server/world/assets/` directory
+- Updated `ensure-assets.mjs` to clone assets repo in CI (shallow, no LFS) so CI gets manifests from source of truth
+- Local dev unchanged: `bun install` clones full assets with LFS
+
+**Asset Directory Structure:**
+```
+packages/server/world/assets/
+├── manifests/           # JSON manifests (from HyperscapeAI/assets)
+│   ├── items/          # Item definitions
+│   ├── gathering/      # Resource nodes (trees, ores, fishing)
+│   ├── recipes/        # Processing recipes
+│   └── ...
+├── models/             # 3D models (GLB, VRM) - Git LFS
+├── textures/           # Texture files - Git LFS
+└── audio/              # Sound effects and music - Git LFS
+```
+
+**Important**: Never commit files in `packages/server/world/assets/`. All changes must go to the [HyperscapeAI/assets](https://github.com/HyperscapeAI/assets) repository.
+
+**Updating Assets:**
+```bash
+# Local development - pull latest assets
+bun run assets:sync
+
+# CI/Production - assets cloned automatically during build
+# See scripts/ensure-assets.mjs for implementation
+```
+
 ### Duel Arena Issues
 
 **Players/agents sinking into arena floors:**
@@ -854,6 +890,11 @@ Fixed in commits 7a60135 and 75d0aa6. Two separate issues were resolved:
 2. **Arena spawn heights** (commit 75d0aa6): Arena spawn heights were corrected to match visual mesh positions.
 
 If you see players falling through the arena floor, ensure you're on the latest code.
+
+**Arena click targeting and minimap rendering** (commit 24354238):
+- Fixed click target going underground in duel arenas by skipping building footprint validation for arena-floor raycast hits (RaycastService)
+- Fixed minimap showing duel arenas as black holes by enabling layer 0 on arena/lobby/hospital floor meshes so minimap camera can render them
+- Removed non-functional wall sconce geometry from arena fences (96 dead meshes across 6 arenas with no lights attached)
 
 ### Streaming Mode Issues
 
