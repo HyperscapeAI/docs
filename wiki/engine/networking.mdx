@@ -70,6 +70,60 @@ Entity updates use **abbreviated keys** to minimize bandwidth:
 | `h` | health | `{ current, max }` | HP state |
 | `i` | id | `string` | Entity ID |
 | `t` | type | `string` | Entity type |
+| `c` | inCombat | `boolean` | Combat state (abbreviated) |
+| `ct` | combatTarget | `string` | Combat target ID (abbreviated) |
+
+<Warning>
+**Combat State Keys**: The `CombatStateService` syncs combat state using abbreviated keys (`c`/`ct`) for network efficiency. Systems reading combat state must check BOTH abbreviated and full keys for compatibility.
+</Warning>
+
+### Combat State Synchronization (Fixed in PR #933)
+
+The combat system uses abbreviated keys for network efficiency, but this caused a critical bug where AI agents couldn't detect combat state correctly.
+
+**The Bug (Fixed Feb 25, 2026):**
+
+`CombatStateService` syncs abbreviated keys (`data.c`/`data.ct`) but `EmbeddedHyperscapeService.getGameState()` only read full keys (`data.inCombat`/`data.combatTarget`). This caused `DuelCombatAI` to always see `inCombat=false` and flood `executeAttack` every tick instead of letting auto-attacks drive combat.
+
+**The Fix:**
+
+```typescript
+// From packages/server/src/eliza/EmbeddedHyperscapeService.ts
+// Read BOTH abbreviated and full keys for combat state
+inCombat: !!(data.inCombat || data.combatTarget || data.c || data.ct),
+currentTarget: (data.combatTarget as string) || (data.ct as string) || null,
+```
+
+**Why Abbreviated Keys:**
+- Network bandwidth optimization for frequent entity updates
+- `inCombat` → `c` saves 7 bytes per packet
+- `combatTarget` → `ct` saves 10 bytes per packet
+- Multiplied by 8 Hz sync rate = significant bandwidth savings
+
+**Compatibility Pattern:**
+
+When reading combat state from entity data, always check both key formats:
+
+```typescript
+// ✅ CORRECT: Check both abbreviated and full keys
+const inCombat = !!(entity.data.inCombat || entity.data.c);
+const target = entity.data.combatTarget || entity.data.ct;
+
+// ❌ WRONG: Only check full keys (will miss abbreviated updates)
+const inCombat = !!entity.data.inCombat;
+const target = entity.data.combatTarget;
+```
+
+**Files Affected:**
+- `packages/server/src/eliza/EmbeddedHyperscapeService.ts` (fixed)
+- `packages/shared/src/systems/shared/combat/CombatStateService.ts` (uses abbreviated keys)
+- Any system reading combat state from entity data should use the compatibility pattern
+
+**Related Fix:**
+
+This bug also caused a TOCTOU race condition in `handleMagicAttack` where cooldown was checked early but claimed after async `consumeRunesForSpell`. With the combat state bug flooding attacks, two concurrent invocations could both pass the cooldown check before either claimed it, causing duplicate magic projectiles. Fixed by moving cooldown claim before async rune consumption.
+
+See [Combat System - Critical Bug Fixes](/wiki/game-systems/combat#critical-bug-fixes) for complete details.
 
 ### Example Packet
 
