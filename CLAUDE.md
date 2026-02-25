@@ -468,15 +468,21 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 ## Tech Stack
 
 - **Runtime**: Bun v1.1.38+
-- **Engine**: Three.js 0.180.0 (WebGPU + TSL shaders), PhysX (WASM)
-- **UI**: React 19.2.0, styled-components
+- **Engine**: Three.js 0.183.1 (WebGPU + TSL shaders), PhysX (WASM)
+- **UI**: React 19.2.0, styled-components, Framer Motion 12.34.3
 - **Server**: Fastify, WebSockets, LiveKit
 - **Database**: PostgreSQL (production via Neon/Supabase), Drizzle ORM
-- **Testing**: Playwright, Vitest
-- **Build**: Turbo, esbuild, Vite
-- **Mobile**: Capacitor, Tauri
-- **Blockchain**: Solana (mainnet), Anchor framework, CLOB market program
+- **Testing**: Playwright 1.58.2, Vitest, Chai 6.2.2
+- **Build**: Turbo, esbuild, Vite 6.4.1+
+- **Mobile**: Capacitor 8.1.0, Tauri
+- **Blockchain**: Solana (mainnet), Anchor 0.32.1, CLOB market program, @elizaos/core 2.0.0-alpha.12
 - **Streaming**: RTMP (Twitch, YouTube), HLS, FFmpeg
+- **Validation**: Zod 4.3.6
+- **AI SDK**: @ai-sdk/anthropic 3.0.46
+- **Icons**: lucide-react 0.575.0
+- **Environment**: dotenv 17.3.1
+- **Linting**: ESLint 10.0.2
+- **3D Optimization**: three-mesh-bvh 0.9.8
 
 ## Security & CI/CD
 
