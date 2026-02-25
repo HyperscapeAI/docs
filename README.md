@@ -221,7 +221,9 @@ Game assets (3D models, textures, audio) source: [HyperscapeAI/assets](https://g
 bun run assets:sync    # Pull latest assets from repo (local dev only)
 ```
 
-**Production/CI**: Manifests are committed to the repo at `packages/server/world/assets/manifests/`.
+**Production/CI**: Manifests are cloned from HyperscapeAI/assets repo during build (commit 12c01c2).
+
+**Important**: The `packages/server/world/assets/` directory is now fully gitignored. All asset changes must be made in the [HyperscapeAI/assets](https://github.com/HyperscapeAI/assets) repository, not in the main hyperscape repo.
 
 ## Configuration
 
