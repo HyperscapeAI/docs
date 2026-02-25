@@ -462,6 +462,52 @@ The CI audit threshold has been lowered to `critical` only (from `high`) to allo
 - **Impact**: Arena points system now operates reliably without connection timeouts
 - File: `packages/server/src/arena/services/ArenaPointsService.ts`
 
+**Cyclic Dependency Fix (commit f355276):**
+- Fixed Turbo build cycle: shared → procgen → shared
+- **Issue**: Turbo detected circular dependency preventing parallel builds
+- **Fix**: Moved `@hyperscape/procgen` from dependencies to optional peerDependencies in shared's package.json
+- **Impact**: Breaks the turbo graph cycle while still allowing the import to resolve at runtime (both packages are always installed together in the workspace)
+- File: `packages/shared/package.json`
+
+### CI/CD Improvements (February 25, 2026)
+
+**Native App Build Workflow Fixes (commits 8ce4819, 15250d2, a095ba1, 3b7665d):**
+- **macOS DMG bundling**: Add `--bundles app` to unsigned builds to produce only .app bundles, skipping DMG creation which requires code signing certificates
+- **iOS unsigned builds**: Make build job release-only since unsigned iOS builds always fail with 'Signing requires a development team'
+- **Windows install retry**: Add retry logic (3 attempts) to bun install for transient NPM registry 403 errors on Windows runners
+- **Secret handling**: Conditionally supply native app secrets only when needed, correct Windows env var syntax
+- **Matrix filtering**: Remove invalid matrix reference from job-level condition (matrix context not available until job runs)
+- Files: `.github/workflows/build-app.yml`
+
+**CI Resilience Improvements (commits 7c9ff6c, 08aa151):**
+- **NPM rate limit retry**: Add retry with backoff to bun install for npm 403 resilience (up to 5 attempts with 15s, 30s, 45s, 60s, 75s backoff)
+- **Frozen lockfile**: Use `--frozen-lockfile` in all workflows to prevent npm 403 errors. When bun install runs without `--frozen-lockfile`, it may try to resolve packages fresh from npm even when a lockfile exists. Under CI load this triggers npm rate-limiting (403 Forbidden), causing all workflows to fail.
+- **Impact**: CI workflows now handle transient npm rate limits gracefully
+- Files: `.github/workflows/*.yml`
+
+**Deployment Fixes (commits c80ad7a, 1af02ce, 3ec9826):**
+- **Vast.ai deployment**: Use `bunx` instead of `npx` in build-services.mjs (Vast.ai container only has bun installed, not npm/npx)
+- **Cloudflare Pages**: Specify pages build output dir to prevent worker deployment error
+- **Cloudflare origin lock**: Disable cloudflare origin lock preventing direct frontend API access
+- Files: `packages/asset-forge/scripts/build-services.mjs`, `wrangler.toml`
+
+### Streaming Stability Improvements (February 25, 2026)
+
+**RTMP Streaming Resilience (commit 14a1e1b):**
+- **CDP stall threshold**: Increase from 2 to 4 intervals (120s) to reduce false restarts
+- **Soft CDP recovery**: Restart screencast without browser/FFmpeg teardown (no stream gap)
+- **FFmpeg restart attempts**: Increase MAX_RESTART_ATTEMPTS from 5 to 8
+- **Recovery counter reset**: Add `resetRestartAttempts()` for recovery counter reset
+- **Capture recovery failures**: Increase CAPTURE_RECOVERY_MAX_FAILURES default from 2 to 4
+- **Impact**: Streaming duels now handle transient network issues without full stream restarts
+- Files: `packages/server/src/streaming/browser-capture.ts`, `packages/server/src/streaming/rtmp-bridge.ts`, `packages/server/src/streaming/stream-capture.ts`
+
+**WebGPU Renderer Initialization (commit 14a1e1b):**
+- **Best-effort requiredLimits**: Try `maxTextureArrayLayers: 2048` first, retry with default limits if GPU rejects
+- **Always WebGPU**: Never fall back to WebGL, always use WebGPU renderer
+- **Impact**: Streaming capture works on more GPU configurations without sacrificing WebGPU features
+- File: `packages/shared/src/utils/rendering/RendererFactory.ts`
+
 ### Rendering Optimizations
 
 **GLBTreeInstancer - InstancedMesh Tree Rendering (commit 0871acb):**
