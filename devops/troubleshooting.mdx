@@ -713,6 +713,123 @@ executablePath: '/usr/bin/google-chrome-unstable'
 **Recent Fixes:**
 - Use Chrome Dev channel for WebGPU support on Vast.ai (commits ba8bd53, d824163)
 
+### Assets Not Found After Fresh Clone
+
+**Symptom**: Server fails to start with "No world areas defined" or manifest validation errors
+
+**Cause**: Assets directory not cloned from HyperscapeAI/assets repository
+
+**Solution**: Assets are automatically cloned during `bun install`. If missing:
+
+```bash
+# Manual asset sync
+bun run assets:sync
+
+# Or re-run install
+bun install
+```
+
+**Technical Details:**
+- Assets are sourced from [HyperscapeAI/assets](https://github.com/HyperscapeAI/assets) repository
+- `scripts/ensure-assets.mjs` runs during `bun install` postinstall hook
+- Local dev: Full clone with LFS (~200MB)
+- CI: Shallow clone without LFS (manifests only, ~1MB)
+- Entire `packages/server/world/assets/` directory is gitignored
+
+**Verification:**
+```bash
+# Check if assets exist
+ls packages/server/world/assets/manifests/
+
+# Should see:
+# items/, gathering/, recipes/, npcs.json, stores.json, etc.
+```
+
+### Mage Agents Not Attacking in Duels
+
+**Symptom**: Mage agents stand idle during duels, no spell projectiles visible
+
+**Cause**: Combat state key mismatch between `CombatStateService` and `EmbeddedHyperscapeService`
+
+**Solution**: Update to latest code (PR #933 fixed this)
+
+**Technical Details:**
+- `CombatStateService` syncs abbreviated keys (`data.c`/`data.ct`) for network efficiency
+- `EmbeddedHyperscapeService.getGameState()` only read full keys (`data.inCombat`/`data.combatTarget`)
+- DuelCombatAI always saw `inCombat=false` and flooded `executeAttack` every tick
+- Fixed by reading both abbreviated and full keys:
+  ```typescript
+  inCombat: !!(data.inCombat || data.combatTarget || data.c || data.ct),
+  currentTarget: (data.combatTarget as string) || (data.ct as string) || null,
+  ```
+- File: `packages/server/src/eliza/EmbeddedHyperscapeService.ts`
+- Commit: 82ff784 (Feb 25, 2026)
+
+### Duplicate Magic Projectiles
+
+**Symptom**: Magic attacks spawn two projectiles, runes consumed twice
+
+**Cause**: TOCTOU race condition in `handleMagicAttack` cooldown claim
+
+**Solution**: Update to latest code (PR #933 fixed this)
+
+**Technical Details:**
+- Cooldown was checked early but claimed after async `consumeRunesForSpell` call
+- With combat state bug flooding attacks, two concurrent invocations could both pass cooldown check
+- Fixed by moving cooldown claim before async rune consumption:
+  ```typescript
+  // Claim cooldown BEFORE async rune consumption
+  this.ctx.combatSystem.setNextAttackTick(attackerId, nextAttackTick);
+  this.ctx.combatSystem.enterCombat(attackerId, targetId, weaponType);
+  
+  // THEN consume runes (async operation)
+  await this.ctx.runeService.consumeRunesForSpell(attackerId, spell);
+  ```
+- File: `packages/shared/src/systems/shared/combat/handlers/MagicAttackHandler.ts`
+- Commit: 82ff784 (Feb 25, 2026)
+
+### Players Sinking Into Duel Arena Floors
+
+**Symptom**: Players/agents appear to sink ~0.4m into duel arena floors, grass grows through floor surfaces
+
+**Cause**: Flat zones were removed from terrain system, causing `getHeightAt()` to return raw procedural terrain height instead of floor-level height
+
+**Solution**: Update to latest code (PR #911 fixed this)
+
+**Technical Details:**
+- `DuelArenaVisualsSystem` now registers flat zones programmatically for all 8 floor areas
+- Affected areas: 6 arenas (2×3 grid), lobby (60×30), hospital (20×15)
+- Terrain height queries now return correct floor-level values
+- Terrain mesh is carved under floors via flat zone registration
+- File: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
+- Commit: 7a60135 (Feb 25, 2026)
+
+### Cannot Click to Move in Duel Arenas
+
+**Symptom**: Click targets go underground in duel arenas, players cannot move
+
+**Cause**: Building footprint validation rejecting arena-floor raycast hits
+
+**Solution**: Update to latest code (commit 2435423 fixed this)
+
+**Technical Details:**
+- `RaycastService` now skips building footprint validation for arena-floor raycast hits
+- File: `packages/shared/src/systems/client/interaction/services/RaycastService.ts`
+- Commit: 2435423 (Feb 24, 2026)
+
+### Duel Arena Minimap Shows Black Holes
+
+**Symptom**: Minimap shows duel arenas as black holes, unusable in arena area
+
+**Cause**: Arena/lobby/hospital floor meshes had layer 0 disabled
+
+**Solution**: Update to latest code (commit 2435423 fixed this)
+
+**Technical Details:**
+- Enabled layer 0 on arena/lobby/hospital floor meshes so minimap camera can render them
+- File: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
+- Commit: 2435423 (Feb 24, 2026)
+
 ## Getting Help
 
 1. Check [GitHub Issues](https://github.com/HyperscapeAI/hyperscape/issues)
