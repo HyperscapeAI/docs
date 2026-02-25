@@ -100,12 +100,16 @@ The dev server provides:
 
 ## Asset Management
 
-Hyperscape uses a **separate assets repository** to keep the main codebase lightweight.
+Hyperscape uses a **separate assets repository** to keep the main codebase lightweight and prevent manifest divergence.
 
 ### Asset Repository Structure
 
-- **Main repo** (`HyperscapeAI/hyperscape`): Tracks manifest JSON files only
-- **Assets repo** (`HyperscapeAI/assets`): Contains 3D models, textures, audio (~200MB with Git LFS)
+- **Main repo** (`HyperscapeAI/hyperscape`): Code only, no asset files
+- **Assets repo** (`HyperscapeAI/assets`): All game content (manifests, models, textures, audio) (~200MB with Git LFS)
+
+<Info>
+**Change (Feb 2026)**: Manifests are now sourced exclusively from the assets repo. The main repo no longer tracks any asset files, including JSON manifests.
+</Info>
 
 ### Local Development
 
@@ -122,8 +126,8 @@ bun run assets:sync
 The `ensure-assets.mjs` script:
 1. Checks if `packages/server/world/assets/` exists
 2. If missing, clones `HyperscapeAI/assets` repository
-3. Uses shallow clone with LFS for faster downloads
-4. Manifests are copied from assets repo to main repo
+3. **Local dev**: Full clone with LFS for models/textures/audio (~200MB)
+4. **CI/Production**: Shallow clone without LFS (manifests only, ~1MB)
 
 ### CI/CD Asset Handling
 
@@ -133,16 +137,17 @@ In CI environments, assets are cloned without LFS (manifests only):
 # From scripts/ensure-assets.mjs
 if (process.env.CI === 'true') {
   // Shallow clone without LFS (manifests only)
-  git clone --depth 1 --no-checkout https://github.com/HyperscapeAI/assets.git
-  git sparse-checkout set manifests/
+  git clone --depth 1 https://github.com/HyperscapeAI/assets.git
+  # Manifests are in assets/manifests/ directory
 } else {
   // Full clone with LFS for local development
   git clone https://github.com/HyperscapeAI/assets.git
+  # Includes models/, textures/, audio/ with Git LFS
 }
 ```
 
 <Warning>
-The entire `packages/server/world/assets/` directory is gitignored. Never commit binary assets to the main repository.
+The entire `packages/server/world/assets/` directory is gitignored. **Never commit asset files to the main repository.** All game content lives in the [HyperscapeAI/assets](https://github.com/HyperscapeAI/assets) repository.
 </Warning>
 
 ### Asset Updates
@@ -150,8 +155,57 @@ The entire `packages/server/world/assets/` directory is gitignored. Never commit
 When assets are updated in the assets repository:
 
 1. Pull latest assets: `bun run assets:sync`
-2. Manifests are automatically updated
+2. Manifests and models are automatically updated
 3. Restart server to reload manifests
+
+**Benefits of Separate Assets Repo:**
+- Single source of truth for all game content
+- Prevents manifest divergence between repos
+- Reduces main repo size (no binary commits)
+- Cleaner git history
+- Easier asset updates (PR to assets repo, not main repo)
+- CI gets manifests without downloading large binary files
+
+### Manifest Files
+
+All manifest JSON files are sourced from the assets repo:
+
+```
+HyperscapeAI/assets/
+├── manifests/
+│   ├── items/
+│   │   ├── weapons.json
+│   │   ├── tools.json
+│   │   ├── resources.json
+│   │   ├── food.json
+│   │   ├── armor.json
+│   │   ├── ammunition.json
+│   │   └── runes.json
+│   ├── gathering/
+│   │   ├── woodcutting.json
+│   │   ├── mining.json
+│   │   └── fishing.json
+│   ├── recipes/
+│   │   ├── smelting.json
+│   │   ├── smithing.json
+│   │   ├── cooking.json
+│   │   └── firemaking.json
+│   ├── npcs.json
+│   ├── stores.json
+│   ├── world-areas.json
+│   ├── biomes.json
+│   ├── vegetation.json
+│   ├── combat-spells.json
+│   ├── duel-arenas.json
+│   ├── tier-requirements.json
+│   └── skill-unlocks.json
+├── models/          # 3D models (GLB/VRM)
+├── textures/        # Texture files
+└── audio/           # Music and sound effects
+```
+
+**Manifest Loading:**
+The server's `DataManager` loads manifests from `packages/server/world/assets/manifests/` which is populated by cloning the assets repo.
 
 ## Docker Services
 
