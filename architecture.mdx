@@ -184,6 +184,58 @@ packages/shared/src/systems/shared/
 └── interaction/    # Player interactions
 ```
 
+### GPU-Instanced Rendering Systems
+
+**GLBTreeInstancer** (commit 0871acb) - InstancedMesh-based tree rendering
+
+Replaces per-tree `scene.clone(true)` with shared InstancedMesh pools per LOD level. Trees from woodcutting.json now render via shared geometry references instead of deep-cloning all buffers on each spawn.
+
+**Performance Impact:**
+- Eliminated per-tree geometry cloning (saves ~2-5ms per tree spawn)
+- Reduced draw calls from N trees to 3 (one per LOD level)
+- FPS improvement: ~15-20% in dense forest areas
+- Memory savings: ~80% reduction in geometry buffer allocations
+
+**Implementation:**
+- Location: `packages/shared/src/systems/shared/world/GLBTreeInstancer.ts`
+- Manages LOD0/LOD1/LOD2 InstancedMesh pools per model
+- Allocates instance slots from pre-sized pools (max 1000 instances per LOD)
+- Handles depleted/stump/destroy lifecycle via no-op-safe calls
+- Initialized in `createClientWorld.ts` when stage scene is ready
+
+**ResourceEntity Visual Strategy Pattern** (commit bc60264)
+
+Refactored ResourceEntity (~1700 lines removed) into delegated visual strategies using the Strategy Pattern. This separates rendering logic from entity lifecycle management.
+
+**Visual Strategies:**
+1. **TreeGLBVisualStrategy**: GLB tree models with LOD support via GLBTreeInstancer
+2. **TreeProcgenVisualStrategy**: Procedurally generated trees via ProcgenTreeInstancer
+3. **StandardModelVisualStrategy**: Generic 3D models (rocks, ores) via ModelCache
+4. **FishingSpotVisualStrategy**: Fishing spot particles via ParticleManager
+5. **PlaceholderVisualStrategy**: Fallback colored cubes via PlaceholderInstancer
+
+**Factory Pattern:**
+- `createVisualStrategy()` factory selects strategy based on resource type, model path, and manifest config
+- Location: `packages/shared/src/entities/world/visuals/createVisualStrategy.ts`
+
+**Benefits:**
+- Single Responsibility: Each strategy handles one rendering approach
+- Open/Closed: Add new strategies without modifying ResourceEntity
+- Testability: Strategies can be tested in isolation
+- Maintainability: ~1700 lines of conditional logic replaced with clean delegation
+
+**PlaceholderInstancer** (commit bc60264)
+
+Manages InstancedMesh pools for placeholder resources (trees/ores with missing models):
+- Color-coded: green (trees), brown (ores), blue (fishing spots)
+- Lifecycle: `allocate()` on spawn, `free()` on destroy
+- Max 1000 instances per resource type
+- Initialized in `createClientWorld.ts` alongside GLBTreeInstancer
+
+**Bug Fixes:**
+- Fixed fishing spot particles persisting after depletion (guard re-registration when depleted, zero ripple phase offset on unregister)
+- Fixed placeholder trees not rendering due to "null" string in modelPath (sanitize in ResourceSystem + createVisualStrategy factory)
+
 ### GPU-Instanced Particle System (PR #877)
 
 The shared package includes a centralized particle system that uses GPU instancing for high-performance visual effects. Introduced in February 2026, this system provides dramatic performance improvements for fishing spots and other particle-heavy entities.
