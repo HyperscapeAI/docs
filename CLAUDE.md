@@ -650,8 +650,18 @@ The streaming infrastructure has been updated to use GL ANGLE backend instead of
 **Headless rendering issues:**
 Switch to headful mode with Xvfb for GPU compositing (commit 5e4c6f1), or use swiftshader + headless + WebGL fallback (commit ae42beb).
 
-**RTX 4090 WebGPU:**
-For RTX 4090 GPUs, switch ANGLE from GL to Vulkan backend (commit 80bb06e).
+**RTX 4090 WebGPU (commit 80bb06e):**
+For RTX 4090 GPUs, switch ANGLE from GL to Vulkan backend for optimal WebGPU performance:
+
+```bash
+# In streaming infrastructure (packages/server/src/streaming/browser-capture.ts)
+# Chrome launch args updated to use Vulkan ANGLE backend:
+--use-angle=vulkan
+--use-vulkan
+--enable-features=Vulkan
+```
+
+This change improves WebGPU rendering performance on RTX 4090 GPUs by using the native Vulkan backend instead of the GL translation layer.
 
 **Vast.ai GPU Compatibility:**
 - RTX 5060 Ti removed from GPU search (broken Vulkan ICD) - commit 30cacb0
