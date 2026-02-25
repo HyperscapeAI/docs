@@ -1,0 +1,543 @@
+---
+title: "Native App Builds"
+description: "Building desktop and mobile apps with Tauri"
+icon: "mobile"
+---
+
+# Native App Builds
+
+Hyperscape supports native desktop and mobile apps via Tauri, providing native performance and offline capabilities.
+
+<Info>
+Native app builds are automatically triggered on tagged releases (`v*`) and can be manually triggered via GitHub Actions workflow dispatch.
+</Info>
+
+## Supported Platforms
+
+| Platform | Architecture | Format | Status |
+|----------|--------------|--------|--------|
+| **Windows** | x86_64 | `.msi`, `.exe` | ✅ Supported |
+| **macOS** | Apple Silicon (M1/M2/M3) | `.dmg`, `.app` | ✅ Supported |
+| **macOS** | Intel (x86_64) | `.dmg`, `.app` | ✅ Supported |
+| **Linux** | x86_64 | `.AppImage`, `.deb`, `.rpm` | ✅ Supported |
+| **iOS** | ARM64 | `.ipa` | ✅ Supported |
+| **Android** | ARM64, ARMv7, x86_64 | `.apk`, `.aab` | ✅ Supported |
+
+## Automated Builds
+
+### Triggering a Release Build
+
+Create and push a version tag to trigger automated builds for all platforms:
+
+```bash
+# Create a release tag
+git tag v1.0.0
+
+# Push the tag
+git push origin v1.0.0
+```
+
+This triggers the `build-app.yml` workflow which:
+1. Builds for all 6 platforms (Windows, macOS ARM, macOS Intel, Linux, iOS, Android)
+2. Signs binaries with platform-specific certificates (if secrets configured)
+3. Creates a GitHub Release with all artifacts
+4. Generates SHA256 checksums for verification
+
+### Manual Workflow Dispatch
+
+You can manually trigger builds via GitHub Actions:
+
+1. Go to **Actions** → **Build Native Apps**
+2. Click **Run workflow**
+3. Select options:
+   - **Platform**: `all`, `windows`, `macos`, `linux`, `ios`, or `android`
+   - **Environment**: `production` or `staging`
+   - **Release tag**: Optional (e.g., `v1.0.0` or `1.0.0`)
+   - **Draft release**: Create as draft for review before publishing
+
+<Warning>
+When `release_tag` is set, `platform` must be `all` so every artifact is published to the release.
+</Warning>
+
+## Build Environments
+
+The workflow supports two environments with different API endpoints:
+
+### Production (default)
+
+```bash
+PUBLIC_API_URL=https://api.hyperscape.club
+PUBLIC_WS_URL=wss://api.hyperscape.club/ws
+PUBLIC_APP_URL=https://hyperscape.club
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+```
+
+### Staging
+
+```bash
+PUBLIC_API_URL=https://staging-api.hyperscape.club
+PUBLIC_WS_URL=wss://staging-api.hyperscape.club/ws
+PUBLIC_APP_URL=https://staging.hyperscape.club
+PUBLIC_CDN_URL=https://staging-assets.hyperscape.club
+```
+
+Staging builds are triggered when:
+- Pushing to `staging` branch
+- Manually selecting `staging` environment in workflow dispatch
+
+## Required Secrets
+
+### Desktop Signing (macOS)
+
+For signed macOS releases, configure these secrets in GitHub repository settings:
+
+| Secret | Description |
+|--------|-------------|
+| `APPLE_CERTIFICATE` | Base64-encoded .p12 certificate |
+| `APPLE_CERTIFICATE_PASSWORD` | Certificate password |
+| `APPLE_SIGNING_IDENTITY` | Developer ID Application identity |
+| `APPLE_ID` | Apple ID email |
+| `APPLE_PASSWORD` | App-specific password |
+| `APPLE_TEAM_ID` | Apple Developer Team ID |
+
+**Generating Apple Certificate:**
+```bash
+# Export from Keychain Access as .p12
+# Then base64 encode
+base64 -i certificate.p12 | pbcopy
+```
+
+### Desktop Signing (Windows)
+
+| Secret | Description |
+|--------|-------------|
+| `WINDOWS_CERTIFICATE` | Base64-encoded .pfx certificate |
+| `WINDOWS_CERTIFICATE_PASSWORD` | Certificate password |
+
+### Mobile Signing (iOS)
+
+| Secret | Description |
+|--------|-------------|
+| `APPLE_PROVISIONING_PROFILE` | Base64-encoded provisioning profile |
+| `APPLE_CERTIFICATE` | Same as desktop (reused) |
+| `APPLE_CERTIFICATE_PASSWORD` | Same as desktop (reused) |
+| `APPLE_SIGNING_IDENTITY` | Same as desktop (reused) |
+
+### Mobile Signing (Android)
+
+| Secret | Description |
+|--------|-------------|
+| `ANDROID_KEYSTORE` | Base64-encoded .keystore file |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | Key alias |
+| `ANDROID_KEY_PASSWORD` | Key password |
+
+**Generating Android Keystore:**
+```bash
+keytool -genkey -v -keystore hyperscape-upload.keystore \
+  -alias hyperscape -keyalg RSA -keysize 2048 -validity 10000
+
+# Base64 encode
+base64 -i hyperscape-upload.keystore | pbcopy
+```
+
+### Tauri Updater
+
+| Secret | Description |
+|--------|-------------|
+| `TAURI_SIGNING_PRIVATE_KEY` | Tauri updater private key |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Private key password |
+
+**Generating Tauri Keys:**
+```bash
+# Install Tauri CLI
+cargo install tauri-cli
+
+# Generate keypair
+tauri signer generate -w ~/.tauri/hyperscape.key
+
+# Copy private key to secret
+cat ~/.tauri/hyperscape.key | pbcopy
+```
+
+### General Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `PUBLIC_PRIVY_APP_ID` | Privy authentication app ID |
+| `GITHUB_TOKEN` | Automatically provided by GitHub Actions |
+
+## Build Process
+
+### Desktop Builds
+
+Desktop builds run on platform-specific runners:
+
+```yaml
+matrix:
+  include:
+    - platform: ubuntu-22.04
+      target: linux
+      rust_target: x86_64-unknown-linux-gnu
+    - platform: macos-14
+      target: macos
+      rust_target: aarch64-apple-darwin
+    - platform: macos-14
+      target: macos-intel
+      rust_target: x86_64-apple-darwin
+    - platform: windows-latest
+      target: windows
+      rust_target: x86_64-pc-windows-msvc
+```
+
+**Build Steps:**
+1. Install platform dependencies (Linux: webkit2gtk, GTK3, etc.)
+2. Install Bun and Rust toolchain
+3. Build shared package (core engine)
+4. Build client (Vite production build)
+5. Build Tauri app with platform-specific bundler
+6. Sign binaries (if release build with secrets)
+7. Upload artifacts to GitHub
+
+**Linux Dependencies:**
+```bash
+sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev \
+  libgtk-3-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  patchelf
+```
+
+### iOS Builds
+
+iOS builds require Xcode and Apple Developer account:
+
+**Build Steps:**
+1. Setup Xcode (latest stable)
+2. Install Rust targets: `aarch64-apple-ios`, `aarch64-apple-ios-sim`
+3. Initialize iOS project: `bun run ios:init`
+4. Build with Tauri: `bun tauri ios build --export-method app-store-connect`
+5. Sign with provisioning profile
+6. Export `.ipa` for App Store submission
+
+**Export Methods:**
+- `app-store-connect`: For App Store submission
+- `ad-hoc`: For internal testing
+- `development`: For development devices
+
+### Android Builds
+
+Android builds require Android SDK and NDK:
+
+**Build Steps:**
+1. Setup Java 17 (Temurin distribution)
+2. Install Android SDK and NDK 27.0.12077973
+3. Install Rust targets: `aarch64-linux-android`, `armv7-linux-androideabi`, `i686-linux-android`, `x86_64-linux-android`
+4. Initialize Android project: `bun run android:init`
+5. Build with Tauri: `bun tauri android build`
+6. Sign with keystore (if configured)
+7. Export `.apk` (sideload) and `.aab` (Play Store)
+
+**NDK Version:**
+```bash
+sdkmanager --install "ndk;27.0.12077973"
+export NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973
+```
+
+## Local Development
+
+### Desktop
+
+```bash
+# Development mode (hot reload)
+cd packages/app
+bun run tauri dev
+
+# Production build
+bun run tauri build
+```
+
+### iOS
+
+```bash
+# Initialize iOS project (first time only)
+bun run ios:init
+
+# Development mode (Xcode simulator)
+bun run ios:dev
+
+# Production build
+bun run ios:build
+```
+
+### Android
+
+```bash
+# Initialize Android project (first time only)
+bun run android:init
+
+# Development mode (Android Studio emulator)
+bun run android:dev
+
+# Production build
+bun run android:build
+```
+
+## Build Artifacts
+
+### Desktop Artifacts
+
+**Windows:**
+- `hyperscape_X.Y.Z_x64_en-US.msi` - MSI installer
+- `hyperscape_X.Y.Z_x64-setup.exe` - NSIS installer
+- `hyperscape_X.Y.Z_x64-setup.exe.sig` - Tauri updater signature
+
+**macOS:**
+- `hyperscape_X.Y.Z_aarch64.dmg` - Apple Silicon disk image
+- `hyperscape_X.Y.Z_x64.dmg` - Intel disk image
+- `hyperscape.app.tar.gz` - App bundle (for updater)
+- `hyperscape.app.tar.gz.sig` - Tauri updater signature
+
+**Linux:**
+- `hyperscape_X.Y.Z_amd64.AppImage` - Universal Linux binary
+- `hyperscape_X.Y.Z_amd64.deb` - Debian package
+- `hyperscape-X.Y.Z-1.x86_64.rpm` - RPM package
+
+### Mobile Artifacts
+
+**iOS:**
+- `hyperscape.ipa` - iOS app package (App Store submission)
+
+**Android:**
+- `app-release.apk` - APK for sideloading
+- `app-release.aab` - Android App Bundle (Play Store submission)
+
+## Release Process
+
+### 1. Prepare Release
+
+```bash
+# Update version in package.json
+cd packages/app
+# Edit package.json version field
+
+# Commit version bump
+git add package.json
+git commit -m "chore: bump version to 1.0.0"
+git push origin main
+```
+
+### 2. Create Tag
+
+```bash
+# Create annotated tag
+git tag -a v1.0.0 -m "Release v1.0.0"
+
+# Push tag
+git push origin v1.0.0
+```
+
+### 3. Monitor Build
+
+1. Go to **Actions** → **Build Native Apps**
+2. Watch the workflow run
+3. Verify all platform builds succeed
+4. Check artifacts are uploaded
+
+### 4. Publish Release
+
+The workflow automatically creates a GitHub Release with:
+- All platform artifacts
+- SHA256 checksums (`SHA256SUMS.txt`)
+- Auto-generated release notes from commits
+- Draft status (if configured)
+
+**Review and publish:**
+1. Go to **Releases** → Find your draft release
+2. Review artifacts and release notes
+3. Click **Publish release**
+
+## Distribution
+
+### Desktop
+
+**Download Portal:**
+[https://hyperscapeai.github.io/hyperscape/](https://hyperscapeai.github.io/hyperscape/)
+
+**Direct Downloads:**
+[https://github.com/HyperscapeAI/hyperscape/releases](https://github.com/HyperscapeAI/hyperscape/releases)
+
+### Mobile
+
+**iOS:**
+- Submit `.ipa` to App Store Connect
+- Use Xcode or Transporter app
+
+**Android:**
+- Submit `.aab` to Google Play Console
+- Or distribute `.apk` for sideloading
+
+## Troubleshooting
+
+### Build Fails on macOS
+
+**Symptom**: Xcode build errors or signing failures
+
+**Solutions:**
+- Ensure Xcode is installed: `xcode-select --install`
+- Accept Xcode license: `sudo xcodebuild -license accept`
+- Verify signing identity: `security find-identity -v -p codesigning`
+
+### Build Fails on Windows
+
+**Symptom**: Missing Visual Studio build tools
+
+**Solution**: Install Visual Studio Build Tools with C++ workload:
+```powershell
+# Download from https://visualstudio.microsoft.com/downloads/
+# Select "Desktop development with C++"
+```
+
+### Build Fails on Linux
+
+**Symptom**: Missing webkit2gtk or GTK dependencies
+
+**Solution**: Install required libraries:
+```bash
+sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev \
+  libgtk-3-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  patchelf
+```
+
+### iOS Build Fails with Provisioning Profile Error
+
+**Symptom**: "No matching provisioning profile found"
+
+**Solutions:**
+- Verify provisioning profile is valid and not expired
+- Ensure bundle ID matches profile
+- Check Apple Developer account status
+- Re-download provisioning profile from Apple Developer portal
+
+### Android Build Fails with NDK Error
+
+**Symptom**: "NDK not found" or "No toolchains found"
+
+**Solution**: Install correct NDK version:
+```bash
+sdkmanager --install "ndk;27.0.12077973"
+export NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973
+```
+
+### Unsigned Builds
+
+If signing secrets are not configured, builds will be unsigned:
+- **Desktop**: Builds succeed but show "unverified developer" warnings
+- **iOS**: Cannot install on devices (requires signing)
+- **Android**: Can sideload unsigned APK (not for Play Store)
+
+For development/testing, unsigned builds are acceptable. For distribution, configure signing secrets.
+
+## Build Configuration
+
+### Tauri Config
+
+Desktop and mobile builds use separate Tauri config files:
+
+- `packages/app/src-tauri/tauri.conf.json` - Desktop config
+- `packages/app/src-tauri/tauri.ios.conf.json` - iOS overrides
+- `packages/app/src-tauri/tauri.android.conf.json` - Android overrides
+
+### App Metadata
+
+Update app metadata in `tauri.conf.json`:
+
+```json
+{
+  "productName": "Hyperscape",
+  "version": "1.0.0",
+  "identifier": "ai.hyperscape.app",
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
+```
+
+### Build Targets
+
+Control which platforms are built:
+
+```bash
+# Build specific platform
+bun tauri build --target x86_64-apple-darwin
+
+# Build all targets
+bun tauri build
+```
+
+## Continuous Deployment
+
+### Workflow Triggers
+
+The build workflow runs on:
+
+1. **Push to main/staging/hackathon** - Builds all platforms (no release)
+2. **Push tag `v*`** - Builds all platforms and creates GitHub Release
+3. **Workflow dispatch** - Manual trigger with platform/environment selection
+4. **Path filters** - Only runs when relevant files change:
+   - `packages/app/**`
+   - `packages/client/**`
+   - `packages/shared/**`
+   - `.github/workflows/build-app.yml`
+
+### Concurrency Control
+
+```yaml
+concurrency:
+  group: build-native-apps-${{ github.ref }}
+  cancel-in-progress: false
+```
+
+Multiple builds for the same ref run sequentially (no cancellation) to prevent incomplete releases.
+
+## Updater Integration
+
+Tauri includes an auto-updater for desktop apps:
+
+**Update Manifest:**
+```json
+{
+  "version": "1.0.0",
+  "notes": "Release notes here",
+  "pub_date": "2026-02-25T00:00:00Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "...",
+      "url": "https://github.com/HyperscapeAI/hyperscape/releases/download/v1.0.0/hyperscape_1.0.0_aarch64.dmg"
+    },
+    "windows-x86_64": {
+      "signature": "...",
+      "url": "https://github.com/HyperscapeAI/hyperscape/releases/download/v1.0.0/hyperscape_1.0.0_x64-setup.exe"
+    }
+  }
+}
+```
+
+The updater checks for new versions on app launch and prompts users to update.
+
+## Related Documentation
+
+- [Mobile Development](/guides/mobile) - Mobile-specific development guide
+- [Deployment](/guides/deployment) - Web deployment (Cloudflare, Railway)
+- [Configuration](/devops/configuration) - Environment variables and secrets
