@@ -32,29 +32,59 @@ Each NPC has the following structure:
 
 ```typescript
 interface NPCData {
-  id: string;                    // Unique identifier (e.g., "goblin_warrior")
-  name: string;                  // Display name (e.g., "Goblin Warrior")
+  id: string;                    // Unique identifier (e.g., "goblin")
+  name: string;                  // Display name (e.g., "Goblin")
+  description: string;           // NPC description
   category: NPCCategory;         // "mob" | "boss" | "neutral" | "quest"
-  modelPath: string;             // Path to GLB model
+  faction?: string;              // Faction (e.g., "monster", "town")
+  levelRange?: [number, number]; // Min/max level range for mobs
 
   stats: {
     level: number;               // Combat level (1-126)
+    health: number;              // Max HP
     attack: number;              // Attack level
     strength: number;            // Strength level
     defense: number;             // Defense level
-    health: number;              // Max HP
+    defenseBonus: number;        // Defense bonus
     ranged?: number;             // Ranged level (optional)
+    magic?: number;              // Magic level (optional)
   };
 
-  aggression: {
-    type: AggressionType;        // Aggro behavior
-    maxLevel?: number;           // For level_gated type
+  combat: {
+    attackable: boolean;         // Can be attacked
+    aggressive?: boolean;        // Attacks players
+    retaliates?: boolean;        // Fights back when attacked
+    aggroRange?: number;         // Aggro detection range
+    combatRange?: number;        // Attack range
+    leashRange?: number;         // Max distance from spawn
+    attackSpeedTicks?: number;   // Attack speed
+    respawnTicks?: number;       // Respawn delay in ticks
   };
 
-  spawnBiomes: string[];         // Where NPC can spawn
-  respawnTime?: number;          // Respawn delay in seconds
+  movement: {
+    type: MovementType;          // "stationary" | "wander" | "patrol"
+    speed: number;               // Movement speed
+    wanderRadius: number;        // Wander distance from spawn
+  };
 
-  drops: DropTable;              // Loot drops
+  services?: {
+    enabled: boolean;            // Provides services
+    types: string[];             // Service types (e.g., "bank", "shop")
+  };
+
+  dialogue?: {
+    entryNodeId: string;         // Starting dialogue node
+    nodes: DialogueNode[];       // Dialogue tree
+  };
+
+  appearance: {
+    modelPath: string;           // Path to VRM/GLB model
+    iconPath?: string;           // Icon path
+    scale: number;               // Model scale
+  };
+
+  spawnBiomes?: string[];        // Where NPC can spawn
+  drops?: DropTable;             // Loot drops (for mobs)
 }
 ```
 
@@ -64,33 +94,133 @@ interface NPCData {
 
 | Category | Description | Example |
 |----------|-------------|---------|
-| `mob` | Hostile enemy | Goblin, Bandit |
+| `mob` | Hostile enemy | Goblin, Bandit, Dark Wizard |
 | `boss` | Powerful enemy | Giant Spider, Dragon |
-| `neutral` | Non-combat NPC | Shopkeeper, Banker |
-| `quest` | Quest giver/target | Quest NPC, Guard |
+| `neutral` | Non-combat NPC | Shopkeeper, Bank Clerk |
+| `quest` | Quest giver/target | Captain Rowan, Forester Wilma |
 
 ---
 
-## Aggression Types
+## Movement Types
 
-NPCs have different aggression behaviors:
+NPCs have different movement patterns:
 
 ```typescript
-type AggressionType =
-  | "passive"           // Never attacks first
-  | "aggressive"        // Attacks players below double its level
-  | "always_aggressive" // Attacks all players
-  | "level_gated";      // Only attacks below specific level
+type MovementType =
+  | "stationary"  // Does not move
+  | "wander"      // Random movement within radius
+  | "patrol";     // Follows predefined path
 ```
-
-### Aggro Rules
 
 | Type | Behavior |
 |------|----------|
-| `passive` | Never initiates combat |
-| `aggressive` | Attacks if player level < 2 × NPC level |
-| `always_aggressive` | Attacks all players regardless of level |
-| `level_gated` | Attacks if player level ≤ `maxLevel` threshold |
+| `stationary` | NPC stays in one location (e.g., shopkeepers, bankers) |
+| `wander` | NPC randomly moves within `wanderRadius` from spawn point |
+| `patrol` | NPC follows a predefined patrol route |
+
+---
+
+## Combat System
+
+### Aggression Behavior
+
+Mobs use the `combat.aggressive` flag to determine if they attack players:
+
+- **Aggressive Mobs**: Automatically attack nearby players within `aggroRange`
+- **Passive Mobs**: Only attack when provoked
+- **Level-Based Aggro**: Some mobs use `levelRange` to determine valid targets
+
+### Combat Properties
+
+| Property | Description |
+|----------|-------------|
+| `attackable` | Whether players can attack this NPC |
+| `aggressive` | Whether NPC attacks players on sight |
+| `retaliates` | Whether NPC fights back when attacked |
+| `aggroRange` | Detection radius for aggressive behavior |
+| `combatRange` | Attack range (1 for melee, higher for ranged/magic) |
+| `leashRange` | Max distance from spawn before resetting |
+| `attackSpeedTicks` | Ticks between attacks (4 ticks = 2.4 seconds) |
+| `respawnTicks` | Ticks until respawn after death |
+
+---
+
+## Services System
+
+NPCs can provide services to players:
+
+```typescript
+interface Services {
+  enabled: boolean;
+  types: string[];  // "bank", "shop", "quest", etc.
+}
+```
+
+### Service Types
+
+| Type | Description | Example NPC |
+|------|-------------|-------------|
+| `bank` | Opens bank interface | Bank Clerk |
+| `shop` | Opens shop interface | Shopkeeper, Dommik |
+| `quest` | Quest giver | Captain Rowan, Forester Wilma |
+
+---
+
+## Dialogue System
+
+NPCs can have multi-node dialogue trees:
+
+```typescript
+interface Dialogue {
+  entryNodeId: string;
+  nodes: DialogueNode[];
+}
+
+interface DialogueNode {
+  id: string;
+  text: string;
+  responses?: DialogueResponse[];
+}
+
+interface DialogueResponse {
+  text: string;
+  nextNodeId?: string;
+  effect?: string;  // "openBank", "openStore", etc.
+}
+```
+
+### Example Dialogue Flow
+
+```json
+{
+  "entryNodeId": "greeting",
+  "nodes": [
+    {
+      "id": "greeting",
+      "text": "Welcome to the bank! How may I help you today?",
+      "responses": [
+        {
+          "text": "I'd like to access my bank.",
+          "nextNodeId": "open_bank",
+          "effect": "openBank"
+        },
+        {
+          "text": "Goodbye.",
+          "nextNodeId": "farewell"
+        }
+      ]
+    },
+    {
+      "id": "open_bank",
+      "text": "Of course! Here are your belongings."
+    },
+    {
+      "id": "farewell",
+      "text": "Take care, adventurer!"
+    }
+  ]
+}
+```
 
 ---
 
@@ -162,15 +292,36 @@ export function calculateNPCDrops(npcId: string): Array<{ itemId: string; quanti
 
 ## Available 3D Models
 
-NPCs use rigged GLB models from `/assets/world/forge/`:
+NPCs use rigged VRM models from the assets repository:
+
+### Mob Models
 
 | Model Path | Used For |
 |------------|----------|
-| `goblin/goblin_rigged.glb` | Goblins |
-| `thug/thug_rigged.glb` | Bandits, thugs |
-| `human/human_rigged.glb` | Guards, knights, shopkeepers |
-| `troll/troll_rigged.glb` | Hobgoblins |
-| `imp/imp_rigged.glb` | Dark warriors |
+| `asset://models/mobs/goblin/goblin.vrm` | Goblins |
+| `asset://models/mobs/bandit/bandit.vrm` | Bandits |
+| `asset://models/mobs/barbarian/barbarian.vrm` | Barbarians |
+| `asset://models/mobs/dark-ranger/dark-ranger.vrm` | Dark Rangers |
+| `asset://models/mobs/dark-wizard/dark-wizard.vrm` | Dark Wizards |
+| `asset://models/mobs/gaurd/gaurd.vrm` | Guards |
+
+### NPC Models
+
+| Model Path | Used For |
+|------------|----------|
+| `asset://models/npcs/captain-rowan/captain-rowan.vrm` | Captain Rowan (quest giver) |
+| `asset://models/npcs/forester-wilma/forester-wilma.vrm` | Forester Wilma (woodcutting trainer) |
+| `asset://models/npcs/fisherman-pete/fisherman-pete.vrm` | Fisherman Pete (fishing trainer) |
+| `asset://models/npcs/torvin/torvin.vrm` | Torvin (smithing trainer) |
+| `asset://models/npcs/banker/banker.vrm` | Bank Clerk |
+| `asset://models/npcs/shopkeeper/shopkeeper.vrm` | Shopkeeper |
+| `asset://models/npcs/dommik/Dommik.vrm` | Dommik (crafting supplier) |
+| `asset://models/npcs/horvik/Horvik.vrm` | Horvik (armor shop) |
+| `asset://models/npcs/Lowe/Lowe.vrm` | Lowe (bowyer) |
+| `asset://models/npcs/Zamorin/Zamorin.vrm` | Wizard Zamorin (magic trainer) |
+| `asset://models/npcs/tanner-ellis/tanner-ellis.vrm` | Tanner Ellis (leather goods) |
+| `asset://avatars/avatar-male-01.vrm` | Generic male NPCs |
+| `asset://avatars/avatar-female-01.vrm` | Generic female NPCs |
 
 ---
 
@@ -273,41 +424,130 @@ export const NPC_SPAWN_CONSTANTS = {
 
 ---
 
-## Example NPC Definition
+## Example NPC Definitions
+
+### Hostile Mob (Goblin)
 
 ```json
 {
-  "id": "goblin_warrior",
-  "name": "Goblin Warrior",
+  "id": "goblin",
+  "name": "Goblin",
+  "description": "A weak goblin creature, perfect for beginners",
   "category": "mob",
-  "modelPath": "goblin/goblin_rigged.glb",
+  "faction": "monster",
+  "levelRange": [1, 3],
   "stats": {
-    "level": 5,
-    "attack": 5,
-    "strength": 5,
-    "defense": 5,
-    "health": 20
+    "level": 2,
+    "health": 5,
+    "attack": 1,
+    "strength": 1,
+    "defense": 1,
+    "defenseBonus": 0,
+    "ranged": 1,
+    "magic": 1
   },
-  "aggression": {
-    "type": "aggressive"
+  "combat": {
+    "attackable": true,
+    "aggressive": true,
+    "retaliates": true,
+    "aggroRange": 4,
+    "combatRange": 1,
+    "leashRange": 7,
+    "attackSpeedTicks": 4,
+    "respawnTicks": 35
   },
-  "spawnBiomes": ["forest", "plains"],
-  "respawnTime": 30,
+  "movement": {
+    "type": "wander",
+    "speed": 3.33,
+    "wanderRadius": 5
+  },
   "drops": {
     "defaultDrop": {
       "enabled": true,
-      "itemId": "coins",
-      "quantity": 10
+      "itemId": "bones",
+      "quantity": 1
     },
-    "always": [],
     "common": [
-      { "itemId": "bronze_dagger", "minQuantity": 1, "maxQuantity": 1, "chance": 0.25 }
+      {
+        "itemId": "coins",
+        "minQuantity": 5,
+        "maxQuantity": 15,
+        "chance": 1.0,
+        "rarity": "common"
+      }
     ],
     "uncommon": [
-      { "itemId": "iron_dagger", "minQuantity": 1, "maxQuantity": 1, "chance": 0.1 }
-    ],
-    "rare": [],
-    "veryRare": []
+      {
+        "itemId": "bronze_sword",
+        "minQuantity": 1,
+        "maxQuantity": 1,
+        "chance": 0.1,
+        "rarity": "uncommon"
+      }
+    ]
+  },
+  "appearance": {
+    "modelPath": "asset://models/goblin/goblin.vrm",
+    "iconPath": "asset://icons/npcs/goblin.png",
+    "scale": 0.75
+  },
+  "spawnBiomes": ["forest", "plains"]
+}
+```
+
+### Service NPC (Bank Clerk)
+
+```json
+{
+  "id": "bank_clerk",
+  "name": "Bank Clerk",
+  "description": "A helpful bank clerk who manages deposits and withdrawals",
+  "category": "neutral",
+  "faction": "town",
+  "combat": {
+    "attackable": false
+  },
+  "movement": {
+    "type": "stationary",
+    "speed": 0,
+    "wanderRadius": 0
+  },
+  "services": {
+    "enabled": true,
+    "types": ["bank"]
+  },
+  "dialogue": {
+    "entryNodeId": "greeting",
+    "nodes": [
+      {
+        "id": "greeting",
+        "text": "Welcome to the bank! How may I help you today?",
+        "responses": [
+          {
+            "text": "I'd like to access my bank.",
+            "nextNodeId": "open_bank",
+            "effect": "openBank"
+          },
+          {
+            "text": "Goodbye.",
+            "nextNodeId": "farewell"
+          }
+        ]
+      },
+      {
+        "id": "open_bank",
+        "text": "Of course! Here are your belongings."
+      },
+      {
+        "id": "farewell",
+        "text": "Take care, adventurer!"
+      }
+    ]
+  },
+  "appearance": {
+    "modelPath": "asset://avatars/avatar-male-01.vrm",
+    "iconPath": "asset://icons/npcs/shopkeeper.png",
+    "scale": 1.0
   }
 }
 ```
