@@ -98,6 +98,61 @@ The dev server provides:
 - **Server**: Auto-restart on file changes
 - **Shared**: Watch mode with rebuild
 
+## Asset Management
+
+Hyperscape uses a **separate assets repository** to keep the main codebase lightweight.
+
+### Asset Repository Structure
+
+- **Main repo** (`HyperscapeAI/hyperscape`): Tracks manifest JSON files only
+- **Assets repo** (`HyperscapeAI/assets`): Contains 3D models, textures, audio (~200MB with Git LFS)
+
+### Local Development
+
+Assets are automatically cloned during `bun install`:
+
+```bash
+# Automatic (runs during bun install)
+# See scripts/ensure-assets.mjs
+
+# Manual sync (if needed)
+bun run assets:sync
+```
+
+The `ensure-assets.mjs` script:
+1. Checks if `packages/server/world/assets/` exists
+2. If missing, clones `HyperscapeAI/assets` repository
+3. Uses shallow clone with LFS for faster downloads
+4. Manifests are copied from assets repo to main repo
+
+### CI/CD Asset Handling
+
+In CI environments, assets are cloned without LFS (manifests only):
+
+```bash
+# From scripts/ensure-assets.mjs
+if (process.env.CI === 'true') {
+  // Shallow clone without LFS (manifests only)
+  git clone --depth 1 --no-checkout https://github.com/HyperscapeAI/assets.git
+  git sparse-checkout set manifests/
+} else {
+  // Full clone with LFS for local development
+  git clone https://github.com/HyperscapeAI/assets.git
+}
+```
+
+<Warning>
+The entire `packages/server/world/assets/` directory is gitignored. Never commit binary assets to the main repository.
+</Warning>
+
+### Asset Updates
+
+When assets are updated in the assets repository:
+
+1. Pull latest assets: `bun run assets:sync`
+2. Manifests are automatically updated
+3. Restart server to reload manifests
+
 ## Docker Services
 
 ```bash
