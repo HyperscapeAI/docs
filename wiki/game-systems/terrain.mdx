@@ -318,6 +318,65 @@ if (zone) {
 }
 ```
 
+## Duel Arena Floor Fix (commit b8f56e81)
+
+Players and agents were sinking ~0.4m into duel arena floors because flat zones were removed from the terrain system. This caused `getHeightAt()` to return raw procedural terrain height instead of floor-level height, and also allowed grass to grow through floor surfaces.
+
+**Problem:**
+- Flat zones were removed from terrain system
+- `getHeightAt()` returned procedural terrain height (~0.4m below arena floors)
+- Players/agents spawned at procedural height, sinking into visual floor meshes
+- Grass system used procedural heights, rendering grass through floors
+
+**Solution:**
+
+Flat zones are now registered programmatically from `DuelArenaVisualsSystem` for all 8 floor areas:
+
+```typescript
+// From DuelArenaVisualsSystem.ts
+// Register flat zones for all arena floors
+for (let i = 0; i < 6; i++) {
+  const arenaCenter = this.getArenaCenter(i);
+  terrainSystem.registerFlatZone({
+    id: `duel_arena_${i}`,
+    centerX: arenaCenter.x,
+    centerZ: arenaCenter.z,
+    width: ARENA_WIDTH,
+    depth: ARENA_LENGTH,
+    height: BASE_Y,
+    blendRadius: 2.0,
+  });
+}
+
+// Lobby floor
+terrainSystem.registerFlatZone({
+  id: \"duel_lobby\",
+  centerX: LOBBY_CENTER_X,
+  centerZ: LOBBY_CENTER_Z,
+  width: LOBBY_WIDTH,
+  depth: LOBBY_DEPTH,
+  height: BASE_Y,
+  blendRadius: 2.0,
+});
+
+// Hospital floor
+terrainSystem.registerFlatZone({
+  id: \"duel_hospital\",
+  centerX: HOSPITAL_CENTER_X,
+  centerZ: HOSPITAL_CENTER_Z,
+  width: HOSPITAL_WIDTH,
+  depth: HOSPITAL_DEPTH,
+  height: BASE_Y,
+  blendRadius: 2.0,
+});
+```
+
+**Impact:**
+- Terrain height queries now return correct floor-level values
+- Players/agents spawn at proper height (no sinking)
+- Grass system respects flat zones (no grass through floors)
+- Terrain mesh is carved under floor areas to prevent overdraw
+
 ## Console Logging
 
 `TerrainSystem` logs flat zone activity:
@@ -326,6 +385,7 @@ if (zone) {
 [TerrainSystem] Registered flat zone "station_bank_lumbridge_1" -> tile keys: [0_-1, 0_0]
 [TerrainSystem] FLAT ZONE HIT: "station_bank_lumbridge_1" at (2.5, -24.8) -> height=42.15
 [TerrainSystem] Flat zone stats: 5 zones registered, 12 tile keys in spatial index, 1247 height lookups used flat zones
+[TerrainSystem] Regenerating 2 terrain tiles for flat zone "duel_arena_0"
 ```
 
 ## Performance Characteristics
