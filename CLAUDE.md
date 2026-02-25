@@ -801,6 +801,38 @@ const db = drizzle(pool, {
 
 ### CI/CD Best Practices
 
+**Native App Build Workflow (commits 8ce4819, 15250d2, a095ba1, 3b7665d, Feb 25 2026):**
+
+The native app build workflow (`.github/workflows/build-app.yml`) has been hardened for cross-platform reliability:
+
+**macOS Builds:**
+- Unsigned builds use `--bundles app` to produce only .app bundles, skipping DMG creation which requires code signing certificates
+- Prevents `SecKeychainItemImport` errors when APPLE_CERTIFICATE env var is empty
+
+**iOS Builds:**
+- Build job is release-only since unsigned iOS builds always fail with 'Signing requires a development team'
+- Unsigned iOS builds are skipped to prevent workflow failures
+
+**Windows Builds:**
+- Added retry logic (3 attempts) to bun install for transient NPM registry 403 errors on Windows runners
+- Handles npm rate-limiting that commonly affects Windows CI runners
+
+**Secret Handling:**
+- Conditionally supply native app secrets only when needed (release builds)
+- Correct Windows env var syntax for secret injection
+
+**Matrix Filtering:**
+- Removed invalid matrix reference from job-level condition (matrix context not available until job runs)
+
+**NPM Rate Limit Resilience (commits 7c9ff6c, 08aa151, Feb 25 2026):**
+
+GitHub Actions IP ranges are rate-limited by npm, causing intermittent 403 Forbidden errors. All workflows now use:
+
+1. **Frozen lockfile**: `bun install --frozen-lockfile` prevents npm from resolving packages fresh (which triggers rate limits)
+2. **Retry with backoff**: Up to 5 attempts with increasing backoff (15s, 30s, 45s, 60s, 75s) for transient rate limits
+
+**Why**: When bun install runs without `--frozen-lockfile`, it may try to resolve packages fresh from npm even when a lockfile exists. Under CI load this triggers npm rate-limiting (403 Forbidden), causing all workflows to fail.
+
 **Chain Setup:**
 - `setup-chain.mjs` skips when `CI=true` (anvil/mud not available in CI)
 - Exclude `@hyperscape/evm-contracts` from turbo test filter
