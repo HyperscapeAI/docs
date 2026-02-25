@@ -23,6 +23,329 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Performance & Visual Effects Overhaul" description="February 2026" date="2026-02-25">
+
+### ⚡ Arena Performance Optimization (PR #938, commit c20d0fc)
+
+Massive rendering performance improvement for duel arenas via instancing and GPU-driven lighting:
+
+**Draw Call Reduction (97%):**
+- **Before**: ~846 individual meshes (fence posts, caps, rails, pillars, braziers, borders, poles)
+- **After**: ~22 InstancedMesh draw calls
+- **Impact**: Reduced GPU state changes and redundant material creation
+
+**InstancedMesh Conversion:**
+- **Fence Posts**: 288 posts + 288 caps → 2 draw calls
+- **Fence Rails**: 36 X-rails + 36 Z-rails → 2 draw calls
+- **Stone Pillars**: 32 pillars × 3 parts (base, shaft, capital) → 3 draw calls
+- **Brazier Bowls**: 24 arena braziers → 1 draw call
+- **Border Strips**: 12 N/S + 12 E/W → 2 draw calls
+- **Banner Poles**: 12 poles → 1 draw call
+
+**GPU-Driven Lighting:**
+- **Removed**: All 28 dynamic `PointLight`s (primary FPS killer)
+  - Each light forced expensive per-pixel shading passes on surrounding geometry
+  - CPU-animated flicker every frame
+- **Replaced**: Single TSL emissive material on brazier bowls
+  - Animated flicker runs entirely on GPU via `emissiveNode`
+  - Per-instance phase offset derived from world position
+  - Zero CPU cost per frame
+  - Multi-frequency sine flicker + high-freq noise matches old PointLight behavior
+
+**Fire Particle Improvements:**
+- **Removed**: "torch" particle preset (redundant with enhanced "fire")
+- **Enhanced "fire" Preset**: Unified fire emitter with improved shader
+  - Smooth value noise fragment shader (bilinear interpolated hash lattice)
+  - Soft radial falloff designed for additive blending
+  - Overlapping particles merge into cohesive flame body
+  - Per-particle turbulent vertex motion for natural flickering
+  - Height-based color gradient (white-yellow core → orange-red tips)
+  - Increased particle count: 18 → 28 per emitter
+  - Tighter spawn spread: 0.25 → 0.04 for concentrated flames
+  - Faster lifetime: 0.5-1.2s → 0.35-0.8s for more dynamic motion
+
+**Dead Code Removal:**
+- `createArenaMarker()` - Unused arena number markers
+- `createAmbientDust()` - Unused dust particles
+- `createLobbyBenches()` - Unused lobby furniture
+
+**Files Changed:**
+- `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts` (+1103/-1427 lines)
+- `packages/shared/src/entities/managers/particleManager/GlowParticleManager.ts` (+159/-59 lines)
+
+**Performance Impact:**
+- FPS improvement on reference hardware: ~40% increase in arena areas
+- GPU memory savings: Shared geometries and materials across all instances
+- CPU savings: Zero per-frame light animation overhead
+
+### ✨ Teleport VFX System Overhaul (PR #939, commits 69105229, 7bf0e14, ceb8909)
+
+Spectacular multi-phase teleportation visual effect with object pooling and TSL shaders:
+
+**Visual Components:**
+- **Ground Rune Circle**: Procedural canvas texture with concentric circles, radial spokes, and triangular glyphs
+  - Scale animation: 0.5 → 2.0 during gather phase
+  - Rotation: 2.0 rad/s with phase-based speed modulation
+  - Additive blending with cyan glow
+- **Dual Beams**: Inner (white→cyan) and outer (light cyan→dark blue) beams
+  - Hermite elastic curve: overshoot to 1.3 at 35%, settle to 1.0
+  - Bottom-pivot geometry (translated up by half height)
+  - Vertical gradient with scrolling energy pulse
+  - Soft fade at beam base prevents floor clipping
+- **Core Flash**: White sphere burst at eruption (t=0.20-0.22s)
+  - Pop from 0 → 2.5 scale
+  - Instant fade-out over 0.04s
+- **Shockwave Rings**: Two expanding rings with easeOutExpo
+  - Ring 1: Scale 1 → 13 over 0.2s
+  - Ring 2: Scale 1 → 11, delayed 0.024s
+  - Cyan and white colors
+- **Helix Spiral Particles**: 12 particles (2 strands × 6)
+  - Spiral upward with decreasing radius (0.8 → 0.1)
+  - Per-particle spawn delays for staggered appearance
+  - Recycle when reaching 16m height
+  - Billboard orientation toward camera
+- **Burst Particles**: 8 particles with gravity simulation
+  - 3 white + 3 cyan + 2 gold
+  - Random horizontal spread and upward velocity
+  - Gravity: 6.0 m/s²
+  - Fade via scale (glow shader handles soft edges)
+- **Point Light**: Dynamic intensity (0 → 5.0 peak → 0)
+  - Cyan color (#66ccff)
+  - 8m radius
+
+**Four Phases:**
+1. **Gather** (0-20%): Rune circle scales up, base glow appears
+2. **Erupt** (20-34%): Beams shoot up, flash burst, shockwaves expand
+3. **Sustain** (34-68%): Full effect visible, helix and burst particles active
+4. **Fade** (68-100%): All elements fade out, beams thin
+
+**Performance Optimizations:**
+- **Object Pooling**: Pool size 2 (max concurrent effects for both duel agents)
+  - Zero allocations at spawn time
+  - All materials compiled once during init()
+  - No pipeline compilations during gameplay
+- **Shared Resources**:
+  - 2 particle materials shared across all pool entries
+  - 7 geometries shared (particle, beams, disc, rune, shockwave, sphere)
+  - 1 rune texture shared
+  - 7 per-effect materials with own uniforms (rune, glow, beams, flash, shockwaves)
+- **Uniform-Based Opacity**: Structural meshes fade via TSL uniforms
+  - No material disposal/recreation
+  - GPU-driven opacity changes
+- **Scale-Based Particle Fade**: Particles fade by scaling down
+  - Glow shader handles soft edges
+  - No per-particle opacity uniforms needed
+
+**Bug Fixes:**
+- **Duplicate Teleport VFX** (commit 7bf0e14): Fixed race condition causing 3rd spurious teleport effect
+  - Removed premature `clearDuelFlagsForCycle()` in `endCycle()`
+  - Flags now stay true until `cleanupAfterDuel()` completes teleports
+  - Prevents `DuelSystem.ejectNonDuelingPlayersFromCombatArenas()` from seeing agents with `inStreamingDuel=false` still in arena
+- **suppressEffect Forwarding** (commit 7bf0e14): Mid-fight proximity corrections now suppressed
+  - `suppressEffect` flag forwarded through ServerNetwork → ClientNetwork → VFX system
+  - Arena exit effects remain visible
+  - Cleanup teleports no longer suppress effects
+- **Duplicate PLAYER_TELEPORTED Emit** (commit 7bf0e14): Removed duplicate event emissions
+  - Removed from `PlayerRemote.modify()` (position may be stale)
+  - Removed from local player path in `ClientNetwork.onPlayerTeleport`
+  - VFX now emitted only once per teleport from dedicated packet handler
+- **Beam Base Clipping** (commit ceb8909): Faded beam base to prevent clipping through floor
+  - Soft fade at beam base using `bottomFade` in TSL shader
+  - Beam emerges from rune circle instead of penetrating floor
+
+**VFX Catalog Browser** (commit 69105229): New `/vfx` page in Asset Forge
+- Sidebar catalog of all game effects (spells, arrows, glow, fishing, teleport, combat HUD)
+- Live Three.js previews with orbit controls
+- Detail panels with colors, parameters, layers, and phase timelines
+- See [Asset Forge VFX Catalog](/packages/asset-forge#vfx-catalog-browser) for details
+
+**Files Changed:**
+- `packages/shared/src/systems/client/ClientTeleportEffectsSystem.ts` (+898/-303 lines)
+- `packages/asset-forge/src/components/VFX/` (new: EffectDetailPanel.tsx, VFXPreview.tsx)
+- `packages/asset-forge/src/data/vfx-catalog.ts` (new: 663 lines)
+- `packages/asset-forge/src/pages/VFXPage.tsx` (new: 242 lines)
+
+### 🐛 Model Cache Critical Fixes (PR #935, commit c98f1cc)
+
+Fixed three critical bugs in IndexedDB processed model cache:
+
+**Bug #1 - Missing Objects (e.g., altars):**
+- **Problem**: Models with duplicate mesh names (common: "", "Cube", "Cube") lost objects during deserialization
+  - `serializeNode` used `findIndex`-by-name to map hierarchy nodes to mesh data
+  - All duplicates resolved to same index
+  - Three.js `add()` auto-removes from previous parent, so only last reference survived
+- **Fix**: Use `Map<Object3D, number>` identity map built during traversal
+- **Impact**: All objects in models now render correctly
+
+**Bug #2 - Lost Textures (white/wrong colors after restart):**
+- **Problem**: Textures serialized as ephemeral `blob:` URLs but never reloaded during deserialization
+  - After page refresh, blob URLs became invalid
+  - Models appeared white or incorrectly colored
+- **Fix**: Extract raw RGBA pixels via canvas `getImageData` (synchronous), restore as `THREE.DataTexture`
+  - No async loading race conditions
+  - Textures persist correctly across page refreshes
+- **Impact**: Models maintain correct colors after restart
+
+**Bug #3 - Grey Trees in WebGPU:**
+- **Problem**: `createDissolveMaterial` used `instanceof MeshStandardMaterial` which fails for `MeshStandardNodeMaterial` in WebGPU build
+  - WebGPU uses separate class hierarchy
+  - Duck-type check needed instead of instanceof
+- **Fix**: Replaced with property check: `src.color && src.roughness !== undefined`
+- **Impact**: Tree materials render correctly in WebGPU builds
+
+**Additional Improvements:**
+- Added `localStorage.setItem('disable-model-cache', 'true')` bypass option for debugging
+- Error logging on IndexedDB `put`/transaction failures
+- Cache version bumped to 3 to invalidate broken entries
+
+**Files Changed:**
+- `packages/shared/src/utils/rendering/ModelCache.ts` (+159/-59 lines)
+- `packages/shared/src/systems/shared/world/GPUVegetation.ts` (+28/-37 lines)
+
+### ⚔️ Duel Combat AI Improvements (PR #934, commit 029456255)
+
+Fixed mage staff and 2H sword combat in streaming duels:
+
+**Weapon Type Propagation:**
+- Combat system now propagates weapon type (mage/ranged/melee) to `startCombat()`
+- Ensures correct attack speeds for each combat role
+- Mage and ranged agents use correct timing instead of defaulting to melee
+- `roleToWeaponType()` helper converts DuelCombatRole → AttackType
+
+**Keep-Alive Re-Engagement:**
+- DuelCombatAI re-engages every 5 ticks (~3s) to prevent idling
+- Fixes 2H sword attacks not firing when combat state times out
+- Entity data flags (`inCombat`, `combatTarget`) can be stale from `setAgentCombatTarget()`
+- Periodic re-engagement ensures agents don't stand idle
+
+**Rune Inventory Readiness:**
+- Waits up to 2 seconds for inventory to load before adding runes
+- Prevents silent rune loss from race conditions
+- `isInventoryReady()` polling with 100ms intervals
+- Mage agents now reliably receive runes
+
+**Rune Validation Bypass:**
+- Streaming duel agents bypass rune validation (inventory timing unreliable)
+- Allows mage bots to cast spells without inventory race conditions
+- Staff provides infinite elemental runes; only catalytic runes (mind/chaos) would fail
+- Diagnostic logging for rune validation failures
+
+**Combat Timeout Refresh:**
+- Ranged/magic attacks now refresh combat timeout in both `CombatSystem` and `CombatTickProcessor`
+- Combat stays active during projectile fights
+- Fetches fresh state from Map after handler (old reference may be stale)
+
+**PvP Zone Bypass:**
+- Streaming duel agents bypass PvP zone checks
+- Enables duels in any zone, not just wilderness
+- Consistent with `enterCombat` behavior
+
+**Safe Zone Aggro Block:**
+- `AggroSystem` blocks aggro and chase on players in safe zones
+- Safe zones are truly safe from hostile mobs
+- Zone detection system integration
+
+**Combat State Starvation Guard:**
+- Only call `startCombat()` if no valid combat state exists
+- Prevents `nextAttackTick` reset starvation for slow weapons
+- `hasValidState()` helper checks CombatSystem state, not entity flags
+- Auto-attacks can fire reliably for 2H swords
+
+**Files Changed:**
+- `packages/server/src/arena/DuelCombatAI.ts` (+327/-65 lines)
+- `packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts`
+- `packages/shared/src/systems/shared/combat/AggroSystem.ts`
+- `packages/shared/src/systems/shared/combat/CombatSystem.ts`
+- `packages/shared/src/systems/shared/combat/CombatTickProcessor.ts`
+
+### 🎥 RTMP Streaming Stability (commit 14a1e1b)
+
+Improved streaming reliability and WebGPU renderer initialization:
+
+**Streaming Resilience:**
+- **CDP Stall Threshold**: Increased from 2 → 4 intervals (120s) to reduce false restarts
+- **Soft CDP Recovery**: Restart screencast without browser/FFmpeg teardown
+  - No stream gap during recovery
+  - Preserves browser state
+- **FFmpeg Restart Attempts**: Increased from 5 → 8 max attempts
+- **Recovery Counter Reset**: `resetRestartAttempts()` for successful recovery
+- **Capture Recovery Failures**: Increased default from 2 → 4 max failures
+
+**WebGPU Renderer Init:**
+- **Best-Effort Limits**: Try `maxTextureArrayLayers: 2048` first
+  - Retry with default limits if GPU rejects
+  - Always WebGPU, never WebGL fallback
+  - Prevents renderer init failures on GPUs with lower limits
+
+**Additional Improvements:**
+- TerrainSystem timing debug gating
+- DuelMarketMaker updates
+- main.ts startup improvements
+
+**File**: `packages/server/src/streaming/` (multiple files)
+
+### 🏔️ Terrain Height Cache Fix (commit 21e0860)
+
+Fixed consistent 50m offset in cached height lookups:
+
+**Two Bugs Fixed:**
+1. **Tile Index Calculation**: `Math.floor(worldX/TILE_SIZE)` doesn't account for centered geometry
+   - PlaneGeometry uses [-50, +50] range, not [0, 100]
+   - Added `worldToTerrainTileIndex()` canonical helper
+2. **Grid Index Formula**: Omitted `halfSize` offset from PlaneGeometry's centered range
+   - Added `localToGridIndex()` canonical helper
+   - Fixed both `getHeightAtCached()` and `getTerrainColorAt()`
+
+**Additional Fix:**
+- `getTerrainColorAt()` had comma-vs-underscore key typo preventing it from ever finding tiles
+- Now uses correct `${tileX}_${tileZ}` key format
+
+**Impact**: Terrain height queries now return correct values, fixing player/entity positioning issues
+
+**File**: `packages/shared/src/systems/shared/world/TerrainSystem.ts`
+
+### 🔧 Cyclic Dependency Fix (commit f355276)
+
+Broke cyclic dependency between shared and procgen packages:
+
+**Problem**: Turbo detected cycle: `shared → procgen → shared`
+- Caused build failures and type resolution issues
+
+**Solution**: Move `@hyperscape/procgen` from dependencies to optional peerDependencies in shared's package.json
+- Breaks turbo graph cycle
+- Import still resolves at runtime (both packages always installed together in workspace)
+
+**Impact**: Clean builds now succeed without circular dependency errors
+
+**File**: `packages/shared/package.json`
+
+### 🔧 CI/CD Improvements
+
+**Tauri Build Workflow** (commits 15250d2, cb57325, a095ba1):
+- **Split Unsigned/Release Builds**: Signing env vars only present during actual releases
+  - Fixes `SecKeychainItemImport` error from empty `APPLE_CERTIFICATE`
+  - macOS: Add `--bundles app` to unsigned builds (skip DMG creation)
+  - iOS: Make build job release-only (unsigned iOS always fails)
+- **Windows Install Retry**: 3 attempts with backoff for transient NPM registry 403 errors
+- **Native App Builds Enabled**: Desktop and mobile builds for tagged releases (`v*`)
+  - Platforms: Windows, macOS, Linux, iOS, Android
+  - Download portal: [https://hyperscapeai.github.io/hyperscape/](https://hyperscapeai.github.io/hyperscape/)
+
+**NPM Rate Limit Resilience** (commits 7c9ff6c, 08aa151):
+- **Retry with Backoff**: Up to 5 attempts with increasing backoff (15s, 30s, 45s, 60s, 75s)
+  - Handles transient npm rate limits on GitHub Actions IP ranges
+- **Frozen Lockfile**: Use `--frozen-lockfile` in all workflows
+  - Prevents fresh package resolution that triggers npm rate-limiting
+  - Ensures bun uses only committed lockfile
+
+**Deployment Fixes** (commits c80ad7a, 3ec9826, 1af02ce):
+- **Vast.ai Deploy**: Use `bunx` instead of `npx` in build-services.mjs
+  - Container only has bun installed, not npm/npx
+- **Cloudflare Origin Lock**: Disabled to allow direct frontend API access
+- **Cloudflare Pages**: Specified build output dir to prevent worker deployment error
+
+</Update>
+
 <Update label="CI/CD & Build System Fixes" description="February 2026" date="2026-02-25">
 
 ### 🔧 Tauri Build Workflow Fixes (commit 15250d2)
