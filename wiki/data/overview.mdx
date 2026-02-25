@@ -109,11 +109,25 @@ Each NPC has these properties (from `types/entities/npc-mob-types.ts`):
 **NPCs**:
 ```
 /assets/models/
-├── goblin/goblin_rigged.glb     → Goblins
-├── thug/thug_rigged.glb         → Bandits
-├── human/human_rigged.glb       → Guards, knights, warriors, rangers
-├── troll/troll_rigged.glb       → Hobgoblins
-└── imp/imp_rigged.glb           → Dark warriors
+├── mobs/
+│   ├── goblin/goblin.vrm              → Goblins
+│   ├── bandit/bandit.vrm              → Bandits
+│   ├── barbarian/barbarian.vrm        → Barbarians
+│   ├── gaurd/gaurd.vrm                → Guards
+│   ├── dark-wizard/dark-wizard.vrm    → Dark Wizards (magic attackers)
+│   └── dark-ranger/dark-ranger.vrm    → Dark Rangers (ranged attackers)
+└── npcs/
+    ├── banker/banker.vrm              → Bank Clerks
+    ├── shopkeeper/shopkeeper.vrm      → General Shopkeepers
+    ├── captain-rowan/captain-rowan.vrm → Captain Rowan (Quest NPC)
+    ├── forester-wilma/forester-wilma.vrm → Forester Wilma (Quest NPC)
+    ├── fisherman-pete/fisherman-pete.vrm → Fisherman Pete (Quest NPC)
+    ├── torvin/torvin.vrm              → Torvin (Smith, Quest NPC)
+    ├── tanner-ellis/tanner-ellis.vrm  → Ellis (Tanner)
+    ├── Zamorin/Zamorin.vrm            → Zamorin (Magic Shop, Quest NPC)
+    ├── Lowe/Lowe.vrm                  → Lowe (Bowyer, Quest NPC)
+    ├── horvik/Horvik.vrm              → Horvik (Armorer)
+    └── dommik/Dommik.vrm              → Dommik (Crafting Supplier, Quest NPC)
 ```
 
 **Stations**:
@@ -140,13 +154,50 @@ Each NPC has these properties (from `types/entities/npc-mob-types.ts`):
 **Equipment (Aligned Models)**:
 ```
 /assets/models/
-├── hatchet-bronze/hatchet-bronze-aligned.glb           → Bronze hatchet (aligned)
-├── pickaxe-bronze/pickaxe-bronze-aligned.glb           → Bronze pickaxe (aligned)
-├── pickaxe-steel/pickaxe-steel-aligned.glb             → Steel pickaxe (aligned)
-├── pickaxe-mithril/pickaxe-mithril-aligned.glb         → Mithril pickaxe (aligned)
-├── sword-bronze/sword-bronze-aligned.glb               → Bronze sword (aligned)
-├── sword-steel/sword-steel-aligned.glb                 → Steel sword (aligned)
-└── sword-mithril/sword-mithril-aligned.glb             → Mithril sword (aligned)
+├── hatchets/
+│   ├── hatchet-bronze/hatchet-bronze-aligned.glb      → Bronze hatchet (aligned)
+│   └── ... (iron, steel, mithril, adamant, rune)
+├── pickaxes/
+│   ├── pickaxe-bronze/pickaxe-bronze-aligned.glb      → Bronze pickaxe (aligned)
+│   ├── pickaxe-steel/pickaxe-steel-aligned.glb        → Steel pickaxe (aligned)
+│   ├── pickaxe-mithril/pickaxe-mithril-aligned.glb    → Mithril pickaxe (aligned)
+│   └── ... (iron, adamant, rune)
+└── swords/
+    ├── daggers/
+    │   ├── dagger-bronze-aligned.glb                  → Bronze dagger (aligned)
+    │   ├── dagger-iron-aligned.glb                    → Iron dagger (aligned)
+    │   ├── dagger-steel-aligned.glb                   → Steel dagger (aligned)
+    │   ├── dagger-mithril-aligned.glb                 → Mithril dagger (aligned)
+    │   ├── dagger-adamant-aligned.glb                 → Adamant dagger (aligned)
+    │   └── dagger-rune-aligned.glb                    → Rune dagger (aligned)
+    ├── shortswords/
+    │   ├── shortsword-bronze-aligned.glb              → Bronze shortsword (aligned)
+    │   ├── shortsword-iron-aligned.glb                → Iron shortsword (aligned)
+    │   ├── shortsword-steel-aligned.glb               → Steel shortsword (aligned)
+    │   ├── shortsword-mithril-aligned.glb             → Mithril shortsword (aligned)
+    │   ├── shortsword-adamant-aligned.glb             → Adamant shortsword (aligned)
+    │   └── shortsword-rune-aligned.glb                → Rune shortsword (aligned)
+    ├── long-swords/
+    │   ├── longsword-bronze-aligned.glb               → Bronze longsword (aligned)
+    │   ├── longsword-iron-aligned.glb                 → Iron longsword (aligned)
+    │   ├── longsword-steel-aligned.glb                → Steel longsword (aligned)
+    │   ├── longsword-mithril-aligned.glb              → Mithril longsword (aligned)
+    │   ├── longsword-adamant-aligned.glb              → Adamant longsword (aligned)
+    │   └── longsword-rune-aligned.glb                 → Rune longsword (aligned)
+    ├── scimitars/
+    │   ├── scimitar-bronze-aligned.glb                → Bronze scimitar (aligned)
+    │   ├── scimitar-iron-aligned.glb                  → Iron scimitar (aligned)
+    │   ├── scimitar-steel-aligned.glb                 → Steel scimitar (aligned)
+    │   ├── scimitar-mithril-aligned.glb               → Mithril scimitar (aligned)
+    │   ├── scimitar-adamant-aligned.glb               → Adamant scimitar (aligned)
+    │   └── scimitar-rune-aligned.glb                  → Rune scimitar (aligned)
+    └── 2h-swords/
+        ├── 2h-sword-bronze-aligned.glb                → Bronze 2H sword (aligned)
+        ├── 2h-sword-iron-aligned.glb                  → Iron 2H sword (aligned)
+        ├── 2h-sword-steel-aligned.glb                 → Steel 2H sword (aligned)
+        ├── 2h-sword-mithril-aligned.glb               → Mithril 2H sword (aligned)
+        ├── 2h-sword-adamant-aligned.glb               → Adamant 2H sword (aligned)
+        └── 2h-sword-rune-aligned.glb                  → Rune 2H sword (aligned)
 ```
 
 **Magic Staffs**:
@@ -297,15 +348,18 @@ getItemsByLevel(level: number): Item[]
 
 ### Shop Items
 
-```typescript
-// From packages/shared/src/data/items.ts
-export const SHOP_ITEMS = [
-  "bronze_hatchet",
-  "fishing_rod",
-  "tinderbox",
-  "arrows",
-];
-```
+The game now features multiple specialized stores with comprehensive inventories:
+
+**Available Stores:**
+- **General Store** - Tools, ores, bars, logs, and basic supplies
+- **Torvin's Weaponry** - Melee weapons (daggers, shortswords, longswords, scimitars, 2H swords) across all tiers
+- **Zamorin's Magic Emporium** - Runes, staves, wizard robes, mystic robes, and essence
+- **Archer's Armoury** (Lowe) - Bows, arrows, fletching supplies, and ranged armor
+- **Pete's Fishing Supplies** - Fishing tools, bait, raw and cooked fish
+- **Armor Emporium** (Horvik) - Helms, platebodies, platelegs, shields, boots, gloves, capes, and jewelry
+- **Crafting Supplies** (Dommik) - Needles, thread, chisels, moulds, leather, gems, and crafting materials
+
+All stores support buyback at 50% of the purchase price.
 
 ### Bank Notes
 
@@ -850,6 +904,9 @@ interface QuestStage {
 | **Lumberjack's First Lesson** | Novice | 1 | Help Forester Wilma gather and burn firewood |
 | **Fresh Catch** | Novice | 1 | Help Fisherman Pete catch and cook fish |
 | **Torvin's Tools** | Novice | 1 | Help Torvin forge a set of bronze tools |
+| **Rune Mysteries** | Novice | 1 | Help Wizard Zamorin gather rune essence and craft air runes |
+| **Crafting Basics** | Novice | 1 | Prove your crafting skill to Dommik by making leather goods |
+| **Fletcher's Introduction** | Novice | 1 | Learn the basics of fletching from Lowe the bowyer |
 
 ### Quest Stage Types
 
