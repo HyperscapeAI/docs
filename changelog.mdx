@@ -70,6 +70,18 @@ Enhanced CI reliability and deployment workflows:
   - Fixed players spawning below or above arena floor
   - Spawn heights now align with procedural arena mesh geometry
   - Prevents visual glitches during duel start
+  - Affects all 6 duel arenas in the 2×3 grid layout
+
+### 🔧 CI/CD Improvements
+
+- **Download Portal Deployment** (commit 312f673): Re-enabled download portal deployment
+  - Native app download page at hyperscapeai.github.io/hyperscape/
+  - Publishes desktop and mobile installers from tagged releases
+  - Automated via `.github/workflows/deploy-downloads.yml`
+- **Deploy Workflow Updates** (commit 2fa2c61): Fixed and updated deploy workflows
+  - Improved Railway deployment workflow reliability
+  - Enhanced Vast.ai deployment workflow with better error handling
+  - Better logging and status reporting
 
 </Update>
 
