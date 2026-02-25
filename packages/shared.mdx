@@ -47,7 +47,81 @@ packages/shared/
 
 ## Terrain Generation System
 
-The shared package includes a sophisticated procedural terrain generation system with multi-threaded performance:
+The shared package includes a sophisticated procedural terrain generation system with multi-threaded performance and cached height lookups for optimal performance.
+
+### Terrain Height Cache System
+
+The terrain system uses a tile-based cache for fast height queries without re-evaluating noise functions. Critical bugs in the cache indexing were fixed in commit 21e0860 (Feb 25, 2026).
+
+**Cache Structure:**
+```typescript
+// From TerrainSystem.ts
+private heightCache = new Map<string, Float32Array>();  // tileKey → height grid
+private colorCache = new Map<string, Uint8Array>();     // tileKey → color grid
+
+// Tile key format: "tileKey_x_z" (e.g., "tileKey_0_0", "tileKey_-1_2")
+```
+
+**Critical Bug Fixes (commit 21e0860):**
+
+1. **Tile Index Calculation Error**:
+   - **Issue**: `getHeightAtCached` used `Math.floor(worldX/TILE_SIZE)` which doesn't account for PlaneGeometry's centered coordinates
+   - **Impact**: Terrain tiles were indexed incorrectly, causing ~50m vertical offset in height queries
+   - **Fix**: Added `worldToTerrainTileIndex()` canonical helper
+   - **Formula**: 
+     ```typescript
+     export function worldToTerrainTileIndex(worldCoord: number): number {
+       return Math.floor((worldCoord + HALF_TILE_SIZE) / TILE_SIZE);
+     }
+     ```
+   - **Result**: Terrain height queries now return correct values for all world positions
+
+2. **Grid Index Formula Error**:
+   - **Issue**: Grid index formula omitted the `halfSize` offset from PlaneGeometry's [-50,+50] range
+   - **Impact**: Local coordinates within tiles were mapped incorrectly to height data arrays
+   - **Fix**: Added `localToGridIndex()` canonical helper
+   - **Formula**:
+     ```typescript
+     export function localToGridIndex(localCoord: number, halfSize: number): number {
+       return Math.floor(localCoord + halfSize);
+     }
+     ```
+   - **Result**: Height data lookups within tiles now use correct array indices
+
+3. **Color Cache Key Typo**:
+   - **Issue**: `getTerrainColorAt()` used comma separator (`tileKey_x,z`) instead of underscore (`tileKey_x_z`)
+   - **Impact**: Color cache lookups always failed, forcing expensive recomputation
+   - **Fix**: Corrected key format to match height cache convention
+   - **Result**: Color cache now works correctly, improving terrain rendering performance
+
+**Usage Example:**
+```typescript
+// Get height at world position (uses cache if available)
+const height = terrainSystem.getHeightAt(worldX, worldZ);
+
+// Get terrain color at world position (uses cache if available)
+const color = terrainSystem.getTerrainColorAt(worldX, worldZ);
+
+// Both methods now use canonical helpers internally:
+const tileX = worldToTerrainTileIndex(worldX);
+const tileZ = worldToTerrainTileIndex(worldZ);
+const tileKey = `tileKey_${tileX}_${tileZ}`;
+const heightGrid = this.heightCache.get(tileKey);
+if (heightGrid) {
+  const localX = worldX - tileX * TILE_SIZE;
+  const localZ = worldZ - tileZ * TILE_SIZE;
+  const gridX = localToGridIndex(localX, HALF_TILE_SIZE);
+  const gridZ = localToGridIndex(localZ, HALF_TILE_SIZE);
+  const index = gridZ * resolution + gridX;
+  return heightGrid[index];
+}
+```
+
+**Impact of Fixes:**
+- Eliminates 50m vertical offset in player spawning and entity placement
+- Fixes vegetation placement using incorrect terrain heights
+- Prevents height query inconsistencies between cached and real-time lookups
+- Improves terrain color rendering performance via working color cache
 
 ### TerrainHeightParams.ts
 
