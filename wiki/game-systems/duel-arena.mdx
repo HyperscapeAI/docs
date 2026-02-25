@@ -240,11 +240,65 @@ const ARENA_CONFIG = {
 **Arena Features:**
 - Automatic reservation when duel confirmed
 - Fence posts and rails (replaced solid walls for better visibility)
-- Flattened terrain for fair combat
+- Flattened terrain for fair combat via terrain flat zones
 - Forfeit pillars (if forfeit allowed)
 - Released when duel ends
 - Lit torches at all 4 corners with fire particles
 - Procedural stone tile floor texture (unique per arena)
+
+**Terrain Flat Zones (commit b8f56e8, 7a60135):**
+
+The duel arena system registers flat zones with the terrain system to prevent players from sinking into arena floors:
+
+```typescript
+// From DuelArenaVisualsSystem.ts
+// Register flat zones for all 8 floor areas (6 arenas + lobby + hospital)
+private registerArenaFlatZones(): void {
+  const FLAT_ZONE_HEIGHT_OFFSET = 0.4; // Where players stand above procedural terrain
+  const BLEND_RADIUS = 1.0;
+  const CARVE_INSET = 1.0;
+
+  for (let i = 0; i < ARENA_COUNT; i++) {
+    const proceduralHeight = this.getProceduralTerrainHeight(centerX, centerZ);
+    const zone: FlatZone = {
+      id: `duel_arena_floor_${i + 1}`,
+      centerX,
+      centerZ,
+      width: ARENA_WIDTH,
+      depth: ARENA_LENGTH,
+      height: proceduralHeight + FLAT_ZONE_HEIGHT_OFFSET,
+      blendRadius: BLEND_RADIUS,
+      carveInset: CARVE_INSET,
+    };
+    this.terrainSystem.registerFlatZone(zone);
+  }
+}
+```
+
+**Why Flat Zones Are Needed:**
+
+Before flat zones were registered, players/agents were sinking ~0.4m into duel arena floors because:
+- Flat zones were removed from the terrain system
+- `getHeightAt()` returned raw procedural terrain height instead of floor-level height
+- Grass was growing through floor surfaces
+
+**How It Works:**
+
+1. **DuelArenaVisualsSystem** registers flat zones during `start()` for all 8 floor areas
+2. **TerrainSystem** stores flat zones in a spatial index (terrain tiles for O(1) lookup)
+3. **Height queries** (`getHeightAt()`) check flat zones first before procedural terrain
+4. **Terrain mesh** is carved under floors to prevent grass/vegetation clipping
+5. **Players spawn** at the correct floor-level height (procedural + 0.4m offset)
+
+**Flat Zone Parameters:**
+- `height`: Procedural terrain height + 0.4m (where players stand)
+- `blendRadius`: 1.0m smooth transition to surrounding terrain
+- `carveInset`: 1.0m inset from zone edges to preserve blend padding
+
+**Affected Areas:**
+- 6 duel arenas (20m × 24m each)
+- Lobby floor (40m × 25m)
+- Hospital floor (30m × 25m)
 
 ### Visual Enhancements
 
