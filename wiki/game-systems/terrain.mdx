@@ -393,12 +393,33 @@ private registerArenaFlatZones(): void {
 - Grass system respects flat zones (no grass through floors)
 - Terrain mesh is carved under floor areas to prevent overdraw
 - Visual floor meshes positioned 2cm above terrain mesh to prevent z-fighting
+- Terrain tiles are automatically regenerated when flat zones are registered after initial tile generation
+
+**Terrain Mesh Regeneration:**
+
+When flat zones are registered after terrain tiles have already been generated, the terrain system automatically regenerates affected tiles to reflect the flat zone heights:
+
+```typescript
+// From TerrainSystem.ts
+// Regenerate any existing terrain tiles to apply flat zone heights
+if (tilesToRegenerate.length > 0) {
+  console.log(
+    `[TerrainSystem] Regenerating ${tilesToRegenerate.length} terrain tiles for flat zone "${zone.id}"`
+  );
+  for (const tile of filteredTiles) {
+    this.queueTerrainTileRegeneration(tile.x, tile.z, \"flat_zone\");
+  }
+}
+```
+
+This ensures terrain meshes always reflect flat zone heights, even when buildings or arenas are added after terrain initialization.
 
 **Console Output:**
 ```
 [DuelArenaVisualsSystem] Registered 8 flat zones (6 arenas + lobby + hospital)
 [DuelArenaVisualsSystem] Created floor 1 at (70.0, 0.67, 92.0) - terrain=0.27
 [TerrainSystem] Flat zone stats: 8 zones registered, 24 tile keys in spatial index
+[TerrainSystem] Regenerating 2 terrain tiles for flat zone "duel_arena_floor_1"
 ```
 
 ## Console Logging
