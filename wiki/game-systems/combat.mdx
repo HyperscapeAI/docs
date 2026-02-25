@@ -1985,6 +1985,31 @@ private async tryAttack(
 - Both drivers compete for the same cooldown slot, silently dropping attacks
 - AI now only calls `executeAttack` when combat needs to be (re-)established
 
+**Attack Style Configuration:**
+
+All weapon types now have complete default attack style mappings in `WeaponStyleConfig.ts`:
+
+```typescript
+// From WeaponStyleConfig.ts
+export const DEFAULT_ATTACK_STYLES: Record<WeaponType, CombatStyle> = {
+  [WeaponType.SWORD]: \"slash\",
+  [WeaponType.SCIMITAR]: \"slash\",
+  [WeaponType.AXE]: \"slash\",
+  [WeaponType.MACE]: \"crush\",
+  [WeaponType.DAGGER]: \"stab\",
+  [WeaponType.SPEAR]: \"stab\",
+  [WeaponType.HALBERD]: \"slash\",
+  [WeaponType.TWO_HAND_SWORD]: \"slash\",  // Added in commit 51453da
+  [WeaponType.UNARMED]: \"crush\",
+  [WeaponType.BOW]: \"accurate\",
+  [WeaponType.CROSSBOW]: \"accurate\",
+  [WeaponType.STAFF]: \"accurate\",
+  [WeaponType.WAND]: \"accurate\",
+};
+```
+
+This ensures all weapon types have a valid default style, preventing undefined behavior when AI agents or players use weapons without explicit style selection.
+
 ### Teleport Suppression
 
 Duel arena teleports can be suppressed to prevent visual effects during fight cleanup:
