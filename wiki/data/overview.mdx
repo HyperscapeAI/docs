@@ -348,15 +348,18 @@ getItemsByLevel(level: number): Item[]
 
 ### Shop Items
 
-```typescript
-// From packages/shared/src/data/items.ts
-export const SHOP_ITEMS = [
-  "bronze_hatchet",
-  "fishing_rod",
-  "tinderbox",
-  "arrows",
-];
-```
+The game now features multiple specialized stores with comprehensive inventories:
+
+**Available Stores:**
+- **General Store** - Tools, ores, bars, logs, and basic supplies
+- **Torvin's Weaponry** - Melee weapons (daggers, shortswords, longswords, scimitars, 2H swords) across all tiers
+- **Zamorin's Magic Emporium** - Runes, staves, wizard robes, mystic robes, and essence
+- **Archer's Armoury** (Lowe) - Bows, arrows, fletching supplies, and ranged armor
+- **Pete's Fishing Supplies** - Fishing tools, bait, raw and cooked fish
+- **Armor Emporium** (Horvik) - Helms, platebodies, platelegs, shields, boots, gloves, capes, and jewelry
+- **Crafting Supplies** (Dommik) - Needles, thread, chisels, moulds, leather, gems, and crafting materials
+
+All stores support buyback at 50% of the purchase price.
 
 ### Bank Notes
 
