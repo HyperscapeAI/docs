@@ -713,6 +713,48 @@ executablePath: '/usr/bin/google-chrome-unstable'
 **Recent Fixes:**
 - Use Chrome Dev channel for WebGPU support on Vast.ai (commits ba8bd53, d824163)
 
+### Tauri Build Fails with Empty APPLE_CERTIFICATE
+
+**Symptom**: Tauri macOS builds fail with `SecKeychainItemImport` error even when not doing a release build
+
+**Cause**: Tauri bundler attempts code signing whenever `APPLE_CERTIFICATE` env var exists, even if empty
+
+**Solution**: Update to latest code (commit 15250d2 fixed this)
+
+**Technical Details:**
+- Build workflow now split into Unsigned and Release variants
+- Signing env vars only present during actual releases
+- Non-release builds no longer set `APPLE_CERTIFICATE=''`
+- File: `.github/workflows/build-app.yml`
+- Commit: 15250d2 (Feb 25, 2026)
+
+### Cloudflare Origin Lock Blocking API Access
+
+**Symptom**: Frontend cannot access API directly, getting origin lock errors
+
+**Cause**: Cloudflare origin lock preventing direct frontend API access
+
+**Solution**: Update to latest code (commit 3ec9826 fixed this)
+
+**Technical Details:**
+- Disabled cloudflare origin lock in server configuration
+- Allows direct API access from frontend
+- File: `packages/server/` (server configuration)
+- Commit: 3ec9826 (Feb 25, 2026)
+
+### Cloudflare Pages Worker Deployment Error
+
+**Symptom**: Cloudflare Pages deployment fails with worker deployment error
+
+**Cause**: Missing build output directory specification in Cloudflare configuration
+
+**Solution**: Update to latest code (commit 1af02ce fixed this)
+
+**Technical Details:**
+- Specified pages build output dir in Cloudflare configuration
+- Cloudflare Pages deployments now succeed
+- Commit: 1af02ce (Feb 25, 2026)
+
 ### Assets Not Found After Fresh Clone
 
 **Symptom**: Server fails to start with "No world areas defined" or manifest validation errors
