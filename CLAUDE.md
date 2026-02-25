@@ -363,19 +363,30 @@ Only weapon types with new models in `swords/` directory are eligible for duel a
 - Filtered via `DUEL_WEAPON_TYPES` Set in DuelOrchestrator
 - Prevents equipping weapons without proper 3D models
 
-**Critical Bug Fixes (PR #933):**
+**Critical Bug Fixes (PR #933, #934):**
 
-1. **Combat State Key Mismatch** (commit 82ff784)
+1. **Combat State Key Mismatch** (commit 82ff784, PR #933)
    - **Issue**: CombatStateService syncs abbreviated keys (`data.c`/`data.ct`) but `getGameState()` only read full keys (`data.inCombat`/`data.combatTarget`)
    - **Impact**: DuelCombatAI always saw `inCombat=false` and flooded `executeAttack` every tick instead of letting auto-attacks drive combat
    - **Fix**: EmbeddedHyperscapeService now reads both abbreviated and full keys: `data.c || data.inCombat` and `data.ct || data.combatTarget`
    - **File**: `packages/server/src/eliza/EmbeddedHyperscapeService.ts`
 
-2. **Magic Attack TOCTOU Race** (commit 82ff784)
+2. **Magic Attack TOCTOU Race** (commit 82ff784, PR #933)
    - **Issue**: Cooldown was checked early but claimed after async `consumeRunesForSpell` call. With bug #1 flooding attacks, two concurrent invocations could both pass the cooldown check before either claimed it
    - **Impact**: Duplicate magic projectiles, double rune consumption
    - **Fix**: Moved cooldown claim and `enterCombat` before async rune consumption to close the race window
    - **File**: `packages/shared/src/systems/shared/combat/CombatSystem.ts` (handleMagicAttack)
+
+3. **Mage Staff and 2H Sword Combat** (commit 029456, PR #934, Feb 25 2026)
+   - **Keep-alive re-engagement**: Added periodic re-engagement in DuelCombatAI every 5 ticks (~3s) to prevent agents idling when combat state times out. Fixes 2H sword attacks where slow weapon speed (7 ticks) combined with combat timeout caused agents to stand idle.
+   - **Weapon type propagation**: Propagate weapon type (mage/ranged/melee) through DuelOrchestrator into `startCombat` so CombatSystem creates correct state with proper attack speeds. Without this, all agents defaulted to MELEE, preventing magic and ranged agents from firing projectile-based attacks.
+   - **Rune inventory readiness**: Added polling loop (up to 2 seconds) to wait for inventory to finish loading from DB before adding runes. Without this, `getOrCreateInventory` returns a disposable placeholder (not stored in the Map) and runes are silently lost.
+   - **Combat state starvation guard**: Don't replace existing combat state if agent already has valid state targeting correct opponent. `createAttackerState` replaces the state Map entry which resets `nextAttackTick` — for slow weapons (2H swords, attackSpeed 7) the auto-attack loop never reaches `nextAttackTick` because repeated re-engagement keeps pushing it forward (starvation pattern).
+   - **Combat timeout refresh**: Refresh combat timeout after ranged/magic attacks in both CombatSystem and CombatTickProcessor. The handler may have replaced the state via `enterCombat` → `createAttackerState`, so fetch fresh state from Map (old reference may be stale).
+   - **PvP zone bypass**: Bypass PvP zone checks for streaming duel combatants (matches `enterCombat` behavior). Prevents combat from ending when agents are in duel arenas which are technically safe zones.
+   - **Safe zone aggro block**: Block aggro and chase on players in safe zones via AggroSystem. Hostile mobs won't auto-aggro players in safe zones, and will stop chasing if player enters safe zone.
+   - **Rune validation bypass**: Streaming duel agents bypass rune validation since inventory-based rune addition is unreliable for bot agents (race conditions, manifest loading timing). Staff provides infinite elemental runes; only catalytic runes (mind/chaos) would fail. Since these are AI bots with no real economy, let the attack proceed.
+   - **Files**: `packages/server/src/arena/DuelCombatAI.ts`, `packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts`, `packages/shared/src/systems/shared/combat/CombatSystem.ts`, `packages/shared/src/systems/shared/combat/CombatTickProcessor.ts`, `packages/shared/src/systems/shared/combat/AggroSystem.ts`
 
 ### Duel Trash Talk System
 
