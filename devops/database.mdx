@@ -254,6 +254,10 @@ Set `DATABASE_URL` in environment:
 DATABASE_URL=postgresql://user:pass@host:5432/hyperscape
 ```
 
+<Warning>
+**pgvector Extension Required**: Production deployments must use PostgreSQL 16+ with the pgvector extension. For Docker deployments, use `pgvector/pgvector:pg16` instead of `postgres:16-alpine` (updated in commit a9e9003).
+</Warning>
+
 ### Connection Pooling (Supabase)
 
 When using Supabase with the Supavisor connection pooler, prepared statements must be disabled (fixed in commits 8aaaf28, f7ab9f7):
