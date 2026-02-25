@@ -23,33 +23,70 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
-<Update label="Dependency Updates & Duel Arena Fixes" description="February 2026" date="2026-02-25">
+<Update label="Dependency Updates & Infrastructure Fixes" description="February 2026" date="2026-02-25">
 
-### 📦 Dependency Updates
+### 📦 Major Dependency Updates
 
-Major dependency updates with breaking changes and security improvements:
+Critical dependency updates with breaking changes and compatibility improvements:
 
 - **Zod 4.x Upgrade** (commit 55c57ed): Upgraded from 3.25.76 to 4.3.6
   - **BREAKING CHANGE**: Major version bump with API changes
   - Review Zod usage for compatibility with v4 API
   - See [Zod v4 migration guide](https://zod.dev/CHANGELOG) for breaking changes
   - Affects validation schemas across server, client, and shared packages
-- **Three.js Update** (commit daba92b): Bumped from 0.182.0 to 0.183.1
+  - Updated in root package.json
+- **Three.js 0.183.1** (commits daba92b, 5ffbbfd, 65bc28b): Bumped from 0.182.0 to 0.183.1
   - Minor version update with bug fixes and improvements
-  - WebGPU renderer enhancements
-  - TSL shader improvements
-  - Applied to packages/client
-- **ElizaOS Core Update** (commit d3d4029): Bumped from 2.0.0-alpha.11 to 2.0.0-alpha.12
+  - WebGPU renderer enhancements and stability fixes
+  - TSL (Three.js Shading Language) shader improvements
+  - Applied to packages/client, packages/asset-forge, and packages/plugin-hyperscape
+  - Includes @types/three type definition updates
+- **three-mesh-bvh 0.9.8** (commit 919faa0): Bumped from 0.8.3 to 0.9.8
+  - Minor version update with performance improvements
+  - Enhanced BVH (Bounding Volume Hierarchy) raycasting
+  - Applied to packages/shared
+- **ElizaOS Core 2.0.0-alpha.12** (commit d3d4029): Bumped from 2.0.0-alpha.11 to 2.0.0-alpha.12
   - Alpha release with potential API changes
   - Review ElizaOS plugin integration for compatibility
   - Affects packages/plugin-hyperscape
-- **Vite Plugin React** (commit 3b03962): Bumped from 5.0.4 to 5.1.4
-  - Minor version update with React 19 compatibility improvements
-  - HMR (Hot Module Replacement) enhancements
-- **Lucide React** (commit ac2603a): Bumped from 0.554.0 to 0.575.0
-  - Icon library update with new icons and improvements
+- **@ai-sdk/anthropic 3.0.46** (commits 974c758, 6d0a1cc): Bumped from 1.2.12 to 3.0.46
+  - **BREAKING CHANGE**: Major version bump (1.x → 3.x)
+  - Updated Anthropic SDK with new API features
+  - Applied to packages/asset-forge and packages/plugin-hyperscape
+- **@coral-xyz/anchor 0.32.1** (commit 8074c09): Bumped from 0.31.1 to 0.32.1
+  - Minor version update for Solana program development
+  - Anchor framework improvements
+- **framer-motion 12.34.3** (commit 6089a66): Bumped from 11.18.2 to 12.34.3
+  - **BREAKING CHANGE**: Major version bump with API changes
+  - Animation library update with performance improvements
   - Applied to packages/client
-- **Vite Plugin Node Polyfills** (commit 352b93f): Bumped from 0.24.0 to 0.25.0
+- **dotenv 17.3.1** (commit 7aeabbb): Bumped from 16.6.1 to 17.3.1
+  - **BREAKING CHANGE**: Major version bump
+  - Environment variable loading improvements
+  - Applied to packages/shared
+
+### 🔧 Development Tooling Updates
+
+- **ESLint 10.0.2** (commits e772d6d, 0e13704, fcc8ff0): Bumped from 9.39.3 to 10.0.2
+  - **BREAKING CHANGE**: Major version bump with new rules
+  - Applied to packages/shared, packages/plugin-hyperscape, packages/asset-forge
+- **@types/node 25.3.0** (commits 6eae14b, 550f4e7, 1fa35c2): Bumped from 24.10.13 to 25.3.0
+  - **BREAKING CHANGE**: Major version bump with Node.js type updates
+  - Applied to packages/shared, packages/server, packages/asset-forge
+- **@playwright/test 1.58.2** (commit edd1291): Bumped from 1.54.2 to 1.58.2
+  - Minor version update with test framework improvements
+  - Enhanced browser automation capabilities
+- **@capacitor/cli 8.1.0** (commit 079d739): Bumped from 7.5.0 to 8.1.0
+  - **BREAKING CHANGE**: Major version bump for mobile builds
+  - iOS and Android build improvements
+  - Applied to packages/shared
+- **chai 6.2.2** (commit 41680b7): Bumped from 4.5.0 to 6.2.2
+  - **BREAKING CHANGE**: Major version bump with assertion API changes
+  - Test assertion library update
+- **lucide-react 0.575.0** (commits f439c01, ac2603a): Bumped from 0.553.0/0.554.0 to 0.575.0
+  - Icon library update with new icons and improvements
+  - Applied to packages/asset-forge and packages/client
+- **vite-plugin-node-polyfills 0.25.0** (commit 352b93f): Bumped from 0.24.0 to 0.25.0
   - Minor version update with Node.js polyfill improvements
 
 ### 🔧 CI/CD Improvements
@@ -59,10 +96,11 @@ Enhanced CI reliability and deployment workflows:
 - **Download Portal Deployment** (commit 312f673): Re-enabled download portal deployment
   - Native app download page at hyperscapeai.github.io/hyperscape/
   - Publishes desktop and mobile installers from tagged releases
+  - Automated via `.github/workflows/deploy-downloads.yml`
 - **Deploy Workflow Updates** (commit 2fa2c61): Fixed and updated deploy workflows
-  - Improved Railway deployment workflow
-  - Enhanced Vast.ai deployment workflow
-  - Better error handling and logging
+  - Improved Railway deployment workflow reliability
+  - Enhanced Vast.ai deployment workflow with better error handling
+  - Better logging and status reporting
 
 ### 🎮 Gameplay Fixes
 
@@ -72,16 +110,42 @@ Enhanced CI reliability and deployment workflows:
   - Prevents visual glitches during duel start
   - Affects all 6 duel arenas in the 2×3 grid layout
 
-### 🔧 CI/CD Improvements
+### 🔒 Database & Migration Improvements
 
-- **Download Portal Deployment** (commit 312f673): Re-enabled download portal deployment
-  - Native app download page at hyperscapeai.github.io/hyperscape/
-  - Publishes desktop and mobile installers from tagged releases
-  - Automated via `.github/workflows/deploy-downloads.yml`
-- **Deploy Workflow Updates** (commit 2fa2c61): Fixed and updated deploy workflows
-  - Improved Railway deployment workflow reliability
-  - Enhanced Vast.ai deployment workflow with better error handling
-  - Better logging and status reporting
+- **Migration 0050 IF NOT EXISTS Fix** (commit e4b6489): Added IF NOT EXISTS guards to prevent fresh database errors
+  - Migration 0050 duplicated CREATE TABLE statements from earlier migrations
+  - `agent_duel_stats` table was created in both migration 0039 and 0050
+  - On fresh databases, running all migrations sequentially caused 42P07 errors
+  - Fixed by adding IF NOT EXISTS to all CREATE TABLE and CREATE INDEX statements
+  - Affects: agent_duel_stats, arena_fee_shares, arena_staking_points, wallet_links tables
+  - Fresh database installations now complete all migrations successfully
+- **SKIP_MIGRATIONS Environment Variable** (commits 6a5f4ee, eb8652a): Added support for external schema management
+  - When `SKIP_MIGRATIONS=true`, server skips migration execution AND table validation
+  - Allows CI to use `drizzle-kit push` for declarative schema creation
+  - Prevents FK ordering issues in migration files
+  - See [Database Management](/devops/database#skip-migrations-environment-variable) for usage
+- **Supabase Pooler Compatibility** (commits 8aaaf28, f7ab9f7): Disabled prepared statements for Supavisor
+  - Set `prepare: false` in Drizzle PostgreSQL config
+  - Supavisor pooler (transaction mode) doesn't support prepared statements
+  - Fixes XX000 \"prepared statement does not exist\" errors
+  - Enables horizontal scaling with Supabase connection pooling
+  - See [Database Management](/devops/database#connection-pooling-supabase) for details
+
+### 🧪 CI/CD Package Exclusions
+
+Excluded problematic packages from CI test runs until dependency issues resolved:
+
+- **gold-betting-demo Exclusion** (commit 93f9633): 
+  - hls.js dependency not resolving correctly in CI due to workspace hoisting issues
+  - Package excluded from CI tests until dependency resolution fixed
+  - Local development unaffected
+- **evm-contracts Package Exclusion** (commit 99dec96):
+  - MUD CLI has compatibility issue with @trpc/server versions
+  - Causing test failures in CI environment
+  - Excluded from CI tests until dependency issue resolved
+- **Impact**: CI pipeline now passes reliably
+  - Allows other packages to test successfully
+  - Prevents false negatives from dependency conflicts
 
 </Update>
 
