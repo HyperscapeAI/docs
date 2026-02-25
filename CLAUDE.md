@@ -557,9 +557,15 @@ pool.on('connect', (client) => {
 - Fixed in commit eb8652a (CI integration tests)
 
 **Package Exclusions:**
-- `@hyperscape/contracts` excluded from CI test run (MUD CLI + @trpc/server compatibility issue)
-- `@hyperscape/gold-betting-demo` excluded from CI (hls.js dependency resolution issue)
+- `@hyperscape/contracts` excluded from CI test run (MUD CLI + @trpc/server compatibility issue) - commit 99dec96
+- `@hyperscape/gold-betting-demo` excluded from CI (hls.js dependency resolution issue) - commit 93f9633
+- `@hyperscape/evm-contracts` excluded from CI (foundry/anvil not available in CI) - commit 034f9c9
 - Tests will be re-enabled when dependency conflicts are resolved
+
+**Missing Dependencies Fixed:**
+- `hls.js` added to gold-betting-demo package.json (commit cfdabf3)
+  - StreamPlayer.tsx imports hls.js but it was not declared
+  - Caused build failures in CI where bun resolves dependencies strictly
 
 **Documentation Updates:**
 - `update-docs.yml` has `continue-on-error: true` for Mintlify API calls
