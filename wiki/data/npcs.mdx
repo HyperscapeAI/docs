@@ -94,33 +94,54 @@ interface NPCData {
 
 | Category | Description | Example |
 |----------|-------------|---------|
-| `mob` | Hostile enemy | Goblin, Bandit |
+| `mob` | Hostile enemy | Goblin, Bandit, Dark Wizard |
 | `boss` | Powerful enemy | Giant Spider, Dragon |
-| `neutral` | Non-combat NPC | Shopkeeper, Banker |
-| `quest` | Quest giver/target | Quest NPC, Guard |
+| `neutral` | Non-combat NPC | Shopkeeper, Bank Clerk |
+| `quest` | Quest giver/target | Captain Rowan, Forester Wilma |
 
 ---
 
-## Aggression Types
+## Movement Types
 
-NPCs have different aggression behaviors:
+NPCs have different movement patterns:
 
 ```typescript
-type AggressionType =
-  | "passive"           // Never attacks first
-  | "aggressive"        // Attacks players below double its level
-  | "always_aggressive" // Attacks all players
-  | "level_gated";      // Only attacks below specific level
+type MovementType =
+  | "stationary"  // Does not move
+  | "wander"      // Random movement within radius
+  | "patrol";     // Follows predefined path
 ```
-
-### Aggro Rules
 
 | Type | Behavior |
 |------|----------|
-| `passive` | Never initiates combat |
-| `aggressive` | Attacks if player level < 2 × NPC level |
-| `always_aggressive` | Attacks all players regardless of level |
-| `level_gated` | Attacks if player level ≤ `maxLevel` threshold |
+| `stationary` | NPC stays in one location (e.g., shopkeepers, bankers) |
+| `wander` | NPC randomly moves within `wanderRadius` from spawn point |
+| `patrol` | NPC follows a predefined patrol route |
+
+---
+
+## Combat System
+
+### Aggression Behavior
+
+Mobs use the `combat.aggressive` flag to determine if they attack players:
+
+- **Aggressive Mobs**: Automatically attack nearby players within `aggroRange`
+- **Passive Mobs**: Only attack when provoked
+- **Level-Based Aggro**: Some mobs use `levelRange` to determine valid targets
+
+### Combat Properties
+
+| Property | Description |
+|----------|-------------|
+| `attackable` | Whether players can attack this NPC |
+| `aggressive` | Whether NPC attacks players on sight |
+| `retaliates` | Whether NPC fights back when attacked |
+| `aggroRange` | Detection radius for aggressive behavior |
+| `combatRange` | Attack range (1 for melee, higher for ranged/magic) |
+| `leashRange` | Max distance from spawn before resetting |
+| `attackSpeedTicks` | Ticks between attacks (4 ticks = 2.4 seconds) |
+| `respawnTicks` | Ticks until respawn after death |
 
 ---
 
