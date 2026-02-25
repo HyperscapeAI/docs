@@ -460,6 +460,27 @@ When `SKIP_MIGRATIONS=true`, the server skips:
 
 **Important**: When using `SKIP_MIGRATIONS=true`, you MUST create the database schema externally (e.g., via `drizzle-kit push`) before starting the server. The server will not create tables or run migrations.
 
+**Example CI Workflow** (from `.github/workflows/integration.yml`):
+```yaml
+- name: Setup database schema
+  working-directory: packages/server
+  run: bunx drizzle-kit push
+  env:
+    DATABASE_URL: postgresql://hyperscape:hyperscape_test@localhost:5432/hyperscape_test
+
+- name: Start server in background
+  working-directory: packages/server
+  run: bun run start > logs/server.log 2>&1 &
+  env:
+    SKIP_MIGRATIONS: "true"  # Schema already created by drizzle-kit push
+    DATABASE_URL: postgresql://hyperscape:hyperscape_test@localhost:5432/hyperscape_test
+```
+
+**Why use drizzle-kit push instead of server migrations?**
+- Server's built-in migration has FK ordering issues (migration 0050 references arena_rounds from older migrations)
+- `drizzle-kit push` creates schema declaratively without these problems
+- Avoids `42P07` errors (relation already exists) on fresh database installs
+
 **Split deployment** (client and server on different hosts):
 - `PUBLIC_PRIVY_APP_ID` (client) must equal `PRIVY_APP_ID` (server)
 - `PUBLIC_WS_URL` and `PUBLIC_API_URL` must point to your server
