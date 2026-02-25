@@ -229,6 +229,29 @@ bun run start
 - Generates SSH keys in Docker for secure access
 - Injects runtime environment variables into provisioned servers
 - Uses Python 3.11+ (bookworm-slim base image)
+- Uses `bunx tsc` instead of `npx tsc` for asset-forge builds (commit c80ad7a, Feb 25, 2026)
+
+**Asset-Forge Build Fix (commit c80ad7a):**
+
+Vast.ai deployment containers only have bun installed, not npm/npx. The asset-forge build step was updated to use `bunx tsc`:
+
+```javascript
+// From packages/asset-forge/scripts/build-services.mjs
+// Before: npx tsc (fails in Vast.ai container)
+// After: bunx tsc (works with bun-only environment)
+const child = spawn('bunx', ['tsc'], {
+  cwd: serverDir,
+  stdio: 'inherit'
+});
+```
+
+**Why This Matters:**
+- Vast.ai containers use minimal base images with only bun runtime
+- npm/npx not available in deployment environment
+- `bunx` is bun's equivalent to `npx` for running packages
+- Asset-forge backend now builds successfully in Vast.ai deployments
+- File: `packages/asset-forge/scripts/build-services.mjs`
+- Commit: c80ad7a (Feb 25, 2026)
 
 **Docker Configuration:**
 
