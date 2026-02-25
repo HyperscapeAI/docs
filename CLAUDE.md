@@ -874,10 +874,22 @@ bun run assets:sync
 # See scripts/ensure-assets.mjs for implementation
 ```
 
-### Duel Arena Issues
+### Terrain System Improvements
 
-**Players/agents sinking into arena floors:**
-Fixed in commits 7a60135 and 75d0aa6. Two separate issues were resolved:
+**Terrain Height Cache Offset Fix (commit 21e0860, Feb 25 2026):**
+
+Fixed a critical bug in `getHeightAtCached` causing a consistent 50m offset in height lookups. This affected all terrain-based positioning including player movement, building placement, and resource spawning.
+
+**Root Causes:**
+1. **Tile Index Calculation**: Used `Math.floor(worldX/TILE_SIZE)` which doesn't account for centered geometry. Terrain tiles are centered at `(tileX * TILE_SIZE, 0, tileZ * TILE_SIZE)` with PlaneGeometry vertices ranging from `-TILE_SIZE/2` to `+TILE_SIZE/2`. This means tile N covers world coords `[(N-0.5)*SIZE, (N+0.5)*SIZE)`, not `[N*SIZE, (N+1)*SIZE)`.
+
+2. **Grid Index Formula**: Omitted the `halfSize` offset from PlaneGeometry's `[-50,+50]` range when converting local coordinates to grid indices.
+
+**Solution:**
+
+Added two canonical helper functions in TerrainSystem:
+
+```typescript\n// World coordinate → terrain tile index (accounts for centered geometry)\nprivate worldToTerrainTileIndex(worldCoord: number): number {\n  return Math.floor(\n    (worldCoord + this.CONFIG.TILE_SIZE * 0.5) / this.CONFIG.TILE_SIZE,\n  );\n}\n\n// Geometry-local coordinate → heightData grid index\n// localCoord is worldCoord - tileIndex * TILE_SIZE, ranging [-SIZE/2, +SIZE/2]\n// Returns a float in [0, RESOLUTION-1] suitable for bilinear interpolation\nprivate localToGridIndex(localCoord: number): number {\n  const gridStep = this.CONFIG.TILE_SIZE / (this.CONFIG.TILE_RESOLUTION - 1);\n  return (localCoord + this.CONFIG.TILE_SIZE * 0.5) / gridStep;\n}\n```\n\n**Additional Fixes:**\n- Fixed `getTerrainColorAt()` which had a comma-vs-underscore key typo (`${tileX},${tileZ}` instead of `${tileX}_${tileZ}`) preventing it from ever finding tiles\n- Updated all terrain coordinate conversions to use the canonical helpers\n\n**Impact:**\n- Terrain height queries now return correct values at all world positions\n- Eliminates 50m vertical offset that was causing positioning errors\n- Fixes bilinear interpolation seams at tile boundaries\n\n**File**: `packages/shared/src/systems/shared/world/TerrainSystem.ts`\n\n### Duel Arena Issues\n\n**Players/agents sinking into arena floors:**\nFixed in commits 7a60135 and 75d0aa6. Two separate issues were resolved:
 
 1. **Terrain flat zones** (commit 7a60135): Players/agents were sinking ~0.4m into duel arena floors because flat zones were removed from the terrain system. This caused `getHeightAt()` to return raw procedural terrain height instead of floor-level height, and allowed grass to grow through floor surfaces.
    - **Fix**: DuelArenaVisualsSystem (`packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`) now registers flat zones programmatically for all 8 floor areas (6 arenas + lobby + hospital)
