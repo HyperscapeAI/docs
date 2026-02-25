@@ -318,15 +318,16 @@ if (zone) {
 }
 ```
 
-## Duel Arena Floor Fix (commits b8f56e81, 7a60135e)
+## Duel Arena Floor Fix (commits b8f56e81, 7a60135e, 51453da)
 
-Players and agents were sinking ~0.4m into duel arena floors because flat zones were removed from the terrain system. This caused `getHeightAt()` to return raw procedural terrain height instead of floor-level height, and also allowed grass to grow through floor surfaces.
+Players and agents were sinking ~0.4m into duel arena floors because flat zones were not being registered with the terrain system. This caused `getHeightAt()` to return raw procedural terrain height instead of floor-level height, and also allowed grass to grow through floor surfaces.
 
 **Problem:**
-- Flat zones were removed from terrain system
+- Flat zones were not registered for duel arena floors
 - `getHeightAt()` returned procedural terrain height (~0.4m below arena floors)
 - Players/agents spawned at procedural height, sinking into visual floor meshes
 - Grass system used procedural heights, rendering grass through floors
+- Terrain mesh rendered at procedural height, creating z-fighting with floor geometry
 
 **Solution:**
 
