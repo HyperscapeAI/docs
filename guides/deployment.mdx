@@ -259,7 +259,7 @@ Debian 12+ requires `--break-system-packages` flag for pip3 due to PEP 668 exter
 
 ### GitHub Actions
 
-The repository includes several CI/CD workflows:
+The repository includes several CI/CD workflows with recent reliability improvements (Feb 2026):
 
 #### Build and Test (`.github/workflows/ci.yml`)
 
@@ -273,6 +273,29 @@ Runs on every push to main:
 - Caches dependencies for faster builds
 - Runs tests in parallel across packages
 - Fails fast on first error
+- Uses `--frozen-lockfile` to prevent npm rate-limiting (commit 08aa151, Feb 25, 2026)
+
+**Frozen Lockfile Fix (commit 08aa151):**
+
+All CI workflows now use `bun install --frozen-lockfile` to prevent npm 403 rate-limiting errors:
+
+```yaml
+# .github/workflows/ci.yml
+- name: Install dependencies
+  run: bun install --frozen-lockfile
+```
+
+**Why This Matters:**
+- `bun install` without `--frozen-lockfile` tries to resolve packages fresh from npm even when lockfile exists
+- Under CI load this triggers npm rate-limiting (403 Forbidden)
+- `--frozen-lockfile` ensures bun uses only the committed lockfile for resolution
+- Eliminates npm registry calls entirely in CI
+- Applied to all workflows: ci.yml, integration.yml, typecheck.yml, deploy-*.yml
+
+**Impact:**
+- CI workflows now run reliably without npm rate-limiting failures
+- Faster builds (no network calls to npm registry)
+- Deterministic builds (exact versions from lockfile)
 
 #### Integration Tests (`.github/workflows/integration.yml`)
 
