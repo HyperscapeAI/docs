@@ -404,6 +404,41 @@ The CI audit threshold has been lowered to `critical` only (from `high`) to allo
 
 ## Recent Updates (February 2026)
 
+### Critical Bug Fixes (February 25, 2026)
+
+**Terrain Height Cache Offset Fix (commit 21e0860):**
+- Fixed consistent 50m offset in cached terrain height lookups
+- **Issue 1**: `getHeightAtCached` used `Math.floor(worldX/TILE_SIZE)` which doesn't account for centered geometry
+- **Issue 2**: Grid index formula omitted the halfSize offset from PlaneGeometry's [-50,+50] range
+- **Fix**: Added canonical helpers `worldToTerrainTileIndex()` and `localToGridIndex()` that properly handle centered tile geometry
+- **Impact**: Terrain tile N now correctly covers world coords [(N-0.5)*SIZE, (N+0.5)*SIZE) instead of [N*SIZE, (N+1)*SIZE)
+- Also fixed `getTerrainColorAt()` which had comma-vs-underscore key typo preventing it from ever finding tiles
+- File: `packages/shared/src/systems/shared/world/TerrainSystem.ts`
+
+**Model Cache Texture Serialization Fix (commit c98f1cc, PR #935):**
+- Fixed two pre-existing bugs in IndexedDB processed model cache causing missing objects and lost textures
+- **Bug 1 - Missing Objects**: `serializeNode` used `findIndex-by-name` to map hierarchy nodes to mesh data. Models with duplicate mesh names (common: "", "Cube", "Cube") all resolved to the same index. During deserialization, Three.js `add()` auto-removes from previous parent, so only the last reference survived. Fixed by using `Map<Object3D, number>` identity map built during traversal.
+- **Bug 2 - Lost Textures**: Textures were serialized as ephemeral `blob:` URLs but never reloaded during deserialization. Fixed by extracting raw RGBA pixels via canvas `getImageData` (synchronous) and restoring as `THREE.DataTexture` — no async loading race conditions.
+- **Bug 3 - Grey Tree Materials**: `createDissolveMaterial` used `instanceof MeshStandardMaterial` which fails for `MeshStandardNodeMaterial` in the WebGPU build. Replaced with duck-type property check.
+- **Impact**: Altars, trees, and other complex models now render correctly after page reload with proper textures and hierarchy
+- Files: `packages/shared/src/utils/rendering/ModelCache.ts`, `packages/shared/src/systems/shared/world/GPUVegetation.ts`
+
+**Duel Combat Fixes (commit 029456, PR #934):**
+- Fixed mage staff and 2H sword combat in streaming duels
+- **Keep-alive re-engagement**: Added periodic re-engagement in DuelCombatAI to prevent agents idling when combat state times out (fixes 2H sword attacks)
+- **Weapon type propagation**: Propagate weapon type (mage/ranged/melee) through DuelOrchestrator into `startCombat` so correct attack speeds are used
+- **Rune inventory readiness**: Added polling and validation bypass for duel bot agents to prevent rune loading race conditions
+- **Combat state starvation guard**: Prevent repeated `startCombat` resets on slow weapons from starving auto-attack loop
+- **Combat timeout refresh**: Refresh combat timeout after ranged/magic attacks in both CombatSystem and CombatTickProcessor
+- **PvP zone bypass**: Bypass PvP zone checks for streaming duel combatants
+- **Safe zone aggro block**: Block aggro and chase on players in safe zones via AggroSystem
+- Files: `packages/server/src/arena/DuelCombatAI.ts`, `packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts`, `packages/shared/src/systems/shared/combat/CombatSystem.ts`, `packages/shared/src/systems/shared/combat/CombatTickProcessor.ts`, `packages/shared/src/systems/shared/combat/AggroSystem.ts`
+
+**ArenaPointsService Connection Timeout Fix (commit 99cd3f7):**
+- Resolved connection timeouts in ArenaPointsService database operations
+- Added proper connection pool management and timeout handling
+- File: `packages/server/src/arena/services/ArenaPointsService.ts`
+
 ### Rendering Optimizations
 
 **GLBTreeInstancer - InstancedMesh Tree Rendering (commit 0871acb):**
