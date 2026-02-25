@@ -292,15 +292,36 @@ export function calculateNPCDrops(npcId: string): Array<{ itemId: string; quanti
 
 ## Available 3D Models
 
-NPCs use rigged GLB models from `/assets/world/forge/`:
+NPCs use rigged VRM models from the assets repository:
+
+### Mob Models
 
 | Model Path | Used For |
 |------------|----------|
-| `goblin/goblin_rigged.glb` | Goblins |
-| `thug/thug_rigged.glb` | Bandits, thugs |
-| `human/human_rigged.glb` | Guards, knights, shopkeepers |
-| `troll/troll_rigged.glb` | Hobgoblins |
-| `imp/imp_rigged.glb` | Dark warriors |
+| `asset://models/mobs/goblin/goblin.vrm` | Goblins |
+| `asset://models/mobs/bandit/bandit.vrm` | Bandits |
+| `asset://models/mobs/barbarian/barbarian.vrm` | Barbarians |
+| `asset://models/mobs/dark-ranger/dark-ranger.vrm` | Dark Rangers |
+| `asset://models/mobs/dark-wizard/dark-wizard.vrm` | Dark Wizards |
+| `asset://models/mobs/gaurd/gaurd.vrm` | Guards |
+
+### NPC Models
+
+| Model Path | Used For |
+|------------|----------|
+| `asset://models/npcs/captain-rowan/captain-rowan.vrm` | Captain Rowan (quest giver) |
+| `asset://models/npcs/forester-wilma/forester-wilma.vrm` | Forester Wilma (woodcutting trainer) |
+| `asset://models/npcs/fisherman-pete/fisherman-pete.vrm` | Fisherman Pete (fishing trainer) |
+| `asset://models/npcs/torvin/torvin.vrm` | Torvin (smithing trainer) |
+| `asset://models/npcs/banker/banker.vrm` | Bank Clerk |
+| `asset://models/npcs/shopkeeper/shopkeeper.vrm` | Shopkeeper |
+| `asset://models/npcs/dommik/Dommik.vrm` | Dommik (crafting supplier) |
+| `asset://models/npcs/horvik/Horvik.vrm` | Horvik (armor shop) |
+| `asset://models/npcs/Lowe/Lowe.vrm` | Lowe (bowyer) |
+| `asset://models/npcs/Zamorin/Zamorin.vrm` | Wizard Zamorin (magic trainer) |
+| `asset://models/npcs/tanner-ellis/tanner-ellis.vrm` | Tanner Ellis (leather goods) |
+| `asset://avatars/avatar-male-01.vrm` | Generic male NPCs |
+| `asset://avatars/avatar-female-01.vrm` | Generic female NPCs |
 
 ---
 
