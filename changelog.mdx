@@ -23,6 +23,131 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Combat Role System & Critical Bug Fixes" description="February 2026" date="2026-02-25">
+
+### ⚔️ Duel Combat Role System (PR #933)
+
+Added weighted random combat role selection for duel arena agents with full gear provisioning:
+
+- **Combat Roles**: Three distinct combat styles with automatic gear setup
+  - **Melee** (50% weight): Bronze weapons (longsword, scimitar, 2h sword)
+  - **Ranged** (25% weight): Shortbow + bronze arrows (500 qty), uses "rapid" attack style
+  - **Mage** (25% weight): Staff of air + wind strike autocast + runes (500 mind, 500 air)
+- **Weighted Random Selection**: `pickCombatRole()` method with configurable weights
+  - Total weight: 100 (50 melee, 25 ranged, 25 mage)
+  - Random roll determines role for each agent independently
+  - Ensures variety in duel matchups
+- **Gear Lifecycle**: Full equip/cleanup lifecycle in DuelOrchestrator
+  - **Pre-duel**: Role selected → gear equipped → food filled → health restored
+  - **During duel**: Combat AI adapts behavior based on assigned role
+  - **Post-duel**: Gear removed → runes removed → food removed → health restored → teleport back
+- **DuelCombatAI Adaptation**: Combat AI receives `combatRole` config parameter
+  - **Melee**: Uses existing phase-based style switching (aggressive/controlled/defensive)
+  - **Ranged**: Forces "rapid" style for faster attack speed (-1 tick), skips melee style switching
+  - **Mage**: Skips style switching entirely (magic auto-casts via selectedSpell)
+- **Gear Provisioning Methods**:
+  - `equipMeleeWeapon()`: Random bronze weapon from filtered pool
+  - `equipRangedGear()`: Shortbow + bronze arrows with quantity set to 500
+  - `equipMageGear()`: Staff of air + wind strike autocast + runes (belt-and-suspenders approach)
+  - `cleanupAgentCombatSetup()`: Unequips all combat gear, clears autocast, removes leftover runes
+- **Weapon Pool Filtering**: Only weapons with new models in `swords/` directory eligible
+  - `DUEL_WEAPON_TYPES`: Set of LONGSWORD, SCIMITAR, TWO_HAND_SWORD
+  - `DUEL_BRONZE_WEAPON_IDS`: bronze_longsword, bronze_scimitar, bronze_2h_sword
+  - Filters out weapons without proper 3D models
+- **Autocast Setup**: Belt-and-suspenders approach for mage agents
+  - Sets `selectedSpell` directly on entity data
+  - Also sets via `world.getPlayer()` (which CombatSystem reads)
+  - Emits `PLAYER_SET_AUTOCAST` event for redundancy
+  - Ensures combat system sees the spell regardless of event handler timing
+- **File**: `packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts`
+- **Commit**: 82ff784 (Feb 25, 2026)
+
+### 🐛 Critical Combat Bug Fixes (PR #933)
+
+Fixed two critical bugs preventing mage agents from attacking in duel arenas:
+
+**Combat State Key Mismatch:**
+- **Issue**: CombatStateService syncs abbreviated keys (`data.c`/`data.ct`) but `getGameState()` only read full keys (`data.inCombat`/`data.combatTarget`)
+- **Impact**: DuelCombatAI always saw `inCombat=false` and flooded `executeAttack` every tick instead of letting auto-attacks drive combat
+- **Fix**: EmbeddedHyperscapeService now reads both abbreviated and full keys
+  ```typescript
+  inCombat: !!(data.inCombat || data.combatTarget || data.c || data.ct),
+  currentTarget: (data.combatTarget as string) || (data.ct as string) || null,
+  ```
+- **File**: `packages/server/src/eliza/EmbeddedHyperscapeService.ts`
+
+**Magic Attack TOCTOU Race:**
+- **Issue**: Cooldown was checked early but claimed after async `consumeRunesForSpell` call
+- **Impact**: With combat state bug flooding attacks, two concurrent invocations could both pass cooldown check before either claimed it, causing duplicate magic projectiles and double rune consumption
+- **Fix**: Moved cooldown claim and `enterCombat` before async rune consumption to close the race window
+- **File**: `packages/shared/src/systems/shared/combat/handlers/MagicAttackHandler.ts`
+
+**Commit**: 82ff784 (Feb 25, 2026)
+
+### 🏔️ Duel Arena Terrain Fixes (PR #911)
+
+Fixed players sinking into duel arena floors:
+
+- **Issue**: Flat zones were removed from terrain system, causing `getHeightAt()` to return raw procedural terrain height instead of floor-level height
+- **Impact**: Players/agents sinking ~0.4m into arena floors, grass growing through floor surfaces
+- **Fix**: DuelArenaVisualsSystem now registers flat zones programmatically for all 8 floor areas (6 arenas + lobby + hospital)
+- **Result**: Terrain height queries return correct floor-level values, terrain mesh carved under floors
+- **File**: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
+- **Commit**: 7a60135 (Feb 25, 2026)
+
+### 🎯 Duel Arena Click Targeting Fix (commit 24354238)
+
+Fixed click targets going underground in duel arenas:
+
+- **Issue**: Building footprint validation was rejecting arena-floor raycast hits
+- **Impact**: Players couldn't click to move within duel arenas
+- **Fix**: RaycastService now skips building footprint validation for arena-floor raycast hits
+- **File**: `packages/shared/src/systems/client/interaction/services/RaycastService.ts`
+- **Commit**: 2435423 (Feb 24, 2026)
+
+### 🗺️ Duel Arena Minimap Fix (commit 24354238)
+
+Fixed minimap showing duel arenas as black holes:
+
+- **Issue**: Arena/lobby/hospital floor meshes had layer 0 disabled
+- **Impact**: Minimap camera couldn't render arena floors, showing black holes
+- **Fix**: Enabled layer 0 on all arena/lobby/hospital floor meshes
+- **File**: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
+- **Commit**: 2435423 (Feb 24, 2026)
+
+### 🧹 Duel Arena Cleanup (commit 24354238)
+
+Removed non-functional wall sconce geometry:
+
+- **Issue**: 96 dead wall sconce meshes across 6 arenas with no lights attached
+- **Impact**: Unnecessary geometry in scene with no visual benefit
+- **Fix**: Removed wall sconce geometry from arena fences
+- **File**: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
+- **Commit**: 2435423 (Feb 24, 2026)
+
+### 📦 Asset Repository Migration (commit 12c01c26)
+
+Moved all binary assets to separate repository for cleaner version control:
+
+- **Asset Repository**: [HyperscapeAI/assets](https://github.com/HyperscapeAI/assets) is now source of truth
+- **Main Repository**: Only tracks manifest JSON files in `packages/server/world/assets/manifests/`
+- **Local Development**: Assets auto-cloned during `bun install` with full LFS support
+- **CI/CD**: Assets cloned without LFS (manifests only) via `ensure-assets.mjs`
+- **Gitignore**: Entire `packages/server/world/assets/` directory now ignored
+- **Benefits**: Smaller main repo, faster clones, cleaner git history
+- **Commit**: 12c01c2 (Feb 24, 2026)
+
+### 🔧 Build System Fix (commit 12c01c26)
+
+Fixed MUD deploy script to handle both hoisted and local node_modules:
+
+- **Issue**: `mud deploy` failed when bun didn't hoist MUD CLI to root node_modules
+- **Fix**: Check for local `packages/contracts/node_modules/.bin/mud` first, fall back to root
+- **File**: `packages/server/scripts/setup-chain.mjs`
+- **Commit**: 12c01c2 (Feb 24, 2026)
+
+</Update>
+
 <Update label="Dependency Updates & Infrastructure Fixes" description="February 2026" date="2026-02-25">
 
 ### 🎮 Gameplay Fixes
