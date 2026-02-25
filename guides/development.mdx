@@ -255,6 +255,33 @@ To use Claude Code:
 Requires `CLAUDE_CODE_OAUTH_TOKEN` and `MINTLIFY_API_KEY` secrets to be configured in repository settings.
 </Info>
 
+## Build System Fixes (February 2026)
+
+### TypeScript Override Conflict (commit 113a85a)
+
+**Issue**: Conflicting TypeScript overrides caused cyclic dependency errors in Cloudflare and CI builds.
+
+**Fix**: Removed conflicting overrides from root `package.json`. The build system now relies on workspace protocol and Turbo's dependency resolution.
+
+### Windows Environment Variables (commit 3b7665d)
+
+**Issue**: Native app builds failed on Windows due to inline environment variable syntax.
+
+**Fix**: Conditionally supply secrets only when defined, using GitHub Actions conditional expressions:
+
+```yaml
+env:
+  TAURI_SIGNING_PRIVATE_KEY: ${{ needs.prepare.outputs.is_release == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+```
+
+This ensures empty strings for non-release builds (Windows-compatible) instead of undefined variables.
+
+### CI Workflow Matrix Reference (commit a095ba1)
+
+**Issue**: Job-level `if` condition referenced matrix variables before matrix context was available.
+
+**Fix**: Removed invalid matrix reference from job-level condition. Matrix variables are only available during job execution, not at job scheduling time.
+
 ## Common Workflows
 
 ### Adding a New Feature
