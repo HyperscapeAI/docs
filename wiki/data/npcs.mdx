@@ -145,6 +145,85 @@ Mobs use the `combat.aggressive` flag to determine if they attack players:
 
 ---
 
+## Services System
+
+NPCs can provide services to players:
+
+```typescript
+interface Services {
+  enabled: boolean;
+  types: string[];  // "bank", "shop", "quest", etc.
+}
+```
+
+### Service Types
+
+| Type | Description | Example NPC |
+|------|-------------|-------------|
+| `bank` | Opens bank interface | Bank Clerk |
+| `shop` | Opens shop interface | Shopkeeper, Dommik |
+| `quest` | Quest giver | Captain Rowan, Forester Wilma |
+
+---
+
+## Dialogue System
+
+NPCs can have multi-node dialogue trees:
+
+```typescript
+interface Dialogue {
+  entryNodeId: string;
+  nodes: DialogueNode[];
+}
+
+interface DialogueNode {
+  id: string;
+  text: string;
+  responses?: DialogueResponse[];
+}
+
+interface DialogueResponse {
+  text: string;
+  nextNodeId?: string;
+  effect?: string;  // "openBank", "openStore", etc.
+}
+```
+
+### Example Dialogue Flow
+
+```json
+{
+  "entryNodeId": "greeting",
+  "nodes": [
+    {
+      "id": "greeting",
+      "text": "Welcome to the bank! How may I help you today?",
+      "responses": [
+        {
+          "text": "I'd like to access my bank.",
+          "nextNodeId": "open_bank",
+          "effect": "openBank"
+        },
+        {
+          "text": "Goodbye.",
+          "nextNodeId": "farewell"
+        }
+      ]
+    },
+    {
+      "id": "open_bank",
+      "text": "Of course! Here are your belongings."
+    },
+    {
+      "id": "farewell",
+      "text": "Take care, adventurer!"
+    }
+  ]
+}
+```
+
+---
+
 ## Drop Tables
 
 Each NPC has a `DropTable` defining loot:
