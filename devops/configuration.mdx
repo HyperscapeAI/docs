@@ -107,11 +107,16 @@ STREAMING_DUEL_COMBAT_AI_ENABLED=false          # Enable DuelCombatAI for agents
 STREAMING_DUEL_LLM_TACTICS_ENABLED=false        # Enable LLM-based combat strategy (default: false)
 STREAMING_COMBAT_STALL_NUDGE_MS=15000           # Fallback damage nudge delay (ms)
 
-# Duel Arena Visuals System
+# Duel Arena Visuals System (commit b8f56e81)
 DUEL_ARENA_VISUALS_ENABLED=true                 # Enable duel arena visuals system (default: true)
                                                 # Registers flat zones for arena floors to prevent player sinking
+                                                # Fixes players sinking ~0.4m into arena floors
 
-# Trash Talk System (added in commit 8ff3ad3)
+# Combat AI System (commit 51453dae)
+STREAMING_DUEL_COMBAT_AI_ENABLED=true           # Enable DuelCombatAI for agents (default: true)
+STREAMING_DUEL_LLM_TACTICS_ENABLED=false        # Enable LLM-based combat strategy (default: false)
+
+# Trash Talk System
 TRASH_TALK_COOLDOWN_MS=8000                     # Cooldown between trash talk messages (default: 8s)
 TRASH_TALK_LLM_TIMEOUT_MS=3000                  # LLM generation timeout (default: 3s)
 TRASH_TALK_ENABLED=true                         # Enable trash talk system (default: true)
