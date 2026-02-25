@@ -557,28 +557,28 @@ npm audit --audit-level=critical
 
 ### Database Configuration
 
-**Supavisor Pooler Compatibility:**
+**Supavisor Pooler Compatibility (commits 8aaaf28, f7ab9f7):**
 
-When using Supabase's Supavisor connection pooler, prepared statements must be disabled to avoid `XX000` errors:
+When using Supabase's Supavisor connection pooler, prepared statements must be disabled to avoid `XX000` errors. The database client automatically detects Supavisor and disables prepared statements:
 
 ```typescript
-// packages/server/src/startup/database.ts
+// packages/server/src/database/client.ts
+function isSupavisorPooler(connectionString: string): boolean {
+  return connectionString.includes('pooler.supabase.com');
+}
+
+const useSupavisor = isSupavisorPooler(connectionString);
 const db = drizzle(pool, {
   schema,
-  logger: false,
-  casing: 'snake_case',
-});
-
-// Disable prepared statements for Supavisor pooler
-pool.on('connect', (client) => {
-  client.query('SET statement_timeout = 30000');
-  client.query('SET idle_in_transaction_session_timeout = 60000');
+  ...(useSupavisor ? { prepare: false } : {}),
 });
 ```
 
-**Why**: Supavisor's transaction pooling mode doesn't support prepared statements. Disabling them prevents `ERROR: prepared statement "..." does not exist (XX000)` errors.
+**Why**: Supavisor's transaction pooling mode doesn't support prepared statements. The `{ prepare: false }` option tells Drizzle ORM to use simple queries instead of prepared statements, preventing `ERROR: prepared statement "..." does not exist (XX000)` errors.
 
-**Commits**: 8aaaf28, f7ab9f7
+**Detection**: Automatic - checks if connection string contains `pooler.supabase.com`
+
+**Pool Configuration**: Supavisor connections use reduced pool size (max: 6 vs 20) due to pooler limitations
 
 ### CI/CD Best Practices
 
