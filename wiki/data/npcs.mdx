@@ -32,29 +32,59 @@ Each NPC has the following structure:
 
 ```typescript
 interface NPCData {
-  id: string;                    // Unique identifier (e.g., "goblin_warrior")
-  name: string;                  // Display name (e.g., "Goblin Warrior")
+  id: string;                    // Unique identifier (e.g., "goblin")
+  name: string;                  // Display name (e.g., "Goblin")
+  description: string;           // NPC description
   category: NPCCategory;         // "mob" | "boss" | "neutral" | "quest"
-  modelPath: string;             // Path to GLB model
+  faction?: string;              // Faction (e.g., "monster", "town")
+  levelRange?: [number, number]; // Min/max level range for mobs
 
   stats: {
     level: number;               // Combat level (1-126)
+    health: number;              // Max HP
     attack: number;              // Attack level
     strength: number;            // Strength level
     defense: number;             // Defense level
-    health: number;              // Max HP
+    defenseBonus: number;        // Defense bonus
     ranged?: number;             // Ranged level (optional)
+    magic?: number;              // Magic level (optional)
   };
 
-  aggression: {
-    type: AggressionType;        // Aggro behavior
-    maxLevel?: number;           // For level_gated type
+  combat: {
+    attackable: boolean;         // Can be attacked
+    aggressive?: boolean;        // Attacks players
+    retaliates?: boolean;        // Fights back when attacked
+    aggroRange?: number;         // Aggro detection range
+    combatRange?: number;        // Attack range
+    leashRange?: number;         // Max distance from spawn
+    attackSpeedTicks?: number;   // Attack speed
+    respawnTicks?: number;       // Respawn delay in ticks
   };
 
-  spawnBiomes: string[];         // Where NPC can spawn
-  respawnTime?: number;          // Respawn delay in seconds
+  movement: {
+    type: MovementType;          // "stationary" | "wander" | "patrol"
+    speed: number;               // Movement speed
+    wanderRadius: number;        // Wander distance from spawn
+  };
 
-  drops: DropTable;              // Loot drops
+  services?: {
+    enabled: boolean;            // Provides services
+    types: string[];             // Service types (e.g., "bank", "shop")
+  };
+
+  dialogue?: {
+    entryNodeId: string;         // Starting dialogue node
+    nodes: DialogueNode[];       // Dialogue tree
+  };
+
+  appearance: {
+    modelPath: string;           // Path to VRM/GLB model
+    iconPath?: string;           // Icon path
+    scale: number;               // Model scale
+  };
+
+  spawnBiomes?: string[];        // Where NPC can spawn
+  drops?: DropTable;             // Loot drops (for mobs)
 }
 ```
 
