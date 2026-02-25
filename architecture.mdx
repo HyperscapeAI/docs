@@ -345,6 +345,106 @@ Manages InstancedMesh pools for placeholder resources (trees/ores with missing m
 - Fixed placeholder trees not rendering due to "null" string in modelPath (sanitize in ResourceSystem + createVisualStrategy factory, fix woodcutting.json)
 - Removed dead ParticleSystem.move() method and leftover hack fixes
 
+### Model Cache System
+
+The shared package includes an IndexedDB-based model cache that stores processed 3D models for instant loading on subsequent page visits. This system was significantly improved in February 2026 (PR #935) to fix critical bugs affecting object visibility and texture persistence.
+
+**Location**: `packages/shared/src/utils/rendering/ModelCache.ts`
+
+**Purpose**: Cache processed GLTF/GLB models in IndexedDB to skip expensive parsing on subsequent loads. The cache stores:
+- Serialized mesh geometry (positions, normals, UVs, skinning data)
+- Material properties (colors, roughness, metalness, textures)
+- Scene hierarchy (parent-child relationships, transforms)
+- Animation clips (keyframes, tracks)
+- Collision data (optional PhysX mesh data)
+
+**Critical Fixes (PR #935, Feb 25, 2026):**
+
+1. **Missing Objects Bug (Identity Map Fix)**:
+   - **Issue**: Models with duplicate mesh names (e.g., "", "Cube", "Cube") lost objects after deserialization. `serializeNode` used `findIndex`-by-name which caused all duplicate names to resolve to the same index. Three.js `add()` auto-removes from previous parent, so only the last reference survived.
+   - **Impact**: Altars and other multi-mesh models appeared incomplete or invisible after page refresh
+   - **Fix**: Replaced name-based lookup with `Map<Object3D, number>` identity map built during traversal
+   - **Code**:
+     ```typescript
+     // Build identity map during mesh collection
+     const meshNodeToIndex = new Map<THREE.Object3D, number>();
+     scene.traverse((node) => {
+       if (node instanceof THREE.Mesh || node instanceof THREE.SkinnedMesh) {
+         meshNodeToIndex.set(node, meshes.length);
+         meshes.push(serializeMesh(node));
+       }
+     });
+     
+     // Use identity map in serializeNode (not name-based findIndex)
+     const hierarchy = this.serializeNode(scene, meshNodeToIndex);
+     ```
+   - **Result**: All objects in models now render correctly after cache restore
+
+2. **Lost Textures Bug (Pixel Extraction Fix)**:
+   - **Issue**: Textures were serialized as ephemeral `blob:` URLs but never reloaded during deserialization
+   - **Impact**: Models appeared white or with wrong colors after page refresh
+   - **Fix**: Extract raw RGBA pixels via canvas `getImageData()` (synchronous) and restore as `THREE.DataTexture`
+   - **Code**:
+     ```typescript
+     // Extract texture pixels synchronously
+     private textureToPixelData(texture: THREE.Texture): SerializedTextureData | null {
+       const image = texture.source?.data ?? texture.image;
+       const canvas = document.createElement(\"canvas\");
+       canvas.width = image.naturalWidth || image.width;
+       canvas.height = image.naturalHeight || image.height;
+       const ctx = canvas.getContext(\"2d\");
+       ctx.drawImage(image, 0, 0);
+       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+       return { pixels: imageData.data.buffer, width: canvas.width, height: canvas.height };
+     }
+     
+     // Restore as DataTexture
+     const restoreTex = (td: SerializedTextureData, srgb: boolean): THREE.DataTexture => {
+       const tex = new THREE.DataTexture(
+         new Uint8ClampedArray(td.pixels),
+         td.width,
+         td.height,
+         THREE.RGBAFormat,
+       );
+       tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
+       tex.needsUpdate = true;
+       return tex;
+     };
+     ```
+   - **Result**: Textures persist correctly across page refreshes with no async loading race conditions
+
+3. **Grey Trees in WebGPU (Duck-Type Fix)**:
+   - **Issue**: `createDissolveMaterial` used `instanceof MeshStandardMaterial` which fails for `MeshStandardNodeMaterial` in WebGPU build (separate classes)
+   - **Impact**: Tree materials rendered grey instead of textured in WebGPU mode
+   - **Fix**: Replaced with duck-type property check
+   - **Code**:
+     ```typescript
+     // Duck-type check instead of instanceof
+     const src = source as THREE.MeshStandardMaterial & { map?: THREE.Texture | null; /* ... */ };
+     if (src.color && src.roughness !== undefined) {
+       // Copy PBR properties
+       material.color.copy(src.color);
+       material.roughness = src.roughness;
+       // ...
+     }
+     ```
+   - **Result**: Tree materials render correctly in both WebGL and WebGPU builds
+
+**Additional Improvements:**
+- `localStorage.setItem('disable-model-cache', 'true')` bypass option for debugging
+- Error logging on IndexedDB `put()` and transaction failures
+- Cache version bumped to 3 to invalidate broken entries
+- All texture types supported: map, normalMap, emissiveMap, roughnessMap, metalnessMap, aoMap
+- Proper color space handling (sRGB for diffuse, Linear for data textures)
+
+**Debug Option:**
+```typescript
+// Disable model cache for debugging
+localStorage.setItem('disable-model-cache', 'true');
+// Re-enable
+localStorage.removeItem('disable-model-cache');
+```
+
 ### GPU-Instanced Particle System (PR #877)
 
 The shared package includes a centralized particle system that uses GPU instancing for high-performance visual effects. Introduced in February 2026, this system provides dramatic performance improvements for fishing spots and other particle-heavy entities.
