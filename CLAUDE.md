@@ -496,43 +496,49 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 ## Tech Stack
 
 - **Runtime**: Bun v1.1.38+
+- **TypeScript**: 5.9.3
 - **Engine**: Three.js 0.183.1 (WebGPU + TSL shaders), PhysX (WASM)
-- **UI**: React 19.2.0, styled-components, Framer Motion 12.34.3
+- **UI**: React 19.2.14, styled-components, Framer Motion 12.34.3
 - **Server**: Fastify, WebSockets, LiveKit
 - **Database**: PostgreSQL (production via Neon/Supabase), Drizzle ORM
 - **Testing**: Playwright 1.58.2, Vitest, Chai 6.2.2
-- **Build**: Turbo, esbuild, Vite 5.1.4+
+- **Build**: Turbo, esbuild, Vite 6.4.1
 - **Mobile**: Capacitor 8.1.0, Tauri
-- **Blockchain**: Solana (mainnet), Anchor 0.32.1, CLOB market program, @elizaos/core 2.0.0-alpha.12
+- **Blockchain**: Solana (mainnet), Anchor 0.32.1, CLOB market program
+- **AI**: @elizaos/core 2.0.0-alpha.26 (server), @ai-sdk/anthropic 3.0.46
 - **Streaming**: RTMP (Twitch, YouTube), HLS, FFmpeg
 - **Validation**: Zod 4.3.6
-- **AI SDK**: @ai-sdk/anthropic 3.0.46
 - **Icons**: lucide-react 0.575.0
 - **Environment**: dotenv 17.3.1
 - **Linting**: ESLint 10.0.2
 - **3D Optimization**: three-mesh-bvh 0.9.8
 
-**Recent Dependency Updates (Feb 2026):**
-- Three.js: 0.182.0 → 0.183.1 (client, asset-forge, shared)
-- @types/three: 0.180.0 → 0.183.1 (plugin-hyperscape, asset-forge)
-- @types/node: 24.8.0 → 25.3.0 (root, shared, server, asset-forge)
-- @types/react: 19.2.2 → 19.2.14 (root)
-- @types/react-dom: 19.2.2 → 19.2.3 (root)
-- @ai-sdk/anthropic: 1.2.12 → 3.0.46 (asset-forge, plugin-hyperscape)
-- @vitejs/plugin-react: 5.0.4 → 5.1.4
-- @capacitor/cli: 7.5.0 → 8.1.0 (shared)
-- @coral-xyz/anchor: 0.31.1 → 0.32.1
-- @elizaos/core: 2.0.0-alpha.11 → 2.0.0-alpha.26 (server), 2.0.0-alpha.12 (plugin-hyperscape)
-- @playwright/test: 1.54.2 → 1.58.2
-- chai: 4.5.0 → 6.2.2
-- dotenv: 16.6.1 → 17.3.1 (shared)
-- eslint: 9.39.3 → 10.0.2 (shared, asset-forge, plugin-hyperscape, server, client)
-- framer-motion: 11.18.2 → 12.34.3
-- lucide-react: 0.553.0 → 0.575.0 (asset-forge), 0.554.0 → 0.575.0 (client)
-- three-mesh-bvh: 0.8.3 → 0.9.8 (shared)
-- typescript: 5.9.2 → 5.9.3 (root)
-- vite-plugin-node-polyfills: 0.24.0 → 0.25.0
-- zod: 3.25.76 → 4.3.6
+**Recent Dependency Updates (Feb 24-25, 2026):**
+
+Commits 7a60135e through 55c57ed5 updated dependencies across all packages:
+
+| Package | Old Version | New Version | Type |
+|---------|-------------|-------------|------|
+| `typescript` | 5.9.2 | 5.9.3 | Patch |
+| `@types/node` | 24.8.0 | 25.3.0 | Major |
+| `@types/react` | 19.2.2 | 19.2.14 | Patch |
+| `@types/react-dom` | 19.2.2 | 19.2.3 | Patch |
+| `three` | 0.182.0 | 0.183.1 | Minor |
+| `@types/three` | 0.180.0 | 0.183.1 | Minor |
+| `three-mesh-bvh` | 0.8.3 | 0.9.8 | Minor |
+| `@elizaos/core` | 2.0.0-alpha.11 | 2.0.0-alpha.26 | Patch |
+| `@ai-sdk/anthropic` | 1.2.12 | 3.0.46 | Major |
+| `@vitejs/plugin-react` | 5.0.4 | 5.1.4 | Minor |
+| `@capacitor/cli` | 7.5.0 | 8.1.0 | Major |
+| `@coral-xyz/anchor` | 0.31.1 | 0.32.1 | Minor |
+| `@playwright/test` | 1.54.2 | 1.58.2 | Minor |
+| `chai` | 4.5.0 | 6.2.2 | Major |
+| `dotenv` | 16.6.1 | 17.3.1 | Major |
+| `eslint` | 9.39.3 | 10.0.2 | Major |
+| `framer-motion` | 11.18.2 | 12.34.3 | Major |
+| `lucide-react` | 0.553.0 | 0.575.0 | Minor |
+| `vite-plugin-node-polyfills` | 0.24.0 | 0.25.0 | Minor |
+| `zod` | 3.25.76 | 4.3.6 | Major |
 
 ## Security & CI/CD
 
