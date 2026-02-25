@@ -473,7 +473,7 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Server**: Fastify, WebSockets, LiveKit
 - **Database**: PostgreSQL (production via Neon/Supabase), Drizzle ORM
 - **Testing**: Playwright 1.58.2, Vitest, Chai 6.2.2
-- **Build**: Turbo, esbuild, Vite 6.4.1+
+- **Build**: Turbo, esbuild, Vite 5.1.4+
 - **Mobile**: Capacitor 8.1.0, Tauri
 - **Blockchain**: Solana (mainnet), Anchor 0.32.1, CLOB market program, @elizaos/core 2.0.0-alpha.12
 - **Streaming**: RTMP (Twitch, YouTube), HLS, FFmpeg
@@ -483,6 +483,25 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Environment**: dotenv 17.3.1
 - **Linting**: ESLint 10.0.2
 - **3D Optimization**: three-mesh-bvh 0.9.8
+
+**Recent Dependency Updates (Feb 2026):**
+- Three.js: 0.182.0 → 0.183.1 (client, asset-forge, shared)
+- @types/three: 0.180.0 → 0.183.1 (plugin-hyperscape, asset-forge)
+- @types/node: 24.10.13 → 25.3.0 (shared, server, asset-forge)
+- @ai-sdk/anthropic: 1.2.12 → 3.0.46 (asset-forge, plugin-hyperscape)
+- @vitejs/plugin-react: 5.0.4 → 5.1.4
+- @capacitor/cli: 7.5.0 → 8.1.0 (shared)
+- @coral-xyz/anchor: 0.31.1 → 0.32.1
+- @elizaos/core: 2.0.0-alpha.11 → 2.0.0-alpha.12
+- @playwright/test: 1.54.2 → 1.58.2
+- chai: 4.5.0 → 6.2.2
+- dotenv: 16.6.1 → 17.3.1 (shared)
+- eslint: 9.39.3 → 10.0.2 (shared, asset-forge, plugin-hyperscape)
+- framer-motion: 11.18.2 → 12.34.3
+- lucide-react: 0.553.0 → 0.575.0 (asset-forge, client)
+- three-mesh-bvh: 0.8.3 → 0.9.8 (shared)
+- vite-plugin-node-polyfills: 0.24.0 → 0.25.0
+- zod: 3.25.76 → 4.3.6
 
 ## Security & CI/CD
 
