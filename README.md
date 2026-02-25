@@ -392,7 +392,34 @@ The CI audit threshold has been lowered to `critical` only (from `high`) to allo
 
 ## Recent Updates (February 2026)
 
-### Performance Improvements
+### Rendering Optimizations
+
+**GLBTreeInstancer - InstancedMesh Tree Rendering (commit 0871acb):**
+- Replaced per-tree `scene.clone(true)` with shared InstancedMesh pools per LOD level
+- Trees now render via shared geometry references instead of deep-cloning buffers on each spawn
+- Eliminated FPS drops when approaching tree chunks
+- Performance: ~15-20% FPS improvement in dense forest areas
+- Memory: ~80% reduction in geometry buffer allocations
+- Draw calls: Reduced from N trees to 3 (one per LOD level)
+- Implementation: `packages/shared/src/systems/shared/world/GLBTreeInstancer.ts`
+
+**ResourceEntity Visual Strategy Pattern (commit bc60264):**
+- Refactored ResourceEntity (~1700 lines removed) into delegated visual strategies
+- Strategy Pattern separates rendering logic from entity lifecycle management
+- 5 visual strategies: TreeGLBVisualStrategy, TreeProcgenVisualStrategy, StandardModelVisualStrategy, FishingSpotVisualStrategy, PlaceholderVisualStrategy
+- Factory pattern in `createVisualStrategy()` selects strategy based on resource type and model path
+- Benefits: Single Responsibility, Open/Closed principle, improved testability and maintainability
+
+**PlaceholderInstancer (commit bc60264):**
+- Instanced rendering for placeholder resources (trees/ores with missing models)
+- Color-coded: green (trees), brown (ores), blue (fishing spots)
+- Prevents individual BoxGeometry creation per resource
+- Max 1000 instances per resource type
+
+**Bug Fixes:**
+- Fixed fishing spot particles persisting after depletion (commit bc60264)
+- Fixed placeholder trees not rendering due to "null" string in modelPath (commit bc60264)
+- Fixed DEV_UNLIMITED_GATHERING flag bypass (commit c182b4b) - re-enabled level checks, tool checks, inventory capacity guards
 
 **GPU-Instanced Particle System (PR #877, commit 4168f2f):**
 - Centralized ParticleManager architecture for all particle effects
@@ -403,7 +430,7 @@ The CI audit threshold has been lowered to `critical` only (from `high`) to allo
 - TSL NodeMaterials with GPU-computed billboard orientation, parabolic arcs, wobble, twinkle
 - Extensible architecture for future particle types (fire, magic, dust)
 
-See [CLAUDE.md](CLAUDE.md) for detailed ParticleManager architecture documentation.
+See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
 
 ### Database & CI Improvements
 
