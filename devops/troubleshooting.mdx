@@ -749,7 +749,7 @@ ls packages/server/world/assets/manifests/
 
 **Symptom**: Missing objects in models (e.g., altars), white/wrong colored textures after restart, or grey trees in WebGPU builds
 
-**Cause**: Bugs in IndexedDB processed model cache (fixed in PR #935)
+**Cause**: Bugs in IndexedDB processed model cache (fixed in PR #935, commit c98f1cc, Feb 25, 2026)
 
 **Solution**: Update to latest code. The cache now uses:
 - Object-identity mapping instead of name-based lookup (fixes missing objects)
@@ -763,12 +763,28 @@ localStorage.setItem('disable-model-cache', 'true');
 ```
 
 **Technical Details:**
-- **Missing objects**: Models with duplicate mesh names (e.g., "Cube") had only the last mesh appear. Fixed by using `Map<Object3D, number>` identity map instead of `findIndex`-by-name
-- **Lost textures**: Textures serialized as ephemeral `blob:` URLs became invalid after page refresh. Fixed by extracting raw RGBA pixels via canvas `getImageData` and restoring as `DataTexture`
-- **Grey trees**: `instanceof MeshStandardMaterial` check failed for `MeshStandardNodeMaterial` in WebGPU builds. Fixed with duck-type property check
+
+**Bug #1 - Missing Objects (e.g., altars):**
+- **Problem**: `serializeNode` used `findIndex`-by-name to map hierarchy nodes to mesh data. Models with duplicate mesh names (common: "", "Cube", "Cube") all resolved to the same index. During deserialization, Three.js `add()` auto-removes from previous parent, so only the last reference survived.
+- **Fix**: Use `Map<Object3D, number>` identity map built during traversal instead of name-based lookup
+- **Impact**: All objects in models now render correctly, including complex multi-mesh models like altars
+
+**Bug #2 - Lost Textures (white/wrong colors after restart):**
+- **Problem**: Textures were serialized as ephemeral `blob:` URLs but never reloaded during deserialization. After page refresh, blob URLs became invalid, leaving models white or incorrectly colored.
+- **Fix**: Extract raw RGBA pixels via canvas `getImageData` (synchronous) and restore as `THREE.DataTexture` — no async loading race conditions
+- **Impact**: Textures persist correctly across page refreshes, models maintain correct colors
+
+**Bug #3 - Grey Trees in WebGPU Builds:**
+- **Problem**: `createDissolveMaterial` used `instanceof MeshStandardMaterial` which fails for `MeshStandardNodeMaterial` in the WebGPU build where they are separate classes
+- **Fix**: Replaced with duck-type property check (`src.color && src.roughness !== undefined`)
+- **Impact**: Tree materials render correctly in WebGPU builds instead of appearing grey
+
+**Additional Improvements:**
+- Added `localStorage.setItem('disable-model-cache', 'true')` to bypass cache for debugging
+- Error logging on IndexedDB `put`/transaction failures
 - Cache version bumped to 3 to invalidate broken entries
 - File: `packages/shared/src/utils/rendering/ModelCache.ts`
-- Commit: c98f1cc (Feb 25, 2026)
+- PR: #935 | Commit: c98f1cc (Feb 25, 2026)
 
 See [Model Cache System](/wiki/engine/model-cache) for complete details.
 
