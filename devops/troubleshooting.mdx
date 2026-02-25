@@ -970,6 +970,101 @@ bun run build
 - File: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
 - Commit: 2435423 (Feb 24, 2026)
 
+### Duplicate Teleport VFX
+
+**Symptom**: Three teleport effects play when agents exit duel arena (should only be one)
+
+**Cause**: Race condition between `clearDuelFlagsForCycle()` and `ejectNonDuelingPlayersFromCombatArenas()`
+
+**Solution**: Update to latest code (commit 7bf0e14 fixed this)
+
+**Technical Details:**
+- Removed premature `clearDuelFlagsForCycle()` in `endCycle()`
+- Flags now stay true until `cleanupAfterDuel()` completes teleports via microtask
+- Prevents `DuelSystem` from seeing agents with `inStreamingDuel=false` still in arena
+- File: `packages/server/src/systems/StreamingDuelScheduler/index.ts`
+- Commit: 7bf0e14 (Feb 25, 2026)
+
+### Teleport Beam Clipping Through Floor
+
+**Symptom**: Teleport beam base penetrates through floor instead of emerging from rune circle
+
+**Cause**: No fade at beam base, full opacity from bottom to top
+
+**Solution**: Update to latest code (commit ceb8909 fixed this)
+
+**Technical Details:**
+- Added `bottomFade` in TSL beam shader
+- Soft fade at beam base: `sub(1.0, max(sub(1.0, mul(yNorm, 2.0)), 0.0))`
+- Beam now emerges from rune circle smoothly
+- File: `packages/shared/src/systems/client/ClientTeleportEffectsSystem.ts`
+- Commit: ceb8909 (Feb 25, 2026)
+
+### Streaming Disconnects After 2 Minutes
+
+**Symptom**: RTMP stream disconnects or restarts every ~2 minutes
+
+**Cause**: CDP stall threshold too aggressive (2 intervals = 60s)
+
+**Solution**: Update to latest code (commit 14a1e1b fixed this)
+
+**Technical Details:**
+- Increased CDP stall threshold from 2 → 4 intervals (120s)
+- Added soft CDP recovery: restart screencast without browser/FFmpeg teardown
+- Increased FFmpeg MAX_RESTART_ATTEMPTS from 5 → 8
+- Increased CAPTURE_RECOVERY_MAX_FAILURES default from 2 → 4
+- File: `packages/server/src/streaming/`
+- Commit: 14a1e1b (Feb 25, 2026)
+
+### WebGPU Renderer Fails to Initialize
+
+**Symptom**: WebGPU renderer initialization fails with "Required limits not supported" error
+
+**Cause**: GPU doesn't support `maxTextureArrayLayers: 2048`
+
+**Solution**: Update to latest code (commit 14a1e1b fixed this)
+
+**Technical Details:**
+- Renderer now tries `maxTextureArrayLayers: 2048` first
+- Retries with default limits if GPU rejects
+- Always WebGPU, never WebGL fallback
+- Prevents renderer init failures on GPUs with lower limits
+- File: `packages/shared/src/utils/rendering/RendererFactory.ts`
+- Commit: 14a1e1b (Feb 25, 2026)
+
+### NPM 403 Forbidden Errors in CI
+
+**Symptom**: `bun install` fails in GitHub Actions with npm 403 Forbidden errors
+
+**Cause**: npm rate-limits GitHub Actions IP ranges
+
+**Solution**: Update to latest code (commits 7c9ff6c, 08aa151 fixed this)
+
+**Technical Details:**
+- Retry with backoff: up to 5 attempts with increasing delays (15s, 30s, 45s, 60s, 75s)
+- Use `--frozen-lockfile` in all workflows to prevent fresh package resolution
+- Ensures bun uses only committed lockfile
+- Files: `.github/workflows/*.yml`
+- Commits: 7c9ff6c, 08aa151 (Feb 25, 2026)
+
+### Tauri macOS Build Fails with Empty Certificate
+
+**Symptom**: Tauri macOS builds fail with `SecKeychainItemImport` error even for non-release builds
+
+**Cause**: Tauri bundler attempts code signing whenever `APPLE_CERTIFICATE` env var exists, even if empty
+
+**Solution**: Update to latest code (commit 15250d2 fixed this)
+
+**Technical Details:**
+- Build workflow split into Unsigned and Release variants
+- Signing env vars only present during actual releases
+- Non-release builds no longer set `APPLE_CERTIFICATE=''`
+- macOS unsigned builds use `--bundles app` to skip DMG creation
+- iOS builds are release-only (unsigned iOS always fails)
+- Windows builds have retry logic for transient NPM registry errors
+- File: `.github/workflows/build-app.yml`
+- Commit: 15250d2 (Feb 25, 2026)
+
 ## Getting Help
 
 1. Check [GitHub Issues](https://github.com/HyperscapeAI/hyperscape/issues)
