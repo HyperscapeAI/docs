@@ -2278,6 +2278,38 @@ Promise.race([llmPromise, timeoutPromise])
 - In-flight flag prevents overlapping LLM calls
 - Failures are silent (trash talk is optional flavor)
 
+### Combat Role System (PR #933, commit 82ff784)
+
+The duel system now supports three combat roles with automatic gear provisioning:
+
+**Combat Roles:**
+- **Melee** (50% weight): Bronze weapons (longsword, scimitar, 2h sword)
+- **Ranged** (25% weight): Shortbow + bronze arrows (500 qty), uses "rapid" attack style
+- **Mage** (25% weight): Staff of air + wind strike autocast + runes (500 mind, 500 air)
+
+**DuelCombatAI Adaptation:**
+- Melee: Uses existing phase-based style switching (aggressive/controlled/defensive)
+- Ranged: Forces "rapid" style for faster attack speed (-1 tick)
+- Mage: Skips style switching entirely (magic auto-casts via selectedSpell)
+
+**Gear Lifecycle:**
+1. Pre-duel: Role selected → gear equipped → food filled → health restored
+2. Post-duel: Gear removed → food removed → health restored → teleport back
+
+### Critical Bug Fixes (PR #933)
+
+**Combat State Key Mismatch (commit 82ff784):**
+- **Issue**: CombatStateService syncs abbreviated keys (`data.c`/`data.ct`) but `getGameState()` only read full keys (`data.inCombat`/`data.combatTarget`)
+- **Impact**: DuelCombatAI always saw `inCombat=false` and flooded `executeAttack` every tick instead of letting auto-attacks drive combat
+- **Fix**: EmbeddedHyperscapeService now reads both abbreviated and full keys: `data.c || data.inCombat` and `data.ct || data.combatTarget`
+- **File**: `packages/server/src/eliza/EmbeddedHyperscapeService.ts`
+
+**Magic Attack TOCTOU Race (commit 82ff784):**
+- **Issue**: Cooldown was checked early but claimed after async `consumeRunesForSpell` call. With bug #1 flooding attacks, two concurrent invocations could both pass the cooldown check before either claimed it
+- **Impact**: Duplicate magic projectiles, double rune consumption
+- **Fix**: Moved cooldown claim and `enterCombat` before async rune consumption to close the race window
+- **File**: `packages/shared/src/systems/shared/combat/CombatSystem.ts` (handleMagicAttack)
+
 ### Integration with DuelOrchestrator
 
 The trash talk system is wired into the combat AI via a callback:
