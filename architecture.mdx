@@ -203,7 +203,7 @@ Replaces per-tree `scene.clone(true)` with shared InstancedMesh pools per LOD le
 - Handles depleted/stump/destroy lifecycle via no-op-safe calls
 - Initialized in `createClientWorld.ts` when stage scene is ready
 
-**ResourceEntity Visual Strategy Pattern** (commit bc60264)
+**ResourceEntity Visual Strategy Pattern**
 
 Refactored ResourceEntity (~1700 lines removed) into delegated visual strategies using the Strategy Pattern. This separates rendering logic from entity lifecycle management.
 
@@ -215,26 +215,65 @@ Refactored ResourceEntity (~1700 lines removed) into delegated visual strategies
 5. **PlaceholderVisualStrategy**: Fallback colored cubes via PlaceholderInstancer
 
 **Factory Pattern:**
-- `createVisualStrategy()` factory selects strategy based on resource type, model path, and manifest config
-- Location: `packages/shared/src/entities/world/visuals/createVisualStrategy.ts`
+```typescript
+// From createVisualStrategy.ts
+export function createVisualStrategy(
+  resource: ResourceEntity,
+  resourceData: GatheringResource,
+  world: World,
+): ResourceVisualStrategy {
+  // Sanitize modelPath (fix "null" string bug)
+  const modelPath = resourceData.modelPath === "null" ? null : resourceData.modelPath;
+  
+  // Select strategy based on resource type and model availability
+  if (resourceData.type === "fishing_spot") {
+    return new FishingSpotVisualStrategy(resource, resourceData, world);
+  }
+  
+  if (resourceData.type === "tree") {
+    if (modelPath && modelPath.includes(".glb")) {
+      return new TreeGLBVisualStrategy(resource, resourceData, world);
+    }
+    return new TreeProcgenVisualStrategy(resource, resourceData, world);
+  }
+  
+  if (modelPath) {
+    return new StandardModelVisualStrategy(resource, resourceData, world);
+  }
+  
+  return new PlaceholderVisualStrategy(resource, resourceData, world);
+}
+```
+
+**Strategy Interface:**
+```typescript
+interface ResourceVisualStrategy {
+  initialize(): Promise<void>;
+  setDepleted(depleted: boolean): void;
+  destroy(): void;
+}
+```
 
 **Benefits:**
-- Single Responsibility: Each strategy handles one rendering approach
-- Open/Closed: Add new strategies without modifying ResourceEntity
-- Testability: Strategies can be tested in isolation
-- Maintainability: ~1700 lines of conditional logic replaced with clean delegation
+- **Single Responsibility**: Each strategy handles one rendering approach
+- **Open/Closed**: Add new strategies without modifying ResourceEntity
+- **Testability**: Strategies can be tested in isolation
+- **Maintainability**: ~1700 lines of conditional logic replaced with clean delegation
+- **Bug Prevention**: Centralized model path sanitization prevents "null" string bugs
 
-**PlaceholderInstancer** (commit bc60264)
+**PlaceholderInstancer**
 
 Manages InstancedMesh pools for placeholder resources (trees/ores with missing models):
 - Color-coded: green (trees), brown (ores), blue (fishing spots)
 - Lifecycle: `allocate()` on spawn, `free()` on destroy
 - Max 1000 instances per resource type
 - Initialized in `createClientWorld.ts` alongside GLBTreeInstancer
+- Location: `packages/shared/src/systems/shared/world/PlaceholderInstancer.ts`
 
 **Bug Fixes:**
-- Fixed fishing spot particles persisting after depletion (guard re-registration when depleted, zero ripple phase offset on unregister)
-- Fixed placeholder trees not rendering due to "null" string in modelPath (sanitize in ResourceSystem + createVisualStrategy factory)
+- Fixed fishing spot particles persisting after depletion (guard re-registration when depleted, zero ripple phase offset on unregister for full transparency)
+- Fixed placeholder trees not rendering due to "null" string in modelPath (sanitize in ResourceSystem + createVisualStrategy factory, fix woodcutting.json)
+- Removed dead ParticleSystem.move() method and leftover hack fixes
 
 ### GPU-Instanced Particle System (PR #877)
 
