@@ -103,19 +103,71 @@ PUBLIC_WS_URL=wss://api.hyperscape.lol
 PUBLIC_CDN_URL=https://cdn.hyperscape.lol
 ```
 
+## Automated Release Builds
+
+Hyperscape uses GitHub Actions to automatically build native apps for all platforms when you create a tagged release.
+
+### Creating a Release
+
+```bash
+# Tag a new version
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+This triggers the `.github/workflows/build-app.yml` workflow which builds:
+
+- **Windows**: `.msi` installer
+- **macOS**: `.dmg` installer (Intel + Apple Silicon universal binary)
+- **Linux**: `.AppImage` and `.deb` packages
+- **iOS**: `.ipa` bundle (requires Apple Developer account)
+- **Android**: `.apk` bundle
+
+### Download Portal
+
+Built apps are automatically published to:
+- **GitHub Releases**: [https://github.com/HyperscapeAI/hyperscape/releases](https://github.com/HyperscapeAI/hyperscape/releases)
+- **Public Portal**: [https://hyperscapeai.github.io/hyperscape/](https://hyperscapeai.github.io/hyperscape/)
+
+### Required Secrets
+
+For the build workflow to succeed, configure these GitHub repository secrets:
+
+| Secret | Purpose | Required For |
+|--------|---------|--------------|
+| `APPLE_CERTIFICATE` | Code signing certificate (base64) | macOS, iOS |
+| `APPLE_CERTIFICATE_PASSWORD` | Certificate password | macOS, iOS |
+| `APPLE_SIGNING_IDENTITY` | Developer ID | macOS, iOS |
+| `APPLE_ID` | Apple ID email | macOS, iOS |
+| `APPLE_PASSWORD` | App-specific password | macOS, iOS |
+| `APPLE_TEAM_ID` | Developer team ID | macOS, iOS |
+| `TAURI_PRIVATE_KEY` | Updater signing key | All platforms |
+| `TAURI_KEY_PASSWORD` | Key password | All platforms |
+
+<Info>
+See `docs/native-release.md` in the repository for complete setup instructions.
+</Info>
+
 ## Platform-Specific Notes
 
 ### iOS
 
-- Minimum iOS version: 14.0
+- Minimum iOS version: 13.0
 - Requires provisioning profile for device testing
-- Use TestFlight for beta distribution
+- Automated builds via GitHub Actions on tagged releases
+- Manual builds: `cd packages/app && bun run tauri ios build`
 
 ### Android
 
 - Minimum SDK: 24 (Android 7.0)
-- Generate signed APK for distribution
-- Use Play Console for beta testing
+- Automated builds via GitHub Actions on tagged releases
+- Manual builds: `cd packages/app && bun run tauri android build`
+
+### Desktop
+
+- **Windows**: Requires Windows 10+ (x64)
+- **macOS**: Universal binary (Intel + Apple Silicon)
+- **Linux**: AppImage (portable) and .deb (Debian/Ubuntu)
 
 ## Debugging
 
