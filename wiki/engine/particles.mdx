@@ -1,79 +1,111 @@
 ---
-title: "Particle system"
+title: "Particle System"
 description: "GPU-instanced particle system for high-performance visual effects"
 icon: "sparkles"
 ---
 
 ## Overview
 
-The Hyperscape particle system uses GPU instancing and Three.js Shading Language (TSL) to render thousands of particles with minimal CPU overhead. Introduced in PR #877 (February 2026), this system provides a 97% reduction in draw calls and an 80% FPS improvement for fishing spots.
+The Hyperscape particle system uses GPU instancing and TSL (Three.js Shading Language) shaders to render thousands of particles with minimal CPU overhead. Introduced in PR #877 (February 2026), this system provides a 97% reduction in draw calls and an 80% FPS improvement for fishing spots.
 
 ## Architecture
 
-### ParticleManager
+The particle system follows a centralized routing pattern with specialized sub-managers:
 
-Central routing system that dispatches particle events to specialized sub-managers based on resource type:
-
-```typescript
-import { ParticleManager } from '@hyperscape/shared';
-
-const particleManager = new ParticleManager(scene);
+```
+ParticleManager (central router)
+├── WaterParticleManager (fishing spots)
+└── GlowParticleManager (altars, fires, torches)
 ```
 
-**Responsibilities:**
-- Route particle registration/unregistration to appropriate sub-manager
-- Track particle ownership by entity ID
-- Coordinate per-frame updates across all sub-managers
-- Handle resource events from game systems
-- Manage lifecycle (creation, updates, disposal)
+### ParticleManager
 
-**Current Sub-Managers:**
-- **WaterParticleManager**: Fishing spot effects (splash, bubble, shimmer, ripple)
+Central router that dispatches particle events to specialized sub-managers based on particle type.
 
-**Future Sub-Managers:**
-- FireParticleManager: Flame and smoke effects
-- MagicParticleManager: Spell impact and aura effects
-- DustParticleManager: Environmental dust and debris
-- BloodParticleManager: Combat hit effects
+**Location:** `packages/shared/src/entities/managers/particleManager/ParticleManager.ts`
 
-### WaterParticleManager
+**Key Features:**
+- Single entry point for all particle systems
+- Type-based routing to appropriate sub-manager
+- Ownership tracking eliminates need for type hints on unregister/move
+- Extensible design for future particle types (dust, smoke, blood, magic)
+
+**API:**
+
+```typescript
+class ParticleManager {
+  constructor(scene: THREE.Scene);
+  
+  // Unified lifecycle
+  register(id: string, config: ParticleConfig): void;
+  unregister(id: string): void;
+  move(id: string, newPos: { x: number; y: number; z: number }): void;
+  
+  // Event routing
+  handleResourceEvent(data: ParticleResourceEvent): void;
+  
+  // Per-frame update
+  update(dt: number, camera: THREE.Camera): void;
+  
+  // Cleanup
+  dispose(): void;
+}
+```
+
+**Particle Configuration Types:**
+
+```typescript
+// Discriminated union for type-safe particle configuration
+type ParticleConfig = WaterParticleConfig | GlowParticleConfig;
+
+interface WaterParticleConfig {
+  type: "water";
+  position: { x: number; y: number; z: number };
+  resourceId: string;
+}
+
+interface GlowParticleConfig {
+  type: "glow";
+  preset: GlowPreset;
+  position: { x: number; y: number; z: number };
+  color?: number | { core: number; mid: number; outer: number };
+  meshRoot?: THREE.Object3D;
+  modelScale?: number;
+  modelYOffset?: number;
+}
+```
+
+## WaterParticleManager
 
 GPU-instanced water particle effects for fishing spots using InstancedMesh and TSL shaders.
 
-**Performance Metrics:**
-- **Draw Calls**: ~150 → 4 per fishing spot (97% reduction)
-- **FPS**: 65-70 → 120 on reference hardware (80% increase)
-- **CPU Code**: ~450 lines of animation code eliminated
-- **CPU Overhead**: Zero (all animations on GPU)
+**Location:** `packages/shared/src/entities/managers/particleManager/WaterParticleManager.ts`
 
-**Technical Implementation:**
+### Performance Metrics
 
-#### InstancedMesh Layers
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Draw calls per fishing spot | ~150 | 4 | 97% reduction |
+| FPS (reference hardware) | 65-70 | 120 | 80% increase |
+| CPU animation code | ~450 lines | 0 lines | 100% elimination |
+| Per-frame CPU overhead | High (trig, quaternion, opacity) | Zero (GPU-driven) | 100% reduction |
 
-Four separate InstancedMesh objects for different particle types:
+### Technical Implementation
 
-| Layer | Max Instances | Purpose | Lifetime |
-|-------|---------------|---------|----------|
-| Splash | 96 | Water droplets in parabolic arcs | 0.6-1.2s |
-| Bubble | 72 | Rising bubbles with wobble | 1.2-2.5s |
-| Shimmer | 72 | Surface sparkles with twinkle | 1.5-3.0s |
-| Ripple | 24 | Expanding ring waves | Continuous |
+**4 InstancedMeshes:**
+- **Splash**: Water droplets with parabolic arc trajectories (MAX_SPLASH=96)
+- **Bubble**: Rising bubbles with lateral wobble (MAX_BUBBLE=72)
+- **Shimmer**: Surface sparkle with twinkle effect (MAX_SHIMMER=72)
+- **Ripple**: Expanding rings with fade (MAX_RIPPLE=24)
 
-#### InstancedBufferAttributes
+**Per-Instance Data (InstancedBufferAttributes):**
 
-Per-particle data stored in GPU buffers:
-
-```typescript
-// Particle layers (splash, bubble, shimmer)
-spotPos: vec3        // Fishing spot world center
-ageLifetime: vec2    // Current age (x), total lifetime (y)
-angleRadius: vec2    // Polar angle (x), radial distance (y)
-dynamics: vec4       // peakHeight (x), size (y), speed (z), direction (w)
-
-// Ripple layer
-spotPos: vec3        // Fishing spot world center
-rippleParams: vec2   // Phase offset (x), ripple speed (y)
-```
+| Attribute | Type | Data |
+|-----------|------|------|
+| `spotPos` | vec3 | Fishing spot world center (x, y, z) |
+| `ageLifetime` | vec2 | Current age (x), total lifetime (y) |
+| `angleRadius` | vec2 | Polar angle (x), radial distance (y) |
+| `dynamics` | vec4 | peakHeight (x), size (y), speed (z), direction (w) |
 
 **Vertex Buffer Budget:**
 - Particle layers: 7 of 8 max attributes
@@ -81,27 +113,40 @@ rippleParams: vec2   // Phase offset (x), ripple speed (y)
 - Ripple layer: 5 of 8 max attributes
   - position(1) + uv(1) + instanceMatrix(1) + spotPos(1) + rippleParams(1)
 
-#### TSL Shader Animations
+### Particle Animations
 
-All particle animations computed on GPU using Three.js Shading Language:
+All animations computed on GPU via TSL shaders:
 
-**Splash Particles:**
+#### Splash Particles
+
+Parabolic arc trajectories with pop-in fade:
+
 ```typescript
-// Parabolic arc trajectory
+// GPU shader math (TSL)
 const arcY = mul(peakHeight, mul(float(4), mul(t, sub(float(1), t))));
 const ox = mul(cos(angle), radius);
 const oz = mul(sin(angle), radius);
 particleCenter = add(spotPos, vec3(ox, add(float(0.08), arcY), oz));
 
-// Snappy fade-in, smooth fade-out
-const fadeIn = min(mul(t, float(12)), float(1));
-const fadeOut = pow(sub(float(1), t), float(1.2));
-material.opacityNode = mul(texAlpha, mul(float(0.9), mul(fadeIn, fadeOut)));
+// Fade animation
+const fadeIn = min(mul(t, float(12)), float(1));  // Snappy pop-in (12x rate)
+const fadeOut = pow(sub(float(1), t), float(1.2)); // Smooth fade-out
+opacity = mul(texAlpha, mul(float(0.9), mul(fadeIn, fadeOut)));
 ```
 
-**Bubble Particles:**
+**Properties:**
+- Lifetime: 0.6-1.2 seconds
+- Peak height: 0.12-0.2 units (burst: 0.25-0.6)
+- Radial distance: 0.05-0.3 units
+- Fade-in rate: 12x (snappy)
+- Fade-out: Power 1.2 (smooth)
+
+#### Bubble Particles
+
+Rising with lateral wobble:
+
 ```typescript
-// Rising with lateral wobble
+// GPU shader math (TSL)
 const riseY = mul(t, peakHeight);
 const wobbleFreq = mul(direction, float(4.0));
 const drift = mul(sin(add(angle, mul(t, wobbleFreq))), radius);
@@ -109,15 +154,25 @@ const driftZ = mul(cos(add(angle, mul(t, float(2.5)))), mul(radius, float(0.6)))
 particleCenter = add(spotPos, vec3(drift, add(float(0.03), riseY), driftZ));
 ```
 
-**Shimmer Particles:**
+**Properties:**
+- Lifetime: 1.2-2.5 seconds
+- Rise height: 0.3-0.55 units
+- Wobble frequency: direction × 4.0
+- Drift pattern: sin(angle + t × wobbleFreq) × radius
+- Size: 0.09 units
+
+#### Shimmer Particles
+
+Surface sparkle with twinkle effect:
+
 ```typescript
-// Surface sparkle with fast twinkle
+// GPU shader math (TSL)
 const freq = mul(speed, mul(direction, float(6)));
 const wanderX = mul(cos(add(angle, mul(t, freq))), radius);
 const wanderZ = mul(sin(add(angle, mul(t, freq))), radius);
 particleCenter = add(spotPos, vec3(wanderX, float(0.06), wanderZ));
 
-// Twinkle effect using global time
+// Twinkle effect
 const twinkle = max(
   float(0),
   mul(
@@ -127,13 +182,23 @@ const twinkle = max(
 );
 ```
 
-**Ripple Rings:**
+**Properties:**
+- Lifetime: 1.5-3.0 seconds
+- Wander radius: 0.15-0.6 units
+- Twinkle frequencies: 8 Hz and 13 Hz
+- Circular wander pattern on water surface
+- Size: 0.055 units
+
+#### Ripple Rings
+
+Expanding rings with fade:
+
 ```typescript
-// Expanding ring with phase-based scale
+// GPU shader math (TSL)
 const phase = fract(add(mul(time, mul(rippleSpeed, float(0.5))), phaseOffset));
 const scale = add(float(0.15), mul(phase, float(1.3)));
 
-// Two-stage fade (early ramp, late decay)
+// Fade animation
 const earlyFade = mul(div(phase, float(0.15)), float(0.55));
 const lateFade = mul(
   float(0.55),
@@ -143,118 +208,54 @@ const s = step(float(0.15), phase);
 const rippleOpacity = mix(earlyFade, lateFade, s);
 ```
 
-## Fishing Spot Variants
+**Properties:**
+- Scale range: 0.15 → 1.45 (expansion)
+- Early fade (0-15%): Linear ramp to 0.55 opacity
+- Late fade (15-100%): Power 1.5 decay from 0.55 to 0
+- Continuous expansion driven by time uniform
+- Phase offset per ripple for staggered animation
+
+### Fishing Spot Variants
 
 Three fishing spot variants with different visual characteristics:
 
-### Net Fishing (Calm)
+| Variant | Splash | Bubble | Shimmer | Ripples | Burst Interval | Burst Count | Description |
+|---------|--------|--------|---------|---------|----------------|-------------|-------------|
+| **Net** | 4 | 3 | 3 | 2 | 5-10s | 2 | Calm, gentle ripples (shallow water) |
+| **Bait** | 5 | 4 | 4 | 2 | 3-7s | 3 | Medium activity (default) |
+| **Fly** | 8 | 5 | 5 | 2 | 2-5s | 4 | Active river fishing (moving water) |
 
-Gentle ripples for shallow water fishing:
-
+**Variant Detection:**
 ```typescript
-{
-  color: 0x88ccff,
-  rippleSpeed: 0.8,
-  rippleCount: 2,
-  splashCount: 4,
-  bubbleCount: 3,
-  shimmerCount: 3,
-  splashColor: 0xddeeff,
-  bubbleColor: 0x99ccee,
-  shimmerColor: 0xeef4ff,
-  burstIntervalMin: 5,
-  burstIntervalMax: 10,
-  burstSplashCount: 2
+// From WaterParticleManager.ts
+export function getFishingSpotVariant(resourceId: string): FishingSpotVariant {
+  if (resourceId.includes("net")) {
+    return { /* net variant config */ };
+  } else if (resourceId.includes("fly")) {
+    return { /* fly variant config */ };
+  }
+  return { /* bait variant (default) */ };
 }
 ```
 
-### Bait Fishing (Medium)
+### Burst System
 
-Medium activity for standard fishing:
+Fish activity bursts fire 2-4 splash particles simultaneously to simulate fish jumping:
 
+**Burst Mechanics:**
+- Burst center randomized within 0.05-0.15 radius
+- Burst particles cluster around center with 0.06 spread
+- Burst particles have higher peak heights (0.25-0.6 vs 0.12-0.32)
+- Burst timer resets to random interval after each burst
+- Only fires when existing splash particles are past 60% lifetime
+
+**Burst Configuration:**
 ```typescript
-{
-  color: 0x66bbff,
-  rippleSpeed: 1.0,
-  rippleCount: 2,
-  splashCount: 5,
-  bubbleCount: 4,
-  shimmerCount: 4,
-  splashColor: 0xddeeff,
-  bubbleColor: 0x88ccee,
-  shimmerColor: 0xeef4ff,
-  burstIntervalMin: 3,
-  burstIntervalMax: 7,
-  burstSplashCount: 3
+interface FishingSpotVariant {
+  burstIntervalMin: number;  // Minimum seconds between bursts
+  burstIntervalMax: number;  // Maximum seconds between bursts
+  burstSplashCount: number;  // Number of splash particles per burst
 }
-```
-
-### Fly Fishing (Active)
-
-Active ripples for river/moving water:
-
-```typescript
-{
-  color: 0xaaddff,
-  rippleSpeed: 1.5,
-  rippleCount: 2,
-  splashCount: 8,
-  bubbleCount: 5,
-  shimmerCount: 5,
-  splashColor: 0xeef5ff,
-  bubbleColor: 0xaaddee,
-  shimmerColor: 0xf5faff,
-  burstIntervalMin: 2,
-  burstIntervalMax: 5,
-  burstSplashCount: 4
-}
-```
-
-## Usage
-
-### Basic Registration
-
-```typescript
-import { ParticleManager } from '@hyperscape/shared';
-
-// Create particle manager (done by ResourceSystem on client)
-const particleManager = new ParticleManager(scene);
-
-// Register fishing spot
-particleManager.registerSpot({
-  entityId: 'fishing-spot-123',
-  position: { x: 10, y: 0, z: 20 },
-  resourceType: 'fishing_spot',
-  resourceId: 'fishing_spot_net'
-});
-```
-
-### Moving Particles
-
-```typescript
-// Update particle position when fishing spot relocates
-particleManager.moveSpot(
-  'fishing-spot-123',
-  'fishing_spot',
-  { x: 12, y: 0, z: 22 }
-);
-```
-
-### Per-Frame Update
-
-```typescript
-// Called by ResourceSystem.update()
-particleManager.update(deltaTime, camera);
-```
-
-### Cleanup
-
-```typescript
-// Unregister when entity is destroyed
-particleManager.unregisterSpot('fishing-spot-123', 'fishing_spot');
-
-// Dispose all particle managers on system shutdown
-particleManager.dispose();
 ```
 
 ## Integration with ResourceSystem
@@ -264,54 +265,40 @@ The ParticleManager is created and managed by ResourceSystem on the client:
 ```typescript
 // From packages/shared/src/systems/shared/entities/ResourceSystem.ts
 
-export class ResourceSystem extends SystemBase {
-  public particleManager?: ParticleManager;
+// CLIENT: Create centralized particle hub for all particle effects
+if (!this.world.isServer) {
+  const scene = this.world.stage?.scene;
+  if (scene) {
+    this.particleManager = new ParticleManager(scene as any);
 
-  start(): void {
-    // CLIENT: Create centralized particle hub for all particle effects
-    if (!this.world.isServer) {
-      const scene = this.world.stage?.scene;
-      if (scene) {
-        this.particleManager = new ParticleManager(scene as any);
-
-        // Retroactively register any fishing spot entities created before this system started
-        const existingEntities = this.world.entities?.getByType?.("resource") || [];
-        for (const entity of existingEntities) {
-          if (
-            entity instanceof ResourceEntity &&
-            entity.config?.resourceType === "fishing_spot"
-          ) {
-            entity.tryRegisterWithParticleManager();
-          }
-        }
-      }
-
-      // Listen for resource events and route them through the particle hub
-      this.subscribe(
-        EventType.RESOURCE_SPAWNED,
-        (data: { id?: string; type?: string; position?: { x: number; y: number; z: number } }) => {
-          this.particleManager?.handleResourceEvent(data);
-        }
-      );
-    }
-  }
-
-  update(dt: number): void {
-    if (this.particleManager) {
-      const camera = this.world.camera;
-      if (camera) {
-        this.particleManager.update(dt, camera);
+    // Retroactively register any fishing spot entities created before this system started
+    const existingEntities = this.world.entities?.getByType?.("resource") || [];
+    for (const entity of existingEntities) {
+      if (
+        entity instanceof ResourceEntity &&
+        entity.config?.resourceType === "fishing_spot"
+      ) {
+        entity.tryRegisterWithParticleManager();
       }
     }
   }
 
-  destroy(): void {
-    if (this.particleManager) {
-      this.particleManager.dispose();
-      this.particleManager = undefined;
+  // Listen for resource events and route them through the particle hub
+  this.subscribe(
+    EventType.RESOURCE_SPAWNED,
+    (data: { id?: string; type?: string; position?: { x: number; y: number; z: number } }) => {
+      this.particleManager?.handleResourceEvent(data);
     }
-    
-    ResourceEntity.disposeSharedResources();
+  );
+}
+
+// Per-frame update: drives all particle managers on the client
+update(dt: number): void {
+  if (this.particleManager) {
+    const camera = this.world.camera;
+    if (camera) {
+      this.particleManager.update(dt, camera);
+    }
   }
 }
 ```
@@ -323,316 +310,322 @@ ResourceEntity uses a lazy registration pattern to handle timing issues where en
 ```typescript
 // From packages/shared/src/entities/world/ResourceEntity.ts
 
-export class ResourceEntity extends InteractableEntity {
-  private _registeredWithParticleManager = false;
+private _registeredWithParticleManager = false;
 
-  private createFishingSpotVisual(): void {
-    // Create the glow indicator (interaction hitbox + distant visibility)
-    this.createGlowIndicator();
+public tryRegisterWithParticleManager(): boolean {
+  if (this._registeredWithParticleManager) return true;
 
-    // Try to register with centralized particle manager (may not exist yet)
-    this.tryRegisterWithParticleManager();
+  const pm = this.getParticleManager();
+  if (!pm) return false;
 
-    // Register for frame updates (glow pulse + lazy particle registration)
-    this.world.setHot(this, true);
-  }
+  const pos = this.getPosition();
+  pm.registerSpot({
+    entityId: this.id,
+    position: { x: pos.x, y: pos.y, z: pos.z },
+    resourceType: this.config.resourceType || "",
+    resourceId: this.config.resourceId || "",
+  });
+  this._registeredWithParticleManager = true;
+  return true;
+}
 
-  public tryRegisterWithParticleManager(): boolean {
-    if (this._registeredWithParticleManager) return true;
+protected clientUpdate(_deltaTime: number): void {
+  super.clientUpdate(_deltaTime);
 
-    const pm = this.getParticleManager();
-    if (!pm) return false;
-
-    const pos = this.getPosition();
-    pm.registerSpot({
-      entityId: this.id,
-      position: { x: pos.x, y: pos.y, z: pos.z },
-      resourceType: this.config.resourceType || "",
-      resourceId: this.config.resourceId || "",
-    });
-    this._registeredWithParticleManager = true;
-    return true;
-  }
-
-  private getParticleManager(): ParticleManager | undefined {
-    const sys = this.world.getSystem("resource") as {
-      particleManager?: ParticleManager;
-    } | null;
-    return sys?.particleManager;
-  }
-
-  protected clientUpdate(_deltaTime: number): void {
-    super.clientUpdate(_deltaTime);
-
-    // Lazy registration: retry if particle manager wasn't ready during createFishingSpotVisual
-    if (
-      !this._registeredWithParticleManager &&
-      this.config.resourceType === "fishing_spot"
-    ) {
-      if (this.tryRegisterWithParticleManager()) {
-        console.log(`[FishingSpot] Late registration succeeded for ${this.id}`);
-      }
-    }
-
-    // Organic glow pulse — two frequencies layered for natural breathing
-    if (this.glowMesh) {
-      const now = Date.now();
-      const slow = Math.sin(now * 0.0015) * 0.04;
-      const fast = Math.sin(now * 0.004 + 1.3) * 0.02;
-      const pulse = 0.18 + slow + fast;
-      (this.glowMesh.material as THREE.MeshBasicMaterial).opacity = pulse;
+  // Lazy registration: retry if particle manager wasn't ready during createFishingSpotVisual
+  if (
+    !this._registeredWithParticleManager &&
+    this.config.resourceType === "fishing_spot"
+  ) {
+    if (this.tryRegisterWithParticleManager()) {
+      console.log(`[FishingSpot] Late registration succeeded for ${this.id}`);
     }
   }
 
-  destroy(): void {
-    // Clean up fishing spot resources
-    if (this.config.resourceType === "fishing_spot") {
-      // Unregister from centralized particle manager
-      if (this._registeredWithParticleManager) {
-        const pm = this.getParticleManager();
-        if (pm) {
-          pm.unregisterSpot(this.id, this.config.resourceType || "");
-        }
-        this._registeredWithParticleManager = false;
-      }
-
-      // Unregister from frame updates (glow pulse)
-      this.world.setHot(this, false);
-    }
-
-    super.destroy();
+  // Organic glow pulse — two frequencies layered for natural breathing
+  if (this.glowMesh) {
+    const now = Date.now();
+    const slow = Math.sin(now * 0.0015) * 0.04;
+    const fast = Math.sin(now * 0.004 + 1.3) * 0.02;
+    const pulse = 0.18 + slow + fast;
+    (this.glowMesh.material as THREE.MeshBasicMaterial).opacity = pulse;
   }
 }
 ```
 
-## Extending the Particle System
+**Why Lazy Registration:**
+- Entities may be created before ResourceSystem.start() creates the ParticleManager
+- Timing/lifecycle issue where entity init runs before system initialization
+- Lazy registration retries on every frame until successful
+- Ensures all fishing spots eventually register with the particle manager
+
+## Usage Example
+
+```typescript
+import { ParticleManager } from '@hyperscape/shared';
+
+// ResourceSystem creates ParticleManager on client startup
+const particleManager = new ParticleManager(scene);
+
+// Register water particles (fishing spot)
+particleManager.registerSpot({
+  entityId: 'entity-123',
+  position: { x: 10, y: 0, z: 20 },
+  resourceType: 'fishing_spot',
+  resourceId: 'fishing_spot_net'
+});
+
+// Move existing spot (when fishing spot relocates)
+particleManager.moveSpot('entity-123', 'fishing_spot', { x: 12, y: 0, z: 22 });
+
+// Per-frame update (called by ResourceSystem)
+particleManager.update(deltaTime, camera);
+
+// Cleanup on entity destroy
+particleManager.unregisterSpot('entity-123', 'fishing_spot');
+
+// Dispose all particle managers on system shutdown
+particleManager.dispose();
+```
+
+## Extensibility Guide
 
 To add new particle types (fire, magic, dust, blood):
 
-### 1. Create Sub-Manager Class
+<Steps>
+  <Step title="Create Sub-Manager Class">
+    Create new file in `packages/shared/src/entities/managers/particleManager/`
+    
+    ```typescript
+    // Example: MagicParticleManager.ts
+    export class MagicParticleManager {
+      constructor(scene: THREE.Scene) { /* ... */ }
+      registerSpot(config: MagicSpotConfig): void { /* ... */ }
+      unregisterSpot(entityId: string): void { /* ... */ }
+      update(dt: number, camera: THREE.Camera): void { /* ... */ }
+      dispose(): void { /* ... */ }
+    }
+    ```
+  </Step>
+  
+  <Step title="Instantiate in ParticleManager">
+    Add to constructor
+    
+    ```typescript
+    export class ParticleManager {
+      private waterManager: WaterParticleManager;
+      private magicManager: MagicParticleManager; // Add new manager
 
-Create a new file in `packages/shared/src/entities/managers/particleManager/`:
+      constructor(scene: THREE.Scene) {
+        this.waterManager = new WaterParticleManager(scene);
+        this.magicManager = new MagicParticleManager(scene); // Instantiate
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Add Routing Logic">
+    Update register/unregister/move/handleEvent methods
+    
+    ```typescript
+    registerSpot(config: ParticleSpotConfig): void {
+      if (this.isWaterType(config.resourceType)) {
+        this.waterManager.registerSpot({ /* ... */ });
+        return;
+      }
+      if (this.isMagicType(config.resourceType)) {
+        this.magicManager.registerSpot({ /* ... */ });
+        return;
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Call update() and dispose()">
+    Add to ParticleManager lifecycle methods
+    
+    ```typescript
+    update(dt: number, camera: THREE.Camera): void {
+      this.waterManager.update(dt, camera);
+      this.magicManager.update(dt, camera); // Add update call
+    }
+
+    dispose(): void {
+      this.waterManager.dispose();
+      this.magicManager.dispose(); // Add dispose call
+    }
+    ```
+  </Step>
+</Steps>
+
+## TSL Shader Implementation
+
+The particle system uses Three.js Shading Language (TSL) for GPU-computed animations:
+
+### Billboard Orientation
+
+Particles always face the camera using right/up vectors:
 
 ```typescript
-// Example: MagicParticleManager.ts
-import * as THREE from "../../../extras/three/three";
-import {
-  attribute,
-  uniform,
-  MeshBasicNodeMaterial,
-  // ... other TSL imports
-} from "../../../extras/three/three";
+const camRight = this.uCameraRight as unknown as ReturnType<typeof uniform>;
+const camUp = this.uCameraUp as unknown as ReturnType<typeof uniform>;
 
-export class MagicParticleManager {
-  private scene: THREE.Scene;
-  private activeSpots = new Map<string, ActiveMagicSpot>();
-  private sparkLayer!: ParticleLayer;
-  private glowLayer!: ParticleLayer;
-
-  constructor(scene: THREE.Scene) {
-    this.scene = scene;
-    this.sparkLayer = this.createParticleLayer(MAX_SPARKS, 0xff00ff, "spark");
-    this.glowLayer = this.createParticleLayer(MAX_GLOWS, 0xaa00ff, "glow");
-    console.log("[MagicParticleManager] Initialized");
-  }
-
-  registerSpot(config: MagicSpotConfig): void {
-    // Allocate particle slots
-    // Initialize particle data
-    // Add to activeSpots map
-  }
-
-  unregisterSpot(entityId: string): void {
-    // Free particle slots
-    // Remove from activeSpots map
-  }
-
-  moveSpot(entityId: string, newPos: { x: number; y: number; z: number }): void {
-    // Update spotPos buffer attributes
-  }
-
-  update(dt: number, camera: THREE.Camera): void {
-    // Update camera vectors for billboarding
-    // Age particles and respawn when lifetime expires
-    // Mark buffer attributes as needing update
-  }
-
-  dispose(): void {
-    // Remove meshes from scene
-    // Dispose geometries and materials
-    // Clear activeSpots map
-  }
-
-  private createParticleLayer(
-    maxInstances: number,
-    colorHex: number,
-    layerType: string
-  ): ParticleLayer {
-    // Create geometry with InstancedBufferAttributes
-    // Create TSL material with GPU animations
-    // Create InstancedMesh and add to scene
-    // Return layer object
-  }
-}
+const localXY = positionLocal.xy;
+const billboardOffset = add(
+  mul(mul(localXY.x, size), camRight),
+  mul(mul(localXY.y, size), camUp)
+);
+material.positionNode = add(particleCenter, billboardOffset);
 ```
 
-### 2. Add to ParticleManager
-
-Update `packages/shared/src/entities/managers/particleManager/ParticleManager.ts`:
+### Parabolic Arc (Splash)
 
 ```typescript
-import { WaterParticleManager } from "./WaterParticleManager";
-import { MagicParticleManager } from "./MagicParticleManager";
-
-export class ParticleManager {
-  private waterManager: WaterParticleManager;
-  private magicManager: MagicParticleManager;
-
-  constructor(scene: THREE.Scene) {
-    this.waterManager = new WaterParticleManager(scene);
-    this.magicManager = new MagicParticleManager(scene);
-    console.log("[ParticleManager] Initialized with WaterParticleManager, MagicParticleManager");
-  }
-
-  registerSpot(config: ParticleSpotConfig): void {
-    if (this.isWaterType(config.resourceType)) {
-      this.waterManager.registerSpot({ /* ... */ });
-      return;
-    }
-    if (this.isMagicType(config.resourceType)) {
-      this.magicManager.registerSpot({ /* ... */ });
-      return;
-    }
-  }
-
-  unregisterSpot(entityId: string, resourceType: string): void {
-    if (this.isWaterType(resourceType)) {
-      this.waterManager.unregisterSpot(entityId);
-      return;
-    }
-    if (this.isMagicType(resourceType)) {
-      this.magicManager.unregisterSpot(entityId);
-      return;
-    }
-  }
-
-  moveSpot(
-    entityId: string,
-    resourceType: string,
-    newPos: { x: number; y: number; z: number }
-  ): void {
-    if (this.isWaterType(resourceType)) {
-      this.waterManager.moveSpot(entityId, newPos);
-      return;
-    }
-    if (this.isMagicType(resourceType)) {
-      this.magicManager.moveSpot(entityId, newPos);
-      return;
-    }
-  }
-
-  update(dt: number, camera: THREE.Camera): void {
-    this.waterManager.update(dt, camera);
-    this.magicManager.update(dt, camera);
-  }
-
-  dispose(): void {
-    this.waterManager.dispose();
-    this.magicManager.dispose();
-    console.log("[ParticleManager] Disposed all particle managers");
-  }
-
-  private isWaterType(resourceType: string): boolean {
-    return resourceType === "fishing_spot";
-  }
-
-  private isMagicType(resourceType: string): boolean {
-    return resourceType === "magic_altar" || resourceType === "magic_portal";
-  }
-}
+// Parabolic trajectory: y = peakHeight * 4 * t * (1-t)
+const arcY = mul(peakHeight, mul(float(4), mul(t, sub(float(1), t))));
+const ox = mul(cos(angle), radius);
+const oz = mul(sin(angle), radius);
+particleCenter = add(spotPos, vec3(ox, add(float(0.08), arcY), oz));
 ```
 
-### 3. Export from Index
-
-Update `packages/shared/src/entities/managers/particleManager/index.ts`:
+### Wobble Pattern (Bubble)
 
 ```typescript
-export { ParticleManager } from "./ParticleManager";
-export type {
-  ParticleSpotConfig,
-  ParticleResourceEvent,
-} from "./ParticleManager";
-export { WaterParticleManager } from "./WaterParticleManager";
-export type { FishingSpotVariant } from "./WaterParticleManager";
-export { MagicParticleManager } from "./MagicParticleManager";
-export type { MagicSpotConfig } from "./MagicParticleManager";
+// Lateral drift with wobble
+const wobbleFreq = mul(direction, float(4.0));
+const drift = mul(sin(add(angle, mul(t, wobbleFreq))), radius);
+const driftZ = mul(cos(add(angle, mul(t, float(2.5)))), mul(radius, float(0.6)));
+particleCenter = add(spotPos, vec3(drift, add(float(0.03), riseY), driftZ));
+```
+
+### Twinkle Effect (Shimmer)
+
+```typescript
+// Fast twinkle using global time
+const twinkle = max(
+  float(0),
+  mul(
+    sin(add(mul(time, float(8)), mul(angle, float(5)))),
+    sin(add(mul(time, float(13)), mul(angle, float(3))))
+  )
+);
+const envelope = mul(
+  min(mul(t, float(4)), float(1)),
+  min(mul(sub(float(1), t), float(4)), float(1))
+);
+opacity = mul(texAlpha, mul(float(0.85), mul(twinkle, envelope)));
+```
+
+### Ring Expansion (Ripple)
+
+```typescript
+// Phase-based scale and fade
+const phase = fract(add(mul(time, mul(rippleSpeed, float(0.5))), phaseOffset));
+const scale = add(float(0.15), mul(phase, float(1.3)));
+
+// Two-stage fade
+const earlyFade = mul(div(phase, float(0.15)), float(0.55));
+const lateFade = mul(
+  float(0.55),
+  pow(sub(float(1), div(sub(phase, float(0.15)), float(0.85))), float(1.5))
+);
+const s = step(float(0.15), phase);
+const rippleOpacity = mix(earlyFade, lateFade, s);
 ```
 
 ## Performance Considerations
 
-### Memory Management
+### Memory Usage
 
-- **Pool-Based Allocation**: Pre-allocated particle slots prevent runtime allocations
-- **Typed Arrays**: Float32Array and Uint8Array for efficient GPU uploads
-- **Shared Geometry**: Single geometry instance shared across all particles in a layer
-- **Texture Caching**: DataTextures cached and reused across particle systems
+**Per Fishing Spot:**
+- 4 InstancedMeshes (shared across all spots)
+- Per-spot data: ~20 particle slots × 11 floats = ~220 floats = ~880 bytes
+- Texture cache: 2 DataTextures (64×64 RGBA) = 32KB (shared)
 
-### GPU Optimization
+**Total Memory (10 fishing spots):**
+- Particle data: ~8.8KB
+- Shared textures: 32KB
+- Shared geometries: ~2KB
+- **Total: ~43KB** (vs ~500KB+ for individual meshes)
 
-- **Instanced Rendering**: Single draw call per particle layer
-- **Billboard Computation**: Camera vectors updated once per frame, not per particle
-- **Attribute Updates**: Only mark attributes as needing update when data changes
-- **Dirty Flags**: Track which attributes need GPU upload to minimize bandwidth
+### Draw Call Budget
 
-### CPU Optimization
+**Before (per fishing spot):**
+- 5-8 splash particles × 1 draw call = 5-8
+- 4-5 bubble particles × 1 draw call = 4-5
+- 4-5 shimmer particles × 1 draw call = 4-5
+- 2 ripple rings × 1 draw call = 2
+- **Total: ~15-20 draw calls per spot**
+- **10 spots: ~150-200 draw calls**
 
-- **Zero Animation Code**: All particle motion computed on GPU
-- **Minimal State Tracking**: Only essential data stored per particle
-- **Lazy Registration**: Entities retry registration instead of blocking
-- **Fire-and-Forget**: Particle updates don't block game logic
+**After (all fishing spots):**
+- 1 splash InstancedMesh = 1 draw call
+- 1 bubble InstancedMesh = 1 draw call
+- 1 shimmer InstancedMesh = 1 draw call
+- 1 ripple InstancedMesh = 1 draw call
+- **Total: 4 draw calls for all spots**
 
-## Debugging
+### CPU Overhead
 
-### Console Logging
+**Before:**
+- Per-frame updates for ~150 individual meshes
+- Trigonometry (sin, cos) for each particle
+- Quaternion copies for billboard orientation
+- Opacity writes for fade animations
+- **~450 lines of CPU animation code**
 
-Enable particle system logging:
+**After:**
+- Zero CPU overhead for particle animation
+- All math computed on GPU via TSL shaders
+- Only camera right/up vectors updated per frame (2 vec3 copies)
+- Age increments in typed arrays (simple addition)
 
-```typescript
-// ParticleManager logs registration events
-[WaterParticles] Registered entity-123: 5S+4B+4Sh+2R at (10.0,0.0,20.0)
+## Best Practices
 
-// ResourceEntity logs late registration
-[FishingSpot] Late registration succeeded for entity-123
-```
+### When to Use GPU Instancing
 
-### Visual Debugging
+Use GPU instancing for particle systems when:
+- You have many similar particles (10+)
+- Particles share the same geometry and material
+- Animation can be expressed in shader code
+- Per-particle data fits in InstancedBufferAttributes
 
-Inspect particle meshes in Three.js DevTools:
+### When to Use Individual Meshes
 
-```javascript
-// In browser console
-const scene = world.stage.scene;
-const particleMeshes = scene.children.filter(c => c.isInstancedMesh);
-console.log('Particle meshes:', particleMeshes);
-console.log('Splash count:', particleMeshes[0].count);
-console.log('Bubble count:', particleMeshes[1].count);
-```
+Use individual meshes when:
+- Particles have unique geometries
+- Complex CPU-driven behavior (physics, AI)
+- Per-particle data exceeds attribute budget
+- Very few particles (< 10)
 
-### Performance Profiling
+### Attribute Budget Management
 
-Monitor draw calls and FPS:
+WebGL/WebGPU has a limit of 8 vertex attributes per mesh. Plan your attribute usage:
 
-```javascript
-// Check draw calls (should be 4 per fishing spot)
-console.log('Draw calls:', renderer.info.render.calls);
+**Current Usage (Particle Layers):**
+1. position (built-in)
+2. uv (built-in)
+3. instanceMatrix (built-in for InstancedMesh)
+4. spotPos (custom)
+5. ageLifetime (custom)
+6. angleRadius (custom)
+7. dynamics (custom)
+8. **1 slot remaining**
 
-// Check FPS (should be 120 on reference hardware)
-console.log('FPS:', 1000 / deltaTime);
-```
+**Current Usage (Ripple Layer):**
+1. position (built-in)
+2. uv (built-in)
+3. instanceMatrix (built-in for InstancedMesh)
+4. spotPos (custom)
+5. rippleParams (custom)
+6. **3 slots remaining**
 
-## Related Documentation
+<Warning>
+  Exceeding 8 attributes will cause WebGL errors. Pack multiple values into vec4 attributes when needed.
+</Warning>
 
-- [Shared Package](/packages/shared) - Core engine documentation
-- [Architecture](/architecture) - System architecture overview
-- [ResourceEntity](/wiki/engine/entities#resourceentity) - Resource entity implementation
-- [ResourceSystem](/wiki/engine/systems#resourcesystem) - Resource system documentation
+## See Also
+
+- [ECS Architecture](/concepts/ecs) - Entity Component System overview
+- [ResourceSystem](/api-reference/systems#resourcesystem) - Resource entity management
+- [Three.js TSL](https://threejs.org/docs/#api/en/nodes/Nodes) - Three.js Shading Language
