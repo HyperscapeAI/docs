@@ -2371,6 +2371,24 @@ const DUEL_BRONZE_WEAPON_IDS = [
 - **Fix**: DuelArenaVisualsSystem now registers flat zones programmatically for all 8 floor areas (6 arenas + lobby + hospital) so terrain height queries return correct floor-level values
 - **File**: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
 
+**Duel Arena Click Targeting:**
+- **Issue**: Click targets were going underground in duel arenas due to building footprint validation rejecting arena floor raycast hits
+- **Impact**: Players couldn't click to move within duel arenas
+- **Fix**: RaycastService now skips building footprint validation for arena-floor raycast hits
+- **File**: `packages/shared/src/systems/client/interaction/services/RaycastService.ts`
+
+**Duel Arena Minimap Rendering:**
+- **Issue**: Minimap showed duel arenas as black holes because arena/lobby/hospital floor meshes had layer 0 disabled
+- **Impact**: Minimap was unusable in duel arena area
+- **Fix**: Enabled layer 0 on arena/lobby/hospital floor meshes so minimap camera can render them
+- **File**: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
+
+**Wall Sconce Cleanup:**
+- **Issue**: 96 dead wall sconce meshes across 6 arenas with no lights attached
+- **Impact**: Unnecessary geometry in scene, no visual benefit
+- **Fix**: Removed non-functional wall sconce geometry from arena fences
+- **File**: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
+
 ### Integration with DuelOrchestrator
 
 The trash talk system is wired into the combat AI via a callback:
