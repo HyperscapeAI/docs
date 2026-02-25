@@ -552,6 +552,51 @@ VITE_SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
 - [ ] Test on devnet before mainnet deployment
 - [ ] Verify program deployment on Solana Explorer
 
+## Native App Releases
+
+Hyperscape automatically builds native desktop and mobile apps for tagged releases.
+
+### Creating a Release
+
+```bash
+# Tag a new version
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+This triggers `.github/workflows/build-app.yml` which builds:
+
+- **Windows**: `.msi` installer (x64)
+- **macOS**: `.dmg` installer (universal binary: Intel + Apple Silicon)
+- **Linux**: `.AppImage` (portable) and `.deb` (Debian/Ubuntu)
+- **iOS**: `.ipa` bundle
+- **Android**: `.apk` bundle
+
+### Download Portal
+
+Built apps are published to:
+- **GitHub Releases**: [https://github.com/HyperscapeAI/hyperscape/releases](https://github.com/HyperscapeAI/hyperscape/releases)
+- **Public Portal**: [https://hyperscapeai.github.io/hyperscape/](https://hyperscapeai.github.io/hyperscape/)
+
+### Required GitHub Secrets
+
+Configure these in repository settings for automated builds:
+
+| Secret | Purpose | Required For |
+|--------|---------|--------------|
+| `APPLE_CERTIFICATE` | Code signing certificate (base64) | macOS, iOS |
+| `APPLE_CERTIFICATE_PASSWORD` | Certificate password | macOS, iOS |
+| `APPLE_SIGNING_IDENTITY` | Developer ID | macOS, iOS |
+| `APPLE_ID` | Apple ID email | macOS, iOS |
+| `APPLE_PASSWORD` | App-specific password | macOS, iOS |
+| `APPLE_TEAM_ID` | Developer team ID | macOS, iOS |
+| `TAURI_PRIVATE_KEY` | Updater signing key | All platforms |
+| `TAURI_KEY_PASSWORD` | Key password | All platforms |
+
+<Info>
+The build workflow is enabled as of commit cb57325 (Feb 25, 2026). See `docs/native-release.md` in the repository for complete setup instructions.
+</Info>
+
 ## Production Checklist
 
 - [ ] PostgreSQL database provisioned
@@ -565,3 +610,4 @@ VITE_SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
 - [ ] DNS configured (Google DNS for Vast.ai instances)
 - [ ] Solana program addresses updated for mainnet (if using betting)
 - [ ] CORS domains configured for production domains
+- [ ] GitHub secrets configured for native app builds (if releasing)
