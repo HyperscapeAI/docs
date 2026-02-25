@@ -361,7 +361,7 @@ events: {
 
 ## Combat AI System
 
-Hyperscape includes a specialized combat AI controller for autonomous PvP duels:
+Hyperscape includes a specialized combat AI controller for autonomous PvP duels. See the [Combat AI documentation](/wiki/ai-agents/combat-ai) for complete details.
 
 ### DuelCombatAI
 
@@ -385,38 +385,24 @@ await combatAI.externalTick();  // Called by StreamingDuelScheduler
 combatAI.stop();
 ```
 
-**Features:**
+**Key Features:**
 - **Priority-Based Decisions**: Heal → Buff → Strategy → Attack
 - **Combat Phases**: Opening, Trading, Finishing, Desperate
 - **LLM Strategy Planning**: Generates combat tactics using agent character
-- **Trash Talk System**: Health-triggered and ambient taunts
-- **Weapon Speed Awareness**: Attacks at correct cadence for equipped weapon
+- **Trash Talk System**: Health-triggered and ambient taunts with LLM generation
+- **Synchronized Attack Timing**: Works with combat system's auto-attack loop (commit 51453dae)
 - **Statistics Tracking**: Attacks landed, heals used, damage dealt/received
 
-### Trash Talk System
+**Attack Timing Fix (commit 51453dae):**
 
-AI agents taunt opponents during combat:
-
-**Health Threshold Taunts:**
-- Triggered at 75%, 50%, 25%, 10% HP milestones
-- Own HP low: "Not even close!", "I've had worse"
-- Opponent HP low: "GG soon", "You're done!"
-
-**Ambient Taunts:**
-- Random taunts every 15-25 ticks
-- "Let's go!", "Fight me!", "Too slow"
-
-**LLM-Generated:**
-- Uses agent character bio and communication style
-- 30-token limit for overhead chat bubbles
-- 3-second timeout with scripted fallback
-- 8-second cooldown between messages
+The AI no longer manually tracks attack speed. Instead, it only re-engages when combat drops or the target changes. The combat system's auto-attack loop drives the actual attack cadence, preventing silent attack drops for slow weapons like 2h swords.
 
 **Configuration:**
 ```bash
 STREAMING_DUEL_COMBAT_AI_ENABLED=true       # Enable combat AI
 STREAMING_DUEL_LLM_TACTICS_ENABLED=true     # Enable LLM strategy
-STREAMING_COMBAT_STALL_NUDGE_MS=15000       # Fallback damage nudge
+TRASH_TALK_COOLDOWN_MS=8000                 # Cooldown between messages
+TRASH_TALK_LLM_TIMEOUT_MS=3000              # LLM generation timeout
 ```
 
 ---
