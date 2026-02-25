@@ -264,6 +264,13 @@ ParticleManager (central router)
 - 5 new trash talk tests added (14/14 passing)
 - Tests verify LLM generation, fallback pools, cooldowns, and health triggers
 
+**Combat AI Improvements (commit 7a60135):**
+- Simplified DuelCombatAI attack loop to remove redundant manual attack-speed tracking
+- Combat system's auto-attack loop already drives attack cadence
+- AI only needs to re-engage when combat drops or target changes
+- Added missing TWO_HAND_SWORD default attack style to prevent undefined style errors
+- Fixes 2H sword attack timing issues where attacks were silently dropped
+
 ### RPG Implementation Architecture
 
 **Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
