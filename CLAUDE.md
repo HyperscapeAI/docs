@@ -543,6 +543,13 @@ pool.on('connect', (client) => {
 - Do NOT run `drizzle-kit push` in CI then start server (creates tables without migration journal)
 - Running push separately causes server migration code to fail on re-creation attempts
 
+**Migration 0050 Duplicate Table Fix (commit e4b6489):**
+- Migration 0050 duplicated CREATE TABLE statements from earlier migrations
+- Example: `agent_duel_stats` was created in migration 0039 and again in 0050
+- On fresh databases, running all migrations sequentially caused `42P07` errors (relation already exists)
+- **Fix**: Added `IF NOT EXISTS` to all CREATE TABLE and CREATE INDEX statements in migration 0050
+- This allows migrations to run idempotently without errors on fresh database installs
+
 **Migration FK Ordering Issues:**
 - Migration 0050 references tables from older migrations (e.g., arena_rounds)
 - On fresh databases, sequential migration execution can cause FK errors
