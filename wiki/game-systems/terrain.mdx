@@ -318,7 +318,7 @@ if (zone) {
 }
 ```
 
-## Duel Arena Floor Fix (commit b8f56e81)
+## Duel Arena Floor Fix (commits b8f56e81, 7a60135e)
 
 Players and agents were sinking ~0.4m into duel arena floors because flat zones were removed from the terrain system. This caused `getHeightAt()` to return raw procedural terrain height instead of floor-level height, and also allowed grass to grow through floor surfaces.
 
@@ -330,52 +330,75 @@ Players and agents were sinking ~0.4m into duel arena floors because flat zones 
 
 **Solution:**
 
-Flat zones are now registered programmatically from `DuelArenaVisualsSystem` for all 8 floor areas:
+Flat zones are now registered programmatically from `DuelArenaVisualsSystem` for all 8 floor areas (6 arenas + lobby + hospital):
 
 ```typescript
 // From DuelArenaVisualsSystem.ts
-// Register flat zones for all arena floors
-for (let i = 0; i < 6; i++) {
-  const arenaCenter = this.getArenaCenter(i);
-  terrainSystem.registerFlatZone({
-    id: `duel_arena_${i}`,
-    centerX: arenaCenter.x,
-    centerZ: arenaCenter.z,
-    width: ARENA_WIDTH,
-    depth: ARENA_LENGTH,
-    height: BASE_Y,
-    blendRadius: 2.0,
-  });
+// Register flat zones during system initialization
+private registerArenaFlatZones(): void {
+  const FLAT_ZONE_HEIGHT_OFFSET = 0.4; // Where players stand above procedural terrain
+  const BLEND_RADIUS = 1.0;
+  const CARVE_INSET = 1.0;
+
+  // Register flat zones for all 6 arenas
+  for (let i = 0; i < ARENA_COUNT; i++) {
+    const row = Math.floor(i / 2);
+    const col = i % 2;
+    const centerX = ARENA_BASE_X + col * (ARENA_WIDTH + ARENA_GAP) + ARENA_WIDTH / 2;
+    const centerZ = ARENA_BASE_Z + row * (ARENA_LENGTH + ARENA_GAP) + ARENA_LENGTH / 2;
+
+    const proceduralHeight = this.getProceduralTerrainHeight(centerX, centerZ);
+    const zone: FlatZone = {
+      id: `duel_arena_floor_${i + 1}`,
+      centerX,
+      centerZ,
+      width: ARENA_WIDTH,
+      depth: ARENA_LENGTH,
+      height: proceduralHeight + FLAT_ZONE_HEIGHT_OFFSET,
+      blendRadius: BLEND_RADIUS,
+      carveInset: CARVE_INSET,
+    };
+
+    this.terrainSystem.registerFlatZone(zone);
+    this.flatZoneIds.push(zone.id);
+  }
+
+  // Register lobby and hospital floors (similar logic)
+  // ...
 }
-
-// Lobby floor
-terrainSystem.registerFlatZone({
-  id: \"duel_lobby\",
-  centerX: LOBBY_CENTER_X,
-  centerZ: LOBBY_CENTER_Z,
-  width: LOBBY_WIDTH,
-  depth: LOBBY_DEPTH,
-  height: BASE_Y,
-  blendRadius: 2.0,
-});
-
-// Hospital floor
-terrainSystem.registerFlatZone({
-  id: \"duel_hospital\",
-  centerX: HOSPITAL_CENTER_X,
-  centerZ: HOSPITAL_CENTER_Z,
-  width: HOSPITAL_WIDTH,
-  depth: HOSPITAL_DEPTH,
-  height: BASE_Y,
-  blendRadius: 2.0,
-});
 ```
 
+**Key Implementation Details:**
+
+1. **Procedural Height Sampling**: Uses `getProceduralTerrainHeight()` to get the raw terrain height at each arena center, then adds 0.4m offset for player standing height
+
+2. **Flat Zone Parameters**:
+   - `height`: Procedural terrain height + 0.4m (where players stand)
+   - `blendRadius`: 1.0m smooth transition to surrounding terrain
+   - `carveInset`: 1.0m inset from zone edges to preserve blend padding
+
+3. **Registration Timing**: Flat zones are registered in `DuelArenaVisualsSystem.start()` after terrain system is initialized but before arena meshes are created
+
+4. **Cleanup**: Flat zones are unregistered in `DuelArenaVisualsSystem.destroy()` to prevent memory leaks
+
+**Affected Areas:**
+- 6 duel arenas (20m × 24m each)
+- Lobby floor (40m × 25m)
+- Hospital floor (30m × 25m)
+
 **Impact:**
-- Terrain height queries now return correct floor-level values
+- Terrain height queries now return correct floor-level values (procedural + 0.4m)
 - Players/agents spawn at proper height (no sinking)
 - Grass system respects flat zones (no grass through floors)
 - Terrain mesh is carved under floor areas to prevent overdraw
+- Visual floor meshes positioned 2cm above terrain mesh to prevent z-fighting
+
+**Console Output:**
+```
+[DuelArenaVisualsSystem] Registered 8 flat zones (6 arenas + lobby + hospital)
+[DuelArenaVisualsSystem] Created floor 1 at (70.0, 0.67, 92.0) - terrain=0.27
+[TerrainSystem] Flat zone stats: 8 zones registered, 24 tile keys in spatial index
+```
 
 ## Console Logging
 
