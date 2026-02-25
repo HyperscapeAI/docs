@@ -983,6 +983,31 @@ If you see players falling through the arena floor, ensure you're on the latest 
 
 ### Streaming Mode Issues
 
+**RTMP Streaming Resilience (commit 14a1e1b, Feb 25 2026):**
+
+The streaming infrastructure has been hardened against transient network issues and GPU initialization failures:
+
+**CDP Stall Detection:**
+- Increased CDP stall threshold from 2 to 4 intervals (120s) to reduce false restarts
+- Added soft CDP recovery: restart screencast without browser/FFmpeg teardown (no stream gap)
+- Prevents unnecessary full stream restarts from temporary network hiccups
+
+**FFmpeg Resilience:**
+- Increased MAX_RESTART_ATTEMPTS from 5 to 8
+- Added `resetRestartAttempts()` for recovery counter reset
+- Increased CAPTURE_RECOVERY_MAX_FAILURES default from 2 to 4
+
+**WebGPU Renderer Initialization:**
+- Make `requiredLimits` best-effort: try `maxTextureArrayLayers: 2048` first, retry with default limits if GPU rejects
+- Always use WebGPU renderer, never fall back to WebGL
+- Handles GPU configurations that don't support high texture array layer counts
+
+**Files**: 
+- `packages/server/src/streaming/browser-capture.ts`
+- `packages/server/src/streaming/rtmp-bridge.ts`
+- `packages/server/src/streaming/stream-capture.ts`
+- `packages/shared/src/utils/rendering/RendererFactory.ts`
+
 **WebGPU crashes on RTX 5060 Ti:**
 The streaming infrastructure has been updated to use GL ANGLE backend instead of Vulkan due to broken Vulkan ICD on RTX 5060 Ti GPUs. If you encounter crashes:
 
