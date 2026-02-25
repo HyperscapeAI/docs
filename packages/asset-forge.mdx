@@ -1,17 +1,18 @@
 ---
 title: "asset-forge"
-description: "AI-powered 3D asset generation"
+description: "AI-powered 3D asset generation and VFX catalog"
 icon: "wand-2"
 ---
 
 ## Overview
 
-The `3d-asset-forge` package provides AI-powered tools for generating game assets:
+The `3d-asset-forge` package provides AI-powered tools for generating game assets and browsing visual effects:
 
 - MeshyAI for 3D model generation
 - GPT-4 for design and lore generation
 - React Three Fiber for 3D preview
 - Drizzle ORM for asset database
+- **VFX Catalog Browser** for inspecting game effects
 
 ## Package Location
 
@@ -19,6 +20,11 @@ The `3d-asset-forge` package provides AI-powered tools for generating game asset
 packages/asset-forge/
 ├── src/
 │   ├── components/     # React UI components
+│   │   └── VFX/        # VFX catalog components
+│   ├── data/
+│   │   └── vfx-catalog.ts  # VFX effect metadata
+│   ├── pages/
+│   │   └── VFXPage.tsx     # VFX browser page
 │   └── index.ts        # Entry point
 ├── server/
 │   └── api-elysia.ts   # Elysia API server
@@ -30,6 +36,58 @@ packages/asset-forge/
 ```
 
 ## Features
+
+### VFX Catalog Browser (New)
+
+Interactive browser for all game visual effects with live Three.js previews:
+
+**Categories:**
+- **Magic Spells**: Strike and Bolt spells (Wind, Water, Earth, Fire)
+  - Multi-layer orb rendering with outer glow, core, and orbiting sparks
+  - Trail particles with additive blending
+  - Pulse animations for bolt-tier spells
+- **Arrow Projectiles**: Metal-tiered arrows (Bronze, Iron, Steel, Mithril, Adamant)
+  - 3D arrow meshes with shaft, head, and fletching
+  - Metallic materials with proper roughness
+- **Glow Particles**: Altar, Fire, and Torch effects
+  - GPU-instanced particle systems
+  - 4-layer composition (pillar, wisp, spark, base)
+  - Procedural noise-based fire shader
+- **Fishing Spots**: Water particle effects (Net, Bait, Fly)
+  - Splash arcs, bubble rise, shimmer twinkle, ripple rings
+  - Burst system for fish activity
+- **Teleport**: Multi-phase teleportation sequence
+  - Ground rune circle with TSL shader
+  - Dual beams with elastic overshoot
+  - Shockwave rings and helix spiral particles
+  - 4 phases: Gather, Erupt, Sustain, Fade
+- **Combat HUD**: Damage splats and XP drops
+  - Canvas-based rendering with rounded rectangles
+  - Hit/miss color coding
+  - Float-up animations
+
+**Features:**
+- Live Three.js previews with orbit controls
+- Detailed parameter tables (size, intensity, duration, etc.)
+- Color palette swatches with hex codes
+- Phase timeline visualization for complex effects
+- Component breakdown for multi-part effects
+- Variant panels for effects with multiple styles
+
+**Navigation:**
+- Sidebar catalog with category grouping
+- Collapsible sections with effect counts
+- Click to select effect and view details
+- Search and filter (future enhancement)
+
+**Technical Details:**
+- Standalone effect metadata in `vfx-catalog.ts` (no game engine imports)
+- Source-of-truth files documented for each effect type
+- Procedural texture generation matching engine implementation
+- Billboard particles with camera-facing orientation
+- Additive blending for glow effects
+
+**Access:** Navigate to `/vfx` in Asset Forge to browse the catalog.
 
 ### Design Generation
 
