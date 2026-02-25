@@ -118,7 +118,7 @@ When `SKIP_MIGRATIONS=true`, the server skips:
 
 **Important**: When using `SKIP_MIGRATIONS=true`, you MUST create the database schema externally (e.g., via `drizzle-kit push`) before starting the server. The server will not create tables or run migrations.
 
-**Example CI Workflow (commit eb8652a1):**
+**Example CI Workflow (commits eb8652a, 6a5f4ee):**
 ```bash
 # Create schema declaratively (no migration journal)
 bunx drizzle-kit push
@@ -131,6 +131,7 @@ SKIP_MIGRATIONS=true bun run start
 - Server's built-in migrations have FK ordering issues (migration 0050 references `arena_rounds` from older migrations)
 - `drizzle-kit push` creates schema declaratively without these problems
 - Prevents \"relation already exists\" errors on fresh databases
+- Allows CI to use declarative schema creation instead of sequential migrations
 - Fixed in commits: eb8652a (CI integration), 6a5f4ee (table validation skip)
 
 **Behavior Changes (commit 6a5f4ee):**
@@ -153,6 +154,28 @@ if (process.env.SKIP_MIGRATIONS === 'true') {
   return;
 }
 ```
+
+**Implementation Details:**
+
+The `SKIP_MIGRATIONS` check is placed at the beginning of the migration function, before any database validation or migration execution:
+
+```typescript
+// From packages/server/src/startup/database.ts (inferred from commit 6a5f4ee)
+export async function runMigrations(db: Database): Promise<void> {
+  // Check SKIP_MIGRATIONS first, before any validation
+  if (process.env.SKIP_MIGRATIONS === 'true') {
+    console.log('[Database] SKIP_MIGRATIONS=true, bypassing migration system');
+    return; // Exit early, skip all migration-related code
+  }
+  
+  // Normal migration flow (only runs when SKIP_MIGRATIONS is not set)
+  await hasRequiredPublicTables(db);
+  await executeMigrations(db);
+  await recoveryLoop(db);
+}
+```
+
+This ensures that when `SKIP_MIGRATIONS=true`, the server assumes the schema is already created and valid, and proceeds directly to application startup.
 
 <Warning>
   Do NOT run `drizzle-kit push` then start the server without `SKIP_MIGRATIONS=true`. This creates tables without populating the migration journal, causing the server's migration code to fail on re-creation attempts.
