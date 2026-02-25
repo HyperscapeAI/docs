@@ -314,6 +314,59 @@ ParticleManager (central router)
 - Bait fishing: medium activity (2 ripples, 5 splash, 4 bubble, 4 shimmer)
 - Fly fishing: active (2 ripples, 8 splash, 5 bubble, 5 shimmer)
 
+### Duel Combat Role System
+
+**Combat Roles** (PR #933, commit 82ff784) - Weighted random role selection with full gear lifecycle
+
+The duel system now supports three combat roles with automatic gear provisioning:
+
+**Combat Roles:**
+- **Melee** (50% weight): Traditional melee combat with bronze weapons (longsword, scimitar, 2h sword)
+- **Ranged** (25% weight): Shortbow + bronze arrows (500 qty), uses "rapid" attack style
+- **Mage** (25% weight): Staff of air + wind strike autocast + runes (500 mind, 500 air)
+
+**Implementation:**
+
+1. **DuelOrchestrator** (`packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts`)
+   - `pickCombatRole()`: Weighted random selection from DUEL_COMBAT_ROLE_WEIGHTS
+   - `ensureAgentCombatSetup()`: Routes to role-specific gear equip methods
+   - `equipMeleeWeapon()`: Random bronze weapon from DUEL_BRONZE_WEAPON_IDS (longsword, scimitar, 2h sword)
+   - `equipRangedGear()`: Shortbow + bronze arrows (500 qty)
+   - `equipMageGear()`: Staff of air + wind strike autocast + runes (500 mind, 500 air)
+   - `cleanupAgentCombatSetup()`: Full gear removal after duel (weapons, arrows, runes, autocast)
+
+2. **DuelCombatAI** (`packages/server/src/arena/DuelCombatAI.ts`)
+   - Receives `combatRole` in config
+   - **Melee**: Uses existing phase-based style switching (aggressive/controlled/defensive)
+   - **Ranged**: Forces "rapid" style for faster attack speed (-1 tick)
+   - **Mage**: Skips style switching entirely (magic auto-casts via selectedSpell)
+
+3. **Gear Lifecycle:**
+   - **Pre-duel**: Role selected → gear equipped → food filled → health restored
+   - **Post-duel**: Gear removed → food removed → health restored → teleport back
+   - **Cleanup**: Unequips weapon/arrows, clears autocast, removes leftover runes
+
+**Weapon Type Filtering:**
+
+Only weapon types with new models in `swords/` directory are eligible for duel arenas:
+- LONGSWORD, SCIMITAR, TWO_HAND_SWORD
+- Filtered via `DUEL_WEAPON_TYPES` Set in DuelOrchestrator
+- Prevents equipping weapons without proper 3D models
+
+**Critical Bug Fixes (PR #933):**
+
+1. **Combat State Key Mismatch** (commit 82ff784)
+   - **Issue**: CombatStateService syncs abbreviated keys (`data.c`/`data.ct`) but `getGameState()` only read full keys (`data.inCombat`/`data.combatTarget`)
+   - **Impact**: DuelCombatAI always saw `inCombat=false` and flooded `executeAttack` every tick instead of letting auto-attacks drive combat
+   - **Fix**: EmbeddedHyperscapeService now reads both abbreviated and full keys: `data.c || data.inCombat` and `data.ct || data.combatTarget`
+   - **File**: `packages/server/src/eliza/EmbeddedHyperscapeService.ts`
+
+2. **Magic Attack TOCTOU Race** (commit 82ff784)
+   - **Issue**: Cooldown was checked early but claimed after async `consumeRunesForSpell` call. With bug #1 flooding attacks, two concurrent invocations could both pass the cooldown check before either claimed it
+   - **Impact**: Duplicate magic projectiles, double rune consumption
+   - **Fix**: Moved cooldown claim and `enterCombat` before async rune consumption to close the race window
+   - **File**: `packages/shared/src/systems/shared/combat/CombatSystem.ts` (handleMagicAttack)
+
 ### Duel Trash Talk System
 
 **DuelCombatAI Trash Talk** (commit 8ff3ad3) - AI agents taunt during combat
