@@ -438,6 +438,45 @@ export class DuelCombatAI {
 }
 ```
 
+**Attack Loop Simplification (commit 51453dae):**
+
+The AI no longer manually tracks attack-speed timing. Instead, it relies on the combat system's auto-attack loop to drive attack cadence:
+
+```typescript
+// The combat system's auto-attack loop (processPlayerCombatTick →
+// processAutoAttackOnTick) drives the actual attack cadence once combat is
+// established. The AI only needs to (re-)engage when combat has dropped
+// or the target has changed.
+const needsEngagement =
+  !state.inCombat || state.currentTarget !== this.opponentId;
+
+if (needsEngagement) {
+  await this.service.executeAttack(this.opponentId);
+}
+```
+
+**Why This Change:**
+- Removes redundant manual attack-speed tracking from DuelCombatAI
+- Combat system's auto-attack loop already drives attack cadence
+- AI only re-engages when combat drops or target changes
+- Fixes 2H sword attack timing issues (slow weapons were silently dropping attacks)
+
+**Default Attack Styles:**
+
+All weapon types now have default attack styles defined, including the previously missing `TWO_HAND_SWORD`:
+
+```typescript
+// From WeaponStyleConfig.ts
+export const DEFAULT_ATTACK_STYLES: Record<WeaponType, AttackStyle> = {
+  UNARMED: AttackStyle.ACCURATE,
+  SWORD: AttackStyle.ACCURATE,
+  TWO_HAND_SWORD: AttackStyle.ACCURATE,  // Added in commit 51453dae
+  SCIMITAR: AttackStyle.ACCURATE,
+  // ... other weapon types
+};
+```
+```
+
 **Features:**
 
 #### Health Threshold Taunts
