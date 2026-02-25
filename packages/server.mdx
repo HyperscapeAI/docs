@@ -251,6 +251,49 @@ bun run deploy:prod   # Deploy to production
 
 The `railway.server.json` in the project root configures Railway deployment.
 
+## Duel System
+
+The server includes a comprehensive duel arena system with AI combat, streaming, and betting integration.
+
+### Combat Roles (PR #933, commit 82ff784)
+
+Duel agents are assigned weighted random combat roles:
+- **Melee** (50%): Bronze weapons (longsword, scimitar, 2h sword)
+- **Ranged** (25%): Shortbow + bronze arrows (500 qty)
+- **Mage** (25%): Staff of air + wind strike autocast + runes
+
+**Implementation:**
+- `DuelOrchestrator.pickCombatRole()`: Weighted random selection
+- `DuelOrchestrator.ensureAgentCombatSetup()`: Role-specific gear equipping
+- `DuelOrchestrator.cleanupAgentCombatSetup()`: Full gear removal after duel
+- `DuelCombatAI`: Adapts style switching based on combat role
+
+**Gear Lifecycle:**
+1. Pre-duel: Role selected → gear equipped → food filled → health restored
+2. Post-duel: Gear removed → food removed → health restored → teleport back
+
+### Critical Bug Fixes (PR #933)
+
+**Combat State Key Mismatch:**
+- Issue: CombatStateService syncs abbreviated keys (`data.c`/`data.ct`) but `getGameState()` only read full keys
+- Impact: DuelCombatAI always saw `inCombat=false` and flooded `executeAttack` every tick
+- Fix: EmbeddedHyperscapeService now reads both abbreviated and full keys
+- File: `packages/server/src/eliza/EmbeddedHyperscapeService.ts`
+
+**Magic Attack TOCTOU Race:**
+- Issue: Cooldown checked early but claimed after async `consumeRunesForSpell` call
+- Impact: Duplicate magic projectiles, double rune consumption
+- Fix: Moved cooldown claim and `enterCombat` before async rune consumption
+- File: `packages/shared/src/systems/shared/combat/CombatSystem.ts`
+
+### Terrain Flat Zones (commit 7a60135)
+
+DuelArenaVisualsSystem registers flat zones programmatically for all 8 floor areas (6 arenas + lobby + hospital):
+- Prevents players/agents from sinking ~0.4m into arena floors
+- Terrain height queries return correct floor-level values
+- Terrain mesh carved under floors to prevent grass/vegetation clipping
+- File: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
+
 ## Key Files
 
 | File | Purpose |
@@ -258,5 +301,8 @@ The `railway.server.json` in the project root configures Railway deployment.
 | `src/index.ts` | Server entry point |
 | `src/database/` | Database schema and queries |
 | `src/startup/` | Initialization logic |
+| `src/arena/` | Duel arena system (betting, combat AI, market maker) |
+| `src/eliza/` | ElizaOS AI agent integration |
+| `src/systems/StreamingDuelScheduler/` | Streaming duel orchestration |
 | `docker-compose.yml` | Docker service configuration |
 | `.env.example` | Environment template |
