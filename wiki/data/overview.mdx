@@ -106,14 +106,28 @@ Each NPC has these properties (from `types/entities/npc-mob-types.ts`):
 
 ### Available 3D Models
 
-**NPCs**:
+**NPCs & Mobs**:
 ```
 /assets/models/
-├── goblin/goblin_rigged.glb     → Goblins
-├── thug/thug_rigged.glb         → Bandits
-├── human/human_rigged.glb       → Guards, knights, warriors, rangers
-├── troll/troll_rigged.glb       → Hobgoblins
-└── imp/imp_rigged.glb           → Dark warriors
+├── mobs/
+│   ├── goblin/goblin.vrm                → Goblins
+│   ├── bandit/bandit.vrm                → Bandits
+│   ├── barbarian/barbarian.vrm          → Barbarians
+│   ├── gaurd/gaurd.vrm                  → Town guards
+│   ├── dark-wizard/dark-wizard.vrm      → Dark wizards (magic attackers)
+│   └── dark-ranger/dark-ranger.vrm      → Dark rangers (ranged attackers)
+└── npcs/
+    ├── captain-rowan/captain-rowan.vrm  → Quest giver (Goblin Slayer)
+    ├── forester-wilma/forester-wilma.vrm → Quest giver (Lumberjack's First Lesson)
+    ├── fisherman-pete/fisherman-pete.vrm → Quest giver & shop (Fresh Catch)
+    ├── torvin/torvin.vrm                → Quest giver & shop (Torvin's Tools)
+    ├── tanner-ellis/tanner-ellis.vrm    → Tanner service
+    ├── Zamorin/Zamorin.vrm              → Magic shop & quest (Rune Mysteries)
+    ├── Lowe/Lowe.vrm                    → Ranged shop & quest (Fletcher's Introduction)
+    ├── Horvik/Horvik.vrm                → Armor shop
+    ├── Dommik/Dommik.vrm                → Crafting shop & quest (Crafting Basics)
+    ├── shopkeeper/shopkeeper.vrm        → General store
+    └── banker/banker.vrm                → Bank services
 ```
 
 **Stations**:
@@ -137,16 +151,59 @@ Each NPC has these properties (from `types/entities/npc-mob-types.ts`):
 └── bait-fishing-rod/bait-fishing-rod-aligned.glb       → Bait fishing rod (aligned)
 ```
 
-**Equipment (Aligned Models)**:
+**Melee Weapons (Aligned Models)**:
+```
+/assets/models/swords/
+├── daggers/
+│   ├── dagger-bronze-aligned.glb        → Bronze dagger
+│   ├── dagger-iron-aligned.glb          → Iron dagger
+│   ├── dagger-adamant-aligned.glb       → Adamant dagger
+│   ├── dagger-mithril-aligned.glb       → Mithril dagger
+│   └── dagger-rune-aligned.glb          → Rune dagger
+├── shortswords/
+│   ├── shortsword-bronze-aligned.glb    → Bronze shortsword
+│   ├── shortsword-iron-aligned.glb      → Iron shortsword
+│   ├── shortsword-steel-aligned.glb     → Steel shortsword
+│   ├── shortsword-mithril-aligned.glb   → Mithril shortsword
+│   ├── shortsword-adamant-aligned.glb   → Adamant shortsword
+│   └── shortsword-rune-aligned.glb      → Rune shortsword
+├── long-swords/
+│   ├── longsword-bronze-aligned.glb     → Bronze longsword
+│   ├── longsword-iron-aligned.glb       → Iron longsword
+│   ├── longsword-steel-aligned.glb      → Steel longsword
+│   ├── longsword-mithril-aligned.glb    → Mithril longsword
+│   ├── longsword-adamant-aligned.glb    → Adamant longsword
+│   └── longsword-rune-aligned.glb       → Rune longsword
+├── scimitars/
+│   ├── scimitar-bronze-aligned.glb      → Bronze scimitar
+│   ├── scimitar-iron-aligned.glb        → Iron scimitar
+│   ├── scimitar-steel-aligned.glb       → Steel scimitar
+│   ├── scimitar-mithril-aligned.glb     → Mithril scimitar
+│   ├── scimitar-adamant-aligned.glb     → Adamant scimitar
+│   └── scimitar-rune-aligned.glb        → Rune scimitar
+└── 2h-swords/
+    ├── 2h-sword-bronze-aligned.glb      → Bronze 2H sword
+    ├── 2h-sword-iron-aligned.glb        → Iron 2H sword
+    ├── 2h-sword-steel-aligned.glb       → Steel 2H sword
+    ├── 2h-sword-mithril-aligned.glb     → Mithril 2H sword
+    ├── 2h-sword-adamant-aligned.glb     → Adamant 2H sword
+    └── 2h-sword-rune-aligned.glb        → Rune 2H sword
+```
+
+**Tools (Aligned Models)**:
 ```
 /assets/models/
-├── hatchet-bronze/hatchet-bronze-aligned.glb           → Bronze hatchet (aligned)
-├── pickaxe-bronze/pickaxe-bronze-aligned.glb           → Bronze pickaxe (aligned)
-├── pickaxe-steel/pickaxe-steel-aligned.glb             → Steel pickaxe (aligned)
-├── pickaxe-mithril/pickaxe-mithril-aligned.glb         → Mithril pickaxe (aligned)
-├── sword-bronze/sword-bronze-aligned.glb               → Bronze sword (aligned)
-├── sword-steel/sword-steel-aligned.glb                 → Steel sword (aligned)
-└── sword-mithril/sword-mithril-aligned.glb             → Mithril sword (aligned)
+├── hatchets/
+│   ├── hatchet-bronze/hatchet-bronze-aligned.glb  → Bronze hatchet
+│   └── hatchet-base/hatchet-base.glb              → Base hatchet
+├── pickaxes/
+│   ├── pickaxe-bronze/pickaxe-bronze-aligned.glb  → Bronze pickaxe
+│   ├── pickaxe-steel/pickaxe-steel-aligned.glb    → Steel pickaxe
+│   └── pickaxe-mithril/pickaxe-mithril-aligned.glb → Mithril pickaxe
+└── shields/
+    ├── shield-bronze/shield-bronze.glb            → Bronze shield
+    ├── shield-steel/shield-steel.glb              → Steel shield
+    └── shield-mithril/shield-mithril.glb          → Mithril shield
 ```
 
 **Magic Staffs**:

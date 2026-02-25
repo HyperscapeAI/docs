@@ -162,15 +162,39 @@ export function calculateNPCDrops(npcId: string): Array<{ itemId: string; quanti
 
 ## Available 3D Models
 
-NPCs use rigged GLB models from `/assets/world/forge/`:
+NPCs use VRM models from `/assets/models/`:
 
-| Model Path | Used For |
-|------------|----------|
-| `goblin/goblin_rigged.glb` | Goblins |
-| `thug/thug_rigged.glb` | Bandits, thugs |
-| `human/human_rigged.glb` | Guards, knights, shopkeepers |
-| `troll/troll_rigged.glb` | Hobgoblins |
-| `imp/imp_rigged.glb` | Dark warriors |
+### Hostile Mobs
+
+| Model Path | Used For | Combat Type |
+|------------|----------|-------------|
+| `mobs/goblin/goblin.vrm` | Goblins (Level 2) | Melee |
+| `mobs/bandit/bandit.vrm` | Bandits (Level 7) | Melee (scimitar) |
+| `mobs/barbarian/barbarian.vrm` | Barbarians (Level 14) | Melee (scimitar) |
+| `mobs/gaurd/gaurd.vrm` | Town Guards (Level 21) | Melee (longsword) |
+| `mobs/dark-wizard/dark-wizard.vrm` | Dark Wizards (Level 42) | Magic (Wind Strike) |
+| `mobs/dark-ranger/dark-ranger.vrm` | Dark Rangers (Level 33) | Ranged (bow + bronze arrows) |
+
+### Service NPCs
+
+| Model Path | Used For | Services |
+|------------|----------|----------|
+| `npcs/banker/banker.vrm` | Bank Clerk | Bank access |
+| `npcs/shopkeeper/shopkeeper.vrm` | General Shopkeeper | General store |
+| `npcs/torvin/torvin.vrm` | Torvin (Smith) | Weapon shop, Torvin's Tools quest |
+| `npcs/Horvik/Horvik.vrm` | Horvik (Armorer) | Armor shop |
+| `npcs/Zamorin/Zamorin.vrm` | Zamorin (Wizard) | Magic shop, Rune Mysteries quest |
+| `npcs/Lowe/Lowe.vrm` | Lowe (Bowyer) | Ranged shop, Fletcher's Introduction quest |
+| `npcs/Dommik/Dommik.vrm` | Dommik (Crafter) | Crafting shop, Crafting Basics quest |
+| `npcs/fisherman-pete/fisherman-pete.vrm` | Fisherman Pete | Fishing shop, Fresh Catch quest |
+| `npcs/tanner-ellis/tanner-ellis.vrm` | Ellis (Tanner) | Tanning service |
+
+### Quest NPCs
+
+| Model Path | Used For | Quest |
+|------------|----------|-------|
+| `npcs/captain-rowan/captain-rowan.vrm` | Captain Rowan | Goblin Slayer |
+| `npcs/forester-wilma/forester-wilma.vrm` | Forester Wilma | Lumberjack's First Lesson |
 
 ---
 
