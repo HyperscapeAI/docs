@@ -138,25 +138,51 @@ bun install
 
 ### Drizzle Migration Failures in CI
 
-**Symptom**: Server migration code fails with "table already exists" errors in CI
+**Symptom**: Server migration code fails with "table already exists" errors in CI, or migration 0050 fails with "relation already exists" (42P07) on fresh databases
 
-**Cause**: Running `drizzle-kit push` separately creates tables without populating migration journal, causing server's migration code to fail on re-creation attempts
+**Cause**: Multiple issues with migration system:
+1. Running `drizzle-kit push` separately creates tables without populating migration journal
+2. Migration 0050 duplicated CREATE TABLE statements from earlier migrations without IF NOT EXISTS guards
+3. `SKIP_MIGRATIONS=true` didn't skip table validation, causing failures when schema created externally
 
-**Solution**: Remove `drizzle-kit push` from CI workflow (commit b5d24942 fixed this):
+**Solution**: Update to latest code (commits eb8652a, 6a5f4ee, e4b6489 fixed this):
 
+**For CI/Integration Tests:**
 ```yaml
-# ❌ Don't do this in CI
-- run: bunx drizzle-kit push
+# ✅ Use drizzle-kit push + SKIP_MIGRATIONS for declarative schema
+- name: Create database schema
+  run: bunx drizzle-kit push
+  
+- name: Run tests
+  run: bun test:integration
+  env:
+    SKIP_MIGRATIONS: true  # Skip ALL migration checks
+```
 
-# ✅ Let server handle migrations during startup
+**For Production:**
+```yaml
+# ✅ Let server handle migrations normally
 - run: bun run start
+# No SKIP_MIGRATIONS, no drizzle-kit push
 ```
 
 **Technical Details:**
-- Server handles its own migrations during startup via `migrate()` function
-- Running `drizzle-kit push` separately bypasses migration journal
-- Server's migration code then tries to re-create tables, causing conflicts
-- CI should only run tests, not push schema changes
+- **Commit eb8652a**: CI now uses `drizzle-kit push` for declarative schema creation
+- **Commit 6a5f4ee**: `SKIP_MIGRATIONS=true` now skips table validation AND migration recovery loop
+- **Commit e4b6489**: Migration 0050 fixed with IF NOT EXISTS guards for idempotency
+- Server's built-in migrations have FK ordering issues (migration 0050 references `arena_rounds` from older migrations)
+- `drizzle-kit push` creates schema declaratively without these problems
+- `SKIP_MIGRATIONS=true` tells server to skip ALL migration-related checks when schema is created externally
+
+**Migration 0050 Fix Details:**
+
+Migration 0050 previously duplicated CREATE TABLE statements from earlier migrations:
+- `agent_duel_stats` (from migration 0039)
+- `arena_fee_shares`
+- `arena_staking_points`
+- `wallet_links`
+
+On fresh databases, running all migrations sequentially caused 42P07 errors when the same table was created twice. Now all CREATE TABLE and CREATE INDEX statements use IF NOT EXISTS guards.
 
 ### Circular Dependency Build Errors
 
