@@ -356,6 +356,12 @@ bun run build
 **MUD deploy fails with "mud: command not found":**
 If contract deployment fails because the MUD binary cannot be found, this was fixed in commit `113a85a`. The setup script now checks for MUD in the local contracts `node_modules/.bin/` first (for bun's non-hoisting behavior) before falling back to the root. Update to the latest code to resolve.
 
+**Client crashes with React version mismatch:**
+If the client throws exceptions related to React version conflicts, this was fixed in commit `3322e78`. All packages now use unified React 19.2.4 and react-dom 19.2.4 versions across the monorepo. The issue was caused by mismatched React versions between packages. Update to the latest code to resolve.
+
+**TypeScript build fails with override conflicts:**
+If you see build errors related to TypeScript version overrides or cyclic dependencies, this was fixed in commit `113a85a`. The root package.json no longer forces TypeScript overrides that conflict with package-specific requirements. Update to the latest code to resolve.
+
 **ESLint crashes with ajv TypeError:**
 If ESLint crashes with `TypeError: Class extends value undefined is not a constructor or null` related to ajv, this was fixed in commit `b344d9e`. The issue was caused by forcing ajv@8 on @eslint/eslintrc which requires ajv@6 for Draft-04 schema support. Update to the latest code to resolve.
 
