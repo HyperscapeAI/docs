@@ -405,6 +405,22 @@ The CI audit threshold has been lowered to `critical` only (from `high`) to allo
 
 ## Recent Updates (February 2026)
 
+### Performance Optimizations (February 25, 2026)
+
+**Duel Arena Instanced Rendering (commit c20d0fc, PR #938):**
+- Converted ~846 individual meshes to InstancedMesh, reducing draw calls by ~97% (846→22)
+- **Removed all 28 dynamic PointLights** that were forcing expensive per-pixel lighting calculations each frame
+- **Replaced with GPU-driven TSL emissive material** on brazier bowls — animated flicker runs entirely on GPU via `emissiveNode` with per-instance phase offset, zero CPU cost per frame
+- **InstancedMesh batching**: Fence posts, caps, rails, pillar components, brazier bowls, border strips, and banner poles now use shared geometry
+- **Enhanced fire particle preset**: Removed `"torch"` preset, unified on enhanced `"fire"` preset with:
+  - Smooth value noise fragment shader (bilinear interpolated hash lattice) for organic flame shapes
+  - Soft radial falloff designed for additive blending — overlapping particles merge into cohesive flame body
+  - Per-particle turbulent vertex motion for natural flickering
+  - Height-based color gradient (white-yellow core → orange-red tips)
+- **Removed dead code**: `createArenaMarker()`, `createAmbientDust()`, `createLobbyBenches()` were unused
+- **Performance impact**: Significant FPS improvement in duel arenas, especially with multiple active duels
+- Files: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`, `packages/shared/src/entities/managers/particleManager/GlowParticleManager.ts`
+
 ### Critical Bug Fixes (February 25, 2026)
 
 **Terrain Height Cache Offset Fix (commit 21e0860):**
