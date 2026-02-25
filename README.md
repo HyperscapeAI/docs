@@ -333,6 +333,9 @@ docker volume ls | grep -i hyperscape
 bun run dev
 ```
 
+**Database migration errors on fresh install (42P07 - relation already exists):**
+If you see errors like `ERROR: relation "agent_duel_stats" already exists (42P07)` when running migrations on a fresh database, this was fixed in commit `e4b6489`. Migration 0050 duplicated CREATE TABLE statements from earlier migrations. The fix added `IF NOT EXISTS` to all CREATE TABLE and CREATE INDEX statements. Update to the latest code to resolve.
+
 **Port conflicts:**
 ```bash
 lsof -ti:5555 | xargs kill -9   # Server
@@ -353,6 +356,15 @@ If ESLint crashes with `TypeError: Class extends value undefined is not a constr
 
 **Integration tests fail with "anvil: command not found":**
 If integration tests fail because the anvil binary is missing, this was fixed in commit `b344d9e`. The CI workflow now installs `foundry-rs/foundry-toolchain` before running integration tests. For local development, install Foundry: `curl -L https://foundry.paradigm.xyz | bash && foundryup`
+
+**CI build failures with hls.js or dependency resolution errors:**
+If CI builds fail with missing `hls.js` dependency in gold-betting-demo, this was fixed in commit `cfdabf3`. The package now properly declares hls.js in its dependencies. Some packages are temporarily excluded from CI tests due to dependency conflicts:
+- `@hyperscape/contracts` (MUD CLI compatibility) - commit 99dec96
+- `@hyperscape/gold-betting-demo` (workspace hoisting) - commit 93f9633
+- `@hyperscape/evm-contracts` (anvil not in CI) - commit 034f9c9
+
+**Players spawning below duel arena floor:**
+Fixed in commit `75d0aa6`. Arena spawn heights were corrected to match visual mesh positions. Update to the latest code if you see players falling through the arena floor.
 
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
@@ -375,6 +387,70 @@ If integration tests fail because the anvil binary is missing, this was fixed in
 
 **CI Audit Policy:**
 The CI audit threshold has been lowered to `critical` only (from `high`) to allow builds to pass while waiting for upstream fixes for bigint-buffer.
+
+## Recent Updates (February 2026)
+
+### Performance Improvements
+
+**GPU-Instanced Particle System (PR #877, commit 4168f2f):**
+- Centralized ParticleManager architecture for all particle effects
+- Fishing spot particles refactored to use 4 GPU InstancedMeshes (splash, bubble, shimmer, ripple)
+- Draw calls reduced from ~150 to 4 (97% reduction)
+- Removed ~450 lines of per-entity CPU animation code
+- FPS improvement: 65-70 → 120 on reference hardware
+- TSL NodeMaterials with GPU-computed billboard orientation, parabolic arcs, wobble, twinkle
+- Extensible architecture for future particle types (fire, magic, dust)
+
+See [CLAUDE.md](CLAUDE.md) for detailed ParticleManager architecture documentation.
+
+### Database & CI Improvements
+
+**Migration 0050 Idempotency Fix (commit e4b6489):**
+- Added `IF NOT EXISTS` to all CREATE TABLE and CREATE INDEX statements
+- Prevents `42P07` errors on fresh database installs
+- Migration 0050 previously duplicated tables from earlier migrations (e.g., agent_duel_stats from 0039)
+
+**SKIP_MIGRATIONS Environment Variable (commit 6a5f4ee, eb8652a):**
+- New `SKIP_MIGRATIONS=true` flag for external schema management
+- Skips built-in migration execution, table validation, and recovery loop
+- Use with `drizzle-kit push` for declarative schema creation (avoids FK ordering issues)
+- Required for CI integration tests
+
+**CI Test Reliability (commits 034f9c9, 93f9633, 99dec96, cfdabf3):**
+- Fixed missing `hls.js` dependency in gold-betting-demo
+- Excluded packages with dependency conflicts from CI tests
+- Chain setup skipped when `CI=true` (anvil/mud not available)
+- Foundry toolchain installed for integration tests
+
+### Streaming Infrastructure
+
+**RTX 4090 WebGPU Support (commit 80bb06e):**
+- Switched ANGLE from GL to Vulkan backend for RTX 4090 GPUs
+- Improves WebGPU rendering performance in streaming capture
+- Chrome launch args: `--use-angle=vulkan --use-vulkan --enable-features=Vulkan`
+
+**Duel Arena Spawn Fix (commit 75d0aa6):**
+- Corrected arena spawn heights to match visual mesh positions
+- Prevents players from spawning below arena floor
+
+### Dependency Updates (February 2026)
+
+Major version updates from dependabot:
+- Three.js: 0.182.0 → 0.183.1
+- @types/node: 24.10.13 → 25.3.0
+- @ai-sdk/anthropic: 1.2.12 → 3.0.46
+- @capacitor/cli: 7.5.0 → 8.1.0
+- @coral-xyz/anchor: 0.31.1 → 0.32.1
+- @elizaos/core: 2.0.0-alpha.11 → 2.0.0-alpha.12
+- @playwright/test: 1.54.2 → 1.58.2
+- chai: 4.5.0 → 6.2.2
+- dotenv: 16.6.1 → 17.3.1
+- eslint: 9.39.3 → 10.0.2
+- framer-motion: 11.18.2 → 12.34.3
+- lucide-react: 0.553.0 → 0.575.0
+- three-mesh-bvh: 0.8.3 → 0.9.8
+- vite-plugin-node-polyfills: 0.24.0 → 0.25.0
+- zod: 3.25.76 → 4.3.6
 
 ## Architecture Documentation
 
