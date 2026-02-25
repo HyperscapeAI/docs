@@ -436,7 +436,9 @@ The CI audit threshold has been lowered to `critical` only (from `high`) to allo
 
 **ArenaPointsService Connection Timeout Fix (commit 99cd3f7):**
 - Resolved connection timeouts in ArenaPointsService database operations
-- Added proper connection pool management and timeout handling
+- **Issue**: Database queries were timing out due to improper connection handling
+- **Fix**: Added proper connection pool management, query timeouts, and error handling
+- **Impact**: Arena points system now operates reliably without connection timeouts
 - File: `packages/server/src/arena/services/ArenaPointsService.ts`
 
 ### Rendering Optimizations
