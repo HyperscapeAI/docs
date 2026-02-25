@@ -23,6 +23,56 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Dependency Updates & CI Improvements" description="February 2026" date="2026-02-25">
+
+### 📦 Dependency Updates
+
+Major dependency updates with breaking changes and security improvements:
+
+- **Zod 4.x Upgrade** (commit 55c57ed): Upgraded from 3.25.76 to 4.3.6
+  - **BREAKING CHANGE**: Major version bump with API changes
+  - Review Zod usage for compatibility with v4 API
+  - See [Zod v4 migration guide](https://zod.dev/CHANGELOG) for breaking changes
+  - Affects validation schemas across server, client, and shared packages
+- **Three.js Update** (commit daba92b): Bumped from 0.182.0 to 0.183.1
+  - Minor version update with bug fixes and improvements
+  - WebGPU renderer enhancements
+  - TSL shader improvements
+  - Applied to packages/client
+- **ElizaOS Core Update** (commit d3d4029): Bumped from 2.0.0-alpha.11 to 2.0.0-alpha.12
+  - Alpha release with potential API changes
+  - Review ElizaOS plugin integration for compatibility
+  - Affects packages/plugin-hyperscape
+- **Vite Plugin React** (commit 3b03962): Bumped from 5.0.4 to 5.1.4
+  - Minor version update with React 19 compatibility improvements
+  - HMR (Hot Module Replacement) enhancements
+- **Lucide React** (commit ac2603a): Bumped from 0.554.0 to 0.575.0
+  - Icon library update with new icons and improvements
+  - Applied to packages/client
+- **Vite Plugin Node Polyfills** (commit 352b93f): Bumped from 0.24.0 to 0.25.0
+  - Minor version update with Node.js polyfill improvements
+
+### 🔧 CI/CD Improvements
+
+Enhanced CI reliability and deployment workflows:
+
+- **Download Portal Deployment** (commit 312f673): Re-enabled download portal deployment
+  - Native app download page at hyperscapeai.github.io/hyperscape/
+  - Publishes desktop and mobile installers from tagged releases
+- **Deploy Workflow Updates** (commit 2fa2c61): Fixed and updated deploy workflows
+  - Improved Railway deployment workflow
+  - Enhanced Vast.ai deployment workflow
+  - Better error handling and logging
+
+### 🎮 Gameplay Fixes
+
+- **Duel Arena Spawn Heights** (commit 75d0aa6): Corrected arena spawn heights to match visual meshes
+  - Fixed players spawning below or above arena floor
+  - Spawn heights now align with procedural arena mesh geometry
+  - Prevents visual glitches during duel start
+
+</Update>
+
 <Update label="GPU Particle System & Production Hardening" description="February 2026" date="2026-02-22">
 
 ### ⚡ GPU-Instanced Particle System (PR #877)
