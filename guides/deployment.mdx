@@ -274,6 +274,53 @@ Runs on every push to main:
 - Runs tests in parallel across packages
 - Fails fast on first error
 
+#### Integration Tests (`.github/workflows/integration.yml`)
+
+Runs integration tests with database setup:
+
+**Database Schema Creation (commit eb8652a):**
+
+The integration workflow uses `drizzle-kit push` for declarative schema creation instead of server migrations:
+
+```yaml
+# .github/workflows/integration.yml
+- name: Create database schema
+  run: |
+    cd packages/server
+    bunx drizzle-kit push
+  env:
+    DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hyperscape_test
+
+- name: Run integration tests
+  run: bun test:integration
+  env:
+    SKIP_MIGRATIONS: true  # Skip server migrations (schema already created)
+    DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hyperscape_test
+```
+
+**Why This Approach:**
+- Server's built-in migrations have FK ordering issues (migration 0050 references `arena_rounds` from older migrations)
+- `drizzle-kit push` creates schema declaratively without these problems
+- Prevents \"relation already exists\" errors on fresh test databases
+- `SKIP_MIGRATIONS=true` tells server to skip migration system (schema already created)
+- Fixed in commits: eb8652a (CI integration), 6a5f4ee (table validation skip)
+
+**Migration 0050 Fix (commit e4b6489):**
+
+Migration 0050 was also fixed to add `IF NOT EXISTS` guards for idempotency:
+
+```sql
+-- Before (caused errors on fresh databases)
+CREATE TABLE agent_duel_stats (...);
+CREATE INDEX idx_agent_duel_stats_character_id ON agent_duel_stats(character_id);
+
+-- After (fixed in commit e4b6489)
+CREATE TABLE IF NOT EXISTS agent_duel_stats (...);
+CREATE INDEX IF NOT EXISTS idx_agent_duel_stats_character_id ON agent_duel_stats(character_id);
+```
+
+This allows the server's migration system to work correctly on fresh databases when `SKIP_MIGRATIONS` is not set.
+
 #### Deployment Workflows
 
 - **Railway**: `.github/workflows/deploy-railway.yml`
