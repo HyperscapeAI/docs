@@ -3,6 +3,95 @@ title: "January 2026"
 description: "Duel Arena, Prayer, Collision, Smithing, Website, and UI Improvements"
 ---
 
+## Week 8: February 20-25
+
+### Server Data Validation Fix
+
+*Merged: February 25, 2026*
+
+Fixed critical server startup errors and improved NPC data validation:
+
+- **Goblin Updates**: Added `levelRange` field to goblin NPC definition (levels 1-3)
+- **Biome Validation**: Removed invalid biome mob references that caused server startup failures
+- **Data Integrity**: Enhanced validation for NPC manifest data to prevent runtime errors
+
+---
+
+### Sword Model Variants
+
+*Merged: February 20, 2026*
+
+Expanded weapon variety with new sword models and variants:
+
+- **2H Swords**: Two-handed sword models for all metal tiers (bronze, iron, steel, mithril, adamant, rune)
+- **Daggers**: Dagger models for all metal tiers with aligned versions
+- **Longswords**: Longsword models for all metal tiers with aligned versions
+- **Scimitars**: Scimitar models for all metal tiers with aligned versions
+- **Shortswords**: Shortsword models for all metal tiers with aligned versions
+- **Model Organization**: Organized into `models/swords/` subdirectories by weapon type
+- **Alignment**: All models include `-aligned.glb` versions for proper character hand positioning
+
+---
+
+## Week 7: February 16-19
+
+### Starter Quest System
+
+*Merged: February 19, 2026*
+
+Added comprehensive starter quest system with 7 tutorial quests:
+
+- **Goblin Slayer**: Combat introduction quest with Captain Rowan (kill 15 goblins)
+- **Lumberjack's First Lesson**: Woodcutting and firemaking tutorial with Forester Wilma
+- **Fresh Catch**: Fishing and cooking tutorial with Fisherman Pete
+- **Torvin's Tools**: Mining and smithing tutorial with dwarf Torvin
+- **Rune Mysteries**: Runecrafting introduction with Wizard Zamorin
+- **Crafting Basics**: Leather crafting tutorial with Dommik
+- **Fletcher's Introduction**: Fletching basics with bowyer Lowe
+- **Quest Manifest**: Complete quest definitions in `manifests/quests.json`
+- **Rewards**: All quests reward 1 quest point and XP lamp (100 XP)
+
+---
+
+### New Mobs
+
+*Merged: February 19, 2026*
+
+Added new hostile mobs and NPC models:
+
+- **Mob Models**: Bandit, Barbarian, Dark Ranger, Dark Wizard VRM models
+- **NPC Models**: Captain Rowan, Forester Wilma, Fisherman Pete, Torvin, Wizard Zamorin, Dommik, Lowe VRM models
+- **Model Path**: All models in `models/mobs/` and `models/npcs/` directories
+- **Integration**: Quest NPCs now have proper 3D models and dialogue systems
+
+---
+
+### NPC Updates
+
+*Merged: February 19, 2026*
+
+Enhanced NPC system with improved data structure:
+
+- **Dialogue System**: Multi-node dialogue trees with branching responses
+- **Service Types**: Bank and shop service definitions for NPCs
+- **Faction System**: Town and monster faction classifications
+- **Movement Types**: Stationary, wander, and patrol movement patterns
+- **Combat Settings**: Detailed aggression, leash range, and respawn configurations
+
+---
+
+### Stores and NPCs Expansion
+
+*Merged: February 16, 2026*
+
+Added new merchant NPCs and store systems:
+
+- **New Stores**: Additional shop configurations in `manifests/stores.json`
+- **Merchant NPCs**: Expanded shopkeeper and specialist merchant models
+- **Store Integration**: Complete shop inventory and pricing systems
+
+---
+
 ## Week 6: February 2-6
 
 ### Ammunition Manifest Update
