@@ -25,9 +25,30 @@ Hyperscape uses manifest-driven design where game content is defined in TypeScri
 - **Developers** focus on systems, not data
 - **Modders** can extend content easily
 
+## Asset Management
+
+<Warning>
+**Breaking Change (Feb 2026)**: Game assets (3D models, textures, audio) and manifests are now sourced from the separate [HyperscapeAI/assets](https://github.com/HyperscapeAI/assets) repository. The `packages/server/world/assets/` directory is fully gitignored and populated exclusively by cloning the assets repo.
+</Warning>
+
+**Local Development:**
+- Assets are auto-downloaded during `bun install` via `postinstall` hook
+- Full clone with Git LFS (~200MB) for complete asset access
+- Located at `packages/server/world/assets/`
+
+**CI/Production:**
+- Assets cloned via `ensure-assets.mjs` script (shallow, no LFS)
+- Manifests-only clone for server startup (models served from CDN)
+- Prevents manifest divergence between repos
+
+**Why This Change:**
+- Manifests were being committed directly to hyperscape repo to fix CI, causing divergence with assets repo
+- Assets directory is now the single source of truth for all game content
+- Eliminates dual-maintenance burden and sync issues
+
 ## Manifest Files
 
-All manifests are in `world/assets/manifests/`:
+All manifests are in `packages/server/world/assets/manifests/` (cloned from HyperscapeAI/assets):
 
 | File | Content |
 |------|---------|
