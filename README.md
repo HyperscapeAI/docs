@@ -445,13 +445,14 @@ The CI audit threshold has been lowered to `critical` only (from `high`) to allo
 
 **Duel Combat Fixes (commit 029456, PR #934):**
 - Fixed mage staff and 2H sword combat in streaming duels
-- **Keep-alive re-engagement**: Added periodic re-engagement in DuelCombatAI to prevent agents idling when combat state times out (fixes 2H sword attacks)
-- **Weapon type propagation**: Propagate weapon type (mage/ranged/melee) through DuelOrchestrator into `startCombat` so correct attack speeds are used
-- **Rune inventory readiness**: Added polling and validation bypass for duel bot agents to prevent rune loading race conditions
-- **Combat state starvation guard**: Prevent repeated `startCombat` resets on slow weapons from starving auto-attack loop
-- **Combat timeout refresh**: Refresh combat timeout after ranged/magic attacks in both CombatSystem and CombatTickProcessor
-- **PvP zone bypass**: Bypass PvP zone checks for streaming duel combatants
-- **Safe zone aggro block**: Block aggro and chase on players in safe zones via AggroSystem
+- **Keep-alive re-engagement**: Added periodic re-engagement in DuelCombatAI every 5 ticks (~3s) to prevent agents idling when combat state times out. Fixes 2H sword attacks where slow weapon speed (7 ticks) combined with combat timeout caused agents to stand idle.
+- **Weapon type propagation**: Propagate weapon type (mage/ranged/melee) through DuelOrchestrator into `startCombat` so CombatSystem creates correct state with proper attack speeds. Without this, all agents defaulted to MELEE, preventing magic and ranged agents from firing projectile-based attacks.
+- **Rune inventory readiness**: Added polling loop (up to 2 seconds) to wait for inventory to finish loading from DB before adding runes. Without this, `getOrCreateInventory` returns a disposable placeholder (not stored in the Map) and runes are silently lost.
+- **Combat state starvation guard**: Don't replace existing combat state if agent already has valid state targeting correct opponent. `createAttackerState` replaces the state Map entry which resets `nextAttackTick` — for slow weapons (2H swords, attackSpeed 7) the auto-attack loop never reaches `nextAttackTick` because repeated re-engagement keeps pushing it forward (starvation pattern).
+- **Combat timeout refresh**: Refresh combat timeout after ranged/magic attacks in both CombatSystem and CombatTickProcessor. The handler may have replaced the state via `enterCombat` → `createAttackerState`, so fetch fresh state from Map (old reference may be stale).
+- **PvP zone bypass**: Bypass PvP zone checks for streaming duel combatants (matches `enterCombat` behavior). Prevents combat from ending when agents are in duel arenas which are technically safe zones.
+- **Safe zone aggro block**: Block aggro and chase on players in safe zones via AggroSystem. Hostile mobs won't auto-aggro players in safe zones, and will stop chasing if player enters safe zone.
+- **Rune validation bypass**: Streaming duel agents bypass rune validation since inventory-based rune addition is unreliable for bot agents (race conditions, manifest loading timing). Staff provides infinite elemental runes; only catalytic runes (mind/chaos) would fail. Since these are AI bots with no real economy, let the attack proceed.
 - Files: `packages/server/src/arena/DuelCombatAI.ts`, `packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts`, `packages/shared/src/systems/shared/combat/CombatSystem.ts`, `packages/shared/src/systems/shared/combat/CombatTickProcessor.ts`, `packages/shared/src/systems/shared/combat/AggroSystem.ts`
 
 **ArenaPointsService Connection Timeout Fix (commit 99cd3f7):**
