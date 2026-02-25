@@ -23,6 +23,46 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="CI/CD & Build System Fixes" description="February 2026" date="2026-02-25">
+
+### 🔧 Tauri Build Workflow Fixes (commit 15250d2)
+
+**Split Unsigned/Release Builds:**
+- **Issue**: Tauri bundler attempts macOS code signing whenever `APPLE_CERTIFICATE` env var exists, even if empty. Non-release builds were setting it to `''` which caused `SecKeychainItemImport` error.
+- **Fix**: Split Desktop, iOS, and Android build steps into separate Unsigned and Release variants so signing env vars are only present during actual releases
+- **Impact**: Non-release builds no longer crash with empty certificate errors
+- **File**: `.github/workflows/build-app.yml`
+- **Commit**: 15250d2 (Feb 25, 2026)
+
+### 🌐 Cloudflare Origin Lock Fix (commit 3ec9826)
+
+**Disabled Origin Lock:**
+- **Issue**: Cloudflare origin lock was preventing direct frontend API access
+- **Fix**: Disabled cloudflare origin lock to allow direct API access from frontend
+- **Impact**: Frontend can now access API directly without proxy restrictions
+- **File**: `packages/server/` (server configuration)
+- **Commit**: 3ec9826 (Feb 25, 2026)
+
+### 📦 Cloudflare Pages Build Output Fix (commit 1af02ce)
+
+**Build Output Directory:**
+- **Issue**: Cloudflare Pages worker deployment error due to missing build output directory specification
+- **Fix**: Specified pages build output dir in Cloudflare configuration
+- **Impact**: Cloudflare Pages deployments now succeed
+- **File**: Cloudflare configuration
+- **Commit**: 1af02ce (Feb 25, 2026)
+
+### 🔧 Asset-Forge Import Path Fix (commit 9ea5b41)
+
+**Procgen Viewer Import:**
+- **Issue**: Asset-forge procgen viewer import path was incorrect
+- **Fix**: Updated procgen viewer import to `src` directory
+- **Impact**: Procgen viewer now loads correctly in asset-forge
+- **File**: `packages/asset-forge/` (procgen viewer)
+- **Commit**: 9ea5b41 (Feb 25, 2026)
+
+</Update>
+
 <Update label="Infrastructure & Combat Fixes" description="February 2026" date="2026-02-25">
 
 ### 🗄️ Database Infrastructure Updates (PR #937, commit a9e9003)
