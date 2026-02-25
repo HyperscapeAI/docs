@@ -1947,30 +1947,43 @@ this.sendToNearby(position, "tileMovementEnd", {
 
 ### AI Combat Timing
 
-The `DuelCombatAI` system manages automated agent duels with proper attack timing:
+The `DuelCombatAI` system manages automated agent duels with simplified attack logic (commit 51453da):
 
 ```typescript
 // From DuelCombatAI.ts
-// Attack every weapon-speed cycle instead of waiting for re-engagement interval
-// Seeds first tick to attack immediately since startCombat() has no auto-attack
-private async attackCycle(): Promise<void> {
-  const weaponSpeed = this.getWeaponSpeed();
-  
-  // Seed first tick to attack immediately
-  await this.performAttack();
-  
-  // Continue attacking every weapon-speed cycle
-  while (this.isInCombat()) {
-    await this.sleep(weaponSpeed);
-    await this.performAttack();
+// The combat system's auto-attack loop (processPlayerCombatTick →
+// processAutoAttackOnTick) drives the actual attack cadence once combat is
+// established. The AI only needs to (re-)engage when combat has dropped
+// or the target has changed.
+private async tryAttack(
+  state: EmbeddedGameState,
+  _phase: CombatPhase,
+): Promise<void> {
+  const needsEngagement =
+    !state.inCombat || state.currentTarget !== this.opponentId;
+
+  if (needsEngagement) {
+    try {
+      await this.service.executeAttack(this.opponentId);
+      this.attacksLanded++;
+    } catch (err) {
+      console.debug(`[DuelCombatAI] Attack failed:`, errMsg(err));
+    }
   }
 }
 ```
 
-**Key Improvements:**
-- **Immediate first attack**: Seeds first tick to attack immediately (no delay waiting for re-engagement)
-- **Weapon-speed cycles**: Attacks every weapon-speed interval (e.g., 2.4s for longsword, 3.6s for 2H sword)
-- **2H sword fix**: 2H swords now attack at correct 6-tick (3.6s) intervals instead of waiting for re-engagement
+**Key Changes (commit 51453da):**
+- **Removed redundant attack-speed tracking**: The combat system's auto-attack loop already drives attack cadence
+- **Simplified AI logic**: AI only re-engages when combat drops or target changes
+- **Fixed 2H sword attacks**: Previously, manual attack-speed tracking competed with the combat system's auto-attack loop, causing attacks to be silently dropped (especially for slow weapons like 2H swords)
+- **Added TWO_HAND_SWORD default style**: Missing default attack style for two-handed swords added to `WeaponStyleConfig.ts`
+
+**Why This Works:**
+- Combat system's `processAutoAttackOnTick` handles all attack timing once combat is established
+- Calling `executeAttack` on every cooldown cycle creates a redundant second driver
+- Both drivers compete for the same cooldown slot, silently dropping attacks
+- AI now only calls `executeAttack` when combat needs to be (re-)established
 
 ### Teleport Suppression
 
