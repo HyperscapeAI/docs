@@ -2372,12 +2372,32 @@ combatSystem.startCombat(agent1Id, agent2Id, {
 });
 ```
 
-**Critical Fixes (PR #934):**
-- **Keep-alive re-engagement**: DuelCombatAI now periodically re-engages to prevent agents idling when combat state times out (fixes 2H sword attacks)
-- **Rune inventory readiness**: Waits for inventory to load from DB before adding runes (prevents silent rune loss)
-- **Combat timeout refresh**: Ranged/magic attacks now refresh combat timeout in both `CombatSystem` and `CombatTickProcessor`
-- **PvP zone bypass**: Streaming duel combatants bypass PvP zone checks (allows combat in safe zones)
-- **Safe zone aggro block**: AggroSystem now blocks aggro and chase on players in safe zones
+**Critical Fixes (PR #934, commit 029456255, Feb 25, 2026):**
+
+**1. Keep-Alive Re-Engagement (2H Sword Fix):**
+- **Problem**: Entity data flags (`inCombat`, `combatTarget`) can be stale when CombatSystem's internal state has timed out. Agents would stand idle instead of attacking.
+- **Fix**: DuelCombatAI now periodically re-engages every 5 ticks (~3s) as a keep-alive, even when entity flags show combat is active
+- **Impact**: 2H sword attacks now fire reliably, agents no longer idle during combat
+
+**2. Rune Inventory Readiness Polling:**
+- **Problem**: Adding runes before inventory loaded from DB caused silent rune loss. `getOrCreateInventory` returned a disposable placeholder (not stored in Map).
+- **Fix**: Wait up to 2 seconds for `inventorySystem.isInventoryReady(playerId)` before adding runes
+- **Impact**: Mage agents now reliably receive runes, magic attacks work consistently
+
+**3. Combat Timeout Refresh:**
+- **Problem**: Ranged/magic attacks didn't refresh combat timeout, causing combat to expire after 16 ticks even during active fighting
+- **Fix**: Both `CombatSystem` and `CombatTickProcessor` now refresh `combatEndTick` after ranged/magic attacks
+- **Impact**: Combat stays active during ranged/magic fights, no premature timeout
+
+**4. PvP Zone Bypass for Streaming Duels:**
+- **Problem**: Streaming duel agents couldn't fight in safe zones due to PvP zone checks
+- **Fix**: Bypass PvP zone checks when `entity.data.inStreamingDuel === true`
+- **Impact**: Streaming duels work in any zone, not just wilderness
+
+**5. Safe Zone Aggro Block:**
+- **Problem**: Hostile mobs would aggro and chase players in safe zones
+- **Fix**: `AggroSystem` now checks `ZoneDetectionSystem.isSafeZone()` before aggroing or chasing
+- **Impact**: Safe zones are truly safe, mobs won't attack players there
 
 ### Combat State Starvation Guard (PR #934)
 
