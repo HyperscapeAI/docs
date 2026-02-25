@@ -362,6 +362,9 @@ If the client throws exceptions related to React version conflicts, this was fix
 **TypeScript build fails with override conflicts:**
 If you see build errors related to TypeScript version overrides or cyclic dependencies, this was fixed in commit `113a85a`. The root package.json no longer forces TypeScript overrides that conflict with package-specific requirements. Update to the latest code to resolve.
 
+**Cloudflare deployment fails with EOVERRIDE error:**
+If Cloudflare Pages deployment fails with `EOVERRIDE` errors related to Playwright version conflicts, this was fixed in commit `64db27f`. The npm override for Playwright (>=1.55.1) conflicted with the direct dependency (^1.55.1) in Cloudflare's build environment. The override was removed to allow Cloudflare's dependency resolution to work correctly. Update to the latest code to resolve.
+
 **ESLint crashes with ajv TypeError:**
 If ESLint crashes with `TypeError: Class extends value undefined is not a constructor or null` related to ajv, this was fixed in commit `b344d9e`. The issue was caused by forcing ajv@8 on @eslint/eslintrc which requires ajv@6 for Draft-04 schema support. Update to the latest code to resolve.
 
