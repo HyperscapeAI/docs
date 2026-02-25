@@ -830,6 +830,61 @@ localStorage.setItem('disable-model-cache', 'true');
 
 See [Model Cache System](/wiki/engine/model-cache) for complete details.
 
+### Terrain Height Offset Issues
+
+**Symptom**: Players/entities positioned 50m above or below expected terrain height
+
+**Cause**: Tile index and grid index calculations didn't account for PlaneGeometry's centered coordinate system
+
+**Solution**: Update to latest code (commit 21e0860 fixed this)
+
+**Technical Details:**
+- **Tile Index Bug**: `Math.floor(worldX/TILE_SIZE)` doesn't account for centered geometry
+  - PlaneGeometry uses [-50, +50] range, not [0, 100]
+  - Fixed with `worldToTerrainTileIndex()` canonical helper
+- **Grid Index Bug**: Formula omitted `halfSize` offset from PlaneGeometry's centered range
+  - Fixed with `localToGridIndex()` canonical helper
+  - Applied to both `getHeightAtCached()` and `getTerrainColorAt()`
+- **Key Format Bug**: `getTerrainColorAt()` had comma-vs-underscore typo preventing tile lookups
+  - Changed from `${tileX},${tileZ}` to `${tileX}_${tileZ}`
+
+**Impact**: Terrain height queries now return correct values, fixing player/entity positioning
+
+**File**: `packages/shared/src/systems/shared/world/TerrainSystem.ts`
+
+### Cyclic Dependency Build Errors
+
+**Symptom**: TypeScript errors about missing types from `@hyperscape/shared` or `@hyperscape/procgen`, or Turbo detecting circular dependencies
+
+**Cause**: Circular dependencies between packages during clean builds
+
+**Solution**: Update to latest code (commit f355276 fixed shared/procgen cycle). The build system handles this automatically with resilient patterns:
+
+- **procgen ↔ shared**: Moved procgen from dependencies to optional peerDependencies in shared
+  - Breaks turbo graph cycle
+  - Import still resolves at runtime (both packages always installed together)
+- **plugin-hyperscape ↔ shared**: Uses `--skipLibCheck` in declaration generation
+- Packages produce partial output sufficient for downstream consumers
+
+If you still see errors:
+
+```bash
+# Build shared first to create dist/ directory
+cd packages/shared
+bun run build
+
+# Then build dependent packages
+cd ../procgen
+bun run build
+
+cd ../plugin-hyperscape
+bun run build
+```
+
+**Recent Fix:**
+- Commit f355276 (Feb 25, 2026): Broke shared → procgen → shared cycle
+- File: `packages/shared/package.json`
+
 ### Mage Agents Not Attacking in Duels
 
 **Symptom**: Mage agents stand idle during duels, no spell projectiles visible
