@@ -467,6 +467,10 @@ bun run dev
   This permanently deletes all player data.
 </Warning>
 
+<Info>
+**Docker Image Update**: The local PostgreSQL container now uses `pgvector/pgvector:pg16` instead of `postgres:16-alpine` to support vector similarity search features (commit a9e9003, Feb 2026).
+</Info>
+
 ## Backup and Restore
 
 ### PostgreSQL Backup
