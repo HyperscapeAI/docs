@@ -658,8 +658,17 @@ foundryup
 
 ### Duel Arena Issues
 
-**Players spawning below arena floor:**
-Fixed in commit 75d0aa6. Arena spawn heights were corrected to match visual mesh positions. If you see players falling through the arena floor, ensure you're on the latest code.
+**Players/agents sinking into arena floors:**
+Fixed in commits 7a60135 and 75d0aa6. Two separate issues were resolved:
+
+1. **Terrain flat zones** (commit 7a60135): Players/agents were sinking ~0.4m into duel arena floors because flat zones were removed from the terrain system. This caused `getHeightAt()` to return raw procedural terrain height instead of floor-level height, and allowed grass to grow through floor surfaces.
+   - **Fix**: DuelArenaVisualsSystem now registers flat zones programmatically for all 8 floor areas (6 arenas + lobby + hospital)
+   - Terrain height queries now return correct floor-level values
+   - Terrain mesh is carved under the floors to prevent grass/vegetation clipping
+
+2. **Arena spawn heights** (commit 75d0aa6): Arena spawn heights were corrected to match visual mesh positions.
+
+If you see players falling through the arena floor, ensure you're on the latest code.
 
 ### Streaming Mode Issues
 
