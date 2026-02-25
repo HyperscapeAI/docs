@@ -672,9 +672,12 @@ foundryup
 Fixed in commits 7a60135 and 75d0aa6. Two separate issues were resolved:
 
 1. **Terrain flat zones** (commit 7a60135): Players/agents were sinking ~0.4m into duel arena floors because flat zones were removed from the terrain system. This caused `getHeightAt()` to return raw procedural terrain height instead of floor-level height, and allowed grass to grow through floor surfaces.
-   - **Fix**: DuelArenaVisualsSystem now registers flat zones programmatically for all 8 floor areas (6 arenas + lobby + hospital)
+   - **Fix**: DuelArenaVisualsSystem (`packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`) now registers flat zones programmatically for all 8 floor areas (6 arenas + lobby + hospital)
+   - Flat zones are registered via `TerrainSystem.registerFlatZone()` during system initialization
+   - Each flat zone specifies: center position, width, depth, height, and blend radius
    - Terrain height queries now return correct floor-level values
    - Terrain mesh is carved under the floors to prevent grass/vegetation clipping
+   - **Implementation**: Flat zones are registered in `DuelArenaVisualsSystem.start()` after arena meshes are created, ensuring terrain respects building floor heights
 
 2. **Arena spawn heights** (commit 75d0aa6): Arena spawn heights were corrected to match visual mesh positions.
 
