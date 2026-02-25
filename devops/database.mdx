@@ -241,6 +241,45 @@ const client = postgres(connectionString, {
   If you see `XX000` errors, check if your connection string uses a pooler and set `prepare: false`.
 </Warning>
 
+## Migration Workflow
+
+### Automatic Migrations (Default)
+
+By default, the server automatically runs migrations on startup:
+
+1. Checks for required public tables
+2. Runs pending migrations from `src/database/migrations/`
+3. Populates migration journal table
+4. Validates schema integrity
+
+### Skip Migrations (CI/Testing)
+
+For CI environments where schema is created externally via `drizzle-kit push`, set:
+
+```bash
+SKIP_MIGRATIONS=true
+```
+
+**Behavior when enabled** (commit 6a5f4ee):
+- Skips migration execution
+- Skips `hasRequiredPublicTables` check
+- Skips migration recovery loop
+- Assumes schema is already created and valid
+
+**Use cases:**
+- CI integration tests using `drizzle-kit push` for declarative schema creation
+- Avoids foreign key ordering issues in migration files
+- Prevents migration journal conflicts when schema created externally
+
+**Why this is needed:**
+- Server's built-in migration has FK ordering issues (migration 0050 references arena_rounds from older migrations)
+- `drizzle-kit push` creates schema declaratively without these problems
+- Allows CI to use push for clean schema creation, then skip server migration
+
+<Warning>
+  Only use `SKIP_MIGRATIONS=true` in CI/testing environments. Production should always run migrations normally.
+</Warning>
+
 ## Migrations
 
 Migrations are stored in `packages/server/src/database/migrations/`:
