@@ -2280,7 +2280,7 @@ Promise.race([llmPromise, timeoutPromise])
 
 ### Combat Role System
 
-The duel system supports three combat roles with automatic gear provisioning and weighted random selection:
+The duel system supports three combat roles with automatic gear provisioning and weighted random selection (added in PR #933, Feb 2026):
 
 **Combat Roles:**
 - **Melee** (50% weight): Bronze weapons (longsword, scimitar, 2h sword)
@@ -2346,6 +2346,63 @@ const DUEL_BRONZE_WEAPON_IDS = [
   "bronze_2h_sword",
 ];
 ```
+
+### Weapon Type Propagation (PR #934)
+
+The combat system now propagates weapon type through `DuelOrchestrator` into `startCombat` so correct attack speeds are used:
+
+```typescript
+// Resolve weapon type from combat role
+const roleToWeaponType = (role: DuelCombatRole): AttackType => {
+  switch (role) {
+    case "mage":
+      return AttackType.MAGIC;
+    case "ranged":
+      return AttackType.RANGED;
+    default:
+      return AttackType.MELEE;
+  }
+};
+
+// Pass weaponType to startCombat
+combatSystem.startCombat(agent1Id, agent2Id, {
+  attackerType: "player",
+  targetType: "player",
+  weaponType: weaponType1,  // Ensures correct attack speed
+});
+```
+
+**Critical Fixes (PR #934):**
+- **Keep-alive re-engagement**: DuelCombatAI now periodically re-engages to prevent agents idling when combat state times out (fixes 2H sword attacks)
+- **Rune inventory readiness**: Waits for inventory to load from DB before adding runes (prevents silent rune loss)
+- **Combat timeout refresh**: Ranged/magic attacks now refresh combat timeout in both `CombatSystem` and `CombatTickProcessor`
+- **PvP zone bypass**: Streaming duel combatants bypass PvP zone checks (allows combat in safe zones)
+- **Safe zone aggro block**: AggroSystem now blocks aggro and chase on players in safe zones
+
+### Combat State Starvation Guard (PR #934)
+
+The system now guards against state starvation from repeated `startCombat` resets on slow weapons:
+
+```typescript
+// Don't replace existing combat state if agent already has valid state
+const hasValidState = (attackerId: string, targetId: string): boolean => {
+  if (!combatSystem.getCombatData || !combatSystem.isInCombat) return false;
+  if (!combatSystem.isInCombat(attackerId)) return false;
+  const state = combatSystem.getCombatData(attackerId);
+  return !!(state?.inCombat && String(state.targetId) === targetId);
+};
+
+if (!hasValidState(agent1Id, agent2Id)) {
+  // Only call startCombat if no valid state exists
+  combatSystem.startCombat(agent1Id, agent2Id, { weaponType: weaponType1 });
+}
+```
+
+**Why This Matters:**
+- `createAttackerState` replaces the state Map entry which resets `nextAttackTick`
+- For slow weapons (2H swords, attackSpeed 7), repeated re-engagement keeps pushing `nextAttackTick` forward
+- Auto-attack loop never reaches `nextAttackTick` (starvation pattern)
+- Guard prevents replacing valid combat state, allowing auto-attacks to fire
 
 ### Critical Bug Fixes
 
