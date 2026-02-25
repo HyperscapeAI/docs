@@ -2349,7 +2349,7 @@ const DUEL_BRONZE_WEAPON_IDS = [
 
 ### Critical Bug Fixes
 
-**Combat State Key Mismatch:**
+**Combat State Key Mismatch (Fixed in PR #933):**
 - **Issue**: CombatStateService syncs abbreviated keys (`data.c`/`data.ct`) but `getGameState()` only read full keys (`data.inCombat`/`data.combatTarget`)
 - **Impact**: DuelCombatAI always saw `inCombat=false` and flooded `executeAttack` every tick instead of letting auto-attacks drive combat
 - **Fix**: EmbeddedHyperscapeService now reads both abbreviated and full keys:
@@ -2358,12 +2358,14 @@ const DUEL_BRONZE_WEAPON_IDS = [
   currentTarget: (data.combatTarget as string) || (data.ct as string) || null,
   ```
 - **File**: `packages/server/src/eliza/EmbeddedHyperscapeService.ts`
+- **Commit**: 82ff784 (Feb 25, 2026)
 
-**Magic Attack TOCTOU Race:**
+**Magic Attack TOCTOU Race (Fixed in PR #933):**
 - **Issue**: Cooldown was checked early but claimed after async `consumeRunesForSpell` call. With the combat state bug flooding attacks, two concurrent invocations could both pass the cooldown check before either claimed it
 - **Impact**: Duplicate magic projectiles, double rune consumption
 - **Fix**: Moved cooldown claim and `enterCombat` before async rune consumption to close the race window
-- **File**: `packages/shared/src/systems/shared/combat/CombatSystem.ts` (handleMagicAttack)
+- **File**: `packages/shared/src/systems/shared/combat/handlers/MagicAttackHandler.ts`
+- **Commit**: 82ff784 (Feb 25, 2026)
 
 **Duel Arena Terrain Sinking:**
 - **Issue**: Players/agents were sinking ~0.4m into duel arena floors because flat zones were removed from the terrain system, causing `getHeightAt()` to return raw procedural terrain height instead of floor-level height
