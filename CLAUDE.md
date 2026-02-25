@@ -637,6 +637,11 @@ curl -L https://foundry.paradigm.xyz | bash
 foundryup
 ```
 
+### Duel Arena Issues
+
+**Players spawning below arena floor:**
+Fixed in commit 75d0aa6. Arena spawn heights were corrected to match visual mesh positions. If you see players falling through the arena floor, ensure you're on the latest code.
+
 ### Streaming Mode Issues
 
 **WebGPU crashes on RTX 5060 Ti:**
