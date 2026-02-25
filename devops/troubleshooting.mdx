@@ -475,6 +475,34 @@ const client = postgres(connectionString, {
 - PgBouncer in statement mode
 - Neon, Railway, or other providers without transaction pooling
 
+### Streaming WebGPU Backend Issues (RTX 4090)
+
+**Symptom**: WebGPU rendering fails or crashes on RTX 4090 GPUs in streaming mode
+
+**Cause**: ANGLE backend defaulting to GL instead of Vulkan for RTX 4090
+
+**Solution**: Update to latest code (commit 80bb06ed fixed this). ANGLE now uses Vulkan backend for RTX 4090:
+
+```typescript
+// From browser-capture.ts
+const gpuBackend = gpuModel?.includes('4090') ? 'vulkan' : 'gl';
+const chromeArgs = [
+  '--use-angle=vulkan',  // Force Vulkan for RTX 4090
+  '--enable-features=Vulkan',
+  // ... other flags
+];
+```
+
+**Technical Details:**
+- RTX 4090 requires Vulkan backend for optimal WebGPU performance
+- GL backend causes rendering issues and crashes
+- Automatically detected based on GPU model string
+- Only affects streaming/headless mode with RTX 4090
+- Fixed in `packages/server/src/streaming/browser-capture.ts`
+
+**Verification:**
+Check Chrome flags in streaming logs for `--use-angle=vulkan` when RTX 4090 is detected.
+
 ## Deployment Issues
 
 ### Docker Build Failures
