@@ -9,7 +9,11 @@ icon: "database"
 Hyperscape uses [Drizzle ORM](https://orm.drizzle.team) for database access:
 
 - **Development**: SQLite (zero config)
-- **Production**: PostgreSQL
+- **Production**: PostgreSQL with pgvector extension
+
+<Info>
+**PostgreSQL 16+ with pgvector**: The production database requires PostgreSQL 16 or higher with the pgvector extension. Use the `pgvector/pgvector:pg16` Docker image for local development (updated in commit a9e9003, Feb 2026).
+</Info>
 
 ## Schema Location
 
