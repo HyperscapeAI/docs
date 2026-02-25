@@ -23,6 +23,102 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Infrastructure & Combat Fixes" description="February 2026" date="2026-02-25">
+
+### 🗄️ Database Infrastructure Updates (PR #937, commit a9e9003)
+
+**PostgreSQL pgvector Extension:**
+- Docker PostgreSQL image updated from `postgres:16-alpine` to `pgvector/pgvector:pg16`
+- Adds vector similarity search capabilities for future AI features
+- Enables semantic search, embeddings storage, and vector-based queries
+- File: `packages/server/docker-compose.yml`
+
+**PGLite In-Memory Database for AI Agents:**
+- ElizaOS duel bots now use in-memory database instead of disk-based PGLite
+- Prevents migration collisions, disk corruption, and PGLite singleton race conditions
+- `ensurePgliteDataDir()` returns `memory://${agentId}` instead of disk path
+- Eliminates bot initialization failures from stale PGLite data
+- File: `packages/server/src/eliza/agentHelpers.ts`
+
+**Devnet RPC Support:**
+- Added devnet RPC URL support in keeper: `https://api.devnet.solana.com`
+- Enables devnet testing for betting keeper bot
+- File: `packages/gold-betting-demo/keeper/src/common.ts`
+
+**Railway Start Command Fix:**
+- Updated nixpacks.toml start command to `bun run start` for consistency
+- File: `nixpacks.toml`
+
+**Asset-Forge Build Optimization:**
+- Vast.ai deploy now uses `bun run build:services` (backend only, faster)
+- File: `scripts/deploy-vast.sh`
+
+### 🎨 Model Cache Bug Fixes (PR #935, commit c98f1cc)
+
+**Bug #1 - Missing Objects:**
+- Fixed models with duplicate mesh names (e.g., altars) losing objects
+- Changed from name-based `findIndex` to `Map<Object3D, number>` identity map
+- All objects in models now render correctly
+
+**Bug #2 - Lost Textures:**
+- Fixed textures becoming white/wrong colors after page refresh
+- Extract raw RGBA pixels via canvas `getImageData`, restore as `DataTexture`
+- Textures persist correctly across page refreshes
+
+**Bug #3 - Grey Trees in WebGPU:**
+- Fixed `instanceof MeshStandardMaterial` failing for `MeshStandardNodeMaterial`
+- Replaced with duck-type property check
+- Tree materials render correctly in WebGPU builds
+
+**Additional Improvements:**
+- Added `localStorage.setItem('disable-model-cache', 'true')` bypass option
+- Error logging on IndexedDB failures
+- Cache version bumped to 3
+- File: `packages/shared/src/utils/rendering/ModelCache.ts`
+
+### ⚔️ Duel Combat System Fixes (PR #934, commit 029456255)
+
+**Weapon Type Propagation:**
+- Combat system now propagates weapon type (mage/ranged/melee) to `startCombat`
+- Ensures correct attack speeds for each combat role
+- Mage and ranged agents use correct timing instead of defaulting to melee
+
+**Keep-Alive Re-Engagement:**
+- DuelCombatAI re-engages every 5 ticks (~3s) to prevent idling
+- Fixes 2H sword attacks not firing when combat state times out
+- File: `packages/server/src/arena/DuelCombatAI.ts`
+
+**Rune Inventory Readiness:**
+- Waits up to 2 seconds for inventory to load before adding runes
+- Prevents silent rune loss from race conditions
+- Mage agents now reliably receive runes
+
+**Rune Validation Bypass:**
+- Streaming duel agents bypass rune validation (inventory timing unreliable)
+- Allows mage bots to cast spells without inventory race conditions
+- File: `packages/shared/src/systems/shared/combat/CombatSystem.ts`
+
+**Combat Timeout Refresh:**
+- Ranged/magic attacks now refresh combat timeout in both systems
+- Combat stays active during projectile fights
+- Files: `CombatSystem.ts`, `CombatTickProcessor.ts`
+
+**PvP Zone Bypass:**
+- Streaming duel agents bypass PvP zone checks
+- Enables duels in any zone, not just wilderness
+
+**Safe Zone Aggro Block:**
+- AggroSystem blocks aggro and chase on players in safe zones
+- Safe zones are truly safe from hostile mobs
+- File: `packages/shared/src/systems/shared/combat/AggroSystem.ts`
+
+**Combat State Starvation Guard:**
+- Only call `startCombat` if no valid combat state exists
+- Prevents `nextAttackTick` reset starvation for slow weapons
+- Auto-attacks can fire reliably for 2H swords
+
+</Update>
+
 <Update label="Combat Role System & Critical Bug Fixes" description="February 2026" date="2026-02-25">
 
 ### ⚔️ Duel Combat Role System (PR #933)
