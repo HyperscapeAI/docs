@@ -943,6 +943,55 @@ curl -L https://foundry.paradigm.xyz | bash
 foundryup
 ```
 
+### Turbo Build Cycle (shared → procgen → shared)
+
+**Symptom**: Turbo build fails with cyclic dependency error
+
+**Cause**: `@hyperscape/shared` depends on `@hyperscape/procgen`, which depends on `@hyperscape/shared`
+
+**Fix**: Moved `@hyperscape/procgen` from dependencies to optional peerDependencies in shared's package.json. Fixed in commit `f355276`.
+
+**Why**: Breaks the turbo graph cycle while still allowing the import to resolve at runtime (both packages are always installed together in the workspace).
+
+### Vast.ai Deployment (bunx vs npx)
+
+**Symptom**: Vast.ai deployment fails with "npx: command not found"
+
+**Cause**: Vast.ai deployment container only has bun installed, not npm/npx
+
+**Fix**: Use `bunx` instead of `npx` in build-services.mjs. Fixed in commit `c80ad7a`.
+
+```bash
+# Before
+npx tsc
+
+# After
+bunx tsc
+```
+
+### Cloudflare Pages Build Output
+
+**Symptom**: Cloudflare Pages deployment fails with worker deployment error
+
+**Cause**: Build output directory not specified in wrangler.toml
+
+**Fix**: Specify pages build output dir in wrangler.toml. Fixed in commit `1af02ce`.
+
+### Model Cache Disabled
+
+**Symptom**: Models reload from scratch on every page refresh, losing performance benefits
+
+**Cause**: Model cache may be disabled for debugging
+
+**Fix**: Check localStorage and remove the disable flag:
+
+```javascript
+// In browser console
+localStorage.removeItem('disable-model-cache');
+```
+
+**Note**: The model cache was fixed in commit `c98f1cc` (PR #935) to properly persist textures and hierarchy. If you're experiencing white/missing textures or missing objects after page reload, ensure you're on the latest code (cache version 3).
+
 ### Asset Management
 
 **Asset Manifest Migration** (commit 12c01c2) - HyperscapeAI/assets as source of truth
