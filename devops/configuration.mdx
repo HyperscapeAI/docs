@@ -119,6 +119,13 @@ MARKET_MINT=So11111111111111111111111111111111111112  # WSOL (native SOL wrapped
 # Perps Oracle (disabled by default on devnet, commit 34255ee)
 # Perps program not deployed on devnet - enable when ready
 ENABLE_PERPS_ORACLE=false  # Set to true when perps program deployed
+
+# ⚠️ BREAKING CHANGE: GOLD_MINT → MARKET_MINT
+# Old variable GOLD_MINT is no longer used
+# Markets now use native token of each chain by default:
+#   - Solana: WSOL (wrapped SOL)
+#   - EVM chains: WETH (wrapped ETH)
+# Override with MARKET_MINT if you want a different token
 ```
 
 **Keypair Setup:**
