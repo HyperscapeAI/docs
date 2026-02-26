@@ -774,6 +774,37 @@ executablePath: '/usr/bin/google-chrome-unstable'
 - Cloudflare Pages deployments now succeed
 - Commit: 1af02ce (Feb 25, 2026)
 
+### Cloudflare Wrangler Configuration Issues
+
+**Symptom**: Cloudflare Pages deployment fails with configuration errors or uses wrong directive
+
+**Cause**: Incorrect wrangler.toml configuration for Pages deployment
+
+**Solution**: Update to latest code (commit 42a1a0e fixed this)
+
+**Technical Details:**
+- Switched from `pages_build_output_dir` to `[assets]` directive
+- Works better with `wrangler deploy` for static asset hosting
+- Deploy command should be empty in Cloudflare dashboard
+- File: `packages/client/wrangler.toml`
+- Commit: 42a1a0e (Feb 26, 2026)
+
+### Root Wrangler Config Conflicts with Pages Project
+
+**Symptom**: Cloudflare deployment confusion between Worker and Pages projects
+
+**Cause**: Root `wrangler.toml` named "hyperscape-betting" conflicts with "hyperscape" Pages project
+
+**Solution**: Update to latest code (commit f19a704 fixed this)
+
+**Technical Details:**
+- Removed root `wrangler.toml` to avoid deployment confusion
+- Correct Pages configuration is in `packages/client/wrangler.toml`
+- To complete fix, update Cloudflare Dashboard:
+  1. Workers & Pages → hyperscape (Worker) → Settings → disconnect GitHub
+  2. Workers & Pages → hyperscape (Pages) → Settings → connect GitHub
+- Commit: f19a704 (Feb 26, 2026)
+
 ### Assets Not Found After Fresh Clone
 
 **Symptom**: Server fails to start with "No world areas defined" or manifest validation errors
