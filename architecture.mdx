@@ -549,18 +549,107 @@ Game content is defined in JSON manifest files in `packages/server/world/assets/
 
 Add new content by editing these JSON files—no code changes required.
 
+## Code Quality & Architecture
+
+### Code Audit Fixes (February 2026)
+
+A comprehensive code audit was performed in commit 3bc59db, addressing critical issues:
+
+**1. Memory Leak Fix:**
+- **Issue**: InventoryInteractionSystem registered 9 event listeners that were never removed
+- **Impact**: Memory leak on every player connection
+- **Fix**: Use AbortController for proper event listener cleanup
+```typescript
+const abortController = new AbortController();
+world.on('inventory:add', handler, { signal: abortController.signal });
+// Cleanup on system destroy
+abortController.abort();
+```
+
+**2. JWT Secret Security:**
+- **Issue**: JWT_SECRET optional in production, allowing unsigned tokens
+- **Impact**: Security vulnerability in production deployments
+- **Fix**: Now throws error in production/staging if JWT_SECRET not set
+```typescript
+if (NODE_ENV === 'production' || NODE_ENV === 'staging') {
+  if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET is required in production/staging');
+  }
+}
+```
+
+**3. WebGPU Enforcement:**
+- **Issue**: WebGL fallback attempted but all shaders use TSL (WebGPU-only)
+- **Impact**: Broken rendering on WebGL-only browsers
+- **Fix**: Enforce WebGPU-only rendering with user-friendly error screen
+```typescript
+if (!navigator.gpu) {
+  // Show error screen with browser upgrade instructions
+  throw new Error('WebGPU not supported. Please upgrade your browser.');
+}
+```
+
+**4. Dead Code Removal (commit 7c3dc985):**
+- Deleted `PacketHandlers.ts` (3,098 lines of dead code, never imported)
+- Updated audit TODOs to reflect actual codebase state:
+  - AUDIT-002: ServerNetwork already decomposed into 30+ modules (not 116K lines)
+  - AUDIT-003: ClientNetwork handlers are intentional thin wrappers (not bloated)
+  - AUDIT-005: `any` types reduced from 142 to ~46 after cleanup
+
+**5. Type Safety Improvements (commit d9113595):**
+- Eliminated explicit `any` types in core game logic
+- `tile-movement.ts`: Removed 13 any casts by properly typing BuildingCollisionService
+- `proxy-routes.ts`: Replaced any with proper types (unknown, Buffer | string, Error)
+- `ClientGraphics.ts`: Added safe cast after WebGPU verification
+
+**Remaining `any` types (acceptable):**
+- TSL shader code (ProceduralGrass.ts) - @types/three limitation
+- Browser polyfills (polyfills.ts) - intentional mock implementations
+- Test files - acceptable for test fixtures
+
+### Architectural TODOs
+
+The codebase includes TODO comments tracking architectural refactoring opportunities:
+
+**AUDIT-001: Entity.ts Decomposition**
+- Current: Entity.ts is large but manageable
+- Recommendation: Extract visual/physics/networking concerns to separate classes
+- Priority: Low (current structure works well)
+
+**AUDIT-002: ServerNetwork Split**
+- Status: ✅ Already decomposed into 30+ modules
+- Location: `packages/server/src/systems/ServerNetwork/handlers/`
+- Actual size: ~3K lines (not 116K as originally estimated)
+
+**AUDIT-003: ClientNetwork Split**
+- Status: ✅ Handlers are intentional thin wrappers
+- Purpose: Emit events for other systems to handle
+- Actual size: ~5K lines (not 165K as originally estimated)
+- Extraction not needed - current design is correct
+
+**AUDIT-004: Circular Dependency Fix**
+- Status: ✅ Fixed in commits 3b9c0f2, 05c2892 (Feb 26, 2026)
+- Solution: Removed cross-references between shared ↔ procgen
+- Uses devDependencies for TypeScript type resolution without build cycle
+
+**AUDIT-005: Any Type Cleanup**
+- Status: ✅ Reduced from 142 to ~46 (commit d9113595)
+- Remaining any types are in acceptable locations (shaders, polyfills, tests)
+
 ## Build Pipeline
 
 ### Circular Dependency Handling
 
 The build system handles circular dependencies between packages gracefully:
 
-**procgen ↔ shared circular dependency:**
-- `@hyperscape/shared` imports from `@hyperscape/procgen` for terrain generation
-- `@hyperscape/procgen` peer-depends on `@hyperscape/shared` for types
-- Build uses `tsc || echo` pattern to exit 0 even with circular dep errors
-- Packages produce partial output sufficient for downstream consumers
-- Prevents clean build failures when dist/ doesn't exist yet
+**procgen ↔ shared circular dependency (FIXED):**
+- **Previous Issue**: `@hyperscape/shared` imports from `@hyperscape/procgen`, procgen imports from shared
+- **Solution** (commits 3b9c0f2, 05c2892):
+  - Removed cross-references entirely from both package.json files
+  - Added procgen as devDependency in shared for TypeScript type resolution
+  - devDependencies not followed by turbo's `^build` topological ordering (no cycle)
+  - Imports still resolve at runtime via bun workspace resolution
+- **Result**: Clean builds work without circular dependency errors
 
 **plugin-hyperscape ↔ shared circular dependency:**
 - Similar pattern with `--skipLibCheck` in shared's declaration generation
