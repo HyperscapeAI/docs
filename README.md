@@ -26,9 +26,9 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 ## System Requirements
 
 **Browser Requirements:**
-- **WebGPU support required** - Chrome 113+, Edge 113+, or Safari 18+ (macOS Sonoma+)
+- **WebGPU support required** - Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
 - Check compatibility: [webgpureport.org](https://webgpureport.org)
-- WebGL fallback removed as of February 2026 (all shaders use TSL which requires WebGPU)
+- See [docs/webgpu-requirements.md](docs/webgpu-requirements.md) for full details
 
 **Development Prerequisites:**
 - [Bun](https://bun.sh) (v1.1.38+)
@@ -105,7 +105,7 @@ cp packages/asset-forge/.env.example packages/asset-forge/.env
    bun run dev:ai       # Game + AI agents (ElizaOS)
    ```
 
-5. Open **http://localhost:3333** in your browser.
+5. Open **http://localhost:3333** in **Chrome 113+** or **Edge 113+**.
 
 > PostgreSQL starts automatically via Docker when the server starts.
 
@@ -212,108 +212,32 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 
 ## Deployment
 
-> **📖 Comprehensive Guide**: See [docs/deployment-best-practices.md](docs/deployment-best-practices.md) for complete deployment workflows, maintenance mode coordination, health checks, and troubleshooting.
+Hyperscape supports multiple deployment targets:
 
-### Cloudflare Pages (Frontend)
+| Target | Use Case | Documentation |
+|--------|----------|---------------|
+| **Cloudflare Pages** | Static client hosting | [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) |
+| **Railway** | Game server (dev/prod) | [docs/railway-dev-prod.md](docs/railway-dev-prod.md) |
+| **Vast.ai** | GPU streaming & duels | [docs/vast-deployment.md](docs/vast-deployment.md) |
 
-The client is deployed to Cloudflare Pages (hyperscape.gg) using the `[assets]` directive in `packages/client/wrangler.toml`:
+### Cloudflare Pages (Client)
 
-```toml
-name = "hyperscape"
-compatibility_date = "2024-01-01"
+- **URL**: https://hyperscape.gg
+- **Build**: Automatic on push to `main`
+- **Assets**: Served from Cloudflare R2 (https://assets.hyperscape.club)
 
-[assets]
-directory = "dist"
-```
+### Railway (Game Server)
 
-**Deployment Methods:**
+- `main` branch → `prod` environment
+- `develop` branch → `dev` environment
+- See [docs/railway-dev-prod.md](docs/railway-dev-prod.md)
 
-1. **Automatic (GitHub Integration)**:
-   - Connect repository in Cloudflare Dashboard: Workers & Pages → hyperscape (Pages) → Settings → Builds & deployments
-   - Build command: Leave empty (handled by GitHub Actions)
-   - Build output directory: `packages/client/dist`
-   - Pushes to `main` trigger automatic deployments
+### Vast.ai (Streaming)
 
-2. **Manual (Wrangler CLI)**:
-   ```bash
-   cd packages/client
-   bun run build
-   bunx wrangler deploy
-   ```
-
-**Environment Variables** (set in Cloudflare Dashboard):
-- `PUBLIC_PRIVY_APP_ID` - Privy app ID (must match server)
-- `PUBLIC_API_URL` - Backend API URL (e.g., https://hyperscape.gg)
-- `PUBLIC_WS_URL` - WebSocket URL (e.g., wss://hyperscape.gg/ws)
-- `PUBLIC_CDN_URL` - Asset CDN URL (e.g., https://assets.hyperscape.club)
-
-**Important**: The root `wrangler.toml` was removed to avoid deployment confusion. Use `packages/client/wrangler.toml` for Pages configuration.
-
-**CORS Configuration**: Assets served from R2 require CORS configuration for cross-origin loading. See [docs/r2-cors-configuration.md](docs/r2-cors-configuration.md) for setup instructions.
-
-### Railway (Production)
-
-Railway deployment is set up for separate development and production targets:
-
-- `main` branch deploys to `prod`
-- `develop` or `dev` branch deploys to `dev`
-
-For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps for `hyperscape.gg`), see:
-
-- `docs/railway-dev-prod.md`
-
-### Vast.ai (Streaming Duels)
-
-Vast.ai deployment runs the streaming duel system with automated maintenance mode coordination:
-
-**Deployment Flow:**
-1. CI triggers on successful main branch builds
-2. System enters maintenance mode (pauses new duel cycles)
-3. Waits for active markets to resolve (up to 5 minutes)
-4. Deploys latest code via SSH
-5. Exits maintenance mode and resumes operations
-
-**Maintenance Mode API:**
-
-Control deployment safety via admin endpoints (requires `ADMIN_CODE`):
-
-```bash
-# Enter maintenance mode (pauses new duels, waits for markets)
-curl -X POST https://your-server.com/admin/maintenance/enter \
-  -H "x-admin-code: your-admin-code" \
-  -H "Content-Type: application/json" \
-  -d '{"reason": "deployment", "timeoutMs": 300000}'
-
-# Check status
-curl https://your-server.com/admin/maintenance/status \
-  -H "x-admin-code: your-admin-code"
-
-# Exit maintenance mode (resumes operations)
-curl -X POST https://your-server.com/admin/maintenance/exit \
-  -H "x-admin-code: your-admin-code"
-```
-
-**Status Response:**
-```json
-{
-  "active": true,
-  "enteredAt": 1709000000000,
-  "reason": "deployment",
-  "safeToDeploy": true,
-  "currentPhase": "IDLE",
-  "marketStatus": "resolved",
-  "pendingMarkets": 0
-}
-```
-
-**Required GitHub Secrets:**
-- `VAST_HOST` - Vast.ai instance IP
-- `VAST_PORT` - SSH port
-- `VAST_SSH_KEY` - SSH private key
-- `VAST_SERVER_URL` - Public server URL (e.g., https://hyperscape.gg)
-- `ADMIN_CODE` - Admin authentication code
-
-See `.github/workflows/deploy-vast.yml` for full deployment workflow.
+- GPU-accelerated rendering with WebGPU
+- Automated maintenance mode for graceful deployments
+- Multi-platform RTMP streaming (Twitch, Kick, X)
+- See [docs/vast-deployment.md](docs/vast-deployment.md)
 
 ## Native App Distribution
 
@@ -336,13 +260,13 @@ That tag triggers cross-platform native packaging and publishes installers to a 
 **WebGPU not supported error:**
 Hyperscape requires WebGPU (all shaders use TSL). Check browser compatibility:
 - Chrome/Edge 113+ (Windows/macOS/Linux)
-- Safari 18+ (macOS Sonoma+ only)
+- Safari 18+ (macOS 15+ only)
 - Firefox: WebGPU support is experimental (not recommended)
 
-Visit [webgpureport.org](https://webgpureport.org) to verify your browser/GPU support.
+Visit [webgpureport.org](https://webgpureport.org) to verify your browser/GPU support. See [docs/webgpu-requirements.md](docs/webgpu-requirements.md) for full requirements.
 
 **Characters vanishing / not appearing on character select:**
-This happens when Privy credentials are missing. Each page refresh creates a new anonymous user, orphaning your characters. Fix: Set `PUBLIC_PRIVY_APP_ID` in client `.env` and both `PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` in server `.env`.
+This happens when Privy credentials are missing. Each page refresh creates a new anonymous user, orphaning your characters. Fix: Set `PUBLIC_PRIVY_APP_ID` in client `.env` and both `PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` + `JWT_SECRET` in server `.env`.
 
 **Assets not loading (404 errors for models/avatars):**
 The CDN container needs to be running. It starts automatically with `bun run dev`, but if you're running services separately:
@@ -385,127 +309,13 @@ bun install
 bun run build
 ```
 
-**Missing objects or white textures after browser restart:**
-Corrupted model cache. Clear IndexedDB:
-```javascript
-// In browser console
-indexedDB.deleteDatabase('hyperscape-processed-models');
-// Reload page
-```
-
-**Players floating or sinking into terrain:**
-Update to latest main branch (terrain height cache fix from February 2026). No migration needed.
-
-**RTMP stream keeps restarting:**
-Increase stability thresholds in `packages/server/.env`:
-```bash
-CDP_STALL_THRESHOLD=6                    # Default: 4 (120s before restart)
-FFMPEG_MAX_RESTART_ATTEMPTS=10           # Default: 8
-CAPTURE_RECOVERY_MAX_FAILURES=5          # Default: 4
-```
-
-**Streaming delay configuration:**
-Configure platform-specific delays for anti-cheat timing in `packages/server/.env`:
-```bash
-# Set canonical platform (determines default delay)
-STREAMING_CANONICAL_PLATFORM=twitch      # Options: youtube | twitch | hls
-
-# Override delay (optional - only if you've measured platform latency)
-# STREAMING_PUBLIC_DELAY_MS=0            # Default: 12000ms for twitch, 15000ms for youtube, 4000ms for hls
-```
-
-**February 2026 Update**: Default delay set to 0ms for instant broadcast. Configure `STREAMING_CANONICAL_PLATFORM` and `STREAMING_PUBLIC_DELAY_MS` to add delay for anti-cheat timing alignment with external platform latency.
-
-**Multi-platform streaming configuration:**
-Configure streaming destinations in `packages/server/.env`:
-```bash
-# Twitch
-TWITCH_STREAM_KEY=live_123456789_abcdefghij
-TWITCH_RTMP_URL=rtmp://live.twitch.tv/app
-
-# Kick
-KICK_STREAM_KEY=your-kick-stream-key
-KICK_RTMP_URL=rtmp://ingest.kick.com/live
-
-# X/Twitter (requires X Premium)
-X_STREAM_KEY=your-x-stream-key
-X_RTMP_URL=rtmp://x-media-studio/your-path
-```
-
-See `packages/server/.env.example` for complete RTMP configuration options including YouTube, Pump.fun, and custom destinations.
-
-**CI builds failing with npm 403 errors:**
-Retry logic is automatic (up to 5 attempts with exponential backoff: 15s, 30s, 45s, 60s, 75s). All workflows now use `--frozen-lockfile` to prevent npm resolution attempts. If persistent, check GitHub Actions logs.
-
-**Tauri builds failing with signing errors:**
-- **Unsigned builds**: Now use `--no-bundle` instead of `--bundles app` (macOS-only)
-- **iOS builds**: Only run on release (unsigned always fails with "Signing requires a development team")
-- **Windows builds**: Include retry logic for transient NPM registry errors
-
-**macOS DMG creation failing:**
-Unsigned builds now produce `.app` bundles only (skip DMG which requires code signing certificates).
-
-**Memory leak in InventoryInteractionSystem:**
-Fixed in February 2026 via AbortController for proper event listener cleanup (9 listeners were never removed). Update to latest main branch.
-
-**Production server won't start without JWT_SECRET:**
-As of February 2026, `JWT_SECRET` is required in production/staging environments. Generate with:
-```bash
-openssl rand -base64 32
-```
-Set in `packages/server/.env`:
-```bash
-JWT_SECRET=your-generated-secret-here
-```
-
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
 
 ## More Info
 
-- **Development Guide**: [CLAUDE.md](CLAUDE.md) - Detailed development guidelines, architecture documentation, and coding standards
-- **Changelog**: [CHANGELOG-FEBRUARY-2026.md](CHANGELOG-FEBRUARY-2026.md) - Complete list of changes in February 2026
-- **Deployment**: [docs/deployment-best-practices.md](docs/deployment-best-practices.md) - Production deployment workflows and best practices
-- **Streaming**: [docs/streaming-configuration.md](docs/streaming-configuration.md) - RTMP streaming setup for Twitch, Kick, X, YouTube
-
-## Recent Updates (February 2026)
-
-> **📋 Full Changelog**: See [CHANGELOG-FEBRUARY-2026.md](CHANGELOG-FEBRUARY-2026.md) for complete details on all changes, including commit references and migration guides.
-
-### Breaking Changes
-- **WebGPU Required**: All shaders now use TSL (Three.js Shading Language) which requires WebGPU. WebGL fallback removed. User-friendly error screen shown when WebGPU unavailable.
-- **JWT_SECRET Required**: Production/staging deployments now throw error if `JWT_SECRET` not set (security hardening)
-
-### Performance & Rendering
-- **Arena Performance**: 97% draw call reduction (~846 meshes → ~20 InstancedMesh), eliminated 28 dynamic PointLights, replaced with GPU-driven TSL emissive materials
-- **Fire Particles**: Enhanced fire shader with smooth value noise, soft radial falloff, and per-particle turbulent motion for natural flame appearance (removed "torch" preset, unified on enhanced "fire")
-- **Teleport VFX**: Complete rewrite with object pooling, multi-phase animation (gather/erupt/sustain/fade), helix spiral particles, and TSL shader materials
-- **Model Cache**: Fixed missing objects (duplicate mesh names) and texture persistence (blob URLs → DataTexture with raw RGBA pixels)
-- **Terrain Heights**: Fixed 50m offset in cached height lookups via canonical `worldToTerrainTileIndex()` and `localToGridIndex()` helpers
-
-### Deployment & Operations
-- **Maintenance Mode API**: Graceful deployment coordination - pauses new duel cycles, waits for markets to resolve, prevents data loss during deployments
-- **Vast.ai Health Checks**: Auto-detect unhealthy instances, destroy and reprovision when failures exceed threshold
-- **Streaming Stability**: Increased CDP stall threshold (2→4 intervals), soft CDP recovery, FFmpeg restart attempts (5→8)
-- **Renderer Initialization**: Best-effort WebGPU limits (tries `maxTextureArrayLayers: 2048`, retries with defaults if GPU rejects)
-
-### Bug Fixes & Stability
-- **Memory Leak Fix**: InventoryInteractionSystem now uses AbortController for proper event listener cleanup (9 listeners were never removed)
-- **Duel Combat**: Fixed mage staff and 2H sword combat via weapon type propagation, keep-alive re-engagement, and combat timeout refresh
-- **Victory Emote**: Delayed by 600ms so combat cleanup doesn't override it
-- **Type Safety**: Eliminated explicit `any` types in core game logic (tile-movement.ts, proxy-routes.ts, ClientGraphics.ts)
-
-### CI/CD & Build System
-- **npm Retry Logic**: Automatic retry with exponential backoff (15s-75s) for transient npm 403 errors
-- **Frozen Lockfile**: All workflows use `--frozen-lockfile` to prevent npm resolution attempts
-- **Tauri Build Fixes**: Split unsigned/release builds, macOS `.app`-only for unsigned, iOS release-only, Windows retry logic
-- **Dependency Cycles**: Resolved shared↔procgen cycle via peerDependencies + devDependencies pattern
-- **Asset Forge**: Fixed TypeScript strict mode (added type annotations for traverse callbacks), updated to `moduleResolution: bundler` for Three.js WebGPU exports
-
-### Asset Forge
-- **VFX Catalog Browser**: New tab with live Three.js previews of all game effects (spells, arrows, glow particles, fishing, teleport, combat HUD)
-- **Effect Detail Panels**: Color swatches, parameter tables, layer breakdowns, phase timelines for comprehensive VFX documentation
+See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
 
 ## License
 
