@@ -345,6 +345,134 @@ Watch AI agents play in real-time:
 3. Select an agent to spectate
 4. Observe decision-making in action
 
+## Agent Stability Audit Fixes (commit bddea54, Feb 26 2026)
+
+A comprehensive stability audit identified and fixed critical issues with LLM model agents:
+
+### Database Isolation
+
+**Problem:** SQL plugin was running destructive migrations against the game database.
+
+**Solution:** Force PGLite (in-memory) for agents by removing POSTGRES_URL/DATABASE_URL from agent secrets:
+
+```typescript
+// ❌ Old: Agents used game database
+const agentSecrets = {
+  POSTGRES_URL: process.env.DATABASE_URL,  // DANGEROUS!
+};
+
+// ✅ New: Agents use PGLite (in-memory)
+const agentSecrets = {
+  // POSTGRES_URL removed - forces PGLite
+};
+```
+
+**Impact:** Agents no longer corrupt game database with ElizaOS schema migrations.
+
+### Runtime Initialization Timeout
+
+**Problem:** ModelAgentSpawner could hang indefinitely during runtime initialization.
+
+**Solution:** 45s timeout with proper cleanup:
+
+```typescript
+const initPromise = runtime.initialize();
+const timeoutPromise = new Promise((_, reject) => 
+  setTimeout(() => reject(new Error('Init timeout')), 45000)
+);
+
+await Promise.race([initPromise, timeoutPromise]);
+```
+
+### Listener Duplication Guard
+
+**Problem:** Multiple event listeners registered on same service instance.
+
+**Solution:** Guard against duplicate registration in EmbeddedHyperscapeService:
+
+```typescript
+if (this.pluginEventHandlersRegistered) {
+  return; // Already registered
+}
+registerEventHandlers(runtime, this);
+this.pluginEventHandlersRegistered = true;
+```
+
+### Runtime Stop Timeout
+
+**Problem:** `runtime.stop()` could hang indefinitely, preventing graceful shutdown.
+
+**Solution:** 10s timeout on all runtime.stop() calls:
+
+```typescript
+await Promise.race([
+  runtime.stop(),
+  new Promise(resolve => setTimeout(resolve, 10000))
+]);
+```
+
+### Graceful Shutdown
+
+**Problem:** Model agents not cleaned up on server shutdown.
+
+**Solution:** Added `stopAllModelAgents()` to shutdown handler:
+
+```typescript
+process.on('SIGTERM', async () => {
+  await stopAllModelAgents();  // NEW: Clean shutdown
+  process.exit(0);
+});
+```
+
+### Agent Spawn Circuit Breaker
+
+**Problem:** Infinite spawn loop when agents consistently fail to initialize.
+
+**Solution:** Circuit breaker after 3 consecutive failures:
+
+```typescript
+if (consecutiveFailures >= 3) {
+  logger.error('Circuit breaker triggered - stopping agent spawn');
+  break;
+}
+```
+
+### Max Reconnect Retry Limit
+
+**Problem:** ElizaDuelMatchmaker could retry indefinitely on connection failures.
+
+**Solution:** Max 8 reconnect attempts:
+
+```typescript
+if (reconnectAttempts >= 8) {
+  logger.error('Max reconnect attempts reached');
+  return;
+}
+```
+
+### Database Adapter Cleanup
+
+**Problem:** WASM heap not cleaned up after agent stop.
+
+**Solution:** Explicitly close DB adapter:
+
+```typescript
+await runtime.databaseAdapter?.close();  // NEW: WASM heap cleanup
+```
+
+### ANNOUNCEMENT Phase Recovery
+
+**Problem:** Agents didn't recover during ANNOUNCEMENT phase gap.
+
+**Solution:** Check contestant status alone, not just inStreamingDuel flag:
+
+```typescript
+// ✅ New: Check contestant status
+if (contestant && contestant.status === 'active') {
+  await recoverAgent(contestant);
+}
+```
+
 ## Configuration
 
 The plugin validates configuration using Zod:
