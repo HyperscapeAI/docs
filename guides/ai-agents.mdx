@@ -254,9 +254,33 @@ actions: [
 ],
 ```
 
+### Movement Completion Tracking (commit 60a03f49)
+
+Agents can now wait for movement to complete before taking next action:
+
+```typescript
+// From HyperscapeService
+await service.waitForMovementComplete();  // Waits for tileMovementEnd packet
+const isMoving = service.isMoving;        // Check if currently moving
+```
+
+**Use Cases:**
+- Banking: Walk to bank, wait for arrival, then open bank
+- Resource gathering: Walk to tree, wait for arrival, then chop
+- Combat: Walk to enemy, wait for arrival, then attack
+
+**Implementation:**
+
+```typescript
+// Banking action now awaits movement
+await service.executeMove({ target: bankPosition });
+await service.waitForMovementComplete();  // NEW: Wait for arrival
+await service.openBank(bankId);
+```
+
 ### World State Access (Providers)
 
-Agents query world state via 7 providers:
+Agents query world state via 8 providers (updated Feb 26 2026):
 
 ```typescript
 // From packages/plugin-hyperscape/src/index.ts
