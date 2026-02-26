@@ -416,6 +416,50 @@ TRASH_TALK_LLM_TIMEOUT_MS=3000              # LLM generation timeout
 
 ---
 
+## Recent Improvements (February 2026)
+
+### Quest-Driven Tool Acquisition
+
+Replaced starter chest system with quest-based tool acquisition:
+- Agents complete quests to acquire tools (Lumberjack's First Lesson, Fresh Catch, Torvin's Tools)
+- Questing goal has highest priority when tools are missing
+- More realistic gameplay progression
+
+### Autonomous Banking
+
+Agents automatically manage inventory:
+- Banking goal triggers at 25/28 inventory slots
+- `bankDepositAllAction` keeps essential tools (axe, pickaxe, tinderbox, net)
+- Banking actions await movement completion
+- Previous goal auto-restores after banking
+
+### Action Locks and Fast-Tick Mode
+
+Performance and responsiveness improvements:
+- **Action locks**: Skip LLM ticks while movement is in progress
+- **Fast-tick mode**: 2s interval after movement/goal changes (vs 10s normal)
+- **Short-circuit LLM**: Skip LLM for obvious decisions (repeat resource, banking)
+- **Movement tracking**: `waitForMovementComplete()` and `isMoving` state
+
+### Resource Detection Fix
+
+Increased resource approach range from 20m to 40m:
+- Fixes "choppableTrees=0" errors despite visible trees
+- Matches server-side skills validation range
+- Applied to CHOP_TREE, MINE_ROCK, and CATCH_FISH actions
+
+### Stability Improvements
+
+Model agent stability fixes:
+- Database isolation (force PGLite, prevent schema conflicts)
+- 45s initialization timeout prevents indefinite hangs
+- Event listener duplication guard prevents memory leaks
+- 10s timeout on runtime.stop() with dangling promise cleanup
+- Circuit breaker (3 consecutive failures, 8 max reconnect retries)
+- Explicit DB adapter close for WASM heap cleanup
+
+---
+
 ## Detailed Documentation
 
 <CardGroup cols={2}>
