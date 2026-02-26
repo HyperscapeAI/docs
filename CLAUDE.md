@@ -720,8 +720,18 @@ POST /admin/maintenance/exit
 - **Dependency Cycles**: Resolved shared↔procgen cycle via peerDependencies + devDependencies pattern
 
 ### Code Cleanup & Refactoring
-- **Dead Code Removal** (February 2026): Deleted `PacketHandlers.ts` (3098 lines, never imported), `createArenaMarker()`, `createAmbientDust()`, `createLobbyBenches()` (unused arena functions)
-- **Architectural TODO Updates**: Updated AUDIT-002 (ServerNetwork already decomposed into 30+ modules), AUDIT-003 (ClientNetwork handlers are intentional thin wrappers), AUDIT-005 (any types reduced from 142 to ~46)
+
+**Dead Code Removal** (February 2026 - Commit `7c3dc98`):
+- **PacketHandlers.ts**: Deleted 3098 lines of dead code (never imported, completely unused)
+- **Arena Functions**: Removed `createArenaMarker()`, `createAmbientDust()`, `createLobbyBenches()` (replaced by instanced rendering)
+- **Impact**: Reduced codebase size, improved maintainability, eliminated confusion
+
+**Architectural TODO Updates**:
+- **AUDIT-002**: ServerNetwork already decomposed into 30+ modules (handlers/, services/, movement/) - actual size ~3K lines, not 116K
+- **AUDIT-003**: ClientNetwork handlers are intentional thin wrappers that emit events - extraction not needed
+- **AUDIT-005**: Any types reduced from 142 to ~46 (68% reduction) - core game logic cleaned up
+
+**File Management Reminder**: When you find dead code, delete it immediately. Don't leave commented-out code or unused imports.
 
 ### Asset Forge
 - **VFX Catalog Browser**: New tab with live Three.js previews of all game effects
