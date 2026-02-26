@@ -2,135 +2,260 @@
 
 All notable changes to Hyperscape are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [Unreleased] - 2026-02-26
 
----
+### Added
 
-## [Unreleased]
+#### Deployment & Infrastructure
+- **Maintenance Mode API** - Graceful deployment coordination for streaming duel system
+  - `POST /admin/maintenance/enter` - Pause new duel cycles, wait for market resolution
+  - `POST /admin/maintenance/exit` - Resume normal operations
+  - `GET /admin/maintenance/status` - Check current status
+  - Integrated into `.github/workflows/deploy-vast.yml` for zero-downtime deployments
+  - See [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md)
 
-### Added - Mob Magic & Ranged Attacks (PR #826)
+- **DATABASE_URL persistence** - Survives git reset operations in deployment scripts
+  - Write `.env` file AFTER git reset (not before)
+  - Prevents database connection loss during CI/CD
 
-**Major Feature:** Mobs can now use magic and ranged attacks, not just melee.
+- **Vast.ai deployment improvements**
+  - Vulkan driver installation for GPU rendering
+  - Chrome Dev channel installation (WebGPU enabled by default)
+  - Post-deploy health checking (waits up to 120s for server ready)
+  - Port proxy setup (socat for internal → external mapping)
 
-#### Combat System
-- Added `attackType` field to NPC combat configuration (`"melee"`, `"ranged"`, `"magic"`)
-- Added `spellId` field for magic mobs (e.g., `"wind_strike"`)
-- Added `arrowId` field for ranged mobs (e.g., `"bronze_arrow"`)
-- Added `heldWeaponModel` field to NPC appearance for visual weapons (bows, staves)
-- Added `prepareMobAttack()` shared utility in `AttackContext.ts` for mob attack validation
-- Added mob-specific attack paths in `MagicAttackHandler` and `RangedAttackHandler`
-- Added `emitMagicProjectile()` and `emitRangedProjectile()` shared methods
-- Added `getMobAttackType()` type guard for safe attack type resolution
+- **R2 CORS configuration** - Automated setup for cross-origin asset loading
+  - `scripts/configure-r2-cors.sh` - One-command CORS setup
+  - Integrated into `.github/workflows/deploy-cloudflare.yml`
 
-#### Combat Constants
-- Added `MAGIC_RANGE: 10` - Maximum magic attack range
-- Added `SPELL_LAUNCH_DELAY_MS: 600` - Spell cast wind-up delay
-- Added `ARROW_LAUNCH_DELAY_MS: 400` - Bow draw wind-up delay
+#### Features
+- **VFX Catalog** - Asset Forge browser for all game effects
+  - Live Three.js previews with camera controls
+  - Detail panels for colors, parameters, layers, phase timelines
+  - Searchable catalog of combat, spell, projectile, environmental, and UI effects
+  - See [docs/asset-forge-vfx-catalog.md](docs/asset-forge-vfx-catalog.md)
 
-#### Visual System
-- Added weapon attachment system in `MobVisualManager`
-- Added static weapon cache (`_weaponCache`) to share GLB models across mobs
-- Added concurrent load deduplication via `_pendingLoads` promise cache
-- Added `clearWeaponCache()` method for world teardown
-- Added `_destroyed` flag to prevent async weapon attach after mob destroy
+- **Mobile-responsive UI** - Gold betting demo overhaul
+  - Resizable panels with `useResizePanel` hook
+  - Mobile-first design with aspect-ratio 16/9 video
+  - Bottom-sheet sidebar, touch-friendly tabs
+  - Real-data integration (live SSE feed from game server)
 
-#### Animation System
-- Added `RANGE` emote mapping for ranged attacks
-- Added `SPELL_CAST` emote mapping for magic attacks
-- Updated `isPriorityEmote()` to use exact equality instead of substring matching
-- Updated `isCombatEmote()` to include ranged and magic emotes
+#### Streaming
+- **Multi-platform RTMP** - Twitch, Kick, X (Twitter) support
+  - Removed YouTube (not needed)
+  - Canonical platform set to Twitch for lower latency
+  - Public delay configurable (set to 0ms for live betting)
 
-#### Type Definitions
-- Added `attackType`, `spellId`, `arrowId` to `NPCCombatConfig`
-- Added `heldWeaponModel` to `NPCAppearanceConfig`
-- Added `attackType`, `spellId`, `arrowId` to `MobEntityConfig`
-- Added `arrowId` and `travelDurationMs` to `COMBAT_PROJECTILE_LAUNCHED` event
+- **Streaming stability improvements**
+  - CDP stall threshold increased from 2 to 4 intervals (120s)
+  - FFmpeg max restart attempts increased from 5 to 8
+  - Capture recovery max failures increased from 2 to 4
+  - Soft CDP recovery (restart screencast without browser/FFmpeg teardown)
 
-#### Testing
-- Added `MobProjectileAttack.integration.test.ts` with 13 test cases
-- Tests cover magic/ranged routing, projectile emission, range validation, missing config handling
+### Changed
 
-### Fixed - Inventory Write Coalescing (PR #823)
+#### Rendering
+- **WebGPU enforcement** - WebGL fallback removed
+  - All shaders use TSL (Three.js Shading Language)
+  - User-friendly error screen when WebGPU unavailable
+  - Renderer limits now best-effort (retry with defaults if GPU rejects)
 
-**Performance Fix:** Prevents database pool starvation during batch operations.
+- **Instanced arena meshes** - 97% draw call reduction
+  - ~846 individual meshes → single InstancedMesh per type
+  - ~846 draw calls → ~25 draw calls
 
-#### Database System
-- Replaced per-player write locks with write coalescing
-- Collapses N concurrent inventory writes into at most 2 DB transactions per player
-- Prevents "200 pending operations" warnings during batch fletching/smithing
-- Added `persistEmptyInventory()` helper to deduplicate death handler logic
-- Added cleanup of `inventoryWriteLocks` map entries after promise chain settles
-- Added rejection of orphaned write waiters on `DatabaseSystem.destroy()`
+- **TSL fire particles** - GPU-driven emissive materials
+  - Removed all 28 PointLights from arena
+  - Enhanced fire shader with smooth value noise, soft radial falloff
+  - Turbulent vertex motion for natural flame flickering
 
-**Impact:** Batch operations (100+ items) now complete without freezing the game or exhausting database connections.
+#### Security
+- **JWT_SECRET enforcement** - Now required in production/staging
+  - Throws error if not set (was warning only)
+  - Prevents insecure deployments
 
-### Fixed - Equipment Panel Icons (PR #825)
+- **CSRF cross-origin handling** - Apex domain support
+  - Skip CSRF validation for known cross-origin clients
+  - Allows Cloudflare Pages → Railway requests
+  - Still protected by Origin header validation + JWT
 
-- Fixed equipment panel to show actual item icons instead of SVG placeholders
-- Updated `EquipmentPanel.tsx` to use item icon URLs from equipment data
+#### Type Safety
+- **Reduced explicit `any` types** - From 142 to ~46
+  - Fixed tile movement types (BuildingCollisionService, ICollisionMatrix)
+  - Fixed WebSocket types (use `ws` library, not browser WebSocket)
+  - Fixed error handler types (`unknown` instead of `any`)
+  - Added type annotations for Three.js traverse callbacks
 
-### Fixed - Inventory Drag Icons (PR #789)
+#### CI/CD
+- **Frozen lockfile** - All workflows use `bun install --frozen-lockfile`
+  - Prevents npm rate limiting (403 Forbidden errors)
+  - Ensures reproducible builds
 
-- Fixed inventory drag overlay showing wrong item icon
-- Changed from array index lookup to slot-based `.find()` lookup
-- Prioritizes drag data over slot lookup for accuracy
+- **Retry logic** - Exponential backoff for npm install
+  - 5 attempts with 15s, 30s, 45s, 60s, 75s delays
+  - Windows-specific retry (3 attempts, 15s delay)
 
-### Changed - Website Improvements (PR #822)
+- **Split unsigned/release builds** - Separate jobs for Tauri builds
+  - Prevents empty APPLE_CERTIFICATE errors on unsigned builds
+  - iOS build now release-only (unsigned always fails)
 
-#### Next.js Upgrade
-- Upgraded Next.js from 15.1.0 to 16.1.6
-- Updated TypeScript config to use `jsx: "preserve"` for Next.js compatibility
-- Added security headers in `next.config.ts`
-- Added structured data for SEO optimization
+#### Dependencies
+- **Circular dependency fix** - `shared ↔ procgen` resolved
+  - `procgen` now optional peerDependency in `shared`
+  - `shared` now devDependency in `procgen`
+  - Breaks Turbo build cycle while preserving runtime imports
 
-#### Solana Wallet Integration
-- Upgraded `@privy-io/react-auth` to 3.13.1
-- Upgraded `@privy-io/server-auth` to 1.32.5
-- Replaced `@solana-mobile/wallet-adapter-mobile` with `@solana-mobile/wallet-standard-mobile`
-- Enhanced `SolanaWalletProvider` to support MWA on Saga and Seeker devices
-- Removed deprecated `wallet_connect_qr_solana` (covered by `walletChainType`)
-- Added balance fetching and MWA detection in `AccountPanel` and `SettingsPanel`
+- **ESLint compatibility** - Disabled crashing `import/order` rule
+  - `eslint-plugin-import@2.32.0` incompatible with ESLint 10
+  - Disabled in `asset-forge` package
 
-#### Gold Token Page
-- Refactored into section components (TokenHero, ValueProps, HowItWorks)
-- Added error boundaries and loading states
-- Added opengraph images and manifest for SEO/PWA
-- Improved accessibility (semantic HTML, ARIA labels)
-- Added CSS variables for gold glow effects
+- **TypeScript module resolution** - `bundler` mode for Three.js WebGPU
+  - Required for `three/webgpu` subpath exports
+  - Changed from `node` to `bundler` in `asset-forge`
 
----
+### Fixed
 
-## [3.0.0] - 2026-02-13
+#### VFX
+- **Duplicate teleport effects** - Was showing 3x, now shows 1x
+  - Fixed race condition in `clearDuelFlagsForCycle()`
+  - Proper cleanup ordering via microtask
 
-### Major Features
+- **Victory emote timing** - Wave emote now visible
+  - Delayed by 600ms to avoid combat cleanup override
+  - Reset to idle in `stopCombat()` when agents teleport
 
-#### Mob Projectile Combat
-- Mobs can now use magic spells and ranged arrows
-- Full projectile system with visual synchronization
-- Weapon attachment system for mob VRM avatars
-- OSRS-accurate hit delay formulas for projectiles
+- **Teleport beam clipping** - Fade beam base to prevent floor clipping
 
-#### Combat System Enhancements
-- Three attack types: Melee, Ranged, Magic (for players AND mobs)
-- Shared attack preparation utilities
-- Pre-allocated damage params for zero-GC combat
-- Proper animation routing by attack type
+#### Deployment
+- **Vast.ai branch stuck** - Server was stuck on hackathon branch
+  - Workflow now explicitly checks out main before deploy
+  - Deploy script pulls from main (not hackathon)
 
-#### Performance Improvements
-- Inventory write coalescing prevents database pool starvation
-- Weapon model caching reduces network requests
-- Concurrent load deduplication for mob weapons
+- **Cloudflare Pages conflict** - Root wrangler.toml removed
+  - Use only `packages/client/wrangler.toml`
+  - Prevents Worker/Pages deployment confusion
 
----
+- **R2 CORS format** - Fixed wrangler API format
+  - Use nested `allowed.origins/methods/headers` structure
+  - Use `exposed` array and `maxAge` integer
 
-## [2.0.0] - 2026-02-08
+#### CI/CD
+- **Linux/Windows builds** - Fixed "app bundle type is macOS-only" error
+  - Use `--no-bundle` for unsigned builds
+  - Use `--bundles app` only for macOS release builds
 
-### Visual Smoothness - RS3 Parity
-- Equipment visual fixes
-- Animation improvements
-- Inventory drag and drop enhancements
+- **iOS unsigned builds** - Skip (always fail with "Signing requires development team")
+  - iOS build job now release-only
 
----
+- **npm 403 errors** - Retry logic with exponential backoff
+  - Handles GitHub Actions IP rate limiting
+  - Windows-specific retry (higher failure rate)
 
-*For complete commit history, see [GitHub Releases](https://github.com/HyperscapeAI/hyperscape/releases)*
+#### Type Safety
+- **WebSocket types** - Use `ws` library types (not browser WebSocket)
+  - Fixes missing `removeAllListeners` and `on` methods
+
+- **Traverse callbacks** - Explicit type annotations
+  - Required by TypeScript strict mode
+
+- **Error handlers** - Use `unknown` instead of `any`
+  - Proper error type narrowing
+
+### Removed
+
+- **WebGL fallback** - All rendering now WebGPU-only
+  - Removed `RendererFactory` WebGL code path
+  - Removed `?forceWebGL=1` and `?disableWebGPU=1` query params
+
+- **YouTube streaming** - Not needed for current use case
+  - Removed from ecosystem.config.cjs
+  - Twitch/Kick/X remain supported
+
+- **Dead code** - 3098 lines removed
+  - `PacketHandlers.ts` (never imported)
+  - `createArenaMarker`, `createAmbientDust`, `createLobbyBenches`
+
+- **Dynamic arena lights** - All 28 PointLights removed
+  - Replaced with emissive TSL materials
+  - Better performance, same visual quality
+
+## Documentation Added
+
+- [docs/vast-deployment.md](docs/vast-deployment.md) - Vast.ai deployment guide
+- [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Maintenance mode API reference
+- [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser and GPU requirements
+- [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) - Cloudflare Pages setup
+- [docs/streaming-configuration.md](docs/streaming-configuration.md) - RTMP streaming configuration
+- [docs/asset-forge-vfx-catalog.md](docs/asset-forge-vfx-catalog.md) - VFX catalog guide
+- [docs/ci-cd-improvements.md](docs/ci-cd-improvements.md) - CI/CD improvements reference
+- [docs/performance-optimizations.md](docs/performance-optimizations.md) - Performance improvements
+
+## Migration Guide
+
+### WebGPU Migration
+
+If you have code expecting WebGL:
+
+**Remove:**
+```typescript
+// ❌ No longer supported
+const renderer = await RendererFactory.create({
+  fallbackToWebGL: true
+});
+```
+
+**Update:**
+```typescript
+// ✅ WebGPU only
+const renderer = await RendererFactory.create({
+  canvas
+});
+```
+
+**Browser requirements:**
+- Chrome 113+ or Edge 113+ (all platforms)
+- Safari 18+ (macOS 15+ only)
+
+### JWT_SECRET Required
+
+Production deployments now require JWT_SECRET:
+
+```bash
+# Generate secure secret
+openssl rand -base64 32
+
+# Set in .env
+JWT_SECRET=your-generated-secret
+```
+
+### DATABASE_URL for Vast.ai
+
+Vast.ai deployments now require DATABASE_URL:
+
+```bash
+# Add to GitHub secrets
+DATABASE_URL=postgresql://user:password@host:port/database
+
+# Or set in packages/server/.env on instance
+echo "DATABASE_URL=postgresql://..." > packages/server/.env
+```
+
+## Breaking Changes
+
+### WebGPU Required
+
+- **WebGL no longer supported** - All users must have WebGPU-capable browser
+- **Minimum browser versions** - Chrome 113+, Edge 113+, Safari 18+
+- **GPU requirements** - See [docs/webgpu-requirements.md](docs/webgpu-requirements.md)
+
+### JWT_SECRET Required in Production
+
+- **Production/staging** - Server throws error if JWT_SECRET not set
+- **Development** - Warning only (uses insecure default)
+
+## Commit Range
+
+This changelog covers commits from `ca18a60` (2026-02-26) to `eec04b0` (2026-02-26).
+
+See [GitHub Commits](https://github.com/HyperscapeAI/hyperscape/commits/main) for full commit history.
