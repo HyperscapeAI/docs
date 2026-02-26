@@ -212,6 +212,41 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 
 ## Deployment
 
+### Cloudflare Pages (Frontend)
+
+The client is deployed to Cloudflare Pages (hyperscape.gg) using the `[assets]` directive in `packages/client/wrangler.toml`:
+
+```toml
+name = "hyperscape"
+compatibility_date = "2024-01-01"
+
+[assets]
+directory = "dist"
+```
+
+**Deployment Methods:**
+
+1. **Automatic (GitHub Integration)**:
+   - Connect repository in Cloudflare Dashboard: Workers & Pages → hyperscape (Pages) → Settings → Builds & deployments
+   - Build command: Leave empty (handled by GitHub Actions)
+   - Build output directory: `packages/client/dist`
+   - Pushes to `main` trigger automatic deployments
+
+2. **Manual (Wrangler CLI)**:
+   ```bash
+   cd packages/client
+   bun run build
+   bunx wrangler deploy
+   ```
+
+**Environment Variables** (set in Cloudflare Dashboard):
+- `PUBLIC_PRIVY_APP_ID` - Privy app ID (must match server)
+- `PUBLIC_API_URL` - Backend API URL (e.g., https://hyperscape.gg)
+- `PUBLIC_WS_URL` - WebSocket URL (e.g., wss://hyperscape.gg/ws)
+- `PUBLIC_CDN_URL` - Asset CDN URL (e.g., https://assets.hyperscape.club)
+
+**Important**: The root `wrangler.toml` was removed to avoid deployment confusion. Use `packages/client/wrangler.toml` for Pages configuration.
+
 ### Railway (Production)
 
 Railway deployment is set up for separate development and production targets:
