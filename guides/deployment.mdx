@@ -229,7 +229,14 @@ bash scripts/configure-r2-cors.sh
 }
 ```
 
-This allows `assets.hyperscape.club` to serve assets to all known domains (hyperscape.gg, hyperscape.club, etc.).
+**Why This Format:**
+
+The wrangler API requires nested `allowed.origins/methods/headers` structure (not flat `allowedOrigins`). The old format caused `wrangler r2 bucket cors set` to fail (commit 055779a).
+
+**Benefits:**
+- Allows `assets.hyperscape.club` to serve to all domains
+- Supports hyperscape.gg, hyperscape.club, and preview URLs
+- Enables cross-origin asset loading for Cloudflare Pages → R2
 
 ### Manual Deployment
 
