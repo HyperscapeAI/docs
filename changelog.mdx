@@ -23,6 +23,185 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Streaming Quality & Agent Stability" description="February 2026" date="2026-02-26">
+
+### 🎥 RTMP Streaming Quality Improvements (commit 4c630f12)
+
+Improved RTMP buffering for smoother viewer playback:
+
+**Three Key Changes:**
+1. **Changed x264 tune from 'zerolatency' to 'film'**
+   - Allows B-frames for better compression
+   - Better lookahead for smoother bitrate
+   - Set `STREAM_LOW_LATENCY=true` to restore old behavior
+
+2. **Increased buffer multiplier from 2x to 4x bitrate**
+   - 18000k bufsize (was 9000k) gives more headroom
+   - Reduces buffering during network hiccups
+
+3. **Added FLV flags for RTMP stability**
+   - `flvflags=no_duration_filesize` prevents FLV header issues
+
+4. **Improved input buffering**
+   - Added `thread_queue_size` for frame queueing
+   - `genpts+discardcorrupt` for better stream recovery
+
+**Configuration:**
+```bash
+# Balanced mode (default) - smoother playback
+STREAM_LOW_LATENCY=false
+
+# Low latency mode - only if <1s delay is critical
+STREAM_LOW_LATENCY=true
+```
+
+### 🤖 Agent Stability Improvements (commits 60a03f49, 593cd56b, bddea54)
+
+**Action Locks and Fast-Tick Mode (commit 60a03f49):**
+- Skip LLM ticks while movement is in progress
+- Fast-tick mode (2s) for quick follow-up after movement/goal changes
+- Short-circuit LLM for obvious decisions (repeat resource, banking, set goal)
+- Banking actions now await movement completion
+- Filter depleted resources from nearby entity checks
+- Track last action name/result in prompt for LLM continuity
+- Increase resource approach range from 20m to 40m
+- Add `waitForMovementComplete()` and `isMoving` tracking to HyperscapeService
+
+**Quest-Driven Tool Acquisition (commit 593cd56b):**
+- Removed starter chest system
+- Quest-based tool acquisition (Lumberjack's First Lesson, Fresh Catch, Torvin's Tools)
+- Autonomous banking when inventory >= 25/28 slots
+- New `BANK_DEPOSIT_ALL` action for bulk banking (keeps essential tools)
+- Enhanced questProvider with tool-to-quest mapping
+- Fixed bank packet protocol (proper open/deposit/depositAll/withdraw/close sequence)
+- Increased resource approach range from 20m to 40m for CHOP_TREE, MINE_ROCK, CATCH_FISH
+
+**Stability Audit Fixes (commit bddea54):**
+- Force PGLite for agents (removed POSTGRES_URL from agent secrets)
+- 45s timeout on ModelAgentSpawner runtime initialization
+- Listener duplication guard in EmbeddedHyperscapeService
+- 10s timeout on all runtime.stop() calls
+- Added stopAllModelAgents() to graceful shutdown
+- Max 8 reconnect retries for ElizaDuelMatchmaker
+- Circuit breaker (3 consecutive failures) for agent spawn loop
+- Explicitly close DB adapter after agent stop for WASM heap cleanup
+- Fixed ANNOUNCEMENT phase gap in agent recovery
+- Register model agents in duel scheduler via character-selection
+- Add terrain fallback to duel arena lobby when no agents exist yet
+
+### 🚀 Deployment & CI/CD Improvements (commits 7ee730d, a71d4ba, 50f8bec, 5dbd239, cf53ad4)
+
+**Stream Key Management:**
+- Stream keys now passed through CI/CD to Vast.ai deployment
+- Written to `packages/server/.env` alongside DATABASE_URL
+- Explicitly unset and re-exported before PM2 start to avoid stale values
+- Fixes streams not appearing on Twitch/X/Kick
+
+**Kick RTMP URL Fix (commit 5dbd239):**
+```bash
+# ❌ Old: rtmp://ingest.kick.com/live
+# ✅ New: rtmps://fa723fc1b171.global-contribute.live-video.net/app
+```
+
+**Environment Variable Persistence (commits eec04b0, dda4396, 4a6aaaf):**
+- Write secrets to `/tmp` before git reset
+- Restore after git reset to prevent overwriting
+- Fixes DATABASE_URL loss during deployment
+
+**CDN Configuration (commit 50f1a28):**
+- Added `PUBLIC_CDN_URL` to ecosystem config
+- Fixes assets loading from Git LFS pointers instead of CDN
+
+**Streaming Diagnostics (commit cf53ad4):**
+- Added detailed streaming diagnostics to deployment
+- Checks streaming API state, RTMP status, FFmpeg processes
+- Shows recent PM2 logs filtered for streaming keywords
+
+**Manual Workflow Dispatch (commit b1f41d5):**
+- Added workflow_dispatch trigger to deploy-vast.yml
+- Enables manual deployments from GitHub Actions UI
+
+**Solana Keypair Setup (commit 8a677dc):**
+- Removed hardcoded private keys from ecosystem.config.cjs
+- Added Solana keypair setup step to deploy-vast.sh
+- Pass SOLANA_DEPLOYER_PRIVATE_KEY secret in GitHub workflow
+- Writes to `~/.config/solana/id.json` and `deployer-keypair.json`
+
+### 🔐 Security & Type Safety (commits 3bc59db, d911359, fcd21eb, efba5a0)
+
+**Code Audit Fixes (commit 3bc59db):**
+- Fixed memory leak in InventoryInteractionSystem using AbortController (9 listeners never removed)
+- JWT secret now required in production/staging (throws if not set)
+- Enforced WebGPU-only rendering (user-friendly error screen)
+- Added TODO comments for architectural refactoring (AUDIT-001 through AUDIT-005)
+
+**Type Safety Cleanup (commit d911359):**
+- Eliminated explicit `any` types in core game logic
+- tile-movement.ts: Removed 13 `any` casts
+- proxy-routes.ts: Replaced `any` with proper types (unknown, Buffer | string, Error)
+- ClientGraphics.ts: Added cast for setupGPUCompute after WebGPU verification
+
+**WebSocket Type Fixes (commits fcd21eb, efba5a0):**
+- Use `ws` WebSocket type for Fastify connections (not browser WebSocket)
+- Simplified readyState check to avoid TypeScript type overlap error
+
+**Asset-Forge Type Annotations (commits 82f97da, 42e52af):**
+- Added explicit types for traverse callbacks (TypeScript strict mode)
+- Use `bundler` moduleResolution for Three.js WebGPU exports
+
+### 🌐 Solana Market Changes (commit 34255ee)
+
+**Native Token Markets:**
+- Markets now use native token (WSOL on Solana) instead of GOLD token
+- `MARKET_MINT` defaults to WSOL (So11111111111111111111111111111111111112)
+- `GOLD_MINT` deprecated - use `MARKET_MINT` instead
+- Disabled perps oracle updates (program not deployed on devnet)
+- Added `ENABLE_PERPS_ORACLE` env var to re-enable when ready
+
+### 🔧 CI/CD Reliability (commits b9a7c3b, 674cb11, 690ede5, aa4d11d)
+
+**Branch Deployment Fixes:**
+- Explicitly checkout main before running deploy script (was stuck on hackathon branch)
+- Use env vars instead of secrets in workflow conditions (GitHub Actions limitation)
+- Deploy script now pulls from main branch (was pulling from hackathon, 30+ commits behind)
+- Added funded deployer keypair for market transactions
+
+**WebGL Fallback Revert (commit aa4d11d):**
+- Reverted WebGL fallback for headless rendering
+- WebGPU-only rendering is now enforced
+- Ensures consistent rendering pipeline
+
+### 🧹 Dead Code Removal (commit 7c3dc98)
+
+**Removed Dead Code:**
+- Deleted PacketHandlers.ts (3098 lines of dead code, never imported)
+- Updated AUDIT-002 TODO: ServerNetwork already decomposed into 30+ modules
+- Updated AUDIT-003 TODO: ClientNetwork handlers are intentional thin wrappers
+- Updated AUDIT-005 TODO: any types reduced from 142 to ~46 after cleanup
+
+### 🔧 Maintenance Mode API (commit 30b52bd)
+
+**Graceful Deployment System:**
+- POST /admin/maintenance/enter - pauses new duel cycles
+- POST /admin/maintenance/exit - resumes operations
+- GET /admin/maintenance/status - check current state
+- CI/CD pipeline integration (enter before deploy, exit after)
+- Helper scripts: pre-deploy-maintenance.sh, post-deploy-resume.sh
+
+**Vast-Keeper Health Checking:**
+- Auto-detect unhealthy instances
+- Destroy and reprovision when failures exceed threshold
+- Configurable health check intervals
+
+**Deploy Script Improvements:**
+- Vulkan driver installation for GPU rendering
+- Post-deploy health check
+- Better logging with timestamps
+
+</Update>
+
+<Update label=\"Type Safety & WebSocket Fixes\" description=\"February 2026\" date=\"2026-02-26\">
+
 <Update label="Type Safety & WebSocket Fixes" description="February 2026" date="2026-02-26">
 
 ### 🔧 Type Safety Improvements (commits fcd21eb, efba5a0, 82f97da, 42e52af, d911359)
