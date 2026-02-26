@@ -424,7 +424,9 @@ See [docs/ci-cd-improvements.md](docs/ci-cd-improvements.md) for details.
 
 **Cause**: Turbo treats peerDependencies as graph edges.
 
-**Solution**: Already fixed - `procgen` is a peerDependency in `shared/package.json`, and `shared` is a devDependency in `procgen/package.json`. This breaks the cycle while allowing imports to resolve at runtime.
+**Solution**: Already fixed (February 2026) - `procgen` is an **optional peerDependency** in `shared/package.json`, and `shared` is a **devDependency** in `procgen/package.json`. This breaks the Turbo graph cycle while allowing imports to resolve at runtime (both packages are always installed together in the workspace).
+
+**Technical Details**: `devDependencies` are not followed by Turbo's `^build` topological ordering, so this doesn't create a cycle. The devDependency in procgen ensures bun links the package so TypeScript can find `@hyperscape/procgen` module declarations during type checking.
 
 **If you see this error**:
 ```bash
