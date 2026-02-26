@@ -914,12 +914,99 @@ Configure these in repository settings for automated builds:
 The build workflow is enabled as of commit cb57325 (Feb 25, 2026). See `docs/native-release.md` in the repository for complete setup instructions.
 </Info>
 
+## Security & Browser Requirements
+
+### WebGPU Requirement
+
+As of February 2026, Hyperscape **requires WebGPU** for rendering. All shaders use Three.js Shading Language (TSL) which only works with WebGPU.
+
+**Browser Support:**
+- Chrome 113+ (WebGPU enabled by default)
+- Edge 113+
+- Safari 18+ (macOS Sonoma+)
+- Firefox Nightly (experimental)
+
+**Unsupported Browsers:**
+
+Users on browsers without WebGPU support see a user-friendly error screen:
+
+```typescript
+// From packages/shared/src/systems/client/ClientGraphics.ts
+if (!navigator.gpu) {
+  // Show error screen with browser upgrade instructions
+  throw new Error('WebGPU not supported. Please upgrade your browser.');
+}
+```
+
+**Why WebGPU Only:**
+- All procedural shaders (grass, terrain, particles) use TSL
+- TSL compiles to WGSL (WebGPU Shading Language)
+- No WebGL fallback possible without rewriting all shaders
+- Commit: 3bc59db (February 26, 2026)
+
+### CSRF Protection Updates
+
+The CSRF middleware was updated to support cross-origin clients (commit cd29a76):
+
+**Problem:**
+- CSRF uses `SameSite=Strict` cookies which cannot be sent in cross-origin requests
+- Cloudflare Pages (hyperscape.gg) → Railway backend caused "Missing CSRF token" errors
+- Cross-origin requests already protected by Origin validation + JWT auth
+
+**Solution:**
+
+```typescript
+// From packages/server/src/middleware/csrf.ts
+const KNOWN_CROSS_ORIGIN_CLIENTS = [
+  /^https:\/\/.*\.hyperscape\.gg$/,
+  /^https:\/\/hyperscape\.gg$/,        // Apex domain support
+  /^https:\/\/.*\.hyperbet\.win$/,
+  /^https:\/\/hyperbet\.win$/,         // Apex domain support
+  /^https:\/\/.*\.hyperscape\.bet$/,
+  /^https:\/\/hyperscape\.bet$/,       // Apex domain support
+];
+
+// Skip CSRF validation for known cross-origin clients
+if (origin && KNOWN_CROSS_ORIGIN_CLIENTS.some(pattern => pattern.test(origin))) {
+  return; // Skip CSRF check
+}
+```
+
+**Security Layers:**
+1. Origin header validation (http-server.ts preHandler hook)
+2. JWT bearer token authentication (Authorization header)
+3. CSRF cookie validation (same-origin requests only)
+
+### JWT Secret Enforcement
+
+JWT secret is now **required** in production and staging environments (commit 3bc59db):
+
+```typescript
+// From packages/server/src/startup/config.ts
+if (NODE_ENV === 'production' || NODE_ENV === 'staging') {
+  if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET is required in production/staging');
+  }
+}
+
+if (NODE_ENV === 'development' && !JWT_SECRET) {
+  console.warn('WARNING: JWT_SECRET not set in development');
+}
+```
+
+**Generate Secure Secret:**
+```bash
+openssl rand -base64 32
+```
+
 ## Production Checklist
 
 - [ ] PostgreSQL database provisioned
 - [ ] Environment variables configured
+- [ ] JWT_SECRET generated and set (REQUIRED in production)
+- [ ] ADMIN_CODE set (REQUIRED for production security)
 - [ ] Privy credentials set (both client and server)
-- [ ] CDN serving assets
+- [ ] CDN serving assets with CORS configured
 - [ ] WebSocket URL configured
 - [ ] SSL/TLS enabled
 - [ ] Vast.ai API key configured (if using GPU deployment)
@@ -928,3 +1015,5 @@ The build workflow is enabled as of commit cb57325 (Feb 25, 2026). See `docs/nat
 - [ ] Solana program addresses updated for mainnet (if using betting)
 - [ ] CORS domains configured for production domains
 - [ ] GitHub secrets configured for native app builds (if releasing)
+- [ ] WebGPU-compatible browsers verified for users
+- [ ] Maintenance mode API tested with ADMIN_CODE
