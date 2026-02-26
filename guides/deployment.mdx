@@ -197,86 +197,279 @@ Upload assets to S3, R2, or similar:
 
 ## Vast.ai GPU Deployment
 
-The `vast-keeper` package provides automated GPU instance provisioning for game servers on Vast.ai:
+Hyperscape deploys to Vast.ai for GPU-accelerated streaming with automated CI/CD via GitHub Actions.
 
-### Prerequisites
+### Automated Deployment
 
-```bash
-# Install vastai SDK (Python 3.10+)
-pip3 install --break-system-packages vastai  # Debian 12+ (PEP 668)
-# or
-pip3 install vastai  # Other systems
+The `.github/workflows/deploy-vast.yml` workflow automatically deploys to Vast.ai on push to main:
+
+```yaml
+# Triggers on successful CI completion or manual dispatch
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
 ```
 
-### Configuration
+**Deployment Process:**
 
+1. **Enter Maintenance Mode** - Pauses new duel cycles, waits for active markets to resolve
+2. **SSH Deploy** - Connects to Vast.ai instance, pulls latest code, builds, and restarts
+3. **Exit Maintenance Mode** - Resumes duel cycles after health check passes
+
+### Maintenance Mode API
+
+The server provides a maintenance mode API for graceful deployments:
+
+**Enter Maintenance Mode:**
 ```bash
-# packages/vast-keeper/.env
-VAST_API_KEY=your-vast-api-key
-GAME_SERVER_IMAGE=your-docker-image
+POST /admin/maintenance/enter
+Headers:
+  x-admin-code: <ADMIN_CODE>
+  Content-Type: application/json
+Body:
+  {
+    "reason": "deployment",
+    "timeoutMs": 300000  # 5 minutes
+  }
+
+Response:
+  {
+    "success": true,
+    "status": {
+      "active": true,
+      "safeToDeploy": true,
+      "currentPhase": "IDLE",
+      "marketStatus": "resolved",
+      "pendingMarkets": 0
+    }
+  }
 ```
 
-### Deployment
-
+**Exit Maintenance Mode:**
 ```bash
-cd packages/vast-keeper
-bun run start
+POST /admin/maintenance/exit
+Headers:
+  x-admin-code: <ADMIN_CODE>
+
+Response:
+  {
+    "success": true,
+    "status": {
+      "active": false,
+      "safeToDeploy": true
+    }
+  }
 ```
 
-**Features:**
-- Filters for US-based machines for lower latency
-- Uses standard CUDA Docker images (not KVM)
-- Generates SSH keys in Docker for secure access
-- Injects runtime environment variables into provisioned servers
-- Uses Python 3.11+ (bookworm-slim base image)
-- Uses `bunx tsc` instead of `npx tsc` for asset-forge builds (commit c80ad7a, Feb 25, 2026)
+**Check Status:**
+```bash
+GET /admin/maintenance/status
+Headers:
+  x-admin-code: <ADMIN_CODE>
 
-**Asset-Forge Build Fix (commit c80ad7a):**
+Response:
+  {
+    "active": false,
+    "enteredAt": null,
+    "reason": null,
+    "safeToDeploy": true,
+    "currentPhase": "FIGHTING",
+    "marketStatus": "betting",
+    "pendingMarkets": 1
+  }
+```
 
-Vast.ai deployment containers only have bun installed, not npm/npx. The asset-forge build step was updated to use `bunx tsc`:
+**Manual Maintenance Mode:**
+
+Helper scripts are available for manual control:
+
+```bash
+# Enter maintenance mode
+bash scripts/pre-deploy-maintenance.sh
+
+# Exit maintenance mode
+bash scripts/post-deploy-resume.sh
+```
+
+### Required GitHub Secrets
+
+Configure these in repository settings → Secrets → Actions:
+
+| Secret | Purpose |
+|--------|---------|
+| `VAST_HOST` | Vast.ai instance IP address |
+| `VAST_PORT` | SSH port (usually 35022) |
+| `VAST_SSH_KEY` | Private SSH key for instance access |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `SOLANA_DEPLOYER_PRIVATE_KEY` | Base58 Solana keypair for market operations |
+| `TWITCH_STREAM_KEY` | Twitch stream key |
+| `X_STREAM_KEY` | X/Twitter stream key |
+| `X_RTMP_URL` | X/Twitter RTMP URL |
+| `KICK_STREAM_KEY` | Kick stream key |
+| `KICK_RTMP_URL` | Kick RTMP URL |
+| `ADMIN_CODE` | Admin code for maintenance mode API |
+| `VAST_SERVER_URL` | Public server URL (e.g., https://hyperscape.gg) |
+
+### Deployment Script
+
+The `scripts/deploy-vast.sh` script handles the full deployment:
+
+**Key Steps:**
+1. Configure DNS resolution (some Vast containers use internal-only DNS)
+2. Pull latest code from main branch
+3. Restore environment variables after git reset
+4. Install system dependencies (build-essential, ffmpeg, Vulkan drivers, Chrome Dev)
+5. Install Playwright and dependencies
+6. Build core packages (physx, decimation, impostors, procgen, asset-forge, shared)
+7. Setup Solana keypair from `SOLANA_DEPLOYER_PRIVATE_KEY`
+8. Push database schema with drizzle-kit
+9. Start port proxies (socat) for external access
+10. Configure and export stream keys
+11. Start duel stack via PM2
+12. Wait for health check to pass
+13. Run streaming diagnostics
+
+**Port Mappings:**
+
+| Internal | External | Service |
+|----------|----------|---------|
+| 5555 | 35143 | HTTP API |
+| 5555 | 35079 | WebSocket |
+| 8080 | 35144 | CDN |
+
+### Solana Keypair Setup
+
+The deployment automatically configures Solana keypairs from environment variables:
+
+```bash
+# SOLANA_DEPLOYER_PRIVATE_KEY is decoded and written to:
+# - ~/.config/solana/id.json (Solana CLI default)
+# - deployer-keypair.json (legacy location)
+
+# Script: scripts/decode-key.ts
+# Converts base58 private key to JSON byte array format
+```
+
+**Environment Variable Fallbacks:**
 
 ```javascript
-// From packages/asset-forge/scripts/build-services.mjs
-// Before: npx tsc (fails in Vast.ai container)
-// After: bunx tsc (works with bun-only environment)
-const child = spawn('bunx', ['tsc'], {
-  cwd: serverDir,
-  stdio: 'inherit'
-});
+// From ecosystem.config.cjs
+SOLANA_ARENA_AUTHORITY_SECRET: process.env.SOLANA_DEPLOYER_PRIVATE_KEY || "",
+SOLANA_ARENA_REPORTER_SECRET: process.env.SOLANA_DEPLOYER_PRIVATE_KEY || "",
+SOLANA_ARENA_KEEPER_SECRET: process.env.SOLANA_DEPLOYER_PRIVATE_KEY || "",
 ```
 
-**Why This Matters:**
-- Vast.ai containers use minimal base images with only bun runtime
-- npm/npx not available in deployment environment
-- `bunx` is bun's equivalent to `npx` for running packages
-- Asset-forge backend now builds successfully in Vast.ai deployments
-- File: `packages/asset-forge/scripts/build-services.mjs`
-- Commit: c80ad7a (Feb 25, 2026)
+All three roles (authority, reporter, keeper) default to the same deployer keypair for simplified configuration.
 
-**Docker Configuration:**
+### System Requirements
 
-```dockerfile
-# From packages/vast-keeper/Dockerfile
-FROM node:20-bookworm-slim
+**Vast.ai Instance Specs:**
+- GPU: NVIDIA with Vulkan support (RTX 3060 Ti or better)
+- RAM: 16GB minimum
+- Storage: 50GB minimum
+- OS: Ubuntu 22.04 or Debian 12
 
-# Install Python 3.11+ and vastai SDK
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    build-essential \
-    git-lfs \
-    unzip
+**Installed Dependencies:**
+- Bun (latest)
+- FFmpeg (system package, not static build)
+- Chrome Dev channel (google-chrome-unstable)
+- Playwright Chromium
+- Vulkan drivers (mesa-vulkan-drivers, vulkan-tools)
+- Xvfb (for headful GPU rendering)
+- socat (for port proxying)
 
-# Install vastai SDK with --break-system-packages for Debian 12 (PEP 668)
-RUN pip3 install --break-system-packages vastai
+### Streaming Configuration
 
-# Generate SSH keys for secure instance access
-RUN ssh-keygen -t rsa -b 4096 -f /root/.ssh/id_rsa -N ""
+The deployment uses these streaming settings:
+
+```bash
+# From ecosystem.config.cjs
+STREAM_CAPTURE_MODE=cdp                    # Chrome DevTools Protocol
+STREAM_CAPTURE_HEADLESS=false              # Headful with Xvfb for GPU
+STREAM_CAPTURE_CHANNEL=chrome-dev          # Chrome Dev channel
+STREAM_CAPTURE_ANGLE=vulkan                # Vulkan backend
+STREAM_CAPTURE_DISABLE_WEBGPU=false        # WebGPU enabled
+STREAMING_CANONICAL_PLATFORM=twitch        # Lower latency than YouTube
+STREAMING_PUBLIC_DELAY_MS=0                # No delay (real-time)
 ```
 
-<Info>
-Debian 12+ requires `--break-system-packages` flag for pip3 due to PEP 668 externally-managed-environment restrictions.
-</Info>
+**Multi-Platform Streaming:**
+
+Streams simultaneously to:
+- Twitch (rtmp://live.twitch.tv/app)
+- Kick (rtmps://fa723fc1b171.global-contribute.live-video.net/app)
+- X/Twitter (rtmp://sg.pscp.tv:80/x)
+
+### Health Monitoring
+
+The deployment includes comprehensive health checks:
+
+```bash
+# Health endpoint
+GET /health
+
+Response:
+{
+  "status": "healthy",
+  "uptime": 12345,
+  "maintenance": false
+}
+```
+
+**Post-Deploy Diagnostics:**
+
+The deploy script automatically runs streaming diagnostics:
+- Checks streaming API state
+- Verifies game client is running
+- Checks RTMP status file
+- Lists FFmpeg processes
+- Shows recent PM2 logs filtered for streaming keywords
+
+### Troubleshooting
+
+**Stream not appearing on platforms:**
+
+1. Check stream keys are configured:
+```bash
+# SSH into Vast instance
+ssh -p 35022 root@<vast-ip>
+
+# Check environment variables
+cd /root/hyperscape
+cat packages/server/.env | grep STREAM_KEY
+```
+
+2. Check FFmpeg processes:
+```bash
+ps aux | grep ffmpeg
+```
+
+3. Check RTMP status:
+```bash
+cat packages/server/public/live/rtmp-status.json
+```
+
+4. Check PM2 logs:
+```bash
+bunx pm2 logs hyperscape-duel --lines 100 | grep -i "rtmp\|stream\|ffmpeg"
+```
+
+**Database connection issues:**
+
+The deployment writes `DATABASE_URL` to `packages/server/.env` after git reset to prevent it from being overwritten.
+
+**GPU rendering issues:**
+
+Check Vulkan support:
+```bash
+vulkaninfo --summary
+nvidia-smi
+```
+
+If Vulkan fails, the system falls back to GL ANGLE backend.
 
 ## CI/CD Configuration
 
