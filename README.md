@@ -41,7 +41,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 ```bash
 git clone https://github.com/HyperscapeAI/hyperscape.git
 cd hyperscape
-bun install
+nbun install
 ```
 
 ### Setup Environment Files
@@ -119,7 +119,7 @@ packages/
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation (trees, rocks, terrain)
-├── asset-forge/         # AI asset generation tools
+├── asset-forge/         # AI asset generation tools + VFX catalog
 └── docs-site/           # Documentation (Docusaurus)
 ```
 
@@ -150,7 +150,7 @@ Build order: `physx-js-webidl` → `procgen` → `shared` → everything else (h
 bun run dev:client    # Client only (port 3333)
 bun run dev:server    # Server only (port 5555)
 bun run dev:ai        # Game + ElizaOS agents (adds port 4001)
-bun run dev:forge     # AssetForge tools (ports 3400, 3401)
+bun run dev:forge     # AssetForge tools + VFX catalog (ports 3400, 3401)
 bun run docs:dev      # Documentation site (port 3402)
 bun run dev:all       # Everything: game + AI + AssetForge
 ```
@@ -193,7 +193,7 @@ bun run assets:sync    # Pull latest assets from repo (local dev only)
 Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.privy.io).
 
 **Optional configuration** - see `.env.example` files for all options:
-- `packages/server/.env.example` - Database, ports, LiveKit voice chat, streaming
+- `packages/server/.env.example` - Database, ports, LiveKit voice chat, streaming, maintenance mode
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
@@ -225,6 +225,7 @@ Hyperscape supports multiple deployment targets:
 - **URL**: https://hyperscape.gg
 - **Build**: Automatic on push to `main`
 - **Assets**: Served from Cloudflare R2 (https://assets.hyperscape.club)
+- **CORS**: Configured for cross-origin asset loading
 
 ### Railway (Game Server)
 
@@ -234,9 +235,10 @@ Hyperscape supports multiple deployment targets:
 
 ### Vast.ai (Streaming)
 
-- GPU-accelerated rendering with WebGPU
+- GPU-accelerated rendering with WebGPU + Vulkan
 - Automated maintenance mode for graceful deployments
 - Multi-platform RTMP streaming (Twitch, Kick, X)
+- Chrome Dev + Xvfb for headless rendering
 - See [docs/vast-deployment.md](docs/vast-deployment.md)
 
 ## Native App Distribution
@@ -274,6 +276,12 @@ The CDN container needs to be running. It starts automatically with `bun run dev
 bun run cdn:up
 ```
 
+**CORS errors loading assets from R2:**
+R2 bucket needs CORS configuration. Run:
+```bash
+bash scripts/configure-r2-cors.sh
+```
+
 **Database schema errors or stale data after pulling updates:**
 Migrations only run once, so pulling new code won't fix an outdated database schema. Reset to fresh:
 > ⚠️ **Warning:** This will delete all local data (characters, inventory, progress).
@@ -305,17 +313,59 @@ lsof -ti:8080 | xargs kill -9   # CDN
 ```bash
 bun run clean
 rm -rf node_modules packages/*/node_modules
-bun install
+nbun install
 bun run build
 ```
+
+**CI/CD npm 403 errors:**
+GitHub Actions may hit npm rate limits. The CI now uses `--frozen-lockfile` and retry logic with exponential backoff (15s, 30s, 45s, 60s, 75s delays).
 
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
 
+## Recent Updates (February 2026)
+
+### Deployment & Infrastructure
+- ✅ **Maintenance Mode API** - Graceful deployments with automatic market resolution waiting
+- ✅ **DATABASE_URL persistence** - Survives git reset operations in CI/CD
+- ✅ **Vast.ai improvements** - Vulkan drivers, health checking, Chrome Dev channel
+- ✅ **CSRF cross-origin handling** - Apex domain support for Cloudflare Pages → Railway
+- ✅ **R2 CORS configuration** - Automated setup for cross-origin asset loading
+
+### Rendering & Performance
+- ✅ **WebGPU enforcement** - WebGL fallback removed (all shaders use TSL)
+- ✅ **Instanced arena meshes** - 97% draw call reduction (~846 meshes → InstancedMesh)
+- ✅ **TSL fire particles** - GPU-driven emissive materials replace 28 PointLights
+- ✅ **Teleport VFX improvements** - Beam fade, scaled geometry, duplicate suppression
+
+### Streaming
+- ✅ **Multi-platform RTMP** - Twitch, Kick, X (Twitter) support
+- ✅ **Streaming stability** - CDP stall threshold increased, soft recovery, better restart logic
+- ✅ **Public delay configuration** - Set to 0ms for live betting (was 12-15s)
+
+### Developer Experience
+- ✅ **VFX catalog** - Asset Forge browser for all game effects
+- ✅ **Type safety** - Reduced explicit `any` types from 142 to ~46
+- ✅ **Memory leak fixes** - AbortController for event listener cleanup
+- ✅ **Dead code removal** - 3098 lines removed (PacketHandlers.ts)
+- ✅ **CI/CD resilience** - Retry logic, frozen lockfile, split unsigned/release builds
+
 ## More Info
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
+
+## Documentation
+
+- [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser and GPU requirements
+- [docs/vast-deployment.md](docs/vast-deployment.md) - Vast.ai GPU streaming deployment
+- [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Graceful deployment API
+- [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) - Cloudflare Pages setup
+- [docs/streaming-configuration.md](docs/streaming-configuration.md) - RTMP streaming setup
+- [docs/asset-forge-vfx-catalog.md](docs/asset-forge-vfx-catalog.md) - VFX catalog guide
+- [docs/ci-cd-improvements.md](docs/ci-cd-improvements.md) - CI/CD improvements reference
+- [docs/railway-dev-prod.md](docs/railway-dev-prod.md) - Railway deployment
+- [docs/native-release.md](docs/native-release.md) - Native app releases
 
 ## License
 
