@@ -30,8 +30,14 @@ cp packages/server/.env.example packages/server/.env
 # Database (production)
 DATABASE_URL=postgresql://user:pass@host:5432/db
 
-# Security
-JWT_SECRET=your-random-secret-key
+# Security (REQUIRED in production/staging as of February 2026)
+JWT_SECRET=your-random-secret-key  # Generate with: openssl rand -base64 32
+                                   # Throws error if not set in production/staging
+                                   # Warns in development if not set
+
+# Admin Access (REQUIRED for production security)
+ADMIN_CODE=your-admin-code         # Prevents unauthorized admin access
+                                   # Without this, only GRANT_DEV_ADMIN provides admin
 
 # Authentication
 PRIVY_APP_ID=your-privy-app-id
