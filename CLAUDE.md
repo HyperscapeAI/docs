@@ -392,18 +392,38 @@ See [docs/terrain-height-cache-fix.md](docs/terrain-height-cache-fix.md) for tec
 
 ### Streaming Issues
 
-**Symptoms**: RTMP stream keeps restarting, frequent disconnections.
+**Symptoms**: RTMP stream keeps restarting, frequent disconnections, or WebGPU initialization failures in headless environments.
 
-**Cause**: CDP stall threshold too aggressive or FFmpeg crashes.
+**Cause**: CDP stall threshold too aggressive, FFmpeg crashes, or WebGPU unavailable in Docker/vast.ai.
 
-**Solution**: Increase stability thresholds in `packages/server/.env`:
+**Solutions** (improved February 2026):
+
+**Stability Tuning** - Increase thresholds in `packages/server/.env`:
 ```bash
-CDP_STALL_THRESHOLD=6                    # Default: 4
+CDP_STALL_THRESHOLD=6                    # Default: 4 (120s total before restart)
 FFMPEG_MAX_RESTART_ATTEMPTS=10           # Default: 8
 CAPTURE_RECOVERY_MAX_FAILURES=5          # Default: 4
 ```
 
-See [docs/streaming-improvements.md](docs/streaming-improvements.md) for tuning guide.
+**WebGPU Fallback** - For headless environments (Docker, vast.ai):
+```bash
+STREAM_CAPTURE_DISABLE_WEBGPU=true       # Forces WebGL fallback
+```
+Or use query params: `?page=stream&forceWebGL=1` or `?page=stream&disableWebGPU=1`
+
+**Improvements**:
+- **Soft CDP Recovery**: Restarts screencast without browser/FFmpeg teardown (no stream gap)
+- **Best-Effort WebGPU Init**: Tries `maxTextureArrayLayers: 2048` first, retries with default limits if GPU rejects
+- **WebGL Fallback**: RendererFactory automatically falls back to WebGL when WebGPU fails or is disabled
+- **Swiftshader ANGLE**: ecosystem.config.cjs uses swiftshader backend for reliable software rendering
+
+**Ecosystem Config** (`ecosystem.config.cjs`):
+```javascript
+env: {
+  STREAM_CAPTURE_DISABLE_WEBGPU: 'true',  // Reliable software rendering
+  // ... other vars
+}
+```
 
 ### CI Build Failures
 
