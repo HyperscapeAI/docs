@@ -630,10 +630,23 @@ POST /admin/maintenance/exit
 - **JWT_SECRET Required**: Production/staging deployments now throw error if `JWT_SECRET` not set (security hardening)
 
 ### Performance Optimizations
-- **Arena Rendering**: 97% draw call reduction via InstancedMesh (~846 individual meshes → ~20 instanced draw calls)
-- **Lighting**: Eliminated 28 dynamic PointLights, replaced with GPU-driven TSL emissive materials (zero CPU cost per frame)
-- **Fire Particles**: Enhanced shader with smooth value noise, soft radial falloff, turbulent vertex motion (removed "torch" preset, unified on "fire")
-- **Renderer Init**: Best-effort `requiredLimits` - tries `maxTextureArrayLayers: 2048`, retries with defaults if GPU rejects
+
+**Arena Rendering** (February 2026 - PR #938):
+- **97% draw call reduction**: ~846 individual meshes → ~20 InstancedMesh draw calls
+- **Eliminated 28 dynamic PointLights**: Replaced with GPU-driven TSL emissive materials (zero CPU cost per frame)
+- **Instanced Components**:
+  - Fence posts + caps: 288 instances → 2 draw calls
+  - Fence rails (X/Z): 72 instances → 2 draw calls
+  - Stone pillars (base/shaft/capital): 96 instances → 3 draw calls
+  - Brazier bowls: 24 instances → 1 draw call
+  - Floor border trim: 24 instances → 2 draw calls
+  - Banner poles: 12 instances → 1 draw call
+- **TSL Brazier Glow**: Per-instance flicker phase derived from world position (quantized), multi-frequency sine + noise, top-face-only emission mask
+- **Fire Particles**: Enhanced shader with smooth value noise (bilinear interpolated hash lattice), soft radial falloff for additive blending, turbulent vertex motion, height-based color gradient
+- **Removed Presets**: Deleted "torch" preset, unified all fire emitters on enhanced "fire" preset (28 particles, 0.35-0.8s lifetime, 0.12-0.2 scale)
+- **Implementation**: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`, `packages/shared/src/entities/managers/particleManager/GlowParticleManager.ts`
+
+**Renderer Init**: Best-effort `requiredLimits` - tries `maxTextureArrayLayers: 2048`, retries with defaults if GPU rejects
 
 ### Bug Fixes
 - **Model Cache**: Fixed missing objects (duplicate mesh names → identity Map) and texture persistence (blob URLs → DataTexture with raw RGBA pixels)
