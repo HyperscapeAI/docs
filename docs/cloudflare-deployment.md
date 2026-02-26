@@ -1,150 +1,166 @@
-# Cloudflare Pages Deployment Guide
+# Cloudflare Pages Deployment
 
-Hyperscape's web client is deployed to Cloudflare Pages for global CDN distribution with automatic builds on every push to `main`.
+This guide covers deploying the Hyperscape client to Cloudflare Pages.
 
 ## Overview
 
-**Cloudflare Pages** hosts the static web client with:
-- **URL**: https://hyperscape.gg (production)
-- **Preview URLs**: `https://<commit-sha>.hyperscape.pages.dev`
-- **Assets**: Served from Cloudflare R2 (https://assets.hyperscape.club)
-- **Build**: Automatic via GitHub Actions on push to `main`
-
-**Architecture:**
-- **Frontend**: Cloudflare Pages (static hosting)
-- **Backend**: Railway (game server)
-- **Assets**: Cloudflare R2 (CDN)
-- **CORS**: Configured for cross-origin requests
+Cloudflare Pages provides:
+- **Global CDN**: Fast content delivery worldwide
+- **Automatic builds**: Deploy on push to `main`
+- **Preview deployments**: Test changes before production
+- **Custom domains**: Use your own domain (e.g., hyperscape.gg)
+- **Free tier**: Generous limits for most projects
 
 ## Prerequisites
 
-### 1. Cloudflare Account Setup
+1. **Cloudflare account**: [dash.cloudflare.com](https://dash.cloudflare.com)
+2. **GitHub repository**: HyperscapeAI/hyperscape
+3. **Cloudflare API token**: For CI/CD deployment
 
-1. Create a Cloudflare account at [dash.cloudflare.com](https://dash.cloudflare.com)
-2. Note your **Account ID** (found in dashboard URL or account settings)
-3. Create an **API Token** with permissions:
-   - Account → Cloudflare Pages → Edit
-   - Zone → DNS → Edit (if using custom domain)
+## Automatic Deployment (CI/CD)
 
-### 2. GitHub Secrets
+The GitHub Actions workflow (`.github/workflows/deploy-pages.yml`) automatically deploys on push to `main`.
 
-Configure these secrets in your repository (`Settings` → `Secrets and variables` → `Actions`):
+### Workflow Configuration
 
-| Secret | Description | Where to Find |
-|--------|-------------|---------------|
-| `CLOUDFLARE_API_TOKEN` | API token for Pages deployment | Cloudflare Dashboard → My Profile → API Tokens |
-| `PUBLIC_PRIVY_APP_ID` | Privy app ID for authentication | [dashboard.privy.io](https://dashboard.privy.io) |
-
-### 3. Cloudflare Pages Project
-
-Create a Pages project in the Cloudflare dashboard:
-
-1. Go to **Workers & Pages** → **Create application** → **Pages**
-2. **Project name**: `hyperscape`
-3. **Production branch**: `main`
-4. **Build command**: Leave empty (GitHub Actions handles builds)
-5. **Build output directory**: Leave empty
-
-**Important**: Do NOT connect GitHub integration in Cloudflare dashboard. The GitHub Actions workflow handles deployment via `wrangler pages deploy`.
-
-## Deployment Workflow
-
-### Automatic Deployment
-
-The `.github/workflows/deploy-pages.yml` workflow runs automatically on:
+**Triggers:**
 - Push to `main` branch
 - Changes to `packages/client/**` or `packages/shared/**`
+- Manual trigger via `workflow_dispatch`
 
-**Build Steps:**
-1. Checkout code with submodules
+**Build steps:**
+1. Checkout code
 2. Setup Bun
-3. Install dependencies (`bun install --frozen-lockfile`)
-4. Build client (`bun run build:client`)
-5. Deploy to Cloudflare Pages (`wrangler pages deploy`)
+3. Install dependencies
+4. Build client (includes shared + physx)
+5. Deploy to Cloudflare Pages
 
-### Manual Deployment
+### Required GitHub Secrets
 
-Trigger manually from GitHub Actions:
+Configure in repository settings (Settings → Secrets and variables → Actions):
+
+| Secret | Description | Example |
+|--------|-------------|---------|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token | `your-api-token` |
+| `PUBLIC_PRIVY_APP_ID` | Privy app ID | `cmgk4zu56005kjj0bcaae0rei` |
+
+**Optional secrets:**
+- `PUBLIC_API_URL` - Game server URL (default: Railway production)
+- `PUBLIC_WS_URL` - WebSocket URL (default: Railway production)
+- `PUBLIC_CDN_URL` - Asset CDN URL (default: R2)
+
+### Deployment URLs
+
+**Production:**
+- https://hyperscape.gg (custom domain)
+- https://hyperscape.pages.dev (Cloudflare subdomain)
+
+**Preview:**
+- https://\<commit-hash\>.hyperscape.pages.dev
+
+## Manual Deployment
+
+### 1. Install Wrangler
 
 ```bash
-# Via GitHub UI
-Actions → Deploy Client to Cloudflare Pages → Run workflow → main
+npm install -g wrangler
 
-# Via GitHub CLI
-gh workflow run deploy-pages.yml
+# Login to Cloudflare
+wrangler login
 ```
 
-### Local Deployment
-
-Deploy from your local machine:
+### 2. Build Client
 
 ```bash
-# Build client
+# From repository root
+bun install
 bun run build:client
+```
 
-# Deploy to Pages
+### 3. Deploy
+
+```bash
 cd packages/client
+
+# Deploy to production
 npx wrangler pages deploy dist \
   --project-name=hyperscape \
   --branch=main
+
+# Deploy to preview
+npx wrangler pages deploy dist \
+  --project-name=hyperscape \
+  --branch=preview
 ```
 
 ## Configuration
 
 ### Environment Variables
 
-The build injects these environment variables at build time:
+Set in Cloudflare Dashboard (Pages → Settings → Environment variables):
 
+**Production:**
 ```bash
-# Authentication
-PUBLIC_PRIVY_APP_ID=cmgk4zu56005kjj0bcaae0rei
-
-# Backend URLs (Railway production)
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
 PUBLIC_API_URL=https://hyperscape-production.up.railway.app
 PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
-
-# Assets (Cloudflare R2)
 PUBLIC_CDN_URL=https://assets.hyperscape.club
-
-# App URL
 PUBLIC_APP_URL=https://hyperscape.gg
 ```
 
-**Note**: These are set in the GitHub Actions workflow, not in Cloudflare dashboard.
-
-### Custom Domain Setup
-
-To use `hyperscape.gg` instead of `hyperscape.pages.dev`:
-
-1. **Add domain in Cloudflare Pages**:
-   - Pages project → Custom domains → Add domain
-   - Enter `hyperscape.gg`
-   - Follow DNS setup instructions
-
-2. **Configure DNS**:
-   - Add CNAME record: `hyperscape.gg` → `hyperscape.pages.dev`
-   - Or use Cloudflare's automatic setup
-
-3. **SSL/TLS**:
-   - Cloudflare automatically provisions SSL certificates
-   - Use "Full (strict)" SSL mode for Railway backend
-
-## CORS Configuration
-
-### R2 Bucket CORS
-
-The client loads assets from R2, which requires CORS configuration.
-
-**Automated Setup:**
+**Preview:**
 ```bash
-# Run from repository root
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
+PUBLIC_API_URL=https://hyperscape-dev.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-dev.up.railway.app/ws
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_APP_URL=https://preview.hyperscape.gg
+```
+
+### Build Configuration
+
+The build is configured in `packages/client/wrangler.toml`:
+
+```toml
+name = "hyperscape"
+compatibility_date = "2024-01-01"
+
+[assets]
+directory = "dist"
+```
+
+### Custom Domain
+
+**Add custom domain:**
+1. Cloudflare Dashboard → Pages → hyperscape
+2. Custom domains → Set up a custom domain
+3. Enter domain: `hyperscape.gg`
+4. Follow DNS setup instructions
+
+**DNS configuration:**
+```
+CNAME hyperscape.gg hyperscape.pages.dev
+```
+
+## Asset CDN (R2)
+
+Hyperscape uses Cloudflare R2 for asset storage.
+
+### Setup R2 Bucket
+
+```bash
+# Create bucket
+wrangler r2 bucket create hyperscape-assets
+
+# Configure CORS
 bash scripts/configure-r2-cors.sh
 ```
 
-**Manual Setup:**
-```bash
-# Create cors.json
-cat > cors.json << 'EOF'
+### CORS Configuration
+
+The CORS configuration allows cross-origin asset loading:
+
+```json
 {
   "allowed": {
     "origins": ["*"],
@@ -154,204 +170,240 @@ cat > cors.json << 'EOF'
   "exposed": ["ETag"],
   "maxAge": 3600
 }
-EOF
-
-# Apply to R2 bucket
-wrangler r2 bucket cors set hyperscape-assets --cors-file cors.json
 ```
 
-### Backend CORS
+**Apply CORS:**
+```bash
+cd scripts
+bash configure-r2-cors.sh
+```
 
-The Railway backend allows requests from:
-- `https://hyperscape.gg`
-- `https://hyperscape.club`
-- `https://*.hyperscape.pages.dev`
-- `https://hyperbet.win`
-- `https://hyperscape.bet`
+### Upload Assets
 
-**CSRF Handling**: Apex domains (hyperscape.gg, hyperbet.win) bypass CSRF validation since cross-origin requests are already protected by Origin header validation and JWT authentication.
+```bash
+# Upload all assets
+wrangler r2 object put hyperscape-assets/models/player.glb \
+  --file=packages/server/world/assets/models/player.glb
 
-## Build Optimization
+# Upload directory
+wrangler r2 object put hyperscape-assets/models/ \
+  --file=packages/server/world/assets/models/ \
+  --recursive
+```
 
-### Build Performance
+### Custom Domain for R2
 
-The client build includes:
-- **Turbo caching**: Reuses shared package builds
-- **PhysX WASM**: Bundled via `build:client` (includes dependencies)
-- **Node memory**: `--max-old-space-size=4096` for large builds
+**Setup:**
+1. R2 → hyperscape-assets → Settings → Public access
+2. Enable public access
+3. Add custom domain: `assets.hyperscape.club`
 
-**Build Time**: ~2-3 minutes on GitHub Actions runners
-
-### Bundle Size
-
-The client bundle includes:
-- Three.js + WebGPU renderer
-- PhysX WASM (~2MB)
-- React + UI libraries
-- Game logic from shared package
-
-**Total**: ~8-12MB (gzipped)
+**DNS configuration:**
+```
+CNAME assets.hyperscape.club hyperscape-assets.r2.cloudflarestorage.com
+```
 
 ## Troubleshooting
 
-### Build Fails with "Out of Memory"
+### Build Fails
 
-**Symptom**: Build crashes with heap out of memory error
+**Check build logs:**
+```bash
+# View in GitHub Actions
+# Repository → Actions → Deploy Client to Cloudflare Pages
 
-**Solution**: Increase Node memory in workflow:
-```yaml
-env:
-  NODE_OPTIONS: '--max-old-space-size=8192'  # was 4096
+# Or deploy manually to see errors
+cd packages/client
+bun run build
 ```
 
-### Assets Not Loading (404 Errors)
+**Common issues:**
+- Missing dependencies: `bun install`
+- TypeScript errors: `bun run lint`
+- Out of memory: Increase `NODE_OPTIONS=--max-old-space-size=4096`
 
-**Symptom**: Client loads but assets return 404
+### Assets Not Loading
 
-**Causes**:
-1. R2 CORS not configured
-2. Wrong `PUBLIC_CDN_URL`
-3. Assets not uploaded to R2
-
-**Solutions**:
+**Check CDN URL:**
 ```bash
-# Check CORS
-wrangler r2 bucket cors get hyperscape-assets
+# Verify PUBLIC_CDN_URL is set
+echo $PUBLIC_CDN_URL
 
-# Upload assets
-bun run scripts/sync-r2-assets.mjs
+# Test asset loading
+curl https://assets.hyperscape.club/models/player.glb
+```
 
-# Verify CDN URL
-curl https://assets.hyperscape.club/manifests/items/weapons.json
+**Check CORS:**
+```bash
+# Test CORS headers
+curl -I -H "Origin: https://hyperscape.gg" \
+  https://assets.hyperscape.club/models/player.glb
+```
+
+**Reconfigure CORS:**
+```bash
+bash scripts/configure-r2-cors.sh
 ```
 
 ### WebSocket Connection Fails
 
-**Symptom**: Client loads but can't connect to game server
-
-**Causes**:
-1. Wrong `PUBLIC_WS_URL`
-2. Railway backend not running
-3. CORS/Origin validation failing
-
-**Solutions**:
+**Check WS URL:**
 ```bash
-# Test WebSocket endpoint
+# Verify PUBLIC_WS_URL is set
+echo $PUBLIC_WS_URL
+
+# Test WebSocket connection
 wscat -c wss://hyperscape-production.up.railway.app/ws
-
-# Check Railway logs
-railway logs --service hyperscape-production
-
-# Verify origin is allowed
-curl -H "Origin: https://hyperscape.gg" \
-  https://hyperscape-production.up.railway.app/health
 ```
 
-### Deployment Succeeds but Site Shows Old Version
+**Check CORS:**
+- Ensure server allows origin: `https://hyperscape.gg`
+- Check `packages/server/src/http-server.ts` CORS config
 
-**Symptom**: Deployment completes but site doesn't update
+### Custom Domain Not Working
 
-**Causes**:
-1. Browser cache
-2. Cloudflare edge cache
-3. Service worker cache
-
-**Solutions**:
+**Check DNS:**
 ```bash
-# Hard refresh browser
-Ctrl+Shift+R (Windows/Linux)
-Cmd+Shift+R (macOS)
+# Verify CNAME record
+dig hyperscape.gg CNAME
 
-# Purge Cloudflare cache
-Cloudflare Dashboard → Caching → Purge Everything
-
-# Check deployment
-curl -I https://hyperscape.gg
-# Look for: cf-cache-status, cf-ray headers
+# Check DNS propagation
+nslookup hyperscape.gg
 ```
 
-### CSRF Token Errors
+**Check SSL:**
+- Cloudflare automatically provisions SSL certificates
+- Wait 5-10 minutes for certificate issuance
+- Check Pages → Custom domains → SSL status
 
-**Symptom**: POST requests fail with "Missing CSRF token"
+### Preview Deployment Not Working
 
-**Cause**: CSRF middleware uses SameSite=Strict cookies which don't work cross-origin
+**Check branch:**
+- Preview deployments use commit hash, not branch name
+- URL format: `https://<commit-hash>.hyperscape.pages.dev`
 
-**Solution**: The backend now skips CSRF validation for known cross-origin clients (hyperscape.gg, hyperbet.win). Verify your domain is in the allowed list:
+**Check build:**
+- Preview builds use same configuration as production
+- Check GitHub Actions logs for errors
 
-```typescript
-// packages/server/src/middleware/csrf.ts
-const KNOWN_CROSS_ORIGIN_CLIENTS = [
-  /^https:\/\/hyperscape\.gg$/,
-  /^https:\/\/hyperbet\.win$/,
-  /^https:\/\/.*\.hyperscape\.pages\.dev$/,
-];
+## Performance Optimization
+
+### Build Optimization
+
+**Enable minification:**
+```javascript
+// vite.config.ts
+export default defineConfig({
+  build: {
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+      },
+    },
+  },
+});
 ```
 
-## Preview Deployments
-
-Every commit to `main` creates a preview deployment:
-
-**URL Format**: `https://<commit-sha>.hyperscape.pages.dev`
-
-**Use Cases**:
-- Test changes before promoting to production domain
-- Share specific versions with team
-- Debug deployment-specific issues
-
-**Accessing Previews**:
-```bash
-# Get commit SHA
-git rev-parse HEAD
-
-# Preview URL
-https://<sha>.hyperscape.pages.dev
+**Code splitting:**
+```javascript
+// vite.config.ts
+export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'three': ['three'],
+          'react': ['react', 'react-dom'],
+        },
+      },
+    },
+  },
+});
 ```
 
-## Rollback
+### Caching
 
-To rollback to a previous deployment:
+**Configure cache headers:**
+```toml
+# wrangler.toml
+[[headers]]
+for = "/*"
+[headers.values]
+Cache-Control = "public, max-age=3600"
 
-1. **Via Cloudflare Dashboard**:
-   - Pages project → Deployments
-   - Find working deployment
-   - Click "Rollback to this deployment"
+[[headers]]
+for = "/assets/*"
+[headers.values]
+Cache-Control = "public, max-age=31536000, immutable"
+```
 
-2. **Via Git**:
-   ```bash
-   # Revert to previous commit
-   git revert HEAD
-   git push origin main
-   
-   # Or reset to specific commit
-   git reset --hard <commit-sha>
-   git push --force origin main
-   ```
+### Compression
+
+Cloudflare automatically compresses responses:
+- Brotli compression for modern browsers
+- Gzip fallback for older browsers
+- No configuration needed
 
 ## Monitoring
 
-### Deployment Status
-
-Check deployment status:
-```bash
-# Via GitHub Actions
-https://github.com/HyperscapeAI/hyperscape/actions/workflows/deploy-pages.yml
-
-# Via Cloudflare Dashboard
-Workers & Pages → hyperscape → Deployments
-```
-
 ### Analytics
 
-Cloudflare Pages provides:
-- **Web Analytics**: Page views, unique visitors, bandwidth
-- **Real User Monitoring**: Core Web Vitals, performance metrics
-- **Error Tracking**: JavaScript errors, failed requests
+**View in Cloudflare Dashboard:**
+1. Pages → hyperscape → Analytics
+2. View requests, bandwidth, errors
 
-Access via: Cloudflare Dashboard → Pages → hyperscape → Analytics
+**Metrics:**
+- Requests per second
+- Bandwidth usage
+- Error rate
+- Geographic distribution
+
+### Logs
+
+**Real-time logs:**
+```bash
+wrangler pages deployment tail
+```
+
+**View in dashboard:**
+1. Pages → hyperscape → Deployments
+2. Click deployment → View logs
+
+### Alerts
+
+**Setup alerts:**
+1. Cloudflare Dashboard → Notifications
+2. Create notification → Pages deployment
+3. Configure alert conditions
+
+## Cost Optimization
+
+### Free Tier Limits
+
+Cloudflare Pages free tier includes:
+- **Builds**: 500 builds/month
+- **Bandwidth**: Unlimited
+- **Requests**: Unlimited
+- **Storage**: 20,000 files
+
+### Paid Tier
+
+If you exceed free tier:
+- **Builds**: $0.50 per 500 builds
+- **Storage**: $0.50 per 1,000 files
+
+### Optimization Tips
+
+1. **Reduce build frequency**: Only build on `main` branch
+2. **Use preview deployments sparingly**: Disable for draft PRs
+3. **Optimize assets**: Compress images, minify code
+4. **Use R2 for large files**: Cheaper than Pages storage
 
 ## See Also
 
-- [docs/railway-dev-prod.md](railway-dev-prod.md) - Railway backend deployment
-- [docs/vast-deployment.md](vast-deployment.md) - Vast.ai streaming deployment
-- [packages/client/.env.example](../packages/client/.env.example) - Client environment variables
-- [packages/client/wrangler.toml](../packages/client/wrangler.toml) - Wrangler configuration
+- [Cloudflare Pages Documentation](https://developers.cloudflare.com/pages/)
+- [Wrangler CLI Documentation](https://developers.cloudflare.com/workers/wrangler/)
+- [R2 Documentation](https://developers.cloudflare.com/r2/)
+- [Railway Deployment Guide](railway-dev-prod.md)
+- [Vast.ai Deployment Guide](vast-deployment.md)
