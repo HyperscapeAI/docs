@@ -488,6 +488,28 @@ CAPTURE_RECOVERY_MAX_FAILURES=5          # Default: 4
 
 **Implementation**: `packages/server/src/streaming/stream-capture.ts`
 
+### CSRF Token Errors (Cross-Origin Requests)
+
+**Symptoms**: POST/PUT/DELETE requests from Cloudflare Pages frontend to Railway backend fail with "Missing CSRF token" error.
+
+**Cause**: CSRF middleware uses `SameSite=Strict` cookies which cannot be sent in cross-origin requests.
+
+**Solution**: Already fixed (February 2026) - CSRF validation is skipped for known cross-origin clients since they're already protected by:
+1. Origin header validation (http-server.ts preHandler hook)
+2. JWT bearer token authentication (Authorization header)
+
+**Known Cross-Origin Clients** (automatically detected):
+- `hyperscape.gg` (apex domain)
+- `*.hyperscape.gg` (subdomains)
+- `hyperbet.win` (apex domain)
+- `*.hyperbet.win` (subdomains)
+- `hyperscape.bet` (apex domain)
+- `*.hyperscape.bet` (subdomains)
+
+**Implementation**: `packages/server/src/middleware/csrf.ts`
+
+**Note**: CSRF cookie validation is redundant for cross-origin requests and doesn't work anyway due to `SameSite=Strict`. Same-origin requests still use CSRF tokens for protection.
+
 ### CI Build Failures
 
 **Symptoms**: GitHub Actions builds fail with npm 403 errors, signing failures, or platform-specific errors.
