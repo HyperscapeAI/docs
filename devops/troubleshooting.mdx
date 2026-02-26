@@ -941,6 +941,22 @@ bun run build
 - Commit f355276 (Feb 25, 2026): Initial fix moving procgen to peerDependencies
 - Files: `packages/shared/package.json`, `packages/procgen/package.json`
 
+### Shared/Procgen Type Resolution Issues
+
+**Symptom**: TypeScript can't find `@hyperscape/procgen` module declarations during type checking in shared package
+
+**Cause**: procgen removed from dependencies to break circular dependency, but TypeScript still needs it for type resolution
+
+**Solution**: Update to latest code (commit 05c2892 fixed this)
+
+**Technical Details:**
+- Added procgen as `devDependency` in shared's package.json
+- devDependencies are not followed by turbo's `^build` topological ordering (doesn't create cycle)
+- Ensures bun links the package so TypeScript can find module declarations during type checking
+- Imports still resolve at runtime via bun workspace resolution
+- File: `packages/shared/package.json`
+- Commit: 05c2892 (Feb 26, 2026)
+
 ### ESLint Crashes in Asset Forge
 
 **Symptom**: ESLint crashes with errors about `import/order` rule using removed `sourceCode.getTokenOrCommentBefore` API
