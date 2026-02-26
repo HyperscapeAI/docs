@@ -127,6 +127,42 @@ The `turbo.json` configuration handles this automatically via `dependsOn: ["^bui
 
 **Note**: `shared` and `procgen` have a peer dependency relationship (not a hard dependency) to avoid circular dependency issues with Turbo's build graph.
 
+### Architectural Audit TODOs
+
+The codebase includes TODO comments tracking known technical debt from code audits (February 2026):
+
+**AUDIT-001: Entity.ts Decomposition**
+- Current: Large Entity.ts file with mixed concerns
+- Goal: Split into focused modules (rendering, physics, networking)
+- Status: Tracked but not blocking
+
+**AUDIT-002: ServerNetwork Decomposition**
+- ~~Previous: 116K lines in single file~~ **RESOLVED**
+- Current: Already decomposed into 30+ modules (handlers/, services/, movement/)
+- Actual size: ~3K lines (not 116K - that was total package size)
+- Status: Complete - no action needed
+
+**AUDIT-003: ClientNetwork Handler Extraction**
+- ~~Previous: 165K lines, suggested extraction~~ **RESOLVED**
+- Current: Handlers are intentional thin wrappers that emit events
+- Actual size: ~5K lines (not 165K - that was total package size)
+- Design: Event-driven architecture is correct pattern
+- Status: Complete - extraction not needed
+
+**AUDIT-004: Circular Dependency (shared ↔ procgen)**
+- Current: Circular dependency between `@hyperscape/shared` and `@hyperscape/procgen`
+- Workaround: procgen build ignores TypeScript errors
+- Recommended fix: Extract shared types to `@hyperscape/types` package
+- Status: Tracked, workaround stable
+
+**AUDIT-005: Any Type Cleanup**
+- Previous: 142 explicit `any` types
+- Current: ~46 remaining (reduced by 68%)
+- Remaining locations: TSL shader code (@types/three limitation), browser polyfills (intentional), test files
+- Status: Ongoing - core game logic cleaned up
+
+**Implementation**: Search codebase for `TODO(AUDIT-` to find specific locations.
+
 ### Entity Component System (ECS)
 
 The RPG is built using Hyperscape's ECS architecture:
