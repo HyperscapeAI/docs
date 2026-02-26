@@ -6,6 +6,41 @@ icon: "bug"
 
 ## Common Issues
 
+### WebGPU Not Supported Error
+
+**Symptom**: Error screen showing "WebGPU not supported. Please upgrade your browser."
+
+**Cause**: Browser doesn't support WebGPU (required as of February 2026)
+
+**Solution**: Upgrade to a WebGPU-compatible browser:
+
+**Supported Browsers:**
+- Chrome 113+ (recommended)
+- Edge 113+
+- Safari 18+ (macOS Sonoma or later)
+- Firefox Nightly (experimental)
+
+**Why WebGPU is Required:**
+- All shaders use Three.js Shading Language (TSL)
+- TSL only compiles to WGSL (WebGPU Shading Language)
+- No WebGL fallback possible without rewriting all shaders
+- Procedural grass, terrain, particles all require WebGPU
+
+**Check WebGPU Support:**
+```javascript
+// In browser console
+if (navigator.gpu) {
+  console.log('WebGPU supported!');
+} else {
+  console.log('WebGPU not supported - upgrade browser');
+}
+```
+
+**Technical Details:**
+- Commit: 3bc59db (February 26, 2026)
+- File: `packages/shared/src/systems/client/ClientGraphics.ts`
+- User-friendly error screen shows browser upgrade instructions
+
 ### Characters Vanishing
 
 **Symptom**: Characters disappear after page refresh
