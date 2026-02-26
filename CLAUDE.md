@@ -436,27 +436,59 @@ See [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) for full API re
 
 ## Recent Architectural Changes (February 2026)
 
+### AI Agent Stability
+- **Database isolation**: Force PGLite for agents, prevent destructive migrations on game DB
+- **Initialization timeouts**: 45s timeout on runtime init prevents indefinite hangs
+- **Event listener cleanup**: Duplication guard prevents memory leaks
+- **Graceful shutdown**: 10s timeout on runtime.stop() with dangling promise cleanup
+- **WASM heap cleanup**: Explicit DB adapter close releases memory
+- **Circuit breaker**: 3 consecutive failure limit, 8 max reconnect retries
+- **Duel recovery**: Check contestant status independently during ANNOUNCEMENT phase
+- **Quest-driven tools**: Replaced starter chest with quest-based tool acquisition
+- **Autonomous banking**: Auto-deposit at 25/28 slots, keep essential tools
+- **Action locks**: Skip LLM during movement, fast-tick mode (2s) for quick follow-up
+- **Resource detection**: Increased approach range from 20m to 40m
+
+### Streaming & Audio
+- **PulseAudio audio capture**: Game music/sound in streams via virtual sink
+- **Improved buffering**: Changed from 'zerolatency' to 'film' tune, 4x buffer size (18000k)
+- **Audio stability**: Wall clock timestamps, async resampling, removed -shortest flag
+- **Multi-platform RTMP**: Twitch, Kick, X (YouTube explicitly disabled)
+- **Stream key management**: Explicit unset/re-export prevents stale keys
+- **Canonical platform**: Changed from YouTube (15s) to Twitch (12s), configurable to 0ms
+- **Kick URL fix**: Corrected to proper IVS endpoint (rtmps://fa723fc1b171...)
+
+### Deployment & Infrastructure
+- **Cloudflare Pages workflow**: Automated client deployment on push to main
+- **DATABASE_URL persistence**: Survives git reset via /tmp secrets file
+- **Database warmup**: 3 retry attempts after schema push prevent cold start failures
+- **Vast.ai diagnostics**: Comprehensive streaming diagnostics after deployment
+- **Health checking**: 120s wait for server health before deployment success
+- **Solana keypair setup**: Automated from SOLANA_DEPLOYER_PRIVATE_KEY env var
+- **CSRF cross-origin handling**: Skip validation for known clients (already protected by Origin + JWT)
+- **R2 CORS automation**: Workflow step configures CORS for asset loading
+- **Vite polyfills fix**: Aliases resolve shims to dist files, disabled protocolImports
+- **CSP updates**: Allow Google Fonts (fonts.googleapis.com, fonts.gstatic.com)
+
 ### Security Enhancements
 - **JWT_SECRET enforcement**: Now required in production/staging (throws error if not set)
-- **CSRF cross-origin handling**: Skip validation for known clients (already protected by Origin + JWT)
 - **Solana keypair management**: Setup from env var, removed hardcoded secrets
+- **Stream key security**: Masked logging, explicit unset of stale values
 
 ### Rendering Pipeline
 - **WebGPU enforcement**: WebGL fallback removed (all shaders use TSL)
-- **Instanced arena meshes**: 97% draw call reduction (~846 meshes → InstancedMesh)
-- **TSL fire particles**: GPU-driven emissive materials replace 28 PointLights
 - **Memory leak fixes**: AbortController for proper event listener cleanup
 
-### CI/CD Improvements
-- **Cloudflare Pages workflow**: Automatic client deployment on push to main
-- **Vast.ai maintenance mode**: Graceful deployments with market resolution waiting
-- **DATABASE_URL persistence**: Survives git reset operations in deploy scripts
-- **Build resilience**: Retry logic, frozen lockfile, split unsigned/release builds
+### Solana Markets
+- **WSOL default**: Markets use native token (WSOL) instead of custom GOLD
+- **MARKET_MINT variable**: Replaced GOLD_MINT for flexibility
+- **Perps oracle disabled**: Default off (program not deployed on devnet)
 
 ### Code Quality
 - **Type safety**: Reduced explicit `any` types from 142 to ~46
 - **Dead code removal**: 3098 lines removed (PacketHandlers.ts never imported)
 - **Circular dependency**: shared ↔ procgen (TODO: extract to @hyperscape/types)
+- **WebSocket type fixes**: Use ws library types for Fastify websocket connections
 
 ## Additional Resources
 
