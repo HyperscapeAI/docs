@@ -891,6 +891,68 @@ bun run build
 - Commit f355276 (Feb 25, 2026): Initial fix moving procgen to peerDependencies
 - Files: `packages/shared/package.json`, `packages/procgen/package.json`
 
+### ESLint Crashes in Asset Forge
+
+**Symptom**: ESLint crashes with errors about `import/order` rule using removed `sourceCode.getTokenOrCommentBefore` API
+
+**Cause**: `eslint-plugin-import@2.32.0` is incompatible with ESLint 10 - uses removed API
+
+**Solution**: Update to latest code (commits cadd3d5, b5c762c fixed this)
+
+**Technical Details:**
+- Disabled cascaded `import/order` rule in asset-forge's flat config
+- Used `eslint src` instead of `eslint . --ext .ts,.tsx` to avoid linting entire directory
+- Prevents eslint-plugin-import's import/order rule from crashing
+- Files: `packages/asset-forge/eslint.config.mjs`, `packages/asset-forge/package.json`
+- Commits: cadd3d5, b5c762c (Feb 26, 2026)
+
+### Cloudflare Pages Deploy Fails with Wrangler Config Error
+
+**Symptom**: Cloudflare Pages deployment fails with configuration errors
+
+**Cause**: Incorrect wrangler.toml configuration for Pages deployment
+
+**Solution**: Update to latest code (commit 42a1a0e fixed this)
+
+**Technical Details:**
+- Switched from `pages_build_output_dir` to `[assets]` directive
+- Works better with `wrangler deploy` for static asset hosting
+- Deploy command should be empty in Cloudflare dashboard
+- File: `packages/client/wrangler.toml`
+- Commit: 42a1a0e (Feb 26, 2026)
+
+### Root Wrangler Config Conflicts with Pages Project
+
+**Symptom**: Cloudflare deployment confusion between Worker and Pages projects
+
+**Cause**: Root `wrangler.toml` named "hyperscape-betting" conflicts with "hyperscape" Pages project
+
+**Solution**: Update to latest code (commit f19a704 fixed this)
+
+**Technical Details:**
+- Removed root `wrangler.toml` to avoid deployment confusion
+- Correct Pages configuration is in `packages/client/wrangler.toml`
+- To complete fix, update Cloudflare Dashboard:
+  1. Workers & Pages → hyperscape (Worker) → Settings → disconnect GitHub
+  2. Workers & Pages → hyperscape (Pages) → Settings → connect GitHub
+- Commit: f19a704 (Feb 26, 2026)
+
+### Linux/Windows Desktop Builds Fail in CI
+
+**Symptom**: Tauri desktop builds fail on Linux/Windows with "app bundle type is macOS-only" error
+
+**Cause**: `--bundles app` flag is macOS-specific, causes Linux/Windows builds to fail
+
+**Solution**: Update to latest code (commit f19a704 fixed this)
+
+**Technical Details:**
+- Replaced `--bundles app` with `--no-bundle` for unsigned builds
+- `app` bundle type is macOS-only, causing Linux/Windows to fail
+- Made `beforeBuildCommand` cross-platform using Node.js instead of Unix shell `test` command
+- Split artifact upload: release builds upload bundles, unsigned builds upload raw binaries
+- File: `.github/workflows/build-app.yml`
+- Commit: f19a704 (Feb 26, 2026)
+
 ### Mage Agents Not Attacking in Duels
 
 **Symptom**: Mage agents stand idle during duels, no spell projectiles visible
