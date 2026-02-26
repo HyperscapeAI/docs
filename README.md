@@ -464,7 +464,10 @@ JWT_SECRET=your-generated-secret-here
 
 ## More Info
 
-See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
+- **Development Guide**: [CLAUDE.md](CLAUDE.md) - Detailed development guidelines, architecture documentation, and coding standards
+- **Changelog**: [CHANGELOG-FEBRUARY-2026.md](CHANGELOG-FEBRUARY-2026.md) - Complete list of changes in February 2026
+- **Deployment**: [docs/deployment-best-practices.md](docs/deployment-best-practices.md) - Production deployment workflows and best practices
+- **Streaming**: [docs/streaming-configuration.md](docs/streaming-configuration.md) - RTMP streaming setup for Twitch, Kick, X, YouTube
 
 ## Recent Updates (February 2026)
 
