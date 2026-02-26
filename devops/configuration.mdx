@@ -774,11 +774,15 @@ img-src 'self' data: https: blob:;
 font-src 'self' data: https://fonts.gstatic.com;
 ```
 
+**Why:** PhysX WASM loading requires `data:` URLs for inline WASM modules.
+
 **Allow Google Fonts (commit e012ed2):**
 ```
 style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
 font-src 'self' data: https://fonts.gstatic.com;
 ```
+
+**Why:** UI uses Google Fonts (Rubik) for typography.
 
 **Remove broken report-uri (commit 8626299):**
 - `report-uri /api/csp-report` removed (endpoint didn't exist)
@@ -786,6 +790,43 @@ font-src 'self' data: https://fonts.gstatic.com;
 
 <Info>
 CSP is enforced in production builds. Development mode may have relaxed policies for hot module replacement.
+</Info>
+
+## Vite Polyfills Configuration
+
+### Node Polyfills Fix (commit e012ed2)
+
+**Problem:** Production builds failed with "Failed to resolve module specifier" errors for `vite-plugin-node-polyfills/shims/*` imports.
+
+**Solution:** Add aliases to resolve shims to actual dist files:
+
+```typescript
+// From packages/client/vite.config.ts
+export default defineConfig({
+  resolve: {
+    alias: {
+      // Fix vite-plugin-node-polyfills shims resolution
+      'vite-plugin-node-polyfills/shims/buffer': 'vite-plugin-node-polyfills/dist/shims/buffer',
+      'vite-plugin-node-polyfills/shims/global': 'vite-plugin-node-polyfills/dist/shims/global',
+      'vite-plugin-node-polyfills/shims/process': 'vite-plugin-node-polyfills/dist/shims/process',
+    }
+  },
+  plugins: [
+    nodePolyfills({
+      protocolImports: false,  // Disable to avoid unresolved imports
+    })
+  ]
+});
+```
+
+**Why:**
+- `vite-plugin-node-polyfills` exports shims from `shims/*` but actual files are in `dist/shims/*`
+- Production builds couldn't resolve the imports
+- Aliases map virtual paths to actual dist files
+- `protocolImports: false` prevents additional unresolved imports
+
+<Info>
+This fix is required for production builds on Cloudflare Pages. Without it, the client fails to load.
 </Info>
 
 ### CSRF Protection
