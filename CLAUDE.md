@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with WebGPU-based rendering.
+Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine with WebGPU-based rendering, ElizaOS AI agent integration, and authentic OSRS-style tick-based combat mechanics.
 
 ## Essential Commands
 
@@ -102,15 +102,15 @@ packages/
 │   └── React UI components
 ├── server/              # Game server (Fastify + WebSockets)
 │   ├── World management
-│   ├── SQLite/PostgreSQL persistence
+│   ├── PostgreSQL persistence
 │   └── LiveKit voice chat integration
 ├── client/              # Web client (Vite + React)
 │   ├── 3D rendering (WebGPU required)
 │   ├── Player controls
 │   └── UI/HUD
 ├── physx-js-webidl/     # PhysX WASM bindings
-├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
 ├── procgen/             # Procedural generation (trees, rocks, terrain)
+├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
 └── docs-site/           # Docusaurus documentation site
 ```
 
@@ -123,45 +123,9 @@ packages/
 3. **shared** - Depends on physx-js-webidl and procgen
 4. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
 
-**Note**: `shared` and `procgen` have a peer dependency relationship (not a hard dependency) to avoid circular dependency issues with Turbo's build graph.
-
-### Architectural Audit TODOs
-
-The codebase includes TODO comments tracking known technical debt from code audits (February 2026):
-
-**AUDIT-001: Entity.ts Decomposition**
-- Current: Large Entity.ts file with mixed concerns
-- Goal: Split into focused modules (rendering, physics, networking)
-- Status: Tracked but not blocking
-
-**AUDIT-002: ServerNetwork Decomposition**
-- ~~Previous: 116K lines in single file~~ **RESOLVED**
-- Current: Already decomposed into 30+ modules (handlers/, services/, movement/)
-- Actual size: ~3K lines (not 116K - that was total package size)
-- Status: Complete - no action needed
-
-**AUDIT-003: ClientNetwork Handler Extraction**
-- ~~Previous: 165K lines, suggested extraction~~ **RESOLVED**
-- Current: Handlers are intentional thin wrappers that emit events
-- Actual size: ~5K lines (not 165K - that was total package size)
-- Design: Event-driven architecture is correct pattern
-- Status: Complete - extraction not needed
-
-**AUDIT-004: Circular Dependency (shared ↔ procgen)**
-- Current: Circular dependency between `@hyperscape/shared` and `@hyperscape/procgen`
-- Workaround: procgen build ignores TypeScript errors
-- Recommended fix: Extract shared types to `@hyperscape/types` package
-- Status: Tracked, workaround stable
-
-**AUDIT-005: Any Type Cleanup**
-- Previous: 142 explicit `any` types
-- Current: ~46 remaining (reduced by 68%)
-- Remaining locations: TSL shader code (@types/three limitation), browser polyfills (intentional), test files
-- Status: Ongoing - core game logic cleaned up
-
-**Implementation**: Search codebase for `TODO(AUDIT-` to find specific locations.
+> **Note on shared ↔ procgen**: These packages have a peer dependency relationship (not a hard dependency) to avoid circular dependency issues with Turbo's build graph. `procgen` is an optional peerDependency in `shared/package.json`, and `shared` is a devDependency in `procgen/package.json`.
 
 ### Entity Component System (ECS)
 
@@ -175,7 +139,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -211,17 +175,6 @@ const player = getEntity(id) as Player;
 player.health -= damage;
 ```
 
-**Recent Cleanup (February 2026)**:
-- Eliminated explicit `any` types in core game logic:
-  - `tile-movement.ts`: Properly typed BuildingCollisionService and ICollisionMatrix
-  - `proxy-routes.ts`: Replaced `any` with proper types (unknown, Buffer | string, Error)
-  - `ClientGraphics.ts`: Added safe cast for setupGPUCompute after WebGPU verification
-
-**Remaining `any` types** (acceptable):
-- TSL shader code (ProceduralGrass.ts) - @types/three limitation
-- Browser polyfills (polyfills.ts) - intentional mock implementations
-- Test files - acceptable for test fixtures
-
 ### File Management
 
 **Don't create new files unless absolutely necessary.**
@@ -252,17 +205,10 @@ Visual testing uses colored cube proxies:
 
 ### Production Code Only
 
-- No TODOs or "will fill this out later" - implement completely
+- No TODOs or \"will fill this out later\" - implement completely
 - No hardcoded data - use JSON files and general systems
 - No shortcuts or workarounds - fix root causes
 - Build toward the general case (many items, players, mobs)
-
-**Exception**: TODO comments for architectural refactoring are acceptable when tracking known technical debt:
-- `TODO(AUDIT-001)`: Entity.ts decomposition
-- `TODO(AUDIT-002)`: ServerNetwork split
-- `TODO(AUDIT-003)`: ClientNetwork split
-- `TODO(AUDIT-004)`: Circular dependency fix (shared ↔ procgen)
-- `TODO(AUDIT-005)`: Any type cleanup
 
 ### Separation of Concerns
 
@@ -335,9 +281,9 @@ All services have unique default ports to avoid conflicts:
 **Package-specific `.env` files**: Each package has its own `.env.example` with deployment documentation:
 
 | Package | File | Purpose |
-|---------|------|---------| 
-| Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
-| Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
+|---------|------|---------|
+| Server | `packages/server/.env.example` | Server deployment (Railway, Vast.ai, Docker) |
+| Client | `packages/client/.env.example` | Client deployment (Cloudflare Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
 
 **Common variables**:
@@ -358,12 +304,6 @@ PUBLIC_WS_URL=wss://...          # Point to your server WebSocket
 **Split deployment** (client and server on different hosts):
 - `PUBLIC_PRIVY_APP_ID` (client) must equal `PRIVY_APP_ID` (server)
 - `PUBLIC_WS_URL` and `PUBLIC_API_URL` must point to your server
-
-**Security Requirements (February 2026)**:
-- **JWT_SECRET** is now **required** in production/staging (throws error if not set)
-- Generate with: `openssl rand -base64 32`
-- **ADMIN_CODE** should be set to prevent unauthorized admin access
-- Development environments warn if JWT_SECRET not set (but don't throw)
 
 ## Package Manager
 
@@ -424,233 +364,16 @@ See [Port Allocation](#port-allocation) section for full port list.
 
 ### WebGPU Issues
 
-**Symptoms**: "WebGPU is not supported" error screen, renderer initialization failures.
-
-**Cause**: WebGPU is **required** as of February 2026 (all shaders use TSL). WebGL fallback removed.
+**WebGPU is required** as of February 2026 (all shaders use TSL). WebGL fallback removed.
 
 **Browser Requirements**:
 - Chrome/Edge 113+ (Windows/macOS/Linux)
-- Safari 18+ (macOS Sonoma+ only)
+- Safari 18+ (macOS 15+ only)
 - Firefox: WebGPU support is experimental (not recommended)
 
 **Check Support**: Visit [webgpureport.org](https://webgpureport.org)
 
-**Renderer Initialization** (February 2026 improvements):
-- Best-effort `requiredLimits`: Tries `maxTextureArrayLayers: 2048` first
-- Retries with default limits if GPU rejects
-- Always WebGPU, never WebGL (no fallback)
-
-**Implementation**: `packages/shared/src/utils/rendering/RendererFactory.ts`
-
-### Model Cache Issues
-
-**Symptoms**: Missing objects (altars, trees) or white/grey textures after browser restart.
-
-**Cause**: Corrupted IndexedDB cache from pre-February 2026 builds.
-
-**Solution**:
-```javascript
-// Clear cache in browser console
-indexedDB.deleteDatabase('hyperscape-processed-models');
-// Reload page - cache will rebuild with fixed serialization
-```
-
-**Disable cache for debugging**:
-```javascript
-localStorage.setItem('disable-model-cache', 'true');
-```
-
-**Fixes (February 2026)**:
-1. **Missing objects**: Used `Map<Object3D, number>` identity map instead of `findIndex`-by-name (duplicate mesh names like "", "Cube" all resolved to same index)
-2. **Lost textures**: Extract raw RGBA pixels via canvas `getImageData` (synchronous) and restore as `THREE.DataTexture` - no async loading race conditions
-3. **Grey tree materials**: Fixed `instanceof MeshStandardMaterial` check (fails for `MeshStandardNodeMaterial` in WebGPU build) - replaced with duck-type property check
-4. **Cache version**: Bumped `PROCESSED_CACHE_VERSION` to 3 to invalidate broken entries
-
-**Implementation**: `packages/shared/src/utils/rendering/ModelCache.ts`
-
-### Terrain Height Issues
-
-**Symptoms**: Players floating 50m above ground, incorrect pathfinding, resources spawning in air.
-
-**Cause**: Terrain height cache offset bug (fixed February 2026).
-
-**Solution**: Update to latest main branch. No migration needed - fix is automatic.
-
-**Technical Details**:
-- `getHeightAtCached` had two bugs causing consistent 50m offset:
-  1. Tile index used `Math.floor(worldX/TILE_SIZE)` (doesn't account for centered geometry)
-  2. Grid index formula omitted `halfSize` offset from PlaneGeometry's `[-50,+50]` range
-- Added canonical helpers: `worldToTerrainTileIndex()` and `localToGridIndex()`
-- Fixed `getTerrainColorAt` (had comma-vs-underscore key typo preventing tile lookups)
-
-**Implementation**: `packages/shared/src/systems/shared/world/TerrainSystem.ts`
-
-### Memory Leaks
-
-**Symptoms**: Server memory grows unbounded, eventual OOM crash.
-
-**Cause**: InventoryInteractionSystem event listeners never removed (9 listeners per interaction).
-
-**Solution**: Update to latest main branch (fixed February 2026).
-
-**Fix**: Uses `AbortController` for proper event listener cleanup:
-```typescript
-const abortController = new AbortController();
-world.on('event', handler, { signal: abortController.signal });
-// Later: abortController.abort() removes all listeners
-```
-
-**Implementation**: `packages/shared/src/systems/shared/interaction/InventoryInteractionSystem.ts`
-
-### Streaming Issues
-
-**Symptoms**: RTMP stream keeps restarting, frequent disconnections, or WebGPU initialization failures in headless environments.
-
-**Cause**: CDP stall threshold too aggressive, FFmpeg crashes, or WebGPU unavailable in Docker/vast.ai.
-
-**Solutions** (improved February 2026):
-
-**Stability Tuning** - Increase thresholds in `packages/server/.env`:
-```bash
-CDP_STALL_THRESHOLD=6                    # Default: 4 (120s total before restart)
-FFMPEG_MAX_RESTART_ATTEMPTS=10           # Default: 8
-CAPTURE_RECOVERY_MAX_FAILURES=5          # Default: 4
-```
-
-**Improvements**:
-- **Soft CDP Recovery**: Restarts screencast without browser/FFmpeg teardown (no stream gap)
-- **Best-Effort WebGPU Init**: Tries `maxTextureArrayLayers: 2048` first, retries with default limits if GPU rejects
-- **Increased Thresholds**: CDP stall (2→4 intervals), FFmpeg restarts (5→8), recovery failures (2→4)
-
-**Implementation**: `packages/server/src/streaming/stream-capture.ts`
-
-### CSRF Token Errors (Cross-Origin Requests)
-
-**Symptoms**: POST/PUT/DELETE requests from Cloudflare Pages frontend to Railway backend fail with "Missing CSRF token" error.
-
-**Cause**: CSRF middleware uses `SameSite=Strict` cookies which cannot be sent in cross-origin requests.
-
-**Solution**: Already fixed (February 2026) - CSRF validation is skipped for known cross-origin clients since they're already protected by:
-1. Origin header validation (http-server.ts preHandler hook)
-2. JWT bearer token authentication (Authorization header)
-
-**Known Cross-Origin Clients** (automatically detected):
-- `hyperscape.gg` (apex domain)
-- `*.hyperscape.gg` (subdomains)
-- `hyperbet.win` (apex domain)
-- `*.hyperbet.win` (subdomains)
-- `hyperscape.bet` (apex domain)
-- `*.hyperscape.bet` (subdomains)
-
-**Implementation**: `packages/server/src/middleware/csrf.ts`
-
-**Note**: CSRF cookie validation is redundant for cross-origin requests and doesn't work anyway due to `SameSite=Strict`. Same-origin requests still use CSRF tokens for protection.
-
-### CI Build Failures
-
-**Symptoms**: GitHub Actions builds fail with npm 403 errors, signing failures, or platform-specific errors.
-
-**Cause**: npm rate limiting, missing signing certificates, or platform-specific build configuration issues.
-
-**Solutions** (all fixed February 2026):
-
-1. **npm 403 errors**: Automatic retry with exponential backoff (15s, 30s, 45s, 60s, 75s) - up to 5 attempts
-2. **Frozen lockfile**: All workflows use `bun install --frozen-lockfile` to prevent npm resolution attempts that trigger rate limits
-3. **Signing failures**: Build workflows split into separate unsigned/release jobs - signing env vars only present during actual releases
-4. **macOS unsigned builds**: Use `--no-bundle` instead of `--bundles app` (app bundle type is macOS-only, causing Linux/Windows to fail)
-5. **iOS builds**: Release-only (unsigned iOS builds always fail with "Signing requires a development team")
-6. **Windows install failures**: Retry logic (3 attempts) for transient NPM registry 403 errors on Windows runners
-
-**Workflow Files**:
-- `.github/workflows/build-app.yml` - Native app builds (desktop + mobile)
-- `.github/workflows/ci.yml` - Main CI pipeline
-- `.github/workflows/deploy-vast.yml` - Vast.ai deployment with maintenance mode
-
-### Dependency Cycle Errors
-
-**Symptoms**: Turbo build fails with "cyclic dependency detected: shared ↔ procgen".
-
-**Cause**: Turbo treats peerDependencies as graph edges.
-
-**Solution**: Already fixed (February 2026) - `procgen` is an **optional peerDependency** in `shared/package.json`, and `shared` is a **devDependency** in `procgen/package.json`. This breaks the Turbo graph cycle while allowing imports to resolve at runtime (both packages are always installed together in the workspace).
-
-**Technical Details**: `devDependencies` are not followed by Turbo's `^build` topological ordering, so this doesn't create a cycle. The devDependency in procgen ensures bun links the package so TypeScript can find `@hyperscape/procgen` module declarations during type checking.
-
-**If you see this error**:
-```bash
-# Verify package.json configurations
-cat packages/shared/package.json | grep procgen
-# Should show: "peerDependencies": { "@hyperscape/procgen": "workspace:*" }
-
-cat packages/procgen/package.json | grep shared
-# Should show: "devDependencies": { "@hyperscape/shared": "workspace:*" }
-```
-
-### Asset Forge TypeScript Issues
-
-**Symptoms**: ESLint crashes with "sourceCode.getTokenOrCommentBefore is not a function" or TypeScript can't resolve Three.js WebGPU exports.
-
-**Cause**: 
-1. `eslint-plugin-import@2.32.0` incompatible with ESLint 10 (uses removed API)
-2. Three.js WebGPU subpath requires `moduleResolution: bundler` or `node16`
-
-**Solutions** (fixed February 2026):
-1. Disabled cascaded `import/order` rule in `packages/asset-forge/eslint.config.mjs`
-2. Updated `packages/asset-forge/tsconfig.json` to use `moduleResolution: "bundler"`
-3. Added explicit type annotations for traverse callbacks (TypeScript strict mode requirement)
-
-**Implementation**: 
-- `packages/asset-forge/eslint.config.mjs`
-- `packages/asset-forge/tsconfig.json`
-
-### Deployment & Maintenance Mode
-
-**Maintenance Mode** - Graceful deployment coordination for streaming duel system.
-
-**Purpose**: Prevents data loss and market inconsistency during deployments by:
-1. Pausing new duel cycles (current cycle completes)
-2. Locking betting markets (no new bets accepted)
-3. Waiting for current market to resolve
-4. Reporting "safe to deploy" status
-
-**API Endpoints** (require `ADMIN_CODE` authentication):
-```bash
-# Enter maintenance mode
-POST /admin/maintenance/enter
-Body: {"reason": "deployment", "timeoutMs": 300000}
-
-# Check status
-GET /admin/maintenance/status
-
-# Exit maintenance mode
-POST /admin/maintenance/exit
-```
-
-**Status Response**:
-```json
-{
-  "active": true,
-  "enteredAt": 1709000000000,
-  "reason": "deployment",
-  "safeToDeploy": true,
-  "currentPhase": "IDLE",
-  "marketStatus": "resolved",
-  "pendingMarkets": 0
-}
-```
-
-**Safe to Deploy When**:
-- `safeToDeploy: true`
-- No active duel phases (FIGHTING, COUNTDOWN, ANNOUNCEMENT)
-- All betting markets resolved
-
-**CI/CD Integration**: `.github/workflows/deploy-vast.yml` automatically enters/exits maintenance mode during deployments.
-
-**Implementation**: `packages/server/src/startup/maintenance-mode.ts`
-
-**Helper Scripts**:
-- `scripts/pre-deploy-maintenance.sh` - Enter maintenance mode
-- `scripts/post-deploy-resume.sh` - Exit maintenance mode
+See [docs/webgpu-requirements.md](docs/webgpu-requirements.md) for full requirements.
 
 ## Additional Resources
 
@@ -658,82 +381,6 @@ POST /admin/maintenance/exit
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
-
-## February 2026 Technical Documentation
-
-### Breaking Changes
-- **WebGPU Required**: All shaders now use TSL (Three.js Shading Language) which requires WebGPU. WebGL fallback removed. User-friendly error screen shown when WebGPU unavailable.
-- **JWT_SECRET Required**: Production/staging deployments now throw error if `JWT_SECRET` not set (security hardening)
-
-### Performance Optimizations
-
-**Arena Rendering** (February 2026 - PR #938):
-- **97% draw call reduction**: ~846 individual meshes → ~20 InstancedMesh draw calls
-- **Eliminated 28 dynamic PointLights**: Replaced with GPU-driven TSL emissive materials (zero CPU cost per frame)
-- **Instanced Components**:
-  - Fence posts + caps: 288 instances → 2 draw calls
-  - Fence rails (X/Z): 72 instances → 2 draw calls
-  - Stone pillars (base/shaft/capital): 96 instances → 3 draw calls
-  - Brazier bowls: 24 instances → 1 draw call
-  - Floor border trim: 24 instances → 2 draw calls
-  - Banner poles: 12 instances → 1 draw call
-- **TSL Brazier Glow**: Per-instance flicker phase derived from world position (quantized), multi-frequency sine + noise, top-face-only emission mask
-- **Fire Particles**: Enhanced shader with smooth value noise (bilinear interpolated hash lattice), soft radial falloff for additive blending, turbulent vertex motion, height-based color gradient
-- **Removed Presets**: Deleted "torch" preset, unified all fire emitters on enhanced "fire" preset (28 particles, 0.35-0.8s lifetime, 0.12-0.2 scale)
-- **Implementation**: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`, `packages/shared/src/entities/managers/particleManager/GlowParticleManager.ts`
-
-**Renderer Init**: Best-effort `requiredLimits` - tries `maxTextureArrayLayers: 2048`, retries with defaults if GPU rejects
-
-### Bug Fixes
-- **Model Cache**: Fixed missing objects (duplicate mesh names → identity Map) and texture persistence (blob URLs → DataTexture with raw RGBA pixels)
-- **Terrain Heights**: Fixed 50m offset via canonical `worldToTerrainTileIndex()` and `localToGridIndex()` helpers
-- **Memory Leak**: InventoryInteractionSystem uses AbortController for proper event listener cleanup (9 listeners were never removed)
-- **Duel Combat**: Fixed mage staff and 2H sword combat via weapon type propagation, keep-alive re-engagement, combat timeout refresh
-- **Victory Emote**: Delayed by 600ms so combat cleanup doesn't override it (PR #940)
-- **Teleport VFX**: Fixed duplicate effects via race condition in `clearDuelFlagsForCycle()`, forward `suppressEffect` to clients, removed duplicate PLAYER_TELEPORTED emits (PR #939)
-
-**Teleport VFX Improvements** (February 2026 - PR #939):
-- **Complete rewrite** with object pooling (2 pre-allocated effects, zero allocations at spawn time)
-- **Multi-phase animation**: Gather (0-20%) → Erupt (20-34%) → Sustain (34-68%) → Fade (68-100%)
-- **Components**: Ground rune circle, base glow disc, dual beams (inner/outer with elastic overshoot), core flash, 2 shockwave rings, 8 helix spiral particles, 6 burst particles with gravity
-- **TSL Shader Materials**: Vertical gradients, scrolling energy pulse, soft base fade, procedural glow patterns
-- **Hermite Curves**: Elastic beam overshoot (peaks at 1.3 at t=0.35, settles to 1.0)
-- **Performance**: All materials compiled once in init(), zero pipeline compilations at spawn time
-- **Duplicate Fix**: Removed PLAYER_TELEPORTED emit from PlayerRemote.modify() and local player path in ClientNetwork.onPlayerTeleport (only remote players emit)
-- **Race Condition Fix**: Duel flags stay true until cleanupAfterDuel() teleports agents out, preventing spurious extra teleport from DuelSystem.ejectNonDuelingPlayersFromCombatArenas()
-- **Implementation**: `packages/shared/src/systems/client/ClientTeleportEffectsSystem.ts`
-
-### Type Safety
-- Eliminated explicit `any` types in core game logic (tile-movement.ts, proxy-routes.ts, ClientGraphics.ts)
-- Remaining `any` types limited to: TSL shader code (@types/three limitation), browser polyfills (intentional), test files
-
-### Streaming & Deployment
-- **Maintenance Mode API**: Graceful deployment coordination - pauses new duel cycles, waits for markets to resolve
-- **Vast.ai Health Checks**: Auto-detect unhealthy instances, destroy and reprovision when failures exceed threshold
-- **CDP Soft Recovery**: Restarts screencast without browser/FFmpeg teardown (no stream gap)
-- **Streaming Stability**: Increased CDP stall threshold (2→4 intervals), FFmpeg restart attempts (5→8), recovery failures (2→4)
-
-### CI/CD Improvements
-- **npm Retry Logic**: Automatic retry with exponential backoff (15s-75s) for transient npm 403 errors
-- **Frozen Lockfile**: All workflows use `--frozen-lockfile` to prevent npm resolution attempts
-- **Tauri Build Fixes**: Split unsigned/release builds, macOS `.app`-only for unsigned, iOS release-only, Windows retry logic
-- **Dependency Cycles**: Resolved shared↔procgen cycle via peerDependencies + devDependencies pattern
-
-### Code Cleanup & Refactoring
-
-**Dead Code Removal** (February 2026 - Commit `7c3dc98`):
-- **PacketHandlers.ts**: Deleted 3098 lines of dead code (never imported, completely unused)
-- **Arena Functions**: Removed `createArenaMarker()`, `createAmbientDust()`, `createLobbyBenches()` (replaced by instanced rendering)
-- **Impact**: Reduced codebase size, improved maintainability, eliminated confusion
-
-**Architectural TODO Updates**:
-- **AUDIT-002**: ServerNetwork already decomposed into 30+ modules (handlers/, services/, movement/) - actual size ~3K lines, not 116K
-- **AUDIT-003**: ClientNetwork handlers are intentional thin wrappers that emit events - extraction not needed
-- **AUDIT-005**: Any types reduced from 142 to ~46 (68% reduction) - core game logic cleaned up
-
-**File Management Reminder**: When you find dead code, delete it immediately. Don't leave commented-out code or unused imports.
-
-### Asset Forge
-- **VFX Catalog Browser**: New tab with live Three.js previews of all game effects
-- **TypeScript Fixes**: Added type annotations for traverse callbacks, updated to `moduleResolution: bundler` for Three.js WebGPU exports
-- **ESLint Fix**: Disabled incompatible `import/order` rule (eslint-plugin-import@2.32.0 incompatible with ESLint 10)
+- [docs/vast-deployment.md](docs/vast-deployment.md) - Vast.ai deployment guide
+- [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Graceful deployment API
+- [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser and GPU requirements
