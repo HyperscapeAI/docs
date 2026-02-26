@@ -1,0 +1,860 @@
+---
+title: "Vast.ai Deployment"
+description: "Deploy Hyperscape to Vast.ai for GPU-accelerated streaming"
+icon: "server"
+---
+
+## Overview
+
+Hyperscape deploys to Vast.ai for GPU-accelerated game streaming with automated CI/CD. This deployment enables:
+
+- **GPU-accelerated rendering** with WebGPU + Vulkan
+- **Multi-platform RTMP streaming** (Twitch, Kick, X/Twitter)
+- **PulseAudio audio capture** for game music and sound effects
+- **Automated maintenance mode** for graceful deployments
+- **Health monitoring** and diagnostics
+
+## Automated Deployment
+
+The `.github/workflows/deploy-vast.yml` workflow automatically deploys on push to main:
+
+```yaml
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:  # Manual deployment trigger
+```
+
+### Manual Deployment
+
+Trigger deployments manually from GitHub Actions UI:
+
+1. Go to **Actions** tab in GitHub
+2. Select **"Deploy to Vast.ai"** workflow
+3. Click **"Run workflow"**
+4. Select branch (usually `main`)
+5. Click **"Run workflow"**
+
+<Info>
+Manual deployment is useful for hotfixes, instance restarts, or testing the deployment process.
+</Info>
+
+## Deployment Process
+
+The deployment follows these steps:
+
+### 1. Enter Maintenance Mode
+
+Pauses new duel cycles and waits for active markets to resolve:
+
+```bash
+POST /admin/maintenance/enter
+Headers:
+  x-admin-code: $ADMIN_CODE
+Body:
+  {
+    "reason": "deployment",
+    "timeoutMs": 300000
+  }
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "status": {
+    "safeToDeploy": true,
+    "currentPhase": "IDLE",
+    "pendingMarkets": 0
+  }
+}
+```
+
+### 2. SSH Deploy
+
+Connects to Vast.ai instance and runs `scripts/deploy-vast.sh`:
+
+**Key Steps:**
+1. Install bun if not present
+2. Clone repository (first-time setup)
+3. Pull latest code from main
+4. Restore environment variables from `/tmp` (survives git reset)
+5. Install system dependencies (FFmpeg, Vulkan, Chrome Dev, PulseAudio)
+6. Setup PulseAudio virtual sink for audio capture
+7. Install Playwright and dependencies
+8. Build core packages
+9. Setup Solana keypair from `SOLANA_DEPLOYER_PRIVATE_KEY`
+10. Push database schema with drizzle-kit
+11. Warmup database connection (3 retry attempts)
+12. Kill PM2 daemon (ensures fresh environment)
+13. Start port proxies (socat)
+14. Explicitly unset and re-export stream keys
+15. Start duel stack via PM2
+16. Wait for health check to pass (120s timeout)
+17. Run streaming diagnostics
+
+### 3. Exit Maintenance Mode
+
+Resumes duel cycles after health check passes:
+
+```bash
+POST /admin/maintenance/exit
+Headers:
+  x-admin-code: $ADMIN_CODE
+```
+
+## Required GitHub Secrets
+
+Configure these in **Settings → Secrets → Actions**:
+
+| Secret | Purpose | Example |
+|--------|---------|---------|
+| `VAST_HOST` | Instance IP address | `123.45.67.89` |
+| `VAST_PORT` | SSH port | `35022` |
+| `VAST_SSH_KEY` | Private SSH key | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
+| `DATABASE_URL` | PostgreSQL connection | `postgresql://user:pass@host:5432/db` |
+| `SOLANA_DEPLOYER_PRIVATE_KEY` | Base58 Solana keypair | `5J7Xk...` |
+| `TWITCH_STREAM_KEY` | Twitch stream key | `live_123456789_abc...` |
+| `X_STREAM_KEY` | X/Twitter stream key | `sp16tpmtyqws` |
+| `X_RTMP_URL` | X/Twitter RTMP URL | `rtmp://sg.pscp.tv:80/x` |
+| `KICK_STREAM_KEY` | Kick stream key | `sk_us-west-2_...` |
+| `KICK_RTMP_URL` | Kick RTMP URL | `rtmps://fa723fc1b171...` |
+| `ADMIN_CODE` | Admin code for maintenance API | `your-secure-code` |
+| `VAST_SERVER_URL` | Public server URL | `https://hyperscape.gg` |
+
+## System Requirements
+
+### Vast.ai Instance Specs
+
+**Minimum Requirements:**
+- **GPU**: NVIDIA with Vulkan support (RTX 3060 Ti or better)
+- **RAM**: 16GB minimum
+- **Storage**: 50GB minimum
+- **OS**: Ubuntu 22.04 or Debian 12
+
+**Recommended:**
+- **GPU**: RTX 4090 or RTX 3090
+- **RAM**: 32GB
+- **Storage**: 100GB SSD
+
+### Installed Dependencies
+
+The deployment script automatically installs:
+
+**System Packages:**
+- `build-essential` - C/C++ compiler for native modules
+- `python3` - Required for some build tools
+- `git-lfs` - Git Large File Storage
+- `ffmpeg` - Video encoding and streaming
+- `socat` - Port proxying
+- `xvfb` - Virtual framebuffer for headful GPU rendering
+- `pulseaudio` + `pulseaudio-utils` - Audio capture
+- `mesa-vulkan-drivers` - Vulkan drivers
+- `vulkan-tools` - Vulkan utilities
+- `libvulkan1` - Vulkan library
+- `wget`, `gnupg`, `curl`, `jq` - Utilities
+
+**Chrome Dev Channel:**
+```bash
+google-chrome-unstable  # Latest WebGPU features
+```
+
+**Playwright:**
+```bash
+bunx playwright install chromium
+bunx playwright install-deps chromium
+```
+
+## Environment Variable Persistence
+
+### Problem
+
+`git reset --hard` operations in the deploy script would overwrite the `.env` file, losing critical configuration like `DATABASE_URL` and stream keys.
+
+### Solution
+
+Write secrets to `/tmp` before git reset, then restore after:
+
+**GitHub Workflow:**
+```bash
+# Write secrets to /tmp FIRST (survives git reset)
+cat > /tmp/hyperscape-secrets.env << 'ENVEOF'
+DATABASE_URL=${{ secrets.DATABASE_URL }}
+TWITCH_STREAM_KEY=${{ secrets.TWITCH_STREAM_KEY }}
+X_STREAM_KEY=${{ secrets.X_STREAM_KEY }}
+KICK_STREAM_KEY=${{ secrets.KICK_STREAM_KEY }}
+SOLANA_DEPLOYER_PRIVATE_KEY=${{ secrets.SOLANA_DEPLOYER_PRIVATE_KEY }}
+YOUTUBE_STREAM_KEY=
+ENVEOF
+
+# Run deploy script (which does git reset)
+bash /root/hyperscape/scripts/deploy-vast.sh
+```
+
+**Deploy Script:**
+```bash
+# Pull latest code (git reset happens here)
+git fetch origin
+git reset --hard origin/main
+
+# Restore secrets from /tmp
+if [ -f "/tmp/hyperscape-secrets.env" ]; then
+  cp /tmp/hyperscape-secrets.env /root/hyperscape/packages/server/.env
+fi
+```
+
+<Warning>
+Without this persistence mechanism, the server would fail to start due to missing `DATABASE_URL`.
+</Warning>
+
+## Stream Key Management
+
+### Problem
+
+Vast.ai servers can have stale stream keys in their shell environment from previous deployments. These stale values override the `.env` file values, causing streams to go to wrong channels.
+
+### Solution
+
+Explicitly unset and re-export stream keys before PM2 start:
+
+```bash
+# From scripts/deploy-vast.sh
+
+# Clear any old/stale stream keys from environment
+unset TWITCH_STREAM_KEY X_STREAM_KEY X_RTMP_URL KICK_STREAM_KEY KICK_RTMP_URL
+unset YOUTUBE_STREAM_KEY YOUTUBE_RTMP_STREAM_KEY YOUTUBE_STREAM_URL YOUTUBE_RTMP_URL
+
+# Explicitly disable YouTube
+export YOUTUBE_STREAM_KEY=""
+
+# Re-source .env to get correct stream keys
+if [ -f "/root/hyperscape/packages/server/.env" ]; then
+  set -a
+  source /root/hyperscape/packages/server/.env
+  set +a
+fi
+
+# Log which keys are configured (masked for security)
+echo "[deploy] TWITCH_STREAM_KEY: ${TWITCH_STREAM_KEY:+***configured***}"
+echo "[deploy] X_STREAM_KEY: ${X_STREAM_KEY:+***configured***}"
+echo "[deploy] KICK_STREAM_KEY: ${KICK_STREAM_KEY:+***configured***}"
+
+# Start PM2 with clean environment
+bunx pm2 start ecosystem.config.cjs
+```
+
+<Info>
+This ensures PM2 picks up the correct stream keys from the `.env` file, not stale values from the shell environment.
+</Info>
+
+## PM2 Environment Variable Handling
+
+### Problem
+
+PM2 wasn't picking up new environment variables on restart because `pm2 delete` only removes processes, not the daemon's cached environment.
+
+### Solution
+
+Use `pm2 kill` instead of `pm2 delete`:
+
+```bash
+# ❌ Old: pm2 delete doesn't restart daemon
+bunx pm2 delete ecosystem.config.cjs
+
+# ✅ New: pm2 kill restarts daemon with fresh env
+bunx pm2 kill
+bunx pm2 start ecosystem.config.cjs
+```
+
+**Impact:** Environment variables (stream keys, DATABASE_URL) are properly loaded on every deployment.
+
+## Database Warmup
+
+### Problem
+
+Cold starts caused database connection failures, leading to server crash-loops.
+
+### Solution
+
+Add warmup step after schema push with retry logic:
+
+```bash
+# From scripts/deploy-vast.sh
+echo "[deploy] Warming up database connection..."
+for i in 1 2 3; do
+  if bun -e "
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
+    pool.query('SELECT 1').then(() => { 
+      console.log('DB warmup successful'); 
+      pool.end(); 
+      process.exit(0); 
+    }).catch(e => { 
+      console.error('DB warmup failed:', e.message); 
+      pool.end(); 
+      process.exit(1); 
+    });
+  " 2>/dev/null; then
+    echo "[deploy] Database connection verified"
+    break
+  else
+    echo "[deploy] Database warmup attempt $i failed, retrying..."
+    sleep 3
+  fi
+done
+```
+
+**Benefits:**
+- Verifies database connection before starting server
+- Retries up to 3 times to handle cold starts
+- Prevents server crash-loops from database connection failures
+
+## PulseAudio Audio Capture
+
+### Overview
+
+The deployment configures PulseAudio to capture game audio (music and sound effects) for RTMP streams.
+
+### Setup Process
+
+**1. Install PulseAudio:**
+```bash
+apt-get install -y pulseaudio pulseaudio-utils
+```
+
+**2. Configure User Mode:**
+```bash
+# Setup XDG runtime directory
+export XDG_RUNTIME_DIR=/tmp/pulse-runtime
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+
+# Create PulseAudio config
+mkdir -p /root/.config/pulse
+cat > /root/.config/pulse/default.pa << 'PULSEEOF'
+.fail
+load-module module-null-sink sink_name=chrome_audio sink_properties=device.description="ChromeAudio"
+set-default-sink chrome_audio
+load-module module-native-protocol-unix auth-anonymous=1
+PULSEEOF
+```
+
+**3. Start PulseAudio:**
+```bash
+pulseaudio --start --exit-idle-time=-1 --daemonize=yes
+
+# Verify sink exists
+pactl list short sinks | grep chrome_audio
+```
+
+**4. Export Environment Variables:**
+```bash
+export PULSE_SERVER="unix:$XDG_RUNTIME_DIR/pulse/native"
+export STREAM_AUDIO_ENABLED=true
+export PULSE_AUDIO_DEVICE=chrome_audio.monitor
+```
+
+### FFmpeg Audio Configuration
+
+**Audio Input:**
+```bash
+-f pulse -i chrome_audio.monitor
+-thread_queue_size 1024
+-use_wallclock_as_timestamps 1
+-filter:a aresample=async=1000:first_pts=0
+```
+
+**Audio Encoding:**
+```bash
+-c:a aac -b:a 128k -ar 44100
+```
+
+### Graceful Fallback
+
+If PulseAudio is not available, FFmpeg falls back to silent audio:
+
+```bash
+if pactl info &>/dev/null && pactl list sinks | grep -q chrome_audio; then
+  AUDIO_INPUT="-f pulse -i chrome_audio.monitor"
+else
+  AUDIO_INPUT="-f lavfi -i anullsrc"  # Silent audio
+fi
+```
+
+### Troubleshooting Audio
+
+**Check PulseAudio status:**
+```bash
+pactl info
+pactl list sinks
+```
+
+**Verify chrome_audio sink:**
+```bash
+pactl list sinks | grep chrome_audio
+```
+
+**Test audio capture:**
+```bash
+ffmpeg -f pulse -i chrome_audio.monitor -t 5 test.wav
+```
+
+**Restart PulseAudio:**
+```bash
+pulseaudio --kill
+pulseaudio --start --exit-idle-time=-1 --daemonize=yes
+```
+
+## Streaming Configuration
+
+### Multi-Platform RTMP
+
+Streams simultaneously to:
+- **Twitch**: `rtmp://live.twitch.tv/app`
+- **Kick**: `rtmps://fa723fc1b171.global-contribute.live-video.net/app`
+- **X/Twitter**: `rtmp://sg.pscp.tv:80/x`
+
+<Warning>
+YouTube streaming is explicitly disabled. Set `YOUTUBE_STREAM_KEY=""` to prevent stale keys from being used.
+</Warning>
+
+### Streaming Quality Settings
+
+**Balanced Mode (Default):**
+```bash
+STREAM_LOW_LATENCY=false
+```
+- Uses 'film' tune with B-frames
+- 4x buffer size (18000k)
+- Better compression and smoother playback
+- Recommended for passive viewing
+
+**Low Latency Mode:**
+```bash
+STREAM_LOW_LATENCY=true
+```
+- Uses 'zerolatency' tune
+- 2x buffer size (9000k)
+- No B-frames
+- Recommended for interactive streams
+
+### Canonical Platform
+
+```bash
+# Default: twitch (12s latency)
+STREAMING_CANONICAL_PLATFORM=twitch
+
+# Override public delay to 0 for live betting
+STREAMING_PUBLIC_DELAY_MS=0
+```
+
+**Platform Defaults:**
+- `youtube` → 15000ms delay
+- `twitch` → 12000ms delay
+- `hls` → 4000ms delay
+
+## Port Mappings
+
+Vast.ai uses socat for port proxying:
+
+| Internal | External | Service |
+|----------|----------|---------|
+| 5555 | 35143 | HTTP API |
+| 5555 | 35079 | WebSocket |
+| 8080 | 35144 | CDN |
+
+**Setup:**
+```bash
+# Game server: internal 5555 -> external 35143
+nohup socat TCP-LISTEN:35143,reuseaddr,fork TCP:127.0.0.1:5555 > /dev/null 2>&1 &
+
+# WebSocket: internal 5555 -> external 35079
+nohup socat TCP-LISTEN:35079,reuseaddr,fork TCP:127.0.0.1:5555 > /dev/null 2>&1 &
+
+# CDN: internal 8080 -> external 35144
+nohup socat TCP-LISTEN:35144,reuseaddr,fork TCP:127.0.0.1:8080 > /dev/null 2>&1 &
+```
+
+## Solana Keypair Setup
+
+The deployment automatically configures Solana keypairs from `SOLANA_DEPLOYER_PRIVATE_KEY`:
+
+```bash
+# Decode base58 private key and write to:
+# - ~/.config/solana/id.json (Solana CLI default)
+# - deployer-keypair.json (legacy location)
+
+bun run scripts/decode-key.ts
+```
+
+**Environment Variable Fallbacks:**
+```javascript
+// From ecosystem.config.cjs
+SOLANA_ARENA_AUTHORITY_SECRET: process.env.SOLANA_DEPLOYER_PRIVATE_KEY || "",
+SOLANA_ARENA_REPORTER_SECRET: process.env.SOLANA_DEPLOYER_PRIVATE_KEY || "",
+SOLANA_ARENA_KEEPER_SECRET: process.env.SOLANA_DEPLOYER_PRIVATE_KEY || "",
+```
+
+All three roles default to the same deployer keypair for simplified configuration.
+
+## Health Monitoring
+
+### Health Check Endpoint
+
+```bash
+GET /health
+
+Response:
+{
+  "status": "healthy",
+  "uptime": 12345,
+  "maintenance": false
+}
+```
+
+### Post-Deploy Diagnostics
+
+The deploy script automatically runs comprehensive diagnostics:
+
+```bash
+# Streaming API state
+curl -s "http://localhost:5555/api/streaming/state"
+
+# Game client status
+curl -s -o /dev/null -w "%{http_code}" "http://localhost:3333"
+
+# RTMP status file
+cat /root/hyperscape/packages/server/public/live/rtmp-status.json
+
+# FFmpeg processes
+ps aux | grep -i ffmpeg
+
+# PM2 logs (filtered for streaming)
+bunx pm2 logs hyperscape-duel --nostream --lines 200 | grep -iE "rtmp|ffmpeg|stream"
+```
+
+### Health Check Wait
+
+The deployment waits up to 120 seconds for the server to become healthy:
+
+```bash
+MAX_WAIT=120
+WAITED=0
+
+while [ $WAITED -lt $MAX_WAIT ]; do
+  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:5555/health")
+  
+  if [ "$HTTP_STATUS" = "200" ]; then
+    echo "[deploy] Server is healthy!"
+    break
+  fi
+  
+  sleep 5
+  WAITED=$((WAITED + 5))
+done
+```
+
+## GPU Configuration
+
+### Vulkan Support
+
+**Check Vulkan:**
+```bash
+vulkaninfo --summary
+nvidia-smi
+```
+
+**Install Drivers:**
+```bash
+apt-get install -y mesa-vulkan-drivers vulkan-tools libvulkan1
+```
+
+### Chrome Dev Channel
+
+For latest WebGPU features:
+
+```bash
+# Install Chrome Dev
+wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
+echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+apt-get update
+apt-get install -y google-chrome-unstable
+
+# Verify installation
+google-chrome-unstable --version
+```
+
+### Xvfb for Headful Rendering
+
+```bash
+# Start Xvfb
+Xvfb :99 -screen 0 1280x720x24 &
+export DISPLAY=:99
+
+# PM2 config uses headful mode
+STREAM_CAPTURE_HEADLESS=false
+DUEL_CAPTURE_USE_XVFB=true
+```
+
+## Streaming Settings
+
+### PM2 Configuration
+
+```javascript
+// From ecosystem.config.cjs
+env: {
+  // Stream Capture Configuration
+  STREAM_CAPTURE_MODE: "cdp",              // Chrome DevTools Protocol
+  STREAM_CAPTURE_HEADLESS: "false",        // Headful with Xvfb
+  STREAM_CAPTURE_CHANNEL: "chrome-dev",    // Chrome Dev channel
+  STREAM_CAPTURE_ANGLE: "vulkan",          // Vulkan backend
+  STREAM_CAPTURE_WIDTH: "1280",
+  STREAM_CAPTURE_HEIGHT: "720",
+  STREAM_CAPTURE_DISABLE_WEBGPU: "false",  // WebGPU enabled
+  
+  // Audio streaming
+  STREAM_AUDIO_ENABLED: "true",
+  PULSE_AUDIO_DEVICE: "chrome_audio.monitor",
+  PULSE_SERVER: "unix:/tmp/pulse-runtime/pulse/native",
+  XDG_RUNTIME_DIR: "/tmp/pulse-runtime",
+  
+  // Stream health monitoring
+  STREAM_CAPTURE_RECOVERY_TIMEOUT_MS: "30000",
+  STREAM_CAPTURE_RECOVERY_MAX_FAILURES: "6",
+  
+  // Streaming destinations
+  TWITCH_STREAM_KEY: process.env.TWITCH_STREAM_KEY || "",
+  KICK_STREAM_KEY: process.env.KICK_STREAM_KEY || "",
+  KICK_RTMP_URL: process.env.KICK_RTMP_URL || "rtmps://fa723fc1b171.global-contribute.live-video.net/app",
+  X_STREAM_KEY: process.env.X_STREAM_KEY || "",
+  X_RTMP_URL: process.env.X_RTMP_URL || "rtmp://sg.pscp.tv:80/x",
+  YOUTUBE_STREAM_KEY: "",  // Explicitly disabled
+  
+  // Timing
+  STREAMING_CANONICAL_PLATFORM: "twitch",
+  STREAMING_PUBLIC_DELAY_MS: "0",
+}
+```
+
+## Troubleshooting
+
+### Stream Not Appearing
+
+**1. Check stream keys:**
+```bash
+ssh -p 35022 root@<vast-ip>
+cd /root/hyperscape
+cat packages/server/.env | grep STREAM_KEY
+```
+
+**2. Check FFmpeg processes:**
+```bash
+ps aux | grep ffmpeg
+```
+
+**3. Check RTMP status:**
+```bash
+cat packages/server/public/live/rtmp-status.json
+```
+
+**4. Check PM2 logs:**
+```bash
+bunx pm2 logs hyperscape-duel --lines 100 | grep -i "rtmp\|stream\|ffmpeg"
+```
+
+### Database Connection Issues
+
+**Check DATABASE_URL:**
+```bash
+cat packages/server/.env | grep DATABASE_URL
+```
+
+**Test connection:**
+```bash
+bun -e "
+  const { Pool } = require('pg');
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  pool.query('SELECT 1').then(() => console.log('OK')).catch(e => console.error(e));
+"
+```
+
+### GPU Rendering Issues
+
+**Check Vulkan:**
+```bash
+vulkaninfo --summary
+nvidia-smi
+```
+
+**Check Chrome:**
+```bash
+google-chrome-unstable --version
+```
+
+**Check Xvfb:**
+```bash
+ps aux | grep Xvfb
+```
+
+### Audio Issues
+
+**Check PulseAudio:**
+```bash
+pulseaudio --check && echo "Running" || echo "Not running"
+pactl list short sinks | grep chrome_audio
+```
+
+**Restart PulseAudio:**
+```bash
+pulseaudio --kill
+pulseaudio --start --exit-idle-time=-1 --daemonize=yes
+pactl load-module module-null-sink sink_name=chrome_audio
+```
+
+## PM2 Commands
+
+```bash
+# Start duel stack
+bunx pm2 start ecosystem.config.cjs
+
+# Monitor
+bunx pm2 logs hyperscape-duel
+bunx pm2 status
+bunx pm2 monit
+
+# Control
+bunx pm2 restart hyperscape-duel
+bunx pm2 stop hyperscape-duel
+bunx pm2 delete hyperscape-duel
+
+# Persist across reboots
+bunx pm2 save
+bunx pm2 startup
+```
+
+## Maintenance Mode API
+
+### Enter Maintenance Mode
+
+```bash
+curl -X POST "https://hyperscape.gg/admin/maintenance/enter" \
+  -H "Content-Type: application/json" \
+  -H "x-admin-code: your-admin-code" \
+  -d '{"reason": "deployment", "timeoutMs": 300000}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "status": {
+    "active": true,
+    "safeToDeploy": true,
+    "currentPhase": "IDLE",
+    "marketStatus": "resolved",
+    "pendingMarkets": 0
+  }
+}
+```
+
+### Exit Maintenance Mode
+
+```bash
+curl -X POST "https://hyperscape.gg/admin/maintenance/exit" \
+  -H "Content-Type: application/json" \
+  -H "x-admin-code: your-admin-code"
+```
+
+### Check Status
+
+```bash
+curl "https://hyperscape.gg/admin/maintenance/status" \
+  -H "x-admin-code: your-admin-code"
+```
+
+**Response:**
+```json
+{
+  "active": false,
+  "enteredAt": null,
+  "reason": null,
+  "safeToDeploy": true,
+  "currentPhase": "FIGHTING",
+  "marketStatus": "betting",
+  "pendingMarkets": 1
+}
+```
+
+## First-Time Setup
+
+The deployment automatically handles first-time setup:
+
+```bash
+# Clone repository if it doesn't exist
+if [ ! -d "/root/hyperscape" ]; then
+  echo "[deploy] First-time setup: cloning repository..."
+  cd /root
+  git clone https://github.com/HyperscapeAI/hyperscape.git
+fi
+```
+
+**Bun Installation:**
+```bash
+# Always check and install bun if missing
+if [ ! -f "/root/.bun/bin/bun" ]; then
+  echo "[deploy] Installing bun..."
+  curl -fsSL https://bun.sh/install | bash
+fi
+export PATH="/root/.bun/bin:$PATH"
+```
+
+## DNS Configuration
+
+Some Vast containers use internal-only DNS. The deploy script configures Google DNS:
+
+```bash
+echo -e "nameserver 8.8.8.8\nnameserver 8.8.4.4" > /etc/resolv.conf
+```
+
+## Deployment Summary
+
+After successful deployment, the script outputs:
+
+```
+════════════════════════════════════════════════════════════
+  ✓ Hyperscape deployed successfully!
+  ✓ Duel stack managed by pm2 (auto-restart on crash)
+  ✓ Deploy timestamp: 2026-02-26T12:00:00Z
+  ✓ Server health check: PASSED
+
+  Port mappings:
+    Internal 5555 -> External 35143 (HTTP)
+    Internal 5555 -> External 35079 (WebSocket)
+    Internal 8080 -> External 35144 (CDN)
+
+  Useful commands:
+    bun run duel:prod:logs     # tail live logs
+    bun run duel:prod:status   # process status
+    bun run duel:prod:restart  # restart stack
+    bun run duel:prod:stop     # stop stack
+════════════════════════════════════════════════════════════
+```
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Maintenance Mode API" icon="wrench" href="/devops/maintenance-mode">
+    Graceful deployment system for production
+  </Card>
+  <Card title="Audio Streaming" icon="volume" href="/devops/audio-streaming">
+    PulseAudio audio capture setup
+  </Card>
+  <Card title="RTMP Streaming" icon="broadcast-tower" href="/devops/rtmp-streaming">
+    Multi-platform streaming configuration
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/devops/configuration">
+    Environment variables and settings
+  </Card>
+</CardGroup>
