@@ -1018,10 +1018,13 @@ bun run build
 **Solution**: Update to latest code (commit 14a1e1b fixed this)
 
 **Technical Details:**
-- Increased CDP stall threshold from 2 → 4 intervals (120s)
-- Added soft CDP recovery: restart screencast without browser/FFmpeg teardown
-- Increased FFmpeg MAX_RESTART_ATTEMPTS from 5 → 8
-- Increased CAPTURE_RECOVERY_MAX_FAILURES default from 2 → 4
+- **CDP Stall Threshold**: Increased from 2 → 4 intervals (120s) to reduce false restarts
+- **Soft CDP Recovery**: Restart screencast without browser/FFmpeg teardown
+  - No stream gap during recovery
+  - Preserves browser state
+- **FFmpeg Restart Attempts**: Increased from 5 → 8 max attempts
+- **Recovery Counter Reset**: `resetRestartAttempts()` for successful recovery
+- **Capture Recovery Failures**: Increased default from 2 → 4 max failures
 - File: `packages/server/src/streaming/`
 - Commit: 14a1e1b (Feb 25, 2026)
 
