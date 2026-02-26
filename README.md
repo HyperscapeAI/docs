@@ -21,15 +21,22 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **Economy** | 480-slot bank, shops, item weights, loot drops |
 | **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
-| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
+| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics, **WebGPU rendering** |
 
-## Quick Start
+## System Requirements
 
-**Prerequisites:**
+**Browser Requirements:**
+- **WebGPU support required** - Chrome 113+, Edge 113+, or Safari 18+ (macOS Sonoma+)
+- Check compatibility: [webgpureport.org](https://webgpureport.org)
+- WebGL fallback removed as of February 2026 (all shaders use TSL which requires WebGPU)
+
+**Development Prerequisites:**
 - [Bun](https://bun.sh) (v1.1.38+)
 - [Git LFS](https://git-lfs.com) - `brew install git-lfs` (macOS) or `apt install git-lfs` (Linux)
 - Docker - [Docker Desktop](https://docker.com/products/docker-desktop) for macOS/Windows, or `apt install docker.io` on Linux
 - [Privy](https://privy.io) account (required for authentication)
+
+## Quick Start
 
 ```bash
 git clone https://github.com/HyperscapeAI/hyperscape.git
@@ -57,9 +64,15 @@ cp packages/server/.env.example packages/server/.env
    ```
    PUBLIC_PRIVY_APP_ID=your-app-id
    PRIVY_APP_SECRET=your-app-secret
+   JWT_SECRET=your-secure-random-string
    ```
 
 > **⚠️ Without Privy credentials**, the game runs in anonymous mode where users get a new identity on every page refresh. Characters will appear to vanish because they're tied to the old anonymous account.
+
+**Production Security Requirements:**
+- **JWT_SECRET** is now **required** in production/staging environments (throws error if not set)
+- Generate with: `openssl rand -base64 32`
+- **ADMIN_CODE** should be set to prevent unauthorized admin access
 
 **Optional configs:**
 ```bash
@@ -175,7 +188,7 @@ bun run assets:sync    # Pull latest assets from repo (local dev only)
 
 **Required for local development:**
 - `packages/client/.env` - Set `PUBLIC_PRIVY_APP_ID`
-- `packages/server/.env` - Set `PUBLIC_PRIVY_APP_ID` and `PRIVY_APP_SECRET`
+- `packages/server/.env` - Set `PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_SECRET`, and `JWT_SECRET`
 
 Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.privy.io).
 
@@ -241,6 +254,19 @@ curl -X POST https://your-server.com/admin/maintenance/exit \
   -H "x-admin-code: your-admin-code"
 ```
 
+**Status Response:**
+```json
+{
+  "active": true,
+  "enteredAt": 1709000000000,
+  "reason": "deployment",
+  "safeToDeploy": true,
+  "currentPhase": "IDLE",
+  "marketStatus": "resolved",
+  "pendingMarkets": 0
+}
+```
+
 **Required GitHub Secrets:**
 - `VAST_HOST` - Vast.ai instance IP
 - `VAST_PORT` - SSH port
@@ -267,6 +293,14 @@ git push origin v1.0.0
 That tag triggers cross-platform native packaging and publishes installers to a GitHub Release.
 
 ## Troubleshooting
+
+**WebGPU not supported error:**
+Hyperscape requires WebGPU (all shaders use TSL). Check browser compatibility:
+- Chrome/Edge 113+ (Windows/macOS/Linux)
+- Safari 18+ (macOS Sonoma+ only)
+- Firefox: WebGPU support is experimental (not recommended)
+
+Visit [webgpureport.org](https://webgpureport.org) to verify your browser/GPU support.
 
 **Characters vanishing / not appearing on character select:**
 This happens when Privy credentials are missing. Each page refresh creates a new anonymous user, orphaning your characters. Fix: Set `PUBLIC_PRIVY_APP_ID` in client `.env` and both `PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` in server `.env`.
@@ -319,11 +353,9 @@ Corrupted model cache. Clear IndexedDB:
 indexedDB.deleteDatabase('hyperscape-processed-models');
 // Reload page
 ```
-See [docs/model-cache-fixes.md](docs/model-cache-fixes.md) for details.
 
 **Players floating or sinking into terrain:**
 Update to latest main branch (terrain height cache fix from February 2026). No migration needed.
-See [docs/terrain-height-cache-fix.md](docs/terrain-height-cache-fix.md) for details.
 
 **RTMP stream keeps restarting:**
 Increase stability thresholds in `packages/server/.env`:
@@ -332,11 +364,6 @@ CDP_STALL_THRESHOLD=6                    # Default: 4 (120s before restart)
 FFMPEG_MAX_RESTART_ATTEMPTS=10           # Default: 8
 CAPTURE_RECOVERY_MAX_FAILURES=5          # Default: 4
 ```
-**WebGPU failing in headless environments (Docker/vast.ai):**
-```bash
-STREAM_CAPTURE_DISABLE_WEBGPU=true       # Forces WebGL fallback
-```
-The system now includes soft CDP recovery (restarts screencast without browser teardown) and best-effort WebGPU initialization (retries with default limits if GPU rejects maxTextureArrayLayers).
 
 **CI builds failing with npm 403 errors:**
 Retry logic is automatic (up to 5 attempts with exponential backoff: 15s, 30s, 45s, 60s, 75s). All workflows now use `--frozen-lockfile` to prevent npm resolution attempts. If persistent, check GitHub Actions logs.
@@ -349,6 +376,19 @@ Retry logic is automatic (up to 5 attempts with exponential backoff: 15s, 30s, 4
 **macOS DMG creation failing:**
 Unsigned builds now produce `.app` bundles only (skip DMG which requires code signing certificates).
 
+**Memory leak in InventoryInteractionSystem:**
+Fixed in February 2026 via AbortController for proper event listener cleanup (9 listeners were never removed). Update to latest main branch.
+
+**Production server won't start without JWT_SECRET:**
+As of February 2026, `JWT_SECRET` is required in production/staging environments. Generate with:
+```bash
+openssl rand -base64 32
+```
+Set in `packages/server/.env`:
+```bash
+JWT_SECRET=your-generated-secret-here
+```
+
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
@@ -359,9 +399,13 @@ See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture doc
 
 ## Recent Updates (February 2026)
 
+### Breaking Changes
+- **WebGPU Required**: All shaders now use TSL (Three.js Shading Language) which requires WebGPU. WebGL fallback removed. User-friendly error screen shown when WebGPU unavailable.
+- **JWT_SECRET Required**: Production/staging deployments now throw error if `JWT_SECRET` not set (security hardening)
+
 ### Performance & Rendering
 - **Arena Performance**: 97% draw call reduction (~846 meshes → ~20 InstancedMesh), eliminated 28 dynamic PointLights, replaced with GPU-driven TSL emissive materials
-- **Fire Particles**: Enhanced fire shader with smooth value noise, soft radial falloff, and per-particle turbulent motion for natural flame appearance
+- **Fire Particles**: Enhanced fire shader with smooth value noise, soft radial falloff, and per-particle turbulent motion for natural flame appearance (removed "torch" preset, unified on enhanced "fire")
 - **Teleport VFX**: Complete rewrite with object pooling, multi-phase animation (gather/erupt/sustain/fade), helix spiral particles, and TSL shader materials
 - **Model Cache**: Fixed missing objects (duplicate mesh names) and texture persistence (blob URLs → DataTexture with raw RGBA pixels)
 - **Terrain Heights**: Fixed 50m offset in cached height lookups via canonical `worldToTerrainTileIndex()` and `localToGridIndex()` helpers
@@ -369,13 +413,21 @@ See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture doc
 ### Deployment & Operations
 - **Maintenance Mode API**: Graceful deployment coordination - pauses new duel cycles, waits for markets to resolve, prevents data loss during deployments
 - **Vast.ai Health Checks**: Auto-detect unhealthy instances, destroy and reprovision when failures exceed threshold
-- **Streaming Stability**: Increased CDP stall threshold (2→4 intervals), soft CDP recovery, FFmpeg restart attempts (5→8), WebGL fallback for headless environments
+- **Streaming Stability**: Increased CDP stall threshold (2→4 intervals), soft CDP recovery, FFmpeg restart attempts (5→8)
+- **Renderer Initialization**: Best-effort WebGPU limits (tries `maxTextureArrayLayers: 2048`, retries with defaults if GPU rejects)
+
+### Bug Fixes & Stability
+- **Memory Leak Fix**: InventoryInteractionSystem now uses AbortController for proper event listener cleanup (9 listeners were never removed)
+- **Duel Combat**: Fixed mage staff and 2H sword combat via weapon type propagation, keep-alive re-engagement, and combat timeout refresh
+- **Victory Emote**: Delayed by 600ms so combat cleanup doesn't override it
+- **Type Safety**: Eliminated explicit `any` types in core game logic (tile-movement.ts, proxy-routes.ts, ClientGraphics.ts)
 
 ### CI/CD & Build System
 - **npm Retry Logic**: Automatic retry with exponential backoff (15s-75s) for transient npm 403 errors
 - **Frozen Lockfile**: All workflows use `--frozen-lockfile` to prevent npm resolution attempts
 - **Tauri Build Fixes**: Split unsigned/release builds, macOS `.app`-only for unsigned, iOS release-only, Windows retry logic
 - **Dependency Cycles**: Resolved shared↔procgen cycle via peerDependencies + devDependencies pattern
+- **Asset Forge**: Fixed TypeScript strict mode (added type annotations for traverse callbacks), updated to `moduleResolution: bundler` for Three.js WebGPU exports
 
 ### Asset Forge
 - **VFX Catalog Browser**: New tab with live Three.js previews of all game effects (spells, arrows, glow particles, fishing, teleport, combat HUD)
