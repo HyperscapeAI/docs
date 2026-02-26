@@ -1,391 +1,451 @@
-# CI/CD Improvements (February 2026)
+# CI/CD Improvements
 
-Recent improvements to Hyperscape's CI/CD pipelines for better reliability and cross-platform support.
+This document summarizes recent CI/CD improvements and best practices for Hyperscape deployments.
 
-## Build System Fixes
+## Overview
 
-### Tauri Build Improvements
+Recent improvements to the CI/CD pipeline include:
+- **Maintenance mode integration** - Graceful deployments with market resolution
+- **DATABASE_URL persistence** - Survives git reset operations
+- **Cloudflare Pages automation** - Automatic client deployment
+- **Build resilience** - Retry logic and frozen lockfile
+- **Split builds** - Separate unsigned and release builds for desktop apps
 
-**Problem:** macOS code signing was failing on unsigned builds due to empty `APPLE_CERTIFICATE` environment variable.
+## GitHub Actions Workflows
 
-**Solution:** Split builds into separate unsigned and release variants:
+### 1. Deploy to Cloudflare Pages
 
+**File:** `.github/workflows/deploy-pages.yml`
+
+**Triggers:**
+- Push to `main` branch
+- Changes to `packages/client/**` or `packages/shared/**`
+- Manual trigger via `workflow_dispatch`
+
+**Features:**
+- Automatic client deployment on push
+- Builds client with shared + physx dependencies
+- Uses Wrangler CLI for deployment
+- Supports production and preview environments
+
+**Required secrets:**
+- `CLOUDFLARE_API_TOKEN` - Cloudflare API token
+- `PUBLIC_PRIVY_APP_ID` - Privy app ID
+
+**Example:**
 ```yaml
-# Unsigned builds (no signing env vars)
-- name: Build Desktop (Unsigned)
-  run: bunx tauri build --no-bundle
-
-# Release builds (with signing)
-- name: Build Desktop (Release)
+- name: Deploy to Cloudflare Pages
+  run: |
+    npx wrangler pages deploy dist \
+      --project-name=hyperscape \
+      --branch=${{ github.ref_name }}
   env:
-    APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-    # ... other signing secrets
-  run: bunx tauri build --bundles app
+    CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 ```
 
-**Platforms affected:**
-- Desktop (macOS, Linux, Windows)
-- iOS
-- Android
+### 2. Deploy to Vast.ai
 
-### Linux/Windows Build Fixes
+**File:** `.github/workflows/deploy-vast.yml`
 
-**Problem:** Linux and Windows builds were failing with "app bundle type is macOS-only" error.
+**Triggers:**
+- After CI passes on `main` branch
+- Manual trigger via `workflow_dispatch`
 
-**Solution:** Use `--no-bundle` for unsigned builds instead of `--bundles app`:
+**Features:**
+- Maintenance mode integration
+- DATABASE_URL persistence through git reset
+- Health checking before exit
+- Solana keypair setup
+- Stream key configuration
 
-```bash
-# macOS only
-bunx tauri build --bundles app
+**Required secrets:**
+- `VAST_HOST` - Vast.ai instance IP
+- `VAST_PORT` - SSH port
+- `VAST_SSH_KEY` - Private SSH key
+- `VAST_SERVER_URL` - Public server URL
+- `DATABASE_URL` - PostgreSQL connection
+- `ADMIN_CODE` - Admin API access
+- `SOLANA_DEPLOYER_PRIVATE_KEY` - Solana keypair
+- `TWITCH_STREAM_KEY` - Twitch stream key
+- `X_STREAM_KEY` - X/Twitter stream key
+- `X_RTMP_URL` - X RTMP URL
 
-# Cross-platform
-bunx tauri build --no-bundle
-```
+**Deployment flow:**
+1. Enter maintenance mode
+2. SSH to Vast instance
+3. Checkout main branch explicitly
+4. Write environment variables
+5. Run deployment script
+6. Wait for server health
+7. Exit maintenance mode
 
-### iOS Build Optimization
-
-**Problem:** Unsigned iOS builds always fail with "Signing requires a development team".
-
-**Solution:** Make iOS build job release-only (skip unsigned builds):
-
+**Example:**
 ```yaml
-ios-release:
-  if: startsWith(github.ref, 'refs/tags/v')
-  # ... build steps
+- name: Enter Maintenance Mode
+  run: |
+    curl -X POST "$VAST_SERVER_URL/admin/maintenance/enter" \
+      -H "Content-Type: application/json" \
+      -H "x-admin-code: $ADMIN_CODE" \
+      -d '{"reason": "deployment", "timeoutMs": 300000}'
 ```
 
-## Dependency Installation Resilience
+### 3. Build Native Apps
 
-### NPM Rate Limiting
+**File:** `.github/workflows/build-app.yml`
 
-**Problem:** GitHub Actions IP ranges are rate-limited by npm, causing intermittent 403 Forbidden errors.
+**Triggers:**
+- Tagged releases (`v*`)
 
-**Solutions implemented:**
+**Features:**
+- Cross-platform builds (macOS, Windows, Linux, iOS, Android)
+- Split unsigned and release builds
+- Automatic GitHub Release creation
+- Artifact upload to release
 
-#### 1. Frozen Lockfile
+**Improvements:**
+- Fixed Linux/Windows builds (use `--no-bundle` instead of `--bundles app`)
+- Cross-platform `beforeBuildCommand` using Node.js
+- Separate artifact upload for unsigned vs release builds
 
-```bash
-# Always use committed lockfile (no fresh resolution)
-bun install --frozen-lockfile
+**Example:**
+```yaml
+- name: Build Desktop App
+  run: |
+    bun run tauri build --no-bundle
+  env:
+    TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
 ```
 
-#### 2. Retry with Backoff
+## Deployment Scripts
 
+### deploy-vast.sh
+
+**Location:** `scripts/deploy-vast.sh`
+
+**Features:**
+- Pulls latest code from main
+- Restores DATABASE_URL after git reset
+- Sets up Solana keypair
+- Installs dependencies
+- Builds packages
+- Restarts PM2 processes
+
+**Key improvements:**
 ```bash
-# Retry up to 5 times with increasing delays
-for i in {1..5}; do
-  bun install --frozen-lockfile && break
-  DELAY=$((i * 15))
-  echo "Retry $i/5 after ${DELAY}s..."
-  sleep $DELAY
+# Explicitly checkout main first
+git fetch origin
+git checkout main
+git reset --hard origin/main
+
+# Restore DATABASE_URL (git reset overwrites .env)
+if [ -n "$DATABASE_URL" ]; then
+  echo "DATABASE_URL=$DATABASE_URL" >> packages/server/.env
+fi
+
+# Setup Solana keypair
+if [ -n "$SOLANA_DEPLOYER_PRIVATE_KEY" ]; then
+  mkdir -p ~/.config/solana
+  bun run packages/server/scripts/decode-key.ts \
+    "$SOLANA_DEPLOYER_PRIVATE_KEY" \
+    ~/.config/solana/id.json
+fi
+```
+
+### configure-r2-cors.sh
+
+**Location:** `scripts/configure-r2-cors.sh`
+
+**Features:**
+- Configures R2 bucket CORS for cross-origin asset loading
+- Uses correct Wrangler API format
+- Allows all origins, GET/HEAD methods
+
+**Example:**
+```bash
+wrangler r2 bucket cors set hyperscape-assets \
+  --config cors-config.json
+```
+
+## Best Practices
+
+### 1. Maintenance Mode
+
+**Always use maintenance mode for production deployments:**
+```bash
+# Enter maintenance mode
+curl -X POST https://your-server.com/admin/maintenance/enter \
+  -H "Content-Type: application/json" \
+  -H "x-admin-code: your-admin-code" \
+  -d '{"reason": "deployment", "timeoutMs": 300000}'
+
+# Deploy changes
+# ...
+
+# Exit maintenance mode
+curl -X POST https://your-server.com/admin/maintenance/exit \
+  -H "Content-Type: application/json" \
+  -H "x-admin-code: your-admin-code"
+```
+
+### 2. DATABASE_URL Persistence
+
+**Write DATABASE_URL AFTER git reset:**
+```bash
+# ❌ WRONG - git reset will overwrite .env
+echo "DATABASE_URL=$DATABASE_URL" > packages/server/.env
+git reset --hard origin/main
+
+# ✅ CORRECT - write after git reset
+git reset --hard origin/main
+echo "DATABASE_URL=$DATABASE_URL" >> packages/server/.env
+```
+
+### 3. Health Checking
+
+**Wait for server to be healthy before exiting maintenance mode:**
+```bash
+for i in {1..30}; do
+  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$SERVER_URL/health")
+  if [ "$HTTP_STATUS" = "200" ]; then
+    echo "Server is healthy!"
+    break
+  fi
+  sleep 10
 done
 ```
 
-**Backoff schedule:**
-- Attempt 1: Immediate
-- Attempt 2: 15s delay
-- Attempt 3: 30s delay
-- Attempt 4: 45s delay
-- Attempt 5: 60s delay
+### 4. Explicit Branch Checkout
 
-#### 3. Windows-Specific Retry
-
-Windows runners have higher npm 403 failure rates:
-
-```yaml
-- name: Install dependencies (Windows)
-  shell: bash
-  run: |
-    for i in {1..3}; do
-      bun install --frozen-lockfile && break || {
-        echo "Install failed, retry $i/3..."
-        sleep 15
-      }
-    done
-```
-
-## Monorepo Dependency Fixes
-
-### Circular Dependency Resolution
-
-**Problem:** Turbo detected circular dependency: `shared → procgen → shared`
-
-**Solution:** Move `@hyperscape/procgen` from dependencies to optional peerDependencies in `shared/package.json`:
-
-```json
-{
-  "peerDependencies": {
-    "@hyperscape/procgen": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@hyperscape/procgen": {
-      "optional": true
-    }
-  }
-}
-```
-
-And add as devDependency in `shared/package.json` for TypeScript resolution:
-
-```json
-{
-  "devDependencies": {
-    "@hyperscape/procgen": "workspace:*"
-  }
-}
-```
-
-**Why this works:**
-- Turbo doesn't follow devDependencies for build ordering
-- Runtime resolution still works (both packages always installed together)
-- TypeScript can find type declarations
-
-### ESLint Compatibility
-
-**Problem:** `eslint-plugin-import@2.32.0` incompatible with ESLint 10 (uses removed `sourceCode.getTokenOrCommentBefore` API).
-
-**Solution:** Disable cascaded `import/order` rule in affected packages:
-
-```javascript
-// packages/asset-forge/eslint.config.mjs
-export default [
-  ...rootConfig,
-  {
-    rules: {
-      'import/order': 'off'  // Disable crashing rule
-    }
-  }
-];
-```
-
-**Affected packages:**
-- `asset-forge`
-
-### TypeScript Module Resolution
-
-**Problem:** Three.js WebGPU subpath exports require `moduleResolution: bundler` or `node16`.
-
-**Solution:** Update `tsconfig.json`:
-
-```json
-{
-  "compilerOptions": {
-    "moduleResolution": "bundler"  // Changed from "node"
-  }
-}
-```
-
-**Affected packages:**
-- `asset-forge`
-
-## Deployment Improvements
-
-### Vast.ai Deployment
-
-**New features:**
-1. **Maintenance mode integration** - Graceful deployments
-2. **DATABASE_URL persistence** - Survives git reset operations
-3. **Vulkan driver installation** - GPU rendering support
-4. **Health checking** - Verifies server is ready post-deploy
-
-**Key changes:**
-
+**Always checkout main explicitly in deployment:**
 ```bash
-# Write DATABASE_URL AFTER git reset (not before)
+# ❌ WRONG - may be on wrong branch
+git pull origin main
+
+# ✅ CORRECT - explicitly checkout main
+git fetch origin
+git checkout main
 git reset --hard origin/main
-echo "DATABASE_URL=$DATABASE_URL" > packages/server/.env
-
-# Install Vulkan drivers for GPU rendering
-apt-get install -y mesa-vulkan-drivers vulkan-tools libvulkan1
 ```
 
-### Cloudflare Pages
+### 5. Environment Variable Handling
 
-**Problem:** Root `wrangler.toml` conflicted with Pages project.
-
-**Solution:** Remove root `wrangler.toml`, use only `packages/client/wrangler.toml`:
-
-```toml
-# packages/client/wrangler.toml
-name = "hyperscape"
-
-[assets]
-directory = "dist"
+**Pass secrets through SSH environment:**
+```yaml
+- name: SSH and Deploy
+  uses: appleboy/ssh-action@v1.0.3
+  with:
+    envs: DATABASE_URL,TWITCH_STREAM_KEY
+    script: |
+      echo "DATABASE_URL=$DATABASE_URL" >> .env
+      echo "TWITCH_STREAM_KEY=$TWITCH_STREAM_KEY" >> .env
+  env:
+    DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    TWITCH_STREAM_KEY: ${{ secrets.TWITCH_STREAM_KEY }}
 ```
 
-**Deployment:**
+### 6. Build Resilience
+
+**Use frozen lockfile and retry logic:**
+```yaml
+- name: Install dependencies
+  run: bun install --frozen-lockfile
+  
+- name: Build with retry
+  uses: nick-invision/retry@v2
+  with:
+    timeout_minutes: 10
+    max_attempts: 3
+    command: bun run build
+```
+
+### 7. Split Builds
+
+**Separate unsigned and release builds:**
+```yaml
+# Unsigned builds (Linux/Windows)
+- name: Build unsigned
+  run: bun run tauri build --no-bundle
+
+# Release builds (macOS with code signing)
+- name: Build release
+  run: bun run tauri build --bundles app
+  env:
+    APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+    APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+```
+
+## Troubleshooting
+
+### Deployment Stuck in Maintenance Mode
+
+**Check status:**
+```bash
+curl https://your-server.com/admin/maintenance/status \
+  -H "x-admin-code: your-admin-code"
+```
+
+**Force exit:**
+```bash
+curl -X POST https://your-server.com/admin/maintenance/exit \
+  -H "Content-Type: application/json" \
+  -H "x-admin-code: your-admin-code"
+```
+
+### DATABASE_URL Lost After Deployment
+
+**Check if written after git reset:**
+```bash
+# View deploy script
+cat scripts/deploy-vast.sh | grep -A 5 "git reset"
+
+# Should see DATABASE_URL write AFTER git reset
+```
+
+**Fix:**
+```bash
+# SSH to server
+ssh -p $VAST_PORT root@$VAST_HOST
+
+# Manually restore DATABASE_URL
+echo "DATABASE_URL=your-database-url" >> packages/server/.env
+
+# Restart server
+pm2 restart server
+```
+
+### Build Fails on CI
+
+**Check logs:**
+```bash
+# View in GitHub Actions
+# Repository → Actions → Workflow → View logs
+```
+
+**Common issues:**
+- npm rate limit: Use `--frozen-lockfile` and retry logic
+- Out of memory: Increase `NODE_OPTIONS=--max-old-space-size=4096`
+- Missing dependencies: Run `bun install` before build
+- TypeScript errors: Run `bun run lint` locally first
+
+### SSH Connection Fails
+
+**Check secrets:**
+```bash
+# Verify secrets are set
+# Repository → Settings → Secrets and variables → Actions
+```
+
+**Test SSH connection:**
+```bash
+ssh -p $VAST_PORT root@$VAST_HOST
+```
+
+**Common issues:**
+- Wrong port: Check `VAST_PORT` secret
+- Wrong host: Check `VAST_HOST` secret
+- Invalid key: Regenerate `VAST_SSH_KEY` secret
+- Firewall: Check Vast.ai instance firewall settings
+
+### Cloudflare Deployment Fails
+
+**Check Wrangler token:**
+```bash
+# Verify token has correct permissions
+# Cloudflare Dashboard → API Tokens → Edit token
+```
+
+**Test deployment locally:**
 ```bash
 cd packages/client
-bunx wrangler pages deploy dist --project-name=hyperscape
+bun run build
+npx wrangler pages deploy dist --project-name=hyperscape
 ```
 
-### R2 CORS Configuration
+**Common issues:**
+- Invalid token: Regenerate `CLOUDFLARE_API_TOKEN`
+- Wrong project name: Check `wrangler.toml`
+- Build errors: Run `bun run build` locally first
 
-**Problem:** R2 bucket CORS used incorrect wrangler API format.
+## Monitoring
 
-**Solution:** Use nested structure with `allowed` object:
+### GitHub Actions
 
-```json
-{
-  "allowed": {
-    "origins": ["*"],
-    "methods": ["GET", "HEAD"],
-    "headers": ["*"]
-  },
-  "exposed": ["ETag"],
-  "maxAge": 3600
-}
+**View workflow runs:**
+```
+Repository → Actions → Workflow name
 ```
 
-**Apply:**
+**View logs:**
+```
+Actions → Workflow run → Job → Step
+```
+
+**Download artifacts:**
+```
+Actions → Workflow run → Artifacts
+```
+
+### Deployment Status
+
+**Check server health:**
 ```bash
-bunx wrangler r2 bucket cors set hyperscape-assets --config cors-config.json
+curl https://your-server.com/health
 ```
 
-## Security Improvements
-
-### JWT Secret Enforcement
-
-**Problem:** Production servers running without JWT_SECRET (security risk).
-
-**Solution:** Throw error in production/staging if JWT_SECRET not set:
-
-```typescript
-if (!process.env.JWT_SECRET) {
-  if (NODE_ENV === 'production' || NODE_ENV === 'staging') {
-    throw new Error('JWT_SECRET is required in production/staging');
-  }
-  console.warn('JWT_SECRET not set - using insecure default');
-}
+**Check maintenance mode:**
+```bash
+curl https://your-server.com/admin/maintenance/status \
+  -H "x-admin-code: your-admin-code"
 ```
 
-### CSRF Cross-Origin Handling
-
-**Problem:** CSRF middleware blocking legitimate cross-origin requests from Cloudflare Pages to Railway backend.
-
-**Solution:** Skip CSRF validation for known cross-origin clients:
-
-```typescript
-// Known cross-origin client patterns
-const KNOWN_CROSS_ORIGIN_CLIENTS = [
-  /^https?:\/\/([a-z0-9-]+\.)?hyperscape\.gg$/,
-  /^https?:\/\/([a-z0-9-]+\.)?hyperbet\.win$/,
-  /^https?:\/\/([a-z0-9-]+\.)?hyperscape\.bet$/,
-];
-
-// Skip CSRF for cross-origin requests (already protected by Origin + JWT)
-if (isKnownCrossOriginClient(origin)) {
-  return; // Skip CSRF validation
-}
+**Check PM2 status:**
+```bash
+ssh -p $VAST_PORT root@$VAST_HOST "pm2 status"
 ```
 
-**Why this is safe:**
-- Cross-origin requests already protected by Origin header validation
-- JWT bearer token authentication required
-- CSRF cookies don't work cross-origin anyway (SameSite=Strict)
+## Security
 
-## Type Safety Improvements
+### Secrets Management
 
-### Explicit Any Type Elimination
+**Never commit secrets to git:**
+- Use GitHub Secrets for CI/CD
+- Use `.env` files for local development
+- Add `.env` to `.gitignore`
 
-**Reduced from 142 to ~46** explicit `any` types across codebase.
+**Rotate secrets regularly:**
+- JWT_SECRET: Every 90 days
+- ADMIN_CODE: Every 90 days
+- API keys: As needed
 
-**Key fixes:**
+**Use strong secrets:**
+```bash
+# Generate JWT_SECRET
+openssl rand -base64 32
 
-#### 1. Tile Movement
-
-```typescript
-// Before
-const collisionService: any = world.getSystem('buildingCollision');
-
-// After
-const collisionService = world.getSystem('buildingCollision') as BuildingCollisionService;
+# Generate ADMIN_CODE
+openssl rand -hex 16
 ```
 
-#### 2. WebSocket Types
+### Access Control
 
-```typescript
-// Before
-const ws: any = connection.socket;
-
-// After
-import type { WebSocket } from 'ws';
-const ws = connection.socket as WebSocket;
-```
-
-#### 3. Error Handlers
-
-```typescript
-// Before
-catch (error: any) {
-  console.error(error);
-}
-
-// After
-catch (error: unknown) {
-  console.error(error instanceof Error ? error.message : String(error));
-}
-```
-
-### Type Annotations for Callbacks
-
-```typescript
-// Before
-model.traverse((node) => {
-  // TypeScript strict mode error
-});
-
-// After
-model.traverse((node: Object3D) => {
-  // Explicit type annotation
-});
-```
-
-## Performance Improvements
-
-### Memory Leak Fixes
-
-**Problem:** InventoryInteractionSystem had 9 event listeners that were never removed.
-
-**Solution:** Use AbortController for automatic cleanup:
-
-```typescript
-const abortController = new AbortController();
-
-world.on('inventory:add', handler, { signal: abortController.signal });
-world.on('inventory:remove', handler, { signal: abortController.signal });
-
-// Cleanup
-destroy() {
-  abortController.abort();
-}
-```
-
-### Dead Code Removal
-
-**Removed:**
-- `PacketHandlers.ts` - 3098 lines of dead code (never imported)
-- `createArenaMarker` - Unused arena function
-- `createAmbientDust` - Unused particle function
-- `createLobbyBenches` - Unused lobby function
-
-## Testing Improvements
-
-### Cross-Platform Test Matrix
-
+**Limit GitHub Actions permissions:**
 ```yaml
-strategy:
-  matrix:
-    os: [ubuntu-latest, macos-latest, windows-latest]
-    node-version: [20.x]
+permissions:
+  contents: read
+  deployments: write
 ```
 
-### Visual Regression Testing
+**Use environment protection rules:**
+```
+Repository → Settings → Environments → production
+→ Required reviewers
+→ Wait timer
+→ Deployment branches
+```
 
-All Playwright tests now save screenshots to `__screenshots__/` for visual verification.
+## See Also
 
-## Related Documentation
-
-- [docs/vast-deployment.md](vast-deployment.md) - Vast.ai deployment
-- [docs/maintenance-mode-api.md](maintenance-mode-api.md) - Maintenance mode API
-- [.github/workflows/](../.github/workflows/) - CI/CD workflows
+- [Maintenance Mode API](maintenance-mode-api.md)
+- [Vast.ai Deployment Guide](vast-deployment.md)
+- [Cloudflare Deployment Guide](cloudflare-deployment.md)
+- [Environment Variables Reference](environment-variables.md)
