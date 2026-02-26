@@ -492,11 +492,27 @@ See [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) for full API re
 
 ## Additional Resources
 
+### Core Documentation
 - [README.md](README.md) - Full project documentation
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
+
+### Deployment Guides
+- [docs/cloudflare-pages-deployment.md](docs/cloudflare-pages-deployment.md) - Cloudflare Pages automated deployment
+- [docs/vast-deployment-improvements.md](docs/vast-deployment-improvements.md) - Vast.ai GPU streaming improvements
+- [docs/railway-dev-prod.md](docs/railway-dev-prod.md) - Railway deployment (dev/prod)
+
+### Streaming Documentation
+- [docs/streaming-improvements-feb-2026.md](docs/streaming-improvements-feb-2026.md) - RTMP streaming improvements
+- [docs/streaming-audio-capture.md](docs/streaming-audio-capture.md) - PulseAudio audio capture setup
+
+### AI Agent Documentation
+- [docs/agent-stability-improvements.md](docs/agent-stability-improvements.md) - Model agent stability fixes
+- [packages/plugin-hyperscape/README.md](packages/plugin-hyperscape/README.md) - ElizaOS plugin guide
+
+### Blockchain Documentation
+- [docs/solana-market-wsol-migration.md](docs/solana-market-wsol-migration.md) - WSOL market token migration
+
+### Technical References
 - [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser/GPU requirements
-- [docs/vast-deployment.md](docs/vast-deployment.md) - Vast.ai deployment guide
-- [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Maintenance mode API
-- [docs/streaming-configuration.md](docs/streaming-configuration.md) - RTMP streaming setup
