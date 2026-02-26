@@ -66,21 +66,23 @@ LIVEKIT_URL=wss://your-livekit-server
 TWITCH_STREAM_KEY=live_123456789_abcdefghij
 TWITCH_RTMP_URL=rtmp://live.twitch.tv/app  # Optional override
 
-# Kick (uses RTMPS)
+# Kick (uses RTMPS - commit 5dbd239, Feb 26 2026)
 KICK_STREAM_KEY=your-kick-stream-key
-KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app  # Fixed IVS endpoint
 
 # X/Twitter
 X_STREAM_KEY=your-x-stream-key
 X_RTMP_URL=rtmp://sg.pscp.tv:80/x
 
-# YouTube (optional)
-YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+# YouTube (DEPRECATED - removed from default destinations, Feb 26 2026)
+# Explicitly disabled to prevent stale keys from being used
+# Set YOUTUBE_STREAM_KEY="" to disable
+YOUTUBE_STREAM_KEY=
 YOUTUBE_RTMP_URL=rtmp://a.rtmp.youtube.com/live2
 
-# Streaming Timing
-STREAMING_CANONICAL_PLATFORM=twitch  # youtube | twitch | hls (default: youtube)
-STREAMING_PUBLIC_DELAY_MS=0          # Override platform default delay (ms)
+# Streaming Timing (commit 7f1b1fd, Feb 26 2026)
+STREAMING_CANONICAL_PLATFORM=twitch  # Changed from youtube to twitch (lower latency)
+STREAMING_PUBLIC_DELAY_MS=0          # Changed from 12000ms to 0ms for live betting
 
 # Streaming Quality Settings (commit 4c630f12, Feb 26 2026)
 # Low latency mode (zerolatency tune, 2x buffer) vs balanced mode (film tune, 4x buffer)
@@ -95,6 +97,8 @@ PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native  # PulseAudio socket path
 XDG_RUNTIME_DIR=/tmp/pulse-runtime           # Runtime directory for PulseAudio
 
 # See packages/server/.env.example for full RTMP configuration
+# See /devops/rtmp-streaming for complete streaming guide
+# See /devops/audio-streaming for PulseAudio setup
 ```
 
 ### Solana Configuration
