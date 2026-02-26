@@ -541,11 +541,61 @@ await runtime.databaseAdapter?.close();  // NEW: WASM heap cleanup
 **Solution:** Check contestant status alone, not just inStreamingDuel flag:
 
 ```typescript
-// ✅ New: Check contestant status
-if (contestant && contestant.status === 'active') {
+// ❌ Old: Only checked during specific phases
+if (cycle.phase === 'COUNTDOWN' || cycle.phase === 'FIGHTING') {
+  await recoverAgent(contestant);
+}
+
+// ✅ New: Check contestant status during ANNOUNCEMENT too
+if (cycle.phase === 'ANNOUNCEMENT' || cycle.phase === 'COUNTDOWN' || cycle.phase === 'FIGHTING') {
   await recoverAgent(contestant);
 }
 ```
+
+### Model Agent Registration in Duel Scheduler (commit bddea54)
+
+**Problem:** Model agents (LLM-driven) weren't registered in duel scheduler, only embedded agents.
+
+**Solution:** Register model agents via character-selection handler:
+
+```typescript
+// Check both embedded AgentManager and ModelAgentSpawner registries
+const isEmbeddedAgent = agentManager?.hasAgent(characterId);
+const isModelAgent = getAgentRuntimeByCharacterId(characterId);
+const isDuelBot = isEmbeddedAgent || isModelAgent;
+
+// Set isAgent field in PlayerJoinedPayload
+socket.player.data.isAgent = isDuelBot;
+```
+
+**Impact:** Model agents can now participate in streaming duels alongside embedded agents.
+
+### Duel Combat State Cleanup (commit bddea54)
+
+**Problem:** Agents remained in combat state after duel ended, preventing autonomous actions.
+
+**Solution:** Comprehensive combat state cleanup:
+
+```typescript
+// Clear ALL combat-related entity data fields
+entity.data.combatTarget = null;
+entity.data.inCombat = false;
+entity.data.ct = null;           // Serialized combatTarget
+entity.data.c = false;           // Serialized inCombat
+entity.data.attackTarget = null;
+
+// Tear down CombatSystem internal state
+combatSystem.forceEndCombat(playerId);
+
+// Notify other systems to stop combat visuals
+world.emit(EventType.COMBAT_STOP_ATTACK, { attackerId: playerId });
+```
+
+**Why This Matters:**
+- `EmbeddedHyperscapeService.getGameState()` checks `ct` and `attackTarget` fields
+- Leaving them stale causes agents to think they're still in combat
+- Agents return "idle" from every behavior tick instead of moving/attacking
+- Autonomous behavior resumes immediately after duel ends
 
 ## Configuration
 
