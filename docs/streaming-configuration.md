@@ -1,285 +1,277 @@
-# Streaming Configuration Guide
+# Streaming Configuration
 
-Hyperscape supports multi-platform RTMP streaming to Twitch, Kick, and X (Twitter) simultaneously using FFmpeg's tee muxer for efficient single-encode multi-output.
+Hyperscape supports multi-platform RTMP streaming to Twitch, Kick, X (Twitter), and custom destinations.
 
 ## Overview
 
-**Streaming Stack:**
-- **Capture**: Headless Chrome with WebGPU + Vulkan
-- **Encode**: FFmpeg with H.264 + AAC
-- **Output**: RTMP to multiple platforms (Twitch, Kick, X)
-- **Anti-cheat**: Configurable public data delay (0-15s)
-
-**Supported Platforms:**
-- ✅ Twitch (primary, 12s default delay)
-- ✅ Kick (RTMPS)
-- ✅ X/Twitter (RTMP)
-- ❌ YouTube (removed, not needed)
+The streaming system uses:
+- **FFmpeg**: Video encoding and RTMP multiplexing
+- **Chrome headless**: WebGPU rendering with Xvfb
+- **Puppeteer**: Browser automation and capture
+- **PM2**: Process management
 
 ## Quick Start
 
-### 1. Get Stream Keys
+### 1. Install FFmpeg
 
-**Twitch:**
-1. Go to [dashboard.twitch.tv/settings/stream](https://dashboard.twitch.tv/settings/stream)
-2. Copy your **Primary Stream Key**
-3. Format: `live_123456789_abcdefghij`
+```bash
+# macOS
+brew install ffmpeg
 
-**Kick:**
-1. Go to Kick Creator Dashboard → Stream Settings
-2. Copy **Stream Key** and **Server URL**
-3. Format: `sk_us-west-2_...` (key) and `rtmps://...` (URL)
+# Ubuntu/Debian
+apt-get install ffmpeg
 
-**X/Twitter:**
-1. Go to Media Studio → Producer → Create Broadcast → Create Source
-2. Copy **RTMP URL** and **Stream Key**
-3. Requires X Premium subscription
+# Verify installation
+ffmpeg -version
+```
 
-### 2. Configure Environment Variables
+### 2. Configure Stream Keys
 
-Add to `packages/server/.env` or `ecosystem.config.cjs`:
+Edit `packages/server/.env`:
 
 ```bash
 # Twitch
 TWITCH_STREAM_KEY=live_123456789_abcdefghij
-
-# Kick (uses RTMPS)
-KICK_STREAM_KEY=sk_us-west-2_OrgZh8XyN0Qs_DKZE46VeaiqkczE5ZMTx63ct25wZ7q
-KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net
+TWITCH_RTMP_URL=rtmp://live.twitch.tv/app
 
 # X/Twitter
-X_STREAM_KEY=sp16tpmtyqws
-X_RTMP_URL=rtmp://sg.pscp.tv:80/x
+X_STREAM_KEY=your-x-stream-key
+X_RTMP_URL=rtmp://x-media-studio/your-path
 
-# Anti-cheat timing
-STREAMING_CANONICAL_PLATFORM=twitch
-STREAMING_PUBLIC_DELAY_MS=0  # 0 for live betting, 12000 for Twitch delay
+# Kick
+KICK_STREAM_KEY=your-kick-stream-key
+KICK_RTMP_URL=rtmp://ingest.kick.com/live
 ```
 
 ### 3. Start Streaming
 
 ```bash
-# Production (PM2)
-bunx pm2 start ecosystem.config.cjs
+# Production streaming
+bun run stream:rtmp
 
-# Development
-bun run dev:all
+# Local test (requires nginx-rtmp)
+bun run stream:test
 ```
 
-## Platform Configuration
+## Streaming Platforms
 
 ### Twitch
 
-**Default Settings:**
-- **Server**: `rtmp://live.twitch.tv/app`
-- **Delay**: 12 seconds (configurable)
-- **Resolution**: 1280x720 @ 30fps
-- **Bitrate**: 2500 kbps
+**Get your stream key:**
+1. Go to [Twitch Dashboard](https://dashboard.twitch.tv/settings/stream)
+2. Copy "Primary Stream Key"
 
-**Environment Variables:**
+**Configuration:**
 ```bash
 TWITCH_STREAM_KEY=live_123456789_abcdefghij
-TWITCH_RTMP_URL=rtmp://live.twitch.tv/app  # Optional, uses default
+TWITCH_RTMP_URL=rtmp://live.twitch.tv/app
 ```
 
-**Ingest Servers:**
-- Primary: `rtmp://live.twitch.tv/app`
-- Backup: `rtmp://live-sjc.twitch.tv/app` (San Jose)
-- Backup: `rtmp://live-lax.twitch.tv/app` (Los Angeles)
-
-### Kick
-
-**Default Settings:**
-- **Server**: `rtmps://fa723fc1b171.global-contribute.live-video.net`
-- **Protocol**: RTMPS (secure RTMP)
-- **Resolution**: 1280x720 @ 30fps
-- **Bitrate**: 2500 kbps
-
-**Environment Variables:**
-```bash
-KICK_STREAM_KEY=sk_us-west-2_OrgZh8XyN0Qs_DKZE46VeaiqkczE5ZMTx63ct25wZ7q
-KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net
-```
-
-**Note**: Kick uses RTMPS (port 443) instead of RTMP (port 1935).
+**Ingest servers:**
+- US West: `rtmp://live-sjc.twitch.tv/app`
+- US East: `rtmp://live-iad.twitch.tv/app`
+- EU: `rtmp://live-fra.twitch.tv/app`
+- Asia: `rtmp://live-sin.twitch.tv/app`
 
 ### X (Twitter)
 
-**Default Settings:**
-- **Server**: `rtmp://sg.pscp.tv:80/x`
-- **Region**: Singapore (sg) or US (va)
-- **Resolution**: 1280x720 @ 30fps
-- **Bitrate**: 2500 kbps
+**Get your stream key:**
+1. Go to [Media Studio](https://studio.twitter.com)
+2. Producer → Create Broadcast → Create Source
+3. Copy RTMP URL and Stream Key
 
-**Environment Variables:**
-```bash
-X_STREAM_KEY=sp16tpmtyqws
-X_RTMP_URL=rtmp://sg.pscp.tv:80/x
-```
-
-**Requirements**:
+**Requirements:**
 - X Premium subscription
-- Desktop streaming enabled in Media Studio
+- Desktop streaming enabled
 
-**Alternative Servers:**
-- US East: `rtmp://va.pscp.tv:80/x`
-- Singapore: `rtmp://sg.pscp.tv:80/x`
-
-## Anti-Cheat Configuration
-
-### Public Data Delay
-
-To prevent stream sniping in betting markets, Hyperscape delays public data broadcast.
-
-**Canonical Platform Defaults:**
+**Configuration:**
 ```bash
-# YouTube (removed)
-STREAMING_CANONICAL_PLATFORM=youtube
-STREAMING_PUBLIC_DELAY_MS=15000  # 15 seconds
-
-# Twitch (current default)
-STREAMING_CANONICAL_PLATFORM=twitch
-STREAMING_PUBLIC_DELAY_MS=12000  # 12 seconds
-
-# HLS (local)
-STREAMING_CANONICAL_PLATFORM=hls
-STREAMING_PUBLIC_DELAY_MS=4000   # 4 seconds
+X_STREAM_KEY=your-x-stream-key
+X_RTMP_URL=rtmp://x-media-studio/your-path
 ```
 
-**Override Delay:**
-```bash
-# Set to 0 for live betting (no delay)
-STREAMING_PUBLIC_DELAY_MS=0
+### Kick
 
-# Or custom delay
-STREAMING_PUBLIC_DELAY_MS=8000  # 8 seconds
+**Get your stream key:**
+1. Go to [Kick Creator Dashboard](https://kick.com/dashboard/settings/stream)
+2. Copy "Stream Key"
+
+**Configuration:**
+```bash
+KICK_STREAM_KEY=your-kick-stream-key
+KICK_RTMP_URL=rtmp://ingest.kick.com/live
 ```
 
-**What Gets Delayed:**
-- `/api/streaming/state` endpoint
-- `/api/streaming/state/events` SSE feed
-- `/api/arena/*` betting endpoints
+### YouTube
 
-**What's NOT Delayed:**
-- Trusted viewers with `STREAMING_VIEWER_ACCESS_TOKEN`
-- Loopback connections (localhost)
-- Internal game server communication
+**Get your stream key:**
+1. Go to [YouTube Studio](https://studio.youtube.com)
+2. Go Live → Stream
+3. Copy "Stream key"
 
-## Stream Capture Settings
-
-### Resolution & Quality
-
+**Configuration:**
 ```bash
-# Resolution
-STREAM_CAPTURE_WIDTH=1280
-STREAM_CAPTURE_HEIGHT=720
-
-# Frame rate (30fps recommended for stability)
-# Controlled by FFmpeg encoder settings
+YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+YOUTUBE_RTMP_URL=rtmp://a.rtmp.youtube.com/live2
 ```
 
-### Capture Mode
+### Custom RTMP Server
 
+**Configuration:**
 ```bash
-# CDP mode (recommended for reliability)
-STREAM_CAPTURE_MODE=cdp
-
-# Recovery settings
-STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000
-STREAM_CAPTURE_RECOVERY_MAX_FAILURES=6
-```
-
-### Browser Configuration
-
-```bash
-# Use Chrome Dev channel (WebGPU support)
-STREAM_CAPTURE_CHANNEL=chrome-dev
-
-# Use Vulkan ANGLE backend (GPU rendering)
-STREAM_CAPTURE_ANGLE=vulkan
-
-# Run headful with Xvfb (GPU access)
-STREAM_CAPTURE_HEADLESS=false
-DUEL_CAPTURE_USE_XVFB=true
-
-# Enable WebGPU (required for TSL shaders)
-STREAM_CAPTURE_DISABLE_WEBGPU=false
-```
-
-## FFmpeg Configuration
-
-### Encoder Settings
-
-**Video:**
-- Codec: H.264 (libx264)
-- Preset: veryfast
-- Bitrate: 2500 kbps
-- Keyframe interval: 2 seconds
-- Profile: main
-- Level: 4.0
-
-**Audio:**
-- Codec: AAC
-- Bitrate: 128 kbps
-- Sample rate: 44100 Hz
-- Channels: 2 (stereo)
-
-### Tee Muxer
-
-FFmpeg uses the tee muxer to send one stream to multiple destinations:
-
-```bash
-ffmpeg -i input.mp4 \
-  -c:v libx264 -preset veryfast -b:v 2500k \
-  -c:a aac -b:a 128k \
-  -f tee \
-  "[f=flv]rtmp://live.twitch.tv/app/live_123|[f=flv]rtmps://kick.com/live/sk_456|[f=flv]rtmp://sg.pscp.tv:80/x/sp789"
-```
-
-**Benefits:**
-- Single encode (efficient)
-- Multiple outputs (parallel)
-- Independent failure handling
-
-## Custom Destinations
-
-### Add Custom RTMP Server
-
-```bash
-# In packages/server/.env
-CUSTOM_RTMP_NAME=MyPlatform
+CUSTOM_RTMP_NAME=Custom
 CUSTOM_RTMP_URL=rtmp://your-server/live
 CUSTOM_STREAM_KEY=your-key
 ```
 
-### JSON Fanout Config
+## Stream Quality Settings
 
-For advanced multi-destination setups:
-
-```bash
-RTMP_DESTINATIONS_JSON='[
-  {
-    "name": "MyMux",
-    "url": "rtmp://host/live",
-    "key": "stream-key",
-    "enabled": true
-  }
-]'
-```
-
-### RTMP Multiplexer
-
-Use a multiplexer service (Restream, Livepeer) to fan out to many platforms:
+### Video Encoding
 
 ```bash
-RTMP_MULTIPLEXER_NAME=Restream
-RTMP_MULTIPLEXER_URL=rtmp://live.restream.io/live
-RTMP_MULTIPLEXER_STREAM_KEY=your-restream-key
+# Codec (libx264 recommended)
+STREAM_VIDEO_CODEC=libx264
+
+# Bitrate (higher = better quality, more bandwidth)
+STREAM_VIDEO_BITRATE=2500k  # 2.5 Mbps
+
+# Preset (faster = lower CPU, lower quality)
+# Options: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
+STREAM_VIDEO_PRESET=veryfast
+
+# Frame rate
+STREAM_VIDEO_FPS=30
+
+# Resolution (set in browser capture)
+STREAM_VIDEO_WIDTH=1280
+STREAM_VIDEO_HEIGHT=720
 ```
 
-## Local HLS Output
+### Audio Encoding
 
-For local testing or website embedding:
+```bash
+# Codec
+STREAM_AUDIO_CODEC=aac
+
+# Bitrate
+STREAM_AUDIO_BITRATE=128k
+
+# Sample rate
+STREAM_AUDIO_SAMPLE_RATE=44100
+```
+
+### Quality Presets
+
+**Low (720p30, 1.5 Mbps):**
+```bash
+STREAM_VIDEO_BITRATE=1500k
+STREAM_VIDEO_PRESET=ultrafast
+STREAM_VIDEO_FPS=30
+STREAM_VIDEO_WIDTH=1280
+STREAM_VIDEO_HEIGHT=720
+```
+
+**Medium (720p30, 2.5 Mbps):**
+```bash
+STREAM_VIDEO_BITRATE=2500k
+STREAM_VIDEO_PRESET=veryfast
+STREAM_VIDEO_FPS=30
+STREAM_VIDEO_WIDTH=1280
+STREAM_VIDEO_HEIGHT=720
+```
+
+**High (1080p30, 4.5 Mbps):**
+```bash
+STREAM_VIDEO_BITRATE=4500k
+STREAM_VIDEO_PRESET=fast
+STREAM_VIDEO_FPS=30
+STREAM_VIDEO_WIDTH=1920
+STREAM_VIDEO_HEIGHT=1080
+```
+
+**Ultra (1080p60, 6 Mbps):**
+```bash
+STREAM_VIDEO_BITRATE=6000k
+STREAM_VIDEO_PRESET=medium
+STREAM_VIDEO_FPS=60
+STREAM_VIDEO_WIDTH=1920
+STREAM_VIDEO_HEIGHT=1080
+```
+
+## Streaming Delay
+
+For betting fairness, configure public streaming delay:
+
+```bash
+# Canonical platform (youtube, twitch, or hls)
+STREAMING_CANONICAL_PLATFORM=twitch
+
+# Override default delay (ms)
+# Default: youtube=15000, twitch=12000, hls=4000
+STREAMING_PUBLIC_DELAY_MS=0  # Set to 0 for live betting
+```
+
+**Default delays:**
+- YouTube: 15 seconds (15000ms)
+- Twitch: 12 seconds (12000ms)
+- HLS: 4 seconds (4000ms)
+
+**Custom delay:**
+```bash
+# 5 second delay
+STREAMING_PUBLIC_DELAY_MS=5000
+
+# No delay (live)
+STREAMING_PUBLIC_DELAY_MS=0
+```
+
+## Multi-Platform Streaming
+
+Stream to multiple platforms simultaneously using FFmpeg tee muxer:
+
+```bash
+# Enable all platforms
+TWITCH_STREAM_KEY=your-twitch-key
+X_STREAM_KEY=your-x-key
+KICK_STREAM_KEY=your-kick-key
+YOUTUBE_STREAM_KEY=your-youtube-key
+```
+
+FFmpeg automatically detects configured platforms and streams to all of them.
+
+## Local Testing
+
+### Setup nginx-rtmp
+
+```bash
+# Start nginx-rtmp container
+docker run -d -p 1935:1935 tiangolo/nginx-rtmp
+
+# Configure test stream
+CUSTOM_RTMP_URL=rtmp://localhost:1935/live
+CUSTOM_STREAM_KEY=test
+
+# Start streaming
+bun run stream:test
+```
+
+### View Test Stream
+
+```bash
+# Using ffplay
+ffplay rtmp://localhost:1935/live/test
+
+# Using VLC
+vlc rtmp://localhost:1935/live/test
+
+# Using OBS
+# Add Media Source → Network Stream
+# URL: rtmp://localhost:1935/live/test
+```
+
+## HLS Output
+
+Generate HLS playlist for web playback:
 
 ```bash
 # Enable HLS output
@@ -287,306 +279,214 @@ HLS_OUTPUT_PATH=packages/server/public/live/stream.m3u8
 HLS_SEGMENT_PATTERN=packages/server/public/live/stream-%09d.ts
 
 # HLS settings
-HLS_TIME_SECONDS=2           # Segment duration
-HLS_LIST_SIZE=24             # Playlist depth
-HLS_DELETE_THRESHOLD=96      # Delete old segments
-HLS_START_NUMBER=1700000000  # Avoid wraparound
+HLS_TIME_SECONDS=2              # Segment duration
+HLS_LIST_SIZE=24                # Playlist size
+HLS_DELETE_THRESHOLD=96         # Delete old segments
+HLS_START_NUMBER=1700000000     # Starting segment number
 HLS_FLAGS=delete_segments+append_list+independent_segments+program_date_time+omit_endlist+temp_file
 ```
 
-**Access HLS Stream:**
-```bash
-# Local
+**Access HLS stream:**
+```
 http://localhost:5555/live/stream.m3u8
-
-# Production
-https://your-server.com/live/stream.m3u8
-```
-
-## Monitoring
-
-### Check Stream Status
-
-```bash
-# Streaming state API
-curl http://localhost:5555/api/streaming/state | jq
-
-# Expected response
-{
-  "cycle": {
-    "phase": "FIGHTING",
-    "agent1": { "name": "AgentA", "hp": 85 },
-    "agent2": { "name": "AgentB", "hp": 72 }
-  }
-}
-```
-
-### View FFmpeg Logs
-
-```bash
-# PM2 logs
-bunx pm2 logs hyperscape-duel | grep -i ffmpeg
-
-# Look for:
-# - "Stream #0:0: Video: h264"
-# - "Stream #0:1: Audio: aac"
-# - "Opening 'rtmp://...' for writing"
-```
-
-### Test RTMP Locally
-
-```bash
-# Start nginx-rtmp test server
-docker run -d -p 1935:1935 tiangolo/nginx-rtmp
-
-# Configure test destination
-CUSTOM_RTMP_URL=rtmp://localhost:1935/live
-CUSTOM_STREAM_KEY=test
-
-# View test stream
-ffplay rtmp://localhost:1935/live/test
 ```
 
 ## Troubleshooting
 
-### Stream Not Appearing on Platform
+### Stream Not Appearing
 
-**Symptom**: FFmpeg reports success but stream doesn't show on Twitch/Kick/X
-
-**Solutions**:
-1. **Verify stream key**: Check for typos, expired keys
-2. **Check platform status**: Platform may be down
-3. **Test with OBS**: Use same key in OBS to isolate issue
-4. **Check bitrate**: Some platforms reject streams >6000 kbps
-
+**Check FFmpeg process:**
 ```bash
-# Test stream key with ffmpeg
-ffmpeg -re -i test.mp4 \
-  -c:v libx264 -preset veryfast -b:v 2500k \
-  -c:a aac -b:a 128k \
-  -f flv rtmp://live.twitch.tv/app/your-key
+# View logs
+pm2 logs stream-capture
+
+# Check if running
+ps aux | grep ffmpeg
 ```
 
-### FFmpeg Crashes or Restarts
-
-**Symptom**: Stream drops, FFmpeg process dies
-
-**Solutions**:
+**Test RTMP connection:**
 ```bash
-# Check FFmpeg logs
-bunx pm2 logs hyperscape-duel | grep -i ffmpeg
+# Test with static image
+ffmpeg -loop 1 -i test.png -f flv "rtmp://live.twitch.tv/app/$TWITCH_STREAM_KEY"
+```
 
-# Common errors:
-# - "Connection refused" → Platform down or wrong URL
-# - "Invalid stream key" → Wrong key or expired
-# - "Broken pipe" → Network issue
+**Check stream key:**
+```bash
+# Verify key is set
+echo $TWITCH_STREAM_KEY
 
-# Increase restart attempts
-STREAM_CAPTURE_RECOVERY_MAX_FAILURES=10  # was 6
+# Test key validity (Twitch)
+curl -H "Client-ID: your-client-id" \
+  -H "Authorization: Bearer your-token" \
+  https://api.twitch.tv/helix/streams/key
+```
+
+### Poor Stream Quality
+
+**Increase bitrate:**
+```bash
+STREAM_VIDEO_BITRATE=4500k
+```
+
+**Use slower preset:**
+```bash
+STREAM_VIDEO_PRESET=fast
+```
+
+**Check CPU usage:**
+```bash
+htop
+```
+
+**Use hardware encoding (if available):**
+```bash
+# NVIDIA GPU
+STREAM_VIDEO_CODEC=h264_nvenc
+
+# AMD GPU
+STREAM_VIDEO_CODEC=h264_amf
+
+# Intel GPU
+STREAM_VIDEO_CODEC=h264_qsv
 ```
 
 ### High CPU Usage
 
-**Symptom**: Server CPU at 100%, stream stutters
-
-**Solutions**:
+**Use faster preset:**
 ```bash
-# Use faster preset
-# In FFmpeg encoder: -preset ultrafast
-
-# Reduce resolution
-STREAM_CAPTURE_WIDTH=960
-STREAM_CAPTURE_HEIGHT=540
-
-# Reduce bitrate
-# In FFmpeg encoder: -b:v 1500k
+STREAM_VIDEO_PRESET=ultrafast
 ```
 
-### Audio Out of Sync
-
-**Symptom**: Audio lags behind video
-
-**Solutions**:
+**Lower resolution:**
 ```bash
-# Add audio offset in FFmpeg
--itsoffset 0.5  # 500ms delay
+STREAM_VIDEO_WIDTH=1280
+STREAM_VIDEO_HEIGHT=720
+```
 
-# Or adjust capture timing
-STREAM_CAPTURE_AUDIO_OFFSET_MS=500
+**Lower frame rate:**
+```bash
+STREAM_VIDEO_FPS=30
+```
+
+### Stream Buffering/Stuttering
+
+**Check upload bandwidth:**
+```bash
+# Test upload speed
+speedtest-cli --upload-only
+```
+
+**Reduce bitrate:**
+```bash
+STREAM_VIDEO_BITRATE=1500k
+```
+
+**Check network latency:**
+```bash
+# Ping Twitch ingest
+ping live.twitch.tv
+
+# Traceroute
+traceroute live.twitch.tv
+```
+
+### Audio/Video Desync
+
+**Check audio buffer:**
+```bash
+STREAM_AUDIO_BUFFER=512
+```
+
+**Use constant frame rate:**
+```bash
+STREAM_VIDEO_FPS=30
+```
+
+**Check system time:**
+```bash
+# Sync system clock
+ntpdate -s time.nist.gov
 ```
 
 ## Advanced Configuration
 
 ### Custom FFmpeg Flags
 
-Edit `packages/server/src/streaming/rtmp-bridge.ts` to customize FFmpeg:
-
-```typescript
-const ffmpegArgs = [
-  '-f', 'rawvideo',
-  '-pix_fmt', 'rgb24',
-  '-s', `${width}x${height}`,
-  '-r', '30',
-  '-i', '-',
-  '-c:v', 'libx264',
-  '-preset', 'veryfast',  // Change to 'ultrafast' for lower CPU
-  '-b:v', '2500k',        // Change bitrate
-  '-maxrate', '2500k',
-  '-bufsize', '5000k',
-  '-pix_fmt', 'yuv420p',
-  '-g', '60',             // Keyframe interval
-  '-c:a', 'aac',
-  '-b:a', '128k',
-  '-ar', '44100',
-  '-f', 'tee',
-  teeOutput
-];
+```bash
+# Add custom FFmpeg flags
+FFMPEG_CUSTOM_FLAGS="-tune zerolatency -profile:v baseline"
 ```
 
-### Streaming to Multiple Regions
-
-For global audience, stream to regional ingest servers:
+### Multiple Outputs
 
 ```bash
-# Twitch US West
-TWITCH_RTMP_URL=rtmp://live-lax.twitch.tv/app
-
-# Twitch EU
-TWITCH_RTMP_URL=rtmp://live-fra.twitch.tv/app
-
-# Twitch Asia
-TWITCH_RTMP_URL=rtmp://live-sin.twitch.tv/app
+# JSON array of destinations
+RTMP_DESTINATIONS_JSON='[
+  {
+    "name": "Twitch",
+    "url": "rtmp://live.twitch.tv/app",
+    "key": "your-key",
+    "enabled": true
+  },
+  {
+    "name": "YouTube",
+    "url": "rtmp://a.rtmp.youtube.com/live2",
+    "key": "your-key",
+    "enabled": true
+  }
+]'
 ```
 
-### Adaptive Bitrate
+### RTMP Multiplexer
 
-For unstable connections, use adaptive bitrate:
+Use a multiplexer service (Restream, Livepeer) to fan out to multiple platforms:
 
 ```bash
-# Lower bitrate for reliability
--b:v 1500k -maxrate 1800k -bufsize 3000k
-
-# Or use CBR (constant bitrate)
--b:v 2500k -minrate 2500k -maxrate 2500k -bufsize 2500k
+RTMP_MULTIPLEXER_NAME=Restream
+RTMP_MULTIPLEXER_URL=rtmp://live.restream.io/live
+RTMP_MULTIPLEXER_STREAM_KEY=your-restream-key
 ```
 
-## SSE Fanout Configuration
+## Monitoring
 
-The streaming state is broadcast to spectators via Server-Sent Events (SSE).
-
-### Tuning Parameters
+### Stream Health
 
 ```bash
-# Replay buffer for resume support
-STREAMING_SSE_REPLAY_BUFFER=2048
+# Check stream status
+curl http://localhost:5555/api/streaming/status
 
-# Max replay payload bytes (oldest frames trimmed first)
-STREAMING_SSE_REPLAY_MAX_BYTES=33554432  # 32MB
-
-# Push cadence for live state fanout
-STREAMING_SSE_PUSH_INTERVAL_MS=500
-
-# Keepalive heartbeat cadence
-STREAMING_SSE_HEARTBEAT_MS=15000
-
-# Per-client pending bytes threshold (drop slow consumers)
-STREAMING_SSE_MAX_PENDING_BYTES=1048576  # 1MB
+# Check FFmpeg stats
+pm2 logs stream-capture | grep fps
 ```
 
-### SSE Endpoints
+### Bandwidth Usage
 
-**Live State Stream:**
 ```bash
-# Connect to SSE feed
-curl -N http://localhost:5555/api/streaming/state/events
+# Monitor network usage
+iftop -i eth0
 
-# With resume support
-curl -N http://localhost:5555/api/streaming/state/events?lastEventId=12345
+# Check FFmpeg bandwidth
+pm2 logs stream-capture | grep bitrate
 ```
 
-**Snapshot:**
+### Viewer Count
+
+**Twitch:**
 ```bash
-# Get current state (no streaming)
-curl http://localhost:5555/api/streaming/state
+curl -H "Client-ID: your-client-id" \
+  -H "Authorization: Bearer your-token" \
+  "https://api.twitch.tv/helix/streams?user_login=your-username"
 ```
 
-## Performance Optimization
-
-### Reduce Stream Latency
-
+**YouTube:**
 ```bash
-# Set public delay to 0
-STREAMING_PUBLIC_DELAY_MS=0
-
-# Use HLS with short segments
-HLS_TIME_SECONDS=1
-HLS_LIST_SIZE=6
-
-# Use faster FFmpeg preset
--preset ultrafast
-```
-
-### Reduce CPU Usage
-
-```bash
-# Lower resolution
-STREAM_CAPTURE_WIDTH=960
-STREAM_CAPTURE_HEIGHT=540
-
-# Lower frame rate
--r 24  # 24fps instead of 30fps
-
-# Faster preset
--preset ultrafast
-
-# Lower bitrate
--b:v 1500k
-```
-
-### Reduce Memory Usage
-
-```bash
-# Limit SSE replay buffer
-STREAMING_SSE_REPLAY_BUFFER=512
-STREAMING_SSE_REPLAY_MAX_BYTES=8388608  # 8MB
-
-# Reduce HLS playlist size
-HLS_LIST_SIZE=12
-HLS_DELETE_THRESHOLD=48
-```
-
-## Testing
-
-### Local RTMP Server
-
-```bash
-# Start nginx-rtmp
-docker run -d -p 1935:1935 tiangolo/nginx-rtmp
-
-# Configure Hyperscape
-CUSTOM_RTMP_URL=rtmp://localhost:1935/live
-CUSTOM_STREAM_KEY=test
-
-# View stream
-ffplay rtmp://localhost:1935/live/test
-```
-
-### Stream Health Check
-
-```bash
-# Check if stream is live
-curl http://localhost:5555/api/streaming/state
-
-# Check FFmpeg process
-ps aux | grep ffmpeg
-
-# Check network
-netstat -an | grep 1935  # RTMP port
+curl "https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=your-video-id&key=your-api-key"
 ```
 
 ## See Also
 
-- [docs/vast-deployment.md](vast-deployment.md) - Vast.ai GPU streaming setup
-- [packages/server/.env.example](../packages/server/.env.example) - Full environment variable reference
-- [packages/server/src/streaming/](../packages/server/src/streaming/) - Streaming implementation
-- [ecosystem.config.cjs](../ecosystem.config.cjs) - PM2 streaming configuration
+- [Vast.ai Deployment Guide](vast-deployment.md)
+- [Maintenance Mode API](maintenance-mode-api.md)
+- [WebGPU Requirements](webgpu-requirements.md)
+- [FFmpeg Documentation](https://ffmpeg.org/documentation.html)
+- [Twitch Broadcast Guidelines](https://help.twitch.tv/s/article/broadcast-guidelines)
