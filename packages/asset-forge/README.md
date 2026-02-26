@@ -23,18 +23,12 @@ A comprehensive React/Vite application for AI-powered 3D asset generation, riggi
 - Weight transfer and mesh deformation
 - Bone mapping and skeleton alignment
 
-### ✨ **VFX Catalog Browser** (New)
-- **Live Three.js Previews**: Real-time rendering of all game visual effects
-- **Effect Categories**: Spells, arrows, glow particles, fishing spots, teleport, combat HUD
-- **Interactive Viewer**: Orbit controls, animated effects, dark/light scene modes
-- **Detailed Documentation**: Color palettes, parameter tables, layer breakdowns, phase timelines
-- **Comprehensive Coverage**: 
-  - 8 spell projectiles (strikes & bolts with trail effects)
-  - 6 arrow types (bronze, iron, steel, mithril, adamant)
-  - 3 glow particle presets (altar, fire, torch)
-  - 3 fishing spot effects (net, fly, default)
-  - Teleport effect (multi-phase with helix particles)
-  - Combat HUD effects (damage splats, XP drops)
+### ✨ **VFX Catalog Browser** (New - February 2026)
+- Live Three.js previews of all game visual effects
+- Comprehensive effect documentation with color palettes, parameters, and layer breakdowns
+- Categories: Magic spells, arrow projectiles, glow particles, fishing spots, teleport effects, combat HUD
+- Interactive phase timelines for complex effects (teleport sequence visualization)
+- Real-time particle system previews with accurate shader rendering
 
 ### 🔧 **Processing Tools**
 - Sprite generation from 3D models
@@ -45,26 +39,27 @@ A comprehensive React/Vite application for AI-powered 3D asset generation, riggi
 ## Tech Stack
 
 - **Frontend**: React 18, TypeScript, Vite
-- **3D Graphics**: Three.js, React Three Fiber, Drei
+- **3D Graphics**: Three.js (WebGPU), React Three Fiber, Drei
 - **State Management**: Zustand, Immer
 - **AI Integration**: OpenAI API, Meshy.ai API
 - **ML/Computer Vision**: TensorFlow.js, MediaPipe (hand detection)
-- **Backend**: Express.js, Node.js
+- **Backend**: Elysia (Bun-native server)
 - **Styling**: Tailwind CSS
 - **Build Tool**: Bun
+- **Rendering**: WebGPU with TSL (Three.js Shading Language)
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+ or Bun runtime
+- Bun runtime (v1.1.38+)
 - API keys for OpenAI and Meshy.ai
 
 ### Installation
 
 1. Clone the repository
 ```bash
-git clone [repository-url]
-cd packages/asset-forge
+git clone https://github.com/HyperscapeAI/hyperscape.git
+cd hyperscape/packages/asset-forge
 ```
 
 2. Install dependencies using Bun
@@ -90,17 +85,15 @@ Start both frontend and backend services:
 # From repository root:
 bun run dev:forge
 
-# Or run from asset-forge directory:
+# Or from packages/asset-forge:
 bun run dev:all
 
 # Or run separately:
-bun run dev           # Terminal 1: Frontend only
-bun run dev:backend   # Terminal 2: Backend services
+bun run dev           # Terminal 1: Frontend only (port 3400)
+bun run dev:backend   # Terminal 2: Backend services (port 3401)
 ```
 
-The app will be available at:
-- **Frontend**: `http://localhost:3400`
-- **Backend API**: `http://localhost:3401`
+The app will be available at `http://localhost:3400`
 
 ## Project Structure
 
@@ -108,19 +101,18 @@ The app will be available at:
 asset-forge/
 ├── src/                    # React application source
 │   ├── components/         # UI components
-│   │   ├── VFX/           # VFX catalog browser components
+│   │   ├── VFX/           # VFX catalog browser components (NEW)
 │   │   ├── Generation/    # Asset generation UI
 │   │   ├── Equipment/     # Equipment system
-│   │   └── ...
+│   │   ├── ArmorFitting/  # Armor fitting tools
+│   │   └── HandRigging/   # Hand rigging tools
 │   ├── services/          # Core services (AI, fitting, rigging)
 │   ├── pages/             # Main application pages
-│   │   ├── VFXPage.tsx   # VFX catalog browser
-│   │   └── ...
 │   ├── data/              # Static data and catalogs
-│   │   └── vfx-catalog.ts # VFX effect metadata
+│   │   └── vfx-catalog.ts # VFX effect metadata (NEW)
 │   ├── hooks/             # Custom React hooks
 │   └── store/             # Zustand state management
-├── server/                # Express.js backend
+├── server/                # Elysia backend
 │   ├── api-elysia.ts     # API endpoints
 │   └── services/         # Backend services
 ├── gdd-assets/           # Generated 3D assets
@@ -163,17 +155,15 @@ asset-forge/
 - Automatic grip point calculation
 - Export rigged weapons
 
-### 6. VFX Catalog Browser (`/vfx`)
-- **Browse All Game Effects**: Organized by category (spells, arrows, glow, fishing, teleport, combat HUD)
-- **Live Previews**: Real-time Three.js rendering with animated effects
-- **Effect Details**: 
-  - Color palettes with hex values
-  - Parameter tables (size, intensity, duration, etc.)
-  - Layer breakdowns for particle systems
-  - Phase timelines for multi-stage effects
-  - Component lists for complex effects
-- **Interactive Controls**: Orbit camera, zoom, pan
-- **Technical Reference**: Shader parameters, blend modes, particle counts
+### 6. VFX Catalog (`/vfx`) - **New February 2026**
+- Browse all game visual effects with live Three.js previews
+- **Magic Spells**: Wind/Water/Earth/Fire strikes and bolts with orbiting sparks and trails
+- **Arrow Projectiles**: Material-specific arrows (bronze, iron, steel, mithril, adamant) with metallic finishes
+- **Glow Particles**: Altar glow (4-layer system), fire, and torch presets with detailed layer breakdowns
+- **Fishing Spots**: Water particle effects with splash arcs, bubble rise, shimmer twinkle, and ripple rings
+- **Teleport Effects**: Multi-phase animation (gather/erupt/sustain/fade) with rune circles, beams, shockwaves, helix spirals, and burst particles
+- **Combat HUD**: Damage splats (hit/miss variants) and XP drops with easing curves
+- **Effect Details**: Color swatches, parameter tables, phase timelines, component lists
 
 ## API Endpoints
 
@@ -183,12 +173,13 @@ asset-forge/
 - `POST /api/retexture/start` - Generate material variants
 - `POST /api/fitting/preview` - Preview armor fitting
 - `POST /api/hand-rigging/process` - Process hand rigging
+- `GET /api/health` - Health check endpoint
 
 ## Scripts
 
-- `bun run dev` - Start frontend development server
+- `bun run dev` - Start frontend development server (port 3400)
 - `bun run dev:all` - Start both frontend and backend development servers
-- `bun run dev:backend` - Start backend services only
+- `bun run dev:backend` - Start backend services only (port 3401)
 - `bun run build` - Build for production
 - `bun run start` - Start production backend services
 - `bun run assets:audit` - Audit asset library
@@ -200,52 +191,17 @@ asset-forge/
 The system uses JSON-based configuration for:
 - Material presets (`public/prompts/material-presets.json`)
 - Asset metadata (stored with each asset)
-- Generation prompts and styles
-- VFX effect definitions (`src/data/vfx-catalog.ts`)
+- Generation prompts and styles (`public/prompts/`)
+- VFX effect catalog (`src/data/vfx-catalog.ts`)
 
-## VFX Catalog
+## Browser Requirements
 
-The VFX catalog browser provides comprehensive documentation of all visual effects used in Hyperscape:
+**WebGPU Required** (as of February 2026):
+- Chrome/Edge 113+ (Windows/macOS/Linux)
+- Safari 18+ (macOS Sonoma+ only)
+- Check compatibility: [webgpureport.org](https://webgpureport.org)
 
-### Effect Categories
-
-1. **Magic Spells** (8 effects)
-   - Wind/Water/Earth/Fire Strikes (tier 1)
-   - Wind/Water/Earth/Fire Bolts (tier 2 with pulse animation)
-   - Billboarded glow orbs with trail particles and orbiting sparks
-
-2. **Arrow Projectiles** (6 effects)
-   - Default, Bronze, Iron, Steel, Mithril, Adamant
-   - 3D mesh rendering with shaft, head, and fletching components
-
-3. **Glow Particles** (3 presets)
-   - Altar: 30 particles across 4 layers (pillar, wisp, spark, base)
-   - Fire: 18 rising particles with turbulent motion
-   - Torch: 6 tighter flame particles
-
-4. **Fishing Spots** (3 effects)
-   - Net, Fly, Default fishing
-   - Splash arcs, bubble rise, shimmer twinkle, ripple rings
-
-5. **Teleport** (1 effect)
-   - Multi-phase animation: gather → erupt → sustain → fade
-   - Ground rune circle, dual beams, shockwave rings
-   - Helix spiral particles, burst particles with gravity
-   - Dynamic point lighting
-
-6. **Combat HUD** (2 effects)
-   - Damage splats (hit/miss variants)
-   - XP drops with cubic ease-out animation
-
-### Technical Implementation
-
-VFX catalog data is duplicated in `src/data/vfx-catalog.ts` as plain objects (no game engine imports). Source-of-truth files:
-- `packages/shared/src/data/spell-visuals.ts`
-- `packages/shared/src/entities/managers/particleManager/GlowParticleManager.ts`
-- `packages/shared/src/entities/managers/particleManager/WaterParticleManager.ts`
-- `packages/shared/src/systems/client/ClientTeleportEffectsSystem.ts`
-- `packages/shared/src/systems/client/DamageSplatSystem.ts`
-- `packages/shared/src/systems/client/XPDropSystem.ts`
+All Three.js rendering uses TSL (Three.js Shading Language) which requires WebGPU. WebGL is not supported.
 
 ## Contributing
 
