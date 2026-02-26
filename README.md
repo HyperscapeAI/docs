@@ -326,30 +326,41 @@ GitHub Actions may hit npm rate limits. The CI now uses `--frozen-lockfile` and 
 
 ## Recent Updates (February 2026)
 
+### AI Agents
+- ✅ **Model agent stability** - Circuit breakers, timeouts, memory leak fixes, graceful shutdown
+- ✅ **Quest-driven tools** - Replaced starter chest with quest-based tool acquisition
+- ✅ **Autonomous banking** - Agents auto-deposit at 25/28 slots, keep essential tools
+- ✅ **Action locks** - Skip LLM during movement, fast-tick mode for quick follow-up
+- ✅ **Resource detection** - Increased approach range from 20m to 40m
+- ✅ **Database isolation** - Force PGLite for agents, prevent schema conflicts
+
+### Streaming & Audio
+- ✅ **PulseAudio audio capture** - Game music and sound effects in streams
+- ✅ **Improved buffering** - Changed from 'zerolatency' to 'film' tune, 4x buffer size
+- ✅ **Audio stability** - Wall clock timestamps, async resampling, removed -shortest flag
+- ✅ **Multi-platform RTMP** - Twitch, Kick, X (YouTube removed)
+- ✅ **Stream key management** - Explicit unset/re-export prevents stale keys
+- ✅ **Public delay to 0ms** - Live betting mode (was 12-15s)
+
 ### Deployment & Infrastructure
-- ✅ **Maintenance Mode API** - Graceful deployments with automatic market resolution waiting
+- ✅ **Cloudflare Pages workflow** - Automated client deployment on push to main
 - ✅ **DATABASE_URL persistence** - Survives git reset operations in CI/CD
-- ✅ **Vast.ai improvements** - Vulkan drivers, health checking, Chrome Dev channel
+- ✅ **Database warmup** - 3 retry attempts prevent cold start failures
+- ✅ **Vast.ai improvements** - Vulkan drivers, health checking, Chrome Dev channel, diagnostics
 - ✅ **CSRF cross-origin handling** - Apex domain support for Cloudflare Pages → Railway
 - ✅ **R2 CORS configuration** - Automated setup for cross-origin asset loading
+- ✅ **Solana keypair setup** - Automated from SOLANA_DEPLOYER_PRIVATE_KEY env var
 
 ### Rendering & Performance
 - ✅ **WebGPU enforcement** - WebGL fallback removed (all shaders use TSL)
-- ✅ **Instanced arena meshes** - 97% draw call reduction (~846 meshes → InstancedMesh)
-- ✅ **TSL fire particles** - GPU-driven emissive materials replace 28 PointLights
-- ✅ **Teleport VFX improvements** - Beam fade, scaled geometry, duplicate suppression
-
-### Streaming
-- ✅ **Multi-platform RTMP** - Twitch, Kick, X (Twitter) support
-- ✅ **Streaming stability** - CDP stall threshold increased, soft recovery, better restart logic
-- ✅ **Public delay configuration** - Set to 0ms for live betting (was 12-15s)
-
-### Developer Experience
-- ✅ **VFX catalog** - Asset Forge browser for all game effects
 - ✅ **Type safety** - Reduced explicit `any` types from 142 to ~46
 - ✅ **Memory leak fixes** - AbortController for event listener cleanup
 - ✅ **Dead code removal** - 3098 lines removed (PacketHandlers.ts)
-- ✅ **CI/CD resilience** - Retry logic, frozen lockfile, split unsigned/release builds
+
+### Solana Markets
+- ✅ **WSOL default** - Markets use native token (WSOL) instead of custom GOLD
+- ✅ **Perps oracle disabled** - Default off (program not deployed on devnet)
+- ✅ **MARKET_MINT variable** - Replaced GOLD_MINT for flexibility
 
 ## More Info
 
