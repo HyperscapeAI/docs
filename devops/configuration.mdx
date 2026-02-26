@@ -82,6 +82,11 @@ YOUTUBE_RTMP_URL=rtmp://a.rtmp.youtube.com/live2
 STREAMING_CANONICAL_PLATFORM=twitch  # youtube | twitch | hls (default: youtube)
 STREAMING_PUBLIC_DELAY_MS=0          # Override platform default delay (ms)
 
+# Streaming Quality Settings (commit 4c630f12, Feb 26 2026)
+# Low latency mode (zerolatency tune, 2x buffer) vs balanced mode (film tune, 4x buffer)
+STREAM_LOW_LATENCY=false  # Set to true for ultra-low latency (may cause viewer buffering)
+                          # Default: false (uses 'film' tune with B-frames for smoother playback)
+
 # See packages/server/.env.example for full RTMP configuration
 ```
 
