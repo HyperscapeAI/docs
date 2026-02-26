@@ -143,14 +143,19 @@ export const GAME_URL = 'https://hyperscape.gg';
 
 ## Cloudflare Pages Deployment
 
-The client automatically deploys to Cloudflare Pages on push to main via GitHub Actions.
+The client automatically deploys to Cloudflare Pages on push to main via GitHub Actions (added commit 37c3629, Feb 26 2026).
 
 ### Automated Deployment
 
 The `.github/workflows/deploy-pages.yml` workflow triggers on:
 - Pushes to main branch
-- Changes to `packages/client/**` or `packages/shared/**`
+- Changes to `packages/client/**` or `packages/shared/**` (shared contains packet definitions)
+- Changes to `package.json` or `bun.lockb`
 - Manual workflow dispatch
+
+<Info>
+The client depends on `packages/shared` for packet definitions. When packets change on the server, the client must rebuild to stay in sync.
+</Info>
 
 **Deployment Process:**
 
