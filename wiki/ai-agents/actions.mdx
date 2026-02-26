@@ -229,7 +229,7 @@ export const fleeAction: Action = {
 
 ### `chopTree`
 
-Chop a tree for logs.
+Chop a tree for logs. Automatically walks to tree if within 40m approach range.
 
 ```typescript
 // From actions/skills.ts
@@ -244,11 +244,33 @@ export const chopTreeAction: Action = {
 
 **Requirements**: Hatchet in inventory, Woodcutting level.
 
+**Approach Range**: 40m (increased from 20m in commit 593cd56b to fix "no trees nearby" errors)
+
+---
+
+### `mineRock` <Badge text="Updated" variant="info" />
+
+Mine a rock for ore. Automatically walks to rock if within 40m approach range.
+
+```typescript
+export const mineRockAction: Action = {
+  name: "MINE_ROCK",
+  description: "Mine a nearby rock for ore",
+  parameters: {
+    rockId: { type: "string", optional: true, description: "Specific rock entity ID" },
+  },
+};
+```
+
+**Requirements**: Pickaxe in inventory, Mining level.
+
+**Approach Range**: 40m (increased from 20m in commit 593cd56b)
+
 ---
 
 ### `catchFish`
 
-Catch fish at a fishing spot.
+Catch fish at a fishing spot. Automatically walks to spot if within 40m approach range.
 
 ```typescript
 export const catchFishAction: Action = {
@@ -260,7 +282,9 @@ export const catchFishAction: Action = {
 };
 ```
 
-**Requirements**: Fishing rod in inventory, Fishing level.
+**Requirements**: Fishing net or rod in inventory, Fishing level.
+
+**Approach Range**: 40m (increased from 20m in commit 593cd56b)
 
 ---
 
