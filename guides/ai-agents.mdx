@@ -287,13 +287,31 @@ Agents query world state via 8 providers (updated Feb 26 2026):
 providers: [
   goalProvider,             // Current goal and progress
   gameStateProvider,        // Health, stamina, position, combat status
-  inventoryProvider,        // Items, coins, free slots
-  nearbyEntitiesProvider,   // Players, NPCs, resources nearby
+  inventoryProvider,        // Items, coins, free slots (now includes inventory count)
+  nearbyEntitiesProvider,   // Players, NPCs, resources nearby (filters depleted resources)
   skillsProvider,           // Skill levels and XP
   equipmentProvider,        // Equipped items
   availableActionsProvider, // Context-aware available actions
+  questProvider,            // NEW: Quest state and tool acquisition guidance
 ],
 ```
+
+**Provider Improvements (Feb 26 2026):**
+
+**inventoryProvider:**
+- Now includes inventory count with warnings: "Inventory: 25/28 (nearly full!)"
+- Helps agents decide when to bank items
+
+**nearbyEntitiesProvider:**
+- Filters out depleted resources (trees, rocks, fishing spots)
+- Prevents agents from trying to gather from depleted resources
+- Increased detection range from 20m to 40m
+
+**questProvider (NEW):**
+- Lists available quests with tool rewards
+- Guides agents toward quests when they lack tools
+- Shows quest progress and completion status
+- Example: "Lumberjack's First Lesson (grants: bronze axe)"
 
 ## Agent Architecture
 
