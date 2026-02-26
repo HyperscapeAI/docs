@@ -136,6 +136,78 @@ The `SOLANA_DEPLOYER_PRIVATE_KEY` is automatically decoded and written to:
 
 This happens during deployment via `scripts/decode-key.ts`.
 
+### Solana Market Token Migration (commit 34255ee, Feb 26 2026)
+
+**Breaking Change:** Markets now use native token (WSOL) instead of GOLD token.
+
+**What Changed:**
+
+```bash
+# ❌ Old: GOLD_MINT (custom token)
+GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump
+
+# ✅ New: MARKET_MINT (native token)
+MARKET_MINT=So11111111111111111111111111111111111112  # WSOL
+```
+
+**Why:**
+- Simplifies market operations (no custom token minting/distribution)
+- Uses native token of each chain (WSOL on Solana, WETH on EVM)
+- Reduces transaction complexity and fees
+- Better liquidity (native tokens are more liquid than custom tokens)
+
+**Migration Guide:**
+
+If you have existing markets using GOLD_MINT:
+
+1. **Update environment variables:**
+   ```bash
+   # Remove GOLD_MINT
+   # GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump
+   
+   # Add MARKET_MINT (or leave unset to use WSOL default)
+   MARKET_MINT=So11111111111111111111111111111111111112
+   ```
+
+2. **Redeploy contracts:**
+   ```bash
+   cd packages/gold-betting-demo/anchor
+   anchor build
+   anchor deploy
+   ```
+
+3. **Update keeper configuration:**
+   ```bash
+   # In packages/gold-betting-demo/keeper/.env
+   MARKET_MINT=So11111111111111111111111111111111111112
+   ```
+
+**Perps Oracle Disabled (commit 34255ee):**
+
+The perps oracle is now disabled by default on devnet because the perps program is not deployed:
+
+```bash
+# Disable perps oracle updates (program not deployed on devnet)
+ENABLE_PERPS_ORACLE=false
+
+# Re-enable when perps program is deployed
+# ENABLE_PERPS_ORACLE=true
+```
+
+**Code Changes:**
+
+```typescript
+// From packages/gold-betting-demo/keeper/src/service.ts
+const enablePerpsOracle = process.env.ENABLE_PERPS_ORACLE === 'true';
+
+if (enablePerpsOracle) {
+  // Update perps oracle
+  await updatePerpsOracle();
+} else {
+  logger.info('Perps oracle disabled (ENABLE_PERPS_ORACLE=false)');
+}
+```
+
 ## Client Environment
 
 ### Required
