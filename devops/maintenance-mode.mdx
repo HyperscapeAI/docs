@@ -1,0 +1,551 @@
+---
+title: "Maintenance Mode API"
+description: "Graceful deployment system for production"
+icon: "wrench"
+---
+
+## Overview
+
+The Maintenance Mode API enables graceful deployments without data loss or market inconsistency. It pauses new duel cycles, waits for active markets to resolve, and reports when it's safe to deploy.
+
+## API Endpoints
+
+### Enter Maintenance Mode
+
+Pauses new duel cycles and waits for active markets to resolve.
+
+```bash
+POST /admin/maintenance/enter
+```
+
+**Headers:**
+```
+Content-Type: application/json
+x-admin-code: <ADMIN_CODE>
+```
+
+**Request Body:**
+```json
+{
+  "reason": "deployment",
+  "timeoutMs": 300000
+}
+```
+
+**Parameters:**
+- `reason` (string) - Reason for maintenance (logged for audit)
+- `timeoutMs` (number) - Maximum wait time in milliseconds (default: 300000 = 5 minutes)
+
+**Response:**
+```json
+{
+  "success": true,
+  "status": {
+    "active": true,
+    "safeToDeploy": true,
+    "currentPhase": "IDLE",
+    "marketStatus": "resolved",
+    "pendingMarkets": 0,
+    "enteredAt": "2026-02-26T12:00:00.000Z",
+    "reason": "deployment"
+  }
+}
+```
+
+**Response Fields:**
+- `success` (boolean) - Whether maintenance mode was entered successfully
+- `status.active` (boolean) - Whether maintenance mode is currently active
+- `status.safeToDeploy` (boolean) - Whether it's safe to deploy now
+- `status.currentPhase` (string) - Current duel phase (IDLE, FIGHTING, etc.)
+- `status.marketStatus` (string) - Market status (resolved, betting, etc.)
+- `status.pendingMarkets` (number) - Number of unresolved markets
+- `status.enteredAt` (string) - ISO timestamp when maintenance mode was entered
+- `status.reason` (string) - Reason for maintenance
+
+### Exit Maintenance Mode
+
+Resumes normal operations (duel cycles, betting markets).
+
+```bash
+POST /admin/maintenance/exit
+```
+
+**Headers:**
+```
+Content-Type: application/json
+x-admin-code: <ADMIN_CODE>
+```
+
+**Request Body:**
+```json
+{}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "status": {
+    "active": false,
+    "safeToDeploy": true,
+    "currentPhase": "IDLE",
+    "marketStatus": "none",
+    "pendingMarkets": 0
+  }
+}
+```
+
+### Check Status
+
+Get current maintenance mode status without changing it.
+
+```bash
+GET /admin/maintenance/status
+```
+
+**Headers:**
+```
+x-admin-code: <ADMIN_CODE>
+```
+
+**Response:**
+```json
+{
+  "active": false,
+  "enteredAt": null,
+  "reason": null,
+  "safeToDeploy": true,
+  "currentPhase": "FIGHTING",
+  "marketStatus": "betting",
+  "pendingMarkets": 1
+}
+```
+
+## Safe to Deploy Conditions
+
+The API reports `safeToDeploy: true` when:
+
+1. **Maintenance mode is active** (entered via API)
+2. **Not in active duel phase** (not FIGHTING, COUNTDOWN, or ANNOUNCEMENT)
+3. **No pending betting markets** (all markets resolved or none exist)
+
+**Unsafe Conditions:**
+- Active duel in progress (FIGHTING phase)
+- Countdown in progress (COUNTDOWN phase)
+- Announcement in progress (ANNOUNCEMENT phase)
+- Unresolved betting markets exist
+
+## What Maintenance Mode Does
+
+### Pauses New Duel Cycles
+
+```typescript
+// From packages/server/src/systems/StreamingDuelScheduler/index.ts
+
+if (this.maintenanceMode) {
+  logger.info('Maintenance mode active - skipping new duel cycle');
+  return;
+}
+
+// Start new duel cycle
+await this.startNewCycle();
+```
+
+### Locks Betting Markets
+
+```typescript
+// From packages/server/src/arena/ArenaService.ts
+
+if (maintenanceMode) {
+  throw new Error('Betting disabled during maintenance mode');
+}
+
+// Accept new bets
+await this.placeBet(wallet, amount, outcome);
+```
+
+### Waits for Resolution
+
+The API waits for:
+- Current duel to complete
+- Betting markets to resolve
+- Payouts to be distributed
+
+**Timeout Behavior:**
+- If timeout is reached before resolution, returns `safeToDeploy: false`
+- Caller should wait and retry status check
+- Maintenance mode remains active until explicitly exited
+
+## Helper Scripts
+
+### Pre-Deploy Maintenance
+
+```bash
+#!/bin/bash
+# scripts/pre-deploy-maintenance.sh
+
+ADMIN_CODE="${ADMIN_CODE:-your-admin-code}"
+SERVER_URL="${VAST_SERVER_URL:-https://hyperscape.gg}"
+
+echo "Entering maintenance mode..."
+RESPONSE=$(curl -s -X POST \
+  "$SERVER_URL/admin/maintenance/enter" \
+  -H "Content-Type: application/json" \
+  -H "x-admin-code: $ADMIN_CODE" \
+  -d '{"reason": "deployment", "timeoutMs": 300000}')
+
+echo "Response: $RESPONSE"
+
+SAFE=$(echo "$RESPONSE" | jq -r '.status.safeToDeploy')
+if [ "$SAFE" = "true" ]; then
+  echo "✓ Safe to deploy"
+  exit 0
+else
+  echo "✗ Not safe to deploy yet"
+  exit 1
+fi
+```
+
+### Post-Deploy Resume
+
+```bash
+#!/bin/bash
+# scripts/post-deploy-resume.sh
+
+ADMIN_CODE="${ADMIN_CODE:-your-admin-code}"
+SERVER_URL="${VAST_SERVER_URL:-https://hyperscape.gg}"
+
+echo "Exiting maintenance mode..."
+RESPONSE=$(curl -s -X POST \
+  "$SERVER_URL/admin/maintenance/exit" \
+  -H "Content-Type: application/json" \
+  -H "x-admin-code: $ADMIN_CODE")
+
+echo "Response: $RESPONSE"
+
+SUCCESS=$(echo "$RESPONSE" | jq -r '.success')
+if [ "$SUCCESS" = "true" ]; then
+  echo "✓ Maintenance mode exited"
+  exit 0
+else
+  echo "✗ Failed to exit maintenance mode"
+  exit 1
+fi
+```
+
+## CI/CD Integration
+
+### GitHub Actions Workflow
+
+The Vast.ai deployment workflow automatically uses maintenance mode:
+
+```yaml
+# .github/workflows/deploy-vast.yml
+
+jobs:
+  deploy:
+    steps:
+      # Step 1: Enter maintenance mode
+      - name: Enter Maintenance Mode
+        env:
+          VAST_SERVER_URL: ${{ secrets.VAST_SERVER_URL }}
+          ADMIN_CODE: ${{ secrets.ADMIN_CODE }}
+        run: |
+          RESPONSE=$(curl -s -X POST \
+            "$VAST_SERVER_URL/admin/maintenance/enter" \
+            -H "Content-Type: application/json" \
+            -H "x-admin-code: $ADMIN_CODE" \
+            -d '{"reason": "deployment", "timeoutMs": 300000}')
+          
+          SAFE=$(echo "$RESPONSE" | jq -r '.status.safeToDeploy')
+          echo "Safe to deploy: $SAFE"
+
+      # Step 2: Deploy to Vast.ai
+      - name: SSH and Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VAST_HOST }}
+          port: ${{ secrets.VAST_PORT }}
+          username: root
+          key: ${{ secrets.VAST_SSH_KEY }}
+          script: bash /root/hyperscape/scripts/deploy-vast.sh
+
+      # Step 3: Exit maintenance mode
+      - name: Exit Maintenance Mode
+        env:
+          VAST_SERVER_URL: ${{ secrets.VAST_SERVER_URL }}
+          ADMIN_CODE: ${{ secrets.ADMIN_CODE }}
+        run: |
+          # Wait for server to be ready
+          for i in {1..30}; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$VAST_SERVER_URL/health")
+            if [ "$HTTP_STATUS" = "200" ]; then
+              break
+            fi
+            sleep 10
+          done
+          
+          # Exit maintenance mode
+          curl -s -X POST \
+            "$VAST_SERVER_URL/admin/maintenance/exit" \
+            -H "x-admin-code: $ADMIN_CODE"
+```
+
+### Required GitHub Secrets
+
+| Secret | Purpose |
+|--------|---------|
+| `VAST_SERVER_URL` | Public server URL (e.g., `https://hyperscape.gg`) |
+| `ADMIN_CODE` | Admin code for maintenance mode API |
+
+## Manual Usage
+
+### Enter Maintenance Mode
+
+```bash
+curl -X POST "https://hyperscape.gg/admin/maintenance/enter" \
+  -H "Content-Type: application/json" \
+  -H "x-admin-code: your-admin-code" \
+  -d '{
+    "reason": "deployment",
+    "timeoutMs": 300000
+  }'
+```
+
+### Wait for Safe Deploy
+
+```bash
+# Poll status until safe to deploy
+while true; do
+  RESPONSE=$(curl -s "https://hyperscape.gg/admin/maintenance/status" \
+    -H "x-admin-code: your-admin-code")
+  
+  SAFE=$(echo "$RESPONSE" | jq -r '.safeToDeploy')
+  
+  if [ "$SAFE" = "true" ]; then
+    echo "✓ Safe to deploy"
+    break
+  fi
+  
+  echo "Waiting for safe deploy..."
+  sleep 10
+done
+```
+
+### Deploy
+
+```bash
+# Your deployment commands here
+ssh root@vast-instance "bash /root/hyperscape/scripts/deploy-vast.sh"
+```
+
+### Exit Maintenance Mode
+
+```bash
+curl -X POST "https://hyperscape.gg/admin/maintenance/exit" \
+  -H "Content-Type: application/json" \
+  -H "x-admin-code: your-admin-code"
+```
+
+## Error Handling
+
+### Timeout Exceeded
+
+If timeout is reached before markets resolve:
+
+```json
+{
+  "success": false,
+  "error": "Timeout waiting for safe deploy conditions",
+  "status": {
+    "active": true,
+    "safeToDeploy": false,
+    "currentPhase": "FIGHTING",
+    "pendingMarkets": 1
+  }
+}
+```
+
+**Action:** Wait and retry status check. Maintenance mode remains active.
+
+### Invalid Admin Code
+
+```json
+{
+  "success": false,
+  "error": "Invalid admin code"
+}
+```
+
+**HTTP Status:** 401 Unauthorized
+
+### Server Not Ready
+
+If server is still starting after deployment:
+
+```json
+{
+  "success": false,
+  "error": "Server not ready"
+}
+```
+
+**HTTP Status:** 503 Service Unavailable
+
+**Action:** Wait for health check to pass, then retry.
+
+## Benefits
+
+### Prevents Data Loss
+
+- No interrupted duel cycles
+- No orphaned betting markets
+- No inconsistent game state
+
+### Ensures Market Integrity
+
+- All markets resolve before deployment
+- Payouts distributed correctly
+- No stuck funds
+
+### Clean Duel Cycle Boundaries
+
+- Current cycle completes naturally
+- New cycle starts after deployment
+- No mid-duel interruptions
+
+### Zero-Downtime Deployments
+
+- Server continues running during deployment
+- Active duels complete normally
+- New duels pause until deployment finishes
+
+## Monitoring
+
+### Check Maintenance Status
+
+```bash
+# Quick status check
+curl -s "https://hyperscape.gg/admin/maintenance/status" \
+  -H "x-admin-code: your-admin-code" \
+  | jq '.active'
+
+# Output: true or false
+```
+
+### Monitor Pending Markets
+
+```bash
+# Check pending markets
+curl -s "https://hyperscape.gg/admin/maintenance/status" \
+  -H "x-admin-code: your-admin-code" \
+  | jq '.pendingMarkets'
+
+# Output: 0 (safe to deploy) or >0 (wait)
+```
+
+### Monitor Current Phase
+
+```bash
+# Check duel phase
+curl -s "https://hyperscape.gg/admin/maintenance/status" \
+  -H "x-admin-code: your-admin-code" \
+  | jq '.currentPhase'
+
+# Output: IDLE, FIGHTING, COUNTDOWN, ANNOUNCEMENT, RESOLUTION
+```
+
+## Troubleshooting
+
+### Maintenance Mode Stuck
+
+If maintenance mode doesn't exit:
+
+```bash
+# Force exit (use with caution)
+curl -X POST "https://hyperscape.gg/admin/maintenance/exit" \
+  -H "x-admin-code: your-admin-code"
+```
+
+### Markets Not Resolving
+
+Check market status:
+
+```bash
+curl -s "https://hyperscape.gg/api/arena/markets/active" \
+  | jq '.markets[] | {id, status, outcome}'
+```
+
+Manually resolve if needed:
+
+```bash
+curl -X POST "https://hyperscape.gg/api/arena/markets/{marketId}/resolve" \
+  -H "x-admin-code: your-admin-code" \
+  -d '{"outcome": "red"}'
+```
+
+### Health Check Failing
+
+If server doesn't become healthy after deployment:
+
+```bash
+# Check server logs
+ssh root@vast-instance "bunx pm2 logs hyperscape-duel --lines 100"
+
+# Check health endpoint
+curl -v "https://hyperscape.gg/health"
+
+# Restart if needed
+ssh root@vast-instance "bunx pm2 restart hyperscape-duel"
+```
+
+## Security
+
+### Admin Code Protection
+
+The maintenance mode API requires `ADMIN_CODE` header:
+
+```typescript
+// From packages/server/src/startup/routes/admin-routes.ts
+
+fastify.addHook('preHandler', async (request, reply) => {
+  const adminCode = request.headers['x-admin-code'];
+  
+  if (!adminCode || adminCode !== process.env.ADMIN_CODE) {
+    reply.code(401).send({ error: 'Invalid admin code' });
+  }
+});
+```
+
+<Warning>
+Never commit `ADMIN_CODE` to git. Store in GitHub Secrets or environment variables.
+</Warning>
+
+### Rate Limiting
+
+Maintenance mode endpoints are rate-limited:
+
+```typescript
+// 10 requests per minute per IP
+rateLimit: {
+  max: 10,
+  timeWindow: '1 minute'
+}
+```
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Vast.ai Deployment" icon="server" href="/devops/vast-deployment">
+    Complete Vast.ai deployment guide
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/devops/configuration">
+    Environment variables and settings
+  </Card>
+  <Card title="Deployment Guide" icon="rocket" href="/guides/deployment">
+    General deployment documentation
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/devops/troubleshooting">
+    Common issues and solutions
+  </Card>
+</CardGroup>
