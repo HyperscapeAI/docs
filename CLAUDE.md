@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world.
+Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with WebGPU-based rendering.
 
 ## Essential Commands
 
@@ -105,7 +105,7 @@ packages/
 │   ├── SQLite/PostgreSQL persistence
 │   └── LiveKit voice chat integration
 ├── client/              # Web client (Vite + React)
-│   ├── 3D rendering
+│   ├── 3D rendering (WebGPU required)
 │   ├── Player controls
 │   └── UI/HUD
 ├── physx-js-webidl/     # PhysX WASM bindings
@@ -175,6 +175,17 @@ const player = getEntity(id) as Player;
 player.health -= damage;
 ```
 
+**Recent Cleanup (February 2026)**:
+- Eliminated explicit `any` types in core game logic:
+  - `tile-movement.ts`: Properly typed BuildingCollisionService and ICollisionMatrix
+  - `proxy-routes.ts`: Replaced `any` with proper types (unknown, Buffer | string, Error)
+  - `ClientGraphics.ts`: Added safe cast for setupGPUCompute after WebGPU verification
+
+**Remaining `any` types** (acceptable):
+- TSL shader code (ProceduralGrass.ts) - @types/three limitation
+- Browser polyfills (polyfills.ts) - intentional mock implementations
+- Test files - acceptable for test fixtures
+
 ### File Management
 
 **Don't create new files unless absolutely necessary.**
@@ -209,6 +220,13 @@ Visual testing uses colored cube proxies:
 - No hardcoded data - use JSON files and general systems
 - No shortcuts or workarounds - fix root causes
 - Build toward the general case (many items, players, mobs)
+
+**Exception**: TODO comments for architectural refactoring are acceptable when tracking known technical debt:
+- `TODO(AUDIT-001)`: Entity.ts decomposition
+- `TODO(AUDIT-002)`: ServerNetwork split
+- `TODO(AUDIT-003)`: ClientNetwork split
+- `TODO(AUDIT-004)`: Circular dependency fix (shared ↔ procgen)
+- `TODO(AUDIT-005)`: Any type cleanup
 
 ### Separation of Concerns
 
@@ -290,7 +308,8 @@ All services have unique default ports to avoid conflicts:
 ```bash
 # Server (packages/server/.env)
 DATABASE_URL=postgresql://...    # Required for production
-JWT_SECRET=...                   # Required for production
+JWT_SECRET=...                   # Required for production (throws error if not set)
+ADMIN_CODE=...                   # Required for production security
 PRIVY_APP_ID=...                 # For Privy auth
 PRIVY_APP_SECRET=...             # For Privy auth
 
@@ -304,6 +323,12 @@ PUBLIC_WS_URL=wss://...          # Point to your server WebSocket
 - `PUBLIC_PRIVY_APP_ID` (client) must equal `PRIVY_APP_ID` (server)
 - `PUBLIC_WS_URL` and `PUBLIC_API_URL` must point to your server
 
+**Security Requirements (February 2026)**:
+- **JWT_SECRET** is now **required** in production/staging (throws error if not set)
+- Generate with: `openssl rand -base64 32`
+- **ADMIN_CODE** should be set to prevent unauthorized admin access
+- Development environments warn if JWT_SECRET not set (but don't throw)
+
 ## Package Manager
 
 This project uses **Bun** (v1.1.38+) as the package manager and runtime.
@@ -315,13 +340,14 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 ## Tech Stack
 
 - **Runtime**: Bun v1.1.38+
-- **Engine**: Three.js 0.180.0, PhysX (WASM)
+- **Engine**: Three.js 0.180.0 (WebGPU required), PhysX (WASM)
+- **Rendering**: WebGPU with TSL (Three.js Shading Language) - WebGL removed
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
 - **Database**: SQLite (local), PostgreSQL (production via Neon)
 - **Testing**: Playwright, Vitest
 - **Build**: Turbo, esbuild, Vite
-- **Mobile**: Capacitor
+- **Mobile**: Tauri v2
 
 ## Troubleshooting
 
@@ -360,6 +386,26 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Tests spawn their own Hyperscape instances
 - Visual tests require headless browser support
 
+### WebGPU Issues
+
+**Symptoms**: "WebGPU is not supported" error screen, renderer initialization failures.
+
+**Cause**: WebGPU is **required** as of February 2026 (all shaders use TSL). WebGL fallback removed.
+
+**Browser Requirements**:
+- Chrome/Edge 113+ (Windows/macOS/Linux)
+- Safari 18+ (macOS Sonoma+ only)
+- Firefox: WebGPU support is experimental (not recommended)
+
+**Check Support**: Visit [webgpureport.org](https://webgpureport.org)
+
+**Renderer Initialization** (February 2026 improvements):
+- Best-effort `requiredLimits`: Tries `maxTextureArrayLayers: 2048` first
+- Retries with default limits if GPU rejects
+- Always WebGPU, never WebGL (no fallback)
+
+**Implementation**: `packages/shared/src/utils/rendering/RendererFactory.ts`
+
 ### Model Cache Issues
 
 **Symptoms**: Missing objects (altars, trees) or white/grey textures after browser restart.
@@ -378,7 +424,13 @@ indexedDB.deleteDatabase('hyperscape-processed-models');
 localStorage.setItem('disable-model-cache', 'true');
 ```
 
-See [docs/model-cache-fixes.md](docs/model-cache-fixes.md) for details.
+**Fixes (February 2026)**:
+1. **Missing objects**: Used `Map<Object3D, number>` identity map instead of `findIndex`-by-name (duplicate mesh names like "", "Cube" all resolved to same index)
+2. **Lost textures**: Extract raw RGBA pixels via canvas `getImageData` (synchronous) and restore as `THREE.DataTexture` - no async loading race conditions
+3. **Grey tree materials**: Fixed `instanceof MeshStandardMaterial` check (fails for `MeshStandardNodeMaterial` in WebGPU build) - replaced with duck-type property check
+4. **Cache version**: Bumped `PROCESSED_CACHE_VERSION` to 3 to invalidate broken entries
+
+**Implementation**: `packages/shared/src/utils/rendering/ModelCache.ts`
 
 ### Terrain Height Issues
 
@@ -388,7 +440,31 @@ See [docs/model-cache-fixes.md](docs/model-cache-fixes.md) for details.
 
 **Solution**: Update to latest main branch. No migration needed - fix is automatic.
 
-See [docs/terrain-height-cache-fix.md](docs/terrain-height-cache-fix.md) for technical details.
+**Technical Details**:
+- `getHeightAtCached` had two bugs causing consistent 50m offset:
+  1. Tile index used `Math.floor(worldX/TILE_SIZE)` (doesn't account for centered geometry)
+  2. Grid index formula omitted `halfSize` offset from PlaneGeometry's `[-50,+50]` range
+- Added canonical helpers: `worldToTerrainTileIndex()` and `localToGridIndex()`
+- Fixed `getTerrainColorAt` (had comma-vs-underscore key typo preventing tile lookups)
+
+**Implementation**: `packages/shared/src/systems/shared/world/TerrainSystem.ts`
+
+### Memory Leaks
+
+**Symptoms**: Server memory grows unbounded, eventual OOM crash.
+
+**Cause**: InventoryInteractionSystem event listeners never removed (9 listeners per interaction).
+
+**Solution**: Update to latest main branch (fixed February 2026).
+
+**Fix**: Uses `AbortController` for proper event listener cleanup:
+```typescript
+const abortController = new AbortController();
+world.on('event', handler, { signal: abortController.signal });
+// Later: abortController.abort() removes all listeners
+```
+
+**Implementation**: `packages/shared/src/systems/shared/interaction/InventoryInteractionSystem.ts`
 
 ### Streaming Issues
 
@@ -405,25 +481,12 @@ FFMPEG_MAX_RESTART_ATTEMPTS=10           # Default: 8
 CAPTURE_RECOVERY_MAX_FAILURES=5          # Default: 4
 ```
 
-**WebGPU Fallback** - For headless environments (Docker, vast.ai):
-```bash
-STREAM_CAPTURE_DISABLE_WEBGPU=true       # Forces WebGL fallback
-```
-Or use query params: `?page=stream&forceWebGL=1` or `?page=stream&disableWebGPU=1`
-
 **Improvements**:
 - **Soft CDP Recovery**: Restarts screencast without browser/FFmpeg teardown (no stream gap)
 - **Best-Effort WebGPU Init**: Tries `maxTextureArrayLayers: 2048` first, retries with default limits if GPU rejects
-- **WebGL Fallback**: RendererFactory automatically falls back to WebGL when WebGPU fails or is disabled
-- **Swiftshader ANGLE**: ecosystem.config.cjs uses swiftshader backend for reliable software rendering
+- **Increased Thresholds**: CDP stall (2→4 intervals), FFmpeg restarts (5→8), recovery failures (2→4)
 
-**Ecosystem Config** (`ecosystem.config.cjs`):
-```javascript
-env: {
-  STREAM_CAPTURE_DISABLE_WEBGPU: 'true',  // Reliable software rendering
-  // ... other vars
-}
-```
+**Implementation**: `packages/server/src/streaming/stream-capture.ts`
 
 ### CI Build Failures
 
@@ -464,6 +527,23 @@ cat packages/shared/package.json | grep procgen
 cat packages/procgen/package.json | grep shared
 # Should show: "devDependencies": { "@hyperscape/shared": "workspace:*" }
 ```
+
+### Asset Forge TypeScript Issues
+
+**Symptoms**: ESLint crashes with "sourceCode.getTokenOrCommentBefore is not a function" or TypeScript can't resolve Three.js WebGPU exports.
+
+**Cause**: 
+1. `eslint-plugin-import@2.32.0` incompatible with ESLint 10 (uses removed API)
+2. Three.js WebGPU subpath requires `moduleResolution: bundler` or `node16`
+
+**Solutions** (fixed February 2026):
+1. Disabled cascaded `import/order` rule in `packages/asset-forge/eslint.config.mjs`
+2. Updated `packages/asset-forge/tsconfig.json` to use `moduleResolution: "bundler"`
+3. Added explicit type annotations for traverse callbacks (TypeScript strict mode requirement)
+
+**Implementation**: 
+- `packages/asset-forge/eslint.config.mjs`
+- `packages/asset-forge/tsconfig.json`
 
 ### Deployment & Maintenance Mode
 
@@ -510,6 +590,10 @@ POST /admin/maintenance/exit
 
 **Implementation**: `packages/server/src/startup/maintenance-mode.ts`
 
+**Helper Scripts**:
+- `scripts/pre-deploy-maintenance.sh` - Enter maintenance mode
+- `scripts/post-deploy-resume.sh` - Exit maintenance mode
+
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
@@ -517,11 +601,43 @@ POST /admin/maintenance/exit
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
 
-### February 2026 Technical Documentation
-- Arena Performance: InstancedMesh conversion, TSL emissive materials replacing PointLights
-- Model Cache: Fixed duplicate mesh name serialization and texture blob URL persistence
-- Terrain Heights: Canonical `worldToTerrainTileIndex()` and `localToGridIndex()` helpers
-- Streaming: CDP soft recovery, WebGPU best-effort init, WebGL fallback
-- CI/CD: npm retry logic, frozen lockfile, Tauri build splitting
-- VFX System: Object pooling, TSL shader materials, multi-phase teleport animation
-- Maintenance Mode: Deployment coordination API with market resolution waiting
+## February 2026 Technical Documentation
+
+### Breaking Changes
+- **WebGPU Required**: All shaders now use TSL (Three.js Shading Language) which requires WebGPU. WebGL fallback removed. User-friendly error screen shown when WebGPU unavailable.
+- **JWT_SECRET Required**: Production/staging deployments now throw error if `JWT_SECRET` not set (security hardening)
+
+### Performance Optimizations
+- **Arena Rendering**: 97% draw call reduction via InstancedMesh (~846 individual meshes → ~20 instanced draw calls)
+- **Lighting**: Eliminated 28 dynamic PointLights, replaced with GPU-driven TSL emissive materials (zero CPU cost per frame)
+- **Fire Particles**: Enhanced shader with smooth value noise, soft radial falloff, turbulent vertex motion (removed "torch" preset, unified on "fire")
+- **Renderer Init**: Best-effort `requiredLimits` - tries `maxTextureArrayLayers: 2048`, retries with defaults if GPU rejects
+
+### Bug Fixes
+- **Model Cache**: Fixed missing objects (duplicate mesh names → identity Map) and texture persistence (blob URLs → DataTexture with raw RGBA pixels)
+- **Terrain Heights**: Fixed 50m offset via canonical `worldToTerrainTileIndex()` and `localToGridIndex()` helpers
+- **Memory Leak**: InventoryInteractionSystem uses AbortController for proper event listener cleanup (9 listeners were never removed)
+- **Duel Combat**: Fixed mage staff and 2H sword combat via weapon type propagation, keep-alive re-engagement, combat timeout refresh
+- **Victory Emote**: Delayed by 600ms so combat cleanup doesn't override it
+- **Teleport VFX**: Fixed duplicate effects via race condition in `clearDuelFlagsForCycle()`, forward `suppressEffect` to clients
+
+### Type Safety
+- Eliminated explicit `any` types in core game logic (tile-movement.ts, proxy-routes.ts, ClientGraphics.ts)
+- Remaining `any` types limited to: TSL shader code (@types/three limitation), browser polyfills (intentional), test files
+
+### Streaming & Deployment
+- **Maintenance Mode API**: Graceful deployment coordination - pauses new duel cycles, waits for markets to resolve
+- **Vast.ai Health Checks**: Auto-detect unhealthy instances, destroy and reprovision when failures exceed threshold
+- **CDP Soft Recovery**: Restarts screencast without browser/FFmpeg teardown (no stream gap)
+- **Streaming Stability**: Increased CDP stall threshold (2→4 intervals), FFmpeg restart attempts (5→8), recovery failures (2→4)
+
+### CI/CD Improvements
+- **npm Retry Logic**: Automatic retry with exponential backoff (15s-75s) for transient npm 403 errors
+- **Frozen Lockfile**: All workflows use `--frozen-lockfile` to prevent npm resolution attempts
+- **Tauri Build Fixes**: Split unsigned/release builds, macOS `.app`-only for unsigned, iOS release-only, Windows retry logic
+- **Dependency Cycles**: Resolved shared↔procgen cycle via peerDependencies + devDependencies pattern
+
+### Asset Forge
+- **VFX Catalog Browser**: New tab with live Three.js previews of all game effects
+- **TypeScript Fixes**: Added type annotations for traverse callbacks, updated to `moduleResolution: bundler` for Three.js WebGPU exports
+- **ESLint Fix**: Disabled incompatible `import/order` rule (eslint-plugin-import@2.32.0 incompatible with ESLint 10)
