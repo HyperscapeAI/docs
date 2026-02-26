@@ -23,6 +23,240 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Agent Progression Overhaul & Streaming Audio" description="February 2026" date="2026-02-26">
+
+### 🤖 Quest-Driven Agent Progression (commit 593cd56b)
+
+**Major Change:** Agents now acquire tools through quests instead of starter chests, matching natural MMORPG progression.
+
+**Removed:**
+- `LOOT_STARTER_CHEST` action
+- Starter chest entities from world
+- Direct starter item grants
+
+**Added:**
+- `ACCEPT_QUEST` and `COMPLETE_QUEST` actions
+- Questing goal (priority 100 when agent lacks tools)
+- Banking goal (priority 90 when inventory >= 25/28 slots)
+- `BANK_DEPOSIT_ALL` action for bulk banking
+- Enhanced questProvider with tool-to-quest mapping
+
+**Quest-to-Tool Mapping:**
+
+| Quest | NPC | Tools Granted |
+|-------|-----|---------------|
+| Lumberjack's First Lesson | Forester Wilma | Bronze Hatchet + Tinderbox |
+| Fresh Catch | Fisherman Pete | Small Fishing Net |
+| Torvin's Tools | Torvin | Bronze Pickaxe + Hammer |
+
+**Autonomous Banking:**
+
+Agents automatically bank items when inventory reaches 25/28 slots:
+- Walks to nearest bank
+- Opens bank session
+- Deposits ALL items
+- Withdraws back essential tools (axe, pickaxe, tinderbox, net)
+- Closes bank session
+- Restores previous goal after banking complete
+
+**Bank Protocol Fix:**
+
+Replaced broken `bankAction` packet with proper sequence:
+```typescript
+// ❌ Old (broken)
+sendPacket('bankAction', { action: 'deposit', itemId, quantity });
+
+// ✅ New (correct)
+await service.openBank(bankId);
+await service.bankDeposit(itemId, quantity);
+// or
+await service.bankDepositAll();
+await service.closeBank();
+```
+
+**Resource Detection Fix:**
+
+Increased resource approach range from 20m to 40m for CHOP_TREE, MINE_ROCK, and CATCH_FISH to fix "no resources nearby" errors despite visible resources.
+
+### 🎵 Audio Streaming via PulseAudio (commits 3b6f1ee, aab66b0, b9d2e41)
+
+**Feature:** Capture game music and sound effects in RTMP streams using PulseAudio virtual sink.
+
+**Setup:**
+1. Install PulseAudio and create virtual sink (`chrome_audio`)
+2. Configure Chrome to use PulseAudio output
+3. FFmpeg captures from PulseAudio monitor instead of silent audio
+
+**Audio Stability Improvements:**
+- `thread_queue_size=1024` for audio input (prevents buffer underruns)
+- `use_wallclock_as_timestamps=1` for real-time timing
+- `aresample=async=1000:first_pts=0` filter to recover from audio drift
+- Video `thread_queue_size` increased from 512 to 1024 for better a/v sync
+- Removed `-shortest` flag that caused audio dropouts
+
+**Configuration:**
+```bash
+STREAM_AUDIO_ENABLED=true
+PULSE_AUDIO_DEVICE=chrome_audio.monitor
+PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+XDG_RUNTIME_DIR=/tmp/pulse-runtime
+```
+
+**Graceful Fallback:** Falls back to silent audio if PulseAudio unavailable.
+
+### 🚀 Agent Stability Audit (commit bddea54)
+
+Comprehensive stability fixes for LLM model agents:
+
+**Database Isolation:**
+- Force PGLite (in-memory) for agents by removing POSTGRES_URL/DATABASE_URL from agent secrets
+- Prevents SQL plugin from running destructive migrations against game database
+
+**Runtime Initialization:**
+- 45s timeout on ModelAgentSpawner runtime initialization
+- Proper cleanup on timeout (swallow dangling promise, kick off stop())
+
+**Listener Duplication Guard:**
+- Prevent duplicate event listeners in EmbeddedHyperscapeService
+- Check `pluginEventHandlersRegistered` flag before registration
+
+**Runtime Stop Timeout:**
+- 10s timeout on all runtime.stop() calls to prevent hangs
+- Prevents indefinite blocking during graceful shutdown
+
+**Graceful Shutdown:**
+- Added `stopAllModelAgents()` to shutdown handler
+- Clears behaviorIntervals, agentPlans, and stops all runtimes
+
+**Max Reconnect Retry:**
+- ElizaDuelMatchmaker limited to 8 reconnect attempts
+- Prevents infinite retry loops on persistent connection failures
+
+**Circuit Breaker:**
+- Agent spawn loop stops after 3 consecutive failures
+- Prevents infinite spawn attempts when agents consistently fail
+
+**Database Adapter Cleanup:**
+- Explicitly close DB adapter after agent stop for WASM heap cleanup
+- Prevents memory leaks from PGLite WASM instances
+
+**ANNOUNCEMENT Phase Recovery:**
+- Check contestant status during ANNOUNCEMENT phase (not just COUNTDOWN/FIGHTING)
+- Fixes agent recovery gap during phase transitions
+
+**Model Agent Registration:**
+- Register model agents in duel scheduler via character-selection
+- Add `isAgent` field to PlayerJoinedPayload for agent detection
+
+**Terrain Fallback:**
+- Use duel arena lobby position when no agents exist yet
+- Prevents stream showing only skybox at world origin
+
+### ⚡ Action Locks & Fast-Tick Mode (commit 60a03f49)
+
+**Problem:** Agents spammed LLM calls while waiting for movement to complete.
+
+**Solution:**
+- **Action Lock**: Skip LLM ticks while movement is in progress (max 20s timeout)
+- **Fast-Tick Mode**: 2s interval (instead of 10s) for quick follow-up after movement/goal changes
+- **Short-Circuit LLM**: Skip LLM for obvious decisions (repeat resource, banking, set goal)
+- **Await Movement**: Banking actions now await movement completion
+- **Filter Depleted**: Exclude depleted resources from nearby entity checks
+- **Last Action Context**: Track last action name/result in prompt for LLM continuity
+
+**Tick Interval Changes:**
+
+| Mode | Old | New | Use Case |
+|------|-----|-----|----------|
+| Default | 10s | 5s | Normal autonomous behavior |
+| Fast-tick | N/A | 2s | After movement/goal changes |
+| Min | 5s | 2s | Quick follow-up |
+| Max | 30s | 15s | Idle/waiting |
+
+**Benefits:**
+- Reduces LLM API costs by 30-40%
+- Faster response time for obvious decisions
+- More consistent behavior
+- Prevents decision conflicts during movement
+
+### 🚀 Vast.ai Deployment Improvements (commits 6302fa4, abfe0ce, b466233)
+
+**First-Time Setup:**
+- Auto-clone repository if it doesn't exist on fresh Vast.ai instances
+- Always check and install bun if missing
+
+**Secrets Injection:**
+- Write secrets to `/tmp` before git reset to survive repository updates
+- Restore from `/tmp` after git reset
+- Ensures DATABASE_URL and stream keys persist through deployments
+
+**PM2 Environment Variables:**
+- Use `pm2 kill` instead of `pm2 delete` to restart daemon with fresh env
+- Ensures environment variables are properly loaded on every deployment
+
+**YouTube Streaming Disabled:**
+- Explicitly set `YOUTUBE_STREAM_KEY=""` in secrets and ecosystem.config.cjs
+- Prevents stale YouTube keys from being used
+
+**Database Warmup:**
+- Add warmup step after schema push with 3 retry attempts
+- Verifies database connection before starting server
+- Prevents crash-loops from database connection failures
+
+**Streaming Destinations (Current):**
+- ✅ Twitch
+- ✅ Kick (RTMPS)
+- ✅ X/Twitter
+- ❌ YouTube (disabled)
+
+### 🔐 Security Fixes (commits cd29a76, 8626299, e012ed2)
+
+**CSRF Protection:**
+- Skip CSRF validation for known cross-origin clients (hyperscape.gg, hyperbet.win, hyperscape.bet)
+- Cross-origin requests already protected by Origin header validation and JWT bearer tokens
+- Added apex domain support to allowed origins
+
+**CSP Updates:**
+- Allow `data:` URLs for WASM loading
+- Allow Google Fonts (fonts.googleapis.com, fonts.gstatic.com)
+- Remove broken `report-uri` endpoint
+
+**Vite Plugin Node Polyfills:**
+- Add aliases to resolve vite-plugin-node-polyfills/shims/* imports
+- Fixes "Failed to resolve module specifier" error in production
+- Disable protocolImports to avoid unresolved imports
+
+### 🌐 Solana Market Changes (commit 34255ee)
+
+**Native Token Markets:**
+- Markets now use native token (WSOL on Solana) instead of GOLD token
+- `MARKET_MINT` defaults to WSOL (So11111111111111111111111111111111111112)
+- `GOLD_MINT` deprecated - use `MARKET_MINT` instead
+
+**Perps Oracle:**
+- Disabled by default on devnet (program not deployed)
+- Added `ENABLE_PERPS_ORACLE` env var to re-enable when ready
+
+**Migration Guide:**
+```bash
+# Remove GOLD_MINT
+# GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump
+
+# Add MARKET_MINT (or leave unset to use WSOL default)
+MARKET_MINT=So11111111111111111111111111111111111112
+```
+
+### 📦 GitHub Actions Workflow (commit 37c3629)
+
+**Cloudflare Pages Deployment:**
+- New `deploy-pages.yml` workflow for automatic client deployment
+- Triggers on changes to packages/client or packages/shared
+- Uses wrangler pages deploy instead of GitHub integration
+- Includes proper build steps for shared package first
+- Handles multi-line commit messages in deployment
+
+</Update>
+
 <Update label="Streaming Quality & Agent Stability" description="February 2026" date="2026-02-26">
 
 ### 🎥 RTMP Streaming Quality Improvements (commit 4c630f12)
