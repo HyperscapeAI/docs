@@ -384,13 +384,13 @@ export const chatMessageAction: Action = {
 
 ### `bankDeposit`
 
-Deposit items into bank.
+Deposit specific items into bank. Automatically walks to nearest bank if not already there.
 
 ```typescript
 // From actions/banking.ts
 export const bankDepositAction: Action = {
   name: "BANK_DEPOSIT",
-  description: "Deposit items into the bank",
+  description: "Deposit items into the bank. Walks to nearest bank if not already there.",
   parameters: {
     itemId: { type: "string", description: "Item ID to deposit" },
     quantity: { type: "number", optional: true, description: "Amount to deposit" },
@@ -398,18 +398,23 @@ export const bankDepositAction: Action = {
 };
 ```
 
-**Requirements**: Must be at a bank.
+**Behavior**:
+1. Finds nearest bank entity or station
+2. Walks to bank if distance > 5 units
+3. Opens bank session
+4. Deposits specified item
+5. Closes bank session
 
 ---
 
 ### `bankWithdraw`
 
-Withdraw items from bank.
+Withdraw items from bank. Automatically walks to nearest bank if not already there.
 
 ```typescript
 export const bankWithdrawAction: Action = {
   name: "BANK_WITHDRAW",
-  description: "Withdraw items from the bank",
+  description: "Withdraw items from the bank. Walks to nearest bank if not already there.",
   parameters: {
     itemId: { type: "string", description: "Item ID to withdraw" },
     quantity: { type: "number", optional: true, description: "Amount to withdraw" },
@@ -417,7 +422,46 @@ export const bankWithdrawAction: Action = {
 };
 ```
 
-**Requirements**: Must be at a bank, item must be in bank.
+**Behavior**:
+1. Finds nearest bank entity or station
+2. Walks to bank if distance > 5 units
+3. Opens bank session
+4. Withdraws specified item
+5. Closes bank session
+
+---
+
+### `bankDepositAll` <Badge text="New" variant="success" />
+
+Deposit all non-essential items at the bank. Keeps essential tools (axe, pickaxe, tinderbox, fishing net).
+
+```typescript
+export const bankDepositAllAction: Action = {
+  name: "BANK_DEPOSIT_ALL",
+  description: "Deposit all non-essential items at the bank. Keeps tools (axe, pickaxe, tinderbox, net). Use when inventory is full from gathering.",
+  parameters: {},
+};
+```
+
+**Behavior**:
+1. Finds nearest bank entity or station
+2. Walks to bank if distance > 5 units
+3. Opens bank session
+4. Deposits ALL items
+5. Withdraws back essential tools (axe, pickaxe, tinderbox, net)
+6. Closes bank session
+
+**Essential Items (Never Deposited)**:
+- Bronze/Iron/Steel/Mithril Hatchet
+- Bronze/Iron/Steel/Mithril Pickaxe
+- Tinderbox
+- Small Fishing Net
+
+**Usage**: Autonomous agents use this when inventory reaches 25/28 slots to free space for continued gathering.
+
+<Info>
+  This action replaced the old `LOOT_STARTER_CHEST` action as part of the quest-driven progression system (commit 593cd56b).
+</Info>
 
 ---
 
