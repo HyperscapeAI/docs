@@ -43,6 +43,7 @@ bun run build:server    # Game server
 bun run dev:shared      # Shared package with watch mode
 bun run dev:client      # Client with Vite HMR
 bun run dev:server      # Server with auto-restart
+bun run dev:forge       # Asset Forge + VFX catalog
 ```
 
 ### Testing
@@ -103,6 +104,7 @@ packages/
 ├── server/              # Game server (Fastify + WebSockets)
 │   ├── World management
 │   ├── PostgreSQL persistence
+│   ├── Maintenance mode API
 │   └── LiveKit voice chat integration
 ├── client/              # Web client (Vite + React)
 │   ├── 3D rendering (WebGPU required)
@@ -110,7 +112,7 @@ packages/
 │   └── UI/HUD
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation (trees, rocks, terrain)
-├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
+├── asset-forge/         # AI asset generation + VFX catalog
 └── docs-site/           # Docusaurus documentation site
 ```
 
@@ -123,9 +125,9 @@ packages/
 3. **shared** - Depends on physx-js-webidl and procgen
 4. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
 
-> **Note on shared ↔ procgen**: These packages have a peer dependency relationship (not a hard dependency) to avoid circular dependency issues with Turbo's build graph. `procgen` is an optional peerDependency in `shared/package.json`, and `shared` is a devDependency in `procgen/package.json`.
+> **Note on shared ↔ procgen**: These packages have a peer dependency relationship (not a hard dependency) to avoid circular dependency issues with Turbo's build graph. `procgen` is an optional peerDependency in `shared/package.json`, and `shared` is a devDependency in `procgen/package.json`. This allows both packages to import from each other at runtime while breaking the build cycle.
 
 ### Entity Component System (ECS)
 
@@ -139,7 +141,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -175,6 +177,12 @@ const player = getEntity(id) as Player;
 player.health -= damage;
 ```
 
+**Recent improvements (February 2026):**
+- Reduced explicit `any` types from 142 to ~46
+- Fixed WebSocket types (use `ws` library types, not browser WebSocket)
+- Added type annotations for Three.js traverse callbacks
+- Replaced `any` with `unknown` in error handlers
+
 ### File Management
 
 **Don't create new files unless absolutely necessary.**
@@ -184,6 +192,10 @@ player.health -= damage;
 - Update all imports when moving code
 - Clean up test files immediately after use
 - Don't create temporary `check-*.ts`, `test-*.mjs`, `fix-*.js` files
+
+**Recent cleanup (February 2026):**
+- Deleted `PacketHandlers.ts` (3098 lines of dead code, never imported)
+- Removed unused arena functions (`createArenaMarker`, `createAmbientDust`, `createLobbyBenches`)
 
 ### Testing Philosophy
 
@@ -205,7 +217,7 @@ Visual testing uses colored cube proxies:
 
 ### Production Code Only
 
-- No TODOs or \"will fill this out later\" - implement completely
+- No TODOs or "will fill this out later" - implement completely
 - No hardcoded data - use JSON files and general systems
 - No shortcuts or workarounds - fix root causes
 - Build toward the general case (many items, players, mobs)
@@ -247,6 +259,19 @@ world.on('inventory:add', (event: InventoryAddEvent) => {
 });
 ```
 
+**Event Cleanup (February 2026 - Memory Leak Fix):**
+```typescript
+// Use AbortController for automatic cleanup
+const abortController = new AbortController();
+
+world.on('event', handler, { signal: abortController.signal });
+
+// Cleanup
+destroy() {
+  abortController.abort();  // Removes all listeners
+}
+```
+
 ### Development Server
 
 The dev server provides:
@@ -258,7 +283,7 @@ The dev server provides:
 **Commands:**
 ```bash
 bun run dev        # Core game (client + server + shared)
-bun run dev:forge  # AssetForge (standalone)
+bun run dev:forge  # AssetForge + VFX catalog (standalone)
 bun run docs:dev   # Documentation site (standalone)
 ```
 
@@ -312,6 +337,7 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - Install: `bun install` (NOT `npm install`)
 - Run scripts: `bun run <script>` or `bun <file>`
 - Some commands use `npm` prefix for Turbo workspace filtering
+- CI uses `bun install --frozen-lockfile` to avoid npm rate limits
 
 ## Tech Stack
 
@@ -320,10 +346,11 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Rendering**: WebGPU with TSL (Three.js Shading Language) - WebGL removed
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
-- **Database**: SQLite (local), PostgreSQL (production via Neon)
+- **Database**: PostgreSQL (production), Docker PostgreSQL (development)
 - **Testing**: Playwright, Vitest
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Tauri v2
+- **Streaming**: FFmpeg, Chrome Dev, Xvfb, Vulkan
 
 ## Troubleshooting
 
@@ -373,7 +400,60 @@ See [Port Allocation](#port-allocation) section for full port list.
 
 **Check Support**: Visit [webgpureport.org](https://webgpureport.org)
 
+**Headless/Server Rendering**:
+- Use Chrome Dev channel (`google-chrome-unstable`)
+- Install Vulkan drivers: `apt-get install mesa-vulkan-drivers vulkan-tools`
+- Use Xvfb for virtual display: `Xvfb :99 -screen 0 1280x720x24`
+- Set `STREAM_CAPTURE_CHANNEL=chrome-dev` and `STREAM_CAPTURE_ANGLE=vulkan`
+
 See [docs/webgpu-requirements.md](docs/webgpu-requirements.md) for full requirements.
+
+### CI/CD npm 403 Errors
+
+**Problem:** GitHub Actions hitting npm rate limits.
+
+**Solution:** CI now uses:
+- `bun install --frozen-lockfile` (no fresh resolution)
+- Retry logic with exponential backoff (15s, 30s, 45s, 60s, 75s)
+- Windows-specific retry (3 attempts with 15s delay)
+
+### Circular Dependency Errors
+
+**Problem:** Turbo detecting `shared → procgen → shared` cycle.
+
+**Solution:** `procgen` is now an optional peerDependency in `shared/package.json`. Both packages can import from each other at runtime, but the build graph is acyclic.
+
+## Recent Changes (February 2026)
+
+### Security
+- **JWT_SECRET enforcement** - Now required in production/staging (throws error if not set)
+- **CSRF cross-origin handling** - Apex domains (hyperscape.gg, hyperbet.win) bypass CSRF validation
+- **Memory leak fixes** - AbortController for event listener cleanup (InventoryInteractionSystem)
+
+### Rendering
+- **WebGPU enforcement** - WebGL fallback removed, all shaders use TSL
+- **Instanced arena meshes** - 97% draw call reduction (~846 meshes → InstancedMesh)
+- **TSL fire particles** - GPU-driven emissive materials replace 28 PointLights
+- **Renderer limits** - Best-effort `maxTextureArrayLayers: 2048`, retry with defaults if GPU rejects
+
+### Streaming
+- **CDP stall threshold** - Increased from 2 to 4 intervals (120s) to reduce false restarts
+- **FFmpeg restart attempts** - Increased from 5 to 8 for better resilience
+- **Soft CDP recovery** - Restart screencast without browser/FFmpeg teardown (no stream gap)
+- **Platform support** - Twitch, Kick, X (YouTube removed)
+- **Public delay** - Configurable via `STREAMING_PUBLIC_DELAY_MS` (set to 0 for live betting)
+
+### Deployment
+- **Maintenance mode API** - Graceful deployments with market resolution waiting
+- **DATABASE_URL persistence** - Survives git reset in deploy scripts
+- **Vast.ai improvements** - Vulkan drivers, Chrome Dev, health checking
+- **R2 CORS** - Automated configuration for cross-origin asset loading
+
+### Developer Experience
+- **VFX catalog** - Asset Forge browser for all game effects with live previews
+- **Type safety** - Reduced explicit `any` types from 142 to ~46
+- **Dead code removal** - 3098 lines removed (PacketHandlers.ts)
+- **ESLint compatibility** - Disabled crashing `import/order` rule in asset-forge
 
 ## Additional Resources
 
@@ -384,3 +464,6 @@ See [docs/webgpu-requirements.md](docs/webgpu-requirements.md) for full requirem
 - [docs/vast-deployment.md](docs/vast-deployment.md) - Vast.ai deployment guide
 - [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Graceful deployment API
 - [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser and GPU requirements
+- [docs/streaming-configuration.md](docs/streaming-configuration.md) - RTMP streaming setup
+- [docs/asset-forge-vfx-catalog.md](docs/asset-forge-vfx-catalog.md) - VFX catalog guide
+- [docs/ci-cd-improvements.md](docs/ci-cd-improvements.md) - CI/CD improvements reference
