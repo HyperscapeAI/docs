@@ -465,14 +465,63 @@ cat packages/procgen/package.json | grep shared
 # Should show: "devDependencies": { "@hyperscape/shared": "workspace:*" }
 ```
 
+### Deployment & Maintenance Mode
+
+**Maintenance Mode** - Graceful deployment coordination for streaming duel system.
+
+**Purpose**: Prevents data loss and market inconsistency during deployments by:
+1. Pausing new duel cycles (current cycle completes)
+2. Locking betting markets (no new bets accepted)
+3. Waiting for current market to resolve
+4. Reporting "safe to deploy" status
+
+**API Endpoints** (require `ADMIN_CODE` authentication):
+```bash
+# Enter maintenance mode
+POST /admin/maintenance/enter
+Body: {"reason": "deployment", "timeoutMs": 300000}
+
+# Check status
+GET /admin/maintenance/status
+
+# Exit maintenance mode
+POST /admin/maintenance/exit
+```
+
+**Status Response**:
+```json
+{
+  "active": true,
+  "enteredAt": 1709000000000,
+  "reason": "deployment",
+  "safeToDeploy": true,
+  "currentPhase": "IDLE",
+  "marketStatus": "resolved",
+  "pendingMarkets": 0
+}
+```
+
+**Safe to Deploy When**:
+- `safeToDeploy: true`
+- No active duel phases (FIGHTING, COUNTDOWN, ANNOUNCEMENT)
+- All betting markets resolved
+
+**CI/CD Integration**: `.github/workflows/deploy-vast.yml` automatically enters/exits maintenance mode during deployments.
+
+**Implementation**: `packages/server/src/startup/maintenance-mode.ts`
+
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
-- [docs/arena-performance-optimizations.md](docs/arena-performance-optimizations.md) - Arena rendering optimizations
-- [docs/model-cache-fixes.md](docs/model-cache-fixes.md) - Model cache bug fixes
-- [docs/terrain-height-cache-fix.md](docs/terrain-height-cache-fix.md) - Terrain height calculation fixes
-- [docs/streaming-improvements.md](docs/streaming-improvements.md) - RTMP streaming stability
-- [docs/ci-cd-improvements.md](docs/ci-cd-improvements.md) - CI/CD workflow improvements
 - Game Design Document: See `.cursor/rules/gdd.mdc`
+
+### February 2026 Technical Documentation
+- Arena Performance: InstancedMesh conversion, TSL emissive materials replacing PointLights
+- Model Cache: Fixed duplicate mesh name serialization and texture blob URL persistence
+- Terrain Heights: Canonical `worldToTerrainTileIndex()` and `localToGridIndex()` helpers
+- Streaming: CDP soft recovery, WebGPU best-effort init, WebGL fallback
+- CI/CD: npm retry logic, frozen lockfile, Tauri build splitting
+- VFX System: Object pooling, TSL shader materials, multi-phase teleport animation
+- Maintenance Mode: Deployment coordination API with market resolution waiting
