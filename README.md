@@ -197,7 +197,9 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
 
-## Deployment (Railway)
+## Deployment
+
+### Railway (Production)
 
 Railway deployment is set up for separate development and production targets:
 
@@ -207,6 +209,46 @@ Railway deployment is set up for separate development and production targets:
 For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps for `hyperscape.gg`), see:
 
 - `docs/railway-dev-prod.md`
+
+### Vast.ai (Streaming Duels)
+
+Vast.ai deployment runs the streaming duel system with automated maintenance mode coordination:
+
+**Deployment Flow:**
+1. CI triggers on successful main branch builds
+2. System enters maintenance mode (pauses new duel cycles)
+3. Waits for active markets to resolve (up to 5 minutes)
+4. Deploys latest code via SSH
+5. Exits maintenance mode and resumes operations
+
+**Maintenance Mode API:**
+
+Control deployment safety via admin endpoints (requires `ADMIN_CODE`):
+
+```bash
+# Enter maintenance mode (pauses new duels, waits for markets)
+curl -X POST https://your-server.com/admin/maintenance/enter \
+  -H "x-admin-code: your-admin-code" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "deployment", "timeoutMs": 300000}'
+
+# Check status
+curl https://your-server.com/admin/maintenance/status \
+  -H "x-admin-code: your-admin-code"
+
+# Exit maintenance mode (resumes operations)
+curl -X POST https://your-server.com/admin/maintenance/exit \
+  -H "x-admin-code: your-admin-code"
+```
+
+**Required GitHub Secrets:**
+- `VAST_HOST` - Vast.ai instance IP
+- `VAST_PORT` - SSH port
+- `VAST_SSH_KEY` - SSH private key
+- `VAST_SERVER_URL` - Public server URL (e.g., https://hyperscape.gg)
+- `ADMIN_CODE` - Admin authentication code
+
+See `.github/workflows/deploy-vast.yml` for full deployment workflow.
 
 ## Native App Distribution
 
