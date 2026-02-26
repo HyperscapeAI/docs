@@ -1,509 +1,534 @@
-# Vast.ai Deployment Guide
+# Vast.ai GPU Streaming Deployment
 
-This guide covers deploying Hyperscape to Vast.ai for GPU-accelerated streaming and duel rendering.
+This guide covers deploying Hyperscape's streaming duel system to Vast.ai for GPU-accelerated rendering and multi-platform RTMP streaming.
 
 ## Overview
 
-Vast.ai provides affordable GPU instances for:
-- **Headless rendering**: Chrome + Xvfb + WebGPU
-- **RTMP streaming**: Multi-platform streaming (Twitch, Kick, X)
-- **Duel automation**: AI vs AI combat with betting markets
-- **Cost efficiency**: ~$0.10-0.30/hour for GPU instances
+The Vast.ai deployment runs the complete duel stack with:
+- Game server + client (headless Chrome with WebGPU)
+- RTMP streaming to Twitch, Kick, and X (Twitter)
+- Automated maintenance mode for graceful deployments
+- Health monitoring and auto-recovery
+- PM2 process management with infinite restart
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Vast.ai GPU Instance (Ubuntu + NVIDIA GPU)              │
+├─────────────────────────────────────────────────────────┤
+│ PM2 (hyperscape-duel)                                   │
+│  └─ scripts/duel-stack.mjs                              │
+│      ├─ Game Server (port 5555)                         │
+│      ├─ Client (headless Chrome Dev + Xvfb)             │
+│      ├─ RTMP Bridge (FFmpeg → Twitch/Kick/X)            │
+│      └─ Health Monitor (auto-restart on failure)        │
+├─────────────────────────────────────────────────────────┤
+│ PostgreSQL (external - Neon/Railway)                    │
+│ Assets CDN (Cloudflare R2)                              │
+└─────────────────────────────────────────────────────────┘
+```
 
 ## Prerequisites
 
-1. **Vast.ai account**: [vast.ai](https://vast.ai)
-2. **GitHub repository access**: HyperscapeAI/hyperscape
-3. **SSH key**: For connecting to Vast instances
-4. **GitHub Secrets**: Required for CI/CD deployment
+### GitHub Secrets
 
-## Required GitHub Secrets
-
-Configure these in your repository settings (Settings → Secrets and variables → Actions):
+Configure these in your repository settings (`Settings → Secrets and variables → Actions`):
 
 | Secret | Description | Example |
 |--------|-------------|---------|
 | `VAST_HOST` | Vast.ai instance IP | `123.45.67.89` |
-| `VAST_PORT` | SSH port | `12345` |
-| `VAST_SSH_KEY` | Private SSH key | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
-| `VAST_SERVER_URL` | Public server URL | `https://hyperscape-vast.example.com` |
-| `DATABASE_URL` | PostgreSQL connection | `postgresql://user:pass@host:5432/db` |
-| `ADMIN_CODE` | Admin API access | `your-secure-admin-code` |
-| `SOLANA_DEPLOYER_PRIVATE_KEY` | Solana keypair | `[1,2,3,...]` or base64 |
-| `TWITCH_STREAM_KEY` | Twitch stream key | `live_123456789_abcdef` |
-| `X_STREAM_KEY` | X/Twitter stream key | `your-x-stream-key` |
-| `X_RTMP_URL` | X RTMP URL | `rtmp://x-media-studio/path` |
+| `VAST_PORT` | SSH port | `22` |
+| `VAST_SSH_KEY` | Private SSH key for root access | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host:5432/db` |
+| `SOLANA_DEPLOYER_PRIVATE_KEY` | Base58 Solana keypair | `5JB9hqEzKqCiptLSBi4fHCVPJVb3gpb3AgRyHcJvc4u4...` |
+| `TWITCH_STREAM_KEY` | Twitch stream key | `live_123456789_abcdefghij` |
+| `X_STREAM_KEY` | X/Twitter stream key | `sp16tpmtyqws` |
+| `X_RTMP_URL` | X/Twitter RTMP URL | `rtmp://sg.pscp.tv:80/x` |
+| `VAST_SERVER_URL` | (Optional) Server URL for maintenance mode | `https://your-server.com` |
+| `ADMIN_CODE` | (Optional) Admin code for maintenance mode | `your-admin-code` |
 
-## Manual Setup
+### Vast.ai Instance Setup
 
-### 1. Rent a Vast.ai Instance
+1. **Rent a GPU instance** on [Vast.ai](https://vast.ai):
+   - **GPU**: NVIDIA RTX 3060+ (for WebGPU + Vulkan)
+   - **RAM**: 16GB+ recommended
+   - **Disk**: 50GB+ (for repo + dependencies)
+   - **Image**: `nvidia/cuda:12.1.0-devel-ubuntu22.04` or similar
 
-**Recommended specs:**
-- **GPU**: NVIDIA GTX 1060 or better (6GB+ VRAM)
-- **CPU**: 4+ cores
-- **RAM**: 16GB+
-- **Disk**: 50GB+ SSD
-- **Bandwidth**: 100+ Mbps upload (for streaming)
+2. **Configure SSH access**:
+   - Add your public SSH key to the instance
+   - Note the instance IP and SSH port
+   - Test connection: `ssh root@<IP> -p <PORT>`
 
-**Search filters:**
-```
-gpu_ram >= 6
-num_gpus >= 1
-cpu_cores >= 4
-cpu_ram >= 16
-disk_space >= 50
-inet_up >= 100
-```
+3. **Initial setup** (run once on new instance):
+   ```bash
+   # Install Bun
+   curl -fsSL https://bun.sh/install | bash
+   export PATH="/root/.bun/bin:$PATH"
+   
+   # Clone repository
+   cd /root
+   git clone https://github.com/HyperscapeAI/hyperscape.git
+   cd hyperscape
+   
+   # Install dependencies
+   bun install
+   
+   # Build project
+   bun run build
+   ```
 
-**Template**: Use `pytorch/pytorch:latest` or `nvidia/cuda:12.1.0-devel-ubuntu22.04`
+## Deployment Workflow
 
-### 2. Connect via SSH
+### Automatic Deployment
 
-```bash
-ssh -p <port> root@<host>
-```
+The deployment runs automatically after CI passes on `main`:
 
-### 3. Install Dependencies
-
-```bash
-# Update system
-apt-get update && apt-get upgrade -y
-
-# Install Bun
-curl -fsSL https://bun.sh/install | bash
-export PATH="/root/.bun/bin:$PATH"
-
-# Install Chrome Dev (for WebGPU support)
-wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
-echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
-apt-get update
-apt-get install -y google-chrome-unstable
-
-# Install Xvfb (virtual framebuffer)
-apt-get install -y xvfb
-
-# Install Vulkan drivers (for GPU acceleration)
-apt-get install -y vulkan-tools mesa-vulkan-drivers
-
-# Install FFmpeg (for RTMP streaming)
-apt-get install -y ffmpeg
-
-# Install PM2 (process manager)
-npm install -g pm2
-```
-
-### 4. Clone Repository
-
-```bash
-cd /root
-git clone https://github.com/HyperscapeAI/hyperscape.git
-cd hyperscape
-bun install
-```
-
-### 5. Configure Environment
-
-```bash
-# Create server .env file
-cat > packages/server/.env << EOF
-NODE_ENV=production
-PORT=5555
-DATABASE_URL=postgresql://user:pass@host:5432/db
-JWT_SECRET=$(openssl rand -base64 32)
-ADMIN_CODE=your-secure-admin-code
-USE_LOCAL_POSTGRES=false
-
-# Streaming
-TWITCH_STREAM_KEY=your-twitch-key
-X_STREAM_KEY=your-x-key
-X_RTMP_URL=rtmp://x-media-studio/path
-
-# Solana (optional)
-SOLANA_ARENA_AUTHORITY_SECRET=your-keypair-json
-EOF
-```
-
-### 6. Build and Start
-
-```bash
-# Build all packages
-bun run build
-
-# Start with PM2
-pm2 start ecosystem.config.cjs
-pm2 save
-pm2 startup
-```
-
-## Automated Deployment (CI/CD)
-
-The GitHub Actions workflow (`.github/workflows/deploy-vast.yml`) automates deployment:
-
-### Workflow Triggers
-
-- **Automatic**: After CI passes on `main` branch
-- **Manual**: Via workflow_dispatch in GitHub Actions UI
-
-### Deployment Steps
-
-1. **Enter Maintenance Mode**
+1. **CI passes** → Triggers `deploy-vast.yml` workflow
+2. **Enter maintenance mode** (if configured):
    - Pauses new duel cycles
-   - Waits for active markets to resolve
-   - Ensures safe deployment window
+   - Waits for active markets to resolve (up to 5 minutes)
+3. **SSH to Vast.ai** and run `scripts/deploy-vast.sh`:
+   - Pulls latest code from `main`
+   - Writes environment variables to `packages/server/.env`
+   - Installs Vulkan drivers (if needed)
+   - Restarts PM2 with `ecosystem.config.cjs`
+4. **Health check** - Waits for server to be ready (up to 5 minutes)
+5. **Exit maintenance mode** - Resumes duel cycles
 
-2. **SSH to Vast Instance**
-   - Connects via SSH using secrets
-   - Checks out `main` branch explicitly
-   - Writes environment variables to `.env`
+### Manual Deployment
 
-3. **Run Deployment Script**
-   - Pulls latest code
-   - Installs dependencies
-   - Builds packages
-   - Restarts PM2 processes
+Trigger manually from GitHub Actions:
 
-4. **Health Check**
-   - Waits for server to be healthy (up to 5 minutes)
-   - Checks `/health` endpoint
+1. Go to **Actions** → **Deploy to Vast.ai**
+2. Click **Run workflow**
+3. Select branch (usually `main`)
+4. Click **Run workflow**
 
-5. **Exit Maintenance Mode**
-   - Resumes duel cycles
-   - Restarts normal operations
+Or deploy directly via SSH:
 
-### Deployment Script
+```bash\n# SSH to Vast.ai instance
+ssh root@<VAST_HOST> -p <VAST_PORT>
 
-The deployment script (`scripts/deploy-vast.sh`) handles:
-
-```bash
-#!/bin/bash
-set -e
-
-echo "[deploy] Starting Vast.ai deployment..."
-
-# Pull latest code
-git fetch origin
-git checkout main
-git reset --hard origin/main
-
-# Restore DATABASE_URL (git reset overwrites .env)
-if [ -n "$DATABASE_URL" ]; then
-  echo "DATABASE_URL=$DATABASE_URL" >> packages/server/.env
-fi
-
-# Setup Solana keypair
-if [ -n "$SOLANA_DEPLOYER_PRIVATE_KEY" ]; then
-  mkdir -p ~/.config/solana
-  bun run packages/server/scripts/decode-key.ts \
-    "$SOLANA_DEPLOYER_PRIVATE_KEY" \
-    ~/.config/solana/id.json
-fi
-
-# Install dependencies
-bun install
-
-# Build packages
-bun run build
-
-# Restart PM2
-pm2 restart ecosystem.config.cjs --update-env
-pm2 save
-
-echo "[deploy] Deployment complete!"
+# Run deploy script
+cd /root/hyperscape
+bash scripts/deploy-vast.sh
 ```
 
-## Streaming Configuration
+## Configuration
 
-### RTMP Destinations
+### ecosystem.config.cjs
 
-Configure in `packages/server/.env`:
-
-```bash
-# Twitch
-TWITCH_STREAM_KEY=live_123456789_abcdef
-TWITCH_RTMP_URL=rtmp://live.twitch.tv/app
-
-# X/Twitter
-X_STREAM_KEY=your-x-stream-key
-X_RTMP_URL=rtmp://x-media-studio/path
-
-# Kick
-KICK_STREAM_KEY=your-kick-key
-KICK_RTMP_URL=rtmp://ingest.kick.com/live
-
-# Custom
-CUSTOM_RTMP_NAME=Custom
-CUSTOM_RTMP_URL=rtmp://your-server/live
-CUSTOM_STREAM_KEY=your-key
-```
-
-### Streaming Delay
-
-Configure public streaming delay (for betting fairness):
-
-```bash
-# Canonical platform (youtube, twitch, or hls)
-STREAMING_CANONICAL_PLATFORM=twitch
-
-# Override default delay (ms)
-# Default: youtube=15000, twitch=12000, hls=4000
-STREAMING_PUBLIC_DELAY_MS=0  # Set to 0 for live betting
-```
-
-### Stream Quality
-
-FFmpeg settings in `ecosystem.config.cjs`:
+PM2 configuration for the duel stack. Key environment variables:
 
 ```javascript
 env: {
-  // Video encoding
-  STREAM_VIDEO_CODEC: 'libx264',
-  STREAM_VIDEO_BITRATE: '2500k',
-  STREAM_VIDEO_PRESET: 'veryfast',
-  STREAM_VIDEO_FPS: '30',
+  NODE_ENV: "production",
   
-  // Audio encoding
-  STREAM_AUDIO_CODEC: 'aac',
-  STREAM_AUDIO_BITRATE: '128k',
-  STREAM_AUDIO_SAMPLE_RATE: '44100',
+  // Database
+  DATABASE_URL: process.env.DATABASE_URL || "postgresql://...",
+  USE_LOCAL_POSTGRES: "false",
+  
+  // CDN (required - local /game-assets/ serves Git LFS pointers)
+  PUBLIC_CDN_URL: "https://assets.hyperscape.club",
+  
+  // Solana keypairs (base58 encoded)
+  SOLANA_ARENA_AUTHORITY_SECRET: process.env.SOLANA_DEPLOYER_PRIVATE_KEY || "",
+  SOLANA_ARENA_REPORTER_SECRET: process.env.SOLANA_DEPLOYER_PRIVATE_KEY || "",
+  SOLANA_ARENA_KEEPER_SECRET: process.env.SOLANA_DEPLOYER_PRIVATE_KEY || "",
+  
+  // Streaming destinations
+  TWITCH_STREAM_KEY: process.env.TWITCH_STREAM_KEY || "",
+  KICK_STREAM_KEY: process.env.KICK_STREAM_KEY || "",
+  KICK_RTMP_URL: process.env.KICK_RTMP_URL || "rtmps://...",
+  X_STREAM_KEY: process.env.X_STREAM_KEY || "",
+  X_RTMP_URL: process.env.X_RTMP_URL || "rtmp://sg.pscp.tv:80/x",
+  
+  // Stream capture (Chrome Dev + Xvfb + Vulkan)
+  STREAM_CAPTURE_MODE: "cdp",
+  STREAM_CAPTURE_HEADLESS: "false",  // Use Xvfb
+  STREAM_CAPTURE_CHANNEL: "chrome-dev",  // google-chrome-unstable
+  STREAM_CAPTURE_ANGLE: "vulkan",
+  STREAM_CAPTURE_DISABLE_WEBGPU: "false",
+  DUEL_CAPTURE_USE_XVFB: "true",
+  
+  // Streaming timing
+  STREAMING_CANONICAL_PLATFORM: "twitch",
+  STREAMING_PUBLIC_DELAY_MS: "0",  // No delay for live betting
 }
 ```
 
-## Troubleshooting
+### scripts/deploy-vast.sh
 
-### WebGPU Not Available
+The deployment script handles:
 
-**Symptoms:**
-- Black screen in stream
-- "WebGPU not supported" errors in logs
+1. **Git operations**:
+   - Fetches latest code
+   - Checks out `main` branch
+   - Resets to `origin/main`
 
-**Solutions:**
-1. Ensure Chrome Dev is installed (not stable)
-2. Check Vulkan drivers: `vulkaninfo`
-3. Verify GPU is accessible: `nvidia-smi`
-4. Check Xvfb is running: `ps aux | grep Xvfb`
+2. **Environment persistence**:
+   - Writes `DATABASE_URL` to `packages/server/.env` AFTER git reset
+   - Prevents environment variables from being overwritten
 
-### Stream Not Appearing
+3. **Solana keypair setup**:
+   - Decodes `SOLANA_DEPLOYER_PRIVATE_KEY` from env
+   - Writes to `~/.config/solana/id.json`
 
-**Check stream keys:**
+4. **System dependencies**:
+   - Installs Vulkan drivers for GPU rendering
+   - Installs Chrome Dev channel for WebGPU support
+
+5. **PM2 restart**:
+   - Stops existing processes
+   - Starts `ecosystem.config.cjs`
+   - Verifies health
+
+## Maintenance Mode
+
+### Purpose
+
+Maintenance mode enables zero-downtime deployments by:
+- Pausing new duel cycles before deployment
+- Waiting for active markets to resolve
+- Preventing data loss or incomplete transactions
+- Resuming operations after deployment completes
+
+### API Endpoints
+
+See [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) for full API reference.
+
+**Enter maintenance mode:**
 ```bash
-# View current environment
-pm2 env 0
-
-# Check if keys are set
-echo $TWITCH_STREAM_KEY
-echo $X_STREAM_KEY
+POST /admin/maintenance/enter
+Headers:
+  Content-Type: application/json
+  x-admin-code: <ADMIN_CODE>
+Body:
+  {
+    "reason": "deployment",
+    "timeoutMs": 300000  // 5 minutes
+  }
 ```
-
-**Check FFmpeg process:**
-```bash
-# View FFmpeg logs
-pm2 logs stream-capture
-
-# Check FFmpeg is running
-ps aux | grep ffmpeg
-```
-
-**Test RTMP connection:**
-```bash
-# Test Twitch
-ffmpeg -re -f lavfi -i testsrc=duration=10:size=1280x720:rate=30 \
-  -f flv "rtmp://live.twitch.tv/app/$TWITCH_STREAM_KEY"
-```
-
-### Database Connection Issues
-
-**Check DATABASE_URL:**
-```bash
-# View server environment
-pm2 env server
-
-# Test connection
-psql "$DATABASE_URL" -c "SELECT 1"
-```
-
-**Common issues:**
-- Firewall blocking port 5432
-- Incorrect credentials
-- Database not accepting external connections
-
-### High CPU/Memory Usage
-
-**Check resource usage:**
-```bash
-# Overall system
-htop
-
-# Per-process
-pm2 monit
-```
-
-**Optimize settings:**
-```bash
-# Reduce stream quality
-STREAM_VIDEO_BITRATE=1500k
-STREAM_VIDEO_PRESET=ultrafast
-
-# Disable features
-SPAWN_MODEL_AGENTS=false
-AUTO_START_AGENTS=false
-DISABLE_ACTIVITY_LOGGER=true
-```
-
-### Deployment Fails
-
-**Check logs:**
-```bash
-# View deployment logs in GitHub Actions
-# Settings → Actions → Deploy to Vast.ai → View logs
-
-# View server logs
-pm2 logs server
-
-# View all logs
-pm2 logs
-```
-
-**Common issues:**
-- SSH connection timeout: Check VAST_HOST and VAST_PORT
-- Git pull fails: Check repository access
-- Build fails: Check disk space (`df -h`)
-- PM2 restart fails: Check PM2 status (`pm2 status`)
-
-### Maintenance Mode Stuck
 
 **Check status:**
 ```bash
-curl https://your-server.com/admin/maintenance/status \
-  -H "x-admin-code: your-admin-code"
+GET /admin/maintenance/status
+Headers:
+  x-admin-code: <ADMIN_CODE>
 ```
 
-**Force exit:**
+**Exit maintenance mode:**
 ```bash
-curl -X POST https://your-server.com/admin/maintenance/exit \
-  -H "Content-Type: application/json" \
-  -H "x-admin-code: your-admin-code"
+POST /admin/maintenance/exit
+Headers:
+  Content-Type: application/json
+  x-admin-code: <ADMIN_CODE>
 ```
 
-**Restart server:**
+### Workflow Integration
+
+The GitHub Actions workflow (`.github/workflows/deploy-vast.yml`) automatically:
+
+1. Enters maintenance mode before deployment
+2. Waits for `safeToDeploy: true` (up to 5 minutes)
+3. Deploys code via SSH
+4. Waits for server health check (up to 5 minutes)
+5. Exits maintenance mode
+
+## Stream Capture Configuration
+
+### Chrome Dev Channel
+
+Uses `google-chrome-unstable` for WebGPU support:
+
 ```bash
-pm2 restart server
+# Installed by deploy-vast.sh
+wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
+echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+apt-get update
+apt-get install -y google-chrome-unstable
 ```
 
-## Performance Optimization
+Playwright channel mapping: `chrome-dev` → `google-chrome-unstable`
 
-### GPU Acceleration
+### Xvfb (Virtual Display)
 
-Ensure Vulkan is working:
+Runs Chrome headful with virtual display for GPU access:
+
 ```bash
-# Check Vulkan devices
-vulkaninfo | grep deviceName
-
-# Test GPU rendering
-vkcube
+# Started by duel-stack.mjs
+Xvfb :99 -screen 0 1280x720x24 &
+export DISPLAY=:99
 ```
 
-### Chrome Flags
+### Vulkan Backend
 
-Optimize Chrome for headless rendering:
+Uses Vulkan ANGLE backend for GPU rendering:
+
 ```bash
---disable-gpu-sandbox
---enable-unsafe-webgpu
---use-vulkan
---enable-features=Vulkan
---disable-software-rasterizer
+# Environment variable
+STREAM_CAPTURE_ANGLE=vulkan
+
+# Requires Vulkan drivers (installed by deploy-vast.sh)
+apt-get install -y mesa-vulkan-drivers vulkan-tools
 ```
 
-### PM2 Configuration
+## Streaming Destinations
 
-Optimize PM2 settings in `ecosystem.config.cjs`:
-```javascript
-{
-  name: 'server',
-  script: 'bun',
-  args: 'run start',
-  cwd: './packages/server',
-  instances: 1,
-  exec_mode: 'fork',
-  max_memory_restart: '2G',
-  env: {
-    NODE_ENV: 'production',
-    // ... other env vars
-  }
-}
+### Twitch
+
+```bash
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+# RTMP URL is hardcoded: rtmp://live.twitch.tv/app
 ```
+
+Get your stream key from: https://dashboard.twitch.tv/settings/stream
+
+### Kick
+
+```bash
+KICK_STREAM_KEY=sk_us-west-2_...
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net
+```
+
+Get your stream key from Kick Creator Dashboard.
+
+### X (Twitter)
+
+```bash
+X_STREAM_KEY=sp16tpmtyqws
+X_RTMP_URL=rtmp://sg.pscp.tv:80/x
+```
+
+Get RTMP URL from: Media Studio → Producer → Create Broadcast → Create Source
+
+**Note**: Requires X Premium subscription for desktop streaming.
 
 ## Monitoring
 
-### Health Checks
+### PM2 Logs
 
 ```bash
-# Server health
-curl https://your-server.com/health
-
-# Maintenance status
-curl https://your-server.com/admin/maintenance/status \
-  -H "x-admin-code: your-admin-code"
-```
-
-### PM2 Monitoring
-
-```bash
-# Process status
-pm2 status
-
-# Real-time monitoring
-pm2 monit
+# SSH to Vast.ai instance
+ssh root@<VAST_HOST> -p <VAST_PORT>
 
 # View logs
-pm2 logs
+pm2 logs hyperscape-duel
 
-# View specific process
-pm2 logs server
-pm2 logs stream-capture
+# View specific log files
+tail -f /root/hyperscape/logs/duel-out.log
+tail -f /root/hyperscape/logs/duel-error.log
 ```
 
-### Resource Monitoring
+### Health Endpoint
 
 ```bash
-# CPU/Memory/GPU
-htop
-
-# GPU usage
-nvidia-smi
-
-# Disk usage
-df -h
-
-# Network usage
-iftop
+curl https://your-server.com/health
 ```
 
-## Cost Optimization
+Response includes:
+- `maintenanceMode`: Current maintenance status
+- `uptime`: Server uptime in seconds
+- `version`: Git commit hash
 
-### Instance Selection
+### Stream Health
 
-- **Development**: GTX 1060 (~$0.10/hour)
-- **Production**: RTX 3060 (~$0.20/hour)
-- **High quality**: RTX 4090 (~$0.50/hour)
+The duel stack includes automatic health monitoring:
+- **Recovery timeout**: 30 seconds (configurable via `STREAM_CAPTURE_RECOVERY_TIMEOUT_MS`)
+- **Max failures**: 6 consecutive failures before restart (configurable via `STREAM_CAPTURE_RECOVERY_MAX_FAILURES`)
+- **Auto-restart**: PM2 restarts the entire stack on critical failures
 
-### Auto-Shutdown
+## Troubleshooting
 
-Configure auto-shutdown when idle:
-```bash
-# Add to crontab
-0 * * * * [ $(pm2 jlist | jq '.[0].pm2_env.status' -r) = "stopped" ] && shutdown -h now
+### Stream not appearing on Twitch/Kick/X
+
+1. **Check stream keys are correct**:
+   ```bash
+   # SSH to instance
+   cat /root/hyperscape/packages/server/.env | grep STREAM_KEY
+   ```
+
+2. **Verify FFmpeg is running**:
+   ```bash
+   ps aux | grep ffmpeg
+   ```
+
+3. **Check RTMP connection**:
+   ```bash
+   # View FFmpeg logs
+   pm2 logs hyperscape-duel | grep ffmpeg
+   ```
+
+4. **Test stream locally**:
+   ```bash
+   # From your machine
+   ffplay rtmp://localhost:1935/live/test
+   ```
+
+### WebGPU not working
+
+1. **Verify Vulkan drivers**:
+   ```bash
+   vulkaninfo | head -20
+   ```
+
+2. **Check Chrome version**:
+   ```bash
+   google-chrome-unstable --version
+   ```
+
+3. **Test WebGPU in Chrome**:
+   ```bash
+   # Visit chrome://gpu in headful Chrome
+   DISPLAY=:99 google-chrome-unstable --no-sandbox chrome://gpu
+   ```
+
+### Database connection errors
+
+1. **Verify DATABASE_URL is set**:
+   ```bash
+   cat /root/hyperscape/packages/server/.env | grep DATABASE_URL
+   ```
+
+2. **Test connection**:
+   ```bash
+   psql "$DATABASE_URL" -c "SELECT 1"
+   ```
+
+### Assets not loading (404 errors)
+
+The server was loading assets from `localhost/game-assets` which served Git LFS pointer files. This is now fixed:
+
+1. **Verify PUBLIC_CDN_URL is set**:
+   ```bash
+   cat /root/hyperscape/packages/server/.env | grep PUBLIC_CDN_URL
+   # Should be: PUBLIC_CDN_URL=https://assets.hyperscape.club
+   ```
+
+2. **Test CDN access**:
+   ```bash
+   curl -I https://assets.hyperscape.club/models/player/human.glb
+   # Should return 200 OK
+   ```
+
+### PM2 process crash-looping
+
+1. **Check PM2 status**:
+   ```bash
+   pm2 status
+   pm2 logs hyperscape-duel --lines 100
+   ```
+
+2. **Check for common issues**:
+   - Missing environment variables
+   - Database connection failures
+   - Port conflicts
+   - Out of memory (check `max_memory_restart: "4G"`)
+
+3. **Restart manually**:
+   ```bash
+   pm2 restart ecosystem.config.cjs
+   ```
+
+## GitHub Actions Workflow
+
+### Workflow File
+
+`.github/workflows/deploy-vast.yml`
+
+### Trigger Conditions
+
+- **Automatic**: After CI passes on `main` branch
+- **Manual**: `workflow_dispatch` (Run workflow button)
+
+### Workflow Steps
+
+1. **Enter Maintenance Mode** (optional):
+   - Skipped if `VAST_SERVER_URL` or `ADMIN_CODE` not configured
+   - Pauses new duel cycles
+   - Waits for active markets to resolve
+
+2. **SSH and Deploy**:
+   - Explicitly checks out `main` branch
+   - Resets to `origin/main`
+   - Writes environment variables to `packages/server/.env`
+   - Runs `scripts/deploy-vast.sh`
+
+3. **Exit Maintenance Mode** (optional):
+   - Waits for server health check (up to 5 minutes)
+   - Exits maintenance mode
+   - Logs success/failure
+
+### Environment Variable Passing
+
+Environment variables are passed through SSH using the `envs` parameter:
+
+```yaml
+envs: DATABASE_URL,SOLANA_DEPLOYER_PRIVATE_KEY,TWITCH_STREAM_KEY,X_STREAM_KEY,X_RTMP_URL
 ```
 
-### Spot Instances
+These are then written to `packages/server/.env` AFTER git reset to prevent overwriting.
 
-Use interruptible instances for lower cost:
-- Enable "Interruptible" in Vast.ai search
-- Implement auto-restart on interruption
-- Use PM2 startup script for auto-recovery
+## Best Practices
 
-## See Also
+### Security
 
-- [Maintenance Mode API](maintenance-mode-api.md)
-- [Streaming Configuration](streaming-configuration.md)
-- [WebGPU Requirements](webgpu-requirements.md)
-- [CI/CD Improvements](ci-cd-improvements.md)
+- **Never commit secrets** to the repository
+- Use GitHub Secrets for all sensitive data
+- Rotate stream keys regularly
+- Use strong `ADMIN_CODE` for maintenance mode API
+
+### Monitoring
+
+- Set up alerts for PM2 crashes (use `ALERT_WEBHOOK_URL` in server `.env`)
+- Monitor stream health via Twitch/Kick/X dashboards
+- Check server logs regularly for errors
+
+### Deployment Timing
+
+- Deploy during low-traffic periods
+- Use maintenance mode for production deployments
+- Allow 5-10 minutes for graceful shutdown and restart
+
+### Resource Management
+
+- Monitor GPU memory usage (`nvidia-smi`)
+- Check disk space regularly (`df -h`)
+- PM2 will restart if memory exceeds 4GB (`max_memory_restart`)
+
+## Advanced Configuration
+
+### Custom Stream Settings
+
+Edit `ecosystem.config.cjs` to customize:
+
+```javascript
+// Stream resolution
+STREAM_CAPTURE_WIDTH: "1920",
+STREAM_CAPTURE_HEIGHT: "1080",
+
+// Recovery settings
+STREAM_CAPTURE_RECOVERY_TIMEOUT_MS: "60000",  // 1 minute
+STREAM_CAPTURE_RECOVERY_MAX_FAILURES: "10",
+
+// Disable specific platforms
+TWITCH_STREAM_KEY: "",  // Disable Twitch
+```
+
+### Multiple Instances
+
+To run multiple Vast.ai instances:
+
+1. Create separate GitHub environments (e.g., `vast-1`, `vast-2`)
+2. Configure separate secrets for each instance
+3. Modify workflow to target specific environment
+
+## Related Documentation
+
+- [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Maintenance mode API reference
+- [docs/streaming-configuration.md](docs/streaming-configuration.md) - RTMP streaming setup
+- [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - WebGPU requirements
+- [ecosystem.config.cjs](../ecosystem.config.cjs) - PM2 configuration
+- [scripts/deploy-vast.sh](../scripts/deploy-vast.sh) - Deployment script
