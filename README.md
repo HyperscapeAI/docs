@@ -249,6 +249,8 @@ directory = "dist"
 
 **Important**: The root `wrangler.toml` was removed to avoid deployment confusion. Use `packages/client/wrangler.toml` for Pages configuration.
 
+**CORS Configuration**: Assets served from R2 require CORS configuration for cross-origin loading. See [docs/r2-cors-configuration.md](docs/r2-cors-configuration.md) for setup instructions.
+
 ### Railway (Production)
 
 Railway deployment is set up for separate development and production targets:
