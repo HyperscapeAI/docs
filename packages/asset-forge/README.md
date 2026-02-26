@@ -17,18 +17,24 @@ A comprehensive React/Vite application for AI-powered 3D asset generation, riggi
 - Metadata management and asset organization
 - GLB/GLTF format support
 
-### 🎬 **VFX Catalog Browser**
-- Browse all game visual effects in a live catalog
-- Real-time Three.js previews of spells, arrows, particles, teleport effects
-- Detailed parameter panels showing colors, layers, and phase timelines
-- Combat HUD effects, fishing particles, and glow effects
-- Interactive preview controls for testing VFX in isolation
-
 ### 🤖 **Advanced Rigging & Fitting**
 - **Armor Fitting System**: Automatically fit armor pieces to character models
 - **Hand Rigging**: AI-powered hand pose detection and weapon rigging
 - Weight transfer and mesh deformation
 - Bone mapping and skeleton alignment
+
+### ✨ **VFX Catalog Browser** (New)
+- **Live Three.js Previews**: Real-time rendering of all game visual effects
+- **Effect Categories**: Spells, arrows, glow particles, fishing spots, teleport, combat HUD
+- **Interactive Viewer**: Orbit controls, animated effects, dark/light scene modes
+- **Detailed Documentation**: Color palettes, parameter tables, layer breakdowns, phase timelines
+- **Comprehensive Coverage**: 
+  - 8 spell projectiles (strikes & bolts with trail effects)
+  - 6 arrow types (bronze, iron, steel, mithril, adamant)
+  - 3 glow particle presets (altar, fire, torch)
+  - 3 fishing spot effects (net, fly, default)
+  - Teleport effect (multi-phase with helix particles)
+  - Combat HUD effects (damage splats, XP drops)
 
 ### 🔧 **Processing Tools**
 - Sprite generation from 3D models
@@ -58,7 +64,7 @@ A comprehensive React/Vite application for AI-powered 3D asset generation, riggi
 1. Clone the repository
 ```bash
 git clone [repository-url]
-cd packages/generation
+cd packages/asset-forge
 ```
 
 2. Install dependencies using Bun
@@ -68,20 +74,23 @@ bun install
 
 3. Create a `.env` file from the example
 ```bash
-cp env.example .env
+cp .env.example .env
 ```
 
 4. Add your API keys to `.env`
 ```
-VITE_OPENAI_API_KEY=your-openai-api-key
-VITE_MESHY_API_KEY=your-meshy-api-key
+OPENAI_API_KEY=your-openai-api-key
+MESHY_API_KEY=your-meshy-api-key
 ```
 
 ### Running the Application
 
 Start both frontend and backend services:
 ```bash
-# Terminal 1: Start the React app
+# From repository root:
+bun run dev:forge
+
+# Or run from asset-forge directory:
 bun run dev:all
 
 # Or run separately:
@@ -89,7 +98,9 @@ bun run dev           # Terminal 1: Frontend only
 bun run dev:backend   # Terminal 2: Backend services
 ```
 
-The app will be available at `http://localhost:3400`
+The app will be available at:
+- **Frontend**: `http://localhost:3400`
+- **Backend API**: `http://localhost:3401`
 
 ## Project Structure
 
@@ -99,14 +110,15 @@ asset-forge/
 │   ├── components/         # UI components
 │   │   ├── VFX/           # VFX catalog browser components
 │   │   ├── Generation/    # Asset generation UI
-│   │   ├── ArmorFitting/  # Armor fitting tools
-│   │   └── HandRigging/   # Hand rigging tools
+│   │   ├── Equipment/     # Equipment system
+│   │   └── ...
 │   ├── services/          # Core services (AI, fitting, rigging)
 │   ├── pages/             # Main application pages
-│   │   └── VFXPage.tsx    # VFX catalog browser page
+│   │   ├── VFXPage.tsx   # VFX catalog browser
+│   │   └── ...
+│   ├── data/              # Static data and catalogs
+│   │   └── vfx-catalog.ts # VFX effect metadata
 │   ├── hooks/             # Custom React hooks
-│   ├── data/              # Static data
-│   │   └── vfx-catalog.ts # VFX effect definitions
 │   └── store/             # Zustand state management
 ├── server/                # Express.js backend
 │   ├── api-elysia.ts     # API endpoints
@@ -134,29 +146,34 @@ asset-forge/
 - 3D preview with rotation controls
 - Export and download assets
 
-### 3. VFX Catalog (`/vfx`)
-- Browse all game visual effects
-- Live Three.js previews with interactive controls
-- Detailed effect parameters (colors, layers, phases)
-- Effect categories: spells, arrows, particles, teleport, combat HUD, fishing
-- Test effects in isolation before integrating into game
-
-### 4. Equipment System (`/equipment`)
+### 3. Equipment System (`/equipment`)
 - Manage weapon and armor sets
 - Preview equipment combinations
 - Configure equipment properties
 
-### 5. Armor Fitting (`/armor-fitting`)
+### 4. Armor Fitting (`/armor-fitting`)
 - Upload character models
 - Automatically fit armor pieces
 - Adjust positioning and scaling
 - Export fitted models
 
-### 6. Hand Rigging (`/hand-rigging`)
+### 5. Hand Rigging (`/hand-rigging`)
 - Upload weapon models
 - AI-powered hand pose detection
 - Automatic grip point calculation
 - Export rigged weapons
+
+### 6. VFX Catalog Browser (`/vfx`)
+- **Browse All Game Effects**: Organized by category (spells, arrows, glow, fishing, teleport, combat HUD)
+- **Live Previews**: Real-time Three.js rendering with animated effects
+- **Effect Details**: 
+  - Color palettes with hex values
+  - Parameter tables (size, intensity, duration, etc.)
+  - Layer breakdowns for particle systems
+  - Phase timelines for multi-stage effects
+  - Component lists for complex effects
+- **Interactive Controls**: Orbit camera, zoom, pan
+- **Technical Reference**: Shader parameters, blend modes, particle counts
 
 ## API Endpoints
 
@@ -181,10 +198,54 @@ asset-forge/
 ## Configuration
 
 The system uses JSON-based configuration for:
-- Material presets (`public/material-presets.json`)
+- Material presets (`public/prompts/material-presets.json`)
 - Asset metadata (stored with each asset)
 - Generation prompts and styles
 - VFX effect definitions (`src/data/vfx-catalog.ts`)
+
+## VFX Catalog
+
+The VFX catalog browser provides comprehensive documentation of all visual effects used in Hyperscape:
+
+### Effect Categories
+
+1. **Magic Spells** (8 effects)
+   - Wind/Water/Earth/Fire Strikes (tier 1)
+   - Wind/Water/Earth/Fire Bolts (tier 2 with pulse animation)
+   - Billboarded glow orbs with trail particles and orbiting sparks
+
+2. **Arrow Projectiles** (6 effects)
+   - Default, Bronze, Iron, Steel, Mithril, Adamant
+   - 3D mesh rendering with shaft, head, and fletching components
+
+3. **Glow Particles** (3 presets)
+   - Altar: 30 particles across 4 layers (pillar, wisp, spark, base)
+   - Fire: 18 rising particles with turbulent motion
+   - Torch: 6 tighter flame particles
+
+4. **Fishing Spots** (3 effects)
+   - Net, Fly, Default fishing
+   - Splash arcs, bubble rise, shimmer twinkle, ripple rings
+
+5. **Teleport** (1 effect)
+   - Multi-phase animation: gather → erupt → sustain → fade
+   - Ground rune circle, dual beams, shockwave rings
+   - Helix spiral particles, burst particles with gravity
+   - Dynamic point lighting
+
+6. **Combat HUD** (2 effects)
+   - Damage splats (hit/miss variants)
+   - XP drops with cubic ease-out animation
+
+### Technical Implementation
+
+VFX catalog data is duplicated in `src/data/vfx-catalog.ts` as plain objects (no game engine imports). Source-of-truth files:
+- `packages/shared/src/data/spell-visuals.ts`
+- `packages/shared/src/entities/managers/particleManager/GlowParticleManager.ts`
+- `packages/shared/src/entities/managers/particleManager/WaterParticleManager.ts`
+- `packages/shared/src/systems/client/ClientTeleportEffectsSystem.ts`
+- `packages/shared/src/systems/client/DamageSplatSystem.ts`
+- `packages/shared/src/systems/client/XPDropSystem.ts`
 
 ## Contributing
 
