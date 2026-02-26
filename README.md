@@ -41,7 +41,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 ```bash
 git clone https://github.com/HyperscapeAI/hyperscape.git
 cd hyperscape
-nbun install
+bun install
 ```
 
 ### Setup Environment Files
@@ -313,7 +313,7 @@ lsof -ti:8080 | xargs kill -9   # CDN
 ```bash
 bun run clean
 rm -rf node_modules packages/*/node_modules
-nbun install
+bun install
 bun run build
 ```
 
