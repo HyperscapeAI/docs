@@ -976,6 +976,27 @@ bun run build
 - File: `packages/shared/src/systems/client/DuelArenaVisualsSystem.ts`
 - Commit: 2435423 (Feb 24, 2026)
 
+### Victory Emote Overridden by Combat Cleanup
+
+**Symptom**: Winning agent's wave emote is immediately overwritten by idle animation after duel victory
+
+**Cause**: Combat animation system's stale idle resets override victory emote
+
+**Solution**: Update to latest code (commit 645137386 fixed this)
+
+**Technical Details:**
+- **Delayed Victory Emote**: Victory emote now delayed by 600ms after combat resolution
+  - Allows all death/combat cleanup (emote resets, combat state teardown, scheduled animation resets) to finish first
+  - Without delay, victory emote was immediately overwritten by stale idle resets from combat animation system
+- **Emote Reset in stopCombat**: Reset emote to idle when agents teleport out
+  - Ensures wave animation stops when agents leave arena
+  - Prevents emote from persisting after duel ends
+- **Entity Data Sync**: Set emote on server entity so future entity sync includes it
+  - Ensures victory emote is part of entity state
+  - Broadcasts to all clients via `entityModified` packet
+- File: `packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts`
+- Commit: 645137386 (Feb 25, 2026)
+
 ### Duplicate Teleport VFX
 
 **Symptom**: Three teleport effects play when agents exit duel arena (should only be one)
