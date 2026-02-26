@@ -372,6 +372,129 @@ The Vast.ai deployment workflow automatically uses maintenance mode:
 - Ensures clean duel cycle boundaries
 - No interrupted streams or broken markets
 
+## Vast.ai Deployment Improvements (Feb 26 2026)
+
+### First-Time Setup Support (commit 6302fa4)
+
+**Problem:** Deployment failed on fresh Vast.ai instances without existing repository.
+
+**Solution:** Auto-clone repository if it doesn't exist:
+
+```bash
+# From .github/workflows/deploy-vast.yml
+if [ ! -d "/root/hyperscape" ]; then
+  echo "[deploy] First-time setup: cloning repository..."
+  cd /root
+  git clone https://github.com/HyperscapeAI/hyperscape.git
+fi
+```
+
+### Bun Installation Check (commit abfe0ce)
+
+**Problem:** Deployment assumed bun was already installed.
+
+**Solution:** Always check and install bun if missing:
+
+```bash
+# From .github/workflows/deploy-vast.yml
+if ! command -v /root/.bun/bin/bun &> /dev/null; then
+  echo "[deploy] Installing bun..."
+  curl -fsSL https://bun.sh/install | bash
+fi
+export PATH="/root/.bun/bin:$PATH"
+```
+
+### Secrets Injection Overhaul (commits b466233, 6302fa4, abfe0ce)
+
+**Problem:** Environment variables weren't persisting through git reset operations in deployment script.
+
+**Solution:** Write secrets to `/tmp` before git reset, then restore:
+
+```bash
+# Write secrets to /tmp FIRST (survives git reset)
+cat > /tmp/hyperscape-secrets.env << 'ENVEOF'
+DATABASE_URL=${{ secrets.DATABASE_URL }}
+TWITCH_STREAM_KEY=${{ secrets.TWITCH_STREAM_KEY }}
+X_STREAM_KEY=${{ secrets.X_STREAM_KEY }}
+KICK_STREAM_KEY=${{ secrets.KICK_STREAM_KEY }}
+SOLANA_DEPLOYER_PRIVATE_KEY=${{ secrets.SOLANA_DEPLOYER_PRIVATE_KEY }}
+YOUTUBE_STREAM_KEY=
+ENVEOF
+
+# Then run deploy script (which does git reset)
+bash /root/hyperscape/scripts/deploy-vast.sh
+
+# Deploy script restores from /tmp after git reset
+source /tmp/hyperscape-secrets.env
+```
+
+**Why This Matters:**
+- `git reset --hard` overwrites `.env` file
+- Writing to `/tmp` before reset preserves secrets
+- Deploy script sources from `/tmp` after reset
+- Ensures DATABASE_URL and stream keys persist
+
+### PM2 Environment Variable Handling (commit b466233)
+
+**Problem:** PM2 wasn't picking up new environment variables on restart.
+
+**Solution:** Use `pm2 kill` instead of `pm2 delete`:
+
+```bash
+# ❌ Old: pm2 delete doesn't restart daemon
+pm2 delete ecosystem.config.cjs
+
+# ✅ New: pm2 kill restarts daemon with fresh env
+pm2 kill
+pm2 start ecosystem.config.cjs
+```
+
+**Impact:** Environment variables (stream keys, DATABASE_URL) are properly loaded on every deployment.
+
+### YouTube Streaming Disabled (commit b466233)
+
+**Problem:** Stale YouTube stream key was being used despite being removed from configuration.
+
+**Solution:** Explicitly set `YOUTUBE_STREAM_KEY=""` in secrets file and ecosystem.config.cjs:
+
+```javascript
+// From ecosystem.config.cjs
+env: {
+  YOUTUBE_STREAM_KEY: "",  // Explicitly disable
+  YOUTUBE_RTMP_STREAM_KEY: "",
+}
+```
+
+**Streaming Destinations (Current):**
+- ✅ Twitch
+- ✅ Kick
+- ✅ X/Twitter
+- ❌ YouTube (disabled)
+
+### Database Warmup (commit d66d13a)
+
+**Problem:** Cold starts caused database connection failures.
+
+**Solution:** Add warmup step after schema push with retry logic:
+
+```bash
+# From scripts/deploy-vast.sh
+echo "[deploy] Warming up database connection..."
+for i in {1..3}; do
+  if bun run -b packages/server/src/scripts/test-db-connection.ts; then
+    echo "[deploy] Database connection verified"
+    break
+  fi
+  echo "[deploy] Database warmup attempt $i failed, retrying..."
+  sleep 2
+done
+```
+
+**Benefits:**
+- Verifies database connection before starting server
+- Retries up to 3 times to handle cold starts
+- Prevents server crash-loops from database connection failures
+
 ## AssetForge Environment
 
 ```bash
