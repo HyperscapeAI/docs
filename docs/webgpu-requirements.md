@@ -1,273 +1,224 @@
 # WebGPU Requirements
 
-Hyperscape requires WebGPU for rendering. All shaders use TSL (Three.js Shading Language), which only works with WebGPU. WebGL fallback was removed in February 2026.
+Hyperscape requires **WebGPU** for rendering. All shaders use Three.js Shading Language (TSL), which only works with WebGPU. WebGL fallback has been removed.
 
-## Browser Compatibility
+## Why WebGPU?
 
-### Supported Browsers
+- **Modern GPU features**: Compute shaders, storage buffers, better performance
+- **TSL shaders**: All Hyperscape shaders (grass, fire particles, water, etc.) use TSL
+- **Future-proof**: WebGPU is the future of web graphics
+- **Better performance**: Lower overhead, more efficient GPU utilization
+
+## Browser Support
+
+### ✅ Supported Browsers
 
 | Browser | Minimum Version | Platform | Notes |
 |---------|----------------|----------|-------|
-| **Chrome** | 113+ | Windows, macOS, Linux | ✅ Recommended |
-| **Edge** | 113+ | Windows, macOS, Linux | ✅ Recommended |
-| **Safari** | 18+ | macOS 15+ only | ⚠️ macOS 15+ required |
-| **Firefox** | Experimental | All | ❌ Not recommended |
+| **Chrome** | 113+ | Windows, macOS, Linux | Recommended |
+| **Edge** | 113+ | Windows, macOS, Linux | Recommended |
+| **Safari** | 18+ | macOS 15+ only | Limited support |
 
-### Check Your Browser
+### ❌ Unsupported Browsers
 
-Visit [webgpureport.org](https://webgpureport.org) to verify WebGPU support.
+| Browser | Status | Workaround |
+|---------|--------|------------|
+| **Firefox** | Experimental | Use Chrome or Edge |
+| **Safari (older)** | No support | Update to macOS 15+ and Safari 18+ |
+| **Mobile browsers** | Limited | Use desktop for best experience |
 
-**Quick Test:**
+## Checking WebGPU Support
+
+### Online Check
+
+Visit [webgpureport.org](https://webgpureport.org) to verify your browser and GPU support WebGPU.
+
+### In-Browser Check
+
+Open your browser's developer console and run:
+
 ```javascript
-// Open browser console (F12)
 if (navigator.gpu) {
-  console.log('✅ WebGPU supported');
+  console.log('✅ WebGPU is supported');
+  navigator.gpu.requestAdapter().then(adapter => {
+    console.log('GPU:', adapter);
+  });
 } else {
-  console.log('❌ WebGPU not supported');
+  console.log('❌ WebGPU is not supported');
 }
 ```
 
-## GPU Requirements
+### Hyperscape Error Screen
 
-### Desktop GPUs
-
-**NVIDIA:**
-- GTX 1060 or newer
-- Driver version 525.60.11+ (Linux) or 527.41+ (Windows)
-
-**AMD:**
-- RX 5700 or newer
-- Driver version 23.1.1+ (Windows) or Mesa 23.0+ (Linux)
-
-**Intel:**
-- Arc A-series (dedicated)
-- Iris Xe (integrated, 11th gen+)
-- Driver version 31.0.101.4502+ (Windows)
-
-### Mobile GPUs
-
-**iOS:**
-- iPhone 12 or newer (A14 Bionic+)
-- iPad Pro 2020 or newer (A12Z+)
-- iOS 18+ required
-
-**Android:**
-- Chrome 113+ with compatible GPU
-- Snapdragon 888+ or equivalent
-- Vulkan 1.1+ support required
-
-## Error Handling
-
-### User-Facing Error Screen
-
-If WebGPU is unavailable, Hyperscape shows a user-friendly error screen:
+If WebGPU is not available, Hyperscape shows a user-friendly error screen:
 
 ```
 WebGPU Not Supported
 
-Hyperscape requires WebGPU for rendering.
+Hyperscape requires WebGPU to run. Please use:
+- Chrome 113+ or Edge 113+ (Windows/macOS/Linux)
+- Safari 18+ (macOS 15+ only)
 
-Your browser or GPU does not support WebGPU.
-
-Please use:
-• Chrome 113+ or Edge 113+ (Windows/macOS/Linux)
-• Safari 18+ (macOS 15+ only)
-
-Check compatibility: webgpureport.org
+Check your browser support at: webgpureport.org
 ```
 
-**Implementation**: See `packages/shared/src/systems/client/ClientGraphics.ts`
+## GPU Requirements
 
-### Developer Error Messages
+### Minimum GPU
 
-**Console Errors:**
-```
-[ClientGraphics] WebGPU not available - cannot initialize renderer
-[ClientGraphics] All shaders use TSL which requires WebGPU
-[ClientGraphics] Visit webgpureport.org to check browser/GPU support
-```
+- **Desktop**: Any GPU with Vulkan or DirectX 12 support
+- **Laptop**: Integrated graphics (Intel HD 620+, AMD Vega, Apple M1+)
+- **Age**: GPUs from 2016 or newer
 
-**Thrown Error:**
-```typescript
-throw new Error(
-  'WebGPU is required but not available. ' +
-  'Please use Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+). ' +
-  'Visit webgpureport.org to check compatibility.'
-);
-```
+### Recommended GPU
 
-## Headless/Server Rendering
+- **Desktop**: NVIDIA GTX 1060 / AMD RX 580 or better
+- **Laptop**: NVIDIA GTX 1650 / AMD RX 5500M or better
+- **Apple**: M1 or newer
 
-For streaming and testing, Hyperscape uses headless Chrome with GPU acceleration.
+### Known Issues
 
-### Requirements
+**Intel HD Graphics (older):**
+- Some older Intel integrated GPUs may have limited WebGPU support
+- Update graphics drivers to the latest version
+- Consider using a dedicated GPU if available
 
-**System Packages:**
-```bash
-# Vulkan drivers (required for GPU rendering)
-apt-get install -y \
-    mesa-vulkan-drivers \
-    vulkan-tools \
-    libvulkan1
+**AMD GPUs (Windows):**
+- Ensure AMD Adrenalin drivers are up to date
+- Some older AMD GPUs may have driver issues with WebGPU
 
-# Chrome Dev channel (WebGPU enabled by default)
-wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
-echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
-apt-get update && apt-get install -y google-chrome-unstable
+**Safari on macOS:**
+- Requires macOS 15 (Sequoia) or newer
+- Older macOS versions do not support WebGPU in Safari
+- Use Chrome or Edge on older macOS versions
 
-# Xvfb (virtual display)
-apt-get install -y xvfb
+## Enabling WebGPU
 
-# Playwright
-bunx playwright install chromium
-bunx playwright install-deps chromium
-```
+### Chrome/Edge
 
-### Environment Variables
+WebGPU is enabled by default in Chrome 113+ and Edge 113+.
 
-```bash
-# Use Chrome Dev channel
-STREAM_CAPTURE_CHANNEL=chrome-dev
+If disabled, enable it manually:
+1. Navigate to `chrome://flags` (or `edge://flags`)
+2. Search for "WebGPU"
+3. Enable "Unsafe WebGPU" (for development only)
+4. Restart browser
 
-# Use Vulkan ANGLE backend
-STREAM_CAPTURE_ANGLE=vulkan
+### Safari
 
-# Run headful with Xvfb
-STREAM_CAPTURE_HEADLESS=false
-DUEL_CAPTURE_USE_XVFB=true
+WebGPU is enabled by default in Safari 18+ on macOS 15+.
 
-# Enable WebGPU (required)
-STREAM_CAPTURE_DISABLE_WEBGPU=false
-```
+If disabled, enable it manually:
+1. Safari → Settings → Advanced
+2. Check "Show Develop menu in menu bar"
+3. Develop → Experimental Features → WebGPU
+4. Restart Safari
 
-### Verify GPU Access
+### Firefox (Experimental)
 
-```bash
-# Check GPU
-nvidia-smi
+WebGPU support in Firefox is experimental and not recommended:
+1. Navigate to `about:config`
+2. Search for `dom.webgpu.enabled`
+3. Set to `true`
+4. Restart Firefox
 
-# Check Vulkan
-vulkaninfo --summary
+**Note**: Firefox WebGPU support is incomplete and may not work with Hyperscape.
 
-# Test Chrome WebGPU
-google-chrome-unstable --headless --disable-gpu-sandbox \
-  --enable-features=Vulkan \
-  --use-angle=vulkan \
-  --enable-unsafe-webgpu \
-  --no-sandbox \
-  about:blank
-```
+## Headless Rendering (Server-Side)
 
-## Why WebGPU?
+For streaming and server-side rendering, Hyperscape uses:
 
-### TSL Shaders
+- **Chrome Dev Channel**: Latest WebGPU features
+- **Xvfb**: Virtual framebuffer for headless rendering
+- **Vulkan drivers**: GPU acceleration on Linux
+- **SwiftShader**: Software rendering fallback (slower)
 
-Hyperscape uses TSL (Three.js Shading Language) for all materials:
-- **Procedural terrain** - GPU-computed noise and biome blending
-- **Procedural grass** - Instanced with wind animation
-- **Fire particles** - Value noise with turbulent motion
-- **Arena materials** - Sandstone block patterns with mortar
-- **Water** - Animated normals and reflections
-
-**TSL requires WebGPU** - it compiles to WGSL (WebGPU Shading Language), not GLSL.
-
-### Performance Benefits
-
-WebGPU provides:
-- **Compute shaders** - Terrain generation, grass culling, particle updates
-- **Storage buffers** - Efficient large data transfers
-- **Indirect drawing** - GPU-driven rendering without CPU readback
-- **Modern API** - Lower overhead than WebGL
-
-### Rendering Features
-
-WebGPU enables:
-- **InstancedMesh** - 97% draw call reduction in duel arenas
-- **GPU particles** - 896 fire particles with zero CPU cost
-- **Procedural materials** - All textures generated on GPU
-- **Post-processing** - Bloom, color grading, depth of field
-
-## Migration from WebGL
-
-**Breaking Change (February 2026)**: WebGL fallback removed.
-
-**Before:**
-```typescript
-// Old code had WebGL fallback
-const renderer = isWebGPUAvailable 
-  ? new WebGPURenderer() 
-  : new WebGLRenderer();
-```
-
-**After:**
-```typescript
-// New code requires WebGPU
-if (!navigator.gpu) {
-  throw new Error('WebGPU required');
-}
-const renderer = new WebGPURenderer();
-```
-
-**Impact**: Users on old browsers (Chrome <113, Safari <18) can no longer play. They see the WebGPU error screen.
+See [Vast.ai Deployment Guide](vast-deployment.md) for server-side setup.
 
 ## Troubleshooting
 
-### "WebGPU not available" Error
+### "WebGPU not supported" error
 
-**Symptom**: Error screen on game load
-
-**Solutions**:
-1. Update browser to Chrome 113+, Edge 113+, or Safari 18+
-2. Enable WebGPU in browser flags (if experimental)
-3. Update GPU drivers
-4. Check GPU compatibility at [webgpureport.org](https://webgpureport.org)
-
-### Black Screen After Loading
-
-**Symptom**: Game loads but shows black screen
-
-**Causes**:
-1. WebGPU initialized but shader compilation failed
-2. GPU out of memory
-3. Unsupported GPU features
-
-**Solutions**:
+**Check browser version:**
 ```bash
-# Check browser console for errors
-F12 → Console
+# Chrome/Edge
+chrome://version
+edge://version
 
-# Look for:
-# - "Failed to create WebGPU device"
-# - "Shader compilation error"
-# - "Out of memory"
-
-# Try reducing graphics settings
-# (if settings panel is accessible)
+# Safari
+Safari → About Safari
 ```
 
-### Headless Rendering Fails
+**Update browser:**
+- Chrome: [google.com/chrome](https://www.google.com/chrome/)
+- Edge: [microsoft.com/edge](https://www.microsoft.com/edge/)
+- Safari: Update macOS to 15+ via System Settings
 
-**Symptom**: Stream shows black screen or crashes
+### WebGPU available but Hyperscape won't load
 
-**Solutions**:
-```bash
-# Verify Vulkan
-vulkaninfo --summary
+**Check GPU drivers:**
+- NVIDIA: [nvidia.com/drivers](https://www.nvidia.com/drivers)
+- AMD: [amd.com/support](https://www.amd.com/support)
+- Intel: [intel.com/content/www/us/en/download-center](https://www.intel.com/content/www/us/en/download-center)
 
-# Check Xvfb
-ps aux | grep Xvfb
+**Check browser console:**
+1. Open Developer Tools (F12)
+2. Check Console tab for errors
+3. Look for WebGPU-related errors
 
-# Test Chrome WebGPU
-google-chrome-unstable --version
-google-chrome-unstable --headless --enable-unsafe-webgpu about:blank
+**Try incognito/private mode:**
+- Browser extensions may interfere with WebGPU
+- Test in incognito mode to rule out extensions
 
-# Check logs
-bunx pm2 logs hyperscape-duel | grep -i webgpu
+### Performance issues
+
+**Check GPU usage:**
+- Open Task Manager (Windows) or Activity Monitor (macOS)
+- Check GPU usage while running Hyperscape
+- If GPU usage is low, check power settings
+
+**Reduce graphics settings:**
+- Lower resolution
+- Disable shadows or post-processing (if available)
+- Close other GPU-intensive applications
+
+**Check thermal throttling:**
+- Ensure laptop is plugged in (not on battery)
+- Check CPU/GPU temperatures
+- Clean dust from vents if overheating
+
+## Development Notes
+
+### Enforcing WebGPU
+
+Hyperscape enforces WebGPU in `ClientGraphics.ts`:
+
+```typescript
+if (!this.renderer.capabilities.isWebGPU) {
+  throw new Error('WebGPU is required but not available');
+}
 ```
+
+### TSL Shaders
+
+All shaders use Three.js Shading Language (TSL):
+- `ProceduralGrass.ts` - Grass rendering
+- `FireParticles.ts` - Fire particle system
+- `WaterShader.ts` - Water rendering
+- `TeleportVFX.ts` - Teleport effects
+
+TSL shaders are compiled to WGSL (WebGPU Shading Language) at runtime.
+
+### WebGL Fallback Removed
+
+The WebGL fallback was removed in commit `aa4d11d`:
+- Reason: All shaders use TSL, which requires WebGPU
+- Impact: WebGL-only browsers cannot run Hyperscape
+- Alternative: Use Chrome/Edge 113+ or Safari 18+
 
 ## See Also
 
 - [Three.js WebGPU Documentation](https://threejs.org/docs/#api/en/renderers/WebGPURenderer)
 - [WebGPU Specification](https://www.w3.org/TR/webgpu/)
-- [Can I Use WebGPU](https://caniuse.com/webgpu)
-- [docs/vast-deployment.md](vast-deployment.md) - Headless rendering setup
+- [WebGPU Browser Support](https://caniuse.com/webgpu)
+- [Vast.ai Deployment Guide](vast-deployment.md) - Server-side WebGPU setup
