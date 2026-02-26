@@ -693,14 +693,14 @@ bunx pm2 show hyperscape-duel | grep STREAM_KEY
 # Twitch
 TWITCH_RTMP_URL=rtmp://live.twitch.tv/app
 
-# Kick (uses RTMPS)
+# Kick (uses RTMPS) - Fixed in commit 5dbd239
 KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
 
 # X/Twitter
 X_RTMP_URL=rtmp://sg.pscp.tv:80/x
 ```
 
-**Stream Key Management:**
+**Stream Key Management (commits 7ee730d, a71d4ba, 50f8bec):**
 
 Stream keys must be explicitly unset and re-exported before PM2 start:
 
@@ -709,6 +709,31 @@ Stream keys must be explicitly unset and re-exported before PM2 start:
 unset TWITCH_STREAM_KEY X_STREAM_KEY X_RTMP_URL KICK_STREAM_KEY KICK_RTMP_URL
 source /root/hyperscape/packages/server/.env
 bunx pm2 start ecosystem.config.cjs
+```
+
+**Why This Matters:**
+- Vast.ai servers can have stale stream keys from previous deployments
+- Stale values override .env file values
+- Explicitly unsetting ensures PM2 picks up correct keys
+- Prevents streams from going to wrong Twitch/X/Kick accounts
+
+**Streaming Diagnostics (commit cf53ad4):**
+
+The deploy script now includes detailed streaming diagnostics:
+
+```bash
+# Automatically run after deployment
+echo "=== Streaming Diagnostics ==="
+curl -s http://localhost:5555/api/streaming/state | jq .
+echo ""
+echo "=== RTMP Status ==="
+cat packages/server/public/live/rtmp-status.json 2>/dev/null || echo "No RTMP status file"
+echo ""
+echo "=== FFmpeg Processes ==="
+ps aux | grep ffmpeg | grep -v grep || echo "No FFmpeg processes"
+echo ""
+echo "=== Recent PM2 Logs (streaming keywords) ==="
+bunx pm2 logs hyperscape-duel --lines 100 --nostream | grep -iE "rtmp|stream|ffmpeg|destination" || echo "No streaming logs"
 ```
 
 **Debugging:**
@@ -732,6 +757,67 @@ bunx pm2 logs hyperscape-duel --lines 200 | grep -iE "rtmp|stream|ffmpeg|destina
 - Fixed Kick RTMP URL from `ingest.kick.com` to correct IVS endpoint (commit 5dbd239)
 - Added all stream keys to CI/CD secrets flow (commit 5dbd239)
 - Fixed stream key environment variable handling in deploy scripts (commits 7ee730d, a71d4ba)
+- Added detailed streaming diagnostics to deployment (commit cf53ad4)
+
+### Stream Buffering/Stalling for Viewers
+
+**Symptom**: Viewers experience frequent buffering or stalling during streams
+
+**Cause**: Aggressive low-latency settings causing unstable bitrate
+
+**Solution**: Use balanced streaming mode (default as of commit 4c630f12):
+
+```bash
+# Balanced mode (default) - smoother playback
+STREAM_LOW_LATENCY=false
+
+# Low latency mode - only if <1s delay is critical
+STREAM_LOW_LATENCY=true
+```
+
+**Technical Details (commit 4c630f12):**
+
+Three key changes to reduce viewer-side buffering:
+
+1. **Changed x264 tune from 'zerolatency' to 'film'**
+   - Allows B-frames for better compression
+   - Better lookahead for smoother bitrate
+   - Set `STREAM_LOW_LATENCY=true` to restore old behavior
+
+2. **Increased buffer multiplier from 2x to 4x bitrate**
+   - 18000k bufsize (was 9000k) gives more headroom
+   - Reduces buffering during network hiccups
+
+3. **Added FLV flags for RTMP stability**
+   - `flvflags=no_duration_filesize` prevents FLV header issues
+
+4. **Improved input buffering**
+   - Added `thread_queue_size` for frame queueing
+   - `genpts+discardcorrupt` for better stream recovery
+
+**FFmpeg Args Comparison:**
+
+```bash
+# Low Latency Mode (STREAM_LOW_LATENCY=true)
+-c:v libx264 -preset ultrafast -tune zerolatency -bufsize 9000k
+
+# Balanced Mode (STREAM_LOW_LATENCY=false) - DEFAULT
+-c:v libx264 -preset ultrafast -tune film -bufsize 18000k -bf 2 \
+-fflags +genpts+discardcorrupt -thread_queue_size 512
+```
+
+**When to Use Each Mode:**
+
+**Low Latency (STREAM_LOW_LATENCY=true):**
+- Interactive streams where <1s delay is critical
+- Betting/prediction markets with real-time odds
+- Live commentary or viewer interaction
+
+**Balanced (STREAM_LOW_LATENCY=false) - DEFAULT:**
+- Passive viewing experiences
+- Recorded content or VODs
+- Viewers on unstable connections
+- Longer streams (>1 hour)
 
 ### WebGPU Crashes on RTX 5060 Ti
 
