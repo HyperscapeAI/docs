@@ -1,343 +1,592 @@
-# Streaming Configuration
+# Streaming Configuration Guide
 
-Hyperscape supports multi-platform RTMP streaming to Twitch, Kick, X (Twitter), and custom destinations.
+Hyperscape supports multi-platform RTMP streaming to Twitch, Kick, and X (Twitter) simultaneously using FFmpeg's tee muxer for efficient single-encode multi-output.
 
 ## Overview
 
-The streaming system uses:
-- **Chrome Dev** with WebGPU for hardware-accelerated rendering
-- **Xvfb** for headless display server
-- **FFmpeg** for video encoding and RTMP output
-- **CDP (Chrome DevTools Protocol)** for reliable frame capture
+**Streaming Stack:**
+- **Capture**: Headless Chrome with WebGPU + Vulkan
+- **Encode**: FFmpeg with H.264 + AAC
+- **Output**: RTMP to multiple platforms (Twitch, Kick, X)
+- **Anti-cheat**: Configurable public data delay (0-15s)
 
-## Supported Platforms
+**Supported Platforms:**
+- ✅ Twitch (primary, 12s default delay)
+- ✅ Kick (RTMPS)
+- ✅ X/Twitter (RTMP)
+- ❌ YouTube (removed, not needed)
 
-As of February 2026, Hyperscape streams to:
+## Quick Start
 
-| Platform | Protocol | Default Ingest | Notes |
-|----------|----------|----------------|-------|
-| **Twitch** | RTMP | `rtmp://live.twitch.tv/app` | ✅ Recommended (lowest latency) |
-| **Kick** | RTMPS | `rtmps://fa723fc1b171.global-contribute.live-video.net` | ✅ Supported |
-| **X (Twitter)** | RTMP | `rtmp://sg.pscp.tv:80/x` | ✅ Requires X Premium |
-| **YouTube** | RTMP | `rtmp://a.rtmp.youtube.com/live2` | ⚠️ Removed (not needed) |
-| **Custom** | RTMP/RTMPS | Your server | ✅ Any RTMP server |
+### 1. Get Stream Keys
 
-## Configuration
+**Twitch:**
+1. Go to [dashboard.twitch.tv/settings/stream](https://dashboard.twitch.tv/settings/stream)
+2. Copy your **Primary Stream Key**
+3. Format: `live_123456789_abcdefghij`
 
-### Environment Variables
+**Kick:**
+1. Go to Kick Creator Dashboard → Stream Settings
+2. Copy **Stream Key** and **Server URL**
+3. Format: `sk_us-west-2_...` (key) and `rtmps://...` (URL)
 
-Set in `packages/server/.env` or `ecosystem.config.cjs`:
+**X/Twitter:**
+1. Go to Media Studio → Producer → Create Broadcast → Create Source
+2. Copy **RTMP URL** and **Stream Key**
+3. Requires X Premium subscription
 
-#### Twitch
+### 2. Configure Environment Variables
+
+Add to `packages/server/.env` or `ecosystem.config.cjs`:
 
 ```bash
+# Twitch
 TWITCH_STREAM_KEY=live_123456789_abcdefghij
-TWITCH_RTMP_URL=rtmp://live.twitch.tv/app
+
+# Kick (uses RTMPS)
+KICK_STREAM_KEY=sk_us-west-2_OrgZh8XyN0Qs_DKZE46VeaiqkczE5ZMTx63ct25wZ7q
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net
+
+# X/Twitter
+X_STREAM_KEY=sp16tpmtyqws
+X_RTMP_URL=rtmp://sg.pscp.tv:80/x
+
+# Anti-cheat timing
+STREAMING_CANONICAL_PLATFORM=twitch
+STREAMING_PUBLIC_DELAY_MS=0  # 0 for live betting, 12000 for Twitch delay
 ```
 
-Get your stream key from [Twitch Dashboard](https://dashboard.twitch.tv/settings/stream).
-
-#### Kick
+### 3. Start Streaming
 
 ```bash
-KICK_STREAM_KEY=sk_us-west-2_...
+# Production (PM2)
+bunx pm2 start ecosystem.config.cjs
+
+# Development
+bun run dev:all
+```
+
+## Platform Configuration
+
+### Twitch
+
+**Default Settings:**
+- **Server**: `rtmp://live.twitch.tv/app`
+- **Delay**: 12 seconds (configurable)
+- **Resolution**: 1280x720 @ 30fps
+- **Bitrate**: 2500 kbps
+
+**Environment Variables:**
+```bash
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+TWITCH_RTMP_URL=rtmp://live.twitch.tv/app  # Optional, uses default
+```
+
+**Ingest Servers:**
+- Primary: `rtmp://live.twitch.tv/app`
+- Backup: `rtmp://live-sjc.twitch.tv/app` (San Jose)
+- Backup: `rtmp://live-lax.twitch.tv/app` (Los Angeles)
+
+### Kick
+
+**Default Settings:**
+- **Server**: `rtmps://fa723fc1b171.global-contribute.live-video.net`
+- **Protocol**: RTMPS (secure RTMP)
+- **Resolution**: 1280x720 @ 30fps
+- **Bitrate**: 2500 kbps
+
+**Environment Variables:**
+```bash
+KICK_STREAM_KEY=sk_us-west-2_OrgZh8XyN0Qs_DKZE46VeaiqkczE5ZMTx63ct25wZ7q
 KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net
 ```
 
-Get your stream key from Kick Creator Dashboard.
+**Note**: Kick uses RTMPS (port 443) instead of RTMP (port 1935).
 
-#### X (Twitter)
+### X (Twitter)
 
+**Default Settings:**
+- **Server**: `rtmp://sg.pscp.tv:80/x`
+- **Region**: Singapore (sg) or US (va)
+- **Resolution**: 1280x720 @ 30fps
+- **Bitrate**: 2500 kbps
+
+**Environment Variables:**
 ```bash
 X_STREAM_KEY=sp16tpmtyqws
 X_RTMP_URL=rtmp://sg.pscp.tv:80/x
 ```
 
-Get RTMP URL from **Media Studio → Producer → Create Broadcast → Create Source**.
-
-**Requirements:**
+**Requirements**:
 - X Premium subscription
-- Desktop streaming enabled
+- Desktop streaming enabled in Media Studio
 
-#### Custom RTMP Server
+**Alternative Servers:**
+- US East: `rtmp://va.pscp.tv:80/x`
+- Singapore: `rtmp://sg.pscp.tv:80/x`
 
+## Anti-Cheat Configuration
+
+### Public Data Delay
+
+To prevent stream sniping in betting markets, Hyperscape delays public data broadcast.
+
+**Canonical Platform Defaults:**
 ```bash
-CUSTOM_RTMP_NAME=My Server
-CUSTOM_RTMP_URL=rtmp://your-server.com/live
-CUSTOM_STREAM_KEY=your-key
-```
+# YouTube (removed)
+STREAMING_CANONICAL_PLATFORM=youtube
+STREAMING_PUBLIC_DELAY_MS=15000  # 15 seconds
 
-### Canonical Platform
-
-The canonical platform determines anti-cheat timing and default public delay:
-
-```bash
-# Options: youtube | twitch | hls
+# Twitch (current default)
 STREAMING_CANONICAL_PLATFORM=twitch
+STREAMING_PUBLIC_DELAY_MS=12000  # 12 seconds
+
+# HLS (local)
+STREAMING_CANONICAL_PLATFORM=hls
+STREAMING_PUBLIC_DELAY_MS=4000   # 4 seconds
 ```
 
-**Default Delays:**
-- `youtube` → 15000ms (15 seconds)
-- `twitch` → 12000ms (12 seconds)
-- `hls` → 4000ms (4 seconds)
-
-**Override delay:**
+**Override Delay:**
 ```bash
-# Set to 0 for no delay (live betting)
+# Set to 0 for live betting (no delay)
 STREAMING_PUBLIC_DELAY_MS=0
+
+# Or custom delay
+STREAMING_PUBLIC_DELAY_MS=8000  # 8 seconds
 ```
 
-## Capture Settings
+**What Gets Delayed:**
+- `/api/streaming/state` endpoint
+- `/api/streaming/state/events` SSE feed
+- `/api/arena/*` betting endpoints
 
-### Resolution
+**What's NOT Delayed:**
+- Trusted viewers with `STREAMING_VIEWER_ACCESS_TOKEN`
+- Loopback connections (localhost)
+- Internal game server communication
+
+## Stream Capture Settings
+
+### Resolution & Quality
 
 ```bash
+# Resolution
 STREAM_CAPTURE_WIDTH=1280
 STREAM_CAPTURE_HEIGHT=720
+
+# Frame rate (30fps recommended for stability)
+# Controlled by FFmpeg encoder settings
 ```
 
-Supported resolutions:
-- 1920x1080 (1080p) - High quality, high bandwidth
-- 1280x720 (720p) - Recommended for most streams
-- 854x480 (480p) - Low bandwidth
-
-### Rendering Backend
+### Capture Mode
 
 ```bash
-# Use Chrome Dev channel (has WebGPU enabled)
+# CDP mode (recommended for reliability)
+STREAM_CAPTURE_MODE=cdp
+
+# Recovery settings
+STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000
+STREAM_CAPTURE_RECOVERY_MAX_FAILURES=6
+```
+
+### Browser Configuration
+
+```bash
+# Use Chrome Dev channel (WebGPU support)
 STREAM_CAPTURE_CHANNEL=chrome-dev
 
-# Use Vulkan ANGLE backend for GPU rendering
+# Use Vulkan ANGLE backend (GPU rendering)
 STREAM_CAPTURE_ANGLE=vulkan
+
+# Run headful with Xvfb (GPU access)
+STREAM_CAPTURE_HEADLESS=false
+DUEL_CAPTURE_USE_XVFB=true
 
 # Enable WebGPU (required for TSL shaders)
 STREAM_CAPTURE_DISABLE_WEBGPU=false
 ```
 
-### Headless Mode
-
-```bash
-# Use CDP mode for reliable frame capture
-STREAM_CAPTURE_MODE=cdp
-
-# Run headful with Xvfb (required for GPU access)
-STREAM_CAPTURE_HEADLESS=false
-
-# Enable Xvfb virtual display
-DUEL_CAPTURE_USE_XVFB=true
-```
-
-## Stability Tuning
-
-Recent improvements (February 2026) for long-running streams:
-
-### CDP Stall Detection
-
-```bash
-# Intervals before considering stream stalled (default: 4 = 120 seconds)
-# Increased from 2 to reduce false restarts
-CDP_STALL_THRESHOLD=4
-```
-
-### FFmpeg Restart Limits
-
-```bash
-# Maximum restart attempts before giving up (default: 8)
-# Increased from 5 for better resilience
-FFMPEG_MAX_RESTART_ATTEMPTS=8
-```
-
-### Capture Recovery
-
-```bash
-# Maximum soft recovery failures before full teardown (default: 4)
-# Increased from 2 to allow more recovery attempts
-CAPTURE_RECOVERY_MAX_FAILURES=4
-
-# Recovery timeout in milliseconds (default: 30000)
-STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000
-```
-
-### Soft Recovery
-
-The system now attempts soft CDP recovery (restart screencast without browser/FFmpeg teardown) before full restart. This eliminates stream gaps during recovery.
-
 ## FFmpeg Configuration
 
-### Output Format
+### Encoder Settings
 
-Hyperscape uses FFmpeg's `tee` muxer for efficient multi-platform streaming:
+**Video:**
+- Codec: H.264 (libx264)
+- Preset: veryfast
+- Bitrate: 2500 kbps
+- Keyframe interval: 2 seconds
+- Profile: main
+- Level: 4.0
+
+**Audio:**
+- Codec: AAC
+- Bitrate: 128 kbps
+- Sample rate: 44100 Hz
+- Channels: 2 (stereo)
+
+### Tee Muxer
+
+FFmpeg uses the tee muxer to send one stream to multiple destinations:
 
 ```bash
 ffmpeg -i input.mp4 \
-  -c:v libx264 -preset veryfast -b:v 3000k \
+  -c:v libx264 -preset veryfast -b:v 2500k \
   -c:a aac -b:a 128k \
   -f tee \
-  "[f=flv]rtmp://live.twitch.tv/app/live_key|[f=flv]rtmps://kick.com/live/kick_key"
+  "[f=flv]rtmp://live.twitch.tv/app/live_123|[f=flv]rtmps://kick.com/live/sk_456|[f=flv]rtmp://sg.pscp.tv:80/x/sp789"
 ```
 
-### Encoding Settings
+**Benefits:**
+- Single encode (efficient)
+- Multiple outputs (parallel)
+- Independent failure handling
 
-Default settings optimized for 720p streaming:
+## Custom Destinations
+
+### Add Custom RTMP Server
 
 ```bash
-# Video
--c:v libx264           # H.264 codec
--preset veryfast       # Encoding speed
--b:v 3000k            # 3 Mbps bitrate
--maxrate 3000k        # Max bitrate
--bufsize 6000k        # Buffer size
--g 60                 # Keyframe interval (2 seconds at 30fps)
--r 30                 # Frame rate
+# In packages/server/.env
+CUSTOM_RTMP_NAME=MyPlatform
+CUSTOM_RTMP_URL=rtmp://your-server/live
+CUSTOM_STREAM_KEY=your-key
+```
 
-# Audio
--c:a aac              # AAC codec
--b:a 128k             # 128 kbps bitrate
--ar 44100             # Sample rate
+### JSON Fanout Config
+
+For advanced multi-destination setups:
+
+```bash
+RTMP_DESTINATIONS_JSON='[
+  {
+    "name": "MyMux",
+    "url": "rtmp://host/live",
+    "key": "stream-key",
+    "enabled": true
+  }
+]'
+```
+
+### RTMP Multiplexer
+
+Use a multiplexer service (Restream, Livepeer) to fan out to many platforms:
+
+```bash
+RTMP_MULTIPLEXER_NAME=Restream
+RTMP_MULTIPLEXER_URL=rtmp://live.restream.io/live
+RTMP_MULTIPLEXER_STREAM_KEY=your-restream-key
+```
+
+## Local HLS Output
+
+For local testing or website embedding:
+
+```bash
+# Enable HLS output
+HLS_OUTPUT_PATH=packages/server/public/live/stream.m3u8
+HLS_SEGMENT_PATTERN=packages/server/public/live/stream-%09d.ts
+
+# HLS settings
+HLS_TIME_SECONDS=2           # Segment duration
+HLS_LIST_SIZE=24             # Playlist depth
+HLS_DELETE_THRESHOLD=96      # Delete old segments
+HLS_START_NUMBER=1700000000  # Avoid wraparound
+HLS_FLAGS=delete_segments+append_list+independent_segments+program_date_time+omit_endlist+temp_file
+```
+
+**Access HLS Stream:**
+```bash
+# Local
+http://localhost:5555/live/stream.m3u8
+
+# Production
+https://your-server.com/live/stream.m3u8
 ```
 
 ## Monitoring
 
-### Stream Health
-
-Check stream status via health endpoint:
+### Check Stream Status
 
 ```bash
-curl http://localhost:5555/health
-```
+# Streaming state API
+curl http://localhost:5555/api/streaming/state | jq
 
-Response includes streaming status:
-```json
+# Expected response
 {
-  "status": "ok",
-  "uptime": 12345,
-  "streaming": {
-    "active": true,
-    "platforms": ["twitch", "kick", "x"],
-    "uptime": 3600
+  "cycle": {
+    "phase": "FIGHTING",
+    "agent1": { "name": "AgentA", "hp": 85 },
+    "agent2": { "name": "AgentB", "hp": 72 }
   }
 }
 ```
 
-### Logs
+### View FFmpeg Logs
 
 ```bash
-# PM2 logs (Vast.ai deployment)
-bunx pm2 logs hyperscape-duel
+# PM2 logs
+bunx pm2 logs hyperscape-duel | grep -i ffmpeg
 
-# Direct logs
-tail -f logs/duel-out.log
-tail -f logs/duel-error.log
+# Look for:
+# - "Stream #0:0: Video: h264"
+# - "Stream #0:1: Audio: aac"
+# - "Opening 'rtmp://...' for writing"
+```
+
+### Test RTMP Locally
+
+```bash
+# Start nginx-rtmp test server
+docker run -d -p 1935:1935 tiangolo/nginx-rtmp
+
+# Configure test destination
+CUSTOM_RTMP_URL=rtmp://localhost:1935/live
+CUSTOM_STREAM_KEY=test
+
+# View test stream
+ffplay rtmp://localhost:1935/live/test
 ```
 
 ## Troubleshooting
 
-### Stream not starting
+### Stream Not Appearing on Platform
 
-**Check Chrome installation:**
+**Symptom**: FFmpeg reports success but stream doesn't show on Twitch/Kick/X
+
+**Solutions**:
+1. **Verify stream key**: Check for typos, expired keys
+2. **Check platform status**: Platform may be down
+3. **Test with OBS**: Use same key in OBS to isolate issue
+4. **Check bitrate**: Some platforms reject streams >6000 kbps
+
 ```bash
-google-chrome-unstable --version
+# Test stream key with ffmpeg
+ffmpeg -re -i test.mp4 \
+  -c:v libx264 -preset veryfast -b:v 2500k \
+  -c:a aac -b:a 128k \
+  -f flv rtmp://live.twitch.tv/app/your-key
 ```
 
-**Check Vulkan support:**
+### FFmpeg Crashes or Restarts
+
+**Symptom**: Stream drops, FFmpeg process dies
+
+**Solutions**:
 ```bash
-vulkaninfo --summary
-nvidia-smi
+# Check FFmpeg logs
+bunx pm2 logs hyperscape-duel | grep -i ffmpeg
+
+# Common errors:
+# - "Connection refused" → Platform down or wrong URL
+# - "Invalid stream key" → Wrong key or expired
+# - "Broken pipe" → Network issue
+
+# Increase restart attempts
+STREAM_CAPTURE_RECOVERY_MAX_FAILURES=10  # was 6
 ```
 
-**Check Xvfb:**
+### High CPU Usage
+
+**Symptom**: Server CPU at 100%, stream stutters
+
+**Solutions**:
 ```bash
-ps aux | grep Xvfb
+# Use faster preset
+# In FFmpeg encoder: -preset ultrafast
+
+# Reduce resolution
+STREAM_CAPTURE_WIDTH=960
+STREAM_CAPTURE_HEIGHT=540
+
+# Reduce bitrate
+# In FFmpeg encoder: -b:v 1500k
 ```
 
-### Black screen / no video
+### Audio Out of Sync
 
-**Cause:** WebGPU not available or GPU drivers missing.
+**Symptom**: Audio lags behind video
 
-**Solutions:**
-1. Install Vulkan drivers: `apt-get install mesa-vulkan-drivers vulkan-tools`
-2. Verify GPU access: `nvidia-smi`
-3. Check WebGPU enabled: `STREAM_CAPTURE_DISABLE_WEBGPU=false`
-
-### Stream stuttering / frame drops
-
-**Reduce resolution:**
+**Solutions**:
 ```bash
-STREAM_CAPTURE_WIDTH=1280
-STREAM_CAPTURE_HEIGHT=720
+# Add audio offset in FFmpeg
+-itsoffset 0.5  # 500ms delay
+
+# Or adjust capture timing
+STREAM_CAPTURE_AUDIO_OFFSET_MS=500
 ```
 
-**Reduce bitrate:**
-```bash
-# Edit FFmpeg settings in stream-to-rtmp.ts
--b:v 2000k  # Lower from 3000k
+## Advanced Configuration
+
+### Custom FFmpeg Flags
+
+Edit `packages/server/src/streaming/rtmp-bridge.ts` to customize FFmpeg:
+
+```typescript
+const ffmpegArgs = [
+  '-f', 'rawvideo',
+  '-pix_fmt', 'rgb24',
+  '-s', `${width}x${height}`,
+  '-r', '30',
+  '-i', '-',
+  '-c:v', 'libx264',
+  '-preset', 'veryfast',  // Change to 'ultrafast' for lower CPU
+  '-b:v', '2500k',        // Change bitrate
+  '-maxrate', '2500k',
+  '-bufsize', '5000k',
+  '-pix_fmt', 'yuv420p',
+  '-g', '60',             // Keyframe interval
+  '-c:a', 'aac',
+  '-b:a', '128k',
+  '-ar', '44100',
+  '-f', 'tee',
+  teeOutput
+];
 ```
 
-### Frequent restarts
+### Streaming to Multiple Regions
 
-**Increase stall threshold:**
+For global audience, stream to regional ingest servers:
+
 ```bash
-CDP_STALL_THRESHOLD=6  # Increase from 4
+# Twitch US West
+TWITCH_RTMP_URL=rtmp://live-lax.twitch.tv/app
+
+# Twitch EU
+TWITCH_RTMP_URL=rtmp://live-fra.twitch.tv/app
+
+# Twitch Asia
+TWITCH_RTMP_URL=rtmp://live-sin.twitch.tv/app
 ```
 
-**Increase recovery failures:**
+### Adaptive Bitrate
+
+For unstable connections, use adaptive bitrate:
+
 ```bash
-CAPTURE_RECOVERY_MAX_FAILURES=6  # Increase from 4
+# Lower bitrate for reliability
+-b:v 1500k -maxrate 1800k -bufsize 3000k
+
+# Or use CBR (constant bitrate)
+-b:v 2500k -minrate 2500k -maxrate 2500k -bufsize 2500k
 ```
 
-### Platform-specific issues
+## SSE Fanout Configuration
 
-**Twitch:**
-- Verify stream key is correct
-- Check ingest server: `rtmp://live.twitch.tv/app`
-- Test with: `ffplay rtmp://live.twitch.tv/app/your_key`
+The streaming state is broadcast to spectators via Server-Sent Events (SSE).
 
-**Kick:**
-- Use RTMPS (not RTMP)
-- Verify stream key format: `sk_us-west-2_...`
-- Check ingest URL matches your region
+### Tuning Parameters
 
-**X (Twitter):**
-- Requires X Premium subscription
-- Verify RTMP URL from Media Studio
-- Test connection before going live
+```bash
+# Replay buffer for resume support
+STREAMING_SSE_REPLAY_BUFFER=2048
+
+# Max replay payload bytes (oldest frames trimmed first)
+STREAMING_SSE_REPLAY_MAX_BYTES=33554432  # 32MB
+
+# Push cadence for live state fanout
+STREAMING_SSE_PUSH_INTERVAL_MS=500
+
+# Keepalive heartbeat cadence
+STREAMING_SSE_HEARTBEAT_MS=15000
+
+# Per-client pending bytes threshold (drop slow consumers)
+STREAMING_SSE_MAX_PENDING_BYTES=1048576  # 1MB
+```
+
+### SSE Endpoints
+
+**Live State Stream:**
+```bash
+# Connect to SSE feed
+curl -N http://localhost:5555/api/streaming/state/events
+
+# With resume support
+curl -N http://localhost:5555/api/streaming/state/events?lastEventId=12345
+```
+
+**Snapshot:**
+```bash
+# Get current state (no streaming)
+curl http://localhost:5555/api/streaming/state
+```
 
 ## Performance Optimization
+
+### Reduce Stream Latency
+
+```bash
+# Set public delay to 0
+STREAMING_PUBLIC_DELAY_MS=0
+
+# Use HLS with short segments
+HLS_TIME_SECONDS=1
+HLS_LIST_SIZE=6
+
+# Use faster FFmpeg preset
+-preset ultrafast
+```
 
 ### Reduce CPU Usage
 
 ```bash
-# Use faster encoding preset
--preset ultrafast  # Instead of veryfast
+# Lower resolution
+STREAM_CAPTURE_WIDTH=960
+STREAM_CAPTURE_HEIGHT=540
 
-# Reduce frame rate
--r 24  # Instead of 30
+# Lower frame rate
+-r 24  # 24fps instead of 30fps
+
+# Faster preset
+-preset ultrafast
+
+# Lower bitrate
+-b:v 1500k
 ```
 
 ### Reduce Memory Usage
 
 ```bash
-# Disable combat AI state polling (reduces per-agent overhead)
-STREAMING_DUEL_COMBAT_AI_ENABLED=false
+# Limit SSE replay buffer
+STREAMING_SSE_REPLAY_BUFFER=512
+STREAMING_SSE_REPLAY_MAX_BYTES=8388608  # 8MB
 
-# Reduce max agents
-AUTO_START_AGENTS_MAX=5
+# Reduce HLS playlist size
+HLS_LIST_SIZE=12
+HLS_DELETE_THRESHOLD=48
 ```
 
-### Reduce Bandwidth
+## Testing
+
+### Local RTMP Server
 
 ```bash
-# Lower bitrate
--b:v 2000k  # Instead of 3000k
+# Start nginx-rtmp
+docker run -d -p 1935:1935 tiangolo/nginx-rtmp
 
-# Lower resolution
-STREAM_CAPTURE_WIDTH=854
-STREAM_CAPTURE_HEIGHT=480
+# Configure Hyperscape
+CUSTOM_RTMP_URL=rtmp://localhost:1935/live
+CUSTOM_STREAM_KEY=test
+
+# View stream
+ffplay rtmp://localhost:1935/live/test
 ```
 
-## Related Documentation
+### Stream Health Check
 
-- [docs/vast-deployment.md](vast-deployment.md) - Vast.ai deployment guide
-- [docs/maintenance-mode-api.md](maintenance-mode-api.md) - Graceful deployment API
-- [ecosystem.config.cjs](../ecosystem.config.cjs) - PM2 configuration
+```bash
+# Check if stream is live
+curl http://localhost:5555/api/streaming/state
+
+# Check FFmpeg process
+ps aux | grep ffmpeg
+
+# Check network
+netstat -an | grep 1935  # RTMP port
+```
+
+## See Also
+
+- [docs/vast-deployment.md](vast-deployment.md) - Vast.ai GPU streaming setup
+- [packages/server/.env.example](../packages/server/.env.example) - Full environment variable reference
 - [packages/server/src/streaming/](../packages/server/src/streaming/) - Streaming implementation
+- [ecosystem.config.cjs](../ecosystem.config.cjs) - PM2 streaming configuration
