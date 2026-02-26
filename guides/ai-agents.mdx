@@ -80,11 +80,131 @@ STREAMING_DUEL_LLM_TACTICS_ENABLED=true     # Enable LLM strategy
 
 See [Combat AI Documentation](/wiki/ai-agents/combat-ai) for complete reference.
 
+## Agent Stability Improvements (Feb 26 2026)
+
+Recent commits significantly improved agent stability and autonomous behavior:
+
+### Action Locks and Fast-Tick Mode (commit 60a03f49)
+
+**Problem:** Agents would spam LLM calls while waiting for movement to complete, wasting tokens and causing decision conflicts.
+
+**Solution:** Action locks and fast-tick mode for responsive follow-up:
+
+```typescript
+// Action lock prevents LLM ticks while movement in progress
+if (service.isMoving) {
+  return; // Skip LLM tick, wait for movement to complete
+}
+
+// Fast-tick mode (2s) after movement/goal changes for quick follow-up
+const tickInterval = recentlyChanged ? 2000 : 10000;
+```
+
+**Features:**
+- Skip LLM ticks while movement is in progress
+- Fast-tick mode (2s) for quick follow-up after movement/goal changes
+- Short-circuit LLM for obvious decisions (repeat resource, banking, set goal)
+- Banking actions now await movement completion instead of returning early
+- Filter depleted resources from nearby entity checks
+- Track last action name/result in prompt for LLM continuity
+
+### Quest-Driven Tool Acquisition (commit 593cd56b)
+
+**Problem:** Agents started with all tools in a starter chest, which didn't match natural MMORPG progression.
+
+**Solution:** Quest-based tool acquisition system:
+
+**Removed:**
+- `LOOT_STARTER_CHEST` action
+- Direct starter item grants
+- Starter chest entities from world
+
+**Added:**
+- Questing goal with highest priority when agent lacks tools
+- Banking goal when inventory >= 25/28 slots
+- Inventory count display with full/nearly-full warnings
+- Enhanced questProvider to tell LLM exactly which quests give which tools
+
+**Quest-to-Tool Mapping:**
+
+| Quest | Tools Granted |
+|-------|---------------|
+| Lumberjack's First Lesson | Bronze axe |
+| Fresh Catch | Small fishing net |
+| Torvin's Tools | Bronze pickaxe, Tinderbox |
+
+**Autonomous Banking:**
+
+Agents now automatically bank items when inventory is nearly full:
+
+```typescript
+// Banking goal triggers at 25/28 slots
+if (inventoryCount >= 25) {
+  return {
+    type: 'banking',
+    description: 'Bank items (inventory nearly full)',
+    priority: 100  // Highest priority
+  };
+}
+```
+
+**Bank Deposit All:**
+
+New `BANK_DEPOSIT_ALL` action for bulk banking:
+- Dumps entire inventory to bank
+- Keeps essential tools (axe, pickaxe, tinderbox, net)
+- Automatically opens/closes bank session
+
+### Resource Detection Fix (commit 593cd56b)
+
+**Problem:** Agents reported "choppableTrees=0" despite visible trees nearby.
+
+**Solution:** Increased resource approach range from 20m to 40m:
+
+```typescript
+// Old: 20m range
+const nearbyTrees = entities.filter(e => 
+  e.type === 'tree' && distance(player, e) < 20
+);
+
+// New: 40m range (matches skills validation)
+const nearbyTrees = entities.filter(e => 
+  e.type === 'tree' && distance(player, e) < 40
+);
+```
+
+This matches the server's skills validation range, preventing "no resources nearby" errors.
+
+### Bank Protocol Fix (commit 593cd56b)
+
+**Problem:** Broken bank packet protocol caused banking to fail.
+
+**Solution:** Replaced broken `bankAction` with proper packet sequence:
+
+```typescript
+// ❌ Old (broken)
+sendPacket('bankAction', { action: 'deposit', itemId, quantity });
+
+// ✅ New (correct)
+await service.openBank(bankId);
+await service.bankDeposit(itemId, quantity);
+// or
+await service.bankDepositAll();
+await service.closeBank();
+```
+
+**New Banking Methods:**
+- `openBank(bankId)` - Start bank session
+- `bankDeposit(itemId, quantity)` - Deposit specific item
+- `bankDepositAll()` - Deposit all items (keeps tools)
+- `bankWithdraw(itemId, quantity)` - Withdraw items
+- `closeBank()` - End bank session
+
 ## Agent Capabilities
 
 ### Available Actions
 
-AI agents have 21 actions across 8 categories:
+AI agents have 22 actions across 9 categories (updated Feb 26 2026):
 
 ```typescript
 // From packages/plugin-hyperscape/src/index.ts
