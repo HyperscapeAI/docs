@@ -1,721 +1,343 @@
-# Streaming Configuration Guide
+# Streaming Configuration
 
-This guide covers RTMP streaming configuration for broadcasting Hyperscape gameplay to multiple platforms simultaneously (Twitch, Kick, X/Twitter, YouTube, custom destinations).
+Hyperscape supports multi-platform RTMP streaming to Twitch, Kick, X (Twitter), and custom destinations.
 
 ## Overview
 
-Hyperscape supports multi-platform RTMP streaming using FFmpeg's tee muxer for efficient single-encode multi-output. The streaming system captures gameplay via headless browser (Puppeteer + Chrome DevTools Protocol) and broadcasts to configured RTMP destinations.
+The streaming system uses:
+- **Chrome Dev** with WebGPU for hardware-accelerated rendering
+- **Xvfb** for headless display server
+- **FFmpeg** for video encoding and RTMP output
+- **CDP (Chrome DevTools Protocol)** for reliable frame capture
 
-## Quick Start
+## Supported Platforms
 
-### Prerequisites
+As of February 2026, Hyperscape streams to:
 
-1. **FFmpeg** installed:
-   ```bash
-   # macOS
-   brew install ffmpeg
-   
-   # Linux
-   apt install ffmpeg
-   
-   # Verify installation
-   ffmpeg -version
-   ```
+| Platform | Protocol | Default Ingest | Notes |
+|----------|----------|----------------|-------|
+| **Twitch** | RTMP | `rtmp://live.twitch.tv/app` | ✅ Recommended (lowest latency) |
+| **Kick** | RTMPS | `rtmps://fa723fc1b171.global-contribute.live-video.net` | ✅ Supported |
+| **X (Twitter)** | RTMP | `rtmp://sg.pscp.tv:80/x` | ✅ Requires X Premium |
+| **YouTube** | RTMP | `rtmp://a.rtmp.youtube.com/live2` | ⚠️ Removed (not needed) |
+| **Custom** | RTMP/RTMPS | Your server | ✅ Any RTMP server |
 
-2. **Stream Keys** from your platforms:
-   - Twitch: https://dashboard.twitch.tv/settings/stream
-   - Kick: Creator Dashboard → Stream Settings
-   - X/Twitter: Media Studio → Producer → Create Broadcast
-   - YouTube: https://studio.youtube.com → Go Live → Stream
+## Configuration
 
-### Basic Configuration
+### Environment Variables
 
-1. Copy environment file:
-   ```bash
-   cp packages/server/.env.example packages/server/.env
-   ```
+Set in `packages/server/.env` or `ecosystem.config.cjs`:
 
-2. Add stream keys to `packages/server/.env`:
-   ```bash
-   # Twitch
-   TWITCH_STREAM_KEY=live_123456789_abcdefghij
-   TWITCH_RTMP_URL=rtmp://live.twitch.tv/app
-   
-   # Kick
-   KICK_STREAM_KEY=your-kick-stream-key
-   KICK_RTMP_URL=rtmp://ingest.kick.com/live
-   
-   # X/Twitter
-   X_STREAM_KEY=your-x-stream-key
-   X_RTMP_URL=rtmp://x-media-studio/your-path
-   ```
+#### Twitch
 
-3. Start streaming:
-   ```bash
-   bun run stream:rtmp
-   ```
-
-## Platform Configuration
-
-### Twitch
-
-**Get Stream Key:**
-1. Go to https://dashboard.twitch.tv/settings/stream
-2. Copy "Primary Stream Key"
-
-**Configuration:**
 ```bash
 TWITCH_STREAM_KEY=live_123456789_abcdefghij
 TWITCH_RTMP_URL=rtmp://live.twitch.tv/app
 ```
 
-**Ingest Servers** (optional - for lower latency):
-- US West: `rtmp://live-sjc.twitch.tv/app`
-- US East: `rtmp://live-iad.twitch.tv/app`
-- EU: `rtmp://live-fra.twitch.tv/app`
-- Asia: `rtmp://live-sin.twitch.tv/app`
+Get your stream key from [Twitch Dashboard](https://dashboard.twitch.tv/settings/stream).
 
-**Recommended Settings:**
-- Resolution: 1920x1080 (1080p)
-- Frame Rate: 30 FPS
-- Bitrate: 2500 kbps
-- Keyframe Interval: 2 seconds
+#### Kick
 
-### Kick
-
-**Get Stream Key:**
-1. Go to Kick Creator Dashboard
-2. Navigate to Stream Settings
-3. Copy "Stream Key"
-
-**Configuration:**
 ```bash
-KICK_STREAM_KEY=your-kick-stream-key
-KICK_RTMP_URL=rtmp://ingest.kick.com/live
+KICK_STREAM_KEY=sk_us-west-2_...
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net
 ```
 
-**Note**: Kick uses RTMPS (RTMP over TLS) for secure streaming. The URL format is:
-```bash
-# Standard RTMP
-KICK_RTMP_URL=rtmp://ingest.kick.com/live
+Get your stream key from Kick Creator Dashboard.
 
-# Secure RTMPS (recommended)
-KICK_RTMP_URL=rtmps://ingest.kick.com:443/live
+#### X (Twitter)
+
+```bash
+X_STREAM_KEY=sp16tpmtyqws
+X_RTMP_URL=rtmp://sg.pscp.tv:80/x
 ```
 
-**Recommended Settings:**
-- Resolution: 1920x1080 (1080p)
-- Frame Rate: 30 FPS
-- Bitrate: 3000 kbps
-- Keyframe Interval: 2 seconds
-
-### X/Twitter
+Get RTMP URL from **Media Studio → Producer → Create Broadcast → Create Source**.
 
 **Requirements:**
-- X Premium subscription (required for desktop streaming)
-- Media Studio access
+- X Premium subscription
+- Desktop streaming enabled
 
-**Get Stream Key:**
-1. Go to https://studio.twitter.com
-2. Click "Producer" → "Create Broadcast"
-3. Click "Create Source"
-4. Copy RTMP URL and Stream Key
+#### Custom RTMP Server
 
-**Configuration:**
 ```bash
-X_STREAM_KEY=your-x-stream-key
-X_RTMP_URL=rtmp://x-media-studio/your-path
-```
-
-**Recommended Settings:**
-- Resolution: 1280x720 (720p) - X has lower bitrate limits
-- Frame Rate: 30 FPS
-- Bitrate: 2000 kbps
-- Keyframe Interval: 2 seconds
-
-**Note**: X/Twitter streaming is currently limited to ~5% of users (as of February 2026). Check your account eligibility before configuring.
-
-### YouTube
-
-**Get Stream Key:**
-1. Go to https://studio.youtube.com
-2. Click "Go Live" → "Stream"
-3. Copy "Stream Key"
-
-**Configuration:**
-```bash
-YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
-YOUTUBE_RTMP_URL=rtmp://a.rtmp.youtube.com/live2
-```
-
-**Ingest Servers** (optional):
-- Primary: `rtmp://a.rtmp.youtube.com/live2`
-- Backup: `rtmp://b.rtmp.youtube.com/live2`
-
-**Recommended Settings:**
-- Resolution: 1920x1080 (1080p)
-- Frame Rate: 30 FPS
-- Bitrate: 3000-4500 kbps
-- Keyframe Interval: 2 seconds
-
-**Note**: YouTube was removed from default configuration (February 2026) but can be re-added via environment variables.
-
-### Custom RTMP Destination
-
-**Configuration:**
-```bash
-CUSTOM_RTMP_NAME=My Custom Server
+CUSTOM_RTMP_NAME=My Server
 CUSTOM_RTMP_URL=rtmp://your-server.com/live
-CUSTOM_STREAM_KEY=your-stream-key
+CUSTOM_STREAM_KEY=your-key
 ```
-
-**Use Cases:**
-- Self-hosted nginx-rtmp server
-- Private streaming infrastructure
-- Custom CDN endpoints
-- Testing and development
-
-### RTMP Multiplexer (Restream/Livepeer)
-
-Instead of configuring each platform individually, use a multiplexer service:
-
-**Configuration:**
-```bash
-RTMP_MULTIPLEXER_NAME=Restream
-RTMP_MULTIPLEXER_URL=rtmp://live.restream.io/live
-RTMP_MULTIPLEXER_STREAM_KEY=your-restream-key
-```
-
-**Benefits:**
-- Single stream to multiplexer
-- Multiplexer fans out to all platforms
-- Reduced server bandwidth
-- Centralized platform management
-
-**Supported Services:**
-- Restream.io
-- Livepeer
-- Custom fanout servers
-
-### JSON Fanout Configuration
-
-For advanced multi-destination setups, use JSON configuration:
-
-```bash
-RTMP_DESTINATIONS_JSON='[
-  {
-    "name": "Twitch",
-    "url": "rtmp://live.twitch.tv/app",
-    "key": "live_123456789_abcdefghij",
-    "enabled": true
-  },
-  {
-    "name": "Kick",
-    "url": "rtmp://ingest.kick.com/live",
-    "key": "your-kick-key",
-    "enabled": true
-  },
-  {
-    "name": "YouTube",
-    "url": "rtmp://a.rtmp.youtube.com/live2",
-    "key": "xxxx-xxxx-xxxx-xxxx",
-    "enabled": false
-  }
-]'
-```
-
-**Format:**
-- `name`: Display name for logging
-- `url`: RTMP server URL
-- `key`: Stream key
-- `enabled`: Toggle destination on/off
-
-## Streaming Delay & Anti-Cheat
 
 ### Canonical Platform
 
-Set the canonical platform for default delay calculation:
+The canonical platform determines anti-cheat timing and default public delay:
 
 ```bash
-STREAMING_CANONICAL_PLATFORM=twitch  # Options: youtube | twitch | hls
+# Options: youtube | twitch | hls
+STREAMING_CANONICAL_PLATFORM=twitch
 ```
 
 **Default Delays:**
-- `youtube`: 15000ms (15 seconds)
-- `twitch`: 12000ms (12 seconds)
-- `hls`: 4000ms (4 seconds)
+- `youtube` → 15000ms (15 seconds)
+- `twitch` → 12000ms (12 seconds)
+- `hls` → 4000ms (4 seconds)
 
-**February 2026 Update**: Default delay set to **0ms** for instant broadcast. Configure delays only if you need anti-cheat timing alignment with external platform latency.
-
-### Custom Delay
-
-Override the default delay:
-
+**Override delay:**
 ```bash
-STREAMING_PUBLIC_DELAY_MS=0  # Instant broadcast (no delay)
-# or
-STREAMING_PUBLIC_DELAY_MS=12000  # 12 second delay
+# Set to 0 for no delay (live betting)
+STREAMING_PUBLIC_DELAY_MS=0
 ```
 
-**Use Cases:**
-- **0ms**: Instant broadcast for maximum engagement
-- **12000ms**: Match Twitch latency for anti-cheat timing
-- **15000ms**: Match YouTube latency for anti-cheat timing
+## Capture Settings
 
-### Viewer Access Control
-
-When using delayed public mode, configure access token for trusted viewers:
+### Resolution
 
 ```bash
-STREAMING_VIEWER_ACCESS_TOKEN=replace-with-random-secret-token
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
 ```
 
-**Access Levels:**
-- **Public**: Delayed stream (respects `STREAMING_PUBLIC_DELAY_MS`)
-- **Trusted**: Instant stream (requires access token)
-- **Loopback**: Always instant (localhost connections)
+Supported resolutions:
+- 1920x1080 (1080p) - High quality, high bandwidth
+- 1280x720 (720p) - Recommended for most streams
+- 854x480 (480p) - Low bandwidth
 
-## Stability Configuration
-
-### CDP (Chrome DevTools Protocol) Settings
+### Rendering Backend
 
 ```bash
-# Stall threshold (intervals before restart)
-# Each interval is 30 seconds, so 4 = 120 seconds total
-CDP_STALL_THRESHOLD=6  # Default: 4 (increased February 2026)
+# Use Chrome Dev channel (has WebGPU enabled)
+STREAM_CAPTURE_CHANNEL=chrome-dev
+
+# Use Vulkan ANGLE backend for GPU rendering
+STREAM_CAPTURE_ANGLE=vulkan
+
+# Enable WebGPU (required for TSL shaders)
+STREAM_CAPTURE_DISABLE_WEBGPU=false
 ```
 
-**Behavior:**
-- Monitors CDP connection for stalls
-- Restarts screencast if stalled for threshold duration
-- **Soft recovery** (February 2026): Restarts screencast without browser/FFmpeg teardown (no stream gap)
-
-### FFmpeg Settings
+### Headless Mode
 
 ```bash
-# Maximum restart attempts before giving up
-FFMPEG_MAX_RESTART_ATTEMPTS=10  # Default: 8 (increased February 2026)
+# Use CDP mode for reliable frame capture
+STREAM_CAPTURE_MODE=cdp
 
-# Recovery failure threshold before full restart
-CAPTURE_RECOVERY_MAX_FAILURES=5  # Default: 4 (increased February 2026)
+# Run headful with Xvfb (required for GPU access)
+STREAM_CAPTURE_HEADLESS=false
+
+# Enable Xvfb virtual display
+DUEL_CAPTURE_USE_XVFB=true
 ```
 
-**Behavior:**
-- FFmpeg automatically restarts on crashes
-- Soft recovery attempted first (no stream gap)
-- Full restart if soft recovery fails repeatedly
-- Gives up after max attempts (requires manual intervention)
+## Stability Tuning
 
-### WebGPU Renderer Settings
+Recent improvements (February 2026) for long-running streams:
 
-**Best-Effort Limits** (February 2026):
-- Tries `maxTextureArrayLayers: 2048` first
-- Retries with default limits if GPU rejects
-- Always WebGPU, never WebGL (no fallback)
-
-**Configuration**: Automatic - no environment variables needed
-
-## HLS Output (Optional)
-
-For local HLS output (useful for website video embed or betting interface):
+### CDP Stall Detection
 
 ```bash
-# Output path
-HLS_OUTPUT_PATH=packages/server/public/live/stream.m3u8
-
-# Segment pattern (use wide numeric pattern to avoid wraparound)
-HLS_SEGMENT_PATTERN=packages/server/public/live/stream-%09d.ts
-
-# Segment duration (seconds)
-HLS_TIME_SECONDS=2
-
-# Playlist size (number of segments)
-HLS_LIST_SIZE=24
-
-# Delete threshold (segments to keep)
-HLS_DELETE_THRESHOLD=96
-
-# Start number (avoid cache collisions)
-HLS_START_NUMBER=1700000000
-
-# HLS flags
-HLS_FLAGS=delete_segments+append_list+independent_segments+program_date_time+omit_endlist+temp_file
+# Intervals before considering stream stalled (default: 4 = 120 seconds)
+# Increased from 2 to reduce false restarts
+CDP_STALL_THRESHOLD=4
 ```
 
-**Use Cases:**
-- Embed stream on website
-- Betting interface video player
-- Local playback and testing
-- CDN distribution
-
-## Testing
-
-### Local RTMP Server
-
-Test streaming without external platforms:
+### FFmpeg Restart Limits
 
 ```bash
-# Start nginx-rtmp server
-docker run -d -p 1935:1935 tiangolo/nginx-rtmp
-
-# Configure custom destination
-CUSTOM_RTMP_NAME=Local Test
-CUSTOM_RTMP_URL=rtmp://localhost:1935/live
-CUSTOM_STREAM_KEY=test
-
-# Start streaming
-bun run stream:test
-
-# View stream
-ffplay rtmp://localhost:1935/live/test
+# Maximum restart attempts before giving up (default: 8)
+# Increased from 5 for better resilience
+FFMPEG_MAX_RESTART_ATTEMPTS=8
 ```
 
-### Stream Health Check
+### Capture Recovery
 
 ```bash
-# Check streaming status
-curl http://localhost:5555/api/streaming/state
+# Maximum soft recovery failures before full teardown (default: 4)
+# Increased from 2 to allow more recovery attempts
+CAPTURE_RECOVERY_MAX_FAILURES=4
 
-# Check FFmpeg process
-ps aux | grep ffmpeg
+# Recovery timeout in milliseconds (default: 30000)
+STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000
+```
 
-# Check PM2 status (production)
-pm2 status
-pm2 logs ffmpeg
+### Soft Recovery
+
+The system now attempts soft CDP recovery (restart screencast without browser/FFmpeg teardown) before full restart. This eliminates stream gaps during recovery.
+
+## FFmpeg Configuration
+
+### Output Format
+
+Hyperscape uses FFmpeg's `tee` muxer for efficient multi-platform streaming:
+
+```bash
+ffmpeg -i input.mp4 \
+  -c:v libx264 -preset veryfast -b:v 3000k \
+  -c:a aac -b:a 128k \
+  -f tee \
+  "[f=flv]rtmp://live.twitch.tv/app/live_key|[f=flv]rtmps://kick.com/live/kick_key"
+```
+
+### Encoding Settings
+
+Default settings optimized for 720p streaming:
+
+```bash
+# Video
+-c:v libx264           # H.264 codec
+-preset veryfast       # Encoding speed
+-b:v 3000k            # 3 Mbps bitrate
+-maxrate 3000k        # Max bitrate
+-bufsize 6000k        # Buffer size
+-g 60                 # Keyframe interval (2 seconds at 30fps)
+-r 30                 # Frame rate
+
+# Audio
+-c:a aac              # AAC codec
+-b:a 128k             # 128 kbps bitrate
+-ar 44100             # Sample rate
 ```
 
 ## Monitoring
 
-### Key Metrics
+### Stream Health
 
-**Stream Health:**
-- Uptime (target: > 99%)
-- Frame rate (target: 30 FPS)
-- Bitrate (target: 2500 kbps)
-- Dropped frames (target: < 1%)
+Check stream status via health endpoint:
 
-**System Health:**
-- CPU usage (target: < 80%)
-- Memory usage (target: < 4GB)
-- FFmpeg restarts (target: < 3 per hour)
-- CDP stalls (target: < 1 per hour)
+```bash
+curl http://localhost:5555/health
+```
+
+Response includes streaming status:
+```json
+{
+  "status": "ok",
+  "uptime": 12345,
+  "streaming": {
+    "active": true,
+    "platforms": ["twitch", "kick", "x"],
+    "uptime": 3600
+  }
+}
+```
 
 ### Logs
 
-**FFmpeg Output:**
 ```bash
-# PM2 logs
-pm2 logs ffmpeg
+# PM2 logs (Vast.ai deployment)
+bunx pm2 logs hyperscape-duel
 
 # Direct logs
-tail -f packages/server/logs/ffmpeg.log
-```
-
-**Browser Capture:**
-```bash
-pm2 logs capture
-tail -f packages/server/logs/capture.log
-```
-
-**RTMP Bridge:**
-```bash
-pm2 logs rtmp-bridge
-tail -f packages/server/logs/rtmp-bridge.log
+tail -f logs/duel-out.log
+tail -f logs/duel-error.log
 ```
 
 ## Troubleshooting
 
-### Stream Keeps Restarting
+### Stream not starting
 
-**Symptom**: FFmpeg restarts every 1-2 minutes.
-
-**Cause**: CDP stall threshold too aggressive or network issues.
-
-**Solution**:
+**Check Chrome installation:**
 ```bash
-# Increase stability thresholds
-CDP_STALL_THRESHOLD=6                    # Default: 4
-FFMPEG_MAX_RESTART_ATTEMPTS=10           # Default: 8
-CAPTURE_RECOVERY_MAX_FAILURES=5          # Default: 4
+google-chrome-unstable --version
 ```
 
-### Stream Not Appearing on Platform
-
-**Symptom**: Stream starts but doesn't appear on Twitch/Kick/etc.
-
-**Cause**: Invalid stream key or RTMP URL.
-
-**Solution**:
-1. Verify stream key is correct (copy-paste from platform)
-2. Check RTMP URL format (no trailing slashes)
-3. Test with ffplay: `ffplay rtmp://platform-url/app/stream-key`
-4. Check platform dashboard for stream status
-
-### Low Frame Rate
-
-**Symptom**: Stream shows < 30 FPS.
-
-**Cause**: CPU overload or GPU rendering issues.
-
-**Solution**:
-1. Check CPU usage: `top` or `htop`
-2. Reduce game complexity (fewer NPCs, lower graphics settings)
-3. Increase server resources (more CPU cores)
-4. Check WebGPU renderer initialization (see logs)
-
-### High Bitrate / Buffering
-
-**Symptom**: Stream buffers frequently for viewers.
-
-**Cause**: Bitrate too high for platform or network.
-
-**Solution**:
-1. Reduce bitrate in FFmpeg settings (default: 2500 kbps)
-2. Check platform bitrate limits:
-   - Twitch: 6000 kbps max
-   - Kick: 8000 kbps max
-   - X/Twitter: 2000 kbps max
-   - YouTube: 9000 kbps max
-3. Test network upload speed: `speedtest-cli`
-
-### WebGPU Initialization Failures
-
-**Symptom**: "WebGPU is not supported" in headless browser.
-
-**Cause**: WebGPU unavailable in Docker/vast.ai environments.
-
-**Solution** (February 2026 improvements):
-- **Best-effort limits**: Renderer tries `maxTextureArrayLayers: 2048`, retries with defaults if GPU rejects
-- **Swiftshader backend**: Use software rendering (set in ecosystem.config.cjs)
-- **Vulkan drivers**: Install on Vast.ai instances (see `scripts/deploy-vast.sh`)
-
-**Verify WebGPU:**
+**Check Vulkan support:**
 ```bash
-# Check Chrome flags
-google-chrome --headless --enable-features=Vulkan,UseSkiaRenderer --use-angle=vulkan
-
-# Check GPU info
-google-chrome --headless --print-to-pdf=test.pdf https://webgpureport.org
+vulkaninfo --summary
+nvidia-smi
 ```
 
-## Advanced Configuration
-
-### Streaming SSE (Server-Sent Events)
-
-Configure SSE fanout for betting interface and spectators:
-
+**Check Xvfb:**
 ```bash
-# Replay buffer capacity (frames)
-STREAMING_SSE_REPLAY_BUFFER=2048
-
-# Replay payload bytes cap
-STREAMING_SSE_REPLAY_MAX_BYTES=33554432  # 32 MB
-
-# Push interval (milliseconds)
-STREAMING_SSE_PUSH_INTERVAL_MS=500
-
-# Heartbeat interval (milliseconds)
-STREAMING_SSE_HEARTBEAT_MS=15000
-
-# Max pending bytes per client
-STREAMING_SSE_MAX_PENDING_BYTES=1048576  # 1 MB
+ps aux | grep Xvfb
 ```
 
-**Use Cases:**
-- Real-time duel updates for betting interface
-- Spectator mode with live stats
-- Agent HP bars and combat stats
-- Phase transitions and market status
+### Black screen / no video
 
-### RTMP Bridge Settings
+**Cause:** WebGPU not available or GPU drivers missing.
 
+**Solutions:**
+1. Install Vulkan drivers: `apt-get install mesa-vulkan-drivers vulkan-tools`
+2. Verify GPU access: `nvidia-smi`
+3. Check WebGPU enabled: `STREAM_CAPTURE_DISABLE_WEBGPU=false`
+
+### Stream stuttering / frame drops
+
+**Reduce resolution:**
 ```bash
-# Bridge port (internal)
-RTMP_BRIDGE_PORT=8765
-
-# Game URL for capture
-GAME_URL=http://localhost:3333/?page=stream
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
 ```
 
-**Architecture:**
-1. Browser capture → CDP → FFmpeg
-2. FFmpeg → RTMP bridge → Platform destinations
-3. SSE fanout → Betting interface / spectators
-
-### Solana RPC Proxy
-
-Configure RPC proxy for betting interface:
-
+**Reduce bitrate:**
 ```bash
-# Cache settings
-RPC_PROXY_CACHE_MAX_ENTRIES=512
-RPC_PROXY_CACHE_MAX_TOTAL_BYTES=67108864  # 64 MB
-RPC_PROXY_CACHE_MAX_ENTRY_BYTES=262144    # 256 KB
-
-# Timeout settings
-RPC_PROXY_REQUEST_TIMEOUT_MS=15000
-
-# WebSocket settings
-WS_PROXY_MAX_PENDING_OPEN_MESSAGES=64
+# Edit FFmpeg settings in stream-to-rtmp.ts
+-b:v 2000k  # Lower from 3000k
 ```
 
-**Purpose**: Reduces RPC load by caching responses and proxying WebSocket connections.
+### Frequent restarts
 
-## Production Deployment
-
-### Environment Variables
-
-**Required:**
+**Increase stall threshold:**
 ```bash
-# At least one streaming destination
-TWITCH_STREAM_KEY=...
-TWITCH_RTMP_URL=...
-
-# Or use multiplexer
-RTMP_MULTIPLEXER_URL=...
-RTMP_MULTIPLEXER_STREAM_KEY=...
+CDP_STALL_THRESHOLD=6  # Increase from 4
 ```
 
-**Recommended:**
+**Increase recovery failures:**
 ```bash
-# Stability settings
-CDP_STALL_THRESHOLD=6
-FFMPEG_MAX_RESTART_ATTEMPTS=10
-CAPTURE_RECOVERY_MAX_FAILURES=5
-
-# Platform settings
-STREAMING_CANONICAL_PLATFORM=twitch
-STREAMING_PUBLIC_DELAY_MS=0
-
-# Monitoring
-ALERT_WEBHOOK_URL=https://hooks.slack.com/...
+CAPTURE_RECOVERY_MAX_FAILURES=6  # Increase from 4
 ```
 
-### PM2 Configuration
+### Platform-specific issues
 
-The streaming system uses PM2 for process management (see `ecosystem.config.cjs`):
+**Twitch:**
+- Verify stream key is correct
+- Check ingest server: `rtmp://live.twitch.tv/app`
+- Test with: `ffplay rtmp://live.twitch.tv/app/your_key`
 
-**Processes:**
-- `server`: Game server
-- `ffmpeg`: FFmpeg encoder
-- `capture`: Browser capture
-- `rtmp-bridge`: RTMP multiplexer
+**Kick:**
+- Use RTMPS (not RTMP)
+- Verify stream key format: `sk_us-west-2_...`
+- Check ingest URL matches your region
 
-**Commands:**
-```bash
-# Start all processes
-pm2 start ecosystem.config.cjs
+**X (Twitter):**
+- Requires X Premium subscription
+- Verify RTMP URL from Media Studio
+- Test connection before going live
 
-# Check status
-pm2 status
+## Performance Optimization
 
-# View logs
-pm2 logs ffmpeg
-pm2 logs capture
-
-# Restart streaming
-pm2 restart ffmpeg
-pm2 restart capture
-```
-
-### Health Monitoring
-
-**Automatic Health Checks** (Vast.ai keeper):
-- HTTP `/health` endpoint (every 60 seconds)
-- FFmpeg process monitoring
-- CDP connection status
-- Frame rate tracking
-
-**Manual Checks:**
-```bash
-# Check stream health
-curl http://localhost:5555/api/streaming/state
-
-# Check FFmpeg
-ps aux | grep ffmpeg
-
-# Check browser
-ps aux | grep chrome
-```
-
-## Streaming Commands
-
-### Development
+### Reduce CPU Usage
 
 ```bash
-# Start streaming to configured destinations
-bun run stream:rtmp
+# Use faster encoding preset
+-preset ultrafast  # Instead of veryfast
 
-# Test with local nginx-rtmp
-bun run stream:test
-
-# Stream with custom config
-TWITCH_STREAM_KEY=... bun run stream:rtmp
+# Reduce frame rate
+-r 24  # Instead of 30
 ```
 
-### Production
+### Reduce Memory Usage
 
 ```bash
-# Start via PM2
-pm2 start ecosystem.config.cjs
+# Disable combat AI state polling (reduces per-agent overhead)
+STREAMING_DUEL_COMBAT_AI_ENABLED=false
 
-# Restart streaming only
-pm2 restart ffmpeg
-pm2 restart capture
-
-# Stop streaming
-pm2 stop ffmpeg
-pm2 stop capture
+# Reduce max agents
+AUTO_START_AGENTS_MAX=5
 ```
 
-## Recent Updates (February 2026)
+### Reduce Bandwidth
 
-### Streaming Platform Configuration (Commit `7f1b1fd`)
-- Added Twitch stream key configuration
-- Added Kick stream key with RTMPS URL support
-- Added X/Twitter stream key with RTMP URL
-- Removed YouTube from default configuration (can be re-added via env vars)
-- Set canonical platform to Twitch for anti-cheat timing
+```bash
+# Lower bitrate
+-b:v 2000k  # Instead of 3000k
 
-### Public Data Delay (Commit `b00aa23`)
-- **Default delay set to 0ms** (instant broadcast)
-- No delay between game events and public broadcast
-- Configure `STREAMING_PUBLIC_DELAY_MS` to add delay if needed
-
-### Stability Improvements (Commit `14a1e1b`)
-- **CDP Stall Threshold**: Increased from 2 to 4 intervals (120s total)
-- **Soft CDP Recovery**: Restart screencast without browser/FFmpeg teardown (no stream gap)
-- **FFmpeg Restart Attempts**: Increased from 5 to 8
-- **Recovery Failures**: Increased from 2 to 4
-- **Reset Counter**: Added `resetRestartAttempts()` for recovery counter reset
-
-### WebGPU Renderer (Commit `14a1e1b`)
-- **Best-Effort Limits**: Tries `maxTextureArrayLayers: 2048` first, retries with defaults if GPU rejects
-- **Always WebGPU**: No WebGL fallback (all shaders use TSL)
-- **Error Handling**: User-friendly error screen when WebGPU unavailable
+# Lower resolution
+STREAM_CAPTURE_WIDTH=854
+STREAM_CAPTURE_HEIGHT=480
+```
 
 ## Related Documentation
 
-- **Deployment**: `docs/deployment-best-practices.md`
-- **Environment Variables**: `packages/server/.env.example`
-- **Duel Stack**: `docs/duel-stack.md`
-- **Betting Production**: `docs/betting-production-deploy.md`
-
-## Troubleshooting Reference
-
-| Issue | Solution | Commit |
-|-------|----------|--------|
-| Stream restarts frequently | Increase `CDP_STALL_THRESHOLD` to 6 | `14a1e1b` |
-| WebGPU not available | Install Vulkan drivers, use swiftshader | `14a1e1b` |
-| Platform not receiving stream | Verify stream key and RTMP URL | `7f1b1fd` |
-| High CPU usage | Reduce game complexity, increase resources | - |
-| Buffering for viewers | Reduce bitrate, check network speed | - |
-
-## Implementation Files
-
-- **Streaming System**: `packages/server/src/streaming/`
-- **Browser Capture**: `packages/server/src/streaming/browser-capture.ts`
-- **RTMP Bridge**: `packages/server/src/streaming/rtmp-bridge.ts`
-- **Stream Capture**: `packages/server/src/streaming/stream-capture.ts`
-- **PM2 Config**: `ecosystem.config.cjs`
-- **Deploy Script**: `scripts/deploy-vast.sh`
+- [docs/vast-deployment.md](vast-deployment.md) - Vast.ai deployment guide
+- [docs/maintenance-mode-api.md](maintenance-mode-api.md) - Graceful deployment API
+- [ecosystem.config.cjs](../ecosystem.config.cjs) - PM2 configuration
+- [packages/server/src/streaming/](../packages/server/src/streaming/) - Streaming implementation
