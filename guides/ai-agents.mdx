@@ -112,7 +112,7 @@ const tickInterval = recentlyChanged ? 2000 : 10000;
 
 **Problem:** Agents started with all tools in a starter chest, which didn't match natural MMORPG progression.
 
-**Solution:** Quest-based tool acquisition system:
+**Solution:** Quest-based tool acquisition system where agents talk to NPCs and accept quests to receive tools immediately.
 
 **Removed:**
 - `LOOT_STARTER_CHEST` action
@@ -124,14 +124,24 @@ const tickInterval = recentlyChanged ? 2000 : 10000;
 - Banking goal when inventory >= 25/28 slots
 - Inventory count display with full/nearly-full warnings
 - Enhanced questProvider to tell LLM exactly which quests give which tools
+- `ACCEPT_QUEST` and `COMPLETE_QUEST` actions
 
 **Quest-to-Tool Mapping:**
 
-| Quest | Tools Granted |
-|-------|---------------|
-| Lumberjack's First Lesson | Bronze axe |
-| Fresh Catch | Small fishing net |
-| Torvin's Tools | Bronze pickaxe, Tinderbox |
+| Quest | NPC | Tools Granted |
+|-------|-----|---------------|
+| Lumberjack's First Lesson | Forester Wilma | Bronze Hatchet + Tinderbox |
+| Fresh Catch | Fisherman Pete | Small Fishing Net |
+| Torvin's Tools | Torvin | Bronze Pickaxe + Hammer |
+
+**How It Works:**
+
+1. Agent spawns without tools
+2. `questProvider` detects missing tools and suggests quests
+3. Agent sets `questing` goal (priority 100)
+4. Agent talks to NPC and accepts quest
+5. Tools are granted immediately on quest accept
+6. Agent can now gather resources
 
 **Autonomous Banking:**
 
@@ -143,7 +153,7 @@ if (inventoryCount >= 25) {
   return {
     type: 'banking',
     description: 'Bank items (inventory nearly full)',
-    priority: 100  // Highest priority
+    priority: 90  // Very high priority
   };
 }
 ```
@@ -151,9 +161,34 @@ if (inventoryCount >= 25) {
 **Bank Deposit All:**
 
 New `BANK_DEPOSIT_ALL` action for bulk banking:
-- Dumps entire inventory to bank
-- Keeps essential tools (axe, pickaxe, tinderbox, net)
-- Automatically opens/closes bank session
+- Walks to nearest bank automatically
+- Opens bank session
+- Deposits ALL items
+- Withdraws back essential tools (axe, pickaxe, tinderbox, net)
+- Closes bank session
+- Restores previous goal after banking complete
+
+**Banking Workflow:**
+
+```typescript
+// Agent detects full inventory
+if (inventoryCount >= 25) {
+  // Save current goal (e.g., woodcutting)
+  savedGoal = currentGoal;
+  
+  // Set banking goal
+  currentGoal = { type: 'banking', ... };
+  
+  // Execute BANK_DEPOSIT_ALL
+  await service.openBank(bankId);
+  await service.bankDepositAll();
+  await service.bankWithdraw('bronze_hatchet', 1);  // Keep tools
+  await service.closeBank();
+  
+  // Restore previous goal
+  currentGoal = savedGoal;
+}
+```
 
 ### Resource Detection Fix (commit 593cd56b)
 
