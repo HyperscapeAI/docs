@@ -1,180 +1,268 @@
 # Cloudflare R2 CORS Configuration
 
-This guide explains how to configure CORS (Cross-Origin Resource Sharing) for Cloudflare R2 buckets to enable cross-origin asset loading in Hyperscape.
+Hyperscape serves game assets (3D models, textures, audio) from Cloudflare R2 at `assets.hyperscape.club`. Cross-origin asset loading requires proper CORS configuration.
 
-## Overview
+## Problem
 
-Hyperscape serves game assets (3D models, textures, audio) from Cloudflare R2 at `assets.hyperscape.club`. These assets must be accessible from multiple domains:
+Without CORS configuration, browsers block asset loading from R2 with errors like:
 
-- `hyperscape.gg` (main game)
-- `hyperscape.club` (Cloudflare Pages)
-- `hyperbet.win` (betting interface)
-- `hyperscape.bet` (betting interface)
-- `localhost:3333` (local development)
+```
+Access to fetch at 'https://assets.hyperscape.club/models/tree.glb' from origin 'https://hyperscape.gg' 
+has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+```
 
-Without proper CORS configuration, browsers block cross-origin asset requests, causing missing models, textures, and audio.
+## Solution
+
+Configure R2 bucket CORS to allow cross-origin requests from all Hyperscape domains.
 
 ## Automatic Configuration (CI/CD)
 
-CORS is automatically configured during Cloudflare deployments via `.github/workflows/deploy-cloudflare.yml`:
+The `.github/workflows/deploy-cloudflare.yml` workflow automatically configures CORS during deployment:
 
 ```yaml
 - name: Configure R2 CORS
-  run: |
-    chmod +x scripts/configure-r2-cors.sh
-    ./scripts/configure-r2-cors.sh
+  run: bash scripts/configure-r2-cors.sh
   env:
     CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     R2_BUCKET_NAME: hyperscape-assets
 ```
 
-This runs automatically on every push to `main` that modifies client or asset files.
-
 ## Manual Configuration
 
-If you need to configure CORS manually (e.g., for a new bucket or domain):
+If you need to configure CORS manually:
 
-### Prerequisites
-
-1. **Cloudflare API Token** with R2 permissions:
-   - Go to [Cloudflare Dashboard](https://dash.cloudflare.com) → My Profile → API Tokens
-   - Create token with `R2 Edit` permissions
-   - Save token securely
-
-2. **Account ID**:
-   - Found in Cloudflare Dashboard → R2 → Overview
-   - Format: 32-character hex string
-
-### Run Configuration Script
+### Using Wrangler CLI
 
 ```bash
-# Set environment variables
-export CLOUDFLARE_ACCOUNT_ID=your-account-id
-export CLOUDFLARE_API_TOKEN=your-api-token
-export R2_BUCKET_NAME=hyperscape-assets
-
-# Run configuration script
-chmod +x scripts/configure-r2-cors.sh
-./scripts/configure-r2-cors.sh
+# Set CORS configuration
+bunx wrangler r2 bucket cors set hyperscape-assets \
+  --config scripts/r2-cors-config.json
 ```
 
-### CORS Configuration Details
+### CORS Configuration File
 
-The script applies this CORS policy to the R2 bucket:
+The `scripts/r2-cors-config.json` file contains:
 
 ```json
-[
-  {
-    "AllowedOrigins": [
-      "https://hyperscape.gg",
-      "https://*.hyperscape.gg",
-      "https://hyperscape.club",
-      "https://*.hyperscape.club",
-      "https://hyperbet.win",
-      "https://*.hyperbet.win",
-      "https://hyperscape.bet",
-      "https://*.hyperscape.bet",
-      "http://localhost:3333",
-      "http://localhost:5555"
-    ],
-    "AllowedMethods": ["GET", "HEAD"],
-    "AllowedHeaders": ["*"],
-    "ExposeHeaders": ["ETag", "Content-Length"],
-    "MaxAgeSeconds": 3600
-  }
-]
+{
+  "allowed": {
+    "origins": ["*"],
+    "methods": ["GET", "HEAD"],
+    "headers": ["*"]
+  },
+  "exposed": ["ETag", "Content-Length", "Content-Type"],
+  "maxAge": 3600
+}
 ```
 
-**Key Settings:**
-- **AllowedOrigins**: All known Hyperscape domains (apex + subdomains) plus localhost for development
-- **AllowedMethods**: Read-only (GET, HEAD) - no write operations from browser
-- **AllowedHeaders**: All headers allowed for flexibility
-- **ExposeHeaders**: ETag and Content-Length for caching and progress tracking
-- **MaxAgeSeconds**: 1 hour cache for preflight requests (reduces OPTIONS requests)
+**Configuration Details:**
+
+| Field | Value | Description |
+|-------|-------|-------------|
+| `allowed.origins` | `["*"]` | Allow requests from any origin |
+| `allowed.methods` | `["GET", "HEAD"]` | Allow GET and HEAD requests (read-only) |
+| `allowed.headers` | `["*"]` | Allow all request headers |
+| `exposed` | `["ETag", "Content-Length", "Content-Type"]` | Headers exposed to JavaScript |
+| `maxAge` | `3600` | Cache preflight responses for 1 hour |
+
+### Using Cloudflare Dashboard
+
+1. Log in to [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Navigate to **R2** → **hyperscape-assets** bucket
+3. Go to **Settings** → **CORS Policy**
+4. Add CORS rule:
+   - **Allowed Origins**: `*`
+   - **Allowed Methods**: `GET`, `HEAD`
+   - **Allowed Headers**: `*`
+   - **Exposed Headers**: `ETag`, `Content-Length`, `Content-Type`
+   - **Max Age**: `3600`
+5. Click **Save**
 
 ## Verification
 
-After configuration, verify CORS is working:
+Test CORS configuration:
 
 ```bash
 # Test from command line
 curl -I -H "Origin: https://hyperscape.gg" \
-  https://assets.hyperscape.club/models/avatar.glb
+  https://assets.hyperscape.club/models/test.glb
 
-# Should include these headers:
-# access-control-allow-origin: https://hyperscape.gg
-# access-control-expose-headers: ETag, Content-Length
+# Should include headers:
+# Access-Control-Allow-Origin: *
+# Access-Control-Expose-Headers: ETag, Content-Length, Content-Type
 ```
 
-**Browser Test:**
-1. Open https://hyperscape.gg
-2. Open browser DevTools → Network tab
-3. Filter by "glb" or "png"
-4. Check Response Headers for `access-control-allow-origin`
-5. Verify no CORS errors in Console
+Or test in browser console:
 
-## Troubleshooting
+```javascript
+fetch('https://assets.hyperscape.club/models/test.glb', {
+  method: 'HEAD',
+  headers: { 'Origin': 'https://hyperscape.gg' }
+})
+.then(r => console.log('CORS OK:', r.headers.get('access-control-allow-origin')))
+.catch(e => console.error('CORS Error:', e));
+```
 
-**CORS errors still appearing:**
-1. Verify bucket name matches: `hyperscape-assets`
-2. Check API token has R2 Edit permissions
-3. Wait 1-2 minutes for CORS policy propagation
-4. Clear browser cache and hard reload (Cmd+Shift+R / Ctrl+Shift+R)
+## Allowed Domains
 
-**Script fails with authentication error:**
-- Verify `CLOUDFLARE_ACCOUNT_ID` is correct (32-character hex)
-- Verify `CLOUDFLARE_API_TOKEN` has R2 Edit permissions
-- Check token hasn't expired
+The CORS configuration allows requests from:
 
-**Assets load from some domains but not others:**
-- Verify all domains are in `AllowedOrigins` list
-- Check for typos in domain names (e.g., `hyperscape.gg` vs `hyperscape.club`)
-- Ensure both apex domain and wildcard subdomain are included
-
-**Localhost not working:**
-- Verify `http://localhost:3333` and `http://localhost:5555` are in `AllowedOrigins`
-- Check you're using HTTP (not HTTPS) for localhost
-- Ensure port numbers match your local development setup
-
-## Adding New Domains
-
-To add a new domain to CORS configuration:
-
-1. Edit `scripts/configure-r2-cors.sh`
-2. Add domain to `AllowedOrigins` array:
-   ```json
-   "https://newdomain.com",
-   "https://*.newdomain.com",
-   ```
-3. Run script manually or push to trigger CI/CD
-4. Verify with curl test (see Verification section)
+- `hyperscape.gg` (production frontend)
+- `*.hyperscape.gg` (subdomains)
+- `hyperbet.win` (betting frontend)
+- `*.hyperbet.win` (subdomains)
+- `hyperscape.bet` (alternative domain)
+- `*.hyperscape.bet` (subdomains)
+- `localhost:*` (local development)
+- Any other origin (wildcard `*`)
 
 ## Security Considerations
 
-**Read-Only Access:**
-- CORS policy only allows GET and HEAD methods
-- No write operations (PUT, POST, DELETE) permitted from browser
-- Asset uploads must go through authenticated server endpoints
+### Why Wildcard Origin?
 
-**Origin Validation:**
-- Only known Hyperscape domains are allowed
-- Wildcard `*` origin is NOT used (would allow any site to load assets)
-- Localhost origins only for development convenience
+R2 assets are **public read-only** resources (3D models, textures, audio). There's no security risk in allowing cross-origin access from any domain because:
 
-**Cache Duration:**
-- 1-hour preflight cache reduces OPTIONS requests
-- Doesn't affect asset caching (controlled by Cache-Control headers)
-- Safe to increase if domains rarely change
+1. **No authentication required** - Assets are publicly accessible
+2. **Read-only access** - Only GET/HEAD methods allowed (no PUT/POST/DELETE)
+3. **No sensitive data** - Assets are game content, not user data
+
+### Alternative: Restricted Origins
+
+If you want to restrict origins to specific domains:
+
+```json
+{
+  "allowed": {
+    "origins": [
+      "https://hyperscape.gg",
+      "https://hyperbet.win",
+      "https://hyperscape.bet",
+      "http://localhost:3333"
+    ],
+    "methods": ["GET", "HEAD"],
+    "headers": ["*"]
+  },
+  "exposed": ["ETag", "Content-Length", "Content-Type"],
+  "maxAge": 3600
+}
+```
+
+**Trade-offs:**
+- ✅ More restrictive (only listed domains can load assets)
+- ❌ Requires updating config when adding new domains
+- ❌ Breaks local development on non-standard ports
+
+## Troubleshooting
+
+### CORS Errors Persist After Configuration
+
+**Cause**: Browser cached old CORS preflight responses
+
+**Solution**: Hard refresh (Ctrl+Shift+R) or clear browser cache
+
+### Wrangler CORS Command Fails
+
+**Symptoms**: `wrangler r2 bucket cors set` returns error
+
+**Common Issues:**
+
+1. **Invalid JSON format**:
+   ```bash
+   # Verify JSON is valid
+   cat scripts/r2-cors-config.json | jq .
+   ```
+
+2. **Missing authentication**:
+   ```bash
+   # Set Cloudflare credentials
+   export CLOUDFLARE_ACCOUNT_ID=your-account-id
+   export CLOUDFLARE_API_TOKEN=your-api-token
+   ```
+
+3. **Bucket doesn't exist**:
+   ```bash
+   # List buckets
+   bunx wrangler r2 bucket list
+   
+   # Create bucket if needed
+   bunx wrangler r2 bucket create hyperscape-assets
+   ```
+
+### Assets Still Not Loading
+
+**Symptoms**: 404 errors or CORS errors persist
+
+**Checklist:**
+
+1. **Verify CORS is configured**:
+   ```bash
+   bunx wrangler r2 bucket cors get hyperscape-assets
+   ```
+
+2. **Check asset exists in R2**:
+   ```bash
+   bunx wrangler r2 object get hyperscape-assets/models/test.glb
+   ```
+
+3. **Verify CDN URL is correct**:
+   - Client `.env`: `PUBLIC_CDN_URL=https://assets.hyperscape.club`
+   - Server `.env`: `PUBLIC_CDN_URL=https://assets.hyperscape.club`
+
+4. **Check R2 custom domain**:
+   - R2 bucket → Settings → Custom Domains
+   - Verify `assets.hyperscape.club` is connected
 
 ## Related Documentation
 
-- **Deployment**: See `docs/railway-dev-prod.md` for full deployment workflow
-- **Asset Management**: See `README.md` → Assets section
-- **CDN Configuration**: See `packages/server/.env.example` → `PUBLIC_CDN_URL`
+- [Cloudflare Deployment](./cloudflare-deployment.md) - Full Cloudflare Pages deployment guide
+- [Vast.ai Deployment](./vast-deployment.md) - GPU streaming deployment
+- [README.md](../README.md) - Quick start guide
 
-## Implementation
+## Implementation Details
 
-**Script**: `scripts/configure-r2-cors.sh`
-**Workflow**: `.github/workflows/deploy-cloudflare.yml`
-**Commit**: `143914d` (February 26, 2026)
+### CORS Configuration Script
+
+The `scripts/configure-r2-cors.sh` script:
+
+1. Reads CORS config from `scripts/r2-cors-config.json`
+2. Uses Wrangler CLI to apply configuration
+3. Verifies configuration was applied successfully
+
+**Script Location**: `scripts/configure-r2-cors.sh`
+
+**CORS Config**: `scripts/r2-cors-config.json`
+
+### Wrangler API Format
+
+The correct Wrangler R2 CORS API format (as of February 2026):
+
+```json
+{
+  "allowed": {
+    "origins": ["*"],
+    "methods": ["GET", "HEAD"],
+    "headers": ["*"]
+  },
+  "exposed": ["ETag", "Content-Length", "Content-Type"],
+  "maxAge": 3600
+}
+```
+
+**Previous format** (deprecated):
+```json
+{
+  "AllowedOrigins": ["*"],
+  "AllowedMethods": ["GET", "HEAD"],
+  "AllowedHeaders": ["*"],
+  "ExposeHeaders": ["ETag"],
+  "MaxAgeSeconds": 3600
+}
+```
+
+The new format uses:
+- Nested `allowed.origins/methods/headers` structure
+- `exposed` array (not `ExposeHeaders`)
+- `maxAge` integer (not `MaxAgeSeconds`)
+
+**Fix Commit**: `055779a` (February 26, 2026)
