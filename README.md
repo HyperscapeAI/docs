@@ -359,12 +359,27 @@ See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture doc
 
 ## Recent Updates (February 2026)
 
-- **Arena Performance**: 97% draw call reduction via InstancedMesh, eliminated 28 dynamic lights ([docs/arena-performance-optimizations.md](docs/arena-performance-optimizations.md))
-- **Model Cache**: Fixed missing objects and texture persistence bugs ([docs/model-cache-fixes.md](docs/model-cache-fixes.md))
-- **Terrain Heights**: Fixed 50m offset in cached height lookups ([docs/terrain-height-cache-fix.md](docs/terrain-height-cache-fix.md))
-- **Streaming**: Improved RTMP stability and WebGPU initialization ([docs/streaming-improvements.md](docs/streaming-improvements.md))
-- **CI/CD**: Build workflow improvements and npm retry logic ([docs/ci-cd-improvements.md](docs/ci-cd-improvements.md))
-- **Asset Forge**: Added VFX catalog browser with live effect previews
+### Performance & Rendering
+- **Arena Performance**: 97% draw call reduction (~846 meshes → ~20 InstancedMesh), eliminated 28 dynamic PointLights, replaced with GPU-driven TSL emissive materials
+- **Fire Particles**: Enhanced fire shader with smooth value noise, soft radial falloff, and per-particle turbulent motion for natural flame appearance
+- **Teleport VFX**: Complete rewrite with object pooling, multi-phase animation (gather/erupt/sustain/fade), helix spiral particles, and TSL shader materials
+- **Model Cache**: Fixed missing objects (duplicate mesh names) and texture persistence (blob URLs → DataTexture with raw RGBA pixels)
+- **Terrain Heights**: Fixed 50m offset in cached height lookups via canonical `worldToTerrainTileIndex()` and `localToGridIndex()` helpers
+
+### Deployment & Operations
+- **Maintenance Mode API**: Graceful deployment coordination - pauses new duel cycles, waits for markets to resolve, prevents data loss during deployments
+- **Vast.ai Health Checks**: Auto-detect unhealthy instances, destroy and reprovision when failures exceed threshold
+- **Streaming Stability**: Increased CDP stall threshold (2→4 intervals), soft CDP recovery, FFmpeg restart attempts (5→8), WebGL fallback for headless environments
+
+### CI/CD & Build System
+- **npm Retry Logic**: Automatic retry with exponential backoff (15s-75s) for transient npm 403 errors
+- **Frozen Lockfile**: All workflows use `--frozen-lockfile` to prevent npm resolution attempts
+- **Tauri Build Fixes**: Split unsigned/release builds, macOS `.app`-only for unsigned, iOS release-only, Windows retry logic
+- **Dependency Cycles**: Resolved shared↔procgen cycle via peerDependencies + devDependencies pattern
+
+### Asset Forge
+- **VFX Catalog Browser**: New tab with live Three.js previews of all game effects (spells, arrows, glow particles, fishing, teleport, combat HUD)
+- **Effect Detail Panels**: Color swatches, parameter tables, layer breakdowns, phase timelines for comprehensive VFX documentation
 
 ## License
 
