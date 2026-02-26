@@ -1,451 +1,358 @@
-# CI/CD Improvements
+# CI/CD Improvements (February 2026)
 
-This document summarizes recent CI/CD improvements and best practices for Hyperscape deployments.
+This document summarizes recent CI/CD improvements and fixes applied to the Hyperscape build and deployment pipelines.
 
 ## Overview
 
-Recent improvements to the CI/CD pipeline include:
-- **Maintenance mode integration** - Graceful deployments with market resolution
-- **DATABASE_URL persistence** - Survives git reset operations
-- **Cloudflare Pages automation** - Automatic client deployment
-- **Build resilience** - Retry logic and frozen lockfile
-- **Split builds** - Separate unsigned and release builds for desktop apps
+Recent commits have significantly improved CI/CD reliability, security, and deployment workflows across multiple platforms.
 
-## GitHub Actions Workflows
+## GitHub Actions Improvements
 
-### 1. Deploy to Cloudflare Pages
+### Retry Logic for npm Install
 
-**File:** `.github/workflows/deploy-pages.yml`
+**Commit**: `f19a7042` (fix(ci): fix Linux and Windows desktop builds + cleanup wrangler config)
 
-**Triggers:**
-- Push to `main` branch
-- Changes to `packages/client/**` or `packages/shared/**`
-- Manual trigger via `workflow_dispatch`
+**Problem**: GitHub Actions hitting npm rate limits causing build failures.
 
-**Features:**
-- Automatic client deployment on push
-- Builds client with shared + physx dependencies
-- Uses Wrangler CLI for deployment
-- Supports production and preview environments
+**Solution**: Added retry logic with exponential backoff:
 
-**Required secrets:**
-- `CLOUDFLARE_API_TOKEN` - Cloudflare API token
-- `PUBLIC_PRIVY_APP_ID` - Privy app ID
-
-**Example:**
 ```yaml
-- name: Deploy to Cloudflare Pages
+- name: Install dependencies with retry
   run: |
-    npx wrangler pages deploy dist \
-      --project-name=hyperscape \
-      --branch=${{ github.ref_name }}
-  env:
-    CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    for i in 1 2 3 4 5; do
+      bun install --frozen-lockfile && break
+      DELAY=$((15 * i))
+      echo "Install failed, retrying in ${DELAY}s..."
+      sleep $DELAY
+    done
 ```
 
-### 2. Deploy to Vast.ai
+**Retry delays**: 15s, 30s, 45s, 60s, 75s
 
-**File:** `.github/workflows/deploy-vast.yml`
+**Impact**: Eliminates transient npm registry failures.
 
-**Triggers:**
-- After CI passes on `main` branch
-- Manual trigger via `workflow_dispatch`
+### Frozen Lockfile
 
-**Features:**
-- Maintenance mode integration
-- DATABASE_URL persistence through git reset
+**Commit**: Multiple commits enforcing `--frozen-lockfile`
+
+**Change**: All CI workflows now use `bun install --frozen-lockfile`
+
+**Benefits**:
+- Prevents dependency drift
+- Ensures reproducible builds
+- Fails fast on lockfile mismatches
+
+### Desktop Build Fixes
+
+**Commit**: `f19a7042` (fix(ci): fix Linux and Windows desktop builds in CI)
+
+**Problem**: Linux/Windows builds failing with "app bundle type is macOS-only"
+
+**Solution**:
+- Use `--no-bundle` for unsigned builds (Linux/Windows)
+- Use `--bundles app` only for macOS
+- Split artifact upload: release builds vs unsigned builds
+
+**Cross-platform beforeBuildCommand**:
+```json
+{
+  "beforeBuildCommand": "node -e \"process.exit(require('fs').existsSync('dist') ? 0 : 1)\" || bun run build:client"
+}
+```
+
+## Deployment Workflows
+
+### Cloudflare Pages Deployment
+
+**Commit**: `37c3629` (ci: add GitHub Actions workflow for Cloudflare Pages deployment)
+
+**New workflow**: `.github/workflows/deploy-pages.yml`
+
+**Features**:
+- Automatic deployment on push to `main`
+- Triggers on changes to `packages/client/**` or `packages/shared/**`
+- Uses `wrangler pages deploy` instead of GitHub integration
+- Includes proper build steps (shared → physx → client)
+
+**Build command**:
+```bash
+bun run build:client  # Builds shared + physx dependencies via turbo
+```
+
+### Vast.ai Deployment
+
+**Commit**: `30b52bd` (feat(deploy): add graceful deployment with maintenance mode)
+
+**New features**:
+- Maintenance mode API for safe deployments
+- Wait for active markets to resolve
 - Health checking before exit
-- Solana keypair setup
-- Stream key configuration
+- DATABASE_URL persistence through git reset
 
-**Required secrets:**
-- `VAST_HOST` - Vast.ai instance IP
-- `VAST_PORT` - SSH port
-- `VAST_SSH_KEY` - Private SSH key
-- `VAST_SERVER_URL` - Public server URL
-- `DATABASE_URL` - PostgreSQL connection
-- `ADMIN_CODE` - Admin API access
-- `SOLANA_DEPLOYER_PRIVATE_KEY` - Solana keypair
-- `TWITCH_STREAM_KEY` - Twitch stream key
-- `X_STREAM_KEY` - X/Twitter stream key
-- `X_RTMP_URL` - X RTMP URL
-
-**Deployment flow:**
+**Workflow steps**:
 1. Enter maintenance mode
-2. SSH to Vast instance
-3. Checkout main branch explicitly
-4. Write environment variables
-5. Run deployment script
-6. Wait for server health
-7. Exit maintenance mode
+2. Wait for `safeToDeploy: true`
+3. Deploy via SSH
+4. Wait for health check
+5. Exit maintenance mode
 
-**Example:**
+**Commit**: `b1f41d5` (feat(deploy): add workflow_dispatch for manual Vast.ai deployments)
+
+**Manual trigger**: Added `workflow_dispatch` for on-demand deployments.
+
+### Railway Deployment
+
+**Existing**: Branch-based deployment (`main` → `prod`, `develop` → `dev`)
+
+**No changes** in recent commits.
+
+## Secret Management
+
+### GitHub Secrets
+
+**Commit**: `7ee730d` (fix(deploy): pass correct stream keys through CI/CD to Vast.ai)
+
+**New secrets**:
+- `TWITCH_STREAM_KEY`
+- `X_STREAM_KEY`
+- `X_RTMP_URL`
+- `SOLANA_DEPLOYER_PRIVATE_KEY`
+
+**Passing to deployment**:
 ```yaml
-- name: Enter Maintenance Mode
-  run: |
-    curl -X POST "$VAST_SERVER_URL/admin/maintenance/enter" \
-      -H "Content-Type: application/json" \
-      -H "x-admin-code: $ADMIN_CODE" \
-      -d '{"reason": "deployment", "timeoutMs": 300000}'
+envs: DATABASE_URL,SOLANA_DEPLOYER_PRIVATE_KEY,TWITCH_STREAM_KEY,X_STREAM_KEY,X_RTMP_URL
 ```
 
-### 3. Build Native Apps
+### Environment Variable Persistence
 
-**File:** `.github/workflows/build-app.yml`
+**Commit**: `eec04b0` (fix(deploy): preserve DATABASE_URL after git reset operations)
 
-**Triggers:**
-- Tagged releases (`v*`)
+**Problem**: `git reset --hard` was overwriting `.env` file with environment variables.
 
-**Features:**
-- Cross-platform builds (macOS, Windows, Linux, iOS, Android)
-- Split unsigned and release builds
-- Automatic GitHub Release creation
-- Artifact upload to release
+**Solution**: Write environment variables AFTER git reset:
 
-**Improvements:**
-- Fixed Linux/Windows builds (use `--no-bundle` instead of `--bundles app`)
-- Cross-platform `beforeBuildCommand` using Node.js
-- Separate artifact upload for unsigned vs release builds
-
-**Example:**
-```yaml
-- name: Build Desktop App
-  run: |
-    bun run tauri build --no-bundle
-  env:
-    TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-```
-
-## Deployment Scripts
-
-### deploy-vast.sh
-
-**Location:** `scripts/deploy-vast.sh`
-
-**Features:**
-- Pulls latest code from main
-- Restores DATABASE_URL after git reset
-- Sets up Solana keypair
-- Installs dependencies
-- Builds packages
-- Restarts PM2 processes
-
-**Key improvements:**
 ```bash
-# Explicitly checkout main first
-git fetch origin
-git checkout main
+# Workflow writes to .env AFTER git reset
 git reset --hard origin/main
-
-# Restore DATABASE_URL (git reset overwrites .env)
-if [ -n "$DATABASE_URL" ]; then
-  echo "DATABASE_URL=$DATABASE_URL" >> packages/server/.env
-fi
-
-# Setup Solana keypair
-if [ -n "$SOLANA_DEPLOYER_PRIVATE_KEY" ]; then
-  mkdir -p ~/.config/solana
-  bun run packages/server/scripts/decode-key.ts \
-    "$SOLANA_DEPLOYER_PRIVATE_KEY" \
-    ~/.config/solana/id.json
-fi
-```
-
-### configure-r2-cors.sh
-
-**Location:** `scripts/configure-r2-cors.sh`
-
-**Features:**
-- Configures R2 bucket CORS for cross-origin asset loading
-- Uses correct Wrangler API format
-- Allows all origins, GET/HEAD methods
-
-**Example:**
-```bash
-wrangler r2 bucket cors set hyperscape-assets \
-  --config cors-config.json
-```
-
-## Best Practices
-
-### 1. Maintenance Mode
-
-**Always use maintenance mode for production deployments:**
-```bash
-# Enter maintenance mode
-curl -X POST https://your-server.com/admin/maintenance/enter \
-  -H "Content-Type: application/json" \
-  -H "x-admin-code: your-admin-code" \
-  -d '{"reason": "deployment", "timeoutMs": 300000}'
-
-# Deploy changes
-# ...
-
-# Exit maintenance mode
-curl -X POST https://your-server.com/admin/maintenance/exit \
-  -H "Content-Type: application/json" \
-  -H "x-admin-code: your-admin-code"
-```
-
-### 2. DATABASE_URL Persistence
-
-**Write DATABASE_URL AFTER git reset:**
-```bash
-# ❌ WRONG - git reset will overwrite .env
 echo "DATABASE_URL=$DATABASE_URL" > packages/server/.env
-git reset --hard origin/main
 
-# ✅ CORRECT - write after git reset
-git reset --hard origin/main
-echo "DATABASE_URL=$DATABASE_URL" >> packages/server/.env
+# Deploy script also restores DATABASE_URL after its git reset
 ```
 
-### 3. Health Checking
+### Solana Keypair Setup
 
-**Wait for server to be healthy before exiting maintenance mode:**
+**Commit**: `8a677dc` (fix(solana): setup keypair from env var, remove hardcoded secrets)
+
+**Changes**:
+- Added `scripts/decode-key.ts` to decode base58 keypair
+- Writes to `~/.config/solana/id.json`
+- Removed hardcoded private keys from `ecosystem.config.cjs`
+- Added `deployer-keypair.json` to `.gitignore`
+
+**Usage**:
 ```bash
-for i in {1..30}; do
-  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$SERVER_URL/health")
-  if [ "$HTTP_STATUS" = "200" ]; then
-    echo "Server is healthy!"
-    break
-  fi
-  sleep 10
-done
+# Set in GitHub Secrets
+SOLANA_DEPLOYER_PRIVATE_KEY=5JB9hqEzKqCiptLSBi4fHCVPJVb3gpb3AgRyHcJvc4u4...
+
+# Deploy script decodes and writes to ~/.config/solana/id.json
+bun run scripts/decode-key.ts
 ```
 
-### 4. Explicit Branch Checkout
+## Build Improvements
 
-**Always checkout main explicitly in deployment:**
-```bash
-# ❌ WRONG - may be on wrong branch
-git pull origin main
+### Asset-Forge ESLint Fixes
 
-# ✅ CORRECT - explicitly checkout main
-git fetch origin
-git checkout main
-git reset --hard origin/main
+**Commit**: `b5c762c` (fix(asset-forge): disable crashing import/order rule from root config)
+
+**Problem**: `eslint-plugin-import@2.32.0` incompatible with ESLint 10.
+
+**Solution**: Disable `import/order` rule in `packages/asset-forge/eslint.config.mjs`.
+
+**Commit**: `cadd3d5` (fix(asset-forge): fix ESLint crash from deprecated --ext flag)
+
+**Problem**: `eslint . --ext .ts,.tsx` uses deprecated `--ext` flag.
+
+**Solution**: Use `eslint src` instead (matches other packages).
+
+### Type Safety Improvements
+
+**Commit**: `d9113595` (fix(types): eliminate explicit any types in core game logic)
+
+**Changes**:
+- `tile-movement.ts`: Removed 13 `any` casts by properly typing BuildingCollisionService
+- `proxy-routes.ts`: Replaced `any` with proper types (unknown, Buffer | string, Error)
+- `ClientGraphics.ts`: Added cast for setupGPUCompute after WebGPU verification
+
+**Impact**: Reduced explicit `any` types from 142 to ~46.
+
+### Circular Dependency Fixes
+
+**Commit**: `3b9c0f2` (fix(deps): fully break shared↔procgen cycle for turbo)
+
+**Problem**: Turbo treats peerDependencies as graph edges, creating circular dependency.
+
+**Solution**: Remove cross-references from both `package.json` files. Imports still resolve via bun workspace resolution.
+
+**Commit**: `05c2892` (fix(shared): add procgen as devDependency for TypeScript type resolution)
+
+**Solution**: Add procgen as devDependency (not followed by turbo's ^build ordering).
+
+## Security Improvements
+
+### JWT Secret Enforcement
+
+**Commit**: `3bc59db` (fix(audit): address critical issues from code audit)
+
+**Change**: JWT_SECRET now required in production/staging.
+
+**Behavior**:
+- **Production/Staging**: Throws error if JWT_SECRET not set
+- **Development**: Warns if JWT_SECRET not set
+- **Unknown environments**: Warns
+
+**Code**:
+```typescript
+if ((NODE_ENV === 'production' || NODE_ENV === 'staging') && !JWT_SECRET) {
+  throw new Error('JWT_SECRET is required in production/staging');
+}
 ```
 
-### 5. Environment Variable Handling
+### CSRF Cross-Origin Handling
 
-**Pass secrets through SSH environment:**
+**Commit**: `cd29a76` (fix(csrf): skip CSRF validation for known cross-origin clients)
+
+**Problem**: CSRF middleware uses SameSite=Strict cookies which cannot be sent in cross-origin requests (Cloudflare Pages → Railway).
+
+**Solution**: Skip CSRF validation for known cross-origin clients:
+- hyperscape.gg
+- hyperscape.club
+- hyperbet.win
+- hyperscape.bet
+
+**Rationale**: Cross-origin requests already protected by:
+1. Origin header validation
+2. JWT bearer token authentication
+
+### Solana Keypair Security
+
+**Commit**: `8a677dce` (fix(solana): setup keypair from env var, remove hardcoded secrets)
+
+**Changes**:
+- Removed hardcoded private keys from `ecosystem.config.cjs`
+- Added `deployer-keypair.json` to `.gitignore`
+- Setup keypair from `SOLANA_DEPLOYER_PRIVATE_KEY` env var
+
+## Error Handling
+
+### Memory Leak Fixes
+
+**Commit**: `3bc59db` (fix(audit): address critical issues from code audit)
+
+**Problem**: InventoryInteractionSystem had 9 event listeners that were never removed.
+
+**Solution**: Use AbortController for proper cleanup:
+
+```typescript
+const abortController = new AbortController();
+
+world.on('inventory:add', handler, { signal: abortController.signal });
+
+// Cleanup
+abortController.abort();
+```
+
+### WebGPU Enforcement
+
+**Commit**: `3bc59db` (fix(audit): address critical issues from code audit)
+
+**Change**: Added user-friendly error screen when WebGPU unavailable.
+
+**Rationale**: All shaders use TSL which requires WebGPU. No WebGL fallback possible.
+
+## Workflow Optimizations
+
+### Concurrency Control
+
+All workflows now use concurrency groups to prevent duplicate runs:
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+```
+
+**Impact**: Saves CI minutes by canceling outdated runs.
+
+### Conditional Execution
+
+**Commit**: `674cb11` (fix(ci): use env vars instead of secrets in workflow conditions)
+
+**Problem**: GitHub Actions doesn't allow accessing secrets in `if` conditions.
+
+**Solution**: Move secret checks inside run blocks using environment variables:
+
+```yaml
+# Before (doesn't work)
+if: ${{ secrets.VAST_SERVER_URL != '' }}
+
+# After (works)
+- name: Enter Maintenance Mode
+  env:
+    VAST_SERVER_URL: ${{ secrets.VAST_SERVER_URL }}
+  run: |
+    if [ -z "$VAST_SERVER_URL" ]; then
+      echo "Skipping - secret not configured"
+      exit 0
+    fi
+    # ... actual work
+```
+
+### Branch Checkout
+
+**Commit**: `b9a7c3b` (fix(ci): explicitly checkout main before running deploy script)
+
+**Problem**: Deploy script was stuck on old branch because it kept pulling from that branch.
+
+**Solution**: Explicitly fetch and checkout `main` before running deploy script:
+
 ```yaml
 - name: SSH and Deploy
-  uses: appleboy/ssh-action@v1.0.3
-  with:
-    envs: DATABASE_URL,TWITCH_STREAM_KEY
-    script: |
-      echo "DATABASE_URL=$DATABASE_URL" >> .env
-      echo "TWITCH_STREAM_KEY=$TWITCH_STREAM_KEY" >> .env
-  env:
-    DATABASE_URL: ${{ secrets.DATABASE_URL }}
-    TWITCH_STREAM_KEY: ${{ secrets.TWITCH_STREAM_KEY }}
+  script: |
+    git fetch origin
+    git checkout main
+    git reset --hard origin/main
+    bash scripts/deploy-vast.sh
 ```
 
-### 6. Build Resilience
+## Testing Improvements
 
-**Use frozen lockfile and retry logic:**
-```yaml
-- name: Install dependencies
-  run: bun install --frozen-lockfile
-  
-- name: Build with retry
-  uses: nick-invision/retry@v2
-  with:
-    timeout_minutes: 10
-    max_attempts: 3
-    command: bun run build
-```
+### Playwright Configuration
 
-### 7. Split Builds
+**No recent changes** - existing Playwright setup remains stable.
 
-**Separate unsigned and release builds:**
-```yaml
-# Unsigned builds (Linux/Windows)
-- name: Build unsigned
-  run: bun run tauri build --no-bundle
+### Visual Testing
 
-# Release builds (macOS with code signing)
-- name: Build release
-  run: bun run tauri build --bundles app
-  env:
-    APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-    APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-```
+**No recent changes** - screenshot-based testing continues to work well.
 
-## Troubleshooting
+## Future Improvements
 
-### Deployment Stuck in Maintenance Mode
+### Planned
 
-**Check status:**
-```bash
-curl https://your-server.com/admin/maintenance/status \
-  -H "x-admin-code: your-admin-code"
-```
+- [ ] Parallel builds for faster CI
+- [ ] Caching for node_modules and build artifacts
+- [ ] Separate test/build/deploy workflows
+- [ ] Preview deployments for PRs
 
-**Force exit:**
-```bash
-curl -X POST https://your-server.com/admin/maintenance/exit \
-  -H "Content-Type: application/json" \
-  -H "x-admin-code: your-admin-code"
-```
+### Under Consideration
 
-### DATABASE_URL Lost After Deployment
+- [ ] Docker-based CI for consistency
+- [ ] Self-hosted runners for GPU tests
+- [ ] Automated performance benchmarks
+- [ ] Deployment rollback automation
 
-**Check if written after git reset:**
-```bash
-# View deploy script
-cat scripts/deploy-vast.sh | grep -A 5 "git reset"
+## Related Documentation
 
-# Should see DATABASE_URL write AFTER git reset
-```
-
-**Fix:**
-```bash
-# SSH to server
-ssh -p $VAST_PORT root@$VAST_HOST
-
-# Manually restore DATABASE_URL
-echo "DATABASE_URL=your-database-url" >> packages/server/.env
-
-# Restart server
-pm2 restart server
-```
-
-### Build Fails on CI
-
-**Check logs:**
-```bash
-# View in GitHub Actions
-# Repository → Actions → Workflow → View logs
-```
-
-**Common issues:**
-- npm rate limit: Use `--frozen-lockfile` and retry logic
-- Out of memory: Increase `NODE_OPTIONS=--max-old-space-size=4096`
-- Missing dependencies: Run `bun install` before build
-- TypeScript errors: Run `bun run lint` locally first
-
-### SSH Connection Fails
-
-**Check secrets:**
-```bash
-# Verify secrets are set
-# Repository → Settings → Secrets and variables → Actions
-```
-
-**Test SSH connection:**
-```bash
-ssh -p $VAST_PORT root@$VAST_HOST
-```
-
-**Common issues:**
-- Wrong port: Check `VAST_PORT` secret
-- Wrong host: Check `VAST_HOST` secret
-- Invalid key: Regenerate `VAST_SSH_KEY` secret
-- Firewall: Check Vast.ai instance firewall settings
-
-### Cloudflare Deployment Fails
-
-**Check Wrangler token:**
-```bash
-# Verify token has correct permissions
-# Cloudflare Dashboard → API Tokens → Edit token
-```
-
-**Test deployment locally:**
-```bash
-cd packages/client
-bun run build
-npx wrangler pages deploy dist --project-name=hyperscape
-```
-
-**Common issues:**
-- Invalid token: Regenerate `CLOUDFLARE_API_TOKEN`
-- Wrong project name: Check `wrangler.toml`
-- Build errors: Run `bun run build` locally first
-
-## Monitoring
-
-### GitHub Actions
-
-**View workflow runs:**
-```
-Repository → Actions → Workflow name
-```
-
-**View logs:**
-```
-Actions → Workflow run → Job → Step
-```
-
-**Download artifacts:**
-```
-Actions → Workflow run → Artifacts
-```
-
-### Deployment Status
-
-**Check server health:**
-```bash
-curl https://your-server.com/health
-```
-
-**Check maintenance mode:**
-```bash
-curl https://your-server.com/admin/maintenance/status \
-  -H "x-admin-code: your-admin-code"
-```
-
-**Check PM2 status:**
-```bash
-ssh -p $VAST_PORT root@$VAST_HOST "pm2 status"
-```
-
-## Security
-
-### Secrets Management
-
-**Never commit secrets to git:**
-- Use GitHub Secrets for CI/CD
-- Use `.env` files for local development
-- Add `.env` to `.gitignore`
-
-**Rotate secrets regularly:**
-- JWT_SECRET: Every 90 days
-- ADMIN_CODE: Every 90 days
-- API keys: As needed
-
-**Use strong secrets:**
-```bash
-# Generate JWT_SECRET
-openssl rand -base64 32
-
-# Generate ADMIN_CODE
-openssl rand -hex 16
-```
-
-### Access Control
-
-**Limit GitHub Actions permissions:**
-```yaml
-permissions:
-  contents: read
-  deployments: write
-```
-
-**Use environment protection rules:**
-```
-Repository → Settings → Environments → production
-→ Required reviewers
-→ Wait timer
-→ Deployment branches
-```
-
-## See Also
-
-- [Maintenance Mode API](maintenance-mode-api.md)
-- [Vast.ai Deployment Guide](vast-deployment.md)
-- [Cloudflare Deployment Guide](cloudflare-deployment.md)
-- [Environment Variables Reference](environment-variables.md)
+- [docs/vast-deployment.md](docs/vast-deployment.md) - Vast.ai deployment
+- [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) - Cloudflare Pages deployment
+- [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Maintenance mode API
+- [.github/workflows/](../.github/workflows/) - All workflow files
