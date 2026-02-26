@@ -407,16 +407,23 @@ See [docs/streaming-improvements.md](docs/streaming-improvements.md) for tuning 
 
 ### CI Build Failures
 
-**Symptoms**: GitHub Actions builds fail with npm 403 errors or signing failures.
+**Symptoms**: GitHub Actions builds fail with npm 403 errors, signing failures, or platform-specific errors.
 
-**Cause**: npm rate limiting or missing signing certificates.
+**Cause**: npm rate limiting, missing signing certificates, or platform-specific build configuration issues.
 
-**Solutions**:
-1. **npm 403 errors**: Retry logic is automatic (up to 5 attempts with backoff)
-2. **Signing failures**: Ensure `APPLE_CERTIFICATE` secrets are set for release builds only
-3. **Windows install failures**: Retry logic handles transient NPM registry errors
+**Solutions** (all fixed February 2026):
 
-See [docs/ci-cd-improvements.md](docs/ci-cd-improvements.md) for details.
+1. **npm 403 errors**: Automatic retry with exponential backoff (15s, 30s, 45s, 60s, 75s) - up to 5 attempts
+2. **Frozen lockfile**: All workflows use `bun install --frozen-lockfile` to prevent npm resolution attempts that trigger rate limits
+3. **Signing failures**: Build workflows split into separate unsigned/release jobs - signing env vars only present during actual releases
+4. **macOS unsigned builds**: Use `--no-bundle` instead of `--bundles app` (app bundle type is macOS-only, causing Linux/Windows to fail)
+5. **iOS builds**: Release-only (unsigned iOS builds always fail with "Signing requires a development team")
+6. **Windows install failures**: Retry logic (3 attempts) for transient NPM registry 403 errors on Windows runners
+
+**Workflow Files**:
+- `.github/workflows/build-app.yml` - Native app builds (desktop + mobile)
+- `.github/workflows/ci.yml` - Main CI pipeline
+- `.github/workflows/deploy-vast.yml` - Vast.ai deployment with maintenance mode
 
 ### Dependency Cycle Errors
 
