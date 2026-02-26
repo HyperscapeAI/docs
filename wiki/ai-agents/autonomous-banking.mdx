@@ -1,0 +1,513 @@
+---
+title: "Autonomous Banking"
+description: "Quest-driven tools and autonomous banking for AI agents"
+icon: "vault"
+---
+
+## Overview
+
+As of February 2026, Hyperscape AI agents use a quest-driven tool acquisition system and autonomous banking to behave like natural MMORPG players. This replaced the previous starter chest system.
+
+## Quest-Driven Tool Acquisition
+
+### Old System (Removed)
+
+Previously, agents received tools from a starter chest:
+
+```typescript
+// ❌ Removed: LOOT_STARTER_CHEST action
+await service.lootStarterChest();
+```
+
+**Problems:**
+- Unrealistic gameplay (instant tools)
+- Skipped core game progression
+- No quest engagement
+
+### New System (Current)
+
+Agents now acquire tools through quests, just like human players:
+
+**Tool Quests:**
+- **Lumberjack's First Lesson** → Bronze axe (Woodcutting)
+- **Fresh Catch** → Small fishing net (Fishing)
+- **Torvin's Tools** → Bronze pickaxe (Mining)
+
+**Implementation:**
+```typescript
+// From packages/plugin-hyperscape/src/actions/quests.ts
+
+// Agent checks if they have required tools
+const hasAxe = inventory.some(item => item.id.includes('axe'));
+const hasPickaxe = inventory.some(item => item.id.includes('pickaxe'));
+const hasNet = inventory.some(item => item.id.includes('net'));
+
+// If missing tools, set questing goal with highest priority
+if (!hasAxe || !hasPickaxe || !hasNet) {
+  await service.setGoal({
+    type: 'questing',
+    priority: 10,  // Highest priority
+    description: 'Complete quests to acquire essential tools'
+  });
+}
+```
+
+### Game Knowledge Updates
+
+The agent's game knowledge was updated to guide them toward tool quests:
+
+```typescript
+// From packages/plugin-hyperscape/src/providers/questProvider.ts
+
+const questKnowledge = `
+Essential Tool Quests:
+- Lumberjack's First Lesson: Rewards bronze axe (required for Woodcutting)
+- Fresh Catch: Rewards small fishing net (required for Fishing)
+- Torvin's Tools: Rewards bronze pickaxe (required for Mining)
+
+Without these tools, you cannot perform gathering skills.
+Prioritize completing these quests first.
+`;
+```
+
+## Autonomous Banking
+
+### Bank Deposit All Action
+
+Agents can now bulk deposit inventory while keeping essential tools:
+
+```typescript
+// From packages/plugin-hyperscape/src/actions/banking.ts
+
+export const bankDepositAllAction: Action = {
+  name: "BANK_DEPOSIT_ALL",
+  description: "Deposit all items to bank except essential tools (axe, pickaxe, tinderbox, net)",
+  
+  handler: async (runtime, message, state) => {
+    const service = runtime.getService<HyperscapeService>("hyperscapeService");
+    
+    // Essential tools to keep
+    const essentialTools = ['axe', 'pickaxe', 'tinderbox', 'net'];
+    
+    // Deposit everything except essential tools
+    await service.bankDepositAll({
+      keepItems: essentialTools
+    });
+    
+    return true;
+  }
+};
+```
+
+### Automatic Banking Goal
+
+Agents automatically bank when inventory is nearly full:
+
+```typescript
+// From packages/plugin-hyperscape/src/providers/goalProvider.ts
+
+const inventoryCount = inventory.length;
+const inventoryMax = 28;
+
+// Add banking goal when inventory >= 25/28 slots
+if (inventoryCount >= 25) {
+  goals.push({
+    type: 'banking',
+    priority: 9,  // High priority (below questing)
+    description: `Inventory nearly full (${inventoryCount}/${inventoryMax}). Bank items.`,
+    progress: 0
+  });
+}
+```
+
+### Banking Goal Type
+
+New goal type with auto-restore of previous goal after deposit:
+
+```typescript
+// From packages/plugin-hyperscape/src/types/core-types.ts
+
+export type GoalType = 
+  | 'combat'
+  | 'skilling'
+  | 'questing'
+  | 'banking'      // NEW: Auto-deposit and restore previous goal
+  | 'exploration'
+  | 'social';
+```
+
+**Behavior:**
+1. Agent sets banking goal when inventory >= 25/28
+2. Agent navigates to nearest bank
+3. Agent deposits all items except essential tools
+4. Banking goal auto-completes
+5. Previous goal is restored (e.g., woodcutting)
+
+## Bank Packet Protocol Fix
+
+### Problem
+
+The old bank protocol was broken:
+
+```typescript
+// ❌ Old: bankAction packet (broken)
+await service.sendPacket({
+  type: 'bankAction',
+  action: 'depositAll'
+});
+```
+
+### Solution
+
+Replaced with proper bank packet sequence:
+
+```typescript
+// ✅ New: Proper bank protocol
+await service.bankOpen();           // Open bank interface
+await service.bankDepositAll();     // Deposit items
+await service.bankClose();          // Close bank interface
+
+// Or individual operations:
+await service.bankDeposit(itemId, quantity);
+await service.bankWithdraw(itemId, quantity);
+```
+
+**Packet Types:**
+- `bankOpen` - Open bank interface
+- `bankDeposit` - Deposit specific item
+- `bankDepositAll` - Bulk deposit (keeps essential tools)
+- `bankWithdraw` - Withdraw specific item
+- `bankClose` - Close bank interface
+
+## Inventory Display
+
+Agents now display inventory count with warnings:
+
+```typescript
+// From packages/plugin-hyperscape/src/providers/inventoryProvider.ts
+
+const inventoryCount = inventory.length;
+const inventoryMax = 28;
+
+let inventoryStatus = `Inventory: ${inventoryCount}/${inventoryMax} slots`;
+
+if (inventoryCount >= 28) {
+  inventoryStatus += " (FULL - cannot pick up items)";
+} else if (inventoryCount >= 25) {
+  inventoryStatus += " (nearly full - consider banking)";
+}
+```
+
+**LLM Prompt:**
+```
+Current Inventory: 26/28 slots (nearly full - consider banking)
+
+Items:
+- logs x 15
+- raw_shrimp x 8
+- bronze_axe x 1
+- small_fishing_net x 1
+- tinderbox x 1
+```
+
+## Resource Detection Fix
+
+### Problem
+
+Agents reported "choppableTrees=0" despite visible trees nearby.
+
+### Solution
+
+Increased resource approach range from 20m to 40m:
+
+```typescript
+// From packages/plugin-hyperscape/src/actions/skills.ts
+
+// ❌ Old: 20m range
+const RESOURCE_APPROACH_RANGE = 20;
+
+// ✅ New: 40m range (matches skills validation)
+const RESOURCE_APPROACH_RANGE = 40;
+```
+
+**Applied to:**
+- `CHOP_TREE` action
+- `MINE_ROCK` action
+- `CATCH_FISH` action
+
+**Why 40m:**
+- Matches server-side skills validation range
+- Prevents "no resources found" errors when trees are visible
+- Accounts for terrain elevation differences
+
+## Action Locks and Fast-Tick Mode
+
+### Action Lock
+
+Skip LLM ticks while movement is in progress:
+
+```typescript
+// From packages/plugin-hyperscape/src/managers/autonomous-behavior-manager.ts
+
+if (this.isMoving) {
+  // Skip LLM tick while moving
+  return;
+}
+
+// Only run LLM when stationary
+await this.runLLMTick();
+```
+
+**Benefits:**
+- Prevents wasted LLM calls during movement
+- Reduces API costs
+- Improves responsiveness
+
+### Fast-Tick Mode
+
+Quick follow-up after movement or goal changes:
+
+```typescript
+// Normal tick: 10s interval
+const NORMAL_TICK_INTERVAL = 10000;
+
+// Fast tick: 2s interval (after movement/goal change)
+const FAST_TICK_INTERVAL = 2000;
+
+// Switch to fast-tick after movement completes
+if (this.justFinishedMovement) {
+  this.tickInterval = FAST_TICK_INTERVAL;
+  this.justFinishedMovement = false;
+}
+
+// Return to normal tick after one fast tick
+setTimeout(() => {
+  this.tickInterval = NORMAL_TICK_INTERVAL;
+}, FAST_TICK_INTERVAL);
+```
+
+**Use Cases:**
+- Quick decision after reaching resource
+- Immediate action after banking
+- Fast response to combat engagement
+
+## Short-Circuit LLM
+
+Skip LLM for obvious decisions:
+
+```typescript
+// From packages/plugin-hyperscape/src/managers/autonomous-behavior-manager.ts
+
+// Repeat resource gathering (same tree/rock/fish spot)
+if (lastAction === 'CHOP_TREE' && lastResult === 'success') {
+  return await this.chopTree(lastTargetId);
+}
+
+// Banking completion
+if (lastAction === 'BANK_DEPOSIT_ALL' && lastResult === 'success') {
+  return await this.restorePreviousGoal();
+}
+
+// Goal already set
+if (currentGoal && currentGoal.type === 'skilling') {
+  return await this.continueCurrentGoal();
+}
+
+// Otherwise, run LLM
+return await this.runLLMTick();
+```
+
+**Benefits:**
+- Faster response times
+- Reduced API costs
+- More natural behavior (don't overthink simple actions)
+
+## Await Banking Movement
+
+Banking actions now await movement completion instead of returning early:
+
+```typescript
+// ❌ Old: Return early (movement continues in background)
+await service.navigateToBank();
+return true;  // Action completes immediately
+
+// ✅ New: Await movement completion
+await service.navigateToBank();
+await service.waitForMovementComplete();  // Wait for arrival
+await service.bankDepositAll();
+return true;  // Action completes after banking
+```
+
+**Benefits:**
+- Ensures banking completes before next action
+- Prevents "bank not open" errors
+- More reliable autonomous behavior
+
+## Movement Tracking
+
+New methods for tracking movement state:
+
+```typescript
+// From packages/plugin-hyperscape/src/services/HyperscapeService.ts
+
+class HyperscapeService {
+  private isMoving: boolean = false;
+  
+  async waitForMovementComplete(timeoutMs = 30000): Promise<void> {
+    const startTime = Date.now();
+    
+    while (this.isMoving && Date.now() - startTime < timeoutMs) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    if (this.isMoving) {
+      throw new Error('Movement timeout');
+    }
+  }
+  
+  isCurrentlyMoving(): boolean {
+    return this.isMoving;
+  }
+}
+```
+
+## Last Action Tracking
+
+Track last action name and result for LLM continuity:
+
+```typescript
+// From packages/plugin-hyperscape/src/managers/autonomous-behavior-manager.ts
+
+interface ActionHistory {
+  name: string;
+  result: 'success' | 'failure';
+  targetId?: string;
+  timestamp: number;
+}
+
+// Include in LLM prompt
+const prompt = `
+Last Action: ${lastAction.name}
+Result: ${lastAction.result}
+Target: ${lastAction.targetId || 'none'}
+
+Based on this result, what should you do next?
+`;
+```
+
+## Filter Depleted Resources
+
+Nearby entity checks now filter out depleted resources:
+
+```typescript
+// From packages/plugin-hyperscape/src/providers/nearbyEntities.ts
+
+const nearbyTrees = entities
+  .filter(e => e.type === 'tree')
+  .filter(e => !e.depleted)  // NEW: Filter depleted resources
+  .filter(e => distance(player, e) < 40);
+```
+
+**Why:**
+- Prevents agents from trying to chop depleted trees
+- Reduces "resource not available" errors
+- More efficient resource gathering
+
+## Configuration
+
+```bash
+# Enable model agents (default: true)
+SPAWN_MODEL_AGENTS=true
+
+# Max model agents to spawn
+AUTO_START_AGENTS_MAX=10
+
+# Enable autonomous banking
+# (No env var - always enabled)
+
+# Resource approach range (hardcoded to 40m)
+# RESOURCE_APPROACH_RANGE=40
+```
+
+## Example Agent Behavior
+
+**Scenario:** Agent with full inventory
+
+1. **Inventory Check**: 26/28 slots (nearly full)
+2. **Goal Set**: Banking goal (priority 9)
+3. **Navigate**: Move to nearest bank
+4. **Wait**: Await movement completion
+5. **Bank Open**: Open bank interface
+6. **Deposit All**: Keep axe, pickaxe, tinderbox, net
+7. **Bank Close**: Close interface
+8. **Goal Restore**: Resume previous goal (e.g., woodcutting)
+9. **Fast-Tick**: 2s interval for quick decision
+10. **Continue**: Resume woodcutting
+
+## Migration Guide
+
+### From Starter Chest to Quests
+
+If you have existing agents using the old starter chest system:
+
+**1. Remove starter chest references:**
+```typescript
+// ❌ Remove
+await service.lootStarterChest();
+```
+
+**2. Add quest completion logic:**
+```typescript
+// ✅ Add
+if (!hasAxe) {
+  await service.acceptQuest('lumberjacks_first_lesson');
+  await service.completeQuest('lumberjacks_first_lesson');
+}
+```
+
+**3. Update character templates:**
+```json
+{
+  "name": "Skiller Agent",
+  "bio": "I complete quests to acquire tools, then skill efficiently.",
+  "knowledge": [
+    "Complete Lumberjack's First Lesson for bronze axe",
+    "Complete Fresh Catch for small fishing net",
+    "Complete Torvin's Tools for bronze pickaxe"
+  ]
+}
+```
+
+### From Manual Banking to Autonomous
+
+**1. Remove manual banking logic:**
+```typescript
+// ❌ Remove
+if (inventory.length >= 28) {
+  await service.navigateToBank();
+  await service.bankDepositAll();
+}
+```
+
+**2. Let autonomous system handle it:**
+```typescript
+// ✅ Autonomous banking handles this automatically
+// No code needed - banking goal triggers at 25/28 slots
+```
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Actions Reference" icon="play" href="/wiki/ai-agents/actions">
+    Complete reference for all agent actions
+  </Card>
+  <Card title="Quest System" icon="scroll" href="/wiki/game-systems/quests">
+    Quest system documentation
+  </Card>
+  <Card title="Banking System" icon="vault" href="/wiki/game-systems/bank">
+    Banking system documentation
+  </Card>
+  <Card title="AI Agents Overview" icon="bot" href="/wiki/ai-agents/overview">
+    AI agents overview and architecture
+  </Card>
+</CardGroup>
