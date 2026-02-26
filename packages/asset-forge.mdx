@@ -42,52 +42,94 @@ packages/asset-forge/
 Interactive browser for all game visual effects with live Three.js previews (added in commit 69105229, Feb 25, 2026):
 
 **Categories:**
-- **Magic Spells**: Strike and Bolt spells (Wind, Water, Earth, Fire)
+- **Magic Spells** (8 effects): Strike and Bolt spells (Wind, Water, Earth, Fire)
   - Multi-layer orb rendering with outer glow, core, and orbiting sparks
   - Trail particles with additive blending
-  - Pulse animations for bolt-tier spells
-- **Arrow Projectiles**: Metal-tiered arrows (Bronze, Iron, Steel, Mithril, Adamant)
+  - Pulse animations for bolt-tier spells (5 Hz pulse, 0.2 amplitude)
+  - Orbit animation with gentle vertical bobbing
+- **Arrow Projectiles** (6 effects): Metal-tiered arrows (Default, Bronze, Iron, Steel, Mithril, Adamant)
   - 3D arrow meshes with shaft, head, and fletching
   - Metallic materials with proper roughness
-- **Glow Particles**: Altar, Fire, and Torch effects
+  - Rotating preview animation
+- **Glow Particles** (3 effects): Altar, Fire, and Torch effects
   - GPU-instanced particle systems
-  - 4-layer composition (pillar, wisp, spark, base)
-  - Procedural noise-based fire shader
-- **Fishing Spots**: Water particle effects (Net, Bait, Fly)
+  - 4-layer composition (pillar, wisp, spark, base) for altar
+  - Procedural noise-based fire shader with smooth value noise
+  - Soft radial falloff designed for additive blending
+  - Per-particle turbulent vertex motion for natural flickering
+- **Fishing Spots** (3 effects): Water particle effects (Net, Bait, Fly)
   - Splash arcs, bubble rise, shimmer twinkle, ripple rings
   - Burst system for fish activity
-- **Teleport**: Multi-phase teleportation sequence
-  - Ground rune circle with TSL shader
-  - Dual beams with elastic overshoot
-  - Shockwave rings and helix spiral particles
-  - 4 phases: Gather, Erupt, Sustain, Fade
-- **Combat HUD**: Damage splats and XP drops
+  - Variant-specific colors and particle counts
+- **Teleport** (1 effect): Multi-phase teleportation sequence
+  - Ground rune circle with procedural canvas texture
+  - Dual beams with Hermite elastic overshoot curve
+  - Shockwave rings with easeOutExpo expansion
+  - Helix spiral particles (12 particles, 2 strands)
+  - Burst particles with gravity simulation (8 particles)
+  - Point light with dynamic intensity (0 → 5.0 peak → 0)
+  - 4 phases: Gather (0-20%), Erupt (20-34%), Sustain (34-68%), Fade (68-100%)
+  - 2.5 second duration
+- **Combat HUD** (2 effects): Damage splats and XP drops
   - Canvas-based rendering with rounded rectangles
-  - Hit/miss color coding
-  - Float-up animations
+  - Hit/miss color coding (dark red vs dark blue)
+  - Float-up animations with easing curves
 
 **Features:**
-- Live Three.js previews with orbit controls
-- Detailed parameter tables (size, intensity, duration, etc.)
-- Color palette swatches with hex codes
-- Phase timeline visualization for complex effects
-- Component breakdown for multi-part effects
-- Variant panels for effects with multiple styles
+- **Live Three.js Previews**: Real-time 3D rendering with orbit controls
+  - Spell orbs orbit in gentle circles with vertical bobbing
+  - Arrows rotate to show all angles
+  - Glow particles demonstrate full lifecycle
+  - Water effects show splash/bubble/shimmer/ripple layers
+  - Teleport effect loops through all 4 phases
+- **Detail Panels**:
+  - Color palette swatches with hex codes
+  - Parameter tables (size, intensity, duration, speed, etc.)
+  - Layer breakdown for multi-layer effects (glow particles)
+  - Phase timeline visualization (teleport effect)
+  - Component breakdown for complex effects (teleport)
+  - Variant panels for effects with multiple styles (combat HUD)
+- **Sidebar Navigation**:
+  - Category grouping with icons (Sparkles, Target, Flame, Waves, Sword)
+  - Collapsible sections with effect counts
+  - Click to select effect and view details
+  - Empty state when no effect selected
 
-**Navigation:**
-- Sidebar catalog with category grouping
-- Collapsible sections with effect counts
-- Click to select effect and view details
-- Search and filter (future enhancement)
-
-**Technical Details:**
-- Standalone effect metadata in `vfx-catalog.ts` (no game engine imports)
-- Source-of-truth files documented for each effect type
-- Procedural texture generation matching engine implementation
-- Billboard particles with camera-facing orientation
-- Additive blending for glow effects
+**Technical Implementation:**
+- **Standalone Metadata**: Effect data in `vfx-catalog.ts` (no game engine imports)
+  - Prevents Asset Forge from pulling in full game engine
+  - Data duplicated from source-of-truth files (documented in comments)
+- **Source-of-Truth Files**:
+  - `packages/shared/src/data/spell-visuals.ts` (spell projectiles)
+  - `packages/shared/src/entities/managers/particleManager/GlowParticleManager.ts` (glow particles)
+  - `packages/shared/src/entities/managers/particleManager/WaterParticleManager.ts` (fishing spots)
+  - `packages/shared/src/systems/client/ClientTeleportEffectsSystem.ts` (teleport)
+  - `packages/shared/src/systems/client/DamageSplatSystem.ts` (damage splats)
+  - `packages/shared/src/systems/client/XPDropSystem.ts` (XP drops)
+- **Procedural Textures**: Matches engine's DataTexture approach
+  - `createGlowTexture()`: Radial gradient with configurable sharpness
+  - `createRingTexture()`: Ring pattern with soft falloff
+  - Cached textures to avoid regeneration
+- **Billboard Rendering**: Camera-facing particles
+  - `Billboard` component copies camera quaternion each frame
+  - Ensures particles always face viewer
+- **Additive Blending**: All glow effects use `THREE.AdditiveBlending`
+  - Overlapping particles merge naturally
+  - Bright cores with soft falloff
+- **Animation Systems**:
+  - Spell orbs: Orbit path with `useFrame` hook
+  - Glow particles: Instanced rendering with per-particle lifecycle
+  - Water particles: Parabolic arcs, wobble, twinkle, ring expansion
+  - Teleport: Multi-phase state machine with easing curves
 
 **Access:** Navigate to `/vfx` in Asset Forge to browse the catalog.
+
+**Files Added:**
+- `src/components/VFX/EffectDetailPanel.tsx` (205 lines)
+- `src/components/VFX/VFXPreview.tsx` (1691 lines)
+- `src/data/vfx-catalog.ts` (663 lines)
+- `src/pages/VFXPage.tsx` (242 lines)
+- `src/constants/navigation.ts` (updated with VFX route)
 
 ### Design Generation
 
