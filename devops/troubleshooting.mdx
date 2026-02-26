@@ -988,6 +988,9 @@ bun run build
 - Removed premature `clearDuelFlagsForCycle()` in `endCycle()`
 - Flags now stay true until `cleanupAfterDuel()` completes teleports via microtask
 - Prevents `DuelSystem` from seeing agents with `inStreamingDuel=false` still in arena
+- `suppressEffect` flag now forwarded through ServerNetwork → ClientNetwork → VFX system
+- Mid-fight proximity corrections suppressed, arena exit effects visible
+- Removed duplicate `PLAYER_TELEPORTED` emit from `PlayerRemote.modify()` and local player path
 - File: `packages/server/src/systems/StreamingDuelScheduler/index.ts`
 - Commit: 7bf0e14 (Feb 25, 2026)
 
