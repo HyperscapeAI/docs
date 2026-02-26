@@ -620,6 +620,109 @@ Recent dependency updates (February 2026):
   All dependency updates were merged via automated Dependabot PRs in commits 7a60135e through 55c57ed5.
 </Info>
 
+## RTMP Streaming Configuration
+
+### Streaming Quality Improvements (Feb 26 2026)
+
+Recent commits improved RTMP streaming stability and quality for smoother viewer experience:
+
+#### Buffering Improvements (commit 4c630f12)
+
+**Problem:** Viewers experienced frequent buffering and stalling during streams.
+
+**Solution:** Three key changes to reduce viewer-side buffering:
+
+1. **Changed x264 tune from 'zerolatency' to 'film'**
+   - Allows B-frames for better compression
+   - Better lookahead for smoother bitrate
+   - Set `STREAM_LOW_LATENCY=true` to restore old behavior
+
+2. **Increased buffer multiplier from 2x to 4x bitrate**
+   - 18000k bufsize (was 9000k) gives more headroom
+   - Reduces buffering during network hiccups
+
+3. **Added FLV flags for RTMP stability**
+   - `flvflags=no_duration_filesize` prevents FLV header issues
+
+4. **Improved input buffering**
+   - Added `thread_queue_size` for frame queueing
+   - `genpts+discardcorrupt` for better stream recovery
+
+**Configuration:**
+
+```bash
+# Low latency mode (zerolatency tune, 2x buffer, no B-frames)
+STREAM_LOW_LATENCY=true
+
+# Balanced mode (film tune, 4x buffer, B-frames enabled) - DEFAULT
+STREAM_LOW_LATENCY=false
+```
+
+**FFmpeg Args Comparison:**
+
+```bash
+# Low Latency Mode (STREAM_LOW_LATENCY=true)
+-c:v libx264 -preset ultrafast -tune zerolatency -bufsize 9000k
+
+# Balanced Mode (STREAM_LOW_LATENCY=false) - DEFAULT
+-c:v libx264 -preset ultrafast -tune film -bufsize 18000k -bf 2
+```
+
+**When to Use Low Latency:**
+- Interactive streams where <1s delay is critical
+- Betting/prediction markets with real-time odds
+- Live commentary or viewer interaction
+
+**When to Use Balanced (Default):**
+- Passive viewing experiences
+- Recorded content or VODs
+- Viewers on unstable connections
+- Longer streams (>1 hour)
+
+### Stream Key Management (commits 7ee730d, a71d4ba, 5dbd239)
+
+**Problem:** Vast.ai servers had stale stream keys in environment that overrode .env file values, causing streams to go to wrong channels.
+
+**Solution:** Explicitly unset and re-export stream keys before PM2 start:
+
+```bash
+# From scripts/deploy-vast.sh
+unset TWITCH_STREAM_KEY X_STREAM_KEY X_RTMP_URL KICK_STREAM_KEY KICK_RTMP_URL
+source /root/hyperscape/packages/server/.env
+bunx pm2 start ecosystem.config.cjs
+```
+
+**Why This Matters:**
+- Prevents streams from going to wrong Twitch/X/Kick accounts
+- Ensures PM2 picks up correct keys from .env file
+- Required for CI/CD deployments to Vast.ai
+
+**GitHub Secrets Required:**
+
+All stream keys must be added to GitHub repository secrets for CI/CD:
+
+| Secret | Purpose |
+|--------|---------|
+| `TWITCH_STREAM_KEY` | Twitch stream key |
+| `X_STREAM_KEY` | X/Twitter stream key |
+| `X_RTMP_URL` | X/Twitter RTMP URL |
+| `KICK_STREAM_KEY` | Kick stream key |
+| `KICK_RTMP_URL` | Kick RTMP URL (rtmps://...) |
+
+### Kick RTMP URL Fix (commit 5dbd239)
+
+**Fixed Kick streaming URL:**
+
+```bash
+# ❌ Old (incorrect)
+KICK_RTMP_URL=rtmp://ingest.kick.com/live
+
+# ✅ New (correct)
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
+```
+
+The Kick platform uses RTMPS (RTMP over TLS) with regional ingest endpoints, not the generic `ingest.kick.com` domain.
+
 ## GitHub Actions
 
 The repository includes automated workflows for code quality and documentation:
