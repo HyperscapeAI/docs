@@ -1059,6 +1059,60 @@ bun run build
 - File: `packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts`
 - Commit: 645137386 (Feb 25, 2026)
 
+### WebSocket Type Errors
+
+**Symptom**: TypeScript errors about missing `removeAllListeners` and `on` methods on WebSocket connections
+
+**Cause**: Fastify websocket connections use `ws` library type, not browser WebSocket
+
+**Solution**: Update to latest code (commit efba5a0 fixed this)
+
+**Technical Details:**
+- Import proper WebSocket type from `ws` library: `import type { WebSocket } from 'ws'`
+- Fastify's `@fastify/websocket` uses the `ws` library under the hood
+- Browser WebSocket type doesn't have Node.js EventEmitter methods
+- File: `packages/server/src/systems/ServerNetwork/index.ts`
+- Commit: efba5a0 (Feb 26, 2026)
+
+### Asset-Forge TypeScript Strict Mode Errors
+
+**Symptom**: TypeScript errors in asset-forge about implicit `any` types in traverse callbacks
+
+**Cause**: TypeScript strict mode requires explicit types for callback parameters
+
+**Solution**: Update to latest code (commits 82f97da, 42e52af fixed this)
+
+**Technical Details:**
+- **Traverse Callbacks** (commit 82f97da): Added type annotations for traverse callbacks
+  - Example: `(child: THREE.Object3D) => { ... }` instead of `(child) => { ... }`
+  - Required by TypeScript strict mode
+- **Module Resolution** (commit 42e52af): Updated to `moduleResolution: "bundler"`
+  - Three.js WebGPU subpath requires `bundler` or `node16` module resolution
+  - Previous `'node'` setting couldn't resolve the exports map correctly
+  - File: `packages/asset-forge/tsconfig.json`
+
+### Type Safety in Core Game Logic
+
+**Symptom**: Explicit `any` types in core game logic causing type safety issues
+
+**Cause**: Legacy code with untyped variables
+
+**Solution**: Update to latest code (commit d911359 fixed this)
+
+**Technical Details:**
+- **tile-movement.ts**: Removed 13 `any` casts by properly typing BuildingCollisionService and ICollisionMatrix method calls
+- **proxy-routes.ts**: Replaced `any` with proper types:
+  - Error handlers: `unknown` for caught errors
+  - WebSocket message handlers: `Buffer | string` for message data
+  - Error events: `Error` type
+- **ClientGraphics.ts**: Added cast for `setupGPUCompute` after WebGPU verification
+  - WebGPU is now required, so cast is safe after verification check
+- **Remaining `any` types** (acceptable):
+  - TSL shader code (ProceduralGrass.ts) - @types/three limitation
+  - Browser polyfills (polyfills.ts) - intentional mock implementations
+  - Test files - acceptable for test fixtures
+- Commit: d911359 (Feb 26, 2026)
+
 ### Duplicate Teleport VFX
 
 **Symptom**: Three teleport effects play when agents exit duel arena (should only be one)
