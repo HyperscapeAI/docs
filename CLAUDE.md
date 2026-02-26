@@ -463,6 +463,12 @@ See [docs/webgpu-requirements.md](docs/webgpu-requirements.md) for full requirem
 - Game Design Document: See `.cursor/rules/gdd.mdc`
 - [docs/vast-deployment.md](docs/vast-deployment.md) - Vast.ai deployment guide
 - [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Graceful deployment API
+- [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) - Cloudflare Pages setup
+- [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser and GPU requirements
+- [docs/streaming-configuration.md](docs/streaming-configuration.md) - RTMP streaming setup
+- [docs/arena-rendering-optimizations.md](docs/arena-rendering-optimizations.md) - InstancedMesh & TSL guide
+- [docs/vast-deployment.md](docs/vast-deployment.md) - Vast.ai deployment guide
+- [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Graceful deployment API
 - [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser and GPU requirements
 - [docs/streaming-configuration.md](docs/streaming-configuration.md) - RTMP streaming setup
 - [docs/asset-forge-vfx-catalog.md](docs/asset-forge-vfx-catalog.md) - VFX catalog guide
