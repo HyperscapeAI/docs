@@ -666,26 +666,89 @@ The client includes Content Security Policy headers to mitigate XSS attacks:
 Content-Security-Policy: 
   default-src 'self'; 
   script-src 'self' 'unsafe-inline' 'unsafe-eval' https://auth.privy.io https://*.privy.io; 
-  style-src 'self' 'unsafe-inline'; 
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
   img-src 'self' data: https: blob:; 
-  font-src 'self' data:; 
+  font-src 'self' data: https://fonts.gstatic.com; 
   connect-src 'self' wss: https: ws://localhost:* http://localhost:*; 
   frame-src 'self' https://auth.privy.io https://*.privy.io; 
   worker-src 'self' blob:; 
   media-src 'self' blob:; 
-  report-uri /api/csp-report;
 ```
 
 **Security Notes:**
 
 - `'unsafe-inline'` is required for Privy SDK (injects inline styles for modals)
 - `'unsafe-eval'` is required for Privy SDK (uses eval for authentication flows)
-- `report-uri` sends CSP violations to the server for monitoring
-- Consider migrating to CSP nonces when Privy SDK adds support
+- `data:` URLs allowed for WASM loading (commit 8626299)
+- Google Fonts allowed for typography (commit e012ed2)
+- `report-uri` removed (was broken, commit 8626299)
+
+**Recent CSP Updates (Feb 26 2026):**
+
+**Allow data: URLs for WASM (commit 8626299):**
+```
+img-src 'self' data: https: blob:;
+font-src 'self' data: https://fonts.gstatic.com;
+```
+
+**Allow Google Fonts (commit e012ed2):**
+```
+style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+font-src 'self' data: https://fonts.gstatic.com;
+```
+
+**Remove broken report-uri (commit 8626299):**
+- `report-uri /api/csp-report` removed (endpoint didn't exist)
+- CSP violations no longer reported to server
 
 <Info>
-CSP violations are throttled and reported to `/api/csp-report` for security monitoring.
+CSP is enforced in production builds. Development mode may have relaxed policies for hot module replacement.
 </Info>
+
+### CSRF Protection
+
+The server uses CSRF tokens to prevent cross-site request forgery attacks.
+
+**CSRF Middleware (commit cd29a76, Feb 26 2026):**
+
+**Problem:** CSRF validation failed for cross-origin requests from Cloudflare Pages (hyperscape.gg) to Railway backend because SameSite=Strict cookies cannot be sent cross-origin.
+
+**Solution:** Skip CSRF validation for known cross-origin clients that are already protected by Origin header validation and JWT bearer tokens:
+
+```typescript
+// From packages/server/src/middleware/csrf.ts
+const knownCrossOriginClients = [
+  /^https?:\/\/([a-z0-9-]+\.)?hyperscape\.gg$/,
+  /^https?:\/\/([a-z0-9-]+\.)?hyperbet\.win$/,
+  /^https?:\/\/([a-z0-9-]+\.)?hyperscape\.bet$/,
+];
+
+// Skip CSRF validation when Origin matches known clients
+if (origin && knownCrossOriginClients.some(pattern => pattern.test(origin))) {
+  return; // Skip CSRF check
+}
+```
+
+**Why This Works:**
+
+Cross-origin requests are already protected by:
+1. **Origin header validation** (http-server.ts preHandler hook)
+2. **JWT bearer token authentication** (Authorization header)
+
+CSRF cookie validation is redundant for cross-origin and doesn't work anyway due to SameSite=Strict.
+
+**Apex Domain Support (commit cd29a76):**
+
+Added apex domain support to allowed origins:
+
+```typescript
+// ✅ Now supported
+https://hyperscape.gg        // Apex domain
+https://www.hyperscape.gg    // Subdomain
+https://play.hyperscape.gg   // Subdomain
+```
+
+Previously only subdomains were matched.
 
 ## Dependency Versions
 
