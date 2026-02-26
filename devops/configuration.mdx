@@ -87,6 +87,13 @@ STREAMING_PUBLIC_DELAY_MS=0          # Override platform default delay (ms)
 STREAM_LOW_LATENCY=false  # Set to true for ultra-low latency (may cause viewer buffering)
                           # Default: false (uses 'film' tune with B-frames for smoother playback)
 
+# Audio Streaming (commits 3b6f1ee, aab66b0, b9d2e41, Feb 26 2026)
+# Capture game audio via PulseAudio virtual sink
+STREAM_AUDIO_ENABLED=true                    # Enable audio capture (default: true)
+PULSE_AUDIO_DEVICE=chrome_audio.monitor      # PulseAudio monitor device
+PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native  # PulseAudio socket path
+XDG_RUNTIME_DIR=/tmp/pulse-runtime           # Runtime directory for PulseAudio
+
 # See packages/server/.env.example for full RTMP configuration
 ```
 
