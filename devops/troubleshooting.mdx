@@ -858,11 +858,15 @@ See [Model Cache System](/wiki/engine/model-cache) for complete details.
 
 **Cause**: Circular dependencies between packages during clean builds
 
-**Solution**: Update to latest code (commit f355276 fixed shared/procgen cycle). The build system handles this automatically with resilient patterns:
+**Solution**: Update to latest code (commits f355276, 3b9c0f2, 05c2892 fixed shared/procgen cycle). The build system handles this automatically with resilient patterns:
 
-- **procgen ↔ shared**: Moved procgen from dependencies to optional peerDependencies in shared
-  - Breaks turbo graph cycle
-  - Import still resolves at runtime (both packages always installed together)
+- **procgen ↔ shared**: Fully broken cycle via peerDependencies + devDependencies
+  - Commit f355276: Moved procgen from dependencies to optional peerDependencies in shared
+  - Commit 3b9c0f2: Removed cross-references entirely from both package.json files
+  - Commit 05c2892: Added procgen as devDependency in shared for TypeScript type resolution
+  - Turbo treats peerDependencies as graph edges, so peerDependencies alone was insufficient
+  - devDependencies are not followed by turbo's `^build` topological ordering (no cycle)
+  - Imports still resolve at runtime via bun workspace resolution (both packages always installed together)
 - **plugin-hyperscape ↔ shared**: Uses `--skipLibCheck` in declaration generation
 - Packages produce partial output sufficient for downstream consumers
 
@@ -881,9 +885,11 @@ cd ../plugin-hyperscape
 bun run build
 ```
 
-**Recent Fix:**
-- Commit f355276 (Feb 25, 2026): Broke shared → procgen → shared cycle
-- File: `packages/shared/package.json`
+**Recent Fixes:**
+- Commit 05c2892 (Feb 26, 2026): Added procgen as devDependency for TypeScript type resolution
+- Commit 3b9c0f2 (Feb 26, 2026): Fully broke shared↔procgen cycle by removing cross-references
+- Commit f355276 (Feb 25, 2026): Initial fix moving procgen to peerDependencies
+- Files: `packages/shared/package.json`, `packages/procgen/package.json`
 
 ### Mage Agents Not Attacking in Duels
 
