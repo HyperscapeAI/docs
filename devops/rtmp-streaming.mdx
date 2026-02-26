@@ -1,0 +1,612 @@
+---
+title: "RTMP Streaming"
+description: "Multi-platform streaming configuration for Twitch, Kick, and X"
+icon: "broadcast-tower"
+---
+
+## Overview
+
+Hyperscape streams gameplay to multiple RTMP destinations simultaneously using FFmpeg's tee muxer for efficient single-encode multi-output.
+
+## Supported Platforms
+
+### Active Platforms
+
+- **Twitch** - `rtmp://live.twitch.tv/app`
+- **Kick** - `rtmps://fa723fc1b171.global-contribute.live-video.net/app` (RTMPS)
+- **X/Twitter** - `rtmp://sg.pscp.tv:80/x`
+
+### Removed Platforms
+
+- **YouTube** - Explicitly disabled (set `YOUTUBE_STREAM_KEY=""` to prevent stale keys)
+
+<Info>
+YouTube was removed from default streaming destinations in February 2026. To re-enable, set `YOUTUBE_STREAM_KEY` and `YOUTUBE_RTMP_URL`.
+</Info>
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Twitch
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+TWITCH_RTMP_URL=rtmp://live.twitch.tv/app  # Optional override
+
+# Kick (uses RTMPS - secure RTMP)
+KICK_STREAM_KEY=sk_us-west-2_OrgZh8XyN0Qs_...
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
+
+# X/Twitter
+X_STREAM_KEY=sp16tpmtyqws
+X_RTMP_URL=rtmp://sg.pscp.tv:80/x
+
+# YouTube (optional - disabled by default)
+YOUTUBE_STREAM_KEY=
+YOUTUBE_RTMP_URL=rtmp://a.rtmp.youtube.com/live2
+```
+
+### Get Stream Keys
+
+**Twitch:**
+1. Go to [Twitch Dashboard](https://dashboard.twitch.tv/settings/stream)
+2. Copy **Primary Stream Key**
+3. Set as `TWITCH_STREAM_KEY`
+
+**Kick:**
+1. Go to Kick Creator Dashboard
+2. Navigate to **Stream Settings**
+3. Copy **Stream Key**
+4. Set as `KICK_STREAM_KEY`
+
+**X/Twitter:**
+1. Go to [Media Studio](https://studio.twitter.com)
+2. Click **Producer** → **Create Broadcast** → **Create Source**
+3. Copy **RTMP URL** and **Stream Key**
+4. Set as `X_RTMP_URL` and `X_STREAM_KEY`
+
+<Warning>
+X/Twitter streaming requires X Premium subscription for desktop streaming.
+</Warning>
+
+## Streaming Quality
+
+### Balanced Mode (Default)
+
+Optimized for smooth playback and viewer experience:
+
+```bash
+STREAM_LOW_LATENCY=false
+```
+
+**Settings:**
+- **Tune**: `film` (allows B-frames for better compression)
+- **Buffer**: 4x bitrate (18000k for 4500k bitrate)
+- **Lookahead**: Better bitrate smoothing
+- **Use Case**: Passive viewing, longer streams, unstable connections
+
+**FFmpeg Args:**
+```bash
+-c:v libx264 -preset ultrafast -tune film \
+-b:v 4500k -bufsize 18000k -bf 2 \
+-g 60 -keyint_min 60
+```
+
+### Low Latency Mode
+
+Optimized for minimal delay:
+
+```bash
+STREAM_LOW_LATENCY=true
+```
+
+**Settings:**
+- **Tune**: `zerolatency` (no B-frames)
+- **Buffer**: 2x bitrate (9000k for 4500k bitrate)
+- **No lookahead**: Immediate encoding
+- **Use Case**: Interactive streams, live betting, viewer interaction
+
+**FFmpeg Args:**
+```bash
+-c:v libx264 -preset ultrafast -tune zerolatency \
+-b:v 4500k -bufsize 9000k \
+-g 60 -keyint_min 60
+```
+
+### Quality Settings
+
+```bash
+# Video bitrate (default: 4500k)
+STREAM_VIDEO_BITRATE=4500
+
+# Audio bitrate (default: 128k)
+STREAM_AUDIO_BITRATE=128
+
+# Framerate (default: 30)
+STREAM_FPS=30
+
+# Resolution (default: 1280x720)
+STREAM_WIDTH=1280
+STREAM_HEIGHT=720
+```
+
+## Canonical Platform
+
+The canonical platform determines default public delay for anti-cheat timing:
+
+```bash
+# Default: twitch (12s latency)
+STREAMING_CANONICAL_PLATFORM=twitch
+
+# Override public delay
+STREAMING_PUBLIC_DELAY_MS=0  # Live betting mode (no delay)
+```
+
+**Platform Defaults:**
+- `youtube` → 15000ms delay
+- `twitch` → 12000ms delay
+- `hls` → 4000ms delay
+
+<Info>
+Set `STREAMING_PUBLIC_DELAY_MS=0` for live betting with no delay. This disables anti-cheat timing protection.
+</Info>
+
+## Audio Configuration
+
+### Enable Audio Capture
+
+```bash
+# Enable audio (default: true)
+STREAM_AUDIO_ENABLED=true
+
+# PulseAudio device
+PULSE_AUDIO_DEVICE=chrome_audio.monitor
+
+# PulseAudio server
+PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+
+# Runtime directory
+XDG_RUNTIME_DIR=/tmp/pulse-runtime
+```
+
+See [Audio Streaming](/devops/audio-streaming) for complete PulseAudio setup.
+
+### Disable Audio
+
+```bash
+STREAM_AUDIO_ENABLED=false
+```
+
+FFmpeg will use silent audio (`anullsrc`).
+
+## FFmpeg Configuration
+
+### Complete Command
+
+```bash
+ffmpeg \
+  # Audio input (PulseAudio)
+  -f pulse -i chrome_audio.monitor \
+  -thread_queue_size 1024 \
+  -use_wallclock_as_timestamps 1 \
+  -filter:a aresample=async=1000:first_pts=0 \
+  \
+  # Video input (X11 screen capture)
+  -f x11grab -i :99 \
+  -thread_queue_size 1024 \
+  -framerate 30 \
+  \
+  # Video encoding
+  -c:v libx264 -preset ultrafast -tune film \
+  -b:v 4500k -bufsize 18000k -bf 2 \
+  -g 60 -keyint_min 60 \
+  -pix_fmt yuv420p \
+  \
+  # Audio encoding
+  -c:a aac -b:a 128k -ar 44100 \
+  \
+  # FLV flags for RTMP stability
+  -flvflags no_duration_filesize \
+  \
+  # Output to multiple destinations (tee muxer)
+  -f tee \
+  "[f=flv]rtmp://live.twitch.tv/app/your-twitch-key|\
+[f=flv]rtmps://fa723fc1b171.global-contribute.live-video.net/app/your-kick-key|\
+[f=flv]rtmp://sg.pscp.tv:80/x/your-x-key"
+```
+
+### Input Buffering
+
+**Audio Buffering:**
+```bash
+-thread_queue_size 1024              # Prevent buffer underruns
+-use_wallclock_as_timestamps 1       # Real-time timing
+-filter:a aresample=async=1000:first_pts=0  # Recover from drift
+```
+
+**Video Buffering:**
+```bash
+-thread_queue_size 1024              # Increased from 512
+-genpts                              # Generate presentation timestamps
+-discardcorrupt                      # Discard corrupt frames
+```
+
+### Output Buffering
+
+```bash
+# Balanced mode (default)
+-bufsize 18000k  # 4x bitrate (4500k * 4)
+
+# Low latency mode
+-bufsize 9000k   # 2x bitrate (4500k * 2)
+```
+
+## Kick RTMP URL Fix
+
+### Problem
+
+Kick streaming used incorrect URL:
+
+```bash
+# ❌ Old (incorrect)
+KICK_RTMP_URL=rtmp://ingest.kick.com/live
+```
+
+### Solution
+
+Use proper IVS endpoint with RTMPS:
+
+```bash
+# ✅ New (correct)
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
+```
+
+**Why:**
+- Kick uses AWS IVS (Interactive Video Service)
+- Regional ingest endpoints (not generic domain)
+- RTMPS (RTMP over TLS) for secure streaming
+- `/app` path required
+
+## Stream Key Security
+
+### Masked Logging
+
+Stream keys are masked in logs:
+
+```bash
+echo "[deploy] TWITCH_STREAM_KEY: ${TWITCH_STREAM_KEY:+***configured***}"
+echo "[deploy] KICK_STREAM_KEY: ${KICK_STREAM_KEY:+***configured***}"
+echo "[deploy] X_STREAM_KEY: ${X_STREAM_KEY:+***configured***}"
+```
+
+**Output:**
+```
+[deploy] TWITCH_STREAM_KEY: ***configured***
+[deploy] KICK_STREAM_KEY: ***configured***
+[deploy] X_STREAM_KEY: ***configured***
+```
+
+### Explicit Unset
+
+Prevent stale stream keys from being used:
+
+```bash
+# Unset all stream keys
+unset TWITCH_STREAM_KEY X_STREAM_KEY X_RTMP_URL KICK_STREAM_KEY KICK_RTMP_URL
+unset YOUTUBE_STREAM_KEY YOUTUBE_RTMP_STREAM_KEY
+
+# Explicitly disable YouTube
+export YOUTUBE_STREAM_KEY=""
+
+# Re-source .env for correct values
+source /root/hyperscape/packages/server/.env
+```
+
+## Streaming Diagnostics
+
+### RTMP Status File
+
+```bash
+cat packages/server/public/live/rtmp-status.json
+```
+
+**Example Output:**
+```json
+{
+  "active": true,
+  "destinations": [
+    {
+      "name": "Twitch",
+      "url": "rtmp://live.twitch.tv/app",
+      "status": "streaming",
+      "uptime": 12345
+    },
+    {
+      "name": "Kick",
+      "url": "rtmps://fa723fc1b171.global-contribute.live-video.net/app",
+      "status": "streaming",
+      "uptime": 12345
+    },
+    {
+      "name": "X",
+      "url": "rtmp://sg.pscp.tv:80/x",
+      "status": "streaming",
+      "uptime": 12345
+    }
+  ]
+}
+```
+
+### Check FFmpeg Processes
+
+```bash
+# List FFmpeg processes
+ps aux | grep ffmpeg
+
+# Check FFmpeg logs
+tail -f /var/log/ffmpeg.log
+```
+
+### Check PM2 Logs
+
+```bash
+# Filter for streaming keywords
+bunx pm2 logs hyperscape-duel --lines 200 | grep -iE "rtmp|ffmpeg|stream|capture|destination|twitch|kick|frame|fps|bitrate"
+```
+
+## Troubleshooting
+
+### Stream Not Appearing
+
+**1. Check stream keys are set:**
+```bash
+echo $TWITCH_STREAM_KEY
+echo $KICK_STREAM_KEY
+echo $X_STREAM_KEY
+```
+
+**2. Check FFmpeg is running:**
+```bash
+ps aux | grep ffmpeg
+```
+
+**3. Check RTMP status:**
+```bash
+cat packages/server/public/live/rtmp-status.json
+```
+
+**4. Check platform dashboards:**
+- Twitch: [dashboard.twitch.tv](https://dashboard.twitch.tv)
+- Kick: Creator Dashboard
+- X: [Media Studio](https://studio.twitter.com)
+
+### Audio Not in Stream
+
+See [Audio Streaming Troubleshooting](/devops/audio-streaming#troubleshooting).
+
+### Buffering Issues
+
+**Increase buffer size:**
+```bash
+# 6x buffer (27000k for 4500k bitrate)
+STREAM_VIDEO_BITRATE=4500
+# Then set bufsize to 6x in FFmpeg args
+```
+
+**Use balanced mode:**
+```bash
+STREAM_LOW_LATENCY=false
+```
+
+### Connection Drops
+
+**Check network stability:**
+```bash
+ping -c 10 live.twitch.tv
+ping -c 10 sg.pscp.tv
+```
+
+**Increase reconnect attempts:**
+```bash
+# In FFmpeg args
+-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5
+```
+
+### High CPU Usage
+
+**Reduce encoding preset:**
+```bash
+# Change from ultrafast to faster
+-preset faster
+```
+
+**Reduce resolution:**
+```bash
+STREAM_WIDTH=1280
+STREAM_HEIGHT=720
+```
+
+**Reduce framerate:**
+```bash
+STREAM_FPS=24
+```
+
+## Advanced Configuration
+
+### Custom RTMP Destination
+
+```bash
+CUSTOM_RTMP_NAME=Custom
+CUSTOM_RTMP_URL=rtmp://your-server/live
+CUSTOM_STREAM_KEY=your-key
+```
+
+### JSON Fanout Config
+
+For additional destinations:
+
+```bash
+RTMP_DESTINATIONS_JSON='[
+  {
+    "name": "MyMux",
+    "url": "rtmp://host/live",
+    "key": "stream-key",
+    "enabled": true
+  }
+]'
+```
+
+### RTMP Multiplexer
+
+Use a multiplexer service (Restream, Livepeer) for fanout:
+
+```bash
+RTMP_MULTIPLEXER_NAME=Restream
+RTMP_MULTIPLEXER_URL=rtmp://live.restream.io/live
+RTMP_MULTIPLEXER_STREAM_KEY=your-restream-key
+```
+
+**Benefits:**
+- Single stream to multiplexer
+- Multiplexer fans out to all platforms
+- Reduces server bandwidth and CPU usage
+
+## Local Testing
+
+### nginx-rtmp Server
+
+Test RTMP streaming locally:
+
+```bash
+# Start nginx-rtmp container
+docker run -d -p 1935:1935 tiangolo/nginx-rtmp
+
+# Configure Hyperscape to stream to localhost
+CUSTOM_RTMP_URL=rtmp://localhost:1935/live
+CUSTOM_STREAM_KEY=test
+
+# View stream
+ffplay rtmp://localhost:1935/live/test
+```
+
+### Test Command
+
+```bash
+bun run stream:test
+```
+
+This starts streaming to local nginx-rtmp server for testing.
+
+## Production Deployment
+
+### PM2 Configuration
+
+```javascript
+// From ecosystem.config.cjs
+env: {
+  // Streaming destinations
+  TWITCH_STREAM_KEY: process.env.TWITCH_STREAM_KEY || "",
+  KICK_STREAM_KEY: process.env.KICK_STREAM_KEY || "",
+  KICK_RTMP_URL: process.env.KICK_RTMP_URL || "rtmps://fa723fc1b171.global-contribute.live-video.net/app",
+  X_STREAM_KEY: process.env.X_STREAM_KEY || "",
+  X_RTMP_URL: process.env.X_RTMP_URL || "rtmp://sg.pscp.tv:80/x",
+  YOUTUBE_STREAM_KEY: "",  // Explicitly disabled
+  
+  // Timing
+  STREAMING_CANONICAL_PLATFORM: "twitch",
+  STREAMING_PUBLIC_DELAY_MS: "0",
+  
+  // Quality
+  STREAM_LOW_LATENCY: "false",
+}
+```
+
+### GitHub Secrets
+
+Configure in **Settings → Secrets → Actions**:
+
+| Secret | Purpose |
+|--------|---------|
+| `TWITCH_STREAM_KEY` | Twitch stream key |
+| `KICK_STREAM_KEY` | Kick stream key |
+| `KICK_RTMP_URL` | Kick RTMP URL |
+| `X_STREAM_KEY` | X/Twitter stream key |
+| `X_RTMP_URL` | X/Twitter RTMP URL |
+
+### Deployment Script
+
+The `scripts/deploy-vast.sh` explicitly manages stream keys:
+
+```bash
+# Unset stale keys
+unset TWITCH_STREAM_KEY X_STREAM_KEY X_RTMP_URL KICK_STREAM_KEY KICK_RTMP_URL
+unset YOUTUBE_STREAM_KEY YOUTUBE_RTMP_STREAM_KEY
+
+# Disable YouTube
+export YOUTUBE_STREAM_KEY=""
+
+# Re-source .env
+source /root/hyperscape/packages/server/.env
+
+# Start PM2
+bunx pm2 start ecosystem.config.cjs
+```
+
+## Monitoring
+
+### Stream Health
+
+```bash
+# Check streaming API
+curl -s "http://localhost:5555/api/streaming/state" | jq .
+
+# Expected output:
+{
+  "active": true,
+  "destinations": ["Twitch", "Kick", "X"],
+  "uptime": 12345,
+  "fps": 30,
+  "bitrate": 4500
+}
+```
+
+### FFmpeg Stats
+
+```bash
+# Check FFmpeg output
+tail -f /var/log/ffmpeg.log | grep -E "fps|bitrate|frame"
+
+# Expected output:
+frame= 1234 fps=30 q=28.0 size=   12345kB time=00:00:41.23 bitrate=4500.0kbits/s
+```
+
+### Platform Dashboards
+
+**Twitch:**
+- [Stream Manager](https://dashboard.twitch.tv/stream-manager)
+- Shows viewer count, bitrate, FPS
+
+**Kick:**
+- Creator Dashboard
+- Shows stream status and viewers
+
+**X:**
+- [Media Studio](https://studio.twitter.com)
+- Shows broadcast status
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Audio Streaming" icon="volume" href="/devops/audio-streaming">
+    PulseAudio audio capture setup
+  </Card>
+  <Card title="Vast.ai Deployment" icon="server" href="/devops/vast-deployment">
+    Complete Vast.ai deployment guide
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/devops/configuration">
+    Environment variables and settings
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/devops/troubleshooting">
+    Common issues and solutions
+  </Card>
+</CardGroup>
