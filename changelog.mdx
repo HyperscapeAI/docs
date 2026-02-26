@@ -23,6 +23,125 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Type Safety & WebSocket Fixes" description="February 2026" date="2026-02-26">
+
+### 🔧 Type Safety Improvements (commits fcd21eb, efba5a0, 82f97da, 42e52af, d911359)
+
+Eliminated explicit `any` types in core game logic and fixed TypeScript strict mode issues:
+
+**WebSocket Type Fixes:**
+- **Server WebSocket Type** (commit efba5a0): Use `ws` WebSocket type for Fastify websocket connections
+  - The connection from `@fastify/websocket` uses the ws library, not browser WebSocket
+  - Fixed TypeScript errors about missing `removeAllListeners` and `on` methods
+  - Proper type: `import type { WebSocket } from 'ws'`
+- **ReadyState Check Simplification** (commit fcd21eb): Use numeric constant 1 (WebSocket.OPEN)
+  - Redundant `WebSocket.OPEN` comparison was causing TypeScript impossible type overlap error
+  - Simplified to direct numeric check: `ws.readyState === 1`
+
+**Asset-Forge Type Annotations:**
+- **Traverse Callbacks** (commit 82f97da): Added explicit types for callback parameters
+  - TypeScript strict mode requires explicit types for callback parameters
+  - Fixed: `(child: THREE.Object3D)` instead of implicit `any`
+- **Module Resolution** (commit 42e52af): Use `bundler` moduleResolution for Three.js WebGPU exports
+  - The `three/webgpu` subpath requires `moduleResolution: bundler` or `node16`
+  - Previous `'node'` setting couldn't resolve the exports map correctly
+  - File: `packages/asset-forge/tsconfig.json`
+
+**Core Game Logic Cleanup** (commit d911359):
+- **tile-movement.ts**: Removed 13 `any` casts by properly typing BuildingCollisionService and ICollisionMatrix method calls
+- **proxy-routes.ts**: Replaced `any` with proper types:
+  - Error handlers: `unknown` for caught errors
+  - WebSocket message handlers: `Buffer | string` for message data
+  - Error events: `Error` type
+- **ClientGraphics.ts**: Added cast for `setupGPUCompute` after WebGPU verification
+  - WebGPU is now required, so cast is safe after verification check
+
+**Remaining `any` Types** (acceptable):
+- TSL shader code (ProceduralGrass.ts) - @types/three limitation
+- Browser polyfills (polyfills.ts) - intentional mock implementations
+- Test files - acceptable for test fixtures
+
+**Files Changed:**
+- `packages/server/src/systems/ServerNetwork/index.ts`
+- `packages/server/src/routes/proxy-routes.ts`
+- `packages/shared/src/systems/client/ClientGraphics.ts`
+- `packages/shared/src/systems/ServerNetwork/tile-movement.ts`
+- `packages/asset-forge/src/services/processing/AssetNormalizationService.ts`
+- `packages/asset-forge/tsconfig.json`
+
+### 🔒 Security Hardening (commit 3bc59db)
+
+Critical security and stability fixes from code audit:
+
+**Memory Leak Fix:**
+- **InventoryInteractionSystem** (AUDIT-001): Fixed memory leak using AbortController
+  - 9 event listeners were never removed on interaction end
+  - Now uses `AbortController` for proper cleanup
+  - All listeners removed when interaction completes
+  - File: `packages/shared/src/systems/shared/interaction/InventoryInteractionSystem.ts`
+
+**JWT Secret Security:**
+- **Production Enforcement**: Now throws in production/staging if `JWT_SECRET` not set
+  - Warns in unknown environments (development defaults to warning)
+  - Prevents insecure production deployments
+  - Generate with: `openssl rand -base64 32`
+  - File: `packages/server/src/startup/config.ts`
+
+**WebGPU-Only Rendering:**
+- **Enforced WebGPU**: All shaders use TSL which requires WebGPU
+  - Added user-friendly error screen when WebGPU unavailable
+  - No WebGL fallback (ensures consistent rendering pipeline)
+  - Browser requirements: Chrome 113+, Edge 113+, Safari 18+ (macOS Sonoma+)
+  - Check compatibility: [webgpureport.org](https://webgpureport.org)
+  - File: `packages/shared/src/utils/rendering/RendererFactory.ts`
+
+**TODO Comments for Architectural Refactoring:**
+- Added TODO comments tracking known technical debt (AUDIT-001 through AUDIT-005):
+  - `TODO(AUDIT-001)`: Entity.ts decomposition
+  - `TODO(AUDIT-002)`: ServerNetwork split
+  - `TODO(AUDIT-003)`: ClientNetwork split
+  - `TODO(AUDIT-004)`: Circular dependency fix (shared ↔ procgen)
+  - `TODO(AUDIT-005)`: Any type cleanup
+
+**Refs**: AUDIT-001, AUDIT-002, AUDIT-003, AUDIT-004, AUDIT-005
+
+### 🚀 CI/CD Improvements (commits b9a7c3b, 674cb11, 690ede5, aa4d11d)
+
+**Branch Deployment Fixes:**
+- **Main Branch Checkout** (commit b9a7c3b): Explicitly checkout main before running deploy script
+  - Server was stuck on hackathon branch because deploy script kept pulling from hackathon
+  - Workflow now explicitly fetches and checks out main before running deploy script
+  - Breaks the cycle and ensures latest main code is deployed
+  - File: `.github/workflows/deploy-vast.yml`
+
+**GitHub Actions Secrets:**
+- **Env Vars in Conditions** (commit 674cb11): Use env vars instead of secrets in workflow conditions
+  - GitHub Actions doesn't allow accessing secrets in `if` conditions
+  - Moved secret checks inside run blocks using environment variables
+  - File: `.github/workflows/deploy-vast.yml`
+
+**Deployment Configuration:**
+- **Main Branch Pull** (commit 690ede5): Deploy script now pulls from main branch
+  - Was pulling from hackathon branch which was 30+ commits behind main
+  - Missing all streaming fixes and TSL particle updates
+  - Stream was showing empty background because hackathon branch was missing instanced arena fire particles and RTMP stabilization commits
+  - File: `scripts/deploy-vast.sh`
+
+**Funded Deployer Keypair:**
+- **Solana Authority** (commit 690ede5): Added funded deployer keypair for market transactions
+  - Uses `5JB9hqEzKqCiptLSBi4fHCVPJVb3gpb3AgRyHcJvc4u4` as Solana authority
+  - Replaces unfunded auto-generated keys
+  - Ensures market transactions can execute
+  - File: `dummy-keypair.json`
+
+**WebGL Fallback Revert:**
+- **Streaming Rendering** (commit aa4d11d): Reverted WebGL fallback for headless rendering
+  - Commit 4bb83c5 added WebGL fallback but was reverted
+  - WebGPU-only rendering is now enforced
+  - Ensures consistent rendering pipeline
+
+</Update>
+
 <Update label="Performance & Visual Effects Overhaul" description="February 2026" date="2026-02-25">
 
 ### ⚡ Arena Performance Optimization (PR #938, commit c20d0fc)
