@@ -255,32 +255,74 @@ To use Claude Code:
 Requires `CLAUDE_CODE_OAUTH_TOKEN` and `MINTLIFY_API_KEY` secrets to be configured in repository settings.
 </Info>
 
-## Build System Fixes (February 2026)
+## Code Quality Improvements (February 2026)
 
-### TypeScript Override Conflict (commit 113a85a)
+### Type Safety Audit (commit d9113595)
 
-**Issue**: Conflicting TypeScript overrides caused cyclic dependency errors in Cloudflare and CI builds.
+Eliminated explicit `any` types in core game logic:
 
-**Fix**: Removed conflicting overrides from root `package.json`. The build system now relies on workspace protocol and Turbo's dependency resolution.
+**Files Updated:**
+- `tile-movement.ts` - Removed 13 any casts by properly typing BuildingCollisionService
+- `proxy-routes.ts` - Replaced any with proper types (unknown, Buffer | string, Error)
+- `ClientGraphics.ts` - Added safe cast after WebGPU verification
 
-### Windows Environment Variables (commit 3b7665d)
+**Remaining any types:**
+- TSL shader code (ProceduralGrass.ts) - @types/three limitation
+- Browser polyfills (polyfills.ts) - intentional mock implementations
+- Test files - acceptable for test fixtures
 
-**Issue**: Native app builds failed on Windows due to inline environment variable syntax.
+### Memory Leak Fix (commit 3bc59db)
 
-**Fix**: Conditionally supply secrets only when defined, using GitHub Actions conditional expressions:
+Fixed memory leak in InventoryInteractionSystem using AbortController:
+
+```typescript
+// Before: 9 event listeners never removed
+world.on('inventory:add', handler);
+
+// After: Proper cleanup with AbortController
+const abortController = new AbortController();
+world.on('inventory:add', handler, { signal: abortController.signal });
+
+// Cleanup on system destroy
+abortController.abort();
+```
+
+### Dead Code Removal (commit 7c3dc985)
+
+Removed 3,098 lines of dead code:
+- Deleted `PacketHandlers.ts` (never imported, completely unused)
+- Updated audit TODOs to reflect actual codebase state
+- ServerNetwork is already decomposed into 30+ modules (not 116K lines)
+- ClientNetwork handlers are intentional thin wrappers (not bloated)
+
+### Build System Fixes
+
+**TypeScript Override Conflict (commit 113a85a):**
+
+Removed conflicting TypeScript overrides from root `package.json`. The build system now relies on workspace protocol and Turbo's dependency resolution.
+
+**Windows Environment Variables (commit 3b7665d):**
+
+Fixed native app builds on Windows by conditionally supplying secrets:
 
 ```yaml
 env:
   TAURI_SIGNING_PRIVATE_KEY: ${{ needs.prepare.outputs.is_release == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
 ```
 
-This ensures empty strings for non-release builds (Windows-compatible) instead of undefined variables.
+**Linux/Windows Desktop Builds (commit f19a7042):**
 
-### CI Workflow Matrix Reference (commit a095ba1)
+Fixed unsigned builds for Linux and Windows:
 
-**Issue**: Job-level `if` condition referenced matrix variables before matrix context was available.
+```yaml
+# Before: --bundles app (macOS-only, caused Linux/Windows to fail)
+# After: --no-bundle (works on all platforms)
+tauri build --no-bundle
+```
 
-**Fix**: Removed invalid matrix reference from job-level condition. Matrix variables are only available during job execution, not at job scheduling time.
+**CI Workflow Matrix Reference (commit a095ba1):**
+
+Removed invalid matrix reference from job-level condition. Matrix variables are only available during job execution, not at job scheduling time.
 
 ## Common Workflows
 
