@@ -339,8 +339,15 @@ STREAM_CAPTURE_DISABLE_WEBGPU=true       # Forces WebGL fallback
 The system now includes soft CDP recovery (restarts screencast without browser teardown) and best-effort WebGPU initialization (retries with default limits if GPU rejects maxTextureArrayLayers).
 
 **CI builds failing with npm 403 errors:**
-Retry logic is automatic (up to 5 attempts with backoff). If persistent, check GitHub Actions logs.
-See [docs/ci-cd-improvements.md](docs/ci-cd-improvements.md) for details.
+Retry logic is automatic (up to 5 attempts with exponential backoff: 15s, 30s, 45s, 60s, 75s). All workflows now use `--frozen-lockfile` to prevent npm resolution attempts. If persistent, check GitHub Actions logs.
+
+**Tauri builds failing with signing errors:**
+- **Unsigned builds**: Now use `--no-bundle` instead of `--bundles app` (macOS-only)
+- **iOS builds**: Only run on release (unsigned always fails with "Signing requires a development team")
+- **Windows builds**: Include retry logic for transient NPM registry errors
+
+**macOS DMG creation failing:**
+Unsigned builds now produce `.app` bundles only (skip DMG which requires code signing certificates).
 
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
