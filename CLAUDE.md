@@ -653,8 +653,19 @@ POST /admin/maintenance/exit
 - **Terrain Heights**: Fixed 50m offset via canonical `worldToTerrainTileIndex()` and `localToGridIndex()` helpers
 - **Memory Leak**: InventoryInteractionSystem uses AbortController for proper event listener cleanup (9 listeners were never removed)
 - **Duel Combat**: Fixed mage staff and 2H sword combat via weapon type propagation, keep-alive re-engagement, combat timeout refresh
-- **Victory Emote**: Delayed by 600ms so combat cleanup doesn't override it
-- **Teleport VFX**: Fixed duplicate effects via race condition in `clearDuelFlagsForCycle()`, forward `suppressEffect` to clients
+- **Victory Emote**: Delayed by 600ms so combat cleanup doesn't override it (PR #940)
+- **Teleport VFX**: Fixed duplicate effects via race condition in `clearDuelFlagsForCycle()`, forward `suppressEffect` to clients, removed duplicate PLAYER_TELEPORTED emits (PR #939)
+
+**Teleport VFX Improvements** (February 2026 - PR #939):
+- **Complete rewrite** with object pooling (2 pre-allocated effects, zero allocations at spawn time)
+- **Multi-phase animation**: Gather (0-20%) → Erupt (20-34%) → Sustain (34-68%) → Fade (68-100%)
+- **Components**: Ground rune circle, base glow disc, dual beams (inner/outer with elastic overshoot), core flash, 2 shockwave rings, 8 helix spiral particles, 6 burst particles with gravity
+- **TSL Shader Materials**: Vertical gradients, scrolling energy pulse, soft base fade, procedural glow patterns
+- **Hermite Curves**: Elastic beam overshoot (peaks at 1.3 at t=0.35, settles to 1.0)
+- **Performance**: All materials compiled once in init(), zero pipeline compilations at spawn time
+- **Duplicate Fix**: Removed PLAYER_TELEPORTED emit from PlayerRemote.modify() and local player path in ClientNetwork.onPlayerTeleport (only remote players emit)
+- **Race Condition Fix**: Duel flags stay true until cleanupAfterDuel() teleports agents out, preventing spurious extra teleport from DuelSystem.ejectNonDuelingPlayersFromCombatArenas()
+- **Implementation**: `packages/shared/src/systems/client/ClientTeleportEffectsSystem.ts`
 
 ### Type Safety
 - Eliminated explicit `any` types in core game logic (tile-movement.ts, proxy-routes.ts, ClientGraphics.ts)
