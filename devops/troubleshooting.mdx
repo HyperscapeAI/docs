@@ -662,6 +662,77 @@ fastify.register(cors, {
 
 ## Streaming Issues
 
+### Stream Not Appearing on Twitch/Kick/X
+
+**Symptom**: FFmpeg running but stream not visible on platforms
+
+**Cause**: Incorrect stream keys or RTMP URLs
+
+**Solution**: Verify stream keys are configured correctly:
+
+```bash
+# Check environment variables
+echo $TWITCH_STREAM_KEY
+echo $KICK_STREAM_KEY
+echo $X_STREAM_KEY
+
+# Check .env file
+cat packages/server/.env | grep STREAM_KEY
+
+# Check PM2 environment
+bunx pm2 show hyperscape-duel | grep STREAM_KEY
+```
+
+**Common Issues:**
+- Stale stream keys in shell environment overriding .env file
+- Missing `/app` path in Kick RTMP URL
+- Wrong RTMP URL format
+
+**Correct RTMP URLs (as of Feb 26, 2026):**
+```bash
+# Twitch
+TWITCH_RTMP_URL=rtmp://live.twitch.tv/app
+
+# Kick (uses RTMPS)
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
+
+# X/Twitter
+X_RTMP_URL=rtmp://sg.pscp.tv:80/x
+```
+
+**Stream Key Management:**
+
+Stream keys must be explicitly unset and re-exported before PM2 start:
+
+```bash
+# From scripts/deploy-vast.sh
+unset TWITCH_STREAM_KEY X_STREAM_KEY X_RTMP_URL KICK_STREAM_KEY KICK_RTMP_URL
+source /root/hyperscape/packages/server/.env
+bunx pm2 start ecosystem.config.cjs
+```
+
+**Debugging:**
+
+Check RTMP status file:
+```bash
+cat packages/server/public/live/rtmp-status.json
+```
+
+Check FFmpeg processes:
+```bash
+ps aux | grep ffmpeg
+```
+
+Check PM2 logs for streaming keywords:
+```bash
+bunx pm2 logs hyperscape-duel --lines 200 | grep -iE "rtmp|stream|ffmpeg|destination"
+```
+
+**Recent Fixes:**
+- Fixed Kick RTMP URL from `ingest.kick.com` to correct IVS endpoint (commit 5dbd239)
+- Added all stream keys to CI/CD secrets flow (commit 5dbd239)
+- Fixed stream key environment variable handling in deploy scripts (commits 7ee730d, a71d4ba)
+
 ### WebGPU Crashes on RTX 5060 Ti
 
 **Symptom**: Chrome crashes or freezes when using WebGPU on RTX 5060 Ti GPUs
