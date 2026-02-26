@@ -262,6 +262,102 @@ bunx pm2 start ecosystem.config.cjs
 
 This ensures PM2 picks up the correct stream keys from the .env file, not stale values from the shell environment.
 
+**Why This Matters:**
+- Vast.ai servers can have stale stream keys in their environment from previous deployments
+- These stale values override the .env file values
+- Explicitly unsetting ensures clean environment before sourcing .env
+- Prevents streams from going to wrong channels/accounts
+
+## Maintenance Mode
+
+The server provides a maintenance mode API for graceful deployments without data loss.
+
+### Environment Variables
+
+```bash
+# Maintenance mode is controlled via API, not environment variables
+# The scheduler checks this internal flag:
+STREAMING_DUEL_MAINTENANCE_MODE=true  # Set by enterMaintenanceMode()
+```
+
+### API Endpoints
+
+**Enter Maintenance Mode:**
+```bash
+POST /admin/maintenance/enter
+Headers:
+  x-admin-code: <ADMIN_CODE>
+  Content-Type: application/json
+Body:
+  {
+    "reason": "deployment",
+    "timeoutMs": 300000
+  }
+```
+
+**Exit Maintenance Mode:**
+```bash
+POST /admin/maintenance/exit
+Headers:
+  x-admin-code: <ADMIN_CODE>
+```
+
+**Check Status:**
+```bash
+GET /admin/maintenance/status
+Headers:
+  x-admin-code: <ADMIN_CODE>
+```
+
+### What Maintenance Mode Does
+
+When maintenance mode is entered:
+1. **Pauses new duel cycles** - Current cycle completes, no new cycles start
+2. **Locks betting markets** - No new bets accepted
+3. **Waits for resolution** - Current market resolves before reporting safe to deploy
+4. **Reports status** - API returns `safeToDeploy: true` when ready
+
+**Safe to Deploy Conditions:**
+- Not in active duel phase (FIGHTING, COUNTDOWN, ANNOUNCEMENT)
+- No pending betting markets (or all markets resolved)
+- Maintenance mode active
+
+### Helper Scripts
+
+```bash
+# Enter maintenance mode
+bash scripts/pre-deploy-maintenance.sh
+
+# Exit maintenance mode
+bash scripts/post-deploy-resume.sh
+```
+
+### CI/CD Integration
+
+The Vast.ai deployment workflow automatically uses maintenance mode:
+
+```yaml
+# .github/workflows/deploy-vast.yml
+- name: Enter Maintenance Mode
+  run: |
+    curl -X POST "$VAST_SERVER_URL/admin/maintenance/enter" \
+      -H "x-admin-code: $ADMIN_CODE" \
+      -d '{"reason": "deployment", "timeoutMs": 300000}'
+
+# ... deploy steps ...
+
+- name: Exit Maintenance Mode
+  run: |
+    curl -X POST "$VAST_SERVER_URL/admin/maintenance/exit" \
+      -H "x-admin-code: $ADMIN_CODE"
+```
+
+**Benefits:**
+- Prevents data loss during deployments
+- Avoids market inconsistency
+- Ensures clean duel cycle boundaries
+- No interrupted streams or broken markets
+
 ## AssetForge Environment
 
 ```bash
