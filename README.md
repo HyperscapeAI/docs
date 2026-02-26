@@ -328,10 +328,15 @@ See [docs/terrain-height-cache-fix.md](docs/terrain-height-cache-fix.md) for det
 **RTMP stream keeps restarting:**
 Increase stability thresholds in `packages/server/.env`:
 ```bash
-CDP_STALL_THRESHOLD=6
-FFMPEG_MAX_RESTART_ATTEMPTS=10
+CDP_STALL_THRESHOLD=6                    # Default: 4 (120s before restart)
+FFMPEG_MAX_RESTART_ATTEMPTS=10           # Default: 8
+CAPTURE_RECOVERY_MAX_FAILURES=5          # Default: 4
 ```
-See [docs/streaming-improvements.md](docs/streaming-improvements.md) for tuning guide.
+**WebGPU failing in headless environments (Docker/vast.ai):**
+```bash
+STREAM_CAPTURE_DISABLE_WEBGPU=true       # Forces WebGL fallback
+```
+The system now includes soft CDP recovery (restarts screencast without browser teardown) and best-effort WebGPU initialization (retries with default limits if GPU rejects maxTextureArrayLayers).
 
 **CI builds failing with npm 403 errors:**
 Retry logic is automatic (up to 5 attempts with backoff). If persistent, check GitHub Actions logs.
