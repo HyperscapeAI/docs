@@ -288,8 +288,23 @@ on:
     workflows: ["CI"]
     types: [completed]
     branches: [main]
-  workflow_dispatch:
+  workflow_dispatch:  # NEW: Manual deployment trigger (commit b1f41d5)
 ```
+
+**Manual Deployment (commit b1f41d5):**
+
+You can now trigger Vast.ai deployments manually from GitHub Actions UI:
+
+1. Go to Actions tab in GitHub
+2. Select "Deploy to Vast.ai" workflow
+3. Click "Run workflow"
+4. Select branch (usually main)
+5. Click "Run workflow"
+
+This is useful for:
+- Deploying hotfixes without waiting for CI
+- Re-deploying after Vast.ai instance restart
+- Testing deployment process
 
 **Deployment Process:**
 
