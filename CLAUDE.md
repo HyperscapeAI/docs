@@ -683,6 +683,10 @@ POST /admin/maintenance/exit
 - **Tauri Build Fixes**: Split unsigned/release builds, macOS `.app`-only for unsigned, iOS release-only, Windows retry logic
 - **Dependency Cycles**: Resolved shared↔procgen cycle via peerDependencies + devDependencies pattern
 
+### Code Cleanup & Refactoring
+- **Dead Code Removal** (February 2026): Deleted `PacketHandlers.ts` (3098 lines, never imported), `createArenaMarker()`, `createAmbientDust()`, `createLobbyBenches()` (unused arena functions)
+- **Architectural TODO Updates**: Updated AUDIT-002 (ServerNetwork already decomposed into 30+ modules), AUDIT-003 (ClientNetwork handlers are intentional thin wrappers), AUDIT-005 (any types reduced from 142 to ~46)
+
 ### Asset Forge
 - **VFX Catalog Browser**: New tab with live Three.js previews of all game effects
 - **TypeScript Fixes**: Added type annotations for traverse callbacks, updated to `moduleResolution: bundler` for Three.js WebGPU exports
