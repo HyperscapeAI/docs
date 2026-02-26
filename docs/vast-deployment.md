@@ -1,364 +1,329 @@
-# Vast.ai Deployment
+# Vast.ai Deployment Guide
 
-Hyperscape supports automated deployment to [Vast.ai](https://vast.ai) GPU instances for production streaming and duel arena hosting. This deployment target is optimized for cost-effective GPU rendering with WebGPU support.
+Hyperscape uses Vast.ai for GPU-accelerated streaming and duel arena hosting. This guide covers setup, deployment, and maintenance.
 
 ## Overview
 
-The Vast.ai deployment provides:
-
-- **Automated CI/CD**: Deploys automatically when CI passes on `main` branch
-- **Maintenance Mode**: Graceful deployments with zero-downtime market resolution
-- **GPU Rendering**: WebGPU-accelerated 3D rendering with Vulkan drivers
-- **Health Monitoring**: Automatic health checks and recovery
-- **PM2 Process Management**: Self-healing process supervision with automatic restarts
-
-## Architecture
-
-```
-GitHub Actions (deploy-vast.yml)
-    ↓
-SSH to Vast.ai Instance
-    ↓
-deploy-vast.sh Script
-    ↓
-PM2 Ecosystem (ecosystem.config.cjs)
-    ↓
-Duel Stack (scripts/duel-stack.mjs)
-    ├── Game Server (port 5555)
-    ├── Stream Capture (Chrome + FFmpeg)
-    └── RTMP Bridge (multi-platform streaming)
-```
+Vast.ai provides on-demand GPU instances for:
+- **WebGPU rendering** - Hardware-accelerated 3D graphics
+- **RTMP streaming** - Multi-platform broadcasting (Twitch, Kick, X)
+- **Duel arena** - Automated AI vs AI combat streaming
+- **Headless capture** - Chrome Dev + Xvfb for reliable frame capture
 
 ## Prerequisites
 
-### 1. Vast.ai Instance Setup
+- Vast.ai account with GPU instance provisioned
+- SSH access to your Vast.ai instance
+- GitHub repository secrets configured (see below)
 
-Rent a GPU instance on Vast.ai with:
+## Required GitHub Secrets
 
-- **GPU**: NVIDIA GPU with Vulkan support (RTX 3060+ recommended)
-- **OS**: Ubuntu 22.04 or later
-- **RAM**: 16GB+ recommended
-- **Storage**: 50GB+ SSD
-- **Ports**: Open ports 35143 (HTTP), 35079 (WebSocket), 35144 (CDN)
+Configure these in **Settings → Secrets and variables → Actions**:
 
-### 2. GitHub Secrets Configuration
+### SSH Access
+- `VAST_HOST` - Your Vast.ai instance IP address
+- `VAST_PORT` - SSH port (usually 22 or custom)
+- `VAST_SSH_KEY` - Private SSH key for authentication
 
-Add these secrets to your GitHub repository (Settings → Secrets and variables → Actions):
+### Database
+- `DATABASE_URL` - PostgreSQL connection string (format: `postgresql://user:password@host:port/database`)
 
-| Secret | Description | Example |
-|--------|-------------|---------|
-| `VAST_HOST` | Vast.ai instance IP address | `123.45.67.89` |
-| `VAST_PORT` | SSH port (usually 22) | `22` |
-| `VAST_SSH_KEY` | Private SSH key for authentication | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host:5432/db` |
-| `VAST_SERVER_URL` | Public URL for health checks | `http://123.45.67.89:35143` |
-| `ADMIN_CODE` | Admin code for maintenance mode API | `your-secret-admin-code` |
+### Maintenance Mode (Optional)
+- `VAST_SERVER_URL` - Public URL of your deployed server (e.g., `https://your-instance.vast.ai`)
+- `ADMIN_CODE` - Admin authentication code for maintenance API
 
-### 3. Initial Instance Setup
-
-SSH into your Vast.ai instance and run initial setup:
-
-```bash
-# Clone repository
-git clone https://github.com/HyperscapeAI/hyperscape.git
-cd hyperscape
-
-# Install Bun
-curl -fsSL https://bun.sh/install | bash
-export PATH="/root/.bun/bin:$PATH"
-
-# Run initial deployment
-bash scripts/deploy-vast.sh
-```
+### Streaming Keys (Optional)
+- `TWITCH_STREAM_KEY` - From [Twitch Dashboard](https://dashboard.twitch.tv/settings/stream)
+- `KICK_STREAM_KEY` - From Kick Creator Dashboard
+- `X_STREAM_KEY` - From X Media Studio
 
 ## Deployment Process
 
 ### Automatic Deployment
 
-Deployments trigger automatically when:
-
-1. Code is pushed to `main` branch
-2. CI workflow passes successfully
-3. `deploy-vast.yml` workflow executes
-
-The deployment follows this sequence:
+Pushes to `main` branch trigger automatic deployment via `.github/workflows/deploy-vast.yml`:
 
 1. **Enter Maintenance Mode** - Pauses new duel cycles, waits for active markets to resolve
-2. **Deploy Code** - Pulls latest code, builds packages, migrates database
-3. **Restart Services** - Restarts PM2-managed processes
-4. **Health Check** - Waits for server to become healthy
-5. **Exit Maintenance Mode** - Resumes normal operations
+2. **SSH Deploy** - Pulls latest code, builds, restarts PM2
+3. **Exit Maintenance Mode** - Resumes normal operations
 
 ### Manual Deployment
 
-To deploy manually via GitHub Actions:
-
-1. Go to Actions → Deploy to Vast.ai
-2. Click "Run workflow"
-3. Select `main` branch
-4. Click "Run workflow"
-
-Or SSH directly to the instance:
+SSH into your Vast.ai instance and run:
 
 ```bash
-ssh root@<VAST_IP>
 cd /root/hyperscape
 bash scripts/deploy-vast.sh
 ```
+
+The deploy script:
+1. Pulls latest code from `main` branch
+2. Installs system dependencies (Vulkan drivers, Chrome Dev, FFmpeg)
+3. Installs Node dependencies
+4. Builds core packages (physx, procgen, shared, asset-forge)
+5. Runs database migrations
+6. Restarts PM2 process manager
 
 ## Configuration
 
 ### Environment Variables
 
-The deployment uses environment variables from:
+The deployment uses `ecosystem.config.cjs` for PM2 configuration. Key environment variables:
 
-1. `/root/hyperscape/packages/server/.env` (created by deploy script)
-2. GitHub Secrets (passed via workflow)
-3. `ecosystem.config.cjs` defaults
-
-Key variables set by deployment:
-
+#### Database
 ```bash
-# Database (required)
-DATABASE_URL=postgresql://user:pass@host:5432/hyperscape
+DATABASE_URL=postgresql://user:password@host:port/database
+USE_LOCAL_POSTGRES=false
+```
 
-# Streaming destinations
+#### Streaming
+```bash
+STREAMING_DUEL_ENABLED=true
+STREAMING_CANONICAL_PLATFORM=twitch
+STREAMING_PUBLIC_DELAY_MS=0
+
+# Platform keys
 TWITCH_STREAM_KEY=live_...
 KICK_STREAM_KEY=sk_...
 KICK_RTMP_URL=rtmps://...
 X_STREAM_KEY=...
-X_RTMP_URL=rtmp://sg.pscp.tv:80/x
+X_RTMP_URL=rtmp://...
+```
 
-# Solana keypairs (base58 encoded)
-SOLANA_ARENA_AUTHORITY_SECRET=...
-SOLANA_ARENA_REPORTER_SECRET=...
-SOLANA_ARENA_KEEPER_SECRET=...
+#### Capture Settings
+```bash
+STREAM_CAPTURE_MODE=cdp
+STREAM_CAPTURE_HEADLESS=false
+STREAM_CAPTURE_CHANNEL=chrome-dev
+STREAM_CAPTURE_ANGLE=vulkan
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+STREAM_CAPTURE_DISABLE_WEBGPU=false
+DUEL_CAPTURE_USE_XVFB=true
+```
+
+#### Resource Limits
+```bash
+# PM2 auto-restart if memory exceeds 4GB
+max_memory_restart=4G
+
+# Crash-loop protection
+max_restarts=999999
+min_uptime=10s
+restart_delay=5000
 ```
 
 ### Port Mapping
 
-Vast.ai instances use `socat` to proxy internal ports to external ports:
+Vast.ai instances use `socat` to proxy internal ports to external:
 
 | Internal | External | Service |
 |----------|----------|---------|
-| 5555 | 35143 | Game Server HTTP |
+| 5555 | 35143 | HTTP API |
 | 5555 | 35079 | WebSocket |
 | 8080 | 35144 | CDN |
 
-Access your deployment at: `http://<VAST_IP>:35143`
+## Maintenance Mode API
 
-### PM2 Configuration
+Graceful deployments use the maintenance mode API to prevent market disruption.
 
-The deployment uses PM2 for process management with:
-
-- **Auto-restart**: Restarts on crash (up to 999,999 times)
-- **Memory limit**: Restarts if memory exceeds 4GB
-- **Crash protection**: Exponential backoff after 15 rapid restarts
-- **Logging**: Logs to `/root/hyperscape/logs/`
-
-View PM2 status:
+### Enter Maintenance Mode
 
 ```bash
-bunx pm2 status
-bunx pm2 logs hyperscape-duel
-bunx pm2 restart hyperscape-duel
-```
-
-## Maintenance Mode
-
-The deployment uses maintenance mode for graceful updates:
-
-### What Maintenance Mode Does
-
-1. **Pauses new duel cycles** - No new duels start
-2. **Waits for active markets** - Existing duels complete normally
-3. **Timeout protection** - Force-proceeds after 5 minutes if markets don't resolve
-
-### Maintenance Mode API
-
-```bash
-# Enter maintenance mode
-curl -X POST http://<VAST_IP>:35143/admin/maintenance/enter \
+curl -X POST https://your-server.com/admin/maintenance/enter \
   -H "Content-Type: application/json" \
   -H "x-admin-code: YOUR_ADMIN_CODE" \
   -d '{"reason": "deployment", "timeoutMs": 300000}'
+```
 
-# Check status
-curl http://<VAST_IP>:35143/admin/maintenance/status \
+Response:
+```json
+{
+  "success": true,
+  "status": {
+    "maintenanceMode": true,
+    "safeToDeploy": true,
+    "currentPhase": "idle",
+    "pendingMarkets": 0
+  }
+}
+```
+
+### Check Status
+
+```bash
+curl https://your-server.com/admin/maintenance/status \
   -H "x-admin-code: YOUR_ADMIN_CODE"
+```
 
-# Exit maintenance mode
-curl -X POST http://<VAST_IP>:35143/admin/maintenance/exit \
+### Exit Maintenance Mode
+
+```bash
+curl -X POST https://your-server.com/admin/maintenance/exit \
   -H "Content-Type: application/json" \
   -H "x-admin-code: YOUR_ADMIN_CODE"
 ```
 
-See [docs/maintenance-mode-api.md](./maintenance-mode-api.md) for full API documentation.
+## Monitoring
+
+### View Logs
+
+```bash
+# SSH into instance
+ssh root@your-instance.vast.ai
+
+# View PM2 logs
+bunx pm2 logs hyperscape-duel
+
+# View specific log files
+tail -f /root/hyperscape/logs/duel-out.log
+tail -f /root/hyperscape/logs/duel-error.log
+```
+
+### Check Process Status
+
+```bash
+bunx pm2 status
+bunx pm2 describe hyperscape-duel
+```
+
+### Health Check
+
+```bash
+curl http://localhost:5555/health
+```
+
+Response includes maintenance mode status:
+```json
+{
+  "status": "ok",
+  "uptime": 12345,
+  "maintenanceMode": false
+}
+```
 
 ## Troubleshooting
 
 ### Deployment Fails
 
-Check GitHub Actions logs:
-
-1. Go to Actions → Deploy to Vast.ai
-2. Click the failed workflow run
-3. Expand the failed step to see error details
-
-Common issues:
-
-- **SSH connection failed**: Check `VAST_HOST`, `VAST_PORT`, and `VAST_SSH_KEY` secrets
-- **Database connection failed**: Verify `DATABASE_URL` secret is set correctly
-- **Build errors**: Check if dependencies are installed (`bun install`)
-
-### Server Not Healthy After Deployment
-
-SSH to the instance and check logs:
-
+**Check logs:**
 ```bash
-ssh root@<VAST_IP>
-cd /root/hyperscape
 bunx pm2 logs hyperscape-duel --lines 100
 ```
 
-Common issues:
+**Common issues:**
+- DATABASE_URL not set → Check `/root/hyperscape/packages/server/.env`
+- Build failures → Check system dependencies installed
+- Port conflicts → Restart socat proxies
 
-- **Database migration failed**: Check `DATABASE_URL` is accessible
-- **WebGPU initialization failed**: Verify Vulkan drivers are installed
-- **Port conflicts**: Check if ports 5555, 8080 are available
+### Stream Not Starting
 
-### Stream Not Working
-
-Check stream capture logs:
-
+**Check Chrome installation:**
 ```bash
-bunx pm2 logs hyperscape-duel | grep -i "stream\|ffmpeg\|capture"
+google-chrome-unstable --version
 ```
 
-Common issues:
+**Check Vulkan support:**
+```bash
+vulkaninfo --summary
+nvidia-smi
+```
 
-- **Chrome not found**: Verify `google-chrome-unstable` is installed
-- **WebGPU unavailable**: Check Vulkan drivers with `vulkaninfo --summary`
-- **RTMP connection failed**: Verify stream keys and URLs are correct
+**Check Xvfb:**
+```bash
+ps aux | grep Xvfb
+```
+
+### Database Connection Issues
+
+**Verify DATABASE_URL:**
+```bash
+cat /root/hyperscape/packages/server/.env
+```
+
+**Test connection:**
+```bash
+cd /root/hyperscape/packages/server
+bunx drizzle-kit push --force
+```
 
 ### Memory Issues
 
-If the server restarts frequently due to memory:
+PM2 automatically restarts if memory exceeds 4GB. Check memory usage:
 
 ```bash
-# Check current memory usage
-bunx pm2 status
+bunx pm2 describe hyperscape-duel | grep memory
+```
 
-# Increase memory limit in ecosystem.config.cjs
-# Change: max_memory_restart: "4G" to "8G"
+Adjust `max_memory_restart` in `ecosystem.config.cjs` if needed.
 
-# Restart PM2
+## Manual Operations
+
+### Restart Stack
+
+```bash
 bunx pm2 restart ecosystem.config.cjs
 ```
 
-### GPU Not Detected
-
-Verify GPU and Vulkan support:
+### Stop Stack
 
 ```bash
-# Check GPU
-nvidia-smi
-
-# Check Vulkan
-vulkaninfo --summary
-
-# Reinstall Vulkan drivers if needed
-apt-get update
-apt-get install -y mesa-vulkan-drivers vulkan-tools libvulkan1
+bunx pm2 stop ecosystem.config.cjs
 ```
 
-## Monitoring
-
-### Health Endpoint
-
-Check server health:
+### Delete from PM2
 
 ```bash
-curl http://<VAST_IP>:35143/health
+bunx pm2 delete ecosystem.config.cjs
 ```
 
-Response includes:
-
-```json
-{
-  "status": "healthy",
-  "uptime": 12345,
-  "version": "abc123",
-  "maintenance": {
-    "active": false,
-    "reason": null
-  }
-}
-```
-
-### PM2 Monitoring
+### Rebuild from Scratch
 
 ```bash
-# Process status
-bunx pm2 status
-
-# Live logs
-bunx pm2 logs hyperscape-duel
-
-# Resource usage
-bunx pm2 monit
-
-# Restart count
-bunx pm2 show hyperscape-duel
+cd /root/hyperscape
+git pull origin main
+bun install
+bun run build
+bunx pm2 restart ecosystem.config.cjs
 ```
 
-### Stream Health
+## Performance Tuning
 
-Monitor stream health via logs:
+### Reduce Memory Usage
 
-```bash
-bunx pm2 logs hyperscape-duel | grep -i "stream health\|ffmpeg\|rtmp"
-```
-
-## Cost Optimization
-
-### Instance Selection
-
-- **Development**: RTX 3060 (6GB VRAM) - $0.10-0.20/hour
-- **Production**: RTX 3080 (10GB VRAM) - $0.20-0.40/hour
-- **High-end**: RTX 4090 (24GB VRAM) - $0.50-1.00/hour
-
-### Resource Tuning
-
-Reduce costs by disabling unused features in `ecosystem.config.cjs`:
+Edit `ecosystem.config.cjs`:
 
 ```javascript
 env: {
-  // Disable AI agents if not needed
-  AUTO_START_AGENTS: "false",
+  // Disable features for lower memory footprint
+  AUTO_START_AGENTS_MAX: "5",  // Reduce from 10
+  STREAMING_DUEL_COMBAT_AI_ENABLED: "false",
   
-  // Reduce stream quality
-  STREAM_CAPTURE_WIDTH: "1280",  // or 854 for lower quality
-  STREAM_CAPTURE_HEIGHT: "720",  // or 480 for lower quality
-  
-  // Disable unused streaming destinations
-  // (comment out KICK_STREAM_KEY, X_STREAM_KEY, etc.)
+  // Memory allocator tuning
+  MALLOC_TRIM_THRESHOLD_: "-1",
+  MIMALLOC_ALLOW_DECOMMIT: "0",
+  MIMALLOC_PURGE_DELAY: "1000000",
 }
 ```
 
-## Comparison with Other Deployment Targets
+### Optimize Stream Quality
 
-| Feature | Vast.ai | Railway | Cloudflare Pages |
-|---------|---------|---------|------------------|
-| **GPU Support** | ✅ Native | ❌ No | ❌ No |
-| **WebGPU** | ✅ Yes | ❌ No | ✅ Yes (client-side) |
-| **Cost** | $0.10-1.00/hr | $5-20/mo | Free (bandwidth limits) |
-| **Auto-scaling** | ❌ Manual | ✅ Yes | ✅ Yes |
-| **Best For** | Streaming, GPU rendering | Game server, API | Static client hosting |
+```javascript
+env: {
+  STREAM_CAPTURE_WIDTH: "1280",   // Lower from 1920
+  STREAM_CAPTURE_HEIGHT: "720",   // Lower from 1080
+}
+```
+
+## Security Notes
+
+- **Never commit secrets** to git
+- **DATABASE_URL** is written to `.env` after git operations to prevent overwriting
+- **ADMIN_CODE** gates maintenance mode API access
+- **Solana keypairs** in `ecosystem.config.cjs` are for devnet only (replace for mainnet)
 
 ## Related Documentation
 
-- [Maintenance Mode API](./maintenance-mode-api.md) - Graceful deployment API
-- [WebGPU Requirements](./webgpu-requirements.md) - Browser and GPU requirements
-- [Railway Deployment](./railway-dev-prod.md) - Alternative deployment target
-- [Duel Stack](./duel-stack.md) - Duel system architecture
+- [docs/maintenance-mode-api.md](maintenance-mode-api.md) - Maintenance mode API reference
+- [docs/railway-dev-prod.md](railway-dev-prod.md) - Railway deployment
+- [docs/webgpu-requirements.md](webgpu-requirements.md) - WebGPU browser requirements
