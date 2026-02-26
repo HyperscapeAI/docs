@@ -1,0 +1,479 @@
+---
+title: "Cloudflare Pages"
+description: "Automated client deployment to Cloudflare Pages"
+icon: "cloud"
+---
+
+## Overview
+
+The Hyperscape client automatically deploys to Cloudflare Pages on push to main via GitHub Actions. This provides:
+
+- **Global CDN** - Fast loading worldwide
+- **Automatic HTTPS** - SSL certificates managed by Cloudflare
+- **Preview deployments** - Every commit gets a preview URL
+- **Custom domains** - hyperscape.gg, hyperscape.club
+
+## Automated Deployment
+
+### Workflow Trigger
+
+The `.github/workflows/deploy-pages.yml` workflow triggers on:
+
+```yaml
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/client/**'
+      - 'packages/shared/**'
+      - 'package.json'
+      - 'bun.lockb'
+  workflow_dispatch:
+```
+
+**Why Trigger on Shared Changes:**
+
+The client depends on `packages/shared` for packet definitions. When packets change on the server, the client must rebuild to stay in sync. This prevents "Missing packet handler" errors.
+
+**Example Scenario:**
+1. Server adds new packet type (e.g., `worldTimeSync`)
+2. Shared package exports new packet definition
+3. Client rebuild triggered automatically
+4. Client includes new packet handler
+5. No runtime errors
+
+### Deployment Steps
+
+**1. Checkout Code:**
+```yaml
+- name: Checkout code
+  uses: actions/checkout@v4
+  with:
+    submodules: recursive
+```
+
+**2. Setup Bun:**
+```yaml
+- name: Setup Bun
+  uses: oven-sh/setup-bun@v2
+  with:
+    bun-version: latest
+```
+
+**3. Install Dependencies:**
+```yaml
+- name: Install dependencies
+  run: bun install --frozen-lockfile
+```
+
+<Info>
+`--frozen-lockfile` prevents npm rate-limiting by using only the committed lockfile.
+</Info>
+
+**4. Build Client:**
+```yaml
+- name: Build client (includes shared + physx dependencies via turbo)
+  run: bun run build:client
+  env:
+    NODE_OPTIONS: '--max-old-space-size=4096'
+    PUBLIC_PRIVY_APP_ID: ${{ secrets.PUBLIC_PRIVY_APP_ID }}
+    PUBLIC_API_URL: https://hyperscape-production.up.railway.app
+    PUBLIC_WS_URL: wss://hyperscape-production.up.railway.app/ws
+    PUBLIC_CDN_URL: https://assets.hyperscape.club
+    PUBLIC_APP_URL: https://hyperscape.gg
+```
+
+**5. Deploy to Pages:**
+```yaml
+- name: Deploy to Cloudflare Pages
+  run: |
+    # Extract first line of commit message (avoid multi-line issues)
+    COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1 | tr -d '"' | cut -c1-100)
+    npx wrangler pages deploy dist \
+      --project-name=hyperscape \
+      --branch=${{ github.ref_name }} \
+      --commit-hash=${{ github.sha }} \
+      --commit-message="$COMMIT_MSG" \
+      --commit-dirty=true
+  env:
+    CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+```
+
+## Multi-Line Commit Message Fix
+
+### Problem
+
+Wrangler fails when commit messages contain newlines:
+
+```bash
+# ❌ Fails
+--commit-message="feat: add feature
+
+This is a detailed description"
+```
+
+### Solution
+
+Extract only the first line (commit 3e4bb48):
+
+```bash
+# ✅ Works
+COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1 | tr -d '"' | cut -c1-100)
+--commit-message="$COMMIT_MSG"
+```
+
+**Processing:**
+1. Extract first line with `head -1`
+2. Remove quotes with `tr -d '"'`
+3. Truncate to 100 chars with `cut -c1-100`
+
+## Production URLs
+
+### Primary Domain
+
+```
+https://hyperscape.gg
+```
+
+**DNS Configuration:**
+- CNAME: `hyperscape.gg` → `hyperscape.pages.dev`
+- Managed by Cloudflare Pages
+
+### Alternative Domain
+
+```
+https://hyperscape.club
+```
+
+### Preview Deployments
+
+Every commit gets a preview URL:
+
+```
+https://<commit-sha>.hyperscape.pages.dev
+```
+
+**Example:**
+```
+https://37c3629946f12af0440d7be8cf01188465476b9a.hyperscape.pages.dev
+```
+
+## Required GitHub Secrets
+
+Configure in **Settings → Secrets → Actions**:
+
+| Secret | Purpose | Example |
+|--------|---------|---------|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token with Pages write access | `abc123...` |
+| `PUBLIC_PRIVY_APP_ID` | Privy app ID (must match server) | `cmgk4zu56005kjj0bcaae0rei` |
+
+### Create Cloudflare API Token
+
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Navigate to **My Profile** → **API Tokens**
+3. Click **Create Token**
+4. Use **Edit Cloudflare Workers** template
+5. Add **Account** → **Cloudflare Pages** → **Edit** permission
+6. Copy token and add to GitHub Secrets
+
+## Environment Variables
+
+### Build-Time Variables
+
+These are baked into the client build:
+
+```bash
+PUBLIC_PRIVY_APP_ID=cmgk4zu56005kjj0bcaae0rei
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+PUBLIC_APP_URL=https://hyperscape.gg
+```
+
+<Warning>
+Build-time variables cannot be changed after deployment. To update, trigger a new build.
+</Warning>
+
+### Cloudflare Pages Dashboard
+
+You can also set environment variables in the Cloudflare Pages dashboard:
+
+1. Go to **Pages** → **hyperscape** → **Settings** → **Environment variables**
+2. Add variables for **Production** environment
+3. Trigger a new deployment
+
+## Manual Deployment
+
+### Using Wrangler CLI
+
+```bash
+# Install wrangler
+npm install -g wrangler
+
+# Login to Cloudflare
+wrangler login
+
+# Build client
+cd packages/client
+bun run build
+
+# Deploy to Pages
+npx wrangler pages deploy dist \
+  --project-name=hyperscape \
+  --branch=main \
+  --commit-hash=$(git rev-parse HEAD) \
+  --commit-message="Manual deployment"
+```
+
+### Using GitHub Actions
+
+Trigger manual deployment from GitHub UI:
+
+1. Go to **Actions** tab
+2. Select **"Deploy Client to Cloudflare Pages"** workflow
+3. Click **"Run workflow"**
+4. Select branch (usually `main`)
+5. Choose environment (`production` or `preview`)
+6. Click **"Run workflow"**
+
+## Concurrency Control
+
+The workflow uses concurrency control to prevent multiple deployments:
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+```
+
+**Behavior:**
+- Only one deployment per branch at a time
+- New deployment cancels in-progress deployment
+- Prevents race conditions and wasted resources
+
+## Deployment Summary
+
+After successful deployment, the workflow outputs:
+
+```markdown
+## 🚀 Deployment Complete
+
+**Branch:** main
+**Commit:** 37c3629946f12af0440d7be8cf01188465476b9a
+
+**URLs:**
+- Production: https://hyperscape.gg
+- Preview: https://37c3629946f12af0440d7be8cf01188465476b9a.hyperscape.pages.dev
+```
+
+## Troubleshooting
+
+### Build Failures
+
+**Check build logs:**
+1. Go to **Actions** tab in GitHub
+2. Click on failed workflow run
+3. Expand **"Build client"** step
+4. Check error messages
+
+**Common Issues:**
+- Missing environment variables
+- TypeScript errors
+- Dependency resolution failures
+- Out of memory (increase `NODE_OPTIONS`)
+
+### Deployment Failures
+
+**Check wrangler logs:**
+1. Expand **"Deploy to Cloudflare Pages"** step
+2. Look for wrangler error messages
+
+**Common Issues:**
+- Invalid `CLOUDFLARE_API_TOKEN`
+- Project name mismatch
+- Multi-line commit messages (fixed in commit 3e4bb48)
+
+### Preview URL Not Working
+
+**Check deployment status:**
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Navigate to **Pages** → **hyperscape**
+3. Check **Deployments** tab
+4. Verify deployment succeeded
+
+**Common Issues:**
+- Deployment still in progress
+- Build failed (check logs)
+- DNS propagation delay (wait 5-10 minutes)
+
+### Assets Not Loading
+
+**Check CDN URL:**
+```bash
+# Should be set to R2 bucket
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+```
+
+**Check R2 CORS:**
+```bash
+# Configure CORS for cross-origin loading
+bash scripts/configure-r2-cors.sh
+```
+
+**Verify assets exist:**
+```bash
+curl -I https://assets.hyperscape.club/models/player.glb
+```
+
+### CORS Errors
+
+**Problem:** Client on `hyperscape.gg` cannot load assets from `assets.hyperscape.club`.
+
+**Solution:** Configure R2 CORS (see [R2 CORS Configuration](#r2-cors-configuration)).
+
+## R2 CORS Configuration
+
+### Automated Configuration
+
+The `deploy-cloudflare.yml` workflow includes a CORS configuration step:
+
+```yaml
+- name: Configure R2 CORS
+  run: |
+    wrangler r2 bucket cors set hyperscape-assets \
+      --file scripts/r2-cors-config.json
+  env:
+    CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+```
+
+### Manual Configuration
+
+```bash
+# Run configuration script
+bash scripts/configure-r2-cors.sh
+```
+
+**Script Contents:**
+```bash
+#!/bin/bash
+# scripts/configure-r2-cors.sh
+
+wrangler r2 bucket cors set hyperscape-assets \
+  --file scripts/r2-cors-config.json
+```
+
+**CORS Config File (commit 055779a):**
+```json
+{
+  "allowed": {
+    "origins": ["*"],
+    "methods": ["GET", "HEAD"],
+    "headers": ["*"]
+  },
+  "exposed": ["ETag"],
+  "maxAge": 3600
+}
+```
+
+<Warning>
+Use nested `allowed.origins/methods/headers` structure. The old flat format (`allowedOrigins`) causes wrangler to fail.
+</Warning>
+
+### Verify CORS
+
+```bash
+# Test CORS headers
+curl -I -H "Origin: https://hyperscape.gg" \
+  https://assets.hyperscape.club/models/player.glb
+
+# Should include:
+# Access-Control-Allow-Origin: *
+# Access-Control-Expose-Headers: ETag
+```
+
+## CSP Configuration
+
+### Content Security Policy
+
+The client includes CSP headers in `public/_headers`:
+
+```
+Content-Security-Policy: 
+  default-src 'self'; 
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://auth.privy.io https://*.privy.io; 
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
+  img-src 'self' data: https: blob:; 
+  font-src 'self' data: https://fonts.gstatic.com; 
+  connect-src 'self' wss: https: ws://localhost:* http://localhost:*; 
+  frame-src 'self' https://auth.privy.io https://*.privy.io; 
+  worker-src 'self' blob:; 
+  media-src 'self' blob:;
+```
+
+**Recent Updates (Feb 26 2026):**
+
+**Allow data: URLs for WASM (commit 8626299):**
+- Required for PhysX WASM loading
+- `img-src 'self' data: https: blob:`
+- `font-src 'self' data: https://fonts.gstatic.com`
+
+**Allow Google Fonts (commit e012ed2):**
+- Required for Rubik font
+- `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`
+- `font-src 'self' data: https://fonts.gstatic.com`
+
+**Remove broken report-uri (commit 8626299):**
+- `report-uri /api/csp-report` removed (endpoint didn't exist)
+
+## Vite Configuration
+
+### Node Polyfills Fix (commit e012ed2)
+
+**Problem:** Production builds failed with "Failed to resolve module specifier" errors.
+
+**Solution:** Add aliases to resolve polyfill shims:
+
+```typescript
+// packages/client/vite.config.ts
+export default defineConfig({
+  resolve: {
+    alias: {
+      'vite-plugin-node-polyfills/shims/buffer': 'vite-plugin-node-polyfills/dist/shims/buffer',
+      'vite-plugin-node-polyfills/shims/global': 'vite-plugin-node-polyfills/dist/shims/global',
+      'vite-plugin-node-polyfills/shims/process': 'vite-plugin-node-polyfills/dist/shims/process',
+    }
+  },
+  plugins: [
+    nodePolyfills({
+      protocolImports: false,  // Disable to avoid unresolved imports
+    })
+  ]
+});
+```
+
+## Production Checklist
+
+- [ ] `CLOUDFLARE_API_TOKEN` configured in GitHub Secrets
+- [ ] `PUBLIC_PRIVY_APP_ID` configured in GitHub Secrets
+- [ ] R2 CORS configured for asset loading
+- [ ] Custom domains configured in Cloudflare Pages dashboard
+- [ ] CSP headers configured in `public/_headers`
+- [ ] Environment variables set for production
+- [ ] Build succeeds locally with `bun run build:client`
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Deployment Guide" icon="rocket" href="/guides/deployment">
+    General deployment documentation
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/devops/configuration">
+    Environment variables and settings
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/devops/troubleshooting">
+    Common issues and solutions
+  </Card>
+  <Card title="Railway Deployment" icon="train" href="/devops/railway">
+    Game server deployment
+  </Card>
+</CardGroup>
