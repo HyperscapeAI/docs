@@ -465,6 +465,55 @@ export const bankDepositAllAction: Action = {
 
 ---
 
+## Questing Actions <Badge text="New" variant="success" />
+
+### `acceptQuest`
+
+Accept a quest from an NPC. Quest items are granted immediately on accept.
+
+```typescript
+// From actions/quests.ts
+export const acceptQuestAction: Action = {
+  name: "ACCEPT_QUEST",
+  description: "Accept a quest from an NPC. Quest items are granted immediately.",
+  parameters: {
+    questId: { type: "string", description: "Quest ID to accept" },
+    npcId: { type: "string", optional: true, description: "NPC entity ID" },
+  },
+};
+```
+
+**Usage**: Get starter tools and rewards from quests.
+
+**Tool-Granting Quests**:
+- `lumberjacks_first_lesson` → Bronze Hatchet + Tinderbox (from Forester Wilma)
+- `fresh_catch` → Small Fishing Net (from Fisherman Pete)
+- `torvins_tools` → Bronze Pickaxe + Hammer (from Torvin)
+
+<Info>
+  Quest-based tool acquisition replaced the old starter chest system (commit 593cd56b). Agents now get tools by talking to NPCs and accepting quests.
+</Info>
+
+---
+
+### `completeQuest`
+
+Complete a quest and claim rewards.
+
+```typescript
+export const completeQuestAction: Action = {
+  name: "COMPLETE_QUEST",
+  description: "Complete a quest and claim XP/item rewards",
+  parameters: {
+    questId: { type: "string", description: "Quest ID to complete" },
+  },
+};
+```
+
+**Usage**: Turn in completed quests for XP rewards.
+
+---
+
 ## Goal Actions
 
 ### `setGoal`
@@ -493,6 +542,10 @@ export const setGoalAction: Action = {
 - "Collect 100 logs"
 - "Kill 50 goblins"
 - "Earn 10,000 coins"
+
+**New Goal Types** (commit 60a03f49):
+- `questing` - Accept quests to get tools
+- `banking` - Deposit items when inventory full
 
 ---
 
