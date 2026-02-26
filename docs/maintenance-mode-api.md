@@ -1,27 +1,15 @@
 # Maintenance Mode API
 
-Graceful deployment coordination for the streaming duel system. Prevents data loss and market inconsistency during code deployments.
+The Maintenance Mode API enables graceful deployments by pausing new duel cycles while allowing active markets to resolve naturally. This prevents mid-duel interruptions and ensures all bets are settled before the server restarts.
 
 ## Overview
 
-The Maintenance Mode API provides endpoints to safely pause the streaming duel system before deployments, wait for active markets to resolve, and resume operations after deployment completes.
+Maintenance mode provides:
 
-**Key Features:**
-- Pauses new duel cycles (current cycle completes naturally)
-- Locks betting markets (no new bets accepted)
-- Waits for current market to resolve before reporting "safe to deploy"
-- Prevents data loss from mid-duel deployments
-- Automatic timeout with forced resolution if markets don't resolve
-
-## Authentication
-
-All maintenance mode endpoints require the `ADMIN_CODE` header:
-
-```bash
--H "x-admin-code: your-admin-code"
-```
-
-Set `ADMIN_CODE` in `packages/server/.env` (required for production).
+- **Zero-downtime deployments** - Active duels complete before restart
+- **Market protection** - All bets resolve before shutdown
+- **Timeout safety** - Automatic force-proceed if markets don't resolve
+- **Status monitoring** - Real-time visibility into deployment readiness
 
 ## API Endpoints
 
@@ -29,102 +17,105 @@ Set `ADMIN_CODE` in `packages/server/.env` (required for production).
 
 Pauses new duel cycles and waits for active markets to resolve.
 
-**Endpoint:** `POST /admin/maintenance/enter`
-
-**Headers:**
-```
-x-admin-code: your-admin-code
+```http
+POST /admin/maintenance/enter
 Content-Type: application/json
-```
+x-admin-code: YOUR_ADMIN_CODE
 
-**Request Body:**
-```json
 {
   "reason": "deployment",
   "timeoutMs": 300000
 }
 ```
 
-**Parameters:**
-- `reason` (string, optional): Reason for entering maintenance mode (logged for audit trail)
-- `timeoutMs` (number, optional): Maximum time to wait for markets to resolve (default: 300000 = 5 minutes)
+**Request Body:**
 
-**Response (200 OK):**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reason` | string | No | Reason for entering maintenance mode (e.g., "deployment", "emergency") |
+| `timeoutMs` | number | No | Maximum wait time in milliseconds (default: 300000 = 5 minutes) |
+
+**Response:**
+
 ```json
 {
   "success": true,
   "message": "Entered maintenance mode",
   "status": {
     "active": true,
-    "enteredAt": 1709000000000,
     "reason": "deployment",
+    "enteredAt": "2026-02-26T07:00:00.000Z",
+    "currentPhase": "BETTING",
+    "pendingMarkets": 2,
     "safeToDeploy": false,
-    "currentPhase": "FIGHTING",
-    "marketStatus": "active",
-    "pendingMarkets": 1
+    "estimatedWaitMs": 45000
   }
 }
 ```
 
-**Example:**
-```bash
-curl -X POST https://hyperscape.gg/admin/maintenance/enter \
-  -H "x-admin-code: your-admin-code" \
-  -H "Content-Type: application/json" \
-  -d '{"reason": "deployment", "timeoutMs": 300000}'
+**Status Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `active` | boolean | Whether maintenance mode is active |
+| `reason` | string | Reason for maintenance mode |
+| `enteredAt` | string | ISO timestamp when maintenance mode was entered |
+| `currentPhase` | string | Current duel cycle phase (BETTING, COUNTDOWN, COMBAT, RESOLUTION) |
+| `pendingMarkets` | number | Number of active markets that need to resolve |
+| `safeToDeploy` | boolean | Whether it's safe to deploy (no pending markets) |
+| `estimatedWaitMs` | number | Estimated time until safe to deploy |
+
+**Error Responses:**
+
+```json
+// Missing admin code
+{
+  "error": "Unauthorized",
+  "message": "Missing or invalid admin code"
+}
+
+// Already in maintenance mode
+{
+  "error": "Already in maintenance mode",
+  "status": { ... }
+}
 ```
 
 ### Check Maintenance Status
 
-Get current maintenance mode status and deployment safety.
+Get current maintenance mode status.
 
-**Endpoint:** `GET /admin/maintenance/status`
-
-**Headers:**
-```
-x-admin-code: your-admin-code
+```http
+GET /admin/maintenance/status
+x-admin-code: YOUR_ADMIN_CODE
 ```
 
-**Response (200 OK):**
+**Response:**
+
 ```json
 {
   "active": true,
-  "enteredAt": 1709000000000,
   "reason": "deployment",
+  "enteredAt": "2026-02-26T07:00:00.000Z",
+  "currentPhase": "RESOLUTION",
+  "pendingMarkets": 0,
   "safeToDeploy": true,
-  "currentPhase": "IDLE",
-  "marketStatus": "resolved",
-  "pendingMarkets": 0
+  "estimatedWaitMs": 0
 }
-```
-
-**Status Fields:**
-- `active` (boolean): Whether maintenance mode is currently active
-- `enteredAt` (number): Unix timestamp when maintenance mode was entered
-- `reason` (string): Reason provided when entering maintenance mode
-- `safeToDeploy` (boolean): **Critical** - true when safe to deploy (no active duels/markets)
-- `currentPhase` (string): Current duel cycle phase (IDLE, COUNTDOWN, FIGHTING, ANNOUNCEMENT, RESOLUTION)
-- `marketStatus` (string): Betting market status (none, active, resolved)
-- `pendingMarkets` (number): Number of unresolved betting markets
-
-**Example:**
-```bash
-curl https://hyperscape.gg/admin/maintenance/status \
-  -H "x-admin-code: your-admin-code"
 ```
 
 ### Exit Maintenance Mode
 
-Resume normal operations after deployment.
+Resumes normal duel cycle operations.
 
-**Endpoint:** `POST /admin/maintenance/exit`
-
-**Headers:**
+```http
+POST /admin/maintenance/exit
+Content-Type: application/json
+x-admin-code: YOUR_ADMIN_CODE
 ```
-x-admin-code: your-admin-code
-```
 
-**Response (200 OK):**
+**Response:**
+
 ```json
 {
   "success": true,
@@ -132,103 +123,102 @@ x-admin-code: your-admin-code
 }
 ```
 
-**Example:**
-```bash
-curl -X POST https://hyperscape.gg/admin/maintenance/exit \
-  -H "x-admin-code: your-admin-code"
+**Error Responses:**
+
+```json
+// Not in maintenance mode
+{
+  "error": "Not in maintenance mode"
+}
 ```
 
-## Deployment Workflow
+## Usage Examples
+
+### Automated Deployment (GitHub Actions)
+
+The `deploy-vast.yml` workflow uses maintenance mode automatically:
+
+```yaml
+# Step 1: Enter maintenance mode
+- name: Enter Maintenance Mode
+  run: |
+    curl -X POST "$VAST_SERVER_URL/admin/maintenance/enter" \
+      -H "Content-Type: application/json" \
+      -H "x-admin-code: $ADMIN_CODE" \
+      -d '{"reason": "deployment", "timeoutMs": 300000}'
+
+# Step 2: Deploy code
+- name: Deploy
+  run: bash scripts/deploy-vast.sh
+
+# Step 3: Exit maintenance mode
+- name: Exit Maintenance Mode
+  run: |
+    curl -X POST "$VAST_SERVER_URL/admin/maintenance/exit" \
+      -H "Content-Type: application/json" \
+      -H "x-admin-code: $ADMIN_CODE"
+```
 
 ### Manual Deployment
 
+For manual deployments, use the helper scripts:
+
 ```bash
-# 1. Enter maintenance mode
-curl -X POST https://hyperscape.gg/admin/maintenance/enter \
-  -H "x-admin-code: $ADMIN_CODE" \
-  -H "Content-Type: application/json" \
-  -d '{"reason": "manual deployment", "timeoutMs": 300000}'
+# Enter maintenance mode
+bash scripts/pre-deploy-maintenance.sh
 
-# 2. Poll status until safeToDeploy is true
-while true; do
-  STATUS=$(curl -s https://hyperscape.gg/admin/maintenance/status \
-    -H "x-admin-code: $ADMIN_CODE")
-  SAFE=$(echo $STATUS | jq -r '.safeToDeploy')
-  if [ "$SAFE" = "true" ]; then
-    echo "Safe to deploy!"
-    break
-  fi
-  echo "Waiting for markets to resolve... (safeToDeploy=$SAFE)"
-  sleep 10
-done
+# Wait for safe deployment status
+# (script polls /admin/maintenance/status until safeToDeploy: true)
 
-# 3. Deploy your code
-git pull origin main
-bun install
-bun run build
-pm2 restart hyperscape
+# Deploy your changes
+bash scripts/deploy-vast.sh
 
-# 4. Exit maintenance mode
-curl -X POST https://hyperscape.gg/admin/maintenance/exit \
-  -H "x-admin-code: $ADMIN_CODE"
+# Exit maintenance mode
+bash scripts/post-deploy-resume.sh
 ```
 
-### Automated CI/CD (GitHub Actions)
+### Emergency Maintenance
 
-The `.github/workflows/deploy-vast.yml` workflow automatically handles maintenance mode:
+For emergency shutdowns (e.g., critical bug):
 
-```yaml
-- name: Enter maintenance mode
-  run: |
-    curl -X POST ${{ secrets.VAST_SERVER_URL }}/admin/maintenance/enter \
-      -H "x-admin-code: ${{ secrets.ADMIN_CODE }}" \
-      -H "Content-Type: application/json" \
-      -d '{"reason": "automated deployment", "timeoutMs": 300000}'
+```bash
+# Enter maintenance mode with short timeout
+curl -X POST http://your-server.com/admin/maintenance/enter \
+  -H "Content-Type: application/json" \
+  -H "x-admin-code: YOUR_ADMIN_CODE" \
+  -d '{"reason": "emergency: critical bug fix", "timeoutMs": 60000}'
 
-- name: Wait for safe deployment state
-  run: |
-    for i in {1..30}; do
-      STATUS=$(curl -s ${{ secrets.VAST_SERVER_URL }}/admin/maintenance/status \
-        -H "x-admin-code: ${{ secrets.ADMIN_CODE }}")
-      SAFE=$(echo $STATUS | jq -r '.safeToDeploy')
-      if [ "$SAFE" = "true" ]; then
-        echo "Safe to deploy!"
-        exit 0
-      fi
-      echo "Waiting for markets to resolve... (attempt $i/30)"
-      sleep 10
-    done
-    echo "Timeout waiting for safe deployment state"
-    exit 1
-
-- name: Deploy code
-  # ... SSH deployment steps ...
-
-- name: Exit maintenance mode
-  run: |
-    curl -X POST ${{ secrets.VAST_SERVER_URL }}/admin/maintenance/exit \
-      -H "x-admin-code: ${{ secrets.ADMIN_CODE }}"
+# Force-stop after timeout if needed
+# (maintenance mode will auto-proceed after 60 seconds)
 ```
 
 ## Implementation Details
 
-### State Machine
+### What Happens During Maintenance Mode
 
-Maintenance mode integrates with the `StreamingDuelScheduler` state machine:
+1. **Duel Scheduler Pauses**
+   - `StreamingDuelScheduler` stops starting new cycles
+   - Current cycle completes normally
+   - No new duels are created
 
-1. **Enter**: Sets `maintenanceMode.active = true`, broadcasts to scheduler
-2. **Scheduler Response**: Completes current cycle, pauses before starting new cycle
-3. **Market Resolution**: Waits for betting markets to resolve (or timeout)
-4. **Safe State**: Reports `safeToDeploy: true` when phase is IDLE and no pending markets
-5. **Exit**: Sets `maintenanceMode.active = false`, scheduler resumes normal operation
+2. **Market Resolution**
+   - Active duels finish combat
+   - Markets resolve and pay out winners
+   - All on-chain transactions complete
 
-### Timeout Behavior
+3. **Timeout Protection**
+   - If markets don't resolve within `timeoutMs`, maintenance mode force-proceeds
+   - This prevents indefinite hangs from stuck markets
+   - Logs warning if timeout is triggered
 
-If markets don't resolve within `timeoutMs`:
-- Maintenance mode remains active
-- `safeToDeploy` becomes true (forced)
-- Markets are force-resolved (prevents indefinite blocking)
-- Warning logged to server logs
+### Safe Deployment Criteria
+
+The API reports `safeToDeploy: true` when:
+
+- No active duel cycles are running
+- All markets have resolved
+- No pending on-chain transactions
+- Current phase is not COMBAT or COUNTDOWN
 
 ### Health Endpoint Integration
 
@@ -236,76 +226,140 @@ The `/health` endpoint includes maintenance mode status:
 
 ```json
 {
-  "status": "ok",
-  "uptime": 123456,
-  "maintenanceMode": {
+  "status": "healthy",
+  "maintenance": {
     "active": true,
-    "reason": "deployment",
-    "safeToDeploy": true
+    "reason": "deployment"
   }
 }
 ```
 
-## Error Responses
+This allows monitoring systems to detect maintenance mode and avoid false alarms.
 
-### 401 Unauthorized
-Missing or invalid `ADMIN_CODE`:
-```json
-{
-  "error": "Unauthorized",
-  "message": "Invalid admin code"
-}
+## Security
+
+### Authentication
+
+All maintenance mode endpoints require the `x-admin-code` header:
+
+```bash
+x-admin-code: YOUR_ADMIN_CODE
 ```
 
-### 400 Bad Request
-Invalid request body:
-```json
-{
-  "error": "Bad Request",
-  "message": "Invalid timeoutMs value"
-}
-```
+The admin code is configured via:
 
-### 500 Internal Server Error
-Server error during operation:
-```json
-{
-  "error": "Internal Server Error",
-  "message": "Failed to enter maintenance mode"
-}
-```
+1. `ADMIN_CODE` environment variable (production)
+2. GitHub Secret `ADMIN_CODE` (CI/CD)
+
+**Never commit admin codes to git or expose them publicly.**
+
+### Authorization
+
+Only requests with valid admin codes can:
+
+- Enter/exit maintenance mode
+- Check maintenance status
+- Access admin endpoints
+
+Invalid or missing codes return `401 Unauthorized`.
 
 ## Best Practices
 
-1. **Always check `safeToDeploy`** before deploying - don't rely on timing alone
-2. **Set reasonable timeouts** - 5 minutes (300000ms) is recommended for most deployments
-3. **Monitor logs** - Check server logs for maintenance mode state transitions
-4. **Exit after deployment** - Always call `/exit` to resume normal operations
-5. **Use in CI/CD** - Automate maintenance mode in deployment pipelines (see `.github/workflows/deploy-vast.yml`)
+### Deployment Workflow
+
+1. **Always use maintenance mode** for production deployments
+2. **Monitor status** until `safeToDeploy: true` before restarting
+3. **Set reasonable timeouts** (5 minutes is usually sufficient)
+4. **Exit maintenance mode** after deployment completes
+5. **Check health endpoint** to verify server is operational
+
+### Timeout Configuration
+
+Choose timeout based on duel cycle length:
+
+- **Standard deployment**: 300000ms (5 minutes)
+- **Quick fix**: 60000ms (1 minute)
+- **Major update**: 600000ms (10 minutes)
+
+Duel cycles typically complete within 2-3 minutes, so 5 minutes provides safe margin.
+
+### Error Handling
+
+Always handle maintenance mode API errors:
+
+```bash
+# Example with error handling
+RESPONSE=$(curl -s -X POST "$URL/admin/maintenance/enter" \
+  -H "Content-Type: application/json" \
+  -H "x-admin-code: $ADMIN_CODE" \
+  -d '{"reason": "deployment", "timeoutMs": 300000}' \
+  || echo '{"error": "curl failed"}')
+
+SUCCESS=$(echo "$RESPONSE" | jq -r '.success // false')
+
+if [ "$SUCCESS" != "true" ]; then
+  echo "Failed to enter maintenance mode: $RESPONSE"
+  exit 1
+fi
+```
 
 ## Troubleshooting
 
-**Maintenance mode stuck active:**
+### Maintenance Mode Won't Enter
+
+**Symptom**: POST /admin/maintenance/enter returns error
+
+**Causes**:
+- Invalid or missing `x-admin-code` header
+- Already in maintenance mode
+- Server not responding
+
+**Solution**:
 ```bash
-# Force exit
-curl -X POST https://hyperscape.gg/admin/maintenance/exit \
-  -H "x-admin-code: $ADMIN_CODE"
+# Check if already in maintenance mode
+curl http://your-server.com/admin/maintenance/status \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+
+# Verify admin code is correct
+echo $ADMIN_CODE
+
+# Check server health
+curl http://your-server.com/health
 ```
 
-**Markets not resolving:**
-- Check server logs for market resolution errors
-- Verify Solana RPC connectivity (if using on-chain betting)
-- Timeout will force resolution after `timeoutMs`
+### Markets Not Resolving
 
-**safeToDeploy never becomes true:**
-- Check `currentPhase` - must be IDLE
-- Check `pendingMarkets` - must be 0
-- Increase `timeoutMs` if markets are slow to resolve
-- Check server logs for scheduler errors
+**Symptom**: `safeToDeploy` stays `false` for extended period
 
-## Related Files
+**Causes**:
+- Stuck duel combat
+- On-chain transaction failures
+- Network issues
 
-- **Implementation**: `packages/server/src/startup/maintenance-mode.ts`
-- **Scheduler Integration**: `packages/server/src/systems/StreamingDuelScheduler/index.ts`
-- **CI/CD Workflow**: `.github/workflows/deploy-vast.yml`
-- **Helper Scripts**: `scripts/pre-deploy-maintenance.sh`, `scripts/post-deploy-resume.sh`
+**Solution**:
+```bash
+# Check current phase and pending markets
+curl http://your-server.com/admin/maintenance/status \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+
+# Wait for timeout to force-proceed
+# Or manually investigate stuck markets in logs
+bunx pm2 logs hyperscape-duel | grep -i "market\|duel\|combat"
+```
+
+### Timeout Triggered
+
+**Symptom**: Deployment proceeds but markets didn't resolve
+
+**Impact**: Some bets may not settle correctly
+
+**Solution**:
+- Investigate why markets didn't resolve (check logs)
+- Increase timeout for future deployments
+- Consider manual market resolution if needed
+
+## Related Documentation
+
+- [Vast.ai Deployment](./vast-deployment.md) - Full Vast.ai deployment guide
+- [Duel Stack](./duel-stack.md) - Duel system architecture
+- [Railway Deployment](./railway-dev-prod.md) - Alternative deployment target
