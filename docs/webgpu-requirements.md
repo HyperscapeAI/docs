@@ -1,298 +1,214 @@
 # WebGPU Requirements
 
-Hyperscape requires **WebGPU** for 3D rendering. All shaders use Three.js Shading Language (TSL), which is WebGPU-only. WebGL is not supported.
+As of February 2026, Hyperscape **requires WebGPU** for rendering. All shaders use TSL (Three.js Shading Language), which is WebGPU-only. WebGL fallback has been removed.
 
-## Browser Requirements
+## Browser Compatibility
 
 ### Supported Browsers
 
-| Browser | Minimum Version | WebGPU Support |
-|---------|----------------|----------------|
-| **Chrome** | 113+ | ✅ Enabled by default |
-| **Edge** | 113+ | ✅ Enabled by default |
-| **Firefox** | 121+ | ⚠️ Requires flag (see below) |
-| **Safari** | 18+ (macOS 15+) | ✅ Enabled by default |
-| **Opera** | 99+ | ✅ Enabled by default |
+| Browser | Minimum Version | Platform | Notes |
+|---------|----------------|----------|-------|
+| **Chrome** | 113+ | Windows, macOS, Linux | ✅ Recommended |
+| **Edge** | 113+ | Windows, macOS, Linux | ✅ Recommended |
+| **Safari** | 18+ | macOS 15+ only | ⚠️ Requires macOS Sequoia |
+| **Firefox** | Experimental | All | ❌ Not recommended (unstable) |
 
-### Unsupported Browsers
+### Check Your Browser
 
-- **Safari < 18** (macOS < 15) - No WebGPU support
-- **Firefox < 121** - No WebGPU support
-- **Mobile browsers** - Limited WebGPU support (varies by device)
-- **Internet Explorer** - Not supported
-
-## Enabling WebGPU
-
-### Chrome/Edge (Recommended)
-
-WebGPU is enabled by default in Chrome 113+ and Edge 113+. No configuration needed.
-
-**Verify WebGPU is available:**
-
-1. Open DevTools (F12)
-2. Run in console:
-   ```javascript
-   navigator.gpu !== undefined
-   ```
-3. Should return `true`
-
-### Firefox
-
-WebGPU requires enabling a flag in Firefox 121+:
-
-1. Navigate to `about:config`
-2. Search for `dom.webgpu.enabled`
-3. Set to `true`
-4. Restart Firefox
-
-**Note**: Firefox WebGPU support is experimental and may have rendering issues.
-
-### Safari
-
-WebGPU is available in Safari 18+ (macOS 15 Sequoia or later):
-
-- **macOS 15+**: WebGPU enabled by default
-- **macOS 14 or earlier**: Not supported (upgrade required)
+Visit [webgpureport.org](https://webgpureport.org) to verify WebGPU support.
 
 ## GPU Requirements
 
 ### Desktop
 
 **Minimum:**
-- **NVIDIA**: GTX 1060 (6GB VRAM) or newer
-- **AMD**: RX 580 (8GB VRAM) or newer
-- **Intel**: Arc A380 or newer
+- NVIDIA GTX 1050 / AMD RX 560 / Intel UHD 630
+- 2GB VRAM
+- Vulkan 1.1+ or Metal 2+ support
 
 **Recommended:**
-- **NVIDIA**: RTX 3060 (12GB VRAM) or newer
-- **AMD**: RX 6700 XT (12GB VRAM) or newer
-- **Intel**: Arc A770 (16GB VRAM) or newer
+- NVIDIA GTX 1660 / AMD RX 5600 / Intel Arc A380
+- 4GB+ VRAM
+- Vulkan 1.2+ or Metal 3+ support
 
-### Laptop
+### Mobile
 
-**Minimum:**
-- **NVIDIA**: GTX 1650 (4GB VRAM) or newer
-- **AMD**: RX 5500M (4GB VRAM) or newer
-- **Intel**: Iris Xe Graphics (integrated)
+**iOS:**
+- iPhone 12 or newer (A14 Bionic+)
+- iOS 18+ (Safari 18+)
+- Metal 3 support
 
-**Recommended:**
-- **NVIDIA**: RTX 3060 Mobile (6GB VRAM) or newer
-- **AMD**: RX 6600M (8GB VRAM) or newer
+**Android:**
+- Snapdragon 888+ or equivalent
+- Android 12+ with Chrome 113+
+- Vulkan 1.1+ support
 
-### Integrated Graphics
+## Headless/Server Rendering
 
-**Supported:**
-- Intel Iris Xe (11th gen or newer)
-- AMD Radeon Graphics (Ryzen 5000+ series)
-- Apple M1/M2/M3 (Safari only)
+For streaming and server-side rendering (Vast.ai, Docker):
 
-**Not Supported:**
-- Intel HD Graphics (10th gen or older)
-- AMD Vega Graphics (Ryzen 3000 series or older)
+### Chrome Dev Channel
 
-## Operating System Requirements
-
-### Windows
-
-- **Windows 10** (version 1903 or later) or **Windows 11**
-- **DirectX 12** support required
-- **Graphics drivers**: Latest from GPU manufacturer
-
-### macOS
-
-- **macOS 15 Sequoia** or later (for Safari WebGPU)
-- **macOS 13+** with Chrome/Edge (WebGPU via Metal)
-- **Apple Silicon** (M1/M2/M3) recommended for best performance
-
-### Linux
-
-- **Ubuntu 22.04+**, **Fedora 38+**, or equivalent
-- **Vulkan 1.3+** support required
-- **Mesa 23.0+** for AMD/Intel GPUs
-- **NVIDIA drivers 525+** for NVIDIA GPUs
-
-**Install Vulkan on Ubuntu:**
+Chrome Dev (google-chrome-unstable) has WebGPU enabled by default:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y mesa-vulkan-drivers vulkan-tools libvulkan1
+# Install Chrome Dev
+wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
+echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+apt-get update && apt-get install -y google-chrome-unstable
 ```
 
-**Verify Vulkan:**
+### Vulkan Drivers
+
+WebGPU on Linux requires Vulkan:
 
 ```bash
+# Install Vulkan drivers
+apt-get install -y mesa-vulkan-drivers vulkan-tools libvulkan1
+
+# Verify installation
 vulkaninfo --summary
 ```
 
-## Error Handling
+### Xvfb (Headless Display)
 
-### WebGPU Unavailable Error
-
-If WebGPU is not available, Hyperscape shows a user-friendly error screen:
-
-```
-WebGPU Not Available
-
-Hyperscape requires WebGPU for 3D rendering.
-
-Your browser or GPU does not support WebGPU.
-
-Please try:
-• Update to Chrome 113+ or Edge 113+
-• Update your graphics drivers
-• Use a device with a modern GPU
-
-For more information, visit:
-https://github.com/HyperscapeAI/hyperscape/blob/main/docs/webgpu-requirements.md
-```
-
-### Common Error Messages
-
-**"WebGPU is not supported in this browser"**
-- **Cause**: Browser doesn't support WebGPU
-- **Solution**: Update browser or switch to Chrome/Edge 113+
-
-**"Failed to request GPU adapter"**
-- **Cause**: GPU drivers outdated or incompatible
-- **Solution**: Update graphics drivers from manufacturer
-
-**"GPU adapter does not support required features"**
-- **Cause**: GPU too old or missing required features
-- **Solution**: Use a newer GPU (see minimum requirements above)
-
-## Development
-
-### Local Development
-
-WebGPU works out-of-the-box in local development with Chrome/Edge:
+For headless environments:
 
 ```bash
-bun run dev
-# Open http://localhost:3333 in Chrome 113+
+# Install Xvfb
+apt-get install -y xvfb
+
+# Start virtual display
+Xvfb :99 -screen 0 1280x720x24 &
+export DISPLAY=:99
 ```
 
-### Headless Rendering (Server-Side)
-
-For server-side rendering (streaming, screenshots), use Chrome with Xvfb:
+### Environment Configuration
 
 ```bash
-# Install dependencies
-sudo apt-get install -y xvfb google-chrome-unstable mesa-vulkan-drivers
+# Use Chrome Dev channel
+STREAM_CAPTURE_CHANNEL=chrome-dev
 
-# Run with Xvfb
-xvfb-run -a -s "-screen 0 1280x720x24" \
-  google-chrome-unstable \
-  --enable-features=Vulkan,UseSkiaRenderer \
-  --use-angle=vulkan \
-  --enable-unsafe-webgpu \
-  --headless=new
+# Use Vulkan ANGLE backend
+STREAM_CAPTURE_ANGLE=vulkan
+
+# Enable WebGPU (required)
+STREAM_CAPTURE_DISABLE_WEBGPU=false
+
+# Use Xvfb for headless
+DUEL_CAPTURE_USE_XVFB=true
 ```
 
-**Environment variables for headless:**
+## Error Messages
 
-```bash
-STREAM_CAPTURE_HEADLESS=false  # Use Xvfb, not headless mode
-STREAM_CAPTURE_CHANNEL=chrome-dev  # Use google-chrome-unstable
-STREAM_CAPTURE_ANGLE=vulkan  # Use Vulkan backend
-STREAM_CAPTURE_DISABLE_WEBGPU=false  # Enable WebGPU
+### "WebGPU not supported"
+
+**Cause:** Browser doesn't support WebGPU or GPU is incompatible.
+
+**Solutions:**
+1. Update to Chrome 113+ or Edge 113+
+2. Enable hardware acceleration in browser settings
+3. Update GPU drivers
+4. Check [webgpureport.org](https://webgpureport.org) for compatibility
+
+### "Failed to create WebGPU adapter"
+
+**Cause:** GPU doesn't meet minimum requirements or drivers are outdated.
+
+**Solutions:**
+1. Update GPU drivers
+2. Check GPU meets minimum requirements
+3. Verify Vulkan/Metal support:
+   - Linux: `vulkaninfo --summary`
+   - macOS: Check Metal support in System Information
+   - Windows: Update DirectX and GPU drivers
+
+### "requiredLimits not supported"
+
+**Cause:** GPU doesn't support required texture array layers (2048).
+
+**Solution:** The renderer now uses best-effort limits. If this error persists, your GPU is below minimum requirements.
+
+## Why WebGPU?
+
+### Performance Benefits
+
+- **GPU compute shaders** - Terrain generation, particle systems, culling
+- **Instanced rendering** - 97% reduction in draw calls for arena meshes
+- **TSL materials** - Shader node graphs with automatic optimization
+- **Better memory management** - Explicit resource lifetime control
+
+### Technical Requirements
+
+All Hyperscape shaders use TSL (Three.js Shading Language):
+- `ProceduralGrass.ts` - GPU-driven grass rendering
+- `TerrainShader.ts` - Procedural terrain with triplanar mapping
+- `LeafMaterialTSL.ts` - Vegetation with wind animation
+- `BuildingMaterialTSL.ts` - Instanced building rendering
+- Fire particles, water, sky, and all VFX
+
+TSL compiles to WGSL (WebGPU Shading Language) and cannot run on WebGL.
+
+## Migration from WebGL
+
+If you have old code expecting WebGL:
+
+### Removed Features
+
+- `RendererFactory` WebGL fallback removed
+- `?forceWebGL=1` query parameter removed
+- `?disableWebGPU=1` query parameter removed
+- `STREAM_CAPTURE_DISABLE_WEBGPU=true` no longer disables WebGPU (only used for testing)
+
+### Updated Code
+
+**Before (WebGL fallback):**
+```typescript
+const renderer = await RendererFactory.create({
+  canvas,
+  preferWebGPU: true,
+  fallbackToWebGL: true
+});
 ```
 
-### Testing WebGPU
+**After (WebGPU only):**
+```typescript
+const renderer = await RendererFactory.create({
+  canvas,
+  // WebGPU is always used, no fallback
+});
+```
 
-Check if WebGPU is available in your environment:
+## Testing WebGPU Support
+
+### Browser Console
 
 ```javascript
-// Browser console
-if (navigator.gpu) {
+// Check WebGPU availability
+if ('gpu' in navigator) {
   const adapter = await navigator.gpu.requestAdapter();
-  const device = await adapter.requestDevice();
-  console.log('WebGPU available:', device);
+  console.log('WebGPU supported:', !!adapter);
+  console.log('Adapter:', adapter);
 } else {
-  console.error('WebGPU not available');
+  console.log('WebGPU not available');
 }
 ```
 
-## Performance Considerations
+### Playwright Tests
 
-### VRAM Usage
+```typescript
+// Check WebGPU in headless browser
+const webgpuSupported = await page.evaluate(async () => {
+  if (!('gpu' in navigator)) return false;
+  const adapter = await navigator.gpu.requestAdapter();
+  return !!adapter;
+});
 
-Hyperscape uses approximately:
-
-- **Minimum**: 2GB VRAM (low settings, small world)
-- **Recommended**: 4GB VRAM (medium settings, full world)
-- **High-end**: 8GB+ VRAM (high settings, multiple players)
-
-### Frame Rate
-
-Expected performance:
-
-| GPU Tier | Resolution | FPS |
-|----------|-----------|-----|
-| Integrated (Iris Xe) | 1280x720 | 30-45 |
-| Mid-range (RTX 3060) | 1920x1080 | 60-90 |
-| High-end (RTX 4080) | 2560x1440 | 90-120 |
-
-### Optimization Tips
-
-1. **Lower resolution** if FPS is low
-2. **Disable shadows** in settings (if available)
-3. **Reduce view distance** to decrease draw calls
-4. **Close other GPU-intensive applications**
-
-## Why WebGPU Only?
-
-Hyperscape uses WebGPU exclusively because:
-
-1. **TSL Shaders**: All shaders use Three.js Shading Language, which compiles to WGSL (WebGPU Shading Language)
-2. **Compute Shaders**: Terrain generation, grass rendering, and particle systems use GPU compute
-3. **Modern Features**: WebGPU provides better performance and features than WebGL
-4. **Future-proof**: WebGPU is the future of web graphics
-
-**No WebGL fallback** is provided because TSL shaders cannot run on WebGL.
-
-## Browser Compatibility Table
-
-| Feature | Chrome 113+ | Firefox 121+ | Safari 18+ | Edge 113+ |
-|---------|-------------|--------------|------------|-----------|
-| WebGPU API | ✅ | ⚠️ Flag required | ✅ | ✅ |
-| Compute Shaders | ✅ | ⚠️ Limited | ✅ | ✅ |
-| TSL Shaders | ✅ | ⚠️ Experimental | ✅ | ✅ |
-| Texture Arrays | ✅ | ⚠️ Limited | ✅ | ✅ |
-| **Recommended** | ✅ **Yes** | ❌ No | ✅ **Yes** | ✅ **Yes** |
-
-## Troubleshooting
-
-### Black Screen on Load
-
-**Cause**: WebGPU initialization failed
-
-**Solutions**:
-1. Check browser console for WebGPU errors
-2. Update graphics drivers
-3. Try Chrome/Edge instead of Firefox
-4. Verify GPU meets minimum requirements
-
-### "WebGPU adapter request failed"
-
-**Cause**: GPU doesn't support required features
-
-**Solutions**:
-1. Update graphics drivers to latest version
-2. Check if GPU supports Vulkan 1.3+ (Linux) or DirectX 12 (Windows)
-3. Try a different browser (Chrome recommended)
-
-### Poor Performance
-
-**Cause**: GPU under minimum requirements or drivers outdated
-
-**Solutions**:
-1. Lower resolution in browser (zoom out)
-2. Update graphics drivers
-3. Close other GPU-intensive applications
-4. Use a device with a more powerful GPU
+expect(webgpuSupported).toBe(true);
+```
 
 ## Related Documentation
 
-- [Vast.ai Deployment](./vast-deployment.md) - Server-side WebGPU rendering
-- [README.md](../README.md) - Quick start guide
-- [CLAUDE.md](../CLAUDE.md) - Development guidelines
+- [Three.js WebGPU Documentation](https://threejs.org/docs/#api/en/renderers/WebGPURenderer)
+- [WebGPU Specification](https://www.w3.org/TR/webgpu/)
+- [TSL (Three.js Shading Language)](https://github.com/mrdoob/three.js/wiki/Three.js-Shading-Language)
