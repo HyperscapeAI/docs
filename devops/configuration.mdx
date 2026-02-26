@@ -161,14 +161,9 @@ STREAMING_DUEL_COMBAT_AI_ENABLED=false          # Enable DuelCombatAI for agents
 STREAMING_DUEL_LLM_TACTICS_ENABLED=false        # Enable LLM-based combat strategy (default: false)
 STREAMING_COMBAT_STALL_NUDGE_MS=15000           # Fallback damage nudge delay (ms)
 
-# Duel Arena Visuals System (commit b8f56e81)
+# Duel Arena Visuals System
 DUEL_ARENA_VISUALS_ENABLED=true                 # Enable duel arena visuals system (default: true)
                                                 # Registers flat zones for arena floors to prevent player sinking
-                                                # Fixes players sinking ~0.4m into arena floors
-
-# Combat AI System (commit 51453dae)
-STREAMING_DUEL_COMBAT_AI_ENABLED=true           # Enable DuelCombatAI for agents (default: true)
-STREAMING_DUEL_LLM_TACTICS_ENABLED=false        # Enable LLM-based combat strategy (default: false)
 
 # Trash Talk System
 TRASH_TALK_COOLDOWN_MS=8000                     # Cooldown between trash talk messages (default: 8s)
@@ -181,6 +176,91 @@ STREAMING_FIGHTING_MS=150000                    # Fighting phase duration (defau
 STREAMING_END_WARNING_MS=10000                  # End warning duration (default: 10s)
 STREAMING_RESOLUTION_MS=5000                    # Resolution phase duration (default: 5s)
 ```
+
+## PM2 Production Deployment
+
+The production duel stack uses PM2 for process management with automatic restarts:
+
+### PM2 Configuration
+
+```javascript
+// From ecosystem.config.cjs
+module.exports = {
+  apps: [{
+    name: "hyperscape-duel",
+    script: "scripts/duel-stack.mjs",
+    interpreter: "bun",
+    args: "--skip-betting --skip-bots",
+    
+    // Restart policy
+    autorestart: true,
+    max_restarts: 999999,
+    min_uptime: "10s",
+    restart_delay: 5000,
+    max_memory_restart: "4G",
+    
+    // Logging
+    error_file: "logs/duel-error.log",
+    out_file: "logs/duel-out.log",
+    
+    env: {
+      NODE_ENV: "production",
+      USE_LOCAL_POSTGRES: "false",
+      DATABASE_URL: process.env.DATABASE_URL || "postgresql://...",
+      PUBLIC_CDN_URL: "https://assets.hyperscape.club",
+      
+      // Streaming configuration
+      STREAM_CAPTURE_MODE: "cdp",
+      STREAM_CAPTURE_HEADLESS: "false",  // Headful with Xvfb
+      STREAM_CAPTURE_CHANNEL: "chrome-dev",
+      STREAM_CAPTURE_ANGLE: "vulkan",
+      STREAMING_CANONICAL_PLATFORM: "twitch",
+      STREAMING_PUBLIC_DELAY_MS: "0",
+      
+      // Stream keys (from environment)
+      TWITCH_STREAM_KEY: process.env.TWITCH_STREAM_KEY || "",
+      KICK_STREAM_KEY: process.env.KICK_STREAM_KEY || "",
+      KICK_RTMP_URL: process.env.KICK_RTMP_URL || "rtmps://fa723fc1b171.global-contribute.live-video.net/app",
+      X_STREAM_KEY: process.env.X_STREAM_KEY || "",
+      X_RTMP_URL: process.env.X_RTMP_URL || "rtmp://sg.pscp.tv:80/x"
+    }
+  }]
+};
+```
+
+### PM2 Commands
+
+```bash
+# Start duel stack
+bunx pm2 start ecosystem.config.cjs
+
+# Monitor
+bunx pm2 logs hyperscape-duel
+bunx pm2 status
+bunx pm2 monit
+
+# Control
+bunx pm2 restart hyperscape-duel
+bunx pm2 stop hyperscape-duel
+bunx pm2 delete hyperscape-duel
+
+# Persist across reboots
+bunx pm2 save
+bunx pm2 startup
+```
+
+### Stream Key Management
+
+Stream keys must be explicitly unset and re-exported before PM2 start to avoid stale environment variables:
+
+```bash
+# From scripts/deploy-vast.sh
+unset TWITCH_STREAM_KEY X_STREAM_KEY X_RTMP_URL KICK_STREAM_KEY KICK_RTMP_URL
+source /root/hyperscape/packages/server/.env
+bunx pm2 start ecosystem.config.cjs
+```
+
+This ensures PM2 picks up the correct stream keys from the .env file, not stale values from the shell environment.
 
 ## AssetForge Environment
 
