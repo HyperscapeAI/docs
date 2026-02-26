@@ -10,8 +10,8 @@ The server has been successfully migrated to PostgreSQL and is production-ready 
 - Character creation and multi-character support
 - Complete persistence layer (inventory, equipment, skills, position)
 - Real-time multiplayer via WebSocket
-- 17 skills with full persistence (Attack, Strength, Defence, Constitution, Ranged, Magic, Prayer, Woodcutting, Mining, Fishing, Cooking, Firemaking, Smithing, Agility, Crafting, Fletching, Runecrafting)
-- 15+ registered game actions
+- RTMP streaming support for spectator mode
+- 15 registered game actions
 
 See `FIXES-COMPLETE.md` for detailed migration changelog.
 
@@ -19,13 +19,12 @@ See `FIXES-COMPLETE.md` for detailed migration changelog.
 
 - **PostgreSQL Database** - Full persistence with automatic migrations
 - **WebSocket Support** - Real-time multiplayer via Fastify WebSockets
+- **RTMP Streaming** - Live spectator streams with automatic recovery
 - **Docker Integration** - Automatic local PostgreSQL via Docker (optional)
 - **Asset Serving** - Efficient static asset delivery
 - **Character System** - Multi-character support per account
 - **Authentication** - Optional Privy authentication with Farcaster support
 - **LiveKit Voice** - Optional voice chat integration
-- **Artisan Skills** - Crafting, Fletching, Runecrafting with recipe manifests
-- **Equipment System** - 11-slot equipment with arrow quantity tracking
 
 ## Quick Start
 
@@ -56,7 +55,7 @@ USE_LOCAL_POSTGRES=true
 
 **Option 2: External PostgreSQL**
 ```env
-DATABASE_URL=postgresql://user:pass@host:5432/dbname
+DATABASE_URL=postgresql://user:pass@host:5488/dbname
 USE_LOCAL_POSTGRES=false
 ```
 
@@ -140,40 +139,78 @@ cat backup.sql | docker exec -i hyperscape-postgres psql -U hyperscape hyperscap
 
 ### Migrations
 
-Migrations are managed by Drizzle ORM in `src/database/migrations/`. Run from `packages/server/`:
+Migrations are defined in `src/db.ts` and run automatically on server start. The migration system tracks version in the `config` table.
 
-```bash
-bunx drizzle-kit generate  # Create migration from schema changes
-bunx drizzle-kit migrate   # Apply pending migrations
-bunx drizzle-kit push      # Push schema directly (dev only)
+**Current migrations:**
+1. Users table
+2. VRM/avatar column migration
+3. Settings config migration
+4. Entities scale field update
+5. Entities table creation
+6. Privy authentication columns
+7. RPG tables (players, items, inventory, equipment)
+8. World chunks and sessions
+9. Characters table (for multi-character support)
+
+## RTMP Streaming
+
+### Configuration
+
+Enable RTMP streaming for spectator mode:
+
+```env
+# Streaming stability (optional - defaults work for most cases)
+CDP_STALL_THRESHOLD=4                    # Intervals before CDP restart (default: 4)
+FFMPEG_MAX_RESTART_ATTEMPTS=8            # Max FFmpeg restarts (default: 8)
+CAPTURE_RECOVERY_MAX_FAILURES=4          # Max capture failures (default: 4)
+
+# RTMP server endpoint
+RTMP_URL=rtmp://your-server/live/stream-key
 ```
 
-**Recent migrations:**
-- 0029: Add crafting skill columns
-- 0030: Add fletching skill columns
-- 0031: Add runecrafting skill columns
+### Tuning
+
+**High-reliability streaming** (prefer stability over quick recovery):
+```env
+CDP_STALL_THRESHOLD=6
+FFMPEG_MAX_RESTART_ATTEMPTS=10
+CAPTURE_RECOVERY_MAX_FAILURES=5
+```
+
+**Low-latency streaming** (prefer quick recovery over stability):
+```env
+CDP_STALL_THRESHOLD=2
+FFMPEG_MAX_RESTART_ATTEMPTS=5
+CAPTURE_RECOVERY_MAX_FAILURES=2
+```
+
+See [../../docs/streaming-improvements.md](../../docs/streaming-improvements.md) for detailed tuning guide.
 
 ## Architecture
 
 ### Core Systems
 
-**ServerNetwork** (`src/systems/ServerNetwork/`)
+**ServerNetwork** (`src/ServerNetwork.ts`)
 - WebSocket connection handling
 - Player spawning and lifecycle
 - Character selection flow
 - Message routing and broadcasting
 
-**DatabaseSystem** (`src/systems/DatabaseSystem/`)
+**DatabaseSystem** (`src/DatabaseSystem.ts`)
 - PostgreSQL connection management
 - Character CRUD operations
 - Player data persistence
 - Inventory and equipment management
 
-**Database Layer** (`src/database/`)
+**Database Layer** (`src/db.ts`)
 - Connection pooling (pg)
-- Migration runner (Drizzle)
-- Repository pattern for data access
-- Schema definitions
+- Migration runner
+- Query builder for shared code
+
+**StreamingDuelScheduler** (`src/systems/StreamingDuelScheduler/`)
+- Automated duel matchmaking for streams
+- Camera director for cinematic views
+- RTMP capture and broadcast
 
 ### Character System
 
@@ -187,30 +224,6 @@ The server supports multiple characters per account:
 ```
 Login → Character List → Select/Create Character → Enter World → Spawn as Player
 ```
-
-### Artisan Skills
-
-The server implements three artisan skills with manifest-driven recipes:
-
-**Crafting System:**
-- Leather crafting (needle + thread)
-- Dragonhide armor (needle + thread)
-- Jewelry crafting (furnace + moulds)
-- Gem cutting (chisel)
-- Tanning (instant hide-to-leather conversion)
-
-**Fletching System:**
-- Arrow shafts (knife + logs, 15 per action)
-- Headless arrows (shafts + feathers, 15 per action)
-- Arrows (arrowtips + headless arrows, 15 per action)
-- Bows (knife + logs, then string with bowstring)
-
-**Runecrafting System:**
-- Instant essence-to-rune conversion at altars
-- Multi-rune multipliers at higher levels
-- Two essence types (rune_essence, pure_essence)
-
-All recipes are defined in JSON manifests at `world/assets/manifests/recipes/`.
 
 ## API Endpoints
 
@@ -234,6 +247,12 @@ All recipes are defined in JSON manifests at `world/assets/manifests/recipes/`.
 - `GET /api/actions/available` - Get actions available to player
 - `POST /api/actions/:name` - Execute specific action
 
+### Streaming
+
+- `GET /api/streaming/status` - Stream health and uptime
+- `POST /api/streaming/start` - Start RTMP stream
+- `POST /api/streaming/stop` - Stop RTMP stream
+
 ### Utility
 
 - `GET /env.js` - Public environment variables for client
@@ -256,12 +275,12 @@ WORLD=world                   # World directory path
 USE_LOCAL_POSTGRES=true
 POSTGRES_CONTAINER=hyperscape-postgres
 POSTGRES_USER=hyperscape
-POSTGRES_PASSWORD=hyperscape_dev
+POSTGRES_PASSWORD=hyperscape_dev_password
 POSTGRES_DB=hyperscape
-POSTGRES_PORT=5432
+POSTGRES_PORT=5488
 
 # Option 2: External PostgreSQL
-DATABASE_URL=postgresql://user:pass@host:5432/dbname
+DATABASE_URL=postgresql://user:pass@host:5488/dbname
 ```
 
 ### Assets
@@ -293,6 +312,28 @@ LIVEKIT_API_KEY=your-key
 LIVEKIT_API_SECRET=your-secret
 PUBLIC_LIVEKIT_URL=wss://your-livekit-server
 ```
+
+### RTMP Streaming (Optional)
+
+```env
+RTMP_URL=rtmp://your-server/live/stream-key
+CDP_STALL_THRESHOLD=4                    # CDP restart threshold (default: 4)
+FFMPEG_MAX_RESTART_ATTEMPTS=8            # Max FFmpeg restarts (default: 8)
+CAPTURE_RECOVERY_MAX_FAILURES=4          # Max capture failures (default: 4)
+```
+
+### Monitoring & Alerting (Optional)
+
+```env
+ALERT_WEBHOOK_URL=https://hooks.slack.com/services/...
+```
+
+Monitoring endpoints:
+- `GET /health` - basic uptime/timestamp (use for uptime checks)
+- `GET /status` - connected users + commit hash
+
+Configure your monitoring service (Railway health checks, UptimeRobot, Pingdom, etc.)
+to poll `/health` and trigger alerts on non-200 responses or elevated latency.
 
 ## Deployment
 
@@ -334,6 +375,15 @@ NODE_ENV=staging bun run start
 NODE_ENV=production bun run start
 ```
 
+### Rollback
+
+Rollback uses the same deployment workflows with an explicit ref:
+
+1. Railway API (server): run the **Deploy to Railway** workflow and set
+   `deploy_ref` to the previous commit SHA or tag.
+2. Cloudflare R2 assets: run **Deploy Assets to Cloudflare R2** with
+   `deploy_ref` pointing at the same commit to keep assets in sync.
+
 ## Troubleshooting
 
 ### PostgreSQL Connection Failed
@@ -344,7 +394,7 @@ NODE_ENV=production bun run start
 1. Check if Docker is running: `docker ps`
 2. Start PostgreSQL: `docker-compose up postgres`
 3. Check connection string in .env
-4. Verify firewall allows port 5432
+4. Verify firewall allows port 5488
 
 ### Database Migration Errors
 
@@ -375,7 +425,7 @@ Then restart the server.
 SELECT * FROM config WHERE key = 'version';
 ```
 
-Should be at version 31 or higher (includes crafting, fletching, runecrafting). If not, restart server to run migrations.
+Should be at version 15 or higher. If not, restart server to run migrations.
 
 ### Docker Issues
 
@@ -388,9 +438,22 @@ Should be at version 31 or higher (includes crafting, fletching, runecrafting). 
 
 **Alternative:** Use external PostgreSQL instead:
 ```env
-DATABASE_URL=postgresql://user:pass@host:5432/dbname
+DATABASE_URL=postgresql://user:pass@host:5488/dbname
 USE_LOCAL_POSTGRES=false
 ```
+
+### Streaming Issues
+
+**Error:** RTMP stream keeps restarting
+
+**Solution:** Increase stability thresholds:
+```env
+CDP_STALL_THRESHOLD=6
+FFMPEG_MAX_RESTART_ATTEMPTS=10
+CAPTURE_RECOVERY_MAX_FAILURES=5
+```
+
+See [../../docs/streaming-improvements.md](../../docs/streaming-improvements.md) for details.
 
 ## Development
 
@@ -399,26 +462,18 @@ USE_LOCAL_POSTGRES=false
 ```
 src/
 ├── index.ts              # Main server entry point
-├── systems/
-│   ├── ServerNetwork/    # Network layer & player lifecycle
-│   ├── DatabaseSystem/   # Database operations
-│   └── DuelSystem/       # Duel arena implementation
-├── database/
-│   ├── client.ts         # PostgreSQL connection
-│   ├── migrations/       # Drizzle migrations
-│   ├── repositories/     # Data access layer
-│   └── schema.ts         # Database schema
-├── startup/
-│   ├── config.ts         # Server configuration
-│   ├── database.ts       # Database initialization
-│   ├── http-server.ts    # HTTP server setup
-│   ├── websocket.ts      # WebSocket setup
-│   └── world.ts          # World initialization
-├── infrastructure/
-│   ├── auth/             # Privy authentication
-│   ├── docker/           # Docker management
-│   └── rate-limit/       # Rate limiting
-└── eliza/                # ElizaOS agent integration
+├── ServerNetwork.ts      # Network layer & player lifecycle
+├── DatabaseSystem.ts     # Database operations
+├── db.ts                 # Connection & migrations
+├── docker-manager.ts     # Docker PostgreSQL automation
+├── streaming/            # RTMP streaming system
+│   ├── stream-capture.ts # Main capture orchestrator
+│   ├── browser-capture.ts # Chrome CDP integration
+│   └── rtmp-bridge.ts    # FFmpeg RTMP encoder
+├── Storage.ts            # File storage
+├── utils.ts              # Utilities (JWT, hashing)
+├── privy-auth.ts        # Privy authentication
+└── polyfills.ts         # Node.js polyfills
 ```
 
 ### Running Tests
@@ -449,7 +504,7 @@ Output: `dist/index.js` (bundled server)
 - Idle timeout: 30s
 - Connection timeout: 5s
 
-Adjust in `src/database/client.ts` if needed.
+Adjust in `src/db.ts` and `src/DatabaseSystem.ts` if needed.
 
 ### Asset Caching
 
@@ -459,6 +514,13 @@ Cache-Control: public, max-age=31536000, immutable
 ```
 
 For development, disable browser cache or use incognito mode.
+
+### Streaming Performance
+
+- **Soft recovery**: ~2-3 seconds (no visible gap)
+- **Hard recovery**: ~10-15 seconds (visible gap)
+- **CPU usage**: ~15-25% during active streaming
+- **Memory**: ~500 MB baseline + ~50 MB per stream
 
 ## Security
 
@@ -483,14 +545,15 @@ Admin commands require:
 
 ### Rate Limiting
 
-Implemented for critical operations:
-- Crafting interact: 1 request per 500ms
-- Combat actions: 1 request per tick (600ms)
-- Movement: Anti-cheat validation
+Not implemented yet. Consider adding:
+- Connection rate limiting (websocket)
+- API endpoint rate limiting
+- Upload size limits (currently 50MB)
 
 ## Support
 
 - **Documentation:** See `MIGRATION-FIXES.md` for recent changes
+- **Streaming Guide:** See [../../docs/streaming-improvements.md](../../docs/streaming-improvements.md)
 - **Cloudflare Deployment:** See `CLOUDFLARE.md` (currently disabled)
 - **Issues:** Report bugs in the main Hyperscape repository
 
