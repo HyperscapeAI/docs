@@ -368,15 +368,25 @@ See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture doc
 
 ## Documentation
 
-- [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser and GPU requirements
-- [docs/vast-deployment.md](docs/vast-deployment.md) - Vast.ai GPU streaming deployment
-- [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Graceful deployment API
-- [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) - Cloudflare Pages setup
-- [docs/streaming-configuration.md](docs/streaming-configuration.md) - RTMP streaming setup
-- [docs/asset-forge-vfx-catalog.md](docs/asset-forge-vfx-catalog.md) - VFX catalog guide
-- [docs/ci-cd-improvements.md](docs/ci-cd-improvements.md) - CI/CD improvements reference
-- [docs/railway-dev-prod.md](docs/railway-dev-prod.md) - Railway deployment
+### Deployment
+- [docs/cloudflare-pages-deployment.md](docs/cloudflare-pages-deployment.md) - Cloudflare Pages automated deployment
+- [docs/vast-deployment-improvements.md](docs/vast-deployment-improvements.md) - Vast.ai GPU streaming improvements
+- [docs/railway-dev-prod.md](docs/railway-dev-prod.md) - Railway deployment (dev/prod)
 - [docs/native-release.md](docs/native-release.md) - Native app releases
+
+### Streaming
+- [docs/streaming-improvements-feb-2026.md](docs/streaming-improvements-feb-2026.md) - RTMP streaming improvements
+- [docs/streaming-audio-capture.md](docs/streaming-audio-capture.md) - PulseAudio audio capture setup
+
+### AI Agents
+- [docs/agent-stability-improvements.md](docs/agent-stability-improvements.md) - Model agent stability fixes
+
+### Blockchain
+- [docs/solana-market-wsol-migration.md](docs/solana-market-wsol-migration.md) - WSOL market token migration
+
+### Technical
+- [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser and GPU requirements
+- [CLAUDE.md](CLAUDE.md) - Development guide and architecture
 
 ## License
 
