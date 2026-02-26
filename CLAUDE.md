@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine with WebGPU-based rendering, ElizaOS AI agent integration, and authentic OSRS-style tick-based combat mechanics.
+Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world.
 
 ## Essential Commands
 
@@ -43,7 +43,6 @@ bun run build:server    # Game server
 bun run dev:shared      # Shared package with watch mode
 bun run dev:client      # Client with Vite HMR
 bun run dev:server      # Server with auto-restart
-bun run dev:forge       # Asset Forge + VFX catalog
 ```
 
 ### Testing
@@ -104,7 +103,6 @@ packages/
 ├── server/              # Game server (Fastify + WebSockets)
 │   ├── World management
 │   ├── PostgreSQL persistence
-│   ├── Maintenance mode API
 │   └── LiveKit voice chat integration
 ├── client/              # Web client (Vite + React)
 │   ├── 3D rendering (WebGPU required)
@@ -121,13 +119,24 @@ packages/
 **Critical**: Packages must build in this order due to dependencies:
 
 1. **physx-js-webidl** - PhysX WASM (takes longest, ~5-10 min first time)
-2. **procgen** - Procedural generation library
+2. **procgen** - Procedural generation utilities
 3. **shared** - Depends on physx-js-webidl and procgen
 4. **All other packages** - Depend on shared
 
 The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
 
-> **Note on shared ↔ procgen**: These packages have a peer dependency relationship (not a hard dependency) to avoid circular dependency issues with Turbo's build graph. `procgen` is an optional peerDependency in `shared/package.json`, and `shared` is a devDependency in `procgen/package.json`. This allows both packages to import from each other at runtime while breaking the build cycle.
+> **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
+>
+> There is a circular dependency between `@hyperscape/shared` and `@hyperscape/procgen`.
+> - shared imports procgen for vegetation/terrain generation
+> - procgen imports shared for TileCoord type in viewers
+>
+> **Current workaround**: procgen build ignores TypeScript errors.
+>
+> **Recommended fix**: Extract shared types to `@hyperscape/types` package:
+> - Create new package with only type definitions (no runtime code)
+> - Both shared and procgen depend on types (no circular dep)
+> - Move TileCoord, Position3D, EntityData to types package
 
 ### Entity Component System (ECS)
 
@@ -177,12 +186,6 @@ const player = getEntity(id) as Player;
 player.health -= damage;
 ```
 
-**Recent improvements (February 2026):**
-- Reduced explicit `any` types from 142 to ~46
-- Fixed WebSocket types (use `ws` library types, not browser WebSocket)
-- Added type annotations for Three.js traverse callbacks
-- Replaced `any` with `unknown` in error handlers
-
 ### File Management
 
 **Don't create new files unless absolutely necessary.**
@@ -192,10 +195,6 @@ player.health -= damage;
 - Update all imports when moving code
 - Clean up test files immediately after use
 - Don't create temporary `check-*.ts`, `test-*.mjs`, `fix-*.js` files
-
-**Recent cleanup (February 2026):**
-- Deleted `PacketHandlers.ts` (3098 lines of dead code, never imported)
-- Removed unused arena functions (`createArenaMarker`, `createAmbientDust`, `createLobbyBenches`)
 
 ### Testing Philosophy
 
@@ -259,19 +258,6 @@ world.on('inventory:add', (event: InventoryAddEvent) => {
 });
 ```
 
-**Event Cleanup (February 2026 - Memory Leak Fix):**
-```typescript
-// Use AbortController for automatic cleanup
-const abortController = new AbortController();
-
-world.on('event', handler, { signal: abortController.signal });
-
-// Cleanup
-destroy() {
-  abortController.abort();  // Removes all listeners
-}
-```
-
 ### Development Server
 
 The dev server provides:
@@ -283,7 +269,7 @@ The dev server provides:
 **Commands:**
 ```bash
 bun run dev        # Core game (client + server + shared)
-bun run dev:forge  # AssetForge + VFX catalog (standalone)
+bun run dev:forge  # AssetForge (standalone)
 bun run docs:dev   # Documentation site (standalone)
 ```
 
@@ -307,18 +293,18 @@ All services have unique default ports to avoid conflicts:
 
 | Package | File | Purpose |
 |---------|------|---------|
-| Server | `packages/server/.env.example` | Server deployment (Railway, Vast.ai, Docker) |
-| Client | `packages/client/.env.example` | Client deployment (Cloudflare Pages) |
+| Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
+| Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
 
 **Common variables**:
 ```bash
 # Server (packages/server/.env)
 DATABASE_URL=postgresql://...    # Required for production
-JWT_SECRET=...                   # Required for production (throws error if not set)
-ADMIN_CODE=...                   # Required for production security
+JWT_SECRET=...                   # Required for production (enforced)
 PRIVY_APP_ID=...                 # For Privy auth
 PRIVY_APP_SECRET=...             # For Privy auth
+ADMIN_CODE=...                   # Required for production security
 
 # Client (packages/client/.env)
 PUBLIC_PRIVY_APP_ID=...          # Must match server's PRIVY_APP_ID
@@ -337,20 +323,18 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - Install: `bun install` (NOT `npm install`)
 - Run scripts: `bun run <script>` or `bun <file>`
 - Some commands use `npm` prefix for Turbo workspace filtering
-- CI uses `bun install --frozen-lockfile` to avoid npm rate limits
 
 ## Tech Stack
 
 - **Runtime**: Bun v1.1.38+
-- **Engine**: Three.js 0.180.0 (WebGPU required), PhysX (WASM)
-- **Rendering**: WebGPU with TSL (Three.js Shading Language) - WebGL removed
+- **Engine**: Three.js 0.180.0, PhysX (WASM)
+- **Rendering**: WebGPU (required - all shaders use TSL)
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
-- **Database**: PostgreSQL (production), Docker PostgreSQL (development)
+- **Database**: PostgreSQL (production via Neon), Docker (local)
 - **Testing**: Playwright, Vitest
 - **Build**: Turbo, esbuild, Vite
-- **Mobile**: Tauri v2
-- **Streaming**: FFmpeg, Chrome Dev, Xvfb, Vulkan
+- **Mobile**: Capacitor
 
 ## Troubleshooting
 
@@ -389,71 +373,90 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Tests spawn their own Hyperscape instances
 - Visual tests require headless browser support
 
-### WebGPU Issues
+### WebGPU Not Available
 
-**WebGPU is required** as of February 2026 (all shaders use TSL). WebGL fallback removed.
-
-**Browser Requirements**:
+Hyperscape requires WebGPU (all shaders use TSL). WebGL fallback was removed.
 - Chrome/Edge 113+ (Windows/macOS/Linux)
 - Safari 18+ (macOS 15+ only)
-- Firefox: WebGPU support is experimental (not recommended)
+- Check: [webgpureport.org](https://webgpureport.org)
 
-**Check Support**: Visit [webgpureport.org](https://webgpureport.org)
+## Deployment
 
-**Headless/Server Rendering**:
-- Use Chrome Dev channel (`google-chrome-unstable`)
-- Install Vulkan drivers: `apt-get install mesa-vulkan-drivers vulkan-tools`
-- Use Xvfb for virtual display: `Xvfb :99 -screen 0 1280x720x24`
-- Set `STREAM_CAPTURE_CHANNEL=chrome-dev` and `STREAM_CAPTURE_ANGLE=vulkan`
+### Cloudflare Pages (Client)
 
-See [docs/webgpu-requirements.md](docs/webgpu-requirements.md) for full requirements.
+Automatic deployment on push to `main`:
+- Workflow: `.github/workflows/deploy-pages.yml`
+- Triggers on changes to `packages/client/**` or `packages/shared/**`
+- Production URL: https://hyperscape.gg
+- Preview URL: https://<commit>.hyperscape.pages.dev
 
-### CI/CD npm 403 Errors
+### Railway (Game Server)
 
-**Problem:** GitHub Actions hitting npm rate limits.
+Branch-based deployment:
+- `main` → `prod` environment
+- `develop` → `dev` environment
+- See [docs/railway-dev-prod.md](docs/railway-dev-prod.md)
 
-**Solution:** CI now uses:
-- `bun install --frozen-lockfile` (no fresh resolution)
-- Retry logic with exponential backoff (15s, 30s, 45s, 60s, 75s)
-- Windows-specific retry (3 attempts with 15s delay)
+### Vast.ai (GPU Streaming)
 
-### Circular Dependency Errors
+Automated deployment with maintenance mode:
+- Workflow: `.github/workflows/deploy-vast.yml`
+- Triggers after CI passes on `main`
+- Manual trigger: `workflow_dispatch`
+- Features:
+  - Maintenance mode API (pauses duel cycles)
+  - Health checking before exit
+  - DATABASE_URL persistence through git reset
+  - Vulkan driver installation
+  - Chrome Dev channel for WebGPU
+- See [docs/vast-deployment.md](docs/vast-deployment.md)
 
-**Problem:** Turbo detecting `shared → procgen → shared` cycle.
+### Maintenance Mode API
 
-**Solution:** `procgen` is now an optional peerDependency in `shared/package.json`. Both packages can import from each other at runtime, but the build graph is acyclic.
+Graceful deployment system for production:
 
-## Recent Changes (February 2026)
+```bash
+# Enter maintenance mode (pauses new duel cycles)
+curl -X POST https://your-server.com/admin/maintenance/enter \
+  -H "Content-Type: application/json" \
+  -H "x-admin-code: your-admin-code" \
+  -d '{"reason": "deployment", "timeoutMs": 300000}'
 
-### Security
-- **JWT_SECRET enforcement** - Now required in production/staging (throws error if not set)
-- **CSRF cross-origin handling** - Apex domains (hyperscape.gg, hyperbet.win) bypass CSRF validation
-- **Memory leak fixes** - AbortController for event listener cleanup (InventoryInteractionSystem)
+# Check status
+curl https://your-server.com/admin/maintenance/status \
+  -H "x-admin-code: your-admin-code"
 
-### Rendering
-- **WebGPU enforcement** - WebGL fallback removed, all shaders use TSL
-- **Instanced arena meshes** - 97% draw call reduction (~846 meshes → InstancedMesh)
-- **TSL fire particles** - GPU-driven emissive materials replace 28 PointLights
-- **Renderer limits** - Best-effort `maxTextureArrayLayers: 2048`, retry with defaults if GPU rejects
+# Exit maintenance mode (resumes operations)
+curl -X POST https://your-server.com/admin/maintenance/exit \
+  -H "Content-Type: application/json" \
+  -H "x-admin-code: your-admin-code"
+```
 
-### Streaming
-- **CDP stall threshold** - Increased from 2 to 4 intervals (120s) to reduce false restarts
-- **FFmpeg restart attempts** - Increased from 5 to 8 for better resilience
-- **Soft CDP recovery** - Restart screencast without browser/FFmpeg teardown (no stream gap)
-- **Platform support** - Twitch, Kick, X (YouTube removed)
-- **Public delay** - Configurable via `STREAMING_PUBLIC_DELAY_MS` (set to 0 for live betting)
+See [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) for full API reference.
 
-### Deployment
-- **Maintenance mode API** - Graceful deployments with market resolution waiting
-- **DATABASE_URL persistence** - Survives git reset in deploy scripts
-- **Vast.ai improvements** - Vulkan drivers, Chrome Dev, health checking
-- **R2 CORS** - Automated configuration for cross-origin asset loading
+## Recent Architectural Changes (February 2026)
 
-### Developer Experience
-- **VFX catalog** - Asset Forge browser for all game effects with live previews
-- **Type safety** - Reduced explicit `any` types from 142 to ~46
-- **Dead code removal** - 3098 lines removed (PacketHandlers.ts)
-- **ESLint compatibility** - Disabled crashing `import/order` rule in asset-forge
+### Security Enhancements
+- **JWT_SECRET enforcement**: Now required in production/staging (throws error if not set)
+- **CSRF cross-origin handling**: Skip validation for known clients (already protected by Origin + JWT)
+- **Solana keypair management**: Setup from env var, removed hardcoded secrets
+
+### Rendering Pipeline
+- **WebGPU enforcement**: WebGL fallback removed (all shaders use TSL)
+- **Instanced arena meshes**: 97% draw call reduction (~846 meshes → InstancedMesh)
+- **TSL fire particles**: GPU-driven emissive materials replace 28 PointLights
+- **Memory leak fixes**: AbortController for proper event listener cleanup
+
+### CI/CD Improvements
+- **Cloudflare Pages workflow**: Automatic client deployment on push to main
+- **Vast.ai maintenance mode**: Graceful deployments with market resolution waiting
+- **DATABASE_URL persistence**: Survives git reset operations in deploy scripts
+- **Build resilience**: Retry logic, frozen lockfile, split unsigned/release builds
+
+### Code Quality
+- **Type safety**: Reduced explicit `any` types from 142 to ~46
+- **Dead code removal**: 3098 lines removed (PacketHandlers.ts never imported)
+- **Circular dependency**: shared ↔ procgen (TODO: extract to @hyperscape/types)
 
 ## Additional Resources
 
@@ -461,15 +464,7 @@ See [docs/webgpu-requirements.md](docs/webgpu-requirements.md) for full requirem
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
+- [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser/GPU requirements
 - [docs/vast-deployment.md](docs/vast-deployment.md) - Vast.ai deployment guide
-- [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Graceful deployment API
-- [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) - Cloudflare Pages setup
-- [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser and GPU requirements
+- [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Maintenance mode API
 - [docs/streaming-configuration.md](docs/streaming-configuration.md) - RTMP streaming setup
-- [docs/arena-rendering-optimizations.md](docs/arena-rendering-optimizations.md) - InstancedMesh & TSL guide
-- [docs/vast-deployment.md](docs/vast-deployment.md) - Vast.ai deployment guide
-- [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Graceful deployment API
-- [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser and GPU requirements
-- [docs/streaming-configuration.md](docs/streaming-configuration.md) - RTMP streaming setup
-- [docs/asset-forge-vfx-catalog.md](docs/asset-forge-vfx-catalog.md) - VFX catalog guide
-- [docs/ci-cd-improvements.md](docs/ci-cd-improvements.md) - CI/CD improvements reference
