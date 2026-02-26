@@ -725,8 +725,27 @@ executablePath: '/usr/bin/google-chrome-unstable'
 - Build workflow now split into Unsigned and Release variants
 - Signing env vars only present during actual releases
 - Non-release builds no longer set `APPLE_CERTIFICATE=''`
+- macOS unsigned builds use `--no-bundle` instead of `--bundles app` (app bundle type is macOS-only)
+- iOS builds are release-only (unsigned iOS always fails with "Signing requires a development team")
+- Windows builds include retry logic for transient NPM registry errors
 - File: `.github/workflows/build-app.yml`
 - Commit: 15250d2 (Feb 25, 2026)
+
+### Linux/Windows Desktop Builds Fail in CI
+
+**Symptom**: Tauri desktop builds fail on Linux/Windows with "app bundle type is macOS-only" error
+
+**Cause**: `--bundles app` flag is macOS-specific, causes Linux/Windows builds to fail
+
+**Solution**: Update to latest code (commit f19a704 fixed this)
+
+**Technical Details:**
+- Replaced `--bundles app` with `--no-bundle` for unsigned builds
+- `app` bundle type is macOS-only, causing Linux/Windows to fail
+- Made `beforeBuildCommand` cross-platform using Node.js instead of Unix shell `test` command
+- Split artifact upload: release builds upload bundles, unsigned builds upload raw binaries
+- File: `.github/workflows/build-app.yml`
+- Commit: f19a704 (Feb 26, 2026)
 
 ### Cloudflare Origin Lock Blocking API Access
 
