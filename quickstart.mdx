@@ -12,6 +12,11 @@ Before you begin, ensure you have:
 - [Git LFS](https://git-lfs.com) for large file support (game assets)
 - [Docker](https://docker.com) for CDN and PostgreSQL
 - [Privy](https://privy.io) account for authentication (recommended)
+- **WebGPU-compatible browser** (Chrome 113+, Edge 113+, Safari 18+)
+
+<Warning>
+  Hyperscape requires WebGPU for rendering. All shaders use Three.js Shading Language (TSL) which only compiles to WebGPU. Browsers without WebGPU support will show an error screen with upgrade instructions.
+</Warning>
 
 <Tabs>
   <Tab title="macOS">
