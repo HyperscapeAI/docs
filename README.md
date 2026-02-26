@@ -471,6 +471,8 @@ JWT_SECRET=your-generated-secret-here
 
 ## Recent Updates (February 2026)
 
+> **📋 Full Changelog**: See [CHANGELOG-FEBRUARY-2026.md](CHANGELOG-FEBRUARY-2026.md) for complete details on all changes, including commit references and migration guides.
+
 ### Breaking Changes
 - **WebGPU Required**: All shaders now use TSL (Three.js Shading Language) which requires WebGPU. WebGL fallback removed. User-friendly error screen shown when WebGPU unavailable.
 - **JWT_SECRET Required**: Production/staging deployments now throw error if `JWT_SECRET` not set (security hardening)
