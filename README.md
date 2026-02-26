@@ -365,6 +365,18 @@ FFMPEG_MAX_RESTART_ATTEMPTS=10           # Default: 8
 CAPTURE_RECOVERY_MAX_FAILURES=5          # Default: 4
 ```
 
+**Streaming delay configuration:**
+Configure platform-specific delays for anti-cheat timing in `packages/server/.env`:
+```bash
+# Set canonical platform (determines default delay)
+STREAMING_CANONICAL_PLATFORM=twitch      # Options: youtube | twitch | hls
+
+# Override delay (optional - only if you've measured platform latency)
+# STREAMING_PUBLIC_DELAY_MS=0            # Default: 12000ms for twitch, 15000ms for youtube, 4000ms for hls
+```
+
+**February 2026 Update**: Default delay set to 0ms for instant broadcast. Configure `STREAMING_CANONICAL_PLATFORM` and `STREAMING_PUBLIC_DELAY_MS` to add delay for anti-cheat timing alignment with external platform latency.
+
 **CI builds failing with npm 403 errors:**
 Retry logic is automatic (up to 5 attempts with exponential backoff: 15s, 30s, 45s, 60s, 75s). All workflows now use `--frozen-lockfile` to prevent npm resolution attempts. If persistent, check GitHub Actions logs.
 
