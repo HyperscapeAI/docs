@@ -393,22 +393,75 @@ Configure these in repository settings → Secrets → Actions:
 
 ### Deployment Script
 
-The `scripts/deploy-vast.sh` script handles the full deployment:
+The `scripts/deploy-vast.sh` script handles the full deployment with recent improvements (Feb 26 2026):
 
 **Key Steps:**
 1. Configure DNS resolution (some Vast containers use internal-only DNS)
-2. Pull latest code from main branch
-3. Restore environment variables after git reset
+2. Pull latest code from main branch (commit 690ede5: now pulls from main, not hackathon)
+3. Restore environment variables after git reset (commits eec04b0, dda4396, 4a6aaaf)
 4. Install system dependencies (build-essential, ffmpeg, Vulkan drivers, Chrome Dev)
 5. Install Playwright and dependencies
 6. Build core packages (physx, decimation, impostors, procgen, asset-forge, shared)
-7. Setup Solana keypair from `SOLANA_DEPLOYER_PRIVATE_KEY`
+7. Setup Solana keypair from `SOLANA_DEPLOYER_PRIVATE_KEY` (commit 8a677dc)
 8. Push database schema with drizzle-kit
 9. Start port proxies (socat) for external access
-10. Configure and export stream keys
+10. **Explicitly unset and re-export stream keys** (commits 7ee730d, a71d4ba, 50f8bec)
 11. Start duel stack via PM2
 12. Wait for health check to pass
-13. Run streaming diagnostics
+13. Run streaming diagnostics (commit cf53ad4)
+
+**Environment Variable Persistence (commits eec04b0, dda4396, 4a6aaaf):**
+
+**Problem:** `git reset` operations in deploy script would overwrite the .env file, losing DATABASE_URL and stream keys.
+
+**Solution:** Write secrets to `/tmp` before git reset, then restore after:
+
+```bash
+# Save secrets to /tmp (survives git reset)
+echo "DATABASE_URL=$DATABASE_URL" > /tmp/hyperscape-secrets.env
+echo "TWITCH_STREAM_KEY=$TWITCH_STREAM_KEY" >> /tmp/hyperscape-secrets.env
+# ... other secrets ...
+
+# Pull latest code (git reset happens here)
+git fetch origin main
+git reset --hard origin/main
+
+# Restore secrets from /tmp
+cat /tmp/hyperscape-secrets.env >> packages/server/.env
+rm /tmp/hyperscape-secrets.env
+```
+
+**Why This Matters:**
+- Prevents database connection loss during deployment
+- Ensures stream keys persist across deployments
+- Required for zero-downtime deployments
+
+**Stream Key Export (commits 7ee730d, a71d4ba, 50f8bec):**
+
+Stream keys must be explicitly unset and re-exported before PM2 start:
+
+```bash
+# Unset stale environment variables
+unset TWITCH_STREAM_KEY X_STREAM_KEY X_RTMP_URL KICK_STREAM_KEY KICK_RTMP_URL
+
+# Re-source .env file to get correct values
+source /root/hyperscape/packages/server/.env
+
+# Log which keys are configured (masked)
+echo "Stream keys configured:"
+[ -n "$TWITCH_STREAM_KEY" ] && echo "  - Twitch: ***${TWITCH_STREAM_KEY: -4}"
+[ -n "$KICK_STREAM_KEY" ] && echo "  - Kick: ***${KICK_STREAM_KEY: -4}"
+[ -n "$X_STREAM_KEY" ] && echo "  - X: ***${X_STREAM_KEY: -4}"
+
+# Start PM2 with clean environment
+bunx pm2 start ecosystem.config.cjs
+```
+
+**Why This Matters:**
+- Vast.ai servers can have stale stream keys from previous deployments
+- Stale values override .env file values
+- Explicitly unsetting ensures PM2 picks up correct keys
+- Prevents streams from going to wrong Twitch/X/Kick accounts
 
 **Port Mappings:**
 
