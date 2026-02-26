@@ -62,10 +62,58 @@ LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-server
 
 # RTMP Streaming (Multi-Platform)
+# Twitch
 TWITCH_STREAM_KEY=live_123456789_abcdefghij
+TWITCH_RTMP_URL=rtmp://live.twitch.tv/app  # Optional override
+
+# Kick (uses RTMPS)
+KICK_STREAM_KEY=your-kick-stream-key
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
+
+# X/Twitter
+X_STREAM_KEY=your-x-stream-key
+X_RTMP_URL=rtmp://sg.pscp.tv:80/x
+
+# YouTube (optional)
 YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+YOUTUBE_RTMP_URL=rtmp://a.rtmp.youtube.com/live2
+
+# Streaming Timing
+STREAMING_CANONICAL_PLATFORM=twitch  # youtube | twitch | hls (default: youtube)
+STREAMING_PUBLIC_DELAY_MS=0          # Override platform default delay (ms)
+
 # See packages/server/.env.example for full RTMP configuration
 ```
+
+### Solana Configuration
+
+```bash
+# Solana RPC Endpoints
+SOLANA_RPC_URL=https://api.devnet.solana.com
+SOLANA_WS_URL=wss://api.devnet.solana.com/
+
+# Solana Keypairs (base58 encoded private keys)
+SOLANA_DEPLOYER_PRIVATE_KEY=<base58-private-key>  # Used for all roles if others not set
+SOLANA_ARENA_AUTHORITY_SECRET=<base58-private-key>  # Falls back to DEPLOYER
+SOLANA_ARENA_REPORTER_SECRET=<base58-private-key>  # Falls back to DEPLOYER
+SOLANA_ARENA_KEEPER_SECRET=<base58-private-key>    # Falls back to DEPLOYER
+
+# Market Configuration (as of commit 34255ee, Feb 26 2026)
+# Markets now use native token (WSOL on Solana, WETH on EVM) instead of GOLD token
+# MARKET_MINT defaults to WSOL (So11111111111111111111111111111111111112)
+# GOLD_MINT is deprecated - use MARKET_MINT instead
+
+# Perps Oracle (disabled by default on devnet)
+ENABLE_PERPS_ORACLE=false  # Set to true when perps program deployed
+```
+
+**Keypair Setup:**
+
+The `SOLANA_DEPLOYER_PRIVATE_KEY` is automatically decoded and written to:
+- `~/.config/solana/id.json` (Solana CLI default location)
+- `deployer-keypair.json` (legacy location)
+
+This happens during deployment via `scripts/decode-key.ts`.
 
 ## Client Environment
 
