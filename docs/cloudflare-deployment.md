@@ -1,81 +1,150 @@
-# Cloudflare Pages Deployment
+# Cloudflare Pages Deployment Guide
 
-Hyperscape's web client is deployed to Cloudflare Pages with assets served from Cloudflare R2.
+Hyperscape's web client is deployed to Cloudflare Pages for global CDN distribution with automatic builds on every push to `main`.
 
-## Architecture
+## Overview
 
-- **Frontend**: Cloudflare Pages (hyperscape.gg)
-- **Game Server**: Railway (api.hyperscape.gg)
-- **Assets/CDN**: Cloudflare R2 (assets.hyperscape.club)
+**Cloudflare Pages** hosts the static web client with:
+- **URL**: https://hyperscape.gg (production)
+- **Preview URLs**: `https://<commit-sha>.hyperscape.pages.dev`
+- **Assets**: Served from Cloudflare R2 (https://assets.hyperscape.club)
+- **Build**: Automatic via GitHub Actions on push to `main`
 
-## Automatic Deployment
+**Architecture:**
+- **Frontend**: Cloudflare Pages (static hosting)
+- **Backend**: Railway (game server)
+- **Assets**: Cloudflare R2 (CDN)
+- **CORS**: Configured for cross-origin requests
 
-Pushes to `main` branch trigger automatic deployment via `.github/workflows/deploy-cloudflare.yml`.
+## Prerequisites
 
-## Cloudflare Pages Setup
+### 1. Cloudflare Account Setup
 
-### 1. Create Pages Project
+1. Create a Cloudflare account at [dash.cloudflare.com](https://dash.cloudflare.com)
+2. Note your **Account ID** (found in dashboard URL or account settings)
+3. Create an **API Token** with permissions:
+   - Account → Cloudflare Pages → Edit
+   - Zone → DNS → Edit (if using custom domain)
+
+### 2. GitHub Secrets
+
+Configure these secrets in your repository (`Settings` → `Secrets and variables` → `Actions`):
+
+| Secret | Description | Where to Find |
+|--------|-------------|---------------|
+| `CLOUDFLARE_API_TOKEN` | API token for Pages deployment | Cloudflare Dashboard → My Profile → API Tokens |
+| `PUBLIC_PRIVY_APP_ID` | Privy app ID for authentication | [dashboard.privy.io](https://dashboard.privy.io) |
+
+### 3. Cloudflare Pages Project
+
+Create a Pages project in the Cloudflare dashboard:
 
 1. Go to **Workers & Pages** → **Create application** → **Pages**
-2. Connect to GitHub repository: `HyperscapeAI/hyperscape`
-3. Configure build settings:
-   - **Build command**: Leave empty (GitHub Actions handles build)
-   - **Build output directory**: `packages/client/dist`
-   - **Root directory**: `/`
+2. **Project name**: `hyperscape`
+3. **Production branch**: `main`
+4. **Build command**: Leave empty (GitHub Actions handles builds)
+5. **Build output directory**: Leave empty
 
-### 2. Configure Environment Variables
+**Important**: Do NOT connect GitHub integration in Cloudflare dashboard. The GitHub Actions workflow handles deployment via `wrangler pages deploy`.
 
-In **Pages → Settings → Environment variables**, set:
+## Deployment Workflow
+
+### Automatic Deployment
+
+The `.github/workflows/deploy-pages.yml` workflow runs automatically on:
+- Push to `main` branch
+- Changes to `packages/client/**` or `packages/shared/**`
+
+**Build Steps:**
+1. Checkout code with submodules
+2. Setup Bun
+3. Install dependencies (`bun install --frozen-lockfile`)
+4. Build client (`bun run build:client`)
+5. Deploy to Cloudflare Pages (`wrangler pages deploy`)
+
+### Manual Deployment
+
+Trigger manually from GitHub Actions:
 
 ```bash
-PUBLIC_PRIVY_APP_ID=your-privy-app-id
-PUBLIC_API_URL=https://api.hyperscape.gg
-PUBLIC_WS_URL=wss://api.hyperscape.gg/ws
+# Via GitHub UI
+Actions → Deploy Client to Cloudflare Pages → Run workflow → main
+
+# Via GitHub CLI
+gh workflow run deploy-pages.yml
+```
+
+### Local Deployment
+
+Deploy from your local machine:
+
+```bash
+# Build client
+bun run build:client
+
+# Deploy to Pages
+cd packages/client
+npx wrangler pages deploy dist \
+  --project-name=hyperscape \
+  --branch=main
+```
+
+## Configuration
+
+### Environment Variables
+
+The build injects these environment variables at build time:
+
+```bash
+# Authentication
+PUBLIC_PRIVY_APP_ID=cmgk4zu56005kjj0bcaae0rei
+
+# Backend URLs (Railway production)
+PUBLIC_API_URL=https://hyperscape-production.up.railway.app
+PUBLIC_WS_URL=wss://hyperscape-production.up.railway.app/ws
+
+# Assets (Cloudflare R2)
 PUBLIC_CDN_URL=https://assets.hyperscape.club
+
+# App URL
 PUBLIC_APP_URL=https://hyperscape.gg
 ```
 
-### 3. Configure Custom Domain
+**Note**: These are set in the GitHub Actions workflow, not in Cloudflare dashboard.
 
-1. Go to **Pages → Custom domains**
-2. Add `hyperscape.gg`
-3. Add DNS records at your provider:
-   - `CNAME hyperscape.gg → your-pages-project.pages.dev`
-4. Wait for SSL certificate provisioning
+### Custom Domain Setup
 
-## Cloudflare R2 Setup (Assets)
+To use `hyperscape.gg` instead of `hyperscape.pages.dev`:
 
-### 1. Create R2 Bucket
+1. **Add domain in Cloudflare Pages**:
+   - Pages project → Custom domains → Add domain
+   - Enter `hyperscape.gg`
+   - Follow DNS setup instructions
 
-1. Go to **R2** → **Create bucket**
-2. Name: `hyperscape-assets`
-3. Location: Automatic
+2. **Configure DNS**:
+   - Add CNAME record: `hyperscape.gg` → `hyperscape.pages.dev`
+   - Or use Cloudflare's automatic setup
 
-### 2. Configure Custom Domain
+3. **SSL/TLS**:
+   - Cloudflare automatically provisions SSL certificates
+   - Use "Full (strict)" SSL mode for Railway backend
 
-1. Go to bucket **Settings** → **Public access**
-2. Add custom domain: `assets.hyperscape.club`
-3. Add DNS record:
-   - `CNAME assets.hyperscape.club → <bucket-url>`
+## CORS Configuration
 
-### 3. Configure CORS
+### R2 Bucket CORS
 
-R2 buckets need CORS configuration to serve assets to the game client:
+The client loads assets from R2, which requires CORS configuration.
 
+**Automated Setup:**
 ```bash
 # Run from repository root
 bash scripts/configure-r2-cors.sh
 ```
 
-Or manually via Wrangler:
-
+**Manual Setup:**
 ```bash
-cd packages/client
-bunx wrangler r2 bucket cors set hyperscape-assets --config cors-config.json
-```
-
-**cors-config.json:**
-```json
+# Create cors.json
+cat > cors.json << 'EOF'
 {
   "allowed": {
     "origins": ["*"],
@@ -85,82 +154,204 @@ bunx wrangler r2 bucket cors set hyperscape-assets --config cors-config.json
   "exposed": ["ETag"],
   "maxAge": 3600
 }
+EOF
+
+# Apply to R2 bucket
+wrangler r2 bucket cors set hyperscape-assets --cors-file cors.json
 ```
 
-### 4. Upload Assets
+### Backend CORS
 
-```bash
-# From repository root
-bun run assets:upload
-```
+The Railway backend allows requests from:
+- `https://hyperscape.gg`
+- `https://hyperscape.club`
+- `https://*.hyperscape.pages.dev`
+- `https://hyperbet.win`
+- `https://hyperscape.bet`
 
-This uploads all assets from `packages/server/world/assets/` to R2.
+**CSRF Handling**: Apex domains (hyperscape.gg, hyperbet.win) bypass CSRF validation since cross-origin requests are already protected by Origin header validation and JWT authentication.
 
-## CSRF and Cross-Origin Requests
+## Build Optimization
 
-Hyperscape uses CSRF protection with SameSite=Strict cookies. Cross-origin requests from Cloudflare Pages to Railway backend are protected by:
+### Build Performance
 
-1. **Origin header validation** - Checks request origin against allowed domains
-2. **JWT bearer tokens** - Authorization header authentication
-3. **CSRF skip for known origins** - Apex domains (hyperscape.gg, hyperbet.win) bypass CSRF cookie validation
+The client build includes:
+- **Turbo caching**: Reuses shared package builds
+- **PhysX WASM**: Bundled via `build:client` (includes dependencies)
+- **Node memory**: `--max-old-space-size=4096` for large builds
 
-### Allowed Origins
+**Build Time**: ~2-3 minutes on GitHub Actions runners
 
-The server automatically allows cross-origin requests from:
-- `*.hyperscape.gg` (all subdomains)
-- `hyperscape.gg` (apex domain)
-- `*.hyperbet.win` (all subdomains)
-- `hyperbet.win` (apex domain)
-- `*.hyperscape.bet` (all subdomains)
-- `hyperscape.bet` (apex domain)
-- `localhost:*` (development)
+### Bundle Size
+
+The client bundle includes:
+- Three.js + WebGPU renderer
+- PhysX WASM (~2MB)
+- React + UI libraries
+- Game logic from shared package
+
+**Total**: ~8-12MB (gzipped)
 
 ## Troubleshooting
 
-### "Missing CSRF token" errors
+### Build Fails with "Out of Memory"
 
-**Cause:** CSRF middleware rejecting cross-origin POST/PUT/DELETE requests.
+**Symptom**: Build crashes with heap out of memory error
 
-**Solution:** Verify your domain is in the allowed origins list in `packages/server/src/middleware/csrf.ts`.
-
-### Assets not loading (CORS errors)
-
-**Cause:** R2 bucket CORS not configured.
-
-**Solution:**
-```bash
-bash scripts/configure-r2-cors.sh
+**Solution**: Increase Node memory in workflow:
+```yaml
+env:
+  NODE_OPTIONS: '--max-old-space-size=8192'  # was 4096
 ```
 
-### Build failures in Pages
+### Assets Not Loading (404 Errors)
 
-**Cause:** Pages trying to build instead of using pre-built artifacts from GitHub Actions.
+**Symptom**: Client loads but assets return 404
 
-**Solution:** Ensure **Build command** is empty in Pages settings. GitHub Actions handles the build.
+**Causes**:
+1. R2 CORS not configured
+2. Wrong `PUBLIC_CDN_URL`
+3. Assets not uploaded to R2
 
-### Environment variables not updating
-
-**Cause:** Pages caches environment variables.
-
-**Solution:**
-1. Update variables in Pages dashboard
-2. Trigger a new deployment (push to main or manual redeploy)
-
-## Manual Deployment
-
-If automatic deployment fails, deploy manually:
-
+**Solutions**:
 ```bash
-# Build locally
-cd packages/client
-bun run build
+# Check CORS
+wrangler r2 bucket cors get hyperscape-assets
 
-# Deploy to Pages
-bunx wrangler pages deploy dist --project-name=hyperscape
+# Upload assets
+bun run scripts/sync-r2-assets.mjs
+
+# Verify CDN URL
+curl https://assets.hyperscape.club/manifests/items/weapons.json
 ```
 
-## Related Documentation
+### WebSocket Connection Fails
 
-- [docs/railway-dev-prod.md](railway-dev-prod.md) - Railway server deployment
-- [docs/vast-deployment.md](vast-deployment.md) - Vast.ai GPU streaming
+**Symptom**: Client loads but can't connect to game server
+
+**Causes**:
+1. Wrong `PUBLIC_WS_URL`
+2. Railway backend not running
+3. CORS/Origin validation failing
+
+**Solutions**:
+```bash
+# Test WebSocket endpoint
+wscat -c wss://hyperscape-production.up.railway.app/ws
+
+# Check Railway logs
+railway logs --service hyperscape-production
+
+# Verify origin is allowed
+curl -H "Origin: https://hyperscape.gg" \
+  https://hyperscape-production.up.railway.app/health
+```
+
+### Deployment Succeeds but Site Shows Old Version
+
+**Symptom**: Deployment completes but site doesn't update
+
+**Causes**:
+1. Browser cache
+2. Cloudflare edge cache
+3. Service worker cache
+
+**Solutions**:
+```bash
+# Hard refresh browser
+Ctrl+Shift+R (Windows/Linux)
+Cmd+Shift+R (macOS)
+
+# Purge Cloudflare cache
+Cloudflare Dashboard → Caching → Purge Everything
+
+# Check deployment
+curl -I https://hyperscape.gg
+# Look for: cf-cache-status, cf-ray headers
+```
+
+### CSRF Token Errors
+
+**Symptom**: POST requests fail with "Missing CSRF token"
+
+**Cause**: CSRF middleware uses SameSite=Strict cookies which don't work cross-origin
+
+**Solution**: The backend now skips CSRF validation for known cross-origin clients (hyperscape.gg, hyperbet.win). Verify your domain is in the allowed list:
+
+```typescript
+// packages/server/src/middleware/csrf.ts
+const KNOWN_CROSS_ORIGIN_CLIENTS = [
+  /^https:\/\/hyperscape\.gg$/,
+  /^https:\/\/hyperbet\.win$/,
+  /^https:\/\/.*\.hyperscape\.pages\.dev$/,
+];
+```
+
+## Preview Deployments
+
+Every commit to `main` creates a preview deployment:
+
+**URL Format**: `https://<commit-sha>.hyperscape.pages.dev`
+
+**Use Cases**:
+- Test changes before promoting to production domain
+- Share specific versions with team
+- Debug deployment-specific issues
+
+**Accessing Previews**:
+```bash
+# Get commit SHA
+git rev-parse HEAD
+
+# Preview URL
+https://<sha>.hyperscape.pages.dev
+```
+
+## Rollback
+
+To rollback to a previous deployment:
+
+1. **Via Cloudflare Dashboard**:
+   - Pages project → Deployments
+   - Find working deployment
+   - Click "Rollback to this deployment"
+
+2. **Via Git**:
+   ```bash
+   # Revert to previous commit
+   git revert HEAD
+   git push origin main
+   
+   # Or reset to specific commit
+   git reset --hard <commit-sha>
+   git push --force origin main
+   ```
+
+## Monitoring
+
+### Deployment Status
+
+Check deployment status:
+```bash
+# Via GitHub Actions
+https://github.com/HyperscapeAI/hyperscape/actions/workflows/deploy-pages.yml
+
+# Via Cloudflare Dashboard
+Workers & Pages → hyperscape → Deployments
+```
+
+### Analytics
+
+Cloudflare Pages provides:
+- **Web Analytics**: Page views, unique visitors, bandwidth
+- **Real User Monitoring**: Core Web Vitals, performance metrics
+- **Error Tracking**: JavaScript errors, failed requests
+
+Access via: Cloudflare Dashboard → Pages → hyperscape → Analytics
+
+## See Also
+
+- [docs/railway-dev-prod.md](railway-dev-prod.md) - Railway backend deployment
+- [docs/vast-deployment.md](vast-deployment.md) - Vast.ai streaming deployment
+- [packages/client/.env.example](../packages/client/.env.example) - Client environment variables
 - [packages/client/wrangler.toml](../packages/client/wrangler.toml) - Wrangler configuration
