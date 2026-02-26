@@ -212,6 +212,8 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 
 ## Deployment
 
+> **📖 Comprehensive Guide**: See [docs/deployment-best-practices.md](docs/deployment-best-practices.md) for complete deployment workflows, maintenance mode coordination, health checks, and troubleshooting.
+
 ### Cloudflare Pages (Frontend)
 
 The client is deployed to Cloudflare Pages (hyperscape.gg) using the `[assets]` directive in `packages/client/wrangler.toml`:
