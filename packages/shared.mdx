@@ -663,12 +663,19 @@ import {
 | `three-mesh-bvh` | 0.9.8 | BVH raycasting optimization |
 | `@pixiv/three-vrm` | 3.4.3 | VRM avatar support |
 | `@hyperscape/physx-js-webidl` | workspace | Physics |
+| `@hyperscape/procgen` | workspace (devDep) | Procedural generation (type resolution only) |
 | `react` | ^19.2.0 | UI components |
 | `styled-components` | ^6.1.19 | CSS-in-JS |
 | `fastify` | ^5.0.0 | HTTP server (server builds) |
 | `livekit-client` | ^2.9.9 | Voice chat |
 | `zod` | 4.3.6 | Schema validation |
 | `dotenv` | 17.3.1 | Environment variables |
+
+<Note>
+  **Procgen Dependency**: The `@hyperscape/procgen` package is listed as a devDependency (not a regular dependency) to break the circular dependency cycle. This allows TypeScript to find module declarations during type checking without creating a build cycle in Turbo. The import still resolves at runtime since both packages are always installed together in the workspace.
+  
+  **Commits**: f355276, 3b9c0f2, 05c2892 (Feb 25-26, 2026)
+</Note>
 
 ## Building
 
