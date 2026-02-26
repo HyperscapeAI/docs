@@ -730,6 +730,123 @@ KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
 
 The Kick platform uses RTMPS (RTMP over TLS) with regional ingest endpoints, not the generic `ingest.kick.com` domain.
 
+### Audio Streaming via PulseAudio (commits 3b6f1ee, aab66b0, b9d2e41, Feb 26 2026)
+
+**Feature:** Capture game music and sound effects in RTMP streams using PulseAudio virtual sink.
+
+**Setup (Vast.ai deployment):**
+
+The `deploy-vast.sh` script automatically configures PulseAudio:
+
+1. **Install PulseAudio** and create virtual sink (`chrome_audio`)
+2. **Configure Chrome** to use PulseAudio output
+3. **Update FFmpeg** to capture from PulseAudio monitor instead of silent audio
+
+**PulseAudio Configuration:**
+
+```bash
+# User mode (more reliable than system mode)
+PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+XDG_RUNTIME_DIR=/tmp/pulse-runtime
+
+# Virtual sink for Chrome audio
+pactl load-module module-null-sink sink_name=chrome_audio sink_properties=device.description=Chrome_Audio
+
+# Chrome uses this sink for audio output
+# FFmpeg captures from chrome_audio.monitor
+```
+
+**FFmpeg Audio Capture:**
+
+```bash
+# Input from PulseAudio monitor
+-f pulse -i chrome_audio.monitor
+
+# Audio buffering and sync (commit b9d2e41)
+-thread_queue_size 1024                    # Prevent buffer underruns
+-use_wallclock_as_timestamps 1             # Real-time timing
+-filter:a aresample=async=1000:first_pts=0 # Recover from audio drift
+
+# Video buffering (increased for a/v sync)
+-thread_queue_size 1024  # Increased from 512
+```
+
+**Audio Stability Improvements (commit b9d2e41):**
+
+Three key changes to prevent intermittent audio issues:
+
+1. **Buffering both audio and video inputs adequately**
+   - Audio: `thread_queue_size=1024` prevents buffer underruns
+   - Video: `thread_queue_size=1024` (increased from 512) for better a/v sync
+
+2. **Using wall clock timestamps for accurate audio timing**
+   - `use_wallclock_as_timestamps=1` for PulseAudio maintains real-time timing
+
+3. **Async resampling to resync audio when drift exceeds 22ms**
+   - `aresample=async=1000:first_pts=0` filter recovers from audio drift
+
+4. **Removed `-shortest` flag**
+   - Was causing audio dropouts during video buffering
+
+**Permissions Fix (commit aab66b0):**
+
+```bash
+# Add root user to pulse-access group
+usermod -aG pulse-access root
+
+# Create /run/pulse with proper permissions
+mkdir -p /run/pulse
+chmod 777 /run/pulse
+
+# Export PULSE_SERVER in both deploy script and PM2 config
+export PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+```
+
+**Graceful Fallback:**
+
+If PulseAudio is not available, FFmpeg falls back to silent audio:
+
+```bash
+# Check if PulseAudio is running
+if pactl info &>/dev/null && pactl list sinks | grep -q chrome_audio; then
+  AUDIO_INPUT="-f pulse -i chrome_audio.monitor"
+else
+  AUDIO_INPUT="-f lavfi -i anullsrc"  # Silent audio fallback
+fi
+```
+
+**Configuration:**
+
+```bash
+# Enable audio capture
+STREAM_AUDIO_ENABLED=true
+
+# PulseAudio device (monitor of virtual sink)
+PULSE_AUDIO_DEVICE=chrome_audio.monitor
+
+# PulseAudio server socket
+PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+
+# Runtime directory for PulseAudio
+XDG_RUNTIME_DIR=/tmp/pulse-runtime
+```
+
+**Troubleshooting:**
+
+```bash
+# Check PulseAudio status
+pactl info
+
+# List available sinks
+pactl list sinks
+
+# Verify chrome_audio sink exists
+pactl list sinks | grep chrome_audio
+
+# Test audio capture
+ffmpeg -f pulse -i chrome_audio.monitor -t 5 test.wav
+```
+
 ## GitHub Actions
 
 The repository includes automated workflows for code quality and documentation:
