@@ -103,12 +103,14 @@ SOLANA_ARENA_AUTHORITY_SECRET=<base58-private-key>  # Falls back to DEPLOYER
 SOLANA_ARENA_REPORTER_SECRET=<base58-private-key>  # Falls back to DEPLOYER
 SOLANA_ARENA_KEEPER_SECRET=<base58-private-key>    # Falls back to DEPLOYER
 
-# Market Configuration (as of commit 34255ee, Feb 26 2026)
-# Markets now use native token (WSOL on Solana, WETH on EVM) instead of GOLD token
+# Market Configuration (commit 34255ee, Feb 26 2026)
+# Markets now use native token (WSOL on Solana) instead of GOLD token
 # MARKET_MINT defaults to WSOL (So11111111111111111111111111111111111112)
 # GOLD_MINT is deprecated - use MARKET_MINT instead
+MARKET_MINT=So11111111111111111111111111111111111112  # WSOL (native SOL wrapped)
 
-# Perps Oracle (disabled by default on devnet)
+# Perps Oracle (disabled by default on devnet, commit 34255ee)
+# Perps program not deployed on devnet - enable when ready
 ENABLE_PERPS_ORACLE=false  # Set to true when perps program deployed
 ```
 
