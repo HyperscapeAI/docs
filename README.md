@@ -416,6 +416,24 @@ STREAMING_CANONICAL_PLATFORM=twitch      # Options: youtube | twitch | hls
 
 **February 2026 Update**: Default delay set to 0ms for instant broadcast. Configure `STREAMING_CANONICAL_PLATFORM` and `STREAMING_PUBLIC_DELAY_MS` to add delay for anti-cheat timing alignment with external platform latency.
 
+**Multi-platform streaming configuration:**
+Configure streaming destinations in `packages/server/.env`:
+```bash
+# Twitch
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+TWITCH_RTMP_URL=rtmp://live.twitch.tv/app
+
+# Kick
+KICK_STREAM_KEY=your-kick-stream-key
+KICK_RTMP_URL=rtmp://ingest.kick.com/live
+
+# X/Twitter (requires X Premium)
+X_STREAM_KEY=your-x-stream-key
+X_RTMP_URL=rtmp://x-media-studio/your-path
+```
+
+See `packages/server/.env.example` for complete RTMP configuration options including YouTube, Pump.fun, and custom destinations.
+
 **CI builds failing with npm 403 errors:**
 Retry logic is automatic (up to 5 attempts with exponential backoff: 15s, 30s, 45s, 60s, 75s). All workflows now use `--frozen-lockfile` to prevent npm resolution attempts. If persistent, check GitHub Actions logs.
 
