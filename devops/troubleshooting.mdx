@@ -1037,10 +1037,12 @@ bun run build
 **Solution**: Update to latest code (commit 14a1e1b fixed this)
 
 **Technical Details:**
-- Renderer now tries `maxTextureArrayLayers: 2048` first
-- Retries with default limits if GPU rejects
-- Always WebGPU, never WebGL fallback
-- Prevents renderer init failures on GPUs with lower limits
+- **Best-Effort Limits**: Renderer now tries `maxTextureArrayLayers: 2048` first
+  - Retries with default limits if GPU rejects
+  - Always WebGPU, never WebGL fallback
+  - Prevents renderer init failures on GPUs with lower limits
+- **Graceful Degradation**: Falls back to GPU's supported limits automatically
+- **No WebGL Fallback**: Ensures consistent rendering pipeline (WebGPU only)
 - File: `packages/shared/src/utils/rendering/RendererFactory.ts`
 - Commit: 14a1e1b (Feb 25, 2026)
 
