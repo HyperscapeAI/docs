@@ -29,6 +29,32 @@ This is a hard requirement. DO NOT:
 - Chrome uses ANGLE/Vulkan for WebGPU
 - If WebGPU cannot initialize, deployment MUST FAIL
 
+#### Vast.ai Deployment Architecture
+The streaming pipeline requires specific GPU setup:
+
+1. **GPU Rendering Modes** (tried in order):
+   - **Xorg with NVIDIA**: Best performance, requires DRI/DRM device access
+   - **Xvfb with NVIDIA Vulkan**: Virtual framebuffer + GPU rendering via ANGLE/Vulkan
+   - **Headless mode**: NOT SUPPORTED - WebGPU will not work
+
+2. **Audio Capture**:
+   - PulseAudio with `chrome_audio` virtual sink
+   - FFmpeg captures from PulseAudio monitor
+   - Configurable via `STREAM_AUDIO_ENABLED` and `PULSE_AUDIO_DEVICE`
+
+3. **RTMP Multi-Streaming**:
+   - Simultaneous streaming to Twitch, Kick, X/Twitter
+   - FFmpeg tee muxer for single-encode multi-output
+   - Stream keys configured via environment variables
+
+4. **Deployment Validation**:
+   - Script verifies NVIDIA GPU is accessible
+   - Checks Vulkan ICD availability
+   - Ensures display server (Xorg/Xvfb) is running
+   - Fails deployment if WebGPU cannot be initialized
+
+See `scripts/deploy-vast.sh` for complete setup logic.
+
 ## Project Overview
 
 Hyperscape is a RuneScape-style MMORPG built on Three.js WebGPURenderer with TSL shaders.
