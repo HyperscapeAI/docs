@@ -583,20 +583,43 @@ The deployment uses these streaming settings:
 ```bash
 # From ecosystem.config.cjs
 STREAM_CAPTURE_MODE=cdp                    # Chrome DevTools Protocol
-STREAM_CAPTURE_HEADLESS=false              # Headful with Xvfb for GPU
+STREAM_CAPTURE_HEADLESS=false              # Xorg mode (or "new" for headless EGL)
+STREAM_CAPTURE_USE_EGL=false               # true for headless EGL mode
 STREAM_CAPTURE_CHANNEL=chrome-dev          # Chrome Dev channel
 STREAM_CAPTURE_ANGLE=vulkan                # Vulkan backend
 STREAM_CAPTURE_DISABLE_WEBGPU=false        # WebGPU enabled
 STREAMING_CANONICAL_PLATFORM=twitch        # Lower latency than YouTube
 STREAMING_PUBLIC_DELAY_MS=0                # No delay (real-time)
+
+# GPU Rendering (auto-detected)
+GPU_RENDERING_MODE=xorg                    # or headless-egl
+DISPLAY=:99                                # or empty for headless EGL
+DUEL_CAPTURE_USE_XVFB=false               # Hardware GPU, not software
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+
+# Audio Capture (commits 3b6f1ee, aab66b0, b9d2e41)
+STREAM_AUDIO_ENABLED=true
+PULSE_AUDIO_DEVICE=chrome_audio.monitor
+PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+XDG_RUNTIME_DIR=/tmp/pulse-runtime
 ```
 
 **Multi-Platform Streaming:**
 
 Streams simultaneously to:
 - Twitch (rtmp://live.twitch.tv/app)
-- Kick (rtmps://fa723fc1b171.global-contribute.live-video.net/app)
+- Kick (rtmps://fa723fc1b171.global-contribute.live-video.net/app) - Fixed in commit 5dbd239
 - X/Twitter (rtmp://sg.pscp.tv:80/x)
+- YouTube explicitly disabled (commit b466233)
+
+**Audio Streaming (commits 3b6f1ee, aab66b0, b9d2e41):**
+- Game music and sound effects captured via PulseAudio
+- Virtual sink (`chrome_audio`) routes Chrome audio to FFmpeg
+- Graceful fallback to silent audio if PulseAudio unavailable
+
+**See Also:**
+- [GPU Rendering Guide](/devops/gpu-rendering) - GPU configuration
+- [Audio Streaming Guide](/devops/audio-streaming) - PulseAudio setup
 
 ### Health Monitoring
 
