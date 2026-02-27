@@ -525,6 +525,39 @@ To add new particle types (fire, magic, dust, blood):
    }
    ```
 
+## Rendering System
+
+### WebGPU-Only Architecture
+
+As of February 2026, all rendering uses WebGPU exclusively:
+
+```typescript
+// From utils/rendering/RendererFactory.ts
+export type RendererBackend = "webgpu";  // WebGL removed
+export type UniversalRenderer = WebGPURenderer;
+
+// Create WebGPU renderer (no fallback)
+export async function createRenderer(options?: RendererOptions): Promise<WebGPURenderer> {
+  if (!navigator.gpu) {
+    throw new Error('WebGPU not supported. Please use Chrome 113+, Edge 113+, or Safari 18+');
+  }
+  
+  const renderer = new THREE.WebGPURenderer({
+    antialias: options?.antialias ?? true,
+    powerPreference: options?.powerPreference ?? "high-performance",
+  });
+  
+  await renderer.init();
+  return renderer;
+}
+```
+
+**Breaking Change (Commit 47782ed, Feb 2026):**
+- Removed all WebGL detection and fallback code
+- Removed `isWebGLAvailable()`, `isWebGLForced()`, `canTransferCanvas()` functions
+- `RendererBackend` type is now only `"webgpu"` (removed `"webgl"`)
+- All shaders use TSL (Three Shading Language) which only compiles to WebGPU
+
 ## Key Exports
 
 ### Entity Hierarchy
