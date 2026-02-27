@@ -96,8 +96,31 @@ PULSE_AUDIO_DEVICE=chrome_audio.monitor      # PulseAudio monitor device
 PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native  # PulseAudio socket path
 XDG_RUNTIME_DIR=/tmp/pulse-runtime           # Runtime directory for PulseAudio
 
+# GPU Rendering Configuration (commits e51a332, 30bdaf0, Feb 27 2026)
+# Rendering mode: xorg (preferred) or headless-egl (fallback)
+GPU_RENDERING_MODE=xorg                      # Auto-detected by deploy script
+DISPLAY=:99                                  # X display (empty for headless EGL)
+DUEL_CAPTURE_USE_XVFB=false                  # Use Xorg/EGL, not Xvfb software rendering
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json  # Force NVIDIA Vulkan ICD
+
+# Chrome Capture Configuration
+STREAM_CAPTURE_MODE=cdp                      # cdp (default), mediarecorder, or webcodecs
+STREAM_CAPTURE_HEADLESS=false                # false (Xorg), new (headless EGL), or true (legacy)
+STREAM_CAPTURE_USE_EGL=false                 # true for headless EGL mode
+STREAM_CAPTURE_CHANNEL=chrome-dev            # Use Chrome Dev channel for WebGPU
+STREAM_CAPTURE_ANGLE=vulkan                  # vulkan (default) or gl
+STREAM_CAPTURE_DISABLE_WEBGPU=false          # WebGPU enabled (required for TSL shaders)
+STREAM_CDP_QUALITY=80                        # JPEG quality for CDP screencast (1-100)
+STREAM_FPS=30                                # Target frames per second
+STREAM_CAPTURE_WIDTH=1280                    # Capture resolution width
+STREAM_CAPTURE_HEIGHT=720                    # Capture resolution height
+
+# Stream Health Monitoring (commit 14a1e1b, Feb 25 2026)
+STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000     # Recovery timeout (default: 30s)
+STREAM_CAPTURE_RECOVERY_MAX_FAILURES=4       # Max failures before fallback (default: 4)
+
 # See packages/server/.env.example for full RTMP configuration
-# See /devops/rtmp-streaming for complete streaming guide
+# See /devops/gpu-rendering for GPU setup guide
 # See /devops/audio-streaming for PulseAudio setup
 ```
 
