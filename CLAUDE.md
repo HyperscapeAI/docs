@@ -403,14 +403,15 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Ensure server is not running before tests
 - Check `/logs/` folder for error details
 - Tests spawn their own Hyperscape instances
-- Visual tests require headless browser support
+- Visual tests require WebGPU support (headful browser with GPU access)
 
 ### WebGPU Not Available
 
-Hyperscape requires WebGPU (all shaders use TSL). WebGL fallback was removed.
+Hyperscape requires WebGPU (all shaders use TSL). **WebGL fallback was removed in commit 47782ed.**
 - Chrome/Edge 113+ (Windows/macOS/Linux)
 - Safari 18+ (macOS 15+ only)
 - Check: [webgpureport.org](https://webgpureport.org)
+- **Server/Streaming**: Must use Xorg or Xvfb with NVIDIA GPU (see Vast.ai deployment docs)
 
 ## Deployment
 
