@@ -366,6 +366,8 @@ The graphics system uses Three.js with WebGPU for high-performance rendering:
 
 <Warning>
 **WebGPU Required**: All rendering uses TSL (Three Shading Language) which only works with WebGPU. There is no WebGL fallback. Requires Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+). Check compatibility at [webgpureport.org](https://webgpureport.org).
+
+**Breaking Change (Feb 2026)**: WebGL fallback was completely removed in commit 47782ed. All shaders use TSL which only compiles to WebGPU.
 </Warning>
 
 ```typescript
