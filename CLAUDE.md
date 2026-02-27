@@ -436,7 +436,7 @@ See [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) for full API re
 
 ## Recent Architectural Changes (February 2026)
 
-### AI Agent Stability
+### AI Agent Stability & Behavior
 - **Database isolation**: Force PGLite for agents, prevent destructive migrations on game DB
 - **Initialization timeouts**: 45s timeout on runtime init prevents indefinite hangs
 - **Event listener cleanup**: Duplication guard prevents memory leaks
@@ -445,44 +445,148 @@ See [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) for full API re
 - **Circuit breaker**: 3 consecutive failure limit, 8 max reconnect retries
 - **Duel recovery**: Check contestant status independently during ANNOUNCEMENT phase
 - **Quest-driven tools**: Replaced starter chest with quest-based tool acquisition
-- **Autonomous banking**: Auto-deposit at 25/28 slots, keep essential tools
-- **Action locks**: Skip LLM during movement, fast-tick mode (2s) for quick follow-up
-- **Resource detection**: Increased approach range from 20m to 40m
+  - Lumberjack's First Lesson → bronze hatchet + tinderbox
+  - Fresh Catch → small fishing net
+  - Torvin's Tools → bronze pickaxe + hammer
+- **Autonomous banking**: Auto-deposit at 25/28 slots, keep essential tools (axe, pickaxe, tinderbox, net)
+  - New BANK_DEPOSIT_ALL action for bulk banking
+  - Proper bankOpen/bankDeposit/bankDepositAll/bankWithdraw/bankClose packet sequence
+  - Banking actions now await movement completion instead of returning early
+- **Action locks**: Skip LLM during movement, fast-tick mode (2s) for quick follow-up after movement/goal changes
+- **Short-circuit LLM**: Obvious decisions (repeat resource, banking, set goal) bypass LLM for faster response
+- **Resource detection**: Increased approach range from 20m to 40m to match skills validation
+- **Inventory tracking**: Display inventory count with full/nearly-full warnings
+- **Quest priority**: Questing goal has highest priority when agent lacks tools
+- **Banking goal**: Triggers when inventory >= 25/28 slots
 
-### Streaming & Audio
-- **PulseAudio audio capture**: Game music/sound in streams via virtual sink
-- **Improved buffering**: Changed from 'zerolatency' to 'film' tune, 4x buffer size (18000k)
-- **Audio stability**: Wall clock timestamps, async resampling, removed -shortest flag
-- **Multi-platform RTMP**: Twitch, Kick, X (YouTube explicitly disabled)
-- **Stream key management**: Explicit unset/re-export prevents stale keys
-- **Canonical platform**: Changed from YouTube (15s) to Twitch (12s), configurable to 0ms
-- **Kick URL fix**: Corrected to proper IVS endpoint (rtmps://fa723fc1b171...)
+### Streaming Infrastructure
+- **GPU rendering**: Xorg headless setup with NVIDIA for hardware-accelerated WebGPU
+  - AllowEmptyInitialConfiguration + UseDisplayDevice=None for headless operation
+  - Xorg config at /etc/X11/xorg-nvidia-headless.conf
+  - xdpyinfo verification before using X server
+- **Xvfb fallback**: Robust fallback to software rendering if Xorg fails
+  - Diagnostic logging for Xorg failures
+  - DUEL_CAPTURE_USE_XVFB dynamically set based on outcome
+- **Vulkan driver management**: Force NVIDIA-only ICD to avoid Mesa conflicts
+  - VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+  - Prevents libGLX_nvidia.so.0 driver conflicts
+- **Chrome Dev channel**: google-chrome-unstable for WebGPU support
+  - Playwright channel mapping: chrome-dev → google-chrome-unstable
+  - STREAM_CAPTURE_CHANNEL=chrome-dev
+- **Display server**: DISPLAY=:99 (configurable), ecosystem.config.cjs reads from env
 
-### Deployment & Infrastructure
+### Audio Capture & Streaming
+- **PulseAudio setup**: User-mode PulseAudio with virtual sink
+  - XDG_RUNTIME_DIR=/tmp/pulse-runtime
+  - chrome_audio sink for browser audio output
+  - default.pa config with module-null-sink
+  - Fallback if initial start fails
+- **Audio capture**: FFmpeg captures from chrome_audio.monitor
+  - thread_queue_size=1024 prevents buffer underruns
+  - use_wallclock_as_timestamps=1 for real-time timing
+  - aresample=async=1000:first_pts=0 recovers from audio drift (22ms threshold)
+- **Improved buffering**: Changed from 'zerolatency' to 'film' tune
+  - Allows B-frames for better compression
+  - Better lookahead for smoother bitrate
+  - Set STREAM_LOW_LATENCY=true to restore old behavior
+- **Buffer sizing**: Increased from 2x to 4x bitrate (18000k bufsize)
+  - Reduces buffering during network hiccups
+  - More headroom for bitrate spikes
+- **Input buffering**: thread_queue_size for frame queueing, genpts+discardcorrupt for stream recovery
+- **FLV flags**: flvflags=no_duration_filesize prevents FLV header issues
+- **Audio stability**: Removed -shortest flag that caused audio dropouts during video buffering
+
+### RTMP Streaming
+- **Multi-platform**: Twitch, Kick, X (YouTube explicitly disabled)
+  - YOUTUBE_STREAM_KEY="" prevents stale keys
+  - Kick URL: rtmps://fa723fc1b171.global-contribute.live-video.net/app
+  - X URL: rtmp://sg.pscp.tv:80/x
+- **Stream key management**: Explicit unset/re-export prevents stale environment values
+  - Unset before re-sourcing .env
+  - Masked logging for security
+  - Passed through GitHub secrets → SSH → .env file
+- **Canonical platform**: STREAMING_CANONICAL_PLATFORM=twitch (was youtube)
+- **Public delay**: STREAMING_PUBLIC_DELAY_MS=0 for live betting (was 12-15s)
+
+### Deployment Automation
 - **Cloudflare Pages workflow**: Automated client deployment on push to main
-- **DATABASE_URL persistence**: Survives git reset via /tmp secrets file
-- **Database warmup**: 3 retry attempts after schema push prevent cold start failures
-- **Vast.ai diagnostics**: Comprehensive streaming diagnostics after deployment
-- **Health checking**: 120s wait for server health before deployment success
-- **Solana keypair setup**: Automated from SOLANA_DEPLOYER_PRIVATE_KEY env var
-- **CSRF cross-origin handling**: Skip validation for known clients (already protected by Origin + JWT)
-- **R2 CORS automation**: Workflow step configures CORS for asset loading
-- **Vite polyfills fix**: Aliases resolve shims to dist files, disabled protocolImports
-- **CSP updates**: Allow Google Fonts (fonts.googleapis.com, fonts.gstatic.com)
+  - Triggers on changes to packages/client/** or packages/shared/**
+  - Uses wrangler pages deploy instead of GitHub integration
+  - Includes proper build steps for shared package first
+  - Multi-line commit message handling
+- **Vast.ai maintenance mode**: Graceful deployment with pause/resume
+  - Enter maintenance mode before deployment (300s timeout)
+  - Wait for pending markets to resolve
+  - Health check after deployment (120s, 30 retries)
+  - Exit maintenance mode after successful deployment
+  - Manual trigger via workflow_dispatch
+- **DATABASE_URL persistence**: Survives git reset operations
+  - Secrets written to /tmp/hyperscape-secrets.env before git reset
+  - Copied to packages/server/.env after git reset
+  - Fallback recreation from environment variables
+- **Database warmup**: 3 retry attempts after schema push
+  - Prevents cold start failures
+  - Uses pg Pool with max: 5 connections
+  - 3s delay between retries
+- **Bun installation**: Automated check and install
+  - Installs unzip dependency first (required for bun)
+  - Checks for /root/.bun/bin/bun before installing
+  - Adds to PATH for subsequent commands
+- **First-time setup**: Auto-clone repo if /root/hyperscape doesn't exist
+- **Solana keypair**: Automated setup from SOLANA_DEPLOYER_PRIVATE_KEY
+  - Writes to ~/.config/solana/id.json via scripts/decode-key.ts
+  - Used by keeper bot and Anchor tools
+- **Secrets injection**: pm2 kill instead of pm2 delete
+  - Ensures daemon picks up new environment variables on restart
+  - Prevents stale env var caching
+- **Diagnostics**: Comprehensive streaming diagnostics after deployment
+  - FFmpeg process check
+  - RTMP status file check
+  - PulseAudio sink verification
+  - PM2 logs filtered for streaming keywords
+  - 30s wait for streaming initialization
 
 ### Security Enhancements
 - **JWT_SECRET enforcement**: Now required in production/staging (throws error if not set)
+  - Generate with: `openssl rand -base64 32`
+  - Prevents session hijacking in production
+- **ARENA_EXTERNAL_BET_WRITE_KEY**: Added to secrets for external betting integration
 - **Solana keypair management**: Setup from env var, removed hardcoded secrets
+  - deployer-keypair.json added to .gitignore
+  - SOLANA_DEPLOYER_PRIVATE_KEY passed through GitHub secrets
 - **Stream key security**: Masked logging, explicit unset of stale values
+  - Keys logged as ***configured*** instead of plaintext
+  - Prevents accidental exposure in logs
+- **ADMIN_CODE**: Required for production admin endpoints
+
+### Client & Build Fixes
+- **CSRF cross-origin handling**: Skip validation for known clients (already protected by Origin + JWT)
+  - Apex domain support for Cloudflare Pages → Railway
+- **R2 CORS automation**: Workflow step configures CORS for asset loading
+  - configure-r2-cors.sh script for manual configuration
+  - Allows assets.hyperscape.club to serve to all known domains
+- **Vite polyfills fix**: Aliases resolve vite-plugin-node-polyfills/shims/* to dist files
+  - Fixes "Failed to resolve module specifier" error in production
+  - Disabled protocolImports to avoid unresolved imports
+- **CSP updates**: Allow Google Fonts and data: URLs
+  - fonts.googleapis.com for style-src
+  - fonts.gstatic.com for font-src
+  - data: URLs for WASM loading
+- **Multi-line commit messages**: Pages deploy workflow handles multi-line commit messages
 
 ### Rendering Pipeline
 - **WebGPU enforcement**: WebGL fallback removed (all shaders use TSL)
+  - DUEL_FORCE_WEBGL_FALLBACK removed
+  - STREAM_CAPTURE_DISABLE_WEBGPU=false (re-enabled)
 - **Memory leak fixes**: AbortController for proper event listener cleanup
 
 ### Solana Markets
 - **WSOL default**: Markets use native token (WSOL) instead of custom GOLD
-- **MARKET_MINT variable**: Replaced GOLD_MINT for flexibility
+  - MARKET_MINT env var replaces GOLD_MINT
+  - Defaults to WSOL on each chain
 - **Perps oracle disabled**: Default off (program not deployed on devnet)
+  - ENABLE_PERPS_ORACLE env var to re-enable when ready
+- **MARKET_MINT variable**: Replaced GOLD_MINT for flexibility
 
 ### Code Quality
 - **Type safety**: Reduced explicit `any` types from 142 to ~46
