@@ -1,45 +1,39 @@
 ---
-title: "Audio Streaming with PulseAudio"
+title: "Audio streaming"
 description: "Configure PulseAudio for game audio capture in RTMP streams"
-icon: "volume-high"
+icon: "volume-2"
 ---
 
 ## Overview
 
-Hyperscape captures game music and sound effects in RTMP streams using PulseAudio virtual sinks. This allows viewers to hear in-game audio alongside video.
+Hyperscape's streaming system captures game music and sound effects via PulseAudio virtual sink. Chrome outputs audio to a virtual sink, and FFmpeg captures from the sink's monitor device.
 
-<Info>
-  Audio streaming was added in commits 3b6f1ee, aab66b0, b9d2e41 (Feb 26, 2026).
-</Info>
+## Architecture
 
-## How It Works
-
-```mermaid
-graph LR
-    A[Chrome Browser] -->|Audio Output| B[PulseAudio Virtual Sink]
-    B -->|Monitor| C[FFmpeg]
-    C -->|RTMP| D[Twitch/Kick/X]
+```
+Chrome (game audio) → PulseAudio (chrome_audio sink) → FFmpeg (monitor capture) → RTMP streams
 ```
 
-1. **Chrome** outputs audio to PulseAudio virtual sink (`chrome_audio`)
-2. **PulseAudio** creates a monitor device (`chrome_audio.monitor`)
-3. **FFmpeg** captures from the monitor device
-4. **RTMP** streams audio to platforms
+**Key Components:**
+- **Virtual Sink**: `chrome_audio` - PulseAudio null sink for Chrome audio output
+- **Monitor Device**: `chrome_audio.monitor` - FFmpeg captures from this
+- **User Mode**: PulseAudio runs in user mode (more reliable than system mode)
 
-## PulseAudio Setup
+## Automatic Setup
 
-### User Mode (Recommended)
-
-The deployment uses user-mode PulseAudio for reliability:
+The `scripts/deploy-vast.sh` script automatically configures PulseAudio:
 
 ```bash
-# Setup runtime directory
+# 1. Kill existing PulseAudio
+pulseaudio --kill
+pkill -9 pulseaudio
+
+# 2. Setup XDG runtime directory
 export XDG_RUNTIME_DIR=/tmp/pulse-runtime
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 
-# Create PulseAudio config
-mkdir -p /root/.config/pulse
+# 3. Create PulseAudio config
 cat > /root/.config/pulse/default.pa << 'EOF'
 .fail
 load-module module-null-sink sink_name=chrome_audio sink_properties=device.description="ChromeAudio"
@@ -47,145 +41,176 @@ set-default-sink chrome_audio
 load-module module-native-protocol-unix auth-anonymous=1
 EOF
 
-# Start PulseAudio
+# 4. Start PulseAudio in user mode
 pulseaudio --start --exit-idle-time=-1 --daemonize=yes
 
-# Verify sink exists
+# 5. Verify sink exists
 pactl list short sinks | grep chrome_audio
+
+# 6. Export PULSE_SERVER for child processes
+export PULSE_SERVER="unix:$XDG_RUNTIME_DIR/pulse/native"
 ```
 
-### System Mode (Alternative)
+## Manual Setup
 
-For system-wide PulseAudio:
+### Install PulseAudio
 
 ```bash
-# Add root to pulse-access group
-usermod -aG pulse-access root
+apt-get update
+apt-get install -y pulseaudio pulseaudio-utils
+```
 
-# Create runtime directory
-mkdir -p /run/pulse
-chmod 777 /run/pulse
+### Create Virtual Sink
 
-# Start system PulseAudio
-pulseaudio --system --exit-idle-time=-1 --daemonize=yes
+```bash
+# Load null sink module
+pactl load-module module-null-sink \
+  sink_name=chrome_audio \
+  sink_properties=device.description="ChromeAudio"
 
-# Create virtual sink
-pactl load-module module-null-sink sink_name=chrome_audio
+# Set as default sink
 pactl set-default-sink chrome_audio
+
+# Verify
+pactl list short sinks
+```
+
+### Configure Chrome
+
+Chrome automatically uses the default PulseAudio sink. No additional configuration needed.
+
+### Configure FFmpeg
+
+FFmpeg captures from the monitor device:
+
+```bash
+# Audio input
+-f pulse -i chrome_audio.monitor
+
+# Audio buffering (prevents underruns)
+-thread_queue_size 1024
+
+# Real-time timing
+-use_wallclock_as_timestamps 1
+
+# Async resampling (recovers from drift)
+-filter:a aresample=async=1000:first_pts=0
 ```
 
 ## Environment Variables
-
-### Required
 
 ```bash
 # Enable audio capture
 STREAM_AUDIO_ENABLED=true
 
-# PulseAudio monitor device
+# PulseAudio device (monitor of virtual sink)
 PULSE_AUDIO_DEVICE=chrome_audio.monitor
 
 # PulseAudio server socket
 PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
 
-# Runtime directory
+# Runtime directory for PulseAudio
 XDG_RUNTIME_DIR=/tmp/pulse-runtime
 ```
 
-### Chrome Configuration
+## Audio Stability Improvements
 
-Chrome must be configured to use PulseAudio:
+Recent commits improved audio stability to prevent dropouts and desync (commit b9d2e41, Feb 26 2026):
 
-```typescript
-// From packages/server/scripts/stream-to-rtmp.ts
-const browser = await chromium.launch({
-  args: [
-    '--alsa-output-device=pulse',
-    '--audio-output-channels=2',
-  ],
-  env: {
-    PULSE_SERVER: 'unix:/run/pulse/native',
-    PULSE_SINK: 'chrome_audio',
-  }
-});
-```
+### Buffering
 
-## FFmpeg Audio Capture
+**Problem:** Buffer underruns caused intermittent audio dropouts.
 
-### Basic Configuration
+**Solution:** Adequate buffering for both audio and video inputs:
 
 ```bash
-# Audio input from PulseAudio monitor
--f pulse -i chrome_audio.monitor
+# Audio input buffering
+-thread_queue_size 1024
 
-# Audio codec
--c:a aac -b:a 128k -ar 44100
-```
-
-### Advanced Configuration (Stability)
-
-The deployment uses advanced FFmpeg settings for audio stability (commit b9d2e41):
-
-```bash
-# Audio input with buffering and sync
--f pulse -i chrome_audio.monitor \
--thread_queue_size 1024 \
--use_wallclock_as_timestamps 1 \
--filter:a aresample=async=1000:first_pts=0
-
-# Audio codec
--c:a aac -b:a 128k -ar 44100
-```
-
-**What Each Flag Does:**
-
-| Flag | Purpose |
-|------|---------|
-| `-thread_queue_size 1024` | Prevent buffer underruns |
-| `-use_wallclock_as_timestamps 1` | Real-time timing for PulseAudio |
-| `-aresample=async=1000:first_pts=0` | Recover from audio drift >22ms |
-
-### Video Buffering
-
-Video buffering was also increased for better A/V sync:
-
-```bash
-# Video input with buffering
+# Video input buffering (increased for a/v sync)
 -thread_queue_size 1024  # Increased from 512
 ```
 
-### Removed Flags
+### Wall Clock Timestamps
 
-The `-shortest` flag was removed as it caused audio dropouts:
+**Problem:** Audio timing drift caused gradual desync.
+
+**Solution:** Use wall clock timestamps for accurate real-time timing:
 
 ```bash
-# ❌ Old: Caused audio dropouts during video buffering
--shortest
-
-# ✅ New: No -shortest flag
-# Let audio and video run independently
+-use_wallclock_as_timestamps 1
 ```
+
+### Async Resampling
+
+**Problem:** Audio drift exceeding 22ms caused permanent desync.
+
+**Solution:** Async resampling filter recovers from drift:
+
+```bash
+# Resample if drift exceeds 1000 samples (22ms at 44.1kHz)
+-filter:a aresample=async=1000:first_pts=0
+```
+
+### Removed -shortest Flag
+
+**Problem:** `-shortest` flag caused audio dropouts during video buffering.
+
+**Solution:** Removed `-shortest` flag from FFmpeg args.
 
 ## Graceful Fallback
 
-If PulseAudio is unavailable, FFmpeg falls back to silent audio:
+If PulseAudio is not available, FFmpeg falls back to silent audio:
 
 ```bash
-# Check if PulseAudio is running
+# Check if PulseAudio is accessible
 if pactl info &>/dev/null && pactl list sinks | grep -q chrome_audio; then
+    echo "Using PulseAudio for audio capture"
     AUDIO_INPUT="-f pulse -i chrome_audio.monitor"
 else
-    echo "WARNING: PulseAudio not available, using silent audio"
+    echo "PulseAudio not available, using silent audio"
     AUDIO_INPUT="-f lavfi -i anullsrc"
 fi
-
-# Use in FFmpeg command
-ffmpeg $AUDIO_INPUT -c:a aac ...
 ```
 
-## Verification
+**Why Silent Audio:**
+- Many RTMP servers require an audio track
+- Silent audio prevents stream rejection
+- Better than stream failure
 
-### Check PulseAudio Status
+## Permissions
+
+### User Mode vs System Mode
+
+**User Mode (Recommended):**
+- More reliable
+- Easier to configure
+- No system-wide daemon conflicts
+
+**System Mode (Not Recommended):**
+- Requires root permissions
+- Can conflict with existing PulseAudio instances
+- More complex permission management
+
+### Permission Fixes
+
+If you get permission errors:
+
+```bash
+# Add root to pulse-access group
+usermod -aG pulse-access root
+
+# Create /run/pulse with proper permissions
+mkdir -p /run/pulse
+chmod 777 /run/pulse
+
+# Export PULSE_SERVER
+export PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+```
+
+## Troubleshooting
+
+### Verify PulseAudio
 
 ```bash
 # Check PulseAudio is running
@@ -194,21 +219,26 @@ pulseaudio --check && echo "PulseAudio is running"
 # List sinks
 pactl list short sinks
 
-# Should show:
-# 0  chrome_audio  module-null-sink.c  s16le 2ch 44100Hz  RUNNING
+# Should see chrome_audio
+pactl list short sinks | grep chrome_audio
+
+# Check default sink
+pactl info | grep "Default Sink"
 ```
 
-### Check Audio Capture
+### Test Audio Capture
 
 ```bash
-# Test audio capture (5 seconds)
+# Capture 5 seconds of audio
 ffmpeg -f pulse -i chrome_audio.monitor -t 5 test.wav
 
 # Play back
 ffplay test.wav
+
+# Should hear game audio if Chrome is playing
 ```
 
-### Monitor Audio Activity
+### Monitor PulseAudio Activity
 
 ```bash
 # Subscribe to PulseAudio events
@@ -222,255 +252,84 @@ pactl subscribe
 ### Check Chrome Audio Output
 
 ```bash
-# List active audio streams
-pactl list sink-inputs
+# List sink inputs (active audio streams)
+pactl list short sink-inputs
 
-# Should show Chrome as a client when game is playing audio
+# Should see Chrome when game is playing audio
 ```
 
-## Troubleshooting
+### Common Issues
 
-### No Audio in Stream
+**No audio in stream:**
+- Verify PulseAudio is running: `pulseaudio --check`
+- Check chrome_audio sink exists: `pactl list short sinks | grep chrome_audio`
+- Verify environment variables: `echo $PULSE_SERVER`
+- Test audio capture: `ffmpeg -f pulse -i chrome_audio.monitor -t 5 test.wav`
 
-**Symptom:** Stream has video but no audio
+**Permission denied:**
+- Add root to pulse-access group: `usermod -aG pulse-access root`
+- Create /run/pulse: `mkdir -p /run/pulse && chmod 777 /run/pulse`
+- Export PULSE_SERVER: `export PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native`
 
-**Diagnosis:**
-```bash
-# 1. Check PulseAudio
-pactl info
-# Should show: Server String: unix:/tmp/pulse-runtime/pulse/native
+**Audio dropouts:**
+- Increase thread_queue_size: `-thread_queue_size 1024`
+- Enable wall clock timestamps: `-use_wallclock_as_timestamps 1`
+- Add async resampling: `-filter:a aresample=async=1000:first_pts=0`
 
-# 2. Check virtual sink
-pactl list short sinks | grep chrome_audio
-# Should show: chrome_audio sink
+**Audio desync:**
+- Check for drift in FFmpeg logs
+- Verify async resampling is enabled
+- Increase video buffering: `-thread_queue_size 1024`
 
-# 3. Check monitor device
-pactl list short sources | grep chrome_audio.monitor
-# Should show: chrome_audio.monitor source
+## FFmpeg Audio Configuration
 
-# 4. Test capture
-ffmpeg -f pulse -i chrome_audio.monitor -t 5 test.wav
-ffplay test.wav
-```
-
-**Solutions:**
-
-**If PulseAudio not running:**
-```bash
-pulseaudio --start --exit-idle-time=-1 --daemonize=yes
-```
-
-**If virtual sink missing:**
-```bash
-pactl load-module module-null-sink sink_name=chrome_audio
-pactl set-default-sink chrome_audio
-```
-
-**If permissions error:**
-```bash
-# Add root to pulse-access group
-usermod -aG pulse-access root
-
-# Create runtime directory
-mkdir -p /run/pulse
-chmod 777 /run/pulse
-```
-
-### Audio Dropouts
-
-**Symptom:** Intermittent audio dropouts or silence
-
-**Cause:** Buffer underruns
-
-**Solution:** Update to latest code (commit b9d2e41 fixed this):
+### Complete FFmpeg Args
 
 ```bash
-# Increased audio buffering
--thread_queue_size 1024  # Prevents buffer underruns
+# Audio input from PulseAudio
+-thread_queue_size 1024 \
+-use_wallclock_as_timestamps 1 \
+-f pulse \
+-ac 2 \
+-ar 44100 \
+-i chrome_audio.monitor \
 
-# Wall clock timestamps
--use_wallclock_as_timestamps 1  # Real-time timing
+# Audio filter (async resample)
+-filter:a aresample=async=1000:first_pts=0 \
 
-# Async resampling
--filter:a aresample=async=1000:first_pts=0  # Recover from drift
+# Audio codec
+-c:a aac \
+-b:a 128k \
+-ar 44100 \
+-flags +global_header
 ```
 
-### Audio Desync
-
-**Symptom:** Audio gradually drifts out of sync with video
-
-**Cause:** Timing issues between audio and video streams
-
-**Solution:** Update to latest code (commit b9d2e41 fixed this):
+### Audio Codec Settings
 
 ```bash
-# Use wall clock timestamps for accurate timing
--use_wallclock_as_timestamps 1
+# AAC codec (best compatibility)
+-c:a aac
 
-# Async resampling to resync when drift exceeds 22ms
--filter:a aresample=async=1000:first_pts=0
+# Bitrate (128k recommended for music)
+-b:a 128k
 
-# Increased video buffering for better A/V sync
--thread_queue_size 1024  # Video input
+# Sample rate (44.1kHz standard)
+-ar 44100
+
+# Global header (required for RTMP)
+-flags +global_header
 ```
-
-### PulseAudio Permission Denied
-
-**Symptom:** FFmpeg fails with "Permission denied" when accessing PulseAudio
-
-**Cause:** Insufficient permissions for PulseAudio socket
-
-**Solution:**
-
-```bash
-# Add root to pulse-access group
-usermod -aG pulse-access root
-
-# Create /run/pulse with proper permissions
-mkdir -p /run/pulse
-chmod 777 /run/pulse
-
-# Export PULSE_SERVER
-export PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
-
-# Restart PulseAudio
-pulseaudio --kill
-pulseaudio --start --exit-idle-time=-1 --daemonize=yes
-```
-
-### Chrome Not Using PulseAudio
-
-**Symptom:** No audio activity in PulseAudio when game is playing
-
-**Diagnosis:**
-```bash
-# Monitor PulseAudio activity
-pactl subscribe
-
-# Play game audio
-# Should see events like:
-# Event 'new' on sink-input #1
-# Event 'change' on sink #0
-```
-
-**Solution:** Verify Chrome environment variables:
-
-```bash
-# Check Chrome is using PulseAudio
-echo $PULSE_SERVER
-# Should be: unix:/tmp/pulse-runtime/pulse/native
-
-echo $PULSE_SINK
-# Should be: chrome_audio
-```
-
-**Restart Chrome with correct environment:**
-```bash
-export PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
-export PULSE_SINK=chrome_audio
-# Restart streaming
-```
-
-## Deployment Integration
-
-### ecosystem.config.cjs
-
-```javascript
-module.exports = {
-  apps: [{
-    name: "hyperscape-duel",
-    env: {
-      // Audio streaming
-      STREAM_AUDIO_ENABLED: "true",
-      PULSE_AUDIO_DEVICE: "chrome_audio.monitor",
-      PULSE_SERVER: "unix:/tmp/pulse-runtime/pulse/native",
-      XDG_RUNTIME_DIR: "/tmp/pulse-runtime",
-    }
-  }]
-};
-```
-
-### deploy-vast.sh
-
-The deployment script automatically configures PulseAudio:
-
-```bash
-#!/bin/bash
-# PulseAudio Setup
-
-# 1. Kill existing PulseAudio
-pulseaudio --kill 2>/dev/null || true
-pkill -9 pulseaudio 2>/dev/null || true
-sleep 2
-
-# 2. Setup runtime directory
-export XDG_RUNTIME_DIR=/tmp/pulse-runtime
-mkdir -p "$XDG_RUNTIME_DIR"
-chmod 700 "$XDG_RUNTIME_DIR"
-
-# 3. Create config
-mkdir -p /root/.config/pulse
-cat > /root/.config/pulse/default.pa << 'EOF'
-.fail
-load-module module-null-sink sink_name=chrome_audio sink_properties=device.description="ChromeAudio"
-set-default-sink chrome_audio
-load-module module-native-protocol-unix auth-anonymous=1
-EOF
-
-# 4. Start PulseAudio
-pulseaudio --start --exit-idle-time=-1 --daemonize=yes
-sleep 3
-
-# 5. Verify sink exists
-if pactl list short sinks | grep -q chrome_audio; then
-    echo "✓ chrome_audio sink is available"
-else
-    echo "Creating chrome_audio sink manually..."
-    pactl load-module module-null-sink sink_name=chrome_audio
-    pactl set-default-sink chrome_audio
-fi
-
-# 6. Export for PM2
-export PULSE_SERVER=unix:$XDG_RUNTIME_DIR/pulse/native
-```
-
-## Performance Impact
-
-### CPU Usage
-
-Audio capture adds minimal CPU overhead:
-
-- **PulseAudio:** ~1-2% CPU
-- **FFmpeg AAC encoding:** ~5-10% CPU
-- **Total overhead:** ~7-12% CPU
-
-### Bandwidth
-
-Audio adds to stream bandwidth:
-
-- **AAC 128kbps:** ~16 KB/s
-- **Total stream:** ~600 KB/s (video) + 16 KB/s (audio) = ~616 KB/s
-
-### Latency
-
-Audio capture adds minimal latency:
-
-- **PulseAudio buffering:** ~20-50ms
-- **FFmpeg encoding:** ~10-20ms
-- **Total audio latency:** ~30-70ms
 
 ## Related Documentation
 
-- [GPU Rendering Guide](/devops/gpu-rendering) - GPU configuration
-- [Deployment Guide](/guides/deployment) - Full deployment process
-- [Configuration Reference](/devops/configuration) - Environment variables
+- [GPU Rendering](/devops/gpu-rendering) - GPU configuration
+- [Deployment](/guides/deployment) - Full deployment guide
+- [Configuration](/devops/configuration) - Environment variables
 - [Troubleshooting](/devops/troubleshooting) - Common issues
 
-## Commit History
+## Recent Changes
 
-Audio streaming improvements:
-
-- **b9d2e41** (Feb 26, 2026): Improve audio stability with better buffering and sync
-- **7a5fcbc** (Feb 26, 2026): Fix await in non-async function for PulseAudio check
-- **aab66b0** (Feb 26, 2026): Fix PulseAudio permissions and add fallback
-- **3b6f1ee** (Feb 26, 2026): Add audio capture via PulseAudio
+- **Feb 26, 2026** (commit b9d2e41): Improve audio stability with better buffering and sync
+- **Feb 26, 2026** (commit aab66b0): Fix PulseAudio permissions and add fallback
+- **Feb 26, 2026** (commit 7a5fcbc): Fix await in non-async function for PulseAudio check
+- **Feb 26, 2026** (commit 3b6f1ee): Add audio capture via PulseAudio for game music/sound
