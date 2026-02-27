@@ -936,6 +936,91 @@ executablePath: '/usr/bin/google-chrome-unstable'
 **Recent Fixes:**
 - Use Chrome Dev channel for WebGPU support on Vast.ai (commits ba8bd53, d824163)
 
+### No Audio in Stream
+
+**Symptom**: Stream has video but no audio, or audio is silent
+
+**Cause**: PulseAudio not configured or Chrome not outputting to virtual sink
+
+**Solution**: Verify PulseAudio setup (commits 3b6f1ee, aab66b0, b9d2e41):
+
+```bash
+# Check PulseAudio is running
+pulseaudio --check && echo "PulseAudio is running"
+
+# List sinks
+pactl list short sinks | grep chrome_audio
+
+# If missing, create virtual sink
+pactl load-module module-null-sink sink_name=chrome_audio
+pactl set-default-sink chrome_audio
+
+# Test audio capture
+ffmpeg -f pulse -i chrome_audio.monitor -t 5 test.wav
+ffplay test.wav
+```
+
+**Check Chrome audio output:**
+```bash
+# Monitor PulseAudio activity
+pactl subscribe
+
+# Should see events when Chrome plays audio:
+# Event 'change' on sink #0
+```
+
+**Verify environment variables:**
+```bash
+echo $PULSE_SERVER
+# Should be: unix:/tmp/pulse-runtime/pulse/native
+
+echo $XDG_RUNTIME_DIR
+# Should be: /tmp/pulse-runtime
+
+echo $STREAM_AUDIO_ENABLED
+# Should be: true
+```
+
+**See Also:** [Audio Streaming Guide](/devops/audio-streaming) for complete PulseAudio configuration
+
+### Audio Dropouts or Desync
+
+**Symptom**: Intermittent audio dropouts or audio gradually drifts out of sync with video
+
+**Cause**: Buffer underruns or timing issues
+
+**Solution**: Update to latest code (commit b9d2e41 fixed this):
+
+**Three key fixes:**
+1. **Adequate buffering** for both audio and video inputs
+   - Audio: `thread_queue_size=1024` prevents buffer underruns
+   - Video: `thread_queue_size=1024` for better a/v sync
+
+2. **Wall clock timestamps** for accurate audio timing
+   - `use_wallclock_as_timestamps=1` maintains real-time timing
+
+3. **Async resampling** to resync audio when drift exceeds 22ms
+   - `aresample=async=1000:first_pts=0` filter recovers from audio drift
+
+4. **Removed `-shortest` flag**
+   - Was causing audio dropouts during video buffering
+
+**FFmpeg Args:**
+```bash
+# Audio input with buffering and sync
+-f pulse -i chrome_audio.monitor \
+-thread_queue_size 1024 \
+-use_wallclock_as_timestamps 1 \
+-filter:a aresample=async=1000:first_pts=0
+
+# Video input with buffering
+-thread_queue_size 1024
+
+# NO -shortest flag (removed)
+```
+
+**See Also:** [Audio Streaming Guide](/devops/audio-streaming) for troubleshooting
+
 ### Tauri Build Fails with Empty APPLE_CERTIFICATE
 
 **Symptom**: Tauri macOS builds fail with `SecKeychainItemImport` error even when not doing a release build
