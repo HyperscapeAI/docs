@@ -1050,6 +1050,156 @@ fi
 
 **See Also:** [Audio Streaming Guide](/devops/audio-streaming) for complete PulseAudio configuration
 
+---
+
+### GPU Rendering Black Screen
+
+**Symptom**: Stream shows black screen instead of game, or WebGPU fails to initialize
+
+**Cause**: GPU not accessible, wrong rendering mode, or software rendering fallback
+
+**Solution**: Verify GPU rendering configuration (commits 725e934, 7140966, dd649da, e51a332, 30bdaf0, Feb 27 2026):
+
+```bash
+# Check GPU rendering mode
+echo $GPU_RENDERING_MODE
+# Should be: xorg or headless-egl (NOT xvfb or swrast)
+
+# Check NVIDIA GPU
+nvidia-smi
+
+# Check Vulkan (NVIDIA-only)
+export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+vulkaninfo --summary
+
+# Check DRI devices (needed for Xorg)
+ls -la /dev/dri/
+
+# Check EGL support (needed for headless)
+ls -la /usr/lib/x86_64-linux-gnu/libEGL_nvidia.so.0
+```
+
+**Xorg Mode Verification:**
+```bash
+# Check Xorg is running
+ps aux | grep Xorg
+
+# Test display
+xdpyinfo -display :99
+
+# Check Xorg log for errors
+grep -E "(EE)" /var/log/Xorg.99.log
+
+# Check for software rendering fallback (BAD)
+grep -i "swrast" /var/log/Xorg.99.log
+```
+
+**Headless EGL Mode Verification:**
+```bash
+# Verify environment
+echo $DISPLAY
+# Should be empty
+
+echo $STREAM_CAPTURE_HEADLESS
+# Should be: new
+
+echo $STREAM_CAPTURE_USE_EGL
+# Should be: true
+
+# Test Chrome with EGL
+google-chrome-unstable --headless=new --use-gl=egl \
+  --ozone-platform=headless --enable-unsafe-webgpu \
+  --screenshot=test.png https://get.webgl.org/webgpu/
+```
+
+**Common Issues:**
+
+1. **Xorg using software rendering (swrast)**:
+   - Deployment script auto-detects and switches to headless EGL
+   - Check logs for: "Xorg using SOFTWARE RENDERING - switching to headless EGL"
+   - Verify GPU_RENDERING_MODE changed to headless-egl
+
+2. **No DRI devices in container**:
+   - Headless EGL mode is the solution
+   - Works without /dev/dri access
+   - Requires NVIDIA EGL library
+
+3. **Wrong headless mode flag**:
+   - Playwright's `headless` option only accepts boolean
+   - For `--headless=new`, pass `headless: false` to Playwright and add `--headless=new` to args
+   - Fixed in commit dd649da
+
+**See Also:** [GPU Rendering Guide](/devops/gpu-rendering) for complete GPU configuration
+
+---
+
+### Xorg Swrast Fallback Detection (Commit 725e934)
+
+**Symptom**: Xorg starts successfully but stream is black or very slow
+
+**Cause**: NVIDIA driver failed to initialize, Xorg fell back to modesetting with swrast (software rendering)
+
+**Solution**: Update to latest code (commit 725e934 fixed this). The deployment script now detects swrast fallback:
+
+```bash
+# Check Xorg log for swrast initialization
+if grep -q "IGLX: Loaded and initialized swrast" /var/log/Xorg.99.log; then
+    echo "Xorg using SOFTWARE RENDERING - switching to headless EGL"
+    pkill -9 Xorg
+    export DISPLAY=
+    export STREAM_CAPTURE_HEADLESS=new
+    export STREAM_CAPTURE_USE_EGL=true
+    export GPU_RENDERING_MODE=headless-egl
+fi
+```
+
+**Why This Matters:**
+- Xorg can start successfully but use software rendering
+- Software rendering is too slow for WebGPU streaming (<5 FPS)
+- Automatic detection prevents silent performance degradation
+- Headless EGL provides hardware acceleration without X server
+- Common in containers without full DRM access
+
+**Diagnostic Output:**
+```bash
+[deploy] ✗ Xorg started but using SOFTWARE RENDERING (swrast) - not usable for WebGPU
+[deploy] NVIDIA driver failed to initialize, falling back to headless EGL...
+[deploy] Xorg errors:
+(EE) NVIDIA(0): Failed to initialize the NVIDIA GPU at PCI:1:0:0
+```
+
+---
+
+### Headless EGL Environment Variables Not Preserved (Commit 7140966)
+
+**Symptom**: PM2 starts with wrong DISPLAY or missing EGL flags after headless EGL detection
+
+**Cause**: PM2 setup overrode DISPLAY to :99 even when headless EGL mode was detected
+
+**Solution**: Update to latest code (commit 7140966 fixed this). The deployment script now preserves headless EGL env vars:
+
+```bash
+# Don't override DISPLAY if it was set to empty for headless EGL
+if [ -z "$DISPLAY" ]; then
+    # Headless EGL mode - keep DISPLAY empty
+    export STREAM_CAPTURE_HEADLESS=new
+    export STREAM_CAPTURE_USE_EGL=true
+else
+    # Xorg mode - DISPLAY already set to :99
+    export STREAM_CAPTURE_HEADLESS=false
+    export STREAM_CAPTURE_USE_EGL=false
+fi
+
+# Preserve in PM2 config
+bunx pm2 start ecosystem.config.cjs
+```
+
+**Why This Matters:**
+- DISPLAY must be empty for headless EGL mode
+- Setting DISPLAY=:99 breaks EGL rendering
+- STREAM_CAPTURE_HEADLESS and STREAM_CAPTURE_USE_EGL must be preserved
+- PM2 config now reads from environment instead of hardcoding
+
 ### Audio Dropouts or Desync
 
 **Symptom**: Intermittent audio dropouts or audio gradually drifts out of sync with video
