@@ -867,22 +867,53 @@ ffmpeg -version
 1. GPU not accessible in headless mode
 2. Wrong Chrome backend
 3. Missing Xvfb for headful mode
+4. WebGPU not available
 
 **Solutions**:
 
-```bash
-# Try headful mode with Xvfb
-Xvfb :99 -screen 0 1920x1080x24 &
-export DISPLAY=:99
-bun run dev:streaming
+The deployment system now automatically detects and configures GPU rendering (commits e51a332, 30bdaf0, Feb 27 2026):
 
-# Or use swiftshader CPU fallback
-CHROME_BACKEND=swiftshader bun run dev:streaming
+```bash
+# Automatic GPU detection (preferred)
+bash scripts/deploy-vast.sh
+# Script auto-detects: Xorg (if DRI available) or headless EGL (fallback)
+
+# Manual Xorg mode (if DRI devices available)
+export DISPLAY=:99
+export DUEL_CAPTURE_USE_XVFB=false
+export GPU_RENDERING_MODE=xorg
+Xorg :99 -config /etc/X11/xorg-nvidia-headless.conf &
+
+# Manual headless EGL mode (for containers without DRM/DRI)
+export DISPLAY=
+export STREAM_CAPTURE_HEADLESS=new
+export STREAM_CAPTURE_USE_EGL=true
+export GPU_RENDERING_MODE=headless-egl
+```
+
+**Verify GPU access:**
+```bash
+# Check NVIDIA driver
+nvidia-smi
+
+# Check Vulkan support
+vulkaninfo --summary
+
+# Check DRI devices (needed for Xorg)
+ls -la /dev/dri/
+
+# Check EGL support (needed for headless)
+ls -la /usr/lib/x86_64-linux-gnu/libEGL_nvidia.so.0
 ```
 
 **Recent Fixes:**
-- Switch back to headful mode for GPU compositing with Xvfb (commit 5e4c6f1)
-- Use swiftshader + headless + WebGL for stable streaming (commit ae42beb)
+- **Commit e51a332**: Added headless EGL mode for containers without DRM
+- **Commit 30bdaf0**: Require NVIDIA Xorg, no software rendering fallback
+- **Commit 5fe4a18**: Add robust Xorg/Xvfb fallback handling
+- **Commit 263bfc5**: Use Xorg instead of Xvfb for NVIDIA GPU rendering
+- **Commit 89b78e3**: Use NVIDIA hardware Vulkan instead of SwiftShader
+
+**See Also:** [GPU Rendering Guide](/devops/gpu-rendering) for complete GPU configuration
 
 ### Chrome Dev Channel Not Found
 
