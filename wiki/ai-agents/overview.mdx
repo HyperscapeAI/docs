@@ -137,20 +137,42 @@ The plugin provides **26 actions** across 9 categories (updated Feb 26 2026):
 |--------|------|-------------|
 | `chatMessageAction` | `actions/social.ts` | Send a chat message |
 
-### Banking Actions
+### Banking Actions <Badge text="Updated" variant="info" />
 
 | Action | File | Description |
 |--------|------|-------------|
-| `bankDepositAction` | `actions/banking.ts` | Deposit items to bank |
-| `bankWithdrawAction` | `actions/banking.ts` | Withdraw items from bank |
-| `bankDepositAllAction` | `actions/banking.ts` | Bulk deposit (keeps tools) |
+| `bankDepositAction` | `actions/banking.ts` | Deposit items to bank (walks to bank automatically) |
+| `bankWithdrawAction` | `actions/banking.ts` | Withdraw items from bank (walks to bank automatically) |
+| `bankDepositAllAction` | `actions/banking.ts` | **NEW**: Bulk deposit (keeps essential tools) |
+
+**Banking Protocol** (commit 593cd56b):
+- Proper packet sequence: `bankOpen` → `bankDeposit/bankDepositAll/bankWithdraw` → `bankClose`
+- Replaces broken `bankAction` packet
+- Banking actions now await movement completion instead of returning early
+- Auto-walks to nearest bank if distance > 5 units
+
+**Essential Tools** (never deposited by `bankDepositAll`):
+- Hatchets (bronze, iron, steel, mithril)
+- Pickaxes (bronze, iron, steel, mithril)
+- Tinderbox
+- Small Fishing Net
 
 ### Questing Actions <Badge text="New" variant="success" />
 
 | Action | File | Description |
 |--------|------|-------------|
-| `acceptQuestAction` | `actions/quests.ts` | Accept quest from NPC |
-| `completeQuestAction` | `actions/quests.ts` | Complete quest for rewards |
+| `acceptQuestAction` | `actions/quests.ts` | Accept quest from NPC (items granted immediately) |
+| `completeQuestAction` | `actions/quests.ts` | Complete quest for XP rewards |
+
+**Quest-Based Tool Acquisition** (commit 593cd56b):
+- Replaced `LOOT_STARTER_CHEST` action with quest system
+- Tools granted immediately on quest accept (no need to complete)
+- Questing goal has highest priority when agent lacks tools
+
+**Tool-Granting Quests**:
+- `lumberjacks_first_lesson` (Forester Wilma) → Bronze Hatchet + Tinderbox
+- `fresh_catch` (Fisherman Pete) → Small Fishing Net
+- `torvins_tools` (Torvin) → Bronze Pickaxe + Hammer
 
 ---
 
