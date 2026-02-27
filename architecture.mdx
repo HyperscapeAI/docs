@@ -47,7 +47,7 @@ flowchart TD
 The core Hyperscape 3D engine containing:
 
 - **Entity Component System (ECS)**: Game object architecture
-- **Three.js integration**: 3D rendering (v0.183.1, WebGPU + TSL shaders) - updated Feb 25, 2026
+- **Three.js integration**: WebGPU rendering (v0.183.1, TSL shaders only) - updated Feb 25, 2026
 - **React 19.2.4**: UI framework (unified across monorepo) - updated Feb 25, 2026
 - **PhysX bindings**: Physics simulation via WASM
 - **Networking**: Real-time multiplayer sync via WebSockets
@@ -56,6 +56,10 @@ The core Hyperscape 3D engine containing:
 - **Procedural terrain**: Multi-threaded terrain generation with web workers
 - **GPU Instancing**: InstancedMesh-based rendering for trees, particles, placeholders
 - **Strategy Pattern**: Delegated visual strategies for resource rendering
+
+<Warning>
+**WebGPU Required**: All rendering uses TSL (Three Shading Language) which only works with WebGPU. WebGL fallback was removed in February 2026. Requires Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+).
+</Warning>
 
 **Key directories:**
 ```
