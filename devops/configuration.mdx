@@ -156,6 +156,10 @@ ENABLE_PERPS_ORACLE=false  # Set to true when perps program deployed
 #   - Solana: WSOL (wrapped SOL)
 #   - EVM chains: WETH (wrapped ETH)
 # Override with MARKET_MINT if you want a different token
+
+# Arena External Bet Write Key (commit 55f93c6, Feb 26 2026)
+# Required for external betting systems to record bets
+ARENA_EXTERNAL_BET_WRITE_KEY=your-secret-key  # Used by keeper service for bet recording
 ```
 
 **Keypair Setup:**
