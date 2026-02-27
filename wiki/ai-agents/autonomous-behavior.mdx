@@ -1,0 +1,511 @@
+---
+title: "Autonomous Agent Behavior"
+description: "How agents make decisions and execute actions autonomously"
+icon: "robot"
+---
+
+## Overview
+
+Hyperscape agents use ElizaOS to make autonomous decisions using LLMs. Recent improvements (commit 60a03f49, Feb 26 2026) added action locks, fast-tick mode, and short-circuit decision-making for more natural MMORPG behavior.
+
+## Decision-Making Architecture
+
+### LLM Tick Cycle
+
+Agents evaluate their situation and choose actions on a regular tick cycle:
+
+**Normal Tick:** 10 seconds (default)
+**Fast Tick:** 2 seconds (after movement or goal changes)
+
+```typescript
+// From packages/plugin-hyperscape/src/managers/autonomous-behavior-manager.ts
+const NORMAL_TICK_INTERVAL = 10_000;  // 10 seconds
+const FAST_TICK_INTERVAL = 2_000;     // 2 seconds
+```
+
+### Action Locks
+
+**Problem:** Agents would spam LLM calls while movement was in progress, wasting tokens and causing decision churn.
+
+**Solution:** Action locks prevent LLM ticks while movement is in progress:
+
+```typescript
+// Set action lock when starting movement
+this.actionLock = true;
+
+// Movement completes
+await this.waitForMovementComplete();
+
+// Clear action lock
+this.actionLock = false;
+
+// Trigger fast tick for quick follow-up
+this.triggerFastTick();
+```
+
+**Benefits:**
+- No wasted LLM calls during movement
+- Agents commit to actions instead of constantly re-evaluating
+- More natural behavior (walk to tree, chop, don't reconsider mid-walk)
+
+### Fast-Tick Mode
+
+After completing an action or changing goals, agents enter fast-tick mode for quick follow-up:
+
+```typescript
+// Trigger fast tick after movement completes
+this.triggerFastTick();
+
+// Next tick happens in 2 seconds instead of 10
+setTimeout(() => this.tick(), FAST_TICK_INTERVAL);
+```
+
+**Use Cases:**
+- After reaching a tree → quickly decide to chop
+- After banking → quickly resume previous goal
+- After completing quest → quickly set new goal
+
+### Short-Circuit LLM
+
+For obvious decisions, agents skip the LLM and execute immediately:
+
+```typescript
+// Short-circuit obvious decisions
+if (shouldRepeatResource(gameState)) {
+  return { action: 'CHOP_TREE', params: { treeId: lastTreeId } };
+}
+
+if (shouldBank(gameState)) {
+  return { action: 'BANK_DEPOSIT_ALL', params: {} };
+}
+
+if (hasNewGoal(gameState)) {
+  return { action: 'SET_GOAL', params: { goal: newGoal } };
+}
+
+// Otherwise, call LLM for decision
+return await callLLM(gameState);
+```
+
+**Short-Circuit Conditions:**
+- **Repeat resource:** Same resource type nearby, inventory not full
+- **Banking:** Inventory ≥ 25/28 slots
+- **Set goal:** Goal changed externally (e.g., via dashboard)
+
+**Benefits:**
+- Faster response times
+- Reduced LLM costs
+- More predictable behavior for repetitive tasks
+
+## Goal System
+
+### Goal Types
+
+Agents can have different goal types with varying priorities:
+
+| Goal Type | Priority | Description |
+|-----------|----------|-------------|
+| `questing` | Highest | Accept quests to get tools |
+| `banking` | High | Deposit items when inventory full |
+| `combat` | Medium | Fight specific mobs |
+| `skilling` | Medium | Train specific skills |
+| `exploration` | Low | Explore new areas |
+
+### Banking Goal
+
+**Trigger:** Inventory ≥ 25/28 slots
+
+**Behavior:**
+1. Set banking goal with high priority
+2. Walk to nearest bank
+3. Execute `BANK_DEPOSIT_ALL` action
+4. Restore previous goal after banking
+
+```typescript
+// Auto-trigger banking goal
+if (inventoryCount >= 25) {
+  const previousGoal = currentGoal;
+  
+  setGoal({
+    type: 'banking',
+    description: 'Deposit items at bank',
+    priority: 9,
+    previousGoal: previousGoal  // Restore after banking
+  });
+}
+```
+
+**Goal Restoration:**
+
+After banking completes, the agent automatically restores their previous goal:
+
+```typescript
+// After BANK_DEPOSIT_ALL completes
+if (goal.type === 'banking' && goal.previousGoal) {
+  setGoal(goal.previousGoal);
+  triggerFastTick();  // Quick follow-up
+}
+```
+
+### Questing Goal
+
+**Trigger:** Agent lacks essential tools (axe, pickaxe, tinderbox, net)
+
+**Behavior:**
+1. Set questing goal with highest priority
+2. Walk to quest NPC
+3. Accept quest to receive tools
+4. Resume previous goal
+
+**Tool-Granting Quests:**
+- `lumberjacks_first_lesson` → Bronze Hatchet + Tinderbox (Forester Wilma)
+- `fresh_catch` → Small Fishing Net (Fisherman Pete)
+- `torvins_tools` → Bronze Pickaxe + Hammer (Torvin)
+
+## Movement Behavior
+
+### Await Movement Completion
+
+Banking actions now await movement completion instead of returning early:
+
+```typescript
+// ❌ Old: Returned early, agent never reached bank
+await service.executeMove({ target: bankPosition });
+return { success: true };  // Movement still in progress!
+
+// ✅ New: Awaits movement completion
+await service.executeMove({ target: bankPosition });
+await service.waitForMovementComplete(15000);  // Wait up to 15s
+// Now agent is at bank, can interact
+```
+
+**Benefits:**
+- Agents actually reach their destination before interacting
+- No "bank too far" errors from premature interaction attempts
+- More reliable autonomous behavior
+
+### Movement Tracking
+
+The HyperscapeService tracks movement state:
+
+```typescript
+// From packages/plugin-hyperscape/src/services/HyperscapeService.ts
+private isMoving: boolean = false;
+
+async executeMove(params: { target: [number, number, number] }): Promise<void> {
+  this.isMoving = true;
+  // Send move packet
+}
+
+async waitForMovementComplete(timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  
+  while (this.isMoving && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
+  return !this.isMoving;
+}
+
+// Clear on movement complete packet
+onMovementComplete() {
+  this.isMoving = false;
+}
+```
+
+## Resource Detection
+
+### Approach Range
+
+Resource detection range was increased from 20m to 40m to fix "choppableTrees=0" errors:
+
+```typescript
+// ❌ Old: 20m range (too small)
+const RESOURCE_APPROACH_RANGE = 20;
+
+// ✅ New: 40m range (matches skills validation)
+const RESOURCE_APPROACH_RANGE = 40;
+```
+
+**Affected Actions:**
+- `CHOP_TREE`
+- `MINE_ROCK`
+- `CATCH_FISH`
+
+**Why 40m:**
+- Matches server-side skills validation range
+- Prevents "no resources nearby" errors when resources are visible
+- Agents can see and approach resources from further away
+
+### Depleted Resource Filtering
+
+Agents now filter out depleted resources from nearby entity checks:
+
+```typescript
+// Filter depleted resources
+const availableResources = nearbyEntities.filter(entity => {
+  if (entity.type === 'tree' || entity.type === 'rock' || entity.type === 'fishing_spot') {
+    return entity.depleted !== true;
+  }
+  return true;
+});
+```
+
+**Benefits:**
+- Agents don't try to chop depleted trees
+- More efficient resource gathering
+- Reduces failed action attempts
+
+## LLM Context
+
+### Last Action Tracking
+
+The LLM prompt now includes the last action and result for continuity:
+
+```typescript
+// Track last action
+this.lastActionName = 'CHOP_TREE';
+this.lastActionResult = 'success';
+
+// Include in LLM prompt
+const prompt = `
+Last action: ${this.lastActionName}
+Result: ${this.lastActionResult}
+
+Current situation:
+...
+`;
+```
+
+**Benefits:**
+- LLM understands what just happened
+- Better decision continuity
+- Avoids repeating failed actions
+
+### Inventory Display
+
+The LLM prompt now shows inventory count with warnings:
+
+```typescript
+// Inventory status
+const inventoryCount = player.items.length;
+const inventoryMax = 28;
+const inventoryStatus = 
+  inventoryCount >= 28 ? '🔴 FULL' :
+  inventoryCount >= 25 ? '🟡 NEARLY FULL' :
+  `${inventoryCount}/${inventoryMax}`;
+
+// Include in prompt
+Inventory: ${inventoryStatus}
+```
+
+**Benefits:**
+- Agents know when to bank
+- Visual warnings for full inventory
+- Prevents inventory overflow
+
+## Autonomous Banking
+
+### Banking Trigger
+
+Agents automatically bank when inventory reaches 25/28 slots:
+
+```typescript
+// Check inventory fullness
+if (inventoryCount >= 25 && !player.inCombat) {
+  // Set banking goal
+  setGoal({
+    type: 'banking',
+    description: 'Deposit items at bank',
+    priority: 9,
+    previousGoal: currentGoal
+  });
+}
+```
+
+### Banking Workflow
+
+1. **Detect full inventory** (≥25/28 slots)
+2. **Set banking goal** with high priority
+3. **Find nearest bank** from nearby entities or world map
+4. **Walk to bank** (await movement completion)
+5. **Open bank session** (`bankOpen` packet)
+6. **Deposit all items** (`bankDepositAll` packet)
+7. **Withdraw essential tools** (axe, pickaxe, tinderbox, net)
+8. **Close bank session** (`bankClose` packet)
+9. **Restore previous goal** (e.g., woodcutting)
+10. **Trigger fast tick** for quick follow-up
+
+### Essential Tools
+
+These items are never deposited (always withdrawn back):
+
+- **Hatchets:** Bronze, Iron, Steel, Mithril
+- **Pickaxes:** Bronze, Iron, Steel, Mithril
+- **Tinderbox:** For firemaking
+- **Small Fishing Net:** For fishing
+
+**Why Keep Tools:**
+- Agents need tools to continue gathering
+- Prevents "no axe" errors after banking
+- Matches natural MMORPG player behavior
+
+## Quest-Driven Progression
+
+### Starter Chest Removal
+
+The old `LOOT_STARTER_CHEST` action was removed (commit 593cd56b). Agents now get tools through quests:
+
+```typescript
+// ❌ Old: Direct item grants from starter chest
+await service.lootStarterChest();
+// Gave: Bronze Hatchet, Bronze Pickaxe, Tinderbox, Small Fishing Net
+
+// ✅ New: Quest-based tool acquisition
+await service.acceptQuest('lumberjacks_first_lesson');
+// Gives: Bronze Hatchet + Tinderbox (immediately on accept)
+```
+
+### Tool Acquisition Quests
+
+Agents are guided toward quests for tools via game knowledge:
+
+```typescript
+// From packages/plugin-hyperscape/src/providers/questProvider.ts
+const questKnowledge = `
+Tool Acquisition Quests:
+- Lumberjack's First Lesson (Forester Wilma): Bronze Hatchet + Tinderbox
+- Fresh Catch (Fisherman Pete): Small Fishing Net
+- Torvin's Tools (Torvin): Bronze Pickaxe + Hammer
+
+If you lack tools, set a questing goal to acquire them.
+`;
+```
+
+**Questing Goal Priority:**
+
+When agent lacks tools, questing goal has highest priority:
+
+```typescript
+// Check for missing tools
+const hasAxe = inventory.some(item => item.name.includes('axe'));
+const hasPickaxe = inventory.some(item => item.name.includes('pickaxe'));
+const hasTinderbox = inventory.some(item => item.name.includes('tinderbox'));
+const hasNet = inventory.some(item => item.name.includes('net'));
+
+if (!hasAxe || !hasPickaxe || !hasTinderbox || !hasNet) {
+  setGoal({
+    type: 'questing',
+    description: 'Accept quests to get tools',
+    priority: 10  // Highest priority
+  });
+}
+```
+
+## Performance Optimizations
+
+### Action Lock Benefits
+
+**Before (without action locks):**
+- Agent starts walking to tree (10s journey)
+- LLM ticks every 10s during walk
+- 1 walk = 1 LLM call (wasted)
+- Total: 2 LLM calls (1 wasted)
+
+**After (with action locks):**
+- Agent starts walking to tree (10s journey)
+- Action lock prevents LLM ticks during walk
+- Agent reaches tree
+- Fast tick triggers (2s)
+- Total: 1 LLM call (0 wasted)
+
+**Savings:** 50% reduction in LLM calls for movement-heavy tasks
+
+### Short-Circuit Benefits
+
+**Before (without short-circuit):**
+- Agent chops tree
+- Inventory not full, same tree type nearby
+- LLM call to decide next action
+- LLM says "chop another tree"
+- Total: 1 LLM call per tree
+
+**After (with short-circuit):**
+- Agent chops tree
+- Inventory not full, same tree type nearby
+- Short-circuit: repeat last action
+- Total: 0 LLM calls (instant decision)
+
+**Savings:** 100% reduction in LLM calls for repetitive tasks
+
+## Configuration
+
+### Enable/Disable Features
+
+```bash
+# Action locks (always enabled, no config)
+# Fast-tick mode (always enabled, no config)
+# Short-circuit LLM (always enabled, no config)
+
+# Autonomous behavior (for embedded agents)
+EMBEDDED_AGENT_AUTONOMY_ENABLED=false  # Disable for streaming (default)
+AUTO_START_AGENTS=true                 # Auto-load embedded agents
+AUTO_START_AGENTS_MAX=10               # Max embedded agents
+```
+
+### Tick Intervals
+
+```bash
+# Normal tick interval (default: 10s)
+AGENT_TICK_INTERVAL_MS=10000
+
+# Fast tick interval (default: 2s)
+AGENT_FAST_TICK_INTERVAL_MS=2000
+```
+
+## Debugging
+
+### Action Lock Status
+
+Check if agent is locked:
+
+```typescript
+// From HyperscapeService
+console.log('Action lock:', service.actionLock);
+console.log('Is moving:', service.isMoving);
+```
+
+### Last Action Tracking
+
+View last action in agent logs:
+
+```typescript
+// From autonomous-behavior-manager.ts
+console.log('Last action:', this.lastActionName);
+console.log('Last result:', this.lastActionResult);
+```
+
+### Goal History
+
+View goal changes:
+
+```typescript
+// From goal provider
+console.log('Current goal:', currentGoal);
+console.log('Previous goal:', previousGoal);
+console.log('Goal type:', currentGoal.type);
+console.log('Goal priority:', currentGoal.priority);
+```
+
+## Related Documentation
+
+- [Agent Actions Reference](/wiki/ai-agents/actions) - All available actions
+- [Agent Providers](/wiki/ai-agents/providers) - Context providers
+- [ElizaOS Integration](/guides/ai-agents) - ElizaOS setup
+
+## Commit History
+
+Autonomous behavior improvements:
+
+- **60a03f49** (Feb 26, 2026): Action locks, fast-tick, short-circuit LLM, await banking movement
+- **593cd56b** (Feb 26, 2026): Quest-driven tools, autonomous banking, resource detection fixes
