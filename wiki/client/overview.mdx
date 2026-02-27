@@ -432,10 +432,12 @@ if (!this.colorGradingEnabled) {
 ### Rendering Pipeline
 
 1. **Pre-render**: Update matrices, frustum culling
-2. **Shadow Pass**: Render cascaded shadow maps
+2. **Shadow Pass**: Render cascaded shadow maps (CSM)
 3. **Main Pass**: Render scene with deferred lighting
-4. **Post-Processing**: Bloom, tone mapping, effects (TSL-based)
+4. **Post-Processing**: Bloom, tone mapping, color grading (TSL-based)
 5. **UI Overlay**: Render 2D React UI on top
+
+**All rendering uses WebGPU** - there is no WebGL fallback path.
 
 ### Model Loading & Transform Baking
 
