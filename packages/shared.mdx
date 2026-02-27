@@ -9,11 +9,15 @@ icon: "share-2"
 The `@hyperscape/shared` package is the core Hyperscape engine, providing:
 
 - Entity Component System (ECS)
-- Three.js 3D rendering
+- Three.js WebGPU rendering (WebGPU required - no WebGL fallback)
 - PhysX physics simulation
 - Real-time networking
 - React UI components
 - Game data manifests
+
+<Warning>
+**WebGPU Required**: All rendering uses TSL (Three Shading Language) which only works with WebGPU. There is no WebGL fallback. Requires Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+).
+</Warning>
 
 ## Package Location
 
