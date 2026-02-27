@@ -20,9 +20,8 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 ### Browser Requirements
 - Chrome 113+ (recommended)
 - Edge 113+
-- Safari 18+ (macOS 15+ only)
+- Safari 18+ (macOS 15+)
 - Firefox (behind flag, not recommended)
-- Check compatibility: [webgpureport.org](https://webgpureport.org)
 
 ### Server/Streaming Requirements
 For Vast.ai and other GPU servers running the streaming pipeline:
@@ -137,12 +136,11 @@ packages/
 │   ├── PostgreSQL persistence
 │   └── LiveKit voice chat integration
 ├── client/              # Web client (Vite + React)
-│   ├── 3D rendering (WebGPU required)
+│   ├── 3D rendering
 │   ├── Player controls
 │   └── UI/HUD
 ├── physx-js-webidl/     # PhysX WASM bindings
-├── procgen/             # Procedural generation (trees, rocks, terrain)
-├── asset-forge/         # AI asset generation + VFX catalog
+├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
 └── docs-site/           # Docusaurus documentation site
 ```
 
@@ -151,11 +149,10 @@ packages/
 **Critical**: Packages must build in this order due to dependencies:
 
 1. **physx-js-webidl** - PhysX WASM (takes longest, ~5-10 min first time)
-2. **procgen** - Procedural generation utilities
-3. **shared** - Depends on physx-js-webidl and procgen
-4. **All other packages** - Depend on shared
+2. **shared** - Depends on physx-js-webidl
+3. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
 
 > **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
 >
@@ -182,7 +179,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -324,7 +321,7 @@ All services have unique default ports to avoid conflicts:
 **Package-specific `.env` files**: Each package has its own `.env.example` with deployment documentation:
 
 | Package | File | Purpose |
-|---------|------|---------|
+|---------|------|------------|
 | Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
@@ -333,10 +330,9 @@ All services have unique default ports to avoid conflicts:
 ```bash
 # Server (packages/server/.env)
 DATABASE_URL=postgresql://...    # Required for production
-JWT_SECRET=...                   # Required for production (enforced)
+JWT_SECRET=...                   # Required for production
 PRIVY_APP_ID=...                 # For Privy auth
 PRIVY_APP_SECRET=...             # For Privy auth
-ADMIN_CODE=...                   # Required for production security
 
 # Client (packages/client/.env)
 PUBLIC_PRIVY_APP_ID=...          # Must match server's PRIVY_APP_ID
@@ -405,295 +401,9 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Tests spawn their own Hyperscape instances
 - Visual tests require WebGPU support (headful browser with GPU access)
 
-### WebGPU Not Available
-
-Hyperscape requires WebGPU (all shaders use TSL). **WebGL fallback was removed in commit 47782ed.**
-- Chrome/Edge 113+ (Windows/macOS/Linux)
-- Safari 18+ (macOS 15+ only)
-- Check: [webgpureport.org](https://webgpureport.org)
-- **Server/Streaming**: Must use Xorg or Xvfb with NVIDIA GPU (see Vast.ai deployment docs)
-
-## Deployment
-
-### Cloudflare Pages (Client)
-
-Automatic deployment on push to `main`:
-- Workflow: `.github/workflows/deploy-pages.yml`
-- Triggers on changes to `packages/client/**` or `packages/shared/**`
-- Production URL: https://hyperscape.gg
-- Preview URL: https://<commit>.hyperscape.pages.dev
-
-### Railway (Game Server)
-
-Branch-based deployment:
-- `main` → `prod` environment
-- `develop` → `dev` environment
-- See [docs/railway-dev-prod.md](docs/railway-dev-prod.md)
-
-### Vast.ai (GPU Streaming)
-
-Automated deployment with maintenance mode and WebGPU-capable GPU rendering:
-
-**Workflow**: `.github/workflows/deploy-vast.yml`
-- Triggers after CI passes on `main`
-- Manual trigger: `workflow_dispatch`
-
-**GPU Rendering Setup** (WebGPU Required):
-1. **Xorg with NVIDIA** (preferred):
-   - Headless Xorg configuration with NVIDIA driver
-   - Config: `/etc/X11/xorg-nvidia-headless.conf`
-   - Options: `AllowEmptyInitialConfiguration`, `UseDisplayDevice=None`
-   - Auto-detects GPU BusID via `nvidia-smi`
-   - Verifies with `xdpyinfo` before use
-   - Checks for swrast fallback (software rendering) and rejects it
-
-2. **Xvfb with NVIDIA Vulkan** (fallback):
-   - Virtual framebuffer for X11 protocol
-   - Chrome uses NVIDIA GPU via ANGLE/Vulkan
-   - CDP captures frames from Chrome's internal GPU rendering
-   - Set `DUEL_CAPTURE_USE_XVFB=true` when active
-
-3. **Failure Mode**:
-   - If neither Xorg nor Xvfb can provide WebGPU, deployment FAILS
-   - No soft fallback to headless mode (doesn't support WebGPU)
-   - Explicit display accessibility verification required
-
-**Environment Variables**:
-- `DISPLAY=:99` - X server display number
-- `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json` - Force NVIDIA Vulkan ICD
-- `DUEL_CAPTURE_USE_XVFB=true/false` - Dynamically set based on GPU setup outcome
-- `GPU_RENDERING_MODE=xorg|xvfb-vulkan` - Rendering mode indicator
-- `STREAM_CAPTURE_HEADLESS=false` - Must be false for WebGPU
-- `STREAM_CAPTURE_CHANNEL=chrome-dev` - Use Chrome Dev for WebGPU support
-
-**Audio Capture** (PulseAudio):
-- User-mode PulseAudio with `chrome_audio` virtual sink
-- `XDG_RUNTIME_DIR=/tmp/pulse-runtime` for socket location
-- FFmpeg captures from `chrome_audio.monitor` device
-- Fallback to silent audio if PulseAudio unavailable
-
-**Deployment Features**:
-- Maintenance mode API (pauses duel cycles)
-- Health checking before exit (120s, 30 retries)
-- DATABASE_URL persistence through git reset
-- Comprehensive streaming diagnostics (FFmpeg, RTMP, PulseAudio checks)
-- Solana keypair setup from `SOLANA_DEPLOYER_PRIVATE_KEY`
-- Stream key management (explicit unset/re-export prevents stale values)
-
-See [docs/vast-deployment.md](docs/vast-deployment.md) for full deployment guide.
-
-### Maintenance Mode API
-
-Graceful deployment system for production:
-
-```bash
-# Enter maintenance mode (pauses new duel cycles)
-curl -X POST https://your-server.com/admin/maintenance/enter \
-  -H "Content-Type: application/json" \
-  -H "x-admin-code: your-admin-code" \
-  -d '{"reason": "deployment", "timeoutMs": 300000}'
-
-# Check status
-curl https://your-server.com/admin/maintenance/status \
-  -H "x-admin-code: your-admin-code"
-
-# Exit maintenance mode (resumes operations)
-curl -X POST https://your-server.com/admin/maintenance/exit \
-  -H "Content-Type: application/json" \
-  -H "x-admin-code: your-admin-code"
-```
-
-See [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) for full API reference.
-
-## Recent Architectural Changes (February 2026)
-
-### AI Agent Stability & Behavior
-- **Database isolation**: Force PGLite for agents, prevent destructive migrations on game DB
-- **Initialization timeouts**: 45s timeout on runtime init prevents indefinite hangs
-- **Event listener cleanup**: Duplication guard prevents memory leaks
-- **Graceful shutdown**: 10s timeout on runtime.stop() with dangling promise cleanup
-- **WASM heap cleanup**: Explicit DB adapter close releases memory
-- **Circuit breaker**: 3 consecutive failure limit, 8 max reconnect retries
-- **Duel recovery**: Check contestant status independently during ANNOUNCEMENT phase
-- **Quest-driven tools**: Replaced starter chest with quest-based tool acquisition
-  - Lumberjack's First Lesson → bronze hatchet + tinderbox
-  - Fresh Catch → small fishing net
-  - Torvin's Tools → bronze pickaxe + hammer
-- **Autonomous banking**: Auto-deposit at 25/28 slots, keep essential tools (axe, pickaxe, tinderbox, net)
-  - New BANK_DEPOSIT_ALL action for bulk banking
-  - Proper bankOpen/bankDeposit/bankDepositAll/bankWithdraw/bankClose packet sequence
-  - Banking actions now await movement completion instead of returning early
-- **Action locks**: Skip LLM during movement, fast-tick mode (2s) for quick follow-up after movement/goal changes
-- **Short-circuit LLM**: Obvious decisions (repeat resource, banking, set goal) bypass LLM for faster response
-- **Resource detection**: Increased approach range from 20m to 40m to match skills validation
-- **Inventory tracking**: Display inventory count with full/nearly-full warnings
-- **Quest priority**: Questing goal has highest priority when agent lacks tools
-- **Banking goal**: Triggers when inventory >= 25/28 slots
-
-### Streaming Infrastructure
-- **GPU rendering**: Xorg headless setup with NVIDIA for hardware-accelerated WebGPU
-  - AllowEmptyInitialConfiguration + UseDisplayDevice=None for headless operation
-  - Xorg config at /etc/X11/xorg-nvidia-headless.conf
-  - xdpyinfo verification before using X server
-- **Xvfb fallback**: Robust fallback to software rendering if Xorg fails
-  - Diagnostic logging for Xorg failures
-  - DUEL_CAPTURE_USE_XVFB dynamically set based on outcome
-- **Vulkan driver management**: Force NVIDIA-only ICD to avoid Mesa conflicts
-  - VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
-  - Prevents libGLX_nvidia.so.0 driver conflicts
-- **Chrome Dev channel**: google-chrome-unstable for WebGPU support
-  - Playwright channel mapping: chrome-dev → google-chrome-unstable
-  - STREAM_CAPTURE_CHANNEL=chrome-dev
-- **Display server**: DISPLAY=:99 (configurable), ecosystem.config.cjs reads from env
-
-### Audio Capture & Streaming
-- **PulseAudio setup**: User-mode PulseAudio with virtual sink
-  - `XDG_RUNTIME_DIR=/tmp/pulse-runtime` for socket location
-  - `chrome_audio` sink for browser audio output
-  - `default.pa` config with `module-null-sink`
-  - Fallback if initial start fails
-  - Root user added to `pulse-access` group
-  - `/run/pulse` created with 777 permissions for FFmpeg access
-  - `PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native` exported
-  - `pactl` check before using PulseAudio (graceful fallback to silent audio)
-- **Audio capture**: FFmpeg captures from `chrome_audio.monitor`
-  - `thread_queue_size=1024` prevents buffer underruns
-  - `use_wallclock_as_timestamps=1` for real-time timing
-  - `aresample=async=1000:first_pts=0` recovers from audio drift (22ms threshold)
-  - `STREAM_AUDIO_ENABLED=true` to enable audio capture
-  - `PULSE_AUDIO_DEVICE=chrome_audio.monitor` for device selection
-- **Improved buffering**: Changed from 'zerolatency' to 'film' tune
-  - Allows B-frames for better compression
-  - Better lookahead for smoother bitrate
-  - Set `STREAM_LOW_LATENCY=true` to restore old behavior
-- **Buffer sizing**: Increased from 2x to 4x bitrate (18000k bufsize)
-  - Reduces buffering during network hiccups
-  - More headroom for bitrate spikes
-- **Input buffering**: `thread_queue_size` for frame queueing, `genpts+discardcorrupt` for stream recovery
-- **FLV flags**: `flvflags=no_duration_filesize` prevents FLV header issues
-- **Audio stability**: Removed `-shortest` flag that caused audio dropouts during video buffering
-
-### RTMP Streaming
-- **Multi-platform**: Twitch, Kick, X (YouTube explicitly disabled)
-  - YOUTUBE_STREAM_KEY="" prevents stale keys
-  - Kick URL: rtmps://fa723fc1b171.global-contribute.live-video.net/app
-  - X URL: rtmp://sg.pscp.tv:80/x
-- **Stream key management**: Explicit unset/re-export prevents stale environment values
-  - Unset before re-sourcing .env
-  - Masked logging for security
-  - Passed through GitHub secrets → SSH → .env file
-- **Canonical platform**: STREAMING_CANONICAL_PLATFORM=twitch (was youtube)
-- **Public delay**: STREAMING_PUBLIC_DELAY_MS=0 for live betting (was 12-15s)
-
-### Deployment Automation
-- **Cloudflare Pages workflow**: Automated client deployment on push to main
-  - Triggers on changes to packages/client/** or packages/shared/**
-  - Uses wrangler pages deploy instead of GitHub integration
-  - Includes proper build steps for shared package first
-  - Multi-line commit message handling
-- **Vast.ai maintenance mode**: Graceful deployment with pause/resume
-  - Enter maintenance mode before deployment (300s timeout)
-  - Wait for pending markets to resolve
-  - Health check after deployment (120s, 30 retries)
-  - Exit maintenance mode after successful deployment
-  - Manual trigger via workflow_dispatch
-- **DATABASE_URL persistence**: Survives git reset operations
-  - Secrets written to /tmp/hyperscape-secrets.env before git reset
-  - Copied to packages/server/.env after git reset
-  - Fallback recreation from environment variables
-- **Database warmup**: 3 retry attempts after schema push
-  - Prevents cold start failures
-  - Uses pg Pool with max: 5 connections
-  - 3s delay between retries
-- **Bun installation**: Automated check and install
-  - Installs unzip dependency first (required for bun)
-  - Checks for /root/.bun/bin/bun before installing
-  - Adds to PATH for subsequent commands
-- **First-time setup**: Auto-clone repo if /root/hyperscape doesn't exist
-- **Solana keypair**: Automated setup from SOLANA_DEPLOYER_PRIVATE_KEY
-  - Writes to ~/.config/solana/id.json via scripts/decode-key.ts
-  - Used by keeper bot and Anchor tools
-- **Secrets injection**: pm2 kill instead of pm2 delete
-  - Ensures daemon picks up new environment variables on restart
-  - Prevents stale env var caching
-- **Diagnostics**: Comprehensive streaming diagnostics after deployment
-  - FFmpeg process check
-  - RTMP status file check
-  - PulseAudio sink verification
-  - PM2 logs filtered for streaming keywords
-  - 30s wait for streaming initialization
-
-### Security Enhancements
-- **JWT_SECRET enforcement**: Now required in production/staging (throws error if not set)
-  - Generate with: `openssl rand -base64 32`
-  - Prevents session hijacking in production
-- **ARENA_EXTERNAL_BET_WRITE_KEY**: Added to secrets for external betting integration
-- **Solana keypair management**: Setup from env var, removed hardcoded secrets
-  - deployer-keypair.json added to .gitignore
-  - SOLANA_DEPLOYER_PRIVATE_KEY passed through GitHub secrets
-- **Stream key security**: Masked logging, explicit unset of stale values
-  - Keys logged as ***configured*** instead of plaintext
-  - Prevents accidental exposure in logs
-- **ADMIN_CODE**: Required for production admin endpoints
-
-### Client & Build Fixes
-- **CSRF cross-origin handling**: Skip validation for known clients (already protected by Origin + JWT)
-  - Apex domain support for Cloudflare Pages → Railway
-- **R2 CORS automation**: Workflow step configures CORS for asset loading
-  - configure-r2-cors.sh script for manual configuration
-  - Allows assets.hyperscape.club to serve to all known domains
-- **Vite polyfills fix**: Aliases resolve vite-plugin-node-polyfills/shims/* to dist files
-  - Fixes "Failed to resolve module specifier" error in production
-  - Disabled protocolImports to avoid unresolved imports
-- **CSP updates**: Allow Google Fonts and data: URLs
-  - fonts.googleapis.com for style-src
-  - fonts.gstatic.com for font-src
-  - data: URLs for WASM loading
-- **Multi-line commit messages**: Pages deploy workflow handles multi-line commit messages
-
-### Rendering Pipeline
-- **WebGPU enforcement**: WebGL fallback removed (all shaders use TSL)
-  - DUEL_FORCE_WEBGL_FALLBACK removed
-  - STREAM_CAPTURE_DISABLE_WEBGPU=false (re-enabled)
-- **Memory leak fixes**: AbortController for proper event listener cleanup
-
-### Solana Markets
-- **WSOL default**: Markets use native token (WSOL) instead of custom GOLD
-  - MARKET_MINT env var replaces GOLD_MINT
-  - Defaults to WSOL on each chain
-- **Perps oracle disabled**: Default off (program not deployed on devnet)
-  - ENABLE_PERPS_ORACLE env var to re-enable when ready
-- **MARKET_MINT variable**: Replaced GOLD_MINT for flexibility
-
-### Code Quality
-- **Type safety**: Reduced explicit `any` types from 142 to ~46
-- **Dead code removal**: 3098 lines removed (PacketHandlers.ts never imported)
-- **Circular dependency**: shared ↔ procgen (TODO: extract to @hyperscape/types)
-- **WebSocket type fixes**: Use ws library types for Fastify websocket connections
-
 ## Additional Resources
 
-### Core Documentation
 - [README.md](README.md) - Full project documentation
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
-
-### Deployment Guides
-- [docs/cloudflare-pages-deployment.md](docs/cloudflare-pages-deployment.md) - Cloudflare Pages automated deployment
-- [docs/vast-deployment-improvements.md](docs/vast-deployment-improvements.md) - Vast.ai GPU streaming improvements
-- [docs/railway-dev-prod.md](docs/railway-dev-prod.md) - Railway deployment (dev/prod)
-
-### Streaming Documentation
-- [docs/streaming-improvements-feb-2026.md](docs/streaming-improvements-feb-2026.md) - RTMP streaming improvements
-- [docs/streaming-audio-capture.md](docs/streaming-audio-capture.md) - PulseAudio audio capture setup
-
-### AI Agent Documentation
-- [docs/agent-stability-improvements.md](docs/agent-stability-improvements.md) - Model agent stability fixes
-- [packages/plugin-hyperscape/README.md](packages/plugin-hyperscape/README.md) - ElizaOS plugin guide
-
-### Blockchain Documentation
-- [docs/solana-market-wsol-migration.md](docs/solana-market-wsol-migration.md) - WSOL market token migration
-
-### Technical References
-- [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser/GPU requirements
