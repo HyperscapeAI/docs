@@ -364,6 +364,10 @@ if (resConfig?.resourceType === "fishing_spot" || resConfig?.harvestSkill === "f
 
 The graphics system uses Three.js with WebGPU for high-performance rendering:
 
+<Warning>
+**WebGPU Required**: All rendering uses TSL (Three Shading Language) which only works with WebGPU. There is no WebGL fallback. Requires Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+). Check compatibility at [webgpureport.org](https://webgpureport.org).
+</Warning>
+
 ```typescript
 // systems/client/ClientGraphics.ts
 export class ClientGraphics extends SystemBase {
@@ -371,6 +375,11 @@ export class ClientGraphics extends SystemBase {
   private postProcessing: PostProcessingComposer;
   
   async init() {
+    // WebGPU is required - no fallback
+    if (!navigator.gpu) {
+      throw new Error('WebGPU not supported. Please use Chrome 113+, Edge 113+, or Safari 18+');
+    }
+    
     this.renderer = await createRenderer({
       powerPreference: "high-performance",
       antialias: true,
@@ -382,7 +391,7 @@ export class ClientGraphics extends SystemBase {
       shadowMapSize: 2048,
     });
     
-    // Post-processing (TSL-based)
+    // Post-processing (TSL-based, WebGPU only)
     this.postProcessing = createPostProcessing(this.renderer, {
       bloom: true,
       toneMapping: true,
