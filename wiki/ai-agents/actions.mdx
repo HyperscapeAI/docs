@@ -227,7 +227,7 @@ export const fleeAction: Action = {
 
 ## Skill Actions
 
-### `chopTree`
+### `chopTree` <Badge text="Updated" variant="info" />
 
 Chop a tree for logs. Automatically walks to tree if within 40m approach range.
 
@@ -244,7 +244,9 @@ export const chopTreeAction: Action = {
 
 **Requirements**: Hatchet in inventory, Woodcutting level.
 
-**Approach Range**: 40m (increased from 20m in commit 593cd56b to fix "no trees nearby" errors)
+**Approach Range**: 40m (increased from 20m in commit 593cd56b to fix "choppableTrees=0" errors despite visible trees)
+
+**How to Get Hatchet**: Accept quest `lumberjacks_first_lesson` from Forester Wilma (grants Bronze Hatchet + Tinderbox immediately)
 
 ---
 
@@ -264,11 +266,13 @@ export const mineRockAction: Action = {
 
 **Requirements**: Pickaxe in inventory, Mining level.
 
-**Approach Range**: 40m (increased from 20m in commit 593cd56b)
+**Approach Range**: 40m (increased from 20m in commit 593cd56b to match skills validation)
+
+**How to Get Pickaxe**: Accept quest `torvins_tools` from Torvin (grants Bronze Pickaxe + Hammer immediately)
 
 ---
 
-### `catchFish`
+### `catchFish` <Badge text="Updated" variant="info" />
 
 Catch fish at a fishing spot. Automatically walks to spot if within 40m approach range.
 
@@ -285,6 +289,8 @@ export const catchFishAction: Action = {
 **Requirements**: Fishing net or rod in inventory, Fishing level.
 
 **Approach Range**: 40m (increased from 20m in commit 593cd56b)
+
+**How to Get Fishing Net**: Accept quest `fresh_catch` from Fisherman Pete (grants Small Fishing Net immediately)
 
 ---
 
