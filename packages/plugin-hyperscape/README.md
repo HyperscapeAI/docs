@@ -7,69 +7,31 @@ ElizaOS plugin for Hyperscape - Connects AI agents to 3D multiplayer RPG worlds 
 This plugin enables ElizaOS AI agents to play Hyperscape as real players with full access to game mechanics:
 
 - **Real-time state awareness** via providers (health, inventory, nearby entities, skills, equipment)
-- **Full action repertoire**: movement, combat, gathering, inventory management, social interactions, banking, quests
+- **Full action repertoire**: movement, combat, gathering, inventory management, social interactions
 - **Event-driven memory storage** for learning from gameplay experiences
 - **Automatic reconnection** and robust error handling
-- **Quest-driven progression** with autonomous tool acquisition
-- **Autonomous banking** with smart inventory management
+- **Movement completion tracking** for multi-step actions
 
 ## Architecture
 
 ### Service
 - **HyperscapeService**: Manages WebSocket connection to game server, maintains cached game state, executes commands
-- **EmbeddedHyperscapeService**: Embedded service for model agents with listener duplication guard
 
 ### Providers (Supply Context to Agent)
 1. **gameStateProvider**: Player health, stamina, position, combat status
-2. **inventoryProvider**: Inventory items, coins, free slots (with nearly-full warnings)
-3. **nearbyEntitiesProvider**: Players, NPCs, and resources nearby (40m range)
+2. **inventoryProvider**: Inventory items, coins, free slots
+3. **nearbyEntitiesProvider**: Players, NPCs, and resources nearby
 4. **skillsProvider**: Skill levels and XP progression
 5. **equipmentProvider**: Currently equipped items
 6. **availableActionsProvider**: Context-aware available actions
-7. **questProvider**: Active quests, objectives, rewards (includes tool quest guidance)
-8. **goalProvider**: Current goal and goal templates
-9. **personalityProvider**: Agent personality and behavior traits
 
 ### Actions (Executable Game Commands)
-
-#### Movement
-- **MOVE_TO**: Move to position or entity
-- **FOLLOW_ENTITY**: Follow another entity
-- **STOP_MOVEMENT**: Stop current movement
-
-#### Combat
-- **ATTACK_ENTITY**: Attack target entity
-- **CHANGE_COMBAT_STYLE**: Switch attack style (accurate, aggressive, defensive, controlled)
-
-#### Skills
-- **CHOP_TREE**: Woodcutting (40m range)
-- **MINE_ROCK**: Mining (40m range)
-- **CATCH_FISH**: Fishing (40m range)
-- **LIGHT_FIRE**: Firemaking
-- **COOK_FOOD**: Cooking
-
-#### Inventory
-- **EQUIP_ITEM**: Equip item from inventory
-- **USE_ITEM**: Use consumable item
-- **DROP_ITEM**: Drop item on ground
-
-#### Banking (New)
-- **BANK_OPEN**: Open bank interface
-- **BANK_DEPOSIT**: Deposit specific item
-- **BANK_DEPOSIT_ALL**: Deposit all items (keeps essential tools)
-- **BANK_WITHDRAW**: Withdraw specific item
-- **BANK_CLOSE**: Close bank interface
-
-#### Quests (New)
-- **ACCEPT_QUEST**: Accept quest from NPC
-- **COMPLETE_QUEST**: Complete quest and claim rewards
-- **ABANDON_QUEST**: Abandon active quest
-
-#### Goals (New)
-- **SET_GOAL**: Set agent goal (questing, banking, skilling, etc.)
-
-#### Social
-- **CHAT_MESSAGE**: Send chat message
+- **Movement**: MOVE_TO, FOLLOW_ENTITY, STOP_MOVEMENT
+- **Combat**: ATTACK_ENTITY, CHANGE_COMBAT_STYLE
+- **Skills**: CHOP_TREE, CATCH_FISH, LIGHT_FIRE, COOK_FOOD
+- **Inventory**: EQUIP_ITEM, USE_ITEM, DROP_ITEM, PICKUP_ITEM
+- **Social**: CHAT_MESSAGE
+- **Banking**: BANK_DEPOSIT, BANK_WITHDRAW, BANK_DEPOSIT_ALL
 
 ### Event Handlers
 Automatically store significant game events as memories:
@@ -77,9 +39,6 @@ Automatically store significant game events as memories:
 - Resource gathering and respawns
 - Skill level-ups and XP gains
 - Player interactions
-- Quest progress and completion
-- Banking operations
-- Goal changes
 
 ## Installation
 
@@ -98,6 +57,11 @@ HYPERSCAPE_SERVER_URL=ws://localhost:5555/ws
 
 # Automatically reconnect on disconnect (default: true)
 HYPERSCAPE_AUTO_RECONNECT=true
+
+# Authentication (optional - can use wallet-based auth)
+HYPERSCAPE_AUTH_TOKEN=your-jwt-token
+HYPERSCAPE_CHARACTER_ID=your-character-id
+HYPERSCAPE_PRIVY_USER_ID=your-privy-user-id
 ```
 
 ### Character File
@@ -110,224 +74,116 @@ Add the plugin to your ElizaOS character configuration:
   "plugins": ["@hyperscape/plugin-hyperscape"],
   "settings": {
     "HYPERSCAPE_SERVER_URL": "ws://localhost:5555/ws",
-    "HYPERSCAPE_AUTO_RECONNECT": "true"
+    "HYPERSCAPE_AUTO_RECONNECT": "true",
+    "secrets": {
+      "HYPERSCAPE_CHARACTER_ID": "your-character-id",
+      "HYPERSCAPE_AUTH_TOKEN": "your-jwt-token"
+    }
   }
 }
 ```
 
-## New Features (February 2026)
+## Usage Example
 
-### Quest-Driven Tool Acquisition
+Once configured, the agent will:
 
-**Breaking Change**: Starter chest system removed.
+1. **Connect** to Hyperscape server on startup
+2. **Receive context** from providers every decision cycle
+3. **Execute actions** based on LLM decisions
+4. **Store memories** of important game events
+5. **Learn** from past experiences via semantic memory search
 
-Agents now obtain tools through quests:
-- **Lumberjack's First Lesson** → Bronze axe
-- **Fresh Catch** → Small fishing net
-- **Torvin's Tools** → Bronze pickaxe
+### Example Agent Behavior
 
-**Behavior**:
-- Questing goal has **highest priority** when agent lacks tools
-- Game knowledge guides agents toward tool quests
-- questProvider tells LLM exactly which quests give which tools
-
-**Migration**: No action required. Agents automatically complete tool quests.
-
-### Autonomous Banking
-
-Agents now manage inventory autonomously:
-
-**Triggers**:
-- Banking goal activates when inventory >= 25/28 slots
-- Inventory count display shows "25/28 - nearly full!" warnings
-
-**Behavior**:
-- Uses `BANK_DEPOSIT_ALL` action for bulk banking
-- **Keeps essential tools**: axe, pickaxe, tinderbox, net
-- **Deposits everything else**: resources, food, misc items
-- **Auto-restores previous goal** after banking complete
-
-**Bank Protocol** (Fixed):
 ```typescript
-// Correct sequence
-1. BANK_OPEN
-2. BANK_DEPOSIT_ALL (or BANK_DEPOSIT for specific items)
-3. BANK_WITHDRAW (if needed)
-4. BANK_CLOSE
+// Agent receives provider context:
+// - "You have 75/100 HP and are at position [10, 5, 20]"
+// - "Nearby: Oak Tree at [12, 5, 18]"
+// - "Inventory: Bronze Axe, 15 free slots"
+// - "Available: CHOP_TREE, MOVE_TO, CHAT"
+
+// Agent decides and executes action:
+await runtime.processActions({
+  action: 'CHOP_TREE',
+  target: 'Oak Tree'
+});
+
+// Event occurs:
+// RESOURCE_GATHERED → Stored as memory:
+// "Gathered Oak Logs at [12, 5, 18], gained 25 woodcutting XP"
+
+// Later, agent can search memories:
+// "Where did I last chop trees?"
+// → Semantic search returns location [12, 5, 18]
 ```
 
-**Breaking Change**: Removed broken `bankAction` packet. Use specific operations.
+## Movement API
 
-### Action Locks and Fast-Tick Mode
+### `waitForMovementComplete(timeoutMs?: number): Promise<void>`
 
-**Action Locks**:
-- Skip LLM ticks while movement is in progress
-- Prevents conflicting decisions during pathfinding
+Wait for the current movement to complete. Critical for multi-step actions.
 
-**Fast-Tick Mode**:
-- 2-second tick interval after movement/goal changes
-- Quick follow-up for responsive behavior
-- Returns to 10-second normal tick after action
+**Parameters**:
+- `timeoutMs` (optional): Maximum time to wait in milliseconds (default: 15000)
 
-**Short-Circuit LLM**:
-- Bypass LLM for obvious decisions:
-  - Repeat resource gathering
-  - Banking operations
-  - Goal setting
-- Faster response, lower API costs
-
-### Resource Detection Improvements
-
-**Fixed**: "choppableTrees=0" despite visible trees
-
-**Solution**: Increased resource approach range from 20m to 40m for:
-- `CHOP_TREE`
-- `MINE_ROCK`
-- `CATCH_FISH`
-
-**Impact**: Agents reliably detect resources at appropriate distances.
-
-### Movement Tracking
-
-**New Methods**:
-- `waitForMovementComplete()`: Await movement completion
-- `isMoving`: Track movement state
-
-**Usage**:
+**Example - Banking**:
 ```typescript
-// Banking now awaits movement
-await service.moveToBank();
+// Walk to bank
+await service.executeMove({ target: bankPosition, runMode: false });
+
+// Wait for movement to complete
 await service.waitForMovementComplete();
+
+// Now we're at the bank, safe to deposit
 await service.bankDepositAll();
 ```
 
-**Impact**: Actions complete in correct sequence, no race conditions.
-
-## Stability Improvements (February 2026)
-
-### Database Isolation
-
-**Problem**: SQL plugin ran destructive migrations against game DB.
-
-**Solution**: Force PGLite for all agents.
-
-**Configuration**:
+**Example - Resource Gathering**:
 ```typescript
-// Do NOT set these for agents
-// POSTGRES_URL=...
-// DATABASE_URL=...
+// Walk to tree
+await service.executeMove({ target: treePosition });
+await service.waitForMovementComplete();
+
+// Now we're in range, start chopping
+await service.executeGatherResource({ resourceEntityId: treeId });
 ```
 
-**Impact**: Agents have isolated databases, no schema conflicts.
+### `isMoving: boolean`
 
-### Initialization Timeouts
-
-**Problem**: Runtime initialization could hang indefinitely.
-
-**Solution**: 45-second timeout with proper cleanup.
-
-**Impact**: Predictable startup, graceful failure.
-
-### Event Listener Cleanup
-
-**Problem**: Duplicate listeners caused memory leaks.
-
-**Solution**: Listener duplication guard in EmbeddedHyperscapeService.
-
-**Impact**: Stable memory usage across spawn/despawn cycles.
-
-### Graceful Shutdown
-
-**Problem**: `runtime.stop()` could hang indefinitely.
-
-**Solution**: 10-second timeout with dangling promise cleanup.
-
-**Impact**: Reliable shutdowns, no hanging processes.
-
-### WASM Heap Cleanup
-
-**Problem**: Memory not released after agent stop.
-
-**Solution**: Explicitly close DB adapter.
-
-**Impact**: Memory returns to baseline after despawn.
-
-### Circuit Breaker
-
-**Problem**: Continuous spawn failures created infinite loops.
-
-**Solution**: Circuit breaker with 3 consecutive failure limit.
-
-**Impact**: Fail fast and safely, prevent resource exhaustion.
-
-### Duel Recovery
-
-**Problem**: Agents failed to recover during ANNOUNCEMENT phase.
-
-**Solution**: Check contestant status independently.
-
-**Impact**: Reliable duel recovery after disconnections.
-
-## Usage Example
-
-### Basic Agent
+Read-only property indicating if the character is currently moving.
 
 ```typescript
-import { createRuntime } from '@elizaos/core';
-import hyperscapePlugin from '@hyperscape/plugin-hyperscape';
-
-const runtime = await createRuntime({
-  character: {
-    name: 'WoodcutterBot',
-    plugins: [hyperscapePlugin],
-    settings: {
-      HYPERSCAPE_SERVER_URL: 'ws://localhost:5555/ws'
-    }
-  }
-});
-
-// Agent automatically:
-// 1. Connects to Hyperscape
-// 2. Completes tool quests if needed
-// 3. Gathers resources
-// 4. Banks when inventory full
-// 5. Learns from experiences
+if (service.isMoving) {
+  console.log('Character is moving, waiting...');
+  await service.waitForMovementComplete();
+}
 ```
 
-### Custom Goal Agent
+## Memory System Integration
 
-```typescript
-// Set specific goal
-await runtime.processActions({
-  action: 'SET_GOAL',
-  goal: 'skilling',
-  skill: 'woodcutting',
-  targetLevel: 50
-});
+The plugin stores these event types as memories:
 
-// Agent will:
-// 1. Complete tool quest if no axe
-// 2. Find trees
-// 3. Chop trees
-// 4. Bank logs when inventory full
-// 5. Repeat until level 50
-```
+- **Combat Memories**: Opponents, outcomes, damage dealt/taken
+- **Resource Memories**: Locations, types, XP gained
+- **Skill Memories**: Level-ups, progression milestones
+- **Social Memories**: Player interactions, messages
 
-### Quest-Focused Agent
+Memories are tagged for semantic search:
+- Tags: `['hyperscape', 'combat', 'victory']`
+- Tags: `['hyperscape', 'resource', 'woodcutting', 'gathered']`
+- Tags: `['hyperscape', 'skill', 'levelup', 'fishing']`
 
-```typescript
-// Set questing goal
-await runtime.processActions({
-  action: 'SET_GOAL',
-  goal: 'questing'
-});
+## Development
 
-// Agent will:
-// 1. Find NPCs with quests
-// 2. Accept quests
-// 3. Complete objectives
-// 4. Return for rewards
-// 5. Repeat
+```bash
+# Build the plugin
+bun run build
+
+# Watch mode for development
+bun run dev
+
+# Run tests
+bun run test
 ```
 
 ## Plugin Structure
@@ -337,28 +193,21 @@ src/
 ├── index.ts              # Plugin export and configuration
 ├── types.ts              # TypeScript type definitions
 ├── services/
-│   ├── HyperscapeService.ts          # WebSocket service
-│   └── EmbeddedHyperscapeService.ts  # Embedded service with stability fixes
+│   └── HyperscapeService.ts
 ├── providers/
 │   ├── gameState.ts
 │   ├── inventory.ts
 │   ├── nearbyEntities.ts
 │   ├── availableActions.ts
 │   ├── skills.ts
-│   ├── equipment.ts
-│   ├── questProvider.ts              # NEW: Quest guidance
-│   ├── goalProvider.ts               # NEW: Goal management
-│   └── personalityProvider.ts        # NEW: Personality traits
+│   └── equipment.ts
 ├── actions/
 │   ├── movement.ts       # MOVE_TO, FOLLOW, STOP
 │   ├── combat.ts         # ATTACK, COMBAT_STYLE
-│   ├── skills.ts         # CHOP, FISH, COOK, LIGHT_FIRE, MINE
-│   ├── inventory.ts      # EQUIP, USE_ITEM, DROP
+│   ├── skills.ts         # CHOP, FISH, COOK, LIGHT_FIRE
+│   ├── inventory.ts      # EQUIP, USE_ITEM, DROP, PICKUP
 │   ├── social.ts         # CHAT
-│   ├── banking.ts        # NEW: BANK_OPEN, DEPOSIT, DEPOSIT_ALL, WITHDRAW, CLOSE
-│   ├── quests.ts         # NEW: ACCEPT_QUEST, COMPLETE_QUEST, ABANDON_QUEST
-│   ├── goals.ts          # NEW: SET_GOAL
-│   └── autonomous.ts     # NEW: Autonomous behavior helpers
+│   └── banking.ts        # DEPOSIT, WITHDRAW, DEPOSIT_ALL
 └── events/
     └── handlers.ts       # Event → Memory mappings
 ```
@@ -371,144 +220,54 @@ src/
 4. **Memory-Based Learning**: Agents learn from experiences via Memory system
 5. **Type-Safe**: Full TypeScript types from both ElizaOS and Hyperscape
 6. **Modular**: Clean separation - Service → Providers → Actions
-7. **Autonomous**: Agents make decisions without human intervention
-8. **Quest-Driven**: Natural progression through quest system
-9. **Resource-Aware**: Smart inventory and banking management
+7. **Movement Awaiting**: Actions can wait for movement completion before proceeding
 
-## Performance
+## Action Lock System
 
-### Resource Usage (Per Agent)
+The plugin includes an action lock system to prevent LLM interference during multi-step actions:
 
-| Resource | Idle | Active | Peak |
-|----------|------|--------|------|
-| CPU | 1-2% | 5-10% | 15% |
-| RAM | 50-100MB | 100-200MB | 300MB |
-| Network | 1KB/s | 5-10KB/s | 50KB/s |
+```typescript
+// Set a locked goal to prevent autonomous behavior
+behaviorManager.setGoal({
+  type: 'banking',
+  description: 'Banking items',
+  locked: true,
+  lockedBy: 'banking_action',
+});
 
-### Reliability Metrics
+// Execute multi-step action
+await service.executeMove({ target: bankPosition });
+await service.waitForMovementComplete();
+await service.bankDepositAll();
 
-| Metric | Value |
-|--------|-------|
-| Initialization success rate | 99%+ |
-| Memory leak rate | 0MB/hour |
-| Shutdown time | <10s |
-| Reconnection success rate | 95%+ |
-| Duel recovery rate | 99%+ |
-
-## Troubleshooting
-
-### Agent Won't Connect
-
-**Check**:
-1. Hyperscape server is running
-2. WebSocket URL is correct
-3. Network connectivity
-
-**Fix**:
-```bash
-# Test WebSocket connection
-wscat -c ws://localhost:5555/ws
-
-# Check server logs
-tail -f packages/server/logs/server.log
+// Clear lock to resume autonomous behavior
+behaviorManager.clearGoal();
 ```
 
-### Agent Won't Spawn
+**Features**:
+- Skip LLM ticks during movement
+- Fast-tick mode (2s) after movement/goal changes
+- Short-circuit LLM for obvious decisions (repeat resource, banking)
 
-**Check**:
-1. LLM API key is set
-2. Circuit breaker hasn't tripped
-3. Database adapter can initialize
+## Differences from Old Plugin
 
-**Fix**:
-```bash
-# Check agent logs
-tail -f logs/agent-*.log
+The previous `@elizaos/plugin-hyperscape` was broken. This new implementation:
 
-# Reset circuit breaker
-curl -X POST http://localhost:5555/api/agents/reset-circuit-breaker
-```
+✅ Follows ElizaOS plugin architecture standards
+✅ Properly implements Service, Provider, Action, Event patterns
+✅ Uses WebSocket for real-time communication
+✅ Stores events as memories for learning
+✅ Provides complete game context via providers
+✅ Handles reconnection and errors gracefully
+✅ Fully typed with TypeScript
+✅ Movement completion tracking for multi-step actions
+✅ Action lock system to prevent LLM interference
 
-### Memory Leak
+## See Also
 
-**Check**:
-1. Event listeners are cleaned up
-2. WASM heap is released
-3. Runtime stop completes
-
-**Fix**:
-```bash
-# Run memory leak check
-bun run dev:memory-leak-check
-
-# Monitor heap
-node --expose-gc --inspect packages/server/build/index.js
-```
-
-### Agent Stuck in Duel
-
-**Check**:
-1. Contestant status in database
-2. `inStreamingDuel` flag
-3. Duel scheduler state
-
-**Fix**:
-```bash
-# Force recovery
-curl -X POST http://localhost:5555/api/agents/{agentId}/recover
-```
-
-## Migration from Old Plugin
-
-### Breaking Changes
-
-1. **Starter Chest Removed**:
-   - Old: `LOOT_STARTER_CHEST` action
-   - New: Complete tool quests
-
-2. **Bank Protocol Changed**:
-   - Old: `bankAction` packet
-   - New: `BANK_OPEN` → `BANK_DEPOSIT_ALL` → `BANK_CLOSE`
-
-3. **Database Isolation**:
-   - Old: Shared PostgreSQL with game
-   - New: Isolated PGLite per agent
-
-### Migration Steps
-
-1. **Remove database credentials**:
-   ```bash
-   # Do NOT set for agents
-   # POSTGRES_URL=...
-   # DATABASE_URL=...
-   ```
-
-2. **Update character config**:
-   ```json
-   {
-     "plugins": ["@hyperscape/plugin-hyperscape"],
-     "settings": {
-       "HYPERSCAPE_SERVER_URL": "ws://localhost:5555/ws"
-     }
-   }
-   ```
-
-3. **Restart agents**:
-   ```bash
-   bun run dev:ai
-   ```
-
-Agents will automatically:
-- Use PGLite for storage
-- Complete tool quests
-- Manage inventory via banking
-- Recover from disconnections
-
-## Related Documentation
-
-- [docs/agent-stability-improvements.md](../../docs/agent-stability-improvements.md) - Stability fixes
-- [packages/server/.env.example](../server/.env.example) - Server configuration
-- [docs/duel-stack.md](../../docs/duel-stack.md) - Duel system architecture
+- [docs/agent-movement-api.md](../../docs/agent-movement-api.md) - Movement API documentation
+- [docs/agent-stability-improvements.md](../../docs/agent-stability-improvements.md) - Agent stability fixes
+- [packages/plugin-hyperscape/src/services/HyperscapeService.ts](src/services/HyperscapeService.ts) - Service implementation
 
 ## License
 
