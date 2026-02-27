@@ -410,7 +410,7 @@ export const chatMessageAction: Action = {
 
 ---
 
-## Banking Actions
+## Banking Actions <Badge text="Updated" variant="info" />
 
 ### `bankDeposit`
 
@@ -430,10 +430,10 @@ export const bankDepositAction: Action = {
 
 **Behavior**:
 1. Finds nearest bank entity or station
-2. Walks to bank if distance > 5 units
-3. Opens bank session
-4. Deposits specified item
-5. Closes bank session
+2. Walks to bank if distance > 5 units (awaits movement completion)
+3. Opens bank session (`bankOpen` packet)
+4. Deposits specified item (`bankDeposit` packet)
+5. Closes bank session (`bankClose` packet)
 
 ---
 
@@ -454,10 +454,10 @@ export const bankWithdrawAction: Action = {
 
 **Behavior**:
 1. Finds nearest bank entity or station
-2. Walks to bank if distance > 5 units
-3. Opens bank session
-4. Withdraws specified item
-5. Closes bank session
+2. Walks to bank if distance > 5 units (awaits movement completion)
+3. Opens bank session (`bankOpen` packet)
+4. Withdraws specified item (`bankWithdraw` packet)
+5. Closes bank session (`bankClose` packet)
 
 ---
 
@@ -473,7 +473,7 @@ export const bankDepositAllAction: Action = {
 };
 ```
 
-**Behavior** (commit 60a03f49):
+**Behavior** (commit 60a03f49, Feb 26 2026):
 1. Finds nearest bank entity or station from nearby entities or world map
 2. **Walks to bank if distance > 5 units** (awaits movement completion)
 3. Opens bank session (`bankOpen` packet)
@@ -515,10 +515,11 @@ socket.send({ type: 'bankClose' });
 </Info>
 
 **Related Changes**:
-- **Action locks** prevent LLM ticks while movement is in progress
+- **Action locks** prevent LLM ticks while movement is in progress (commit 60a03f49)
 - **Fast-tick mode** (2s) for quick follow-up after movement/goal changes
 - **Short-circuit LLM** for obvious decisions (repeat resource, banking, set goal)
 - **Banking goal type** with auto-restore of previous goal after deposit
+- **Await movement completion** instead of returning early (ensures agent reaches bank)
 
 ---
 
