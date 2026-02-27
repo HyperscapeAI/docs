@@ -470,15 +470,24 @@ Increased resource approach range from 20m to 40m:
 - Matches server-side skills validation range
 - Applied to CHOP_TREE, MINE_ROCK, and CATCH_FISH actions
 
+### Inventory Display (Commit 60a03f49)
+
+Added inventory count display with warnings:
+- Shows current inventory count (e.g., "24/28 slots")
+- Warns when nearly full (>= 25 slots)
+- Warns when completely full (28 slots)
+- Helps LLM decide when to bank
+
 ### Stability Improvements
 
-Model agent stability fixes:
-- Database isolation (force PGLite, prevent schema conflicts)
-- 45s initialization timeout prevents indefinite hangs
-- Event listener duplication guard prevents memory leaks
-- 10s timeout on runtime.stop() with dangling promise cleanup
-- Circuit breaker (3 consecutive failures, 8 max reconnect retries)
-- Explicit DB adapter close for WASM heap cleanup
+Model agent stability fixes (PR #945):
+- **Database Isolation**: Force PGLite for agents, prevent destructive migrations on game DB
+- **Initialization Timeout**: 45s timeout on runtime init prevents indefinite hangs
+- **Event Listener Cleanup**: Duplication guard prevents memory leaks
+- **Graceful Shutdown**: 10s timeout on runtime.stop() with dangling promise cleanup
+- **Circuit Breaker**: 3 consecutive failure limit, 8 max reconnect retries
+- **WASM Heap Cleanup**: Explicit DB adapter close releases memory
+- **Duel Recovery**: Check contestant status independently during ANNOUNCEMENT phase
 
 ---
 
