@@ -1,367 +1,476 @@
 # Environment Variables Reference
 
-Complete reference for all environment variables used in Hyperscape.
+Comprehensive reference for all environment variables used across Hyperscape packages.
 
-## Server Variables
+## Server (`packages/server/.env`)
 
-Location: `packages/server/.env`
+### Required (Production)
 
-### Core Configuration
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host:5432/hyperscape` |
+| `JWT_SECRET` | JWT signing secret (required in prod/staging) | `openssl rand -base64 32` |
+| `PRIVY_APP_ID` | Privy authentication app ID | `clabcd1234...` |
+| `PRIVY_APP_SECRET` | Privy authentication secret | `abc123...` |
+| `ADMIN_CODE` | Admin API access code | Random secure string |
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `NODE_ENV` | string | `development` | Environment: `development`, `production`, `staging`, `test` |
-| `PORT` | number | `5555` | HTTP server port |
-| `WORLD` | string | `world` | World folder to load (relative to server root) |
+### Database
 
-### Security & Authentication
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `USE_LOCAL_POSTGRES` | `true` | Use local Docker PostgreSQL |
+| `POSTGRES_URL` | - | Alternative to DATABASE_URL |
+| `DATABASE_POOL_MAX` | `10` | Max database connections |
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `JWT_SECRET` | string | *(required in prod)* | JWT signing secret (generate with `openssl rand -base64 32`) |
-| `ADMIN_CODE` | string | *(required in prod)* | Admin access code for `/admin` endpoints |
-| `GRANT_DEV_ADMIN` | boolean | `false` | Grant admin to all users in development (only if `ADMIN_CODE` not set) |
-| `PUBLIC_PRIVY_APP_ID` | string | - | Privy application ID (public, exposed to clients) |
-| `PRIVY_APP_SECRET` | string | - | Privy application secret (private, server-only) |
+### Server Configuration
 
-**Security notes:**
-- `JWT_SECRET` is **required** in production/staging (throws error if not set)
-- `ADMIN_CODE` should always be set in production
-- Never commit secrets to git
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `5555` | HTTP server port |
+| `NODE_ENV` | `development` | Environment (development/production/staging) |
+| `DISABLE_RATE_LIMIT` | `false` | Disable rate limiting |
+| `ALLOW_DESTRUCTIVE_CHANGES` | `false` | Allow destructive database operations |
 
-### Database Configuration
+### Streaming & GPU Rendering
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `USE_LOCAL_POSTGRES` | boolean | `true` | Use Docker PostgreSQL (true) or external database (false) |
-| `DATABASE_URL` | string | - | PostgreSQL connection string (takes precedence over `USE_LOCAL_POSTGRES`) |
-| `POSTGRES_CONTAINER` | string | `hyperscape-postgres` | Docker container name |
-| `POSTGRES_USER` | string | `hyperscape` | PostgreSQL username |
-| `POSTGRES_PASSWORD` | string | `hyperscape_dev_password` | PostgreSQL password |
-| `POSTGRES_DB` | string | `hyperscape` | PostgreSQL database name |
-| `POSTGRES_PORT` | number | `5488` | PostgreSQL port |
-| `POSTGRES_IMAGE` | string | `postgres:16-alpine` | Docker image |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STREAMING_DUEL_ENABLED` | `false` | Enable duel streaming |
+| `STREAM_CAPTURE_MODE` | `cdp` | Capture mode (cdp/webcodecs) |
+| `STREAM_CAPTURE_WIDTH` | `1280` | Video width |
+| `STREAM_CAPTURE_HEIGHT` | `720` | Video height |
+| `STREAM_FPS` | `30` | Frame rate |
+| `STREAM_VIDEO_BITRATE_KBPS` | `4500` | Video bitrate |
+| `STREAM_AUDIO_BITRATE_KBPS` | `128` | Audio bitrate |
+| `STREAM_LOW_LATENCY` | `false` | Use zerolatency tune (disables B-frames) |
+| `STREAM_CAPTURE_CHANNEL` | `chrome-dev` | Chrome channel (chrome-dev = google-chrome-unstable) |
+| `STREAM_CAPTURE_HEADLESS` | `false` | Run headless (false = use Xvfb/Xorg) |
+| `STREAM_CAPTURE_ANGLE` | `vulkan` | ANGLE backend (vulkan/swiftshader) |
+| `STREAM_CAPTURE_DISABLE_WEBGPU` | `false` | Disable WebGPU rendering |
+| `DUEL_CAPTURE_USE_XVFB` | `true` | Use Xvfb instead of Xorg (set dynamically by deploy-vast.sh) |
+| `DISPLAY` | `:99` | X server display number |
+| `VK_ICD_FILENAMES` | `/usr/share/vulkan/icd.d/nvidia_icd.json` | Force NVIDIA Vulkan ICD |
+| `FFMPEG_PATH` | `/usr/bin/ffmpeg` | FFmpeg binary path |
+| `FFMPEG_HWACCEL` | `auto` | Hardware acceleration (auto/nvidia/mac) |
 
-**Example DATABASE_URL:**
-```bash
-DATABASE_URL=postgresql://user:password@host:5432/database
-```
+### Audio Capture
 
-### Assets & CDN
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `PUBLIC_CDN_URL` | string | `http://localhost:8080` | CDN base URL for game assets |
-| `PUBLIC_WS_URL` | string | `ws://localhost:5555/ws` | WebSocket URL for client connections |
-| `PUBLIC_API_URL` | string | `http://localhost:5555` | API base URL for client HTTP requests |
-
-**Production example:**
-```bash
-PUBLIC_CDN_URL=https://assets.hyperscape.club
-PUBLIC_WS_URL=wss://hyperscape.gg/ws
-PUBLIC_API_URL=https://hyperscape.gg
-```
-
-### Game Configuration
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `SAVE_INTERVAL` | number | `60` | Auto-save interval in seconds (0 to disable) |
-| `PUBLIC_PLAYER_COLLISION` | boolean | `false` | Enable player-to-player collision physics |
-| `PUBLIC_MAX_UPLOAD_SIZE` | number | `12` | Maximum file upload size in megabytes |
-
-### Streaming Configuration
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `STREAMING_CANONICAL_PLATFORM` | string | `youtube` | Canonical platform: `youtube`, `twitch`, or `hls` |
-| `STREAMING_PUBLIC_DELAY_MS` | number | *(auto)* | Public streaming delay (ms). Default: youtube=15000, twitch=12000, hls=4000 |
-| `STREAMING_VIEWER_ACCESS_TOKEN` | string | - | Secret token for trusted live viewers |
-| `STREAMING_DUEL_ENABLED` | boolean | `true` | Enable/disable streaming duel scheduler |
-
-**SSE Configuration:**
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `STREAMING_SSE_REPLAY_BUFFER` | number | `2048` | Replay frame capacity for resume support |
-| `STREAMING_SSE_REPLAY_MAX_BYTES` | number | `33554432` | Total replay payload bytes cap (32MB) |
-| `STREAMING_SSE_PUSH_INTERVAL_MS` | number | `500` | Push cadence for live state fanout |
-| `STREAMING_SSE_HEARTBEAT_MS` | number | `15000` | Keepalive heartbeat cadence |
-| `STREAMING_SSE_MAX_PENDING_BYTES` | number | `1048576` | Per-client pending bytes threshold (1MB) |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STREAM_AUDIO_ENABLED` | `true` | Enable audio capture |
+| `PULSE_AUDIO_DEVICE` | `chrome_audio.monitor` | PulseAudio monitor device |
+| `PULSE_SERVER` | `unix:/tmp/pulse-runtime/pulse/native` | PulseAudio server socket |
+| `XDG_RUNTIME_DIR` | `/tmp/pulse-runtime` | Runtime directory for PulseAudio |
 
 ### RTMP Streaming
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `TWITCH_STREAM_KEY` | string | - | Twitch stream key |
-| `TWITCH_RTMP_URL` | string | `rtmp://live.twitch.tv/app` | Twitch RTMP URL |
-| `X_STREAM_KEY` | string | - | X/Twitter stream key |
-| `X_RTMP_URL` | string | - | X/Twitter RTMP URL |
-| `KICK_STREAM_KEY` | string | - | Kick stream key |
-| `KICK_RTMP_URL` | string | `rtmp://ingest.kick.com/live` | Kick RTMP URL |
-| `YOUTUBE_STREAM_KEY` | string | - | YouTube stream key |
-| `YOUTUBE_RTMP_URL` | string | `rtmp://a.rtmp.youtube.com/live2` | YouTube RTMP URL |
-| `CUSTOM_RTMP_NAME` | string | - | Custom RTMP destination name |
-| `CUSTOM_RTMP_URL` | string | - | Custom RTMP URL |
-| `CUSTOM_STREAM_KEY` | string | - | Custom stream key |
-| `RTMP_DESTINATIONS_JSON` | string | - | JSON array of additional destinations |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TWITCH_STREAM_KEY` | - | Twitch stream key |
+| `TWITCH_RTMP_URL` | `rtmp://live.twitch.tv/app` | Twitch RTMP server |
+| `KICK_STREAM_KEY` | - | Kick stream key |
+| `KICK_RTMP_URL` | `rtmps://fa723fc1b171.global-contribute.live-video.net/app` | Kick RTMP server |
+| `X_STREAM_KEY` | - | X/Twitter stream key |
+| `X_RTMP_URL` | `rtmp://sg.pscp.tv:80/x` | X/Twitter RTMP server |
+| `YOUTUBE_STREAM_KEY` | `""` | YouTube stream key (empty = disabled) |
+| `YOUTUBE_RTMP_URL` | - | YouTube RTMP server |
+| `STREAMING_CANONICAL_PLATFORM` | `twitch` | Platform for anti-cheat timing |
+| `STREAMING_PUBLIC_DELAY_MS` | `0` | Public data delay (0 = live betting) |
 
-**Example RTMP_DESTINATIONS_JSON:**
-```json
-[
-  {
-    "name": "Restream",
-    "url": "rtmp://live.restream.io/live",
-    "key": "your-key",
-    "enabled": true
-  }
-]
-```
+### Stream Recovery
 
-### HLS Output
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STREAM_CAPTURE_RECOVERY_TIMEOUT_MS` | `30000` | Recovery timeout |
+| `STREAM_CAPTURE_RECOVERY_MAX_FAILURES` | `6` | Max recovery failures |
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `HLS_OUTPUT_PATH` | string | `packages/server/public/live/stream.m3u8` | HLS playlist path |
-| `HLS_SEGMENT_PATTERN` | string | `packages/server/public/live/stream-%09d.ts` | Segment filename pattern |
-| `HLS_TIME_SECONDS` | number | `2` | Segment duration |
-| `HLS_LIST_SIZE` | number | `24` | Playlist size |
-| `HLS_DELETE_THRESHOLD` | number | `96` | Delete old segments threshold |
-| `HLS_START_NUMBER` | number | `1700000000` | Starting segment number |
-| `HLS_FLAGS` | string | *(see below)* | HLS flags |
+### Solana
 
-**Default HLS_FLAGS:**
-```
-delete_segments+append_list+independent_segments+program_date_time+omit_endlist+temp_file
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SOLANA_DEPLOYER_PRIVATE_KEY` | - | Solana keypair (base58 or JSON array) |
+| `SOLANA_RPC_URL` | `https://api.devnet.solana.com` | Solana RPC endpoint |
+| `SOLANA_WS_URL` | `wss://api.devnet.solana.com/` | Solana WebSocket endpoint |
+| `SOLANA_ARENA_AUTHORITY_SECRET` | - | Arena authority keypair (falls back to DEPLOYER) |
+| `SOLANA_ARENA_REPORTER_SECRET` | - | Arena reporter keypair (falls back to DEPLOYER) |
+| `SOLANA_ARENA_KEEPER_SECRET` | - | Arena keeper keypair (falls back to DEPLOYER) |
+| `SOLANA_MM_PRIVATE_KEY` | - | Market maker keypair |
+| `MARKET_MINT` | WSOL | Market token mint (defaults to native token) |
+| `ENABLE_PERPS_ORACLE` | `false` | Enable perps oracle updates |
 
-### Duel Bot Configuration
+### Arena & Betting
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `DUEL_BOT_FOOD_ITEM` | string | `shark` | Food item given to bots |
-| `DUEL_BOT_FOOD_COUNT` | number | `10` | Number of food items (0-28) |
-| `DUEL_BOT_EAT_THRESHOLD` | number | `40` | HP% to eat at (10-80) |
-| `DUEL_KEEPER_WALLET` | string | - | Wallet address for seeding market liquidity |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DUEL_MARKET_MAKER_ENABLED` | `false` | Enable market maker bot |
+| `DUEL_BETTING_ENABLED` | `false` | Enable betting system |
+| `ARENA_SERVICE_ENABLED` | `false` | Enable arena service |
+| `ARENA_EXTERNAL_BET_WRITE_KEY` | - | External betting API key |
+| `DUEL_SKIP_CHAIN_SETUP` | `false` | Skip blockchain setup |
 
-### Solana Configuration
+### AI Agents
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `SOLANA_RPC_URL` | string | `https://api.mainnet-beta.solana.com` | Solana RPC endpoint |
-| `SOLANA_WS_URL` | string | `wss://api.mainnet-beta.solana.com` | Solana WebSocket endpoint |
-| `SOLANA_ARENA_MARKET_PROGRAM_ID` | string | - | Arena market program ID |
-| `SOLANA_GOLD_MINT` | string | - | GOLD token mint address |
-| `SOLANA_ARENA_AUTHORITY_SECRET` | string | - | Authority keypair (JSON/base64) |
-| `SOLANA_ARENA_REPORTER_SECRET` | string | - | Reporter keypair (falls back to authority) |
-| `SOLANA_ARENA_KEEPER_SECRET` | string | - | Keeper keypair (falls back to authority) |
-| `SOLANA_MARKET_FEE_BPS` | number | `100` | Platform fee in basis points (1% = 100) |
-| `SOLANA_ARENA_CLOSE_SLOT_LEAD` | number | `20` | Extra safety slots for market close |
-| `ARENA_EXTERNAL_BET_WRITE_KEY` | string | - | Secret for external bet recording |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUTO_START_AGENTS` | `false` | Auto-start agents on server start |
+| `AUTO_START_AGENTS_MAX` | `10` | Max agents to auto-start |
+| `STREAMING_DUEL_COMBAT_AI_ENABLED` | `false` | Enable DuelCombatAI for streaming |
 
-**Solana keypair formats:**
-- JSON array: `[1,2,3,...]`
-- Comma-separated: `1,2,3,...`
-- Base64: `base64-encoded-string`
+### CDN & Assets
 
-### RPC Proxy Configuration
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PUBLIC_CDN_URL` | `http://localhost:8080` | Asset CDN URL |
+| `DUEL_ALLOW_INHERITED_CDN_URL` | `false` | Allow CDN URL inheritance |
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `RPC_PROXY_CACHE_MAX_ENTRIES` | number | `512` | Max cached RPC responses |
-| `RPC_PROXY_CACHE_MAX_TOTAL_BYTES` | number | `67108864` | Total cache size (64MB) |
-| `RPC_PROXY_CACHE_MAX_ENTRY_BYTES` | number | `262144` | Max single entry size (256KB) |
-| `RPC_PROXY_REQUEST_TIMEOUT_MS` | number | `15000` | Upstream HTTP timeout |
-| `WS_PROXY_MAX_PENDING_OPEN_MESSAGES` | number | `64` | Max queued WS messages before open |
+### Performance
 
-### AI Model Providers
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SERVER_RUNTIME_MAX_TICKS_PER_FRAME` | `1` | Max ticks per frame |
+| `SERVER_RUNTIME_MIN_DELAY_MS` | `10` | Min delay between frames |
+| `GAME_STATE_POLL_TIMEOUT_MS` | `5000` | Game state poll timeout |
+| `GAME_STATE_POLL_INTERVAL_MS` | `3000` | Game state poll interval |
+| `DUEL_RUNTIME_HEALTH_INTERVAL_MS` | `15000` | Health check interval |
+| `DUEL_RUNTIME_HEALTH_MAX_FAILURES` | `30` | Max health check failures |
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `OPENAI_API_KEY` | string | - | OpenAI API key (recommended) |
-| `ANTHROPIC_API_KEY` | string | - | Anthropic API key |
-| `OPENROUTER_API_KEY` | string | - | OpenRouter API key |
-| `ELIZAOS_API_URL` | string | `http://localhost:4001` | ElizaOS API URL |
+### Memory Management
 
-**Provider priority:**
-1. OpenAI (if `OPENAI_API_KEY` set)
-2. Anthropic (if `ANTHROPIC_API_KEY` set)
-3. OpenRouter (if `OPENROUTER_API_KEY` set)
-4. Ollama (local, no API key needed)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MALLOC_TRIM_THRESHOLD_` | `-1` | Disable malloc trimming |
+| `MIMALLOC_ALLOW_DECOMMIT` | `0` | Disable memory decommit |
+| `MIMALLOC_ALLOW_RESET` | `0` | Disable memory reset |
+| `MIMALLOC_PAGE_RESET` | `0` | Disable page reset |
+| `MIMALLOC_PURGE_DELAY` | `1000000` | Delay memory purge |
 
-### LiveKit Voice Chat
+### Game URLs
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `LIVEKIT_URL` | string | - | LiveKit server WebSocket URL |
-| `LIVEKIT_API_KEY` | string | - | LiveKit API key |
-| `LIVEKIT_API_SECRET` | string | - | LiveKit API secret |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GAME_URL` | `http://localhost:3333/?page=stream` | Primary game URL |
+| `GAME_FALLBACK_URLS` | - | Comma-separated fallback URLs |
 
-### Monitoring & Alerting
+## Client (`packages/client/.env`)
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `ALERT_WEBHOOK_URL` | string | - | Webhook for critical alerts (Slack/Discord) |
-| `COMMIT_HASH` | string | - | Git commit hash (auto-populated by CI/CD) |
+### Required
 
-### WebSocket Configuration
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `PUBLIC_PRIVY_APP_ID` | Privy app ID (must match server) | `clabcd1234...` |
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `WS_PING_INTERVAL_SEC` | number | `5` | Ping interval in seconds |
-| `WS_PING_MISS_TOLERANCE` | number | `3` | Missed pongs before disconnect |
-| `WS_PING_GRACE_MS` | number | `5000` | Grace period for new connections |
+### API Endpoints
 
-### Development Flags
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PUBLIC_API_URL` | `http://localhost:5555` | Game server HTTP URL |
+| `PUBLIC_WS_URL` | `ws://localhost:5555/ws` | Game server WebSocket URL |
+| `PUBLIC_CDN_URL` | `http://localhost:8080` | Asset CDN URL |
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `DISABLE_RATE_LIMIT` | boolean | `false` | Disable rate limiting (dev only!) |
-| `LOAD_TEST_MODE` | boolean | `false` | Enable load test mode (dev only!) |
-| `SPAWN_MODEL_AGENTS` | boolean | `true` | Spawn AI model agents |
-| `AUTO_START_AGENTS` | boolean | `true` | Auto-start agents from database |
-| `DISABLE_ACTIVITY_LOGGER` | boolean | `false` | Disable activity logging |
-| `TOWN_COLLISION_DEEP_VALIDATION` | boolean | `false` | Enable deep collision validation |
-| `TERRAIN_SERVER_MESH_COLLISION_ENABLED` | boolean | *(auto)* | Enable server-side terrain collision (true in prod) |
-| `DUEL_ARENA_VISUALS_ENABLED` | boolean | `true` | Enable duel arena visuals system |
-| `LOGGER_MAX_ENTRIES` | number | `2000` | Max in-memory logger entries |
+### Development
 
-**Lean mode overrides:**
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `SERVER_DEV_LEAN_ALLOW_DUEL_BETTING` | boolean | `false` | Keep duel betting in lean mode |
-| `SERVER_DEV_LEAN_ALLOW_STREAMING_DUEL` | boolean | `false` | Keep streaming duels in lean mode |
-| `SERVER_DEV_LEAN_ALLOW_STREAMING_CAPTURE` | boolean | `false` | Keep stream capture in lean mode |
-| `SERVER_DEV_LEAN_ALLOW_DUEL_SCHEDULER` | boolean | `false` | Keep duel scheduler in lean mode |
-| `SERVER_DEV_LEAN_ALLOW_MODEL_AGENTS` | boolean | `false` | Keep model agents in lean mode |
-| `SERVER_DEV_LEAN_ALLOW_AUTO_AGENTS` | boolean | `false` | Keep auto-started agents in lean mode |
-| `SERVER_DEV_LEAN_ALLOW_TERRAIN_MESH_COLLISION` | boolean | `false` | Keep terrain collision in lean mode |
-| `SERVER_DEV_LEAN_ALLOW_DUEL_ARENA_VISUALS` | boolean | `false` | Keep arena visuals in lean mode |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_PORT` | `3333` | Vite dev server port |
 
-### Advanced Configuration
+## Plugin Hyperscape (`packages/plugin-hyperscape/.env`)
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `SYSTEMS_PATH` | string | - | Custom systems path for loading additional game systems |
-| `JUPITER_QUOTE_URL` | string | `https://lite-api.jup.ag/swap/v1/quote` | Jupiter quote endpoint |
-| `ARENA_STAKING_SWEEP_ENABLED` | boolean | `false` | Enable staking accrual sweep |
-| `ARENA_STAKING_SWEEP_BATCH_SIZE` | number | `100` | Wallets per staking sweep batch (1-1000) |
-| `ARENA_HOLD_DAYS_SCAN_ENABLED` | boolean | `false` | Enable deep signature-history scan |
-| `ARENA_HOLD_DAYS_SCAN_MAX_PAGES` | number | `0` | Max signature pages for hold-day scan |
-| `ARENA_HOLD_DAYS_SCAN_PAGE_SIZE` | number | `1000` | Signatures per page (1-1000) |
-| `ARENA_SOLANA_RPC_TIMEOUT_MS` | number | `3000` | Solana RPC timeout for arena fetches |
+### LLM Providers
 
-## Client Variables
+At least one required:
 
-Location: `packages/client/.env`
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | OpenAI API key |
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `OPENROUTER_API_KEY` | OpenRouter API key |
 
-### Core Configuration
+### Hyperscape Connection
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `PUBLIC_PRIVY_APP_ID` | string | - | Privy app ID (must match server) |
-| `PUBLIC_API_URL` | string | `http://localhost:5555` | Game server HTTP API |
-| `PUBLIC_WS_URL` | string | `ws://localhost:5555/ws` | Game server WebSocket |
-| `PUBLIC_CDN_URL` | string | `http://localhost:8080` | CDN for game assets |
-| `PUBLIC_APP_URL` | string | `http://localhost:3333` | Public URL for deployed app |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HYPERSCAPE_SERVER_URL` | `ws://localhost:5555/ws` | Game server WebSocket URL |
+| `HYPERSCAPE_AUTO_RECONNECT` | `true` | Auto-reconnect on disconnect |
+| `HYPERSCAPE_AUTH_TOKEN` | - | Optional Privy auth token |
+| `HYPERSCAPE_PRIVY_USER_ID` | - | Optional Privy user ID |
 
-### Optional Configuration
+## Asset Forge (`packages/asset-forge/.env`)
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `PUBLIC_ELIZAOS_URL` | string | - | ElizaOS API for AI agent dashboard |
-| `PUBLIC_ENABLE_FARCASTER` | boolean | `false` | Enable Farcaster Frame V2 |
-| `VITE_PORT` | number | `3333` | Vite dev server port |
-| `DEBUG_RPG` | boolean | `false` | Enable debug logging for RPG systems |
-| `CAP_SERVER_URL` | string | - | Capacitor live reload URL (e.g., `http://192.168.1.100:3333`) |
+### AI Services
 
-## Asset Forge Variables
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | OpenAI API key (for GPT-4 Vision) |
+| `MESHY_API_KEY` | MeshyAI API key (for 3D generation) |
+| `ELEVENLABS_API_KEY` | ElevenLabs API key (for voice/music) |
 
-Location: `packages/asset-forge/.env`
+### Server Configuration
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `OPENAI_API_KEY` | string | - | OpenAI API key for AI generation |
-| `MESHY_API_KEY` | string | - | MeshyAI API key for 3D model generation |
-| `ASSET_FORGE_PORT` | number | `3400` | AssetForge UI port |
-| `ASSET_FORGE_API_PORT` | number | `3401` | AssetForge API port |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ASSET_FORGE_PORT` | `3400` | UI server port |
+| `ASSET_FORGE_API_PORT` | `3401` | API server port |
 
-## Plugin Hyperscape Variables
+## Ecosystem Config (`ecosystem.config.cjs`)
 
-Location: `packages/plugin-hyperscape/.env`
+PM2 configuration for production deployment. Reads from environment or provides defaults.
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `OPENAI_API_KEY` | string | - | OpenAI API key for agent LLM |
-| `ANTHROPIC_API_KEY` | string | - | Anthropic API key for agent LLM |
-| `OPENROUTER_API_KEY` | string | - | OpenRouter API key for agent LLM |
+### Key Variables
+
+All server variables above, plus:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DUEL_DISABLE_BRIDGE_CAPTURE` | `false` | Disable RTMP bridge capture |
+| `DUEL_FORCE_WEBGL_FALLBACK` | `false` | Force WebGL (removed - WebGPU required) |
+
+## GitHub Secrets (CI/CD)
+
+Required for automated deployments:
+
+### Vast.ai Deployment
+
+| Secret | Description |
+|--------|-------------|
+| `VAST_HOST` | Vast.ai instance IP |
+| `VAST_PORT` | SSH port |
+| `VAST_SSH_KEY` | SSH private key |
+| `VAST_SERVER_URL` | Public server URL (for maintenance mode API) |
+
+### Streaming
+
+| Secret | Description |
+|--------|-------------|
+| `TWITCH_STREAM_KEY` | Twitch stream key |
+| `KICK_STREAM_KEY` | Kick stream key |
+| `KICK_RTMP_URL` | Kick RTMP URL |
+| `X_STREAM_KEY` | X/Twitter stream key |
+| `X_RTMP_URL` | X/Twitter RTMP URL |
+
+### Database & Security
+
+| Secret | Description |
+|--------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `JWT_SECRET` | JWT signing secret |
+| `ADMIN_CODE` | Admin API access code |
+
+### Blockchain
+
+| Secret | Description |
+|--------|-------------|
+| `SOLANA_DEPLOYER_PRIVATE_KEY` | Solana keypair (base58 or JSON array) |
+| `ARENA_EXTERNAL_BET_WRITE_KEY` | External betting API key |
+
+### Cloudflare
+
+| Secret | Description |
+|--------|-------------|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token (for Pages/R2) |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
 
 ## Environment-Specific Configurations
 
 ### Local Development
 
-```bash
-# Server
-NODE_ENV=development
-PORT=5555
-USE_LOCAL_POSTGRES=true
-PUBLIC_CDN_URL=http://localhost:8080
-PUBLIC_WS_URL=ws://localhost:5555/ws
-PUBLIC_API_URL=http://localhost:5555
+Minimal configuration for local development:
 
-# Client
-PUBLIC_PRIVY_APP_ID=your-privy-app-id
-PUBLIC_API_URL=http://localhost:5555
-PUBLIC_WS_URL=ws://localhost:5555/ws
-PUBLIC_CDN_URL=http://localhost:8080
+```bash
+# packages/client/.env
+PUBLIC_PRIVY_APP_ID=your-app-id
+
+# packages/server/.env
+PUBLIC_PRIVY_APP_ID=your-app-id
+PRIVY_APP_SECRET=your-app-secret
+JWT_SECRET=your-random-secret
 ```
 
-### Production (Railway + Cloudflare)
+All other variables use defaults that work with `bun run dev`.
+
+### Production (Railway)
 
 ```bash
-# Server (Railway)
+# packages/server/.env (Railway environment variables)
 NODE_ENV=production
-PORT=5555
-DATABASE_URL=postgresql://user:pass@host:5432/db
-JWT_SECRET=your-secure-jwt-secret
-ADMIN_CODE=your-secure-admin-code
+DATABASE_URL=postgresql://...
+JWT_SECRET=...
+PRIVY_APP_ID=...
+PRIVY_APP_SECRET=...
+ADMIN_CODE=...
+PUBLIC_CDN_URL=https://assets.hyperscape.club
 USE_LOCAL_POSTGRES=false
-PUBLIC_CDN_URL=https://assets.hyperscape.club
-PUBLIC_WS_URL=wss://hyperscape.gg/ws
-PUBLIC_API_URL=https://hyperscape.gg
-
-# Client (Cloudflare Pages)
-PUBLIC_PRIVY_APP_ID=your-privy-app-id
-PUBLIC_API_URL=https://hyperscape.gg
-PUBLIC_WS_URL=wss://hyperscape.gg/ws
-PUBLIC_CDN_URL=https://assets.hyperscape.club
-PUBLIC_APP_URL=https://hyperscape.gg
 ```
 
-### Vast.ai (GPU Streaming)
+### Production (Vast.ai Streaming)
 
 ```bash
-# Server
-NODE_ENV=production
-PORT=5555
-DATABASE_URL=postgresql://user:pass@host:5432/db
-JWT_SECRET=your-secure-jwt-secret
-ADMIN_CODE=your-secure-admin-code
-USE_LOCAL_POSTGRES=false
-
-# Streaming
-TWITCH_STREAM_KEY=your-twitch-key
-X_STREAM_KEY=your-x-key
-X_RTMP_URL=rtmp://x-media-studio/path
-STREAMING_PUBLIC_DELAY_MS=0
-
-# Solana
-SOLANA_ARENA_AUTHORITY_SECRET=your-keypair-json
+# Passed via GitHub Secrets → SSH → /tmp/hyperscape-secrets.env → packages/server/.env
+DATABASE_URL=postgresql://...
+JWT_SECRET=...
+TWITCH_STREAM_KEY=...
+KICK_STREAM_KEY=...
+KICK_RTMP_URL=...
+X_STREAM_KEY=...
+X_RTMP_URL=...
+YOUTUBE_STREAM_KEY=
+SOLANA_DEPLOYER_PRIVATE_KEY=...
+ARENA_EXTERNAL_BET_WRITE_KEY=...
 ```
 
-## See Also
+Plus all ecosystem.config.cjs defaults for streaming configuration.
 
-- [Server .env.example](../packages/server/.env.example)
-- [Client .env.example](../packages/client/.env.example)
-- [Vast.ai Deployment Guide](vast-deployment.md)
-- [Cloudflare Deployment Guide](cloudflare-deployment.md)
-- [Streaming Configuration](streaming-configuration.md)
+## Variable Precedence
+
+1. **Environment variables** (highest priority)
+2. **`.env` file** in package directory
+3. **Default values** in code
+
+Example from `ecosystem.config.cjs`:
+```javascript
+DATABASE_URL: process.env.DATABASE_URL || 
+              process.env.POSTGRES_URL || 
+              "postgresql://hyperscape:hyperscape_dev_password@localhost:5488/hyperscape"
+```
+
+## Security Best Practices
+
+### Never Commit Secrets
+
+Add to `.gitignore`:
+```
+.env
+.env.local
+.env.production
+*.env
+deployer-keypair.json
+```
+
+### Use GitHub Secrets
+
+For CI/CD, store secrets in GitHub repository settings:
+- Settings → Secrets and variables → Actions
+- Add repository secrets (not environment secrets for better compatibility)
+
+### Rotate Secrets Regularly
+
+- JWT_SECRET: Rotate every 90 days
+- API keys: Rotate when team members leave
+- Stream keys: Rotate if exposed in logs
+
+### Generate Secure Secrets
+
+```bash
+# JWT_SECRET
+openssl rand -base64 32
+
+# ADMIN_CODE
+openssl rand -hex 32
+
+# Random password
+openssl rand -base64 24
+```
+
+## Troubleshooting
+
+### Secrets Not Persisting (Vast.ai)
+
+**Problem**: Stream keys or DATABASE_URL not working after deployment.
+
+**Cause**: Git reset overwrites .env file, or stale environment variables override .env values.
+
+**Fix**: Secrets are now written to `/tmp/hyperscape-secrets.env` before git reset, then copied back. Verify:
+
+```bash
+# Check /tmp secrets file
+cat /tmp/hyperscape-secrets.env
+
+# Check .env file
+cat /root/hyperscape/packages/server/.env
+
+# Check environment (should show ***configured***)
+grep "STREAM_KEY" /root/hyperscape/logs/duel-out.log
+```
+
+### JWT_SECRET Missing Error
+
+**Problem**: Server throws error on startup: "JWT_SECRET is required in production/staging"
+
+**Cause**: JWT_SECRET not set in production environment.
+
+**Fix**:
+```bash
+# Generate secret
+openssl rand -base64 32
+
+# Add to .env
+echo "JWT_SECRET=your-generated-secret" >> packages/server/.env
+
+# Or set in Railway/Vast.ai environment
+```
+
+### Stream Keys Not Working
+
+**Problem**: Streams not appearing on Twitch/Kick/X.
+
+**Cause**: Stale stream keys in environment override .env file values.
+
+**Fix**: The deploy script now explicitly unsets and re-exports stream keys:
+
+```bash
+# In deploy-vast.sh
+unset TWITCH_STREAM_KEY X_STREAM_KEY X_RTMP_URL KICK_STREAM_KEY KICK_RTMP_URL
+unset YOUTUBE_STREAM_KEY
+export YOUTUBE_STREAM_KEY=""
+source /root/hyperscape/packages/server/.env
+```
+
+Verify keys are configured:
+```bash
+pm2 logs hyperscape-duel | grep "STREAM_KEY"
+# Should show: ***configured*** (not NOT SET)
+```
+
+### DATABASE_URL Lost After Git Reset
+
+**Problem**: Database connection fails after deployment.
+
+**Cause**: Git reset overwrites .env file.
+
+**Fix**: Secrets are now written to `/tmp` before git reset:
+
+```bash
+# In deploy-vast.yml
+cat > /tmp/hyperscape-secrets.env << 'EOF'
+DATABASE_URL=${{ secrets.DATABASE_URL }}
+# ... other secrets
+EOF
+
+# In deploy-vast.sh (after git reset)
+cp /tmp/hyperscape-secrets.env /root/hyperscape/packages/server/.env
+```
+
+### Solana Keypair Not Found
+
+**Problem**: Keeper bot or Anchor tools fail with "keypair not found".
+
+**Cause**: ~/.config/solana/id.json not created from SOLANA_DEPLOYER_PRIVATE_KEY.
+
+**Fix**:
+```bash
+# Run decode-key script
+cd /root/hyperscape
+bun run scripts/decode-key.ts
+
+# Verify keypair exists
+ls -la ~/.config/solana/id.json
+
+# Check public key
+solana-keygen pubkey ~/.config/solana/id.json
+```
+
+## Related Documentation
+
+- [Vast.ai Deployment](vast-deployment.md)
+- [Railway Deployment](railway-dev-prod.md)
+- [Streaming Audio Capture](streaming-audio-capture.md)
+- [Maintenance Mode API](maintenance-mode-api.md)
