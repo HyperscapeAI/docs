@@ -974,7 +974,7 @@ executablePath: '/usr/bin/google-chrome-unstable'
 
 **Cause**: PulseAudio not configured or Chrome not outputting to virtual sink
 
-**Solution**: Verify PulseAudio setup (commits 3b6f1ee, aab66b0, b9d2e41):
+**Solution**: Verify PulseAudio setup (commits 3b6f1ee, aab66b0, 7a5fcbc, b9d2e41):
 
 ```bash
 # Check PulseAudio is running
@@ -984,7 +984,7 @@ pulseaudio --check && echo "PulseAudio is running"
 pactl list short sinks | grep chrome_audio
 
 # If missing, create virtual sink
-pactl load-module module-null-sink sink_name=chrome_audio
+pactl load-module module-null-sink sink_name=chrome_audio sink_properties=device.description="ChromeAudio"
 pactl set-default-sink chrome_audio
 
 # Test audio capture
@@ -999,6 +999,7 @@ pactl subscribe
 
 # Should see events when Chrome plays audio:
 # Event 'change' on sink #0
+# Event 'new' on sink-input #1
 ```
 
 **Verify environment variables:**
@@ -1011,6 +1012,40 @@ echo $XDG_RUNTIME_DIR
 
 echo $STREAM_AUDIO_ENABLED
 # Should be: true
+
+echo $PULSE_AUDIO_DEVICE
+# Should be: chrome_audio.monitor
+```
+
+**PulseAudio Permissions (commit aab66b0):**
+
+If you get permission errors:
+
+```bash
+# Add root to pulse-access group
+usermod -aG pulse-access root
+
+# Create /run/pulse with proper permissions
+mkdir -p /run/pulse
+chmod 777 /run/pulse
+
+# Export PULSE_SERVER in both deploy script and PM2 config
+export PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+```
+
+**Graceful Fallback (commit 7a5fcbc):**
+
+The system gracefully falls back to silent audio if PulseAudio is unavailable:
+
+```bash
+# Check if PulseAudio is available before using
+if pactl info &>/dev/null && pactl list sinks | grep -q chrome_audio; then
+    echo "Using PulseAudio for audio capture"
+    AUDIO_INPUT="-f pulse -i chrome_audio.monitor"
+else
+    echo "PulseAudio not available, using silent audio"
+    AUDIO_INPUT="-f lavfi -i anullsrc"
+fi
 ```
 
 **See Also:** [Audio Streaming Guide](/devops/audio-streaming) for complete PulseAudio configuration
