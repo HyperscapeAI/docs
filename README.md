@@ -11,6 +11,8 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - **Manifest-Driven Design**: Add NPCs, items, and content by editing JSON files—no code changes required
 - **Spectator Mode**: Watch agents play in real-time and observe their decision-making process
 - **Open Source**: Built on open technology with extensible architecture
+- **GPU-Accelerated Rendering**: WebGPU-only rendering with TSL shaders for modern graphics
+- **Instanced Rendering**: Thousands of resources rendered with minimal draw calls
 
 ## Core Features
 
@@ -21,22 +23,17 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **Economy** | 480-slot bank, shops, item weights, loot drops |
 | **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
-| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics, **WebGPU rendering** |
+| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
+| **Rendering** | WebGPU-only with TSL shaders, instanced rendering, LOD system |
 
-## System Requirements
+## Quick Start
 
-**Browser Requirements:**
-- **WebGPU support required** - Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
-- Check compatibility: [webgpureport.org](https://webgpureport.org)
-- See [docs/webgpu-requirements.md](docs/webgpu-requirements.md) for full details
-
-**Development Prerequisites:**
+**Prerequisites:**
 - [Bun](https://bun.sh) (v1.1.38+)
 - [Git LFS](https://git-lfs.com) - `brew install git-lfs` (macOS) or `apt install git-lfs` (Linux)
 - Docker - [Docker Desktop](https://docker.com/products/docker-desktop) for macOS/Windows, or `apt install docker.io` on Linux
 - [Privy](https://privy.io) account (required for authentication)
-
-## Quick Start
+- **WebGPU-capable browser** - Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
 
 ```bash
 git clone https://github.com/HyperscapeAI/hyperscape.git
@@ -64,15 +61,9 @@ cp packages/server/.env.example packages/server/.env
    ```
    PUBLIC_PRIVY_APP_ID=your-app-id
    PRIVY_APP_SECRET=your-app-secret
-   JWT_SECRET=your-secure-random-string
    ```
 
 > **⚠️ Without Privy credentials**, the game runs in anonymous mode where users get a new identity on every page refresh. Characters will appear to vanish because they're tied to the old anonymous account.
-
-**Production Security Requirements:**
-- **JWT_SECRET** is now **required** in production/staging environments (throws error if not set)
-- Generate with: `openssl rand -base64 32`
-- **ADMIN_CODE** should be set to prevent unauthorized admin access
 
 **Optional configs:**
 ```bash
@@ -105,7 +96,7 @@ cp packages/asset-forge/.env.example packages/asset-forge/.env
    bun run dev:ai       # Game + AI agents (ElizaOS)
    ```
 
-5. Open **http://localhost:3333** in **Chrome 113+** or **Edge 113+**.
+5. Open **http://localhost:3333** in your browser.
 
 > PostgreSQL starts automatically via Docker when the server starts.
 
@@ -118,12 +109,11 @@ packages/
 ├── client/              # Web client (Vite, React)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
-├── procgen/             # Procedural generation (trees, rocks, terrain)
-├── asset-forge/         # AI asset generation tools + VFX catalog
+├── asset-forge/         # AI asset generation tools
 └── docs-site/           # Documentation (Docusaurus)
 ```
 
-Build order: `physx-js-webidl` → `procgen` → `shared` → everything else (handled automatically by Turbo)
+Build order: `physx-js-webidl` → `shared` → everything else (handled automatically by Turbo)
 
 ## Commands
 
@@ -150,7 +140,7 @@ Build order: `physx-js-webidl` → `procgen` → `shared` → everything else (h
 bun run dev:client    # Client only (port 3333)
 bun run dev:server    # Server only (port 5555)
 bun run dev:ai        # Game + ElizaOS agents (adds port 4001)
-bun run dev:forge     # AssetForge tools + VFX catalog (ports 3400, 3401)
+bun run dev:forge     # AssetForge tools (ports 3400, 3401)
 bun run docs:dev      # Documentation site (port 3402)
 bun run dev:all       # Everything: game + AI + AssetForge
 ```
@@ -188,12 +178,12 @@ bun run assets:sync    # Pull latest assets from repo (local dev only)
 
 **Required for local development:**
 - `packages/client/.env` - Set `PUBLIC_PRIVY_APP_ID`
-- `packages/server/.env` - Set `PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_SECRET`, and `JWT_SECRET`
+- `packages/server/.env` - Set `PUBLIC_PRIVY_APP_ID` and `PRIVY_APP_SECRET`
 
 Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.privy.io).
 
 **Optional configuration** - see `.env.example` files for all options:
-- `packages/server/.env.example` - Database, ports, LiveKit voice chat, streaming, maintenance mode
+- `packages/server/.env.example` - Database, ports, LiveKit voice chat, GPU streaming
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
@@ -210,36 +200,28 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
 
-## Deployment
+## Deployment (Railway)
 
-Hyperscape supports multiple deployment targets:
+Railway deployment is set up for separate development and production targets:
 
-| Target | Use Case | Documentation |
-|--------|----------|---------------|
-| **Cloudflare Pages** | Static client hosting | [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) |
-| **Railway** | Game server (dev/prod) | [docs/railway-dev-prod.md](docs/railway-dev-prod.md) |
-| **Vast.ai** | GPU streaming & duels | [docs/vast-deployment.md](docs/vast-deployment.md) |
+- `main` branch deploys to `prod`
+- `develop` or `dev` branch deploys to `dev`
 
-### Cloudflare Pages (Client)
+For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps for `hyperscape.gg`), see:
 
-- **URL**: https://hyperscape.gg
-- **Build**: Automatic on push to `main`
-- **Assets**: Served from Cloudflare R2 (https://assets.hyperscape.club)
-- **CORS**: Configured for cross-origin asset loading
+- `docs/railway-dev-prod.md`
 
-### Railway (Game Server)
+## GPU Streaming (Vast.ai)
 
-- `main` branch → `prod` environment
-- `develop` branch → `dev` environment
-- See [docs/railway-dev-prod.md](docs/railway-dev-prod.md)
+Hyperscape streams live gameplay to Twitch, Kick, and X/Twitter using GPU-accelerated rendering.
 
-### Vast.ai (Streaming)
+**Requirements:**
+- NVIDIA GPU with Vulkan support
+- Xorg or Xvfb display server
+- PulseAudio for audio capture
+- FFmpeg for encoding
 
-- GPU-accelerated rendering with WebGPU + Vulkan
-- Automated maintenance mode for graceful deployments
-- Multi-platform RTMP streaming (Twitch, Kick, X)
-- Chrome Dev + Xvfb for headless rendering
-- See [docs/vast-deployment.md](docs/vast-deployment.md)
+**See:** `docs/vast-ai-streaming.md` for complete architecture documentation.
 
 ## Native App Distribution
 
@@ -259,27 +241,13 @@ That tag triggers cross-platform native packaging and publishes installers to a 
 
 ## Troubleshooting
 
-**WebGPU not supported error:**
-Hyperscape requires WebGPU (all shaders use TSL). Check browser compatibility:
-- Chrome/Edge 113+ (Windows/macOS/Linux)
-- Safari 18+ (macOS 15+ only)
-- Firefox: WebGPU support is experimental (not recommended)
-
-Visit [webgpureport.org](https://webgpureport.org) to verify your browser/GPU support. See [docs/webgpu-requirements.md](docs/webgpu-requirements.md) for full requirements.
-
 **Characters vanishing / not appearing on character select:**
-This happens when Privy credentials are missing. Each page refresh creates a new anonymous user, orphaning your characters. Fix: Set `PUBLIC_PRIVY_APP_ID` in client `.env` and both `PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` + `JWT_SECRET` in server `.env`.
+This happens when Privy credentials are missing. Each page refresh creates a new anonymous user, orphaning your characters. Fix: Set `PUBLIC_PRIVY_APP_ID` in client `.env` and both `PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` in server `.env`.
 
 **Assets not loading (404 errors for models/avatars):**
 The CDN container needs to be running. It starts automatically with `bun run dev`, but if you're running services separately:
 ```bash
 bun run cdn:up
-```
-
-**CORS errors loading assets from R2:**
-R2 bucket needs CORS configuration. Run:
-```bash
-bash scripts/configure-r2-cors.sh
 ```
 
 **Database schema errors or stale data after pulling updates:**
@@ -317,98 +285,42 @@ bun install
 bun run build
 ```
 
-**CI/CD npm 403 errors:**
-GitHub Actions may hit npm rate limits. The CI now uses `--frozen-lockfile` and retry logic with exponential backoff (15s, 30s, 45s, 60s, 75s delays).
+**WebGPU not available:**
+Hyperscape requires WebGPU - WebGL will NOT work. Check browser compatibility:
+- Chrome 113+ (recommended)
+- Edge 113+
+- Safari 18+ (macOS 15+)
+- Check: [webgpureport.org](https://webgpureport.org)
 
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
 
-## Recent Updates (February 2026)
+## Recent Updates
 
-### AI Agents
-- ✅ **Model agent stability** - Circuit breakers, timeouts, memory leak fixes, graceful shutdown
-- ✅ **Quest-driven tools** - Replaced starter chest with quest-based tool acquisition (Lumberjack's First Lesson, Fresh Catch, Torvin's Tools)
-- ✅ **Autonomous banking** - Agents auto-deposit at 25/28 slots, keep essential tools (axe, pickaxe, tinderbox, net)
-- ✅ **Action locks** - Skip LLM during movement, fast-tick mode (2s) for quick follow-up after movement/goal changes
-- ✅ **Short-circuit LLM** - Obvious decisions (repeat resource, banking, set goal) bypass LLM for faster response
-- ✅ **Resource detection** - Increased approach range from 20m to 40m to match skills validation
-- ✅ **Banking protocol fix** - Proper bankOpen/bankDeposit/bankDepositAll/bankWithdraw/bankClose sequence
-- ✅ **Movement awaiting** - Banking actions now await movement completion instead of returning early
-- ✅ **Database isolation** - Force PGLite for agents, prevent schema conflicts
+### Instanced Rendering (Feb 2026)
+- GPU instancing for trees, rocks, ores, and herbs
+- Reduces draw calls from O(n) to O(1) per model
+- Automatic LOD switching based on camera distance
+- Instanced depletion (stumps) for better performance
+- See: `docs/instanced-rendering.md`
 
-### Streaming & Audio
-- ✅ **GPU rendering** - Xorg headless setup with NVIDIA for hardware-accelerated WebGPU
-- ✅ **Xvfb fallback** - Robust fallback to software rendering if Xorg fails
-- ✅ **PulseAudio audio capture** - Game music and sound effects in streams via virtual sink (chrome_audio.monitor)
-- ✅ **Improved buffering** - Changed from 'zerolatency' to 'film' tune, 4x buffer size (18000k bufsize)
-- ✅ **Audio stability** - Wall clock timestamps, async resampling (1000 samples/22ms threshold), removed -shortest flag
-- ✅ **Input buffering** - thread_queue_size=1024 for both audio and video prevents buffer underruns
-- ✅ **Multi-platform RTMP** - Twitch, Kick, X (YouTube explicitly disabled)
-- ✅ **Stream key management** - Explicit unset/re-export prevents stale keys from environment
-- ✅ **Kick URL fix** - Corrected to rtmps://fa723fc1b171.global-contribute.live-video.net/app
-- ✅ **Vulkan ICD isolation** - Force NVIDIA-only ICD (VK_ICD_FILENAMES) to avoid Mesa conflicts
-- ✅ **Chrome Dev channel** - google-chrome-unstable for WebGPU support
-- ✅ **Public delay to 0ms** - Live betting mode (was 12-15s)
+### AI Agent Improvements (Feb 2026)
+- Action locks prevent LLM calls during movement
+- Fast-tick mode (2s) for quick follow-up decisions
+- Short-circuit obvious decisions (70% fewer LLM calls)
+- Banking goal type with auto-restore
+- See: `docs/ai-agent-improvements.md`
 
-### Deployment & Infrastructure
-- ✅ **Cloudflare Pages workflow** - Automated client deployment on push to main (triggers on client/shared changes)
-- ✅ **Vast.ai maintenance mode** - Graceful deployment with pause/resume of duel cycles
-- ✅ **DATABASE_URL persistence** - Survives git reset via /tmp secrets file
-- ✅ **Database warmup** - 3 retry attempts after schema push prevent cold start failures
-- ✅ **Vast.ai diagnostics** - Comprehensive streaming diagnostics (FFmpeg, RTMP, PulseAudio checks)
-- ✅ **Health checking** - 120s wait for server health before deployment success
-- ✅ **Solana keypair setup** - Automated from SOLANA_DEPLOYER_PRIVATE_KEY env var
-- ✅ **Bun installation** - Automated check and install with unzip dependency
-- ✅ **First-time setup** - Auto-clone repo if not present on Vast.ai
-- ✅ **CSRF cross-origin handling** - Apex domain support for Cloudflare Pages → Railway
-- ✅ **R2 CORS automation** - Workflow step configures CORS for asset loading
-- ✅ **Vite polyfills fix** - Aliases resolve shims to dist files, disabled protocolImports
-- ✅ **CSP updates** - Allow Google Fonts (fonts.googleapis.com, fonts.gstatic.com), data: URLs for WASM
-
-### Security Enhancements
-- ✅ **JWT_SECRET enforcement** - Now required in production/staging (throws error if not set)
-- ✅ **ARENA_EXTERNAL_BET_WRITE_KEY** - Added to secrets for external betting integration
-- ✅ **Solana keypair management** - Setup from env var, removed hardcoded secrets
-- ✅ **Stream key security** - Masked logging, explicit unset of stale values
-- ✅ **Secrets injection overhaul** - pm2 kill instead of delete ensures daemon picks up new env vars
-
-### Rendering & Performance
-- ✅ **WebGPU enforcement** - WebGL fallback removed (all shaders use TSL)
-- ✅ **Type safety** - Reduced explicit `any` types from 142 to ~46
-- ✅ **Memory leak fixes** - AbortController for event listener cleanup
-- ✅ **Dead code removal** - 3098 lines removed (PacketHandlers.ts)
-
-### Solana Markets
-- ✅ **WSOL default** - Markets use native token (WSOL) instead of custom GOLD
-- ✅ **Perps oracle disabled** - Default off (program not deployed on devnet), ENABLE_PERPS_ORACLE to re-enable
-- ✅ **MARKET_MINT variable** - Replaced GOLD_MINT for flexibility
+### WebGPU-Only Enforcement (Feb 2026)
+- Removed all WebGL fallback code
+- WebGPU is now strictly required
+- Vast.ai streaming validates WebGPU availability
+- See: `AGENTS.md` and `docs/vast-ai-streaming.md`
 
 ## More Info
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
-
-## Documentation
-
-### Deployment
-- [docs/cloudflare-pages-deployment.md](docs/cloudflare-pages-deployment.md) - Cloudflare Pages automated deployment
-- [docs/vast-deployment-improvements.md](docs/vast-deployment-improvements.md) - Vast.ai GPU streaming improvements
-- [docs/railway-dev-prod.md](docs/railway-dev-prod.md) - Railway deployment (dev/prod)
-- [docs/native-release.md](docs/native-release.md) - Native app releases
-
-### Streaming
-- [docs/streaming-improvements-feb-2026.md](docs/streaming-improvements-feb-2026.md) - RTMP streaming improvements
-- [docs/streaming-audio-capture.md](docs/streaming-audio-capture.md) - PulseAudio audio capture setup
-
-### AI Agents
-- [docs/agent-stability-improvements.md](docs/agent-stability-improvements.md) - Model agent stability fixes
-
-### Blockchain
-- [docs/solana-market-wsol-migration.md](docs/solana-market-wsol-migration.md) - WSOL market token migration
-
-### Technical
-- [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser and GPU requirements
-- [CLAUDE.md](CLAUDE.md) - Development guide and architecture
 
 ## License
 
