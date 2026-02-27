@@ -1,0 +1,747 @@
+---
+title: "GPU Rendering & Streaming"
+description: "Configure GPU rendering for headless streaming on Vast.ai and containerized environments"
+icon: "display"
+---
+
+## Overview
+
+Hyperscape's streaming system requires hardware GPU rendering for WebGPU support. This guide covers GPU configuration for headless environments, particularly Vast.ai containers and Docker deployments.
+
+## GPU Rendering Modes
+
+The deployment system automatically detects available GPU access and configures the appropriate rendering mode:
+
+### 1. Xorg with NVIDIA (Preferred)
+
+**Requirements:**
+- NVIDIA GPU with working drivers
+- DRM/DRI device access (`/dev/dri/card0`)
+- X server support
+
+**Configuration:**
+```bash
+export DISPLAY=:99
+export DUEL_CAPTURE_USE_XVFB=false
+export GPU_RENDERING_MODE=xorg
+export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+```
+
+**Chrome Flags:**
+```bash
+--use-gl=angle
+--use-angle=vulkan
+--enable-features=Vulkan,UseSkiaRenderer,WebGPU
+```
+
+**Benefits:**
+- Full hardware GPU acceleration
+- Best WebGPU performance
+- Supports all Three.js features
+
+### 2. Headless EGL (Fallback)
+
+**Requirements:**
+- NVIDIA GPU with EGL support
+- No X server or DRM/DRI access needed
+- Chrome's new headless mode
+
+**Configuration:**
+```bash
+export DISPLAY=
+export STREAM_CAPTURE_HEADLESS=new
+export STREAM_CAPTURE_USE_EGL=true
+export GPU_RENDERING_MODE=headless-egl
+export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+```
+
+**Chrome Flags:**
+```bash
+--headless=new
+--use-gl=egl
+--ozone-platform=headless
+--enable-features=UseOzonePlatform,VaapiVideoDecoder,VaapiVideoEncoder
+--enable-gpu-memory-buffer-video-frames
+```
+
+**Benefits:**
+- Works in containers without DRM/DRI access
+- No X server required
+- Hardware GPU acceleration via EGL
+- Ideal for Vast.ai containers
+
+**Limitations:**
+- Requires Chrome 112+ with new headless mode
+- May have reduced performance vs Xorg
+
+## Automatic GPU Detection
+
+The `deploy-vast.sh` script automatically detects and configures GPU rendering:
+
+```bash
+# Check for DRI devices
+if [ -d "/dev/dri" ] && [ -e "/dev/dri/card0" ]; then
+  # Setup Xorg with NVIDIA
+  RENDERING_MODE="xorg"
+  export DISPLAY=:99
+  export DUEL_CAPTURE_USE_XVFB=false
+else
+  # Setup headless EGL
+  RENDERING_MODE="headless-egl"
+  export DISPLAY=
+  export STREAM_CAPTURE_HEADLESS=new
+  export STREAM_CAPTURE_USE_EGL=true
+fi
+```
+
+## Xorg Headless Configuration
+
+For containers with DRM/DRI access, Xorg provides the best GPU rendering:
+
+### Xorg Configuration File
+
+```bash
+# Auto-generated at /etc/X11/xorg-nvidia-headless.conf
+Section "ServerLayout"
+    Identifier     "Layout0"
+    Screen      0  "Screen0"
+EndSection
+
+Section "Device"
+    Identifier     "Device0"
+    Driver         "nvidia"
+    BusID          "PCI:1:0:0"  # Auto-detected from nvidia-smi
+    Option         "AllowEmptyInitialConfiguration" "True"
+    Option         "UseDisplayDevice" "None"
+EndSection
+
+Section "Screen"
+    Identifier     "Screen0"
+    Device         "Device0"
+    DefaultDepth    24
+    SubSection     "Display"
+        Depth       24
+        Virtual    1920 1080
+    EndSubSection
+EndSection
+```
+
+### Starting Xorg
+
+```bash
+# Start Xorg on display :99
+Xorg :99 -config /etc/X11/xorg-nvidia-headless.conf -noreset -logfile /var/log/Xorg.99.log &
+
+# Wait for startup
+sleep 5
+
+# Verify display is accessible
+xdpyinfo -display :99
+```
+
+### Troubleshooting Xorg
+
+**Check Xorg logs:**
+```bash
+cat /var/log/Xorg.99.log | tail -50
+```
+
+**Common issues:**
+- **"no screens found"**: DRM/DRI devices not accessible
+- **"Failed to initialize GLX"**: NVIDIA drivers not installed
+- **"Cannot open /dev/dri/card0"**: Insufficient permissions
+
+**Verify GPU access:**
+```bash
+# Check NVIDIA driver
+nvidia-smi
+
+# Check DRI devices
+ls -la /dev/dri/
+
+# Check Vulkan
+vulkaninfo --summary
+```
+
+## Headless EGL Configuration
+
+For containers without DRM/DRI access (common on Vast.ai), use Chrome's headless EGL mode:
+
+### Environment Variables
+
+```bash
+# Disable X server
+export DISPLAY=
+
+# Enable Chrome's new headless mode
+export STREAM_CAPTURE_HEADLESS=new
+
+# Enable EGL rendering
+export STREAM_CAPTURE_USE_EGL=true
+
+# Force NVIDIA Vulkan ICD
+export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+```
+
+### Chrome Configuration
+
+```typescript
+// From packages/server/scripts/stream-to-rtmp.ts
+const launchConfig = {
+  headless: "new",  // Chrome's new headless mode
+  args: [
+    "--use-gl=egl",
+    "--ozone-platform=headless",
+    "--enable-features=UseOzonePlatform,VaapiVideoDecoder,VaapiVideoEncoder",
+    "--enable-gpu-memory-buffer-video-frames",
+    "--enable-unsafe-webgpu",
+    "--ignore-gpu-blocklist",
+  ]
+};
+```
+
+### Benefits
+
+- **No X server required**: Works in minimal containers
+- **Hardware GPU acceleration**: Uses NVIDIA EGL without X
+- **WebGPU support**: Full Three.js WebGPU rendering
+- **Container-friendly**: Ideal for Vast.ai and Docker
+
+### Limitations
+
+- Requires Chrome 112+ with new headless mode
+- May have slightly reduced performance vs Xorg
+- Some GPU features may be unavailable
+
+## Vulkan Configuration
+
+### Force NVIDIA Vulkan ICD
+
+Vast.ai containers often have conflicting Mesa Vulkan ICDs that break NVIDIA Vulkan. Force NVIDIA-only:
+
+```bash
+export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+```
+
+**Why This Matters:**
+- Mesa ICDs can conflict with NVIDIA drivers
+- Broken Mesa ICDs cause Vulkan initialization failures
+- Forcing NVIDIA-only ICD ensures clean Vulkan access
+- Required for WebGPU with Vulkan backend
+
+### Verify Vulkan Support
+
+```bash
+# Check Vulkan devices
+vulkaninfo --summary
+
+# Should show NVIDIA GPU
+# Example output:
+# GPU0:
+#   deviceName     = NVIDIA GeForce RTX 3060 Ti
+#   driverVersion  = 535.183.1
+```
+
+### Vulkan Fallback Modes
+
+If NVIDIA Vulkan fails, the system has tried several fallback approaches:
+
+**Historical Fallbacks (deprecated):**
+1. **Lavapipe** (commit ba1cf0a): Software Vulkan via Mesa Lavapipe
+   - Slow but provides full WebGPU support
+   - Used when NVIDIA Vulkan ICD is broken
+   
+2. **SwiftShader** (commit 54836200): Chrome's bundled software Vulkan
+   - `--enable-unsafe-swiftshader` flag
+   - CPU-based rendering
+
+**Current Approach:**
+- Force NVIDIA Vulkan ICD only
+- No software fallbacks (too slow for streaming)
+- Fail fast if GPU rendering unavailable
+
+## Required System Packages
+
+### Vast.ai Deployment
+
+The `deploy-vast.sh` script installs all required packages:
+
+```bash
+apt-get update && apt-get install -y \
+  build-essential \
+  python3 \
+  socat \
+  xvfb \
+  git-lfs \
+  ffmpeg \
+  wget \
+  gnupg \
+  curl \
+  jq \
+  pulseaudio \
+  pulseaudio-utils \
+  mesa-vulkan-drivers \
+  vulkan-tools \
+  libvulkan1 \
+  mesa-utils \
+  libglvnd0 \
+  libgl1 \
+  libglx0 \
+  libegl1 \
+  libgles2 \
+  x11-xserver-utils \
+  xserver-xorg-core
+```
+
+### Chrome Dev Channel
+
+Chrome Dev channel has WebGPU enabled by default:
+
+```bash
+# Install Chrome Dev
+wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
+echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+apt-get update
+apt-get install -y google-chrome-unstable
+
+# Verify installation
+google-chrome-unstable --version
+```
+
+**Playwright Configuration:**
+```typescript
+const browser = await chromium.launch({
+  channel: "chrome-dev",  // Uses google-chrome-unstable
+  // ... other options
+});
+```
+
+## Environment Variables
+
+### GPU Rendering
+
+```bash
+# Rendering mode (auto-detected by deploy script)
+GPU_RENDERING_MODE=xorg              # or headless-egl
+
+# Display configuration
+DISPLAY=:99                          # Xorg mode
+# DISPLAY=                           # Headless EGL mode
+
+# Xvfb usage
+DUEL_CAPTURE_USE_XVFB=false         # Use Xorg, not Xvfb
+
+# Vulkan ICD
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+```
+
+### Chrome Capture
+
+```bash
+# Headless mode
+STREAM_CAPTURE_HEADLESS=false       # Xorg mode
+# STREAM_CAPTURE_HEADLESS=new       # Headless EGL mode
+
+# EGL rendering
+STREAM_CAPTURE_USE_EGL=false        # Xorg mode
+# STREAM_CAPTURE_USE_EGL=true       # Headless EGL mode
+
+# Browser channel
+STREAM_CAPTURE_CHANNEL=chrome-dev   # Use Chrome Dev channel
+
+# ANGLE backend
+STREAM_CAPTURE_ANGLE=vulkan         # Vulkan backend (default)
+
+# WebGPU
+STREAM_CAPTURE_DISABLE_WEBGPU=false # WebGPU enabled
+```
+
+### Capture Mode
+
+```bash
+# Capture method
+STREAM_CAPTURE_MODE=cdp             # Chrome DevTools Protocol (default)
+# STREAM_CAPTURE_MODE=mediarecorder # Legacy MediaRecorder
+# STREAM_CAPTURE_MODE=webcodecs     # WebCodecs API (experimental)
+
+# CDP quality
+STREAM_CDP_QUALITY=80               # JPEG quality (1-100)
+
+# Frame rate
+STREAM_FPS=30                       # Target FPS
+
+# Resolution
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+```
+
+## Troubleshooting
+
+### GPU Not Detected
+
+**Check NVIDIA driver:**
+```bash
+nvidia-smi
+```
+
+**Expected output:**
+```
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 535.183.01   Driver Version: 535.183.01   CUDA Version: 12.2     |
+|-------------------------------+----------------------+----------------------+
+| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+|===============================+======================+======================|
+|   0  NVIDIA GeForce ...  Off  | 00000000:01:00.0 Off |                  N/A |
+```
+
+**If nvidia-smi fails:**
+- NVIDIA drivers not installed
+- GPU not accessible in container
+- Check container GPU passthrough settings
+
+### Vulkan Initialization Fails
+
+**Check Vulkan devices:**
+```bash
+vulkaninfo --summary
+```
+
+**Common errors:**
+
+**"Cannot find a compatible Vulkan installable client driver (ICD)":**
+- Vulkan drivers not installed
+- Wrong ICD path in `VK_ICD_FILENAMES`
+
+**Solution:**
+```bash
+# Install Vulkan drivers
+apt-get install -y mesa-vulkan-drivers vulkan-tools libvulkan1
+
+# Verify NVIDIA ICD exists
+ls -la /usr/share/vulkan/icd.d/nvidia_icd.json
+
+# Force NVIDIA ICD
+export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+```
+
+### Xorg Fails to Start
+
+**Check Xorg logs:**
+```bash
+cat /var/log/Xorg.99.log
+```
+
+**Common errors:**
+
+**"no screens found":**
+- DRM/DRI devices not accessible
+- Check `/dev/dri/` exists and has correct permissions
+
+**"Failed to load module nvidia":**
+- NVIDIA X driver not installed
+- Install: `apt-get install -y xserver-xorg-video-nvidia-535`
+
+**"Cannot open /dev/dri/card0: Permission denied":**
+- Insufficient permissions
+- Run as root or add user to `video` group
+
+### Headless EGL Not Working
+
+**Check EGL library:**
+```bash
+# Verify NVIDIA EGL exists
+ls -la /usr/lib/x86_64-linux-gnu/libEGL_nvidia.so.0
+# or
+ls -la /usr/lib/libEGL_nvidia.so.0
+```
+
+**If missing:**
+```bash
+# Install NVIDIA EGL
+apt-get install -y libegl-nvidia0
+```
+
+**Verify Chrome headless mode:**
+```bash
+google-chrome-unstable --headless=new --use-gl=egl --print-to-pdf=test.pdf https://google.com
+```
+
+### WebGPU Not Available
+
+**Check Chrome flags:**
+```bash
+# In browser console (navigate to chrome://gpu)
+# Should show:
+# - WebGPU: Hardware accelerated
+# - Vulkan: Enabled
+```
+
+**Common issues:**
+
+**"WebGPU blocked by blocklist":**
+- Add `--ignore-gpu-blocklist` flag
+
+**"WebGPU not supported":**
+- GPU doesn't support Vulkan
+- Drivers outdated
+- Chrome version too old (need 113+)
+
+**Verify WebGPU in headless:**
+```bash
+# Test WebGPU availability
+google-chrome-unstable --headless=new --use-gl=egl \
+  --enable-unsafe-webgpu \
+  --ignore-gpu-blocklist \
+  --dump-dom https://webgpu.io
+```
+
+## Performance Optimization
+
+### GPU Memory Management
+
+```bash
+# Disable memory trimming for better performance
+export MALLOC_TRIM_THRESHOLD_=-1
+export MIMALLOC_ALLOW_DECOMMIT=0
+export MIMALLOC_ALLOW_RESET=0
+export MIMALLOC_PAGE_RESET=0
+export MIMALLOC_PURGE_DELAY=1000000
+```
+
+### Browser Restart Interval
+
+Chrome is automatically restarted every hour to prevent memory leaks:
+
+```typescript
+// From stream-to-rtmp.ts
+const BROWSER_RESTART_INTERVAL_MS = 1 * 60 * 60 * 1000; // 1 hour
+
+// Automatic restart logic
+if (Date.now() - launchTime > BROWSER_RESTART_INTERVAL_MS) {
+  console.log('[Main] Scheduled browser rotation to prevent WebGL memory leaks.');
+  await setupBrowser();
+  await startCdpCapture(bridge);
+}
+```
+
+### CDP Frame Rate Monitoring
+
+The system tracks CDP frame rate and automatically recovers from stalls:
+
+```typescript
+// Stall detection (4 intervals = 120s without traffic)
+if (cdpStalledIntervals >= 4) {
+  // Soft recovery: restart screencast without killing browser/FFmpeg
+  await cdpSession.send('Page.stopScreencast');
+  cdpSession = await page.context().newCDPSession(page);
+  await cdpSession.send('Page.startScreencast', { ... });
+}
+```
+
+**Configuration:**
+```bash
+# Recovery timeout
+STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000  # 30 seconds
+
+# Max recovery failures before fallback
+STREAM_CAPTURE_RECOVERY_MAX_FAILURES=4
+```
+
+## Vast.ai Specific Configuration
+
+### Container Requirements
+
+**Recommended Vast.ai Template:**
+- **Image**: `nvidia/cuda:12.2.0-devel-ubuntu22.04`
+- **GPU**: RTX 3060 Ti or better
+- **RAM**: 16GB minimum
+- **Storage**: 50GB minimum
+- **Ports**: 35143 (HTTP), 35079 (WebSocket), 35144 (CDN)
+
+### DNS Configuration
+
+Vast.ai containers often have broken DNS. The deploy script fixes this:
+
+```bash
+# Overwrite resolv.conf with Google DNS
+echo -e "nameserver 8.8.8.8\nnameserver 8.8.4.4" > /etc/resolv.conf
+```
+
+### Port Proxies
+
+Internal services are proxied to external ports via socat:
+
+```bash
+# Game server: internal 5555 -> external 35143
+socat TCP-LISTEN:35143,reuseaddr,fork TCP:127.0.0.1:5555 &
+
+# WebSocket: internal 5555 -> external 35079
+socat TCP-LISTEN:35079,reuseaddr,fork TCP:127.0.0.1:5555 &
+
+# CDN: internal 8080 -> external 35144
+socat TCP-LISTEN:35144,reuseaddr,fork TCP:127.0.0.1:8080 &
+```
+
+### Health Monitoring
+
+The deployment includes automatic health checks:
+
+```bash
+# Wait for server to be healthy
+MAX_WAIT=120
+while [ $WAITED -lt $MAX_WAIT ]; do
+  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:5555/health" --max-time 5)
+  if [ "$HTTP_STATUS" = "200" ]; then
+    echo "Server is healthy!"
+    break
+  fi
+  sleep 5
+  WAITED=$((WAITED + 5))
+done
+```
+
+## Historical Context
+
+### Evolution of GPU Rendering Approaches
+
+The streaming system has evolved through several GPU rendering approaches:
+
+**February 27, 2026:**
+- **Commit e51a332**: Added headless EGL mode for containers without DRM
+  - Auto-detect DRI devices and try Xorg if available
+  - Fall back to headless EGL if DRI unavailable
+  - Support `STREAM_CAPTURE_HEADLESS=new` for Chrome's new headless
+  - Support `STREAM_CAPTURE_USE_EGL=true` for EGL mode
+
+**February 27, 2026:**
+- **Commit 30bdaf0**: Require NVIDIA Xorg, no software rendering fallback
+  - WebGPU requires hardware GPU rendering
+  - Xvfb is software-only and too slow
+  - Fail fast if Xorg/GPU setup fails
+
+**February 27, 2026:**
+- **Commit 5fe4a18**: Add robust Xorg/Xvfb fallback handling
+  - Check if nvidia-smi works before attempting Xorg
+  - Verify X server responds with xdpyinfo
+  - Properly set DUEL_CAPTURE_USE_XVFB based on outcome
+
+**February 27, 2026:**
+- **Commit 263bfc5**: Use Xorg instead of Xvfb for NVIDIA GPU rendering
+  - Xvfb is software framebuffer, cannot access physical GPU
+  - Force NVIDIA-only Vulkan ICD
+  - Enable GPU rendering without physical display
+
+**February 27, 2026:**
+- **Commit 89b78e3**: Use NVIDIA hardware Vulkan instead of SwiftShader
+  - Force NVIDIA ICD via VK_ICD_FILENAMES
+  - Use vulkan ANGLE backend (hardware accelerated)
+
+**February 27, 2026:**
+- **Commit 54836200**: Enable SwiftShader for WebGPU
+  - Add `--enable-unsafe-swiftshader` flag
+  - Use swiftshader ANGLE backend (software OpenGL ES)
+
+**February 27, 2026:**
+- **Commit ba1cf0a**: Use Lavapipe software Vulkan
+  - NVIDIA Vulkan ICD broken on Vast.ai
+  - Use Mesa Lavapipe (llvmpipe-based software Vulkan)
+
+**February 27, 2026:**
+- **Commit ef8033c**: Use SwiftShader and WebGL fallback
+  - Vulkan ICD doesn't work properly on Vast.ai
+  - Switch to CPU-based rendering (slower but functional)
+
+### Lessons Learned
+
+1. **Hardware GPU Required**: Software rendering (Xvfb, SwiftShader, Lavapipe) is too slow for streaming
+2. **Xorg vs Headless**: Xorg provides best performance when DRM/DRI available
+3. **Headless EGL**: Best fallback for containers without DRM/DRI access
+4. **Vulkan ICD Conflicts**: Force NVIDIA-only ICD to avoid Mesa conflicts
+5. **Fail Fast**: Better to fail deployment than silently fall back to unusable software rendering
+
+## Best Practices
+
+### Development
+
+```bash
+# Local development (macOS/Linux with GPU)
+bun run dev
+
+# No special GPU configuration needed
+# Uses system GPU automatically
+```
+
+### Production (Vast.ai)
+
+```bash
+# Let deploy script auto-detect GPU mode
+bash scripts/deploy-vast.sh
+
+# Script will:
+# 1. Check for DRI devices
+# 2. Try Xorg if available
+# 3. Fall back to headless EGL if needed
+# 4. Export correct environment variables
+# 5. Start PM2 with GPU configuration
+```
+
+### Manual Configuration
+
+If you need to override auto-detection:
+
+```bash
+# Force Xorg mode
+export GPU_RENDERING_MODE=xorg
+export DISPLAY=:99
+export DUEL_CAPTURE_USE_XVFB=false
+
+# Force headless EGL mode
+export GPU_RENDERING_MODE=headless-egl
+export DISPLAY=
+export STREAM_CAPTURE_HEADLESS=new
+export STREAM_CAPTURE_USE_EGL=true
+```
+
+## Monitoring
+
+### Check Current GPU Mode
+
+```bash
+# From PM2 logs
+bunx pm2 logs hyperscape-duel | grep "GPU Rendering Mode"
+
+# Expected output:
+# GPU Rendering Mode: xorg
+# DISPLAY: :99
+# DUEL_CAPTURE_USE_XVFB: false
+```
+
+### Verify GPU Rendering
+
+```bash
+# Check Chrome is using GPU
+bunx pm2 logs hyperscape-duel | grep -i "gpu\|vulkan\|webgpu"
+
+# Should see:
+# - WebGPU: enabled
+# - Vulkan: enabled
+# - GPU: NVIDIA GeForce RTX 3060 Ti
+```
+
+### Monitor Frame Rate
+
+```bash
+# Check CDP frame rate
+bunx pm2 logs hyperscape-duel | grep "CDP FPS"
+
+# Expected output:
+# [Stream Health] CDP FPS: 30 | Frames: 12345 | Dropped: 0
+```
+
+## Related Documentation
+
+- [RTMP Streaming](/devops/rtmp-streaming) - Multi-platform streaming configuration
+- [Audio Streaming](/devops/audio-streaming) - PulseAudio audio capture
+- [Deployment](/guides/deployment) - Full deployment guide
+- [Troubleshooting](/devops/troubleshooting) - Common issues and solutions
