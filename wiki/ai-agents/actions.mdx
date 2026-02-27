@@ -463,7 +463,7 @@ export const bankWithdrawAction: Action = {
 
 ### `bankDepositAll` <Badge text="New" variant="success" />
 
-Deposit all non-essential items at the bank. Keeps essential tools (axe, pickaxe, tinderbox, fishing net).
+Deposit all non-essential items at the bank. Keeps essential tools (axe, pickaxe, tinderbox, fishing net). Automatically walks to nearest bank and awaits movement completion.
 
 ```typescript
 export const bankDepositAllAction: Action = {
@@ -473,13 +473,13 @@ export const bankDepositAllAction: Action = {
 };
 ```
 
-**Behavior**:
-1. Finds nearest bank entity or station
-2. Walks to bank if distance > 5 units
-3. Opens bank session
-4. Deposits ALL items
-5. Withdraws back essential tools (axe, pickaxe, tinderbox, net)
-6. Closes bank session
+**Behavior** (commit 60a03f49):
+1. Finds nearest bank entity or station from nearby entities or world map
+2. **Walks to bank if distance > 5 units** (awaits movement completion)
+3. Opens bank session (`bankOpen` packet)
+4. Deposits ALL items (`bankDepositAll` packet)
+5. Withdraws back essential tools one by one (`bankWithdraw` packets)
+6. Closes bank session (`bankClose` packet)
 
 **Essential Items (Never Deposited)**:
 - Bronze/Iron/Steel/Mithril Hatchet
@@ -487,11 +487,38 @@ export const bankDepositAllAction: Action = {
 - Tinderbox
 - Small Fishing Net
 
+**Autonomous Banking Behavior**:
+- Agents automatically bank when inventory reaches 25/28 slots
+- Banking goal has high priority (triggers before gathering goals)
+- After banking, agent restores previous goal (e.g., woodcutting)
+- Movement is awaited (no early return) to ensure agent reaches bank
+
+**Bank Packet Protocol** (commit 593cd56b):
+
+The old `bankAction` packet was broken. The new protocol uses proper packet sequence:
+
+```typescript
+// ❌ Old (broken)
+socket.send({ type: 'bankAction', action: 'depositAll' });
+
+// ✅ New (correct)
+socket.send({ type: 'bankOpen', entityId: bankId });
+socket.send({ type: 'bankDepositAll' });
+socket.send({ type: 'bankWithdraw', itemId: 'bronze_hatchet', quantity: 1 });
+socket.send({ type: 'bankClose' });
+```
+
 **Usage**: Autonomous agents use this when inventory reaches 25/28 slots to free space for continued gathering.
 
 <Info>
-  This action replaced the old `LOOT_STARTER_CHEST` action as part of the quest-driven progression system (commit 593cd56b).
+  This action replaced the old `LOOT_STARTER_CHEST` action as part of the quest-driven progression system (commit 593cd56b, Feb 26 2026).
 </Info>
+
+**Related Changes**:
+- **Action locks** prevent LLM ticks while movement is in progress
+- **Fast-tick mode** (2s) for quick follow-up after movement/goal changes
+- **Short-circuit LLM** for obvious decisions (repeat resource, banking, set goal)
+- **Banking goal type** with auto-restore of previous goal after deposit
 
 ---
 
