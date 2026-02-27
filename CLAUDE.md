@@ -548,24 +548,30 @@ See [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) for full API re
 
 ### Audio Capture & Streaming
 - **PulseAudio setup**: User-mode PulseAudio with virtual sink
-  - XDG_RUNTIME_DIR=/tmp/pulse-runtime
-  - chrome_audio sink for browser audio output
-  - default.pa config with module-null-sink
+  - `XDG_RUNTIME_DIR=/tmp/pulse-runtime` for socket location
+  - `chrome_audio` sink for browser audio output
+  - `default.pa` config with `module-null-sink`
   - Fallback if initial start fails
-- **Audio capture**: FFmpeg captures from chrome_audio.monitor
-  - thread_queue_size=1024 prevents buffer underruns
-  - use_wallclock_as_timestamps=1 for real-time timing
-  - aresample=async=1000:first_pts=0 recovers from audio drift (22ms threshold)
+  - Root user added to `pulse-access` group
+  - `/run/pulse` created with 777 permissions for FFmpeg access
+  - `PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native` exported
+  - `pactl` check before using PulseAudio (graceful fallback to silent audio)
+- **Audio capture**: FFmpeg captures from `chrome_audio.monitor`
+  - `thread_queue_size=1024` prevents buffer underruns
+  - `use_wallclock_as_timestamps=1` for real-time timing
+  - `aresample=async=1000:first_pts=0` recovers from audio drift (22ms threshold)
+  - `STREAM_AUDIO_ENABLED=true` to enable audio capture
+  - `PULSE_AUDIO_DEVICE=chrome_audio.monitor` for device selection
 - **Improved buffering**: Changed from 'zerolatency' to 'film' tune
   - Allows B-frames for better compression
   - Better lookahead for smoother bitrate
-  - Set STREAM_LOW_LATENCY=true to restore old behavior
+  - Set `STREAM_LOW_LATENCY=true` to restore old behavior
 - **Buffer sizing**: Increased from 2x to 4x bitrate (18000k bufsize)
   - Reduces buffering during network hiccups
   - More headroom for bitrate spikes
-- **Input buffering**: thread_queue_size for frame queueing, genpts+discardcorrupt for stream recovery
-- **FLV flags**: flvflags=no_duration_filesize prevents FLV header issues
-- **Audio stability**: Removed -shortest flag that caused audio dropouts during video buffering
+- **Input buffering**: `thread_queue_size` for frame queueing, `genpts+discardcorrupt` for stream recovery
+- **FLV flags**: `flvflags=no_duration_filesize` prevents FLV header issues
+- **Audio stability**: Removed `-shortest` flag that caused audio dropouts during video buffering
 
 ### RTMP Streaming
 - **Multi-platform**: Twitch, Kick, X (YouTube explicitly disabled)
