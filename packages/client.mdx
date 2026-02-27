@@ -10,10 +10,14 @@ The `@hyperscape/client` package is the web game client:
 
 - Vite for fast builds with HMR
 - React 19 UI framework
-- Three.js 3D rendering
+- Three.js WebGPU rendering (WebGPU required - no WebGL fallback)
 - Capacitor for iOS/Android mobile builds
 - Privy authentication
 - Farcaster miniapp SDK
+
+<Warning>
+**WebGPU Required**: The client requires WebGPU support. All shaders use TSL (Three Shading Language) which only works with WebGPU. There is no WebGL fallback. Requires Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+).
+</Warning>
 
 ## Package Location
 
