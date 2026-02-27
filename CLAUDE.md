@@ -359,8 +359,8 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 ## Tech Stack
 
 - **Runtime**: Bun v1.1.38+
+- **Rendering**: WebGPU ONLY (Three.js WebGPURenderer + TSL shaders) - NO WebGL
 - **Engine**: Three.js 0.180.0, PhysX (WASM)
-- **Rendering**: WebGPU (required - all shaders use TSL)
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
 - **Database**: PostgreSQL (production via Neon), Docker (local)
