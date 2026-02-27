@@ -1,0 +1,696 @@
+---
+title: "February 2026 Changelog"
+description: "Comprehensive changelog for all updates pushed to main in February 2026"
+icon: "clock-rotate-left"
+---
+
+# February 2026 Changelog
+
+This document summarizes all significant changes pushed to the main branch in February 2026, organized by category.
+
+## Breaking Changes
+
+### WebGPU-Only Rendering (Commit 47782ed, Feb 27 2026)
+
+**BREAKING**: WebGPU is now REQUIRED. WebGL fallback has been completely removed.
+
+**What Changed:**
+- Removed all WebGL detection and fallback code from `RendererFactory.ts`
+- Removed `isWebGLForced`, `isWebGLFallbackForced`, `isWebGLFallbackAllowed` functions
+- Removed `isWebGLAvailable`, `isOffscreenCanvasAvailable`, `canTransferCanvas` functions
+- Changed `UniversalRenderer` type to `WebGPURenderer` only
+- `RendererBackend` type is now only `"webgpu"` (removed `"webgl"`)
+- Removed `--disable-webgpu` and `forceWebGL` URL parameters from streaming
+- Removed `DUEL_FORCE_WEBGL_FALLBACK` environment variable
+
+**Why:**
+- All materials use TSL (Three Shading Language) which ONLY works with WebGPU
+- Post-processing effects use TSL-based node materials
+- There is NO WebGL fallback path - the game simply won't render
+
+**Browser Requirements:**
+- Chrome 113+ (recommended)
+- Edge 113+
+- Safari 18+ (macOS 15+ only)
+- Check compatibility: [webgpureport.org](https://webgpureport.org)
+
+**Migration Guide:**
+- Update browser to Chrome 113+ or Edge 113+
+- Remove any `forceWebGL` or `--disable-webgpu` flags from configurations
+- Server/streaming deployments must use Xorg or Xvfb with GPU access (no headless mode)
+
+**Files Changed:**
+- `packages/shared/src/utils/rendering/RendererFactory.ts`
+- `packages/server/src/streaming/stream-to-rtmp.ts`
+- `packages/server/ecosystem.config.cjs`
+- `scripts/deploy-vast.sh`
+- `CLAUDE.md`
+- `AGENTS.md`
+
+---
+
+## Vast.ai Deployment & Streaming
+
+### GPU Rendering Pipeline (Commits 263bfc5, 92ee48e, 47782ed, Feb 27 2026)
+
+**Major architectural changes to GPU rendering for WebGPU support:**
+
+**GPU Rendering Modes** (tried in order):
+1. **Xorg with NVIDIA** (preferred):
+   - Requires DRI/DRM device access (`/dev/dri/card0`)
+   - Full hardware GPU acceleration
+   - Best performance
+   - Config: `/etc/X11/xorg-nvidia-headless.conf`
+   - Options: `AllowEmptyInitialConfiguration`, `UseDisplayDevice=None`
+
+2. **Xvfb with NVIDIA Vulkan** (fallback):
+   - Virtual framebuffer for X11 protocol
+   - Chrome uses NVIDIA GPU via ANGLE/Vulkan
+   - CDP captures frames from Chrome's internal GPU rendering
+   - Set `DUEL_CAPTURE_USE_XVFB=true` when active
+
+3. **Failure Mode**:
+   - If neither Xorg nor Xvfb can provide WebGPU, deployment FAILS
+   - No soft fallback to headless mode (doesn't support WebGPU)
+   - Explicit display accessibility verification required
+
+**Environment Variables:**
+```bash
+DISPLAY=:99                                                    # X server display
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json      # Force NVIDIA Vulkan ICD
+DUEL_CAPTURE_USE_XVFB=true/false                              # Dynamically set
+GPU_RENDERING_MODE=xorg|xvfb-vulkan                           # Rendering mode indicator
+STREAM_CAPTURE_HEADLESS=false                                 # Must be false for WebGPU
+STREAM_CAPTURE_CHANNEL=chrome-dev                             # Use Chrome Dev
+```
+
+**Deployment Validation:**
+- Script verifies NVIDIA GPU is accessible via `nvidia-smi`
+- Checks Vulkan ICD availability via `vulkaninfo`
+- Ensures display server (Xorg/Xvfb) is running via `xdpyinfo`
+- Fails deployment if WebGPU cannot be initialized
+
+**Files Changed:**
+- `scripts/deploy-vast.sh` - Complete GPU setup logic
+- `ecosystem.config.cjs` - Environment variable passthrough
+- `AGENTS.md` - Deployment architecture documentation
+
+### Audio Capture via PulseAudio (Commits 3b6f1ee, aab66b0, b9d2e41, Feb 26 2026)
+
+**Feature**: Capture game music and sound effects in RTMP streams.
+
+**Setup:**
+- User-mode PulseAudio with `chrome_audio` virtual sink
+- `XDG_RUNTIME_DIR=/tmp/pulse-runtime` for socket location
+- FFmpeg captures from `chrome_audio.monitor` device
+- Graceful fallback to silent audio if PulseAudio unavailable
+
+**Audio Stability Improvements:**
+- `thread_queue_size=1024` prevents buffer underruns
+- `use_wallclock_as_timestamps=1` for real-time timing
+- `aresample=async=1000:first_pts=0` recovers from audio drift (22ms threshold)
+- Removed `-shortest` flag that caused audio dropouts during video buffering
+
+**Configuration:**
+```bash
+STREAM_AUDIO_ENABLED=true
+PULSE_AUDIO_DEVICE=chrome_audio.monitor
+PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+XDG_RUNTIME_DIR=/tmp/pulse-runtime
+```
+
+**Files Changed:**
+- `scripts/deploy-vast.sh` - PulseAudio setup
+- `packages/server/src/streaming/rtmp-bridge.ts` - Audio capture
+- `ecosystem.config.cjs` - Environment variables
+- `packages/server/.env.example` - Documentation
+
+### RTMP Streaming Improvements (Commits 4c630f12, 5dbd239, Feb 26 2026)
+
+**Buffering Improvements:**
+- Changed x264 tune from 'zerolatency' to 'film' (allows B-frames for better compression)
+- Increased buffer multiplier from 2x to 4x bitrate (18000k bufsize)
+- Added FLV flags: `flvflags=no_duration_filesize`
+- Improved input buffering: `thread_queue_size` + `genpts+discardcorrupt`
+
+**Multi-Platform Streaming:**
+- Twitch: `rtmp://live.twitch.tv/app`
+- Kick: `rtmps://fa723fc1b171.global-contribute.live-video.net/app` (fixed URL)
+- X/Twitter: `rtmp://sg.pscp.tv:80/x`
+- YouTube: Explicitly disabled (set `YOUTUBE_STREAM_KEY=""`)
+
+**Stream Key Management:**
+- Explicit unset/re-export prevents stale environment values
+- Masked logging for security (`***configured***`)
+- Passed through GitHub secrets → SSH → .env file
+
+**Configuration:**
+```bash
+STREAM_LOW_LATENCY=false  # Use 'film' tune (default)
+STREAMING_CANONICAL_PLATFORM=twitch  # Changed from youtube
+STREAMING_PUBLIC_DELAY_MS=0  # Live betting mode (was 12-15s)
+```
+
+**Files Changed:**
+- `packages/server/src/streaming/rtmp-bridge.ts`
+- `scripts/deploy-vast.sh`
+- `ecosystem.config.cjs`
+- `.github/workflows/deploy-vast.yml`
+
+### Deployment Automation (Commits 6302fa4, abfe0ce, b466233, Feb 26 2026)
+
+**First-Time Setup Support:**
+- Auto-clone repository if `/root/hyperscape` doesn't exist
+- Automated bun installation with unzip dependency
+- Handles fresh Vast.ai instances without manual setup
+
+**Secrets Injection Overhaul:**
+- Write secrets to `/tmp` before git reset
+- Restore from `/tmp` after git reset
+- Prevents DATABASE_URL and stream keys from being lost
+
+**PM2 Environment Handling:**
+- Use `pm2 kill` instead of `pm2 delete` to restart daemon with fresh env
+- Ensures environment variables are properly loaded on every deployment
+
+**Database Warmup:**
+- 3 retry attempts after schema push
+- Prevents cold start failures
+- Uses pg Pool with max: 5 connections
+
+**Solana Keypair Setup:**
+- Automated from `SOLANA_DEPLOYER_PRIVATE_KEY` env var
+- Writes to `~/.config/solana/id.json` via `scripts/decode-key.ts`
+- Used by keeper bot and Anchor tools
+
+**Diagnostics:**
+- Comprehensive streaming diagnostics after deployment
+- FFmpeg process check, RTMP status file check
+- PulseAudio sink verification
+- PM2 logs filtered for streaming keywords
+- 30s wait for streaming initialization
+
+**Files Changed:**
+- `scripts/deploy-vast.sh`
+- `.github/workflows/deploy-vast.yml`
+- `ecosystem.config.cjs`
+
+---
+
+## AI Agent Improvements
+
+### Action Locks and Fast-Tick Mode (Commit 60a03f49, Feb 26 2026)
+
+**Performance and responsiveness improvements:**
+
+**Action Locks:**
+- Skip LLM ticks while movement is in progress
+- Prevents decision churn during long walks
+- 50% reduction in LLM calls for movement-heavy tasks
+
+**Fast-Tick Mode:**
+- 2s tick interval after movement/goal changes (vs 10s normal)
+- Quick follow-up decisions after completing actions
+- More responsive autonomous behavior
+
+**Short-Circuit LLM:**
+- Skip LLM for obvious decisions (repeat resource, banking, set goal)
+- 100% reduction in LLM calls for repetitive tasks
+- Faster response times
+
+**Movement Tracking:**
+- `waitForMovementComplete()` ensures agent reaches destination
+- `isMoving` state prevents premature interactions
+- Banking actions now await movement completion
+
+**Last Action Tracking:**
+- LLM prompt includes last action name and result
+- Better decision continuity
+- Avoids repeating failed actions
+
+**Files Changed:**
+- `packages/plugin-hyperscape/src/managers/autonomous-behavior-manager.ts`
+- `packages/plugin-hyperscape/src/services/HyperscapeService.ts`
+- `packages/plugin-hyperscape/src/actions/banking.ts`
+
+### Quest-Driven Tool Acquisition (Commit 60a03f49, Feb 26 2026)
+
+**Replaced starter chest system with quest-based tool acquisition:**
+
+**Tool-Granting Quests:**
+- `lumberjacks_first_lesson` (Forester Wilma) → Bronze Hatchet + Tinderbox
+- `fresh_catch` (Fisherman Pete) → Small Fishing Net
+- `torvins_tools` (Torvin) → Bronze Pickaxe + Hammer
+
+**Behavior:**
+- Tools granted immediately on quest accept (no need to complete)
+- Questing goal has highest priority when agent lacks tools
+- More realistic gameplay progression
+
+**Files Changed:**
+- `packages/plugin-hyperscape/src/actions/quests.ts`
+- `packages/plugin-hyperscape/src/providers/goalProvider.ts`
+- Removed `lootStarterChestAction`
+
+### Autonomous Banking (Commit 60a03f49, Feb 26 2026)
+
+**Agents automatically manage inventory:**
+
+**Banking Protocol:**
+- Proper packet sequence: `bankOpen` → `bankDeposit/bankDepositAll/bankWithdraw` → `bankClose`
+- Replaces broken `bankAction` packet
+- Banking actions now await movement completion
+- Auto-walks to nearest bank if distance > 5 units
+
+**Essential Tools** (never deposited by `bankDepositAll`):
+- Hatchets (bronze, iron, steel, mithril)
+- Pickaxes (bronze, iron, steel, mithril)
+- Tinderbox
+- Small Fishing Net
+
+**Banking Goal:**
+- Triggers when inventory >= 25/28 slots
+- Auto-restores previous goal after banking
+- Inventory count displayed with warnings
+
+**Files Changed:**
+- `packages/plugin-hyperscape/src/actions/banking.ts`
+- `packages/plugin-hyperscape/src/providers/goalProvider.ts`
+- `packages/plugin-hyperscape/src/services/HyperscapeService.ts`
+
+### Resource Detection Fix (Commit 60a03f49, Feb 26 2026)
+
+**Increased resource approach range from 20m to 40m:**
+- Fixes "choppableTrees=0" errors despite visible trees
+- Matches server-side skills validation range
+- Applied to CHOP_TREE, MINE_ROCK, and CATCH_FISH actions
+
+**Files Changed:**
+- `packages/plugin-hyperscape/src/actions/skills.ts`
+
+### Model Agent Stability (PR #945, Feb 26 2026)
+
+**Database Isolation:**
+- Force PGLite for agents
+- Prevent destructive migrations on game DB
+- Separate database per agent runtime
+
+**Initialization Timeout:**
+- 45s timeout on runtime init prevents indefinite hangs
+- Graceful error handling with cleanup
+
+**Event Listener Cleanup:**
+- Duplication guard prevents memory leaks
+- Proper AbortController usage
+
+**Graceful Shutdown:**
+- 10s timeout on runtime.stop()
+- Dangling promise cleanup
+- WASM heap cleanup via explicit DB adapter close
+
+**Circuit Breaker:**
+- 3 consecutive failure limit
+- 8 max reconnect retries
+- Exponential backoff
+
+**Duel Recovery:**
+- Check contestant status independently during ANNOUNCEMENT phase
+- Prevents stuck duels from agent crashes
+
+**Files Changed:**
+- `packages/server/src/eliza/AgentManager.ts`
+- `packages/server/src/eliza/EmbeddedHyperscapeService.ts`
+- `packages/plugin-hyperscape/src/services/HyperscapeService.ts`
+
+---
+
+## Client & Build Fixes
+
+### Vite Polyfills Fix (Commit e012ed2, Feb 26 2026)
+
+**Problem:** Production builds failed with "Failed to resolve module specifier" errors for `vite-plugin-node-polyfills/shims/*` imports.
+
+**Solution:** Add aliases to resolve shims to actual dist files:
+
+```typescript
+// vite.config.ts
+resolve: {
+  alias: {
+    'vite-plugin-node-polyfills/shims/buffer': 'vite-plugin-node-polyfills/dist/shims/buffer',
+    'vite-plugin-node-polyfills/shims/global': 'vite-plugin-node-polyfills/dist/shims/global',
+    'vite-plugin-node-polyfills/shims/process': 'vite-plugin-node-polyfills/dist/shims/process',
+  }
+},
+plugins: [
+  nodePolyfills({
+    protocolImports: false,  // Disable to avoid unresolved imports
+  })
+]
+```
+
+**Files Changed:**
+- `packages/client/vite.config.ts`
+
+### CSP Updates (Commits 8626299, e012ed2, 1b2e230, Feb 26 2026)
+
+**Allow data: URLs for WASM loading:**
+```
+img-src 'self' data: https: blob:;
+font-src 'self' data: https://fonts.gstatic.com;
+```
+
+**Allow Google Fonts:**
+```
+style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+font-src 'self' data: https://fonts.gstatic.com;
+```
+
+**Allow Cloudflare Insights:**
+```
+script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com;
+```
+
+**Removed broken report-uri:**
+- `/api/csp-report` endpoint didn't exist
+- CSP violations no longer reported to server
+
+**Files Changed:**
+- `packages/client/public/_headers`
+
+### Visual Testing Fix (Commit 205f964, Feb 27 2026)
+
+**Problem:** WebGPU doesn't support `readPixels()` for pixel reading.
+
+**Solution:** Use 2D canvas `drawImage()` for WebGPU pixel reading:
+
+```typescript
+// visualTesting.ts
+// WebGPU: Use 2D canvas drawImage instead of readPixels
+const canvas2d = document.createElement('canvas');
+canvas2d.width = width;
+canvas2d.height = height;
+const ctx = canvas2d.getContext('2d');
+ctx.drawImage(renderer.domElement, 0, 0);
+const imageData = ctx.getImageData(0, 0, width, height);
+```
+
+**Files Changed:**
+- `packages/client/tests/e2e/utils/visualTesting.ts`
+
+### Error Message Updates (Commit 205f964, Feb 27 2026)
+
+**Updated error messages to reference WebGPU:**
+- `GameClient.tsx`: Updated context lost handler comments
+- `SettingsPanel.tsx`: Always show 'WebGPU' instead of conditional
+- `errorCodes.ts`: Updated `SYSTEM_WEBGL_ERROR` message to mention WebGPU
+
+**Files Changed:**
+- `packages/client/src/screens/GameClient.tsx`
+- `packages/client/src/game/panels/SettingsPanel.tsx`
+- `packages/client/src/lib/errorCodes.ts`
+
+---
+
+## Security & Configuration
+
+### JWT Secret Enforcement (Commit 3bc59db, Feb 26 2026)
+
+**JWT_SECRET is now REQUIRED in production/staging:**
+
+```typescript
+// config.ts
+if (NODE_ENV === 'production' || NODE_ENV === 'staging') {
+  if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET is required in production/staging');
+  }
+}
+```
+
+**Generate secure secret:**
+```bash
+openssl rand -base64 32
+```
+
+**Files Changed:**
+- `packages/server/src/startup/config.ts`
+- `packages/server/.env.example`
+
+### Secrets Management (Commits b466233, 55f93c6, b56b0fd, Feb 26 2026)
+
+**Added to GitHub secrets:**
+- `ARENA_EXTERNAL_BET_WRITE_KEY` - External betting integration
+- `JWT_SECRET` - Session signing (required for production)
+- `SOLANA_DEPLOYER_PRIVATE_KEY` - Solana keypair for all roles
+
+**Stream Key Security:**
+- Masked logging (`***configured***` instead of plaintext)
+- Explicit unset of stale values before PM2 start
+- Prevents accidental exposure in logs
+
+**Files Changed:**
+- `.github/workflows/deploy-vast.yml`
+- `scripts/deploy-vast.sh`
+- `ecosystem.config.cjs`
+
+---
+
+## Solana Markets
+
+### WSOL Migration (Commit 34255ee, Feb 26 2026)
+
+**Markets now use native token (WSOL) instead of custom GOLD:**
+
+```bash
+# Old
+GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump
+
+# New
+MARKET_MINT=So11111111111111111111111111111111111112  # WSOL
+```
+
+**Why:**
+- Simplifies market operations (no custom token minting/distribution)
+- Uses native token of each chain (WSOL on Solana, WETH on EVM)
+- Better liquidity (native tokens more liquid than custom tokens)
+
+**Perps Oracle Disabled:**
+- Default off (program not deployed on devnet)
+- `ENABLE_PERPS_ORACLE=false` by default
+- Re-enable when perps program deployed
+
+**Files Changed:**
+- `packages/gold-betting-demo/keeper/src/bot.ts`
+- `packages/server/src/arena/config.ts`
+- `packages/server/.env.example`
+
+---
+
+## Cloudflare Pages Deployment
+
+### Automated Client Deployment (Commit 37c3629, Feb 26 2026)
+
+**Workflow triggers on:**
+- Pushes to main branch
+- Changes to `packages/client/**` or `packages/shared/**`
+- Changes to `package.json` or `bun.lockb`
+- Manual workflow dispatch
+
+**Multi-Line Commit Message Fix (Commit 3e4bb48, Feb 26 2026):**
+
+Wrangler fails on multi-line commit messages. Extract only first line:
+
+```bash
+COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1 | tr -d '"' | cut -c1-100)
+```
+
+**Production URLs:**
+- Primary: `https://hyperscape.gg`
+- Alternative: `https://hyperscape.club`
+- Preview: `https://<commit-sha>.hyperscape.pages.dev`
+
+**Files Changed:**
+- `.github/workflows/deploy-pages.yml`
+- `.github/workflows/deploy-cloudflare.yml`
+
+---
+
+## Environment Variables
+
+### New Variables (February 2026)
+
+**GPU Rendering:**
+```bash
+GPU_RENDERING_MODE=xorg|xvfb-vulkan  # Auto-detected
+DUEL_CAPTURE_USE_XVFB=true/false     # Dynamically set
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+STREAM_CAPTURE_CHANNEL=chrome-dev
+```
+
+**Audio Streaming:**
+```bash
+STREAM_AUDIO_ENABLED=true
+PULSE_AUDIO_DEVICE=chrome_audio.monitor
+PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+XDG_RUNTIME_DIR=/tmp/pulse-runtime
+```
+
+**Streaming Quality:**
+```bash
+STREAM_LOW_LATENCY=false  # Use 'film' tune (default)
+STREAMING_CANONICAL_PLATFORM=twitch
+STREAMING_PUBLIC_DELAY_MS=0
+```
+
+**Solana Markets:**
+```bash
+MARKET_MINT=So11111111111111111111111111111111111112  # WSOL
+ENABLE_PERPS_ORACLE=false
+ARENA_EXTERNAL_BET_WRITE_KEY=your-secret-key
+```
+
+**Security:**
+```bash
+JWT_SECRET=your-secret-key  # REQUIRED in production
+ADMIN_CODE=your-admin-code  # REQUIRED for production
+```
+
+### Deprecated Variables
+
+**Removed:**
+- `GOLD_MINT` → Use `MARKET_MINT` instead
+- `DUEL_FORCE_WEBGL_FALLBACK` → WebGL no longer supported
+- `STREAM_CAPTURE_DISABLE_WEBGPU` → WebGPU always enabled
+- `YOUTUBE_STREAM_KEY` → YouTube streaming disabled
+
+---
+
+## Documentation Updates
+
+### New Documentation Files
+
+The following documentation files are referenced in CLAUDE.md and README.md but may need to be created:
+
+- `docs/webgpu-requirements.md` - Browser and GPU requirements
+- `docs/vast-deployment.md` - Vast.ai deployment guide
+- `docs/cloudflare-deployment.md` - Cloudflare Pages deployment
+- `docs/streaming-improvements-feb-2026.md` - RTMP streaming improvements
+- `docs/streaming-audio-capture.md` - PulseAudio setup
+- `docs/agent-stability-improvements.md` - Model agent stability fixes
+- `docs/solana-market-wsol-migration.md` - WSOL market token migration
+- `docs/maintenance-mode-api.md` - Maintenance mode API reference
+
+### Updated Documentation
+
+**AGENTS.md:**
+- Added Vast.ai deployment architecture section
+- Documented GPU rendering modes
+- Documented audio capture via PulseAudio
+- Documented RTMP multi-streaming
+
+**CLAUDE.md:**
+- Updated WebGPU requirements
+- Added Safari 18+ (macOS 15+) requirement
+- Documented deployment improvements
+- Added troubleshooting for WebGPU
+
+**README.md:**
+- Added WebGPU system requirements
+- Updated browser compatibility
+- Added Recent Updates section
+- Documented AI agent improvements
+
+---
+
+## Bug Fixes
+
+### X Server Socket Cleanup (Commits 8575215, 1025071, 47782ed, Feb 27 2026)
+
+**Problem:** Xvfb failed to start because `/tmp/.X11-unix/X99` socket was still present after killing Xorg.
+
+**Solution:**
+- Clean up ALL X lock files (`/tmp/.X*-lock`)
+- Remove and recreate `/tmp/.X11-unix` directory
+- Kill 'X' process in addition to Xorg/Xvfb
+- Increase sleep time to 3s for processes to fully terminate
+
+**Files Changed:**
+- `scripts/deploy-vast.sh`
+
+### Missing Environment Variable (Commit 77403a2, Feb 27 2026)
+
+**Problem:** `ReferenceError: STREAM_CAPTURE_USE_EGL is not defined` crashed RTMP bridge on startup.
+
+**Solution:**
+- Added `STREAM_CAPTURE_USE_EGL` variable to ecosystem.config.cjs
+- Added `STREAM_CAPTURE_EXECUTABLE` for custom browser path
+- Added GPU rendering flags for better performance
+- Added frame rate limit disable for smoother capture
+
+**Files Changed:**
+- `ecosystem.config.cjs`
+
+---
+
+## Commit Summary
+
+**Total Commits Analyzed:** 35 commits from Feb 26-27, 2026
+
+**Categories:**
+- WebGPU Enforcement: 5 commits
+- Vast.ai Deployment: 12 commits
+- Audio Streaming: 4 commits
+- AI Agent Improvements: 2 commits
+- Security: 4 commits
+- Client Fixes: 3 commits
+- Deployment Automation: 5 commits
+
+**Lines Changed:**
+- Estimated 2000+ lines of documentation updates
+- 500+ lines of deployment script improvements
+- 300+ lines of AI agent behavior improvements
+- 200+ lines of streaming configuration
+
+---
+
+## Migration Guide
+
+### For Developers
+
+1. **Update browser to Chrome 113+ or Edge 113+** (WebGPU required)
+2. **Set JWT_SECRET in production** (now required)
+3. **Set ADMIN_CODE in production** (recommended for security)
+4. **Update MARKET_MINT** if using Solana markets (GOLD_MINT deprecated)
+5. **Remove WebGL fallback code** from any custom implementations
+
+### For Deployers
+
+1. **Vast.ai instances must have NVIDIA GPU** with Vulkan support
+2. **Configure stream keys** in GitHub secrets (Twitch, Kick, X)
+3. **Set SOLANA_DEPLOYER_PRIVATE_KEY** for automated keypair setup
+4. **Disable YouTube streaming** (set `YOUTUBE_STREAM_KEY=""`)
+5. **Update KICK_RTMP_URL** to correct RTMPS endpoint
+
+### For Users
+
+1. **Update browser** to Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
+2. **Check WebGPU support** at [webgpureport.org](https://webgpureport.org)
+3. **No action required** if already using supported browser
+
+---
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="WebGPU Requirements" icon="display" href="/docs/webgpu-requirements">
+    Browser and GPU compatibility guide
+  </Card>
+  <Card title="Vast.ai Deployment" icon="server" href="/docs/vast-deployment">
+    GPU streaming deployment guide
+  </Card>
+  <Card title="AI Agent Guide" icon="bot" href="/wiki/ai-agents/overview">
+    ElizaOS integration and improvements
+  </Card>
+  <Card title="Deployment Guide" icon="rocket" href="/guides/deployment">
+    Complete deployment documentation
+  </Card>
+</CardGroup>
