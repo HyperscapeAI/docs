@@ -866,12 +866,13 @@ ffmpeg -version
 **Causes**:
 1. GPU not accessible in headless mode
 2. Wrong Chrome backend
-3. Missing Xvfb for headful mode
+3. Missing Xorg or EGL support
 4. WebGPU not available
+5. Incorrect headless mode flag passing
 
 **Solutions**:
 
-The deployment system now automatically detects and configures GPU rendering (commits e51a332, 30bdaf0, Feb 27 2026):
+The deployment system now automatically detects and configures GPU rendering (commits dd649da, e51a332, 30bdaf0, Feb 27 2026):
 
 ```bash
 # Automatic GPU detection (preferred)
@@ -882,6 +883,7 @@ bash scripts/deploy-vast.sh
 export DISPLAY=:99
 export DUEL_CAPTURE_USE_XVFB=false
 export GPU_RENDERING_MODE=xorg
+export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
 Xorg :99 -config /etc/X11/xorg-nvidia-headless.conf &
 
 # Manual headless EGL mode (for containers without DRM/DRI)
@@ -889,6 +891,7 @@ export DISPLAY=
 export STREAM_CAPTURE_HEADLESS=new
 export STREAM_CAPTURE_USE_EGL=true
 export GPU_RENDERING_MODE=headless-egl
+export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
 ```
 
 **Verify GPU access:**
@@ -896,7 +899,8 @@ export GPU_RENDERING_MODE=headless-egl
 # Check NVIDIA driver
 nvidia-smi
 
-# Check Vulkan support
+# Check Vulkan support (with NVIDIA-only ICD)
+export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
 vulkaninfo --summary
 
 # Check DRI devices (needed for Xorg)
@@ -904,14 +908,42 @@ ls -la /dev/dri/
 
 # Check EGL support (needed for headless)
 ls -la /usr/lib/x86_64-linux-gnu/libEGL_nvidia.so.0
+
+# Check Xorg is running (Xorg mode)
+xdpyinfo -display :99
+
+# Test Chrome with GPU
+google-chrome-unstable --headless=new --use-gl=egl \
+  --enable-unsafe-webgpu --screenshot=test.png \
+  https://get.webgl.org/webgpu/
 ```
 
 **Recent Fixes:**
-- **Commit e51a332**: Added headless EGL mode for containers without DRM
-- **Commit 30bdaf0**: Require NVIDIA Xorg, no software rendering fallback
-- **Commit 5fe4a18**: Add robust Xorg/Xvfb fallback handling
-- **Commit 263bfc5**: Use Xorg instead of Xvfb for NVIDIA GPU rendering
-- **Commit 89b78e3**: Use NVIDIA hardware Vulkan instead of SwiftShader
+- **Commit dd649da** (Feb 27, 2026): Fix headless mode flag passing (args vs Playwright option)
+- **Commit e51a332** (Feb 27, 2026): Added headless EGL mode for containers without DRM
+- **Commit 30bdaf0** (Feb 27, 2026): Require NVIDIA Xorg, no software rendering fallback
+- **Commit 5fe4a18** (Feb 27, 2026): Add robust Xorg/Xvfb fallback handling
+- **Commit 263bfc5** (Feb 27, 2026): Use Xorg instead of Xvfb for NVIDIA GPU rendering
+- **Commit 89b78e3** (Feb 27, 2026): Use NVIDIA hardware Vulkan instead of SwiftShader
+
+**Headless Mode Flag Fix (commit dd649da):**
+
+Playwright's `headless` option only accepts boolean, not string. For Chrome's new headless mode (`--headless=new`), we must:
+1. Pass `headless: false` to Playwright
+2. Add `--headless=new` to the args array manually
+
+```typescript
+// ❌ Old: Doesn't work (Playwright rejects string)
+const browser = await chromium.launch({
+  headless: 'new'  // TypeError: headless must be boolean
+});
+
+// ✅ New: Pass as arg, not option
+const browser = await chromium.launch({
+  headless: false,  // Tell Playwright not to add --headless
+  args: ['--headless=new']  // Add Chrome's new headless mode manually
+});
+```
 
 **See Also:** [GPU Rendering Guide](/devops/gpu-rendering) for complete GPU configuration
 
