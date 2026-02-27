@@ -1,257 +1,316 @@
 # WebGPU Requirements
 
-Hyperscape requires WebGPU for rendering. All shaders use Three.js Shading Language (TSL), which only works with WebGPU. WebGL fallback has been removed.
+Hyperscape requires WebGPU for rendering. This document explains why, what's required, and how to verify support.
 
 ## Why WebGPU is Required
 
-**All rendering uses TSL shaders:**
-- Terrain rendering (procedural noise, biome blending)
-- Vegetation (grass, trees, flowers with GPU instancing)
-- Fire particles (emissive materials, turbulent motion)
-- Water (reflections, refractions, caustics)
-- Post-processing (bloom, color grading, fog)
+### TSL Shaders
 
-**TSL only compiles to WebGPU** - there is no WebGL backend.
+All materials in Hyperscape use **TSL (Three Shading Language)**, which is Three.js's node-based shader system. TSL only works with the WebGPU rendering backend.
 
-## Browser Compatibility
+**Examples of TSL usage**:
+- Terrain shaders (height-based blending, triplanar mapping)
+- Water shaders (reflections, refractions, foam)
+- Vegetation shaders (wind animation, LOD transitions)
+- Post-processing (bloom, tone mapping, color grading)
+- Impostor materials (octahedral impostors for distant objects)
 
-### Supported Browsers
+### No WebGL Fallback
 
-| Browser | Minimum Version | Platform | Notes |
-|---------|----------------|----------|-------|
-| **Chrome** | 113+ | Windows, macOS, Linux | ✅ Recommended |
-| **Edge** | 113+ | Windows, macOS, Linux | ✅ Recommended |
-| **Safari** | 18+ | macOS 15+ only | ⚠️ macOS 15+ required |
-| **Firefox** | Experimental | All | ❌ Not recommended |
+**BREAKING CHANGE (Commit 47782ed)**: All WebGL fallback code was removed.
 
-### Check Your Browser
+**Removed**:
+- `RendererFactory.ts` - WebGL detection and fallback logic
+- `isWebGLForced`, `isWebGLFallbackForced`, `isWebGLFallbackAllowed` flags
+- `isWebGLAvailable`, `isOffscreenCanvasAvailable`, `canTransferCanvas` checks
+- `UniversalRenderer` type (now only `WebGPURenderer`)
+- `forceWebGL` and `disableWebGPU` URL parameters
+- `STREAM_CAPTURE_DISABLE_WEBGPU` environment variable
+- `DUEL_FORCE_WEBGL_FALLBACK` configuration option
 
-Visit [webgpureport.org](https://webgpureport.org) to verify WebGPU support.
+**Why removed**:
+- TSL shaders don't compile to WebGL
+- Maintaining two rendering paths was causing bugs
+- WebGPU is now widely supported (Chrome 113+, Edge 113+, Safari 18+)
+- Simplifies codebase and reduces maintenance burden
 
-Or check manually:
-```javascript
-// Open browser console (F12)
-if (navigator.gpu) {
-  console.log('✅ WebGPU is supported');
-  navigator.gpu.requestAdapter().then(adapter => {
-    console.log('Adapter:', adapter);
-  });
-} else {
-  console.log('❌ WebGPU is not supported');
-}
-```
+## Browser Requirements
 
-## GPU Requirements
+### Desktop
 
-### Minimum Requirements
+| Browser | Minimum Version | Notes |
+|---------|----------------|-------|
+| Chrome | 113+ | ✅ Recommended |
+| Edge | 113+ | ✅ Recommended |
+| Safari | 18+ | ⚠️ Requires macOS 15+ |
+| Firefox | Nightly | ⚠️ Behind flag, not recommended |
 
-- **GPU**: Any GPU with Vulkan 1.1+ or Metal 2+ support
-- **VRAM**: 2GB+ recommended
-- **Drivers**: Up-to-date graphics drivers
+### Mobile
 
-### Recommended GPUs
+| Platform | Browser | Notes |
+|----------|---------|-------|
+| iOS | Safari 18+ | Requires iOS 18+ |
+| Android | Chrome 113+ | Most Android devices |
 
-**Desktop:**
-- NVIDIA GTX 1060 or newer
-- AMD RX 580 or newer
-- Intel Arc A380 or newer
+### Verification
 
-**Laptop:**
-- NVIDIA GTX 1650 or newer
-- AMD RX 5500M or newer
-- Intel Iris Xe or newer
+Check your browser/GPU support at: **[webgpureport.org](https://webgpureport.org)**
 
-**macOS:**
-- M1/M2/M3 (Apple Silicon) - ✅ Excellent
-- Intel Macs with Metal 2+ - ⚠️ Requires macOS 15+
+Or check `chrome://gpu` in Chrome/Edge:
+- Look for "WebGPU: Hardware accelerated"
+- Verify "WebGPU Status" shows enabled features
 
-### Integrated Graphics
+## Server/Streaming Requirements
 
-Most modern integrated GPUs work:
-- **Intel**: Iris Xe (11th gen+), UHD Graphics 770 (12th gen+)
-- **AMD**: Radeon Vega (Ryzen 2000+)
-- **Apple**: M1/M2/M3 integrated GPU
+### GPU Hardware
 
-## Platform-Specific Notes
+**Required**:
+- NVIDIA GPU with Vulkan support
+- CUDA capability 3.5+ (most GPUs from 2014+)
+- Minimum 2GB VRAM (4GB+ recommended)
 
-### Windows
-
-**Chrome/Edge 113+** with up-to-date NVIDIA/AMD drivers.
-
-**Enable WebGPU** (usually enabled by default):
-1. Visit `chrome://flags`
-2. Search for "WebGPU"
-3. Enable "Unsafe WebGPU" (if needed)
-4. Restart browser
-
-### macOS
-
-**Safari 18+** requires **macOS 15 (Sequoia)** or later.
-
-**Chrome/Edge 113+** works on macOS 12+ with Metal 2+ GPUs.
-
-**Apple Silicon (M1/M2/M3)**: Excellent WebGPU support in all browsers.
-
-### Linux
-
-**Chrome/Edge 113+** with Vulkan 1.1+ drivers.
-
-**Install Vulkan drivers**:
+**Verify**:
 ```bash
-# Ubuntu/Debian
-sudo apt-get install mesa-vulkan-drivers vulkan-tools
+# Check GPU
+nvidia-smi
 
-# Verify Vulkan
-vulkaninfo | head -20
+# Check Vulkan support
+vulkaninfo --summary
+
+# Check CUDA version
+nvcc --version
 ```
 
-**NVIDIA GPUs**: Install proprietary drivers for best performance:
+### Software Stack
+
+**Required packages**:
 ```bash
-sudo ubuntu-drivers autoinstall
+# NVIDIA drivers
+nvidia-driver-XXX              # Match your GPU
+nvidia-utils
+
+# Vulkan
+mesa-vulkan-drivers
+vulkan-tools
+libvulkan1
+
+# X Server (for display protocol)
+xserver-xorg-core              # For Xorg
+xvfb                           # For Xvfb fallback
+x11-xserver-utils              # xdpyinfo, etc.
+
+# Chrome
+google-chrome-unstable         # Chrome Dev channel
 ```
 
-## Error Handling
+### Display Server Setup
 
-### WebGPU Not Available
+Hyperscape streaming requires a display server (Xorg or Xvfb) for Chrome to access WebGPU.
 
-If WebGPU is not available, Hyperscape shows a user-friendly error screen:
+#### Option 1: Xorg with NVIDIA (Preferred)
 
+**Requirements**:
+- DRI/DRM device access (`/dev/dri/card0`)
+- NVIDIA X driver installed
+
+**Configuration** (`/etc/X11/xorg-nvidia-headless.conf`):
 ```
-WebGPU Not Supported
+Section "ServerLayout"
+    Identifier     "Layout0"
+    Screen      0  "Screen0"
+EndSection
 
-Hyperscape requires WebGPU for rendering.
+Section "Device"
+    Identifier     "Device0"
+    Driver         "nvidia"
+    BusID          "PCI:X:Y:Z"                    # Auto-detected from nvidia-smi
+    Option         "AllowEmptyInitialConfiguration" "True"
+    Option         "UseDisplayDevice" "None"
+EndSection
 
-Your browser or GPU does not support WebGPU.
-
-Please use:
-- Chrome 113+ or Edge 113+ (Windows/macOS/Linux)
-- Safari 18+ (macOS 15+ only)
-
-Check compatibility: webgpureport.org
+Section "Screen"
+    Identifier     "Screen0"
+    Device         "Device0"
+    DefaultDepth    24
+    SubSection     "Display"
+        Depth       24
+        Virtual    1920 1080
+    EndSubSection
+EndSection
 ```
 
-**No fallback rendering** - the game will not run without WebGPU.
-
-### Why No WebGL Fallback?
-
-Previous attempts to support WebGL fallback failed because:
-1. **TSL shaders don't compile to WebGL** - would require rewriting all shaders
-2. **Performance degradation** - WebGL lacks compute shaders, storage buffers, and other features
-3. **Maintenance burden** - maintaining two rendering pipelines doubles complexity
-4. **WebGPU adoption** - Chrome/Edge 113+ (May 2023) have >90% market share
-
-## Headless Rendering (Server-Side)
-
-### Vast.ai Deployment
-
-The Vast.ai deployment uses headless Chrome with WebGPU for stream capture:
-
-**Configuration:**
+**Start Xorg**:
 ```bash
-STREAM_CAPTURE_CHANNEL=chrome-dev  # google-chrome-unstable
-STREAM_CAPTURE_ANGLE=vulkan        # Vulkan ANGLE backend
-STREAM_CAPTURE_HEADLESS=false      # Use Xvfb for GPU access
-DUEL_CAPTURE_USE_XVFB=true         # Virtual display
+Xorg :99 -config /etc/X11/xorg-nvidia-headless.conf -noreset &
+export DISPLAY=:99
 ```
 
-**Requirements:**
-- NVIDIA GPU with Vulkan 1.1+ support
-- Vulkan drivers installed
-- Chrome Dev channel (google-chrome-unstable)
-- Xvfb for virtual display
-
-See [docs/vast-deployment.md](docs/vast-deployment.md) for full setup.
-
-### Docker
-
-WebGPU in Docker requires:
-- GPU passthrough (`--gpus all`)
-- Vulkan drivers in container
-- X11 or Xvfb for display
-
-**Not recommended** - use Vast.ai or bare metal for GPU rendering.
-
-## Testing WebGPU Support
-
-### Browser Test
-
-```javascript
-// Check WebGPU availability
-async function testWebGPU() {
-  if (!navigator.gpu) {
-    console.error('WebGPU not supported');
-    return;
-  }
-  
-  const adapter = await navigator.gpu.requestAdapter();
-  if (!adapter) {
-    console.error('No WebGPU adapter found');
-    return;
-  }
-  
-  console.log('✅ WebGPU is supported');
-  console.log('Adapter:', adapter);
-  
-  const device = await adapter.requestDevice();
-  console.log('Device:', device);
-  console.log('Limits:', device.limits);
-}
-
-testWebGPU();
+**Verify**:
+```bash
+xdpyinfo -display :99
+glxinfo -display :99 | grep "OpenGL renderer"  # Should show NVIDIA GPU
 ```
 
-### Feature Detection
+#### Option 2: Xvfb with NVIDIA Vulkan (Fallback)
 
-Hyperscape checks for WebGPU on startup:
+**When to use**:
+- Container without DRM device access
+- Xorg fails to initialize NVIDIA driver
+
+**How it works**:
+- Xvfb provides X11 protocol (virtual framebuffer)
+- Chrome uses NVIDIA GPU via ANGLE/Vulkan (not the framebuffer)
+- CDP captures frames from Chrome's internal GPU rendering
+
+**Start Xvfb**:
+```bash
+Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &
+export DISPLAY=:99
+export DUEL_CAPTURE_USE_XVFB=true
+```
+
+**Verify**:
+```bash
+xdpyinfo -display :99
+# Chrome will use Vulkan directly, not the Xvfb framebuffer
+```
+
+### Vulkan Configuration
+
+**Force NVIDIA ICD** (avoid Mesa conflicts):
+```bash
+export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+```
+
+**Why this is needed**:
+- Some containers have broken Mesa Vulkan ICDs
+- Mesa ICDs can conflict with NVIDIA drivers
+- Forcing NVIDIA-only ICD ensures consistent behavior
+
+**Verify Vulkan**:
+```bash
+vulkaninfo --summary
+# Should show NVIDIA GPU, not llvmpipe/lavapipe
+```
+
+## Chrome Configuration
+
+### Launch Arguments
+
+Chrome must be launched with specific flags for WebGPU:
+
+```bash
+# WebGPU essentials
+--enable-unsafe-webgpu
+--enable-features=Vulkan,UseSkiaRenderer,WebGPU
+--ignore-gpu-blocklist
+--enable-gpu-rasterization
+
+# ANGLE/Vulkan backend
+--use-gl=angle
+--use-angle=vulkan
+
+# Headless mode (if using Xvfb)
+--headless=new                 # Chrome's new headless mode with GPU support
+
+# Sandbox & stability
+--no-sandbox
+--disable-dev-shm-usage
+--disable-web-security
+```
+
+### Playwright Configuration
 
 ```typescript
-// packages/shared/src/systems/client/ClientGraphics.ts
-if (!navigator.gpu) {
-  throw new Error('WebGPU is not supported. Please use Chrome 113+ or Edge 113+.');
-}
-
-const adapter = await navigator.gpu.requestAdapter();
-if (!adapter) {
-  throw new Error('No WebGPU adapter found. Please update your graphics drivers.');
-}
+const browser = await chromium.launch({
+  headless: false,              // Must be false for Xorg/Xvfb
+  channel: 'chrome-dev',        // Use Chrome Dev channel
+  args: [
+    '--use-gl=angle',
+    '--use-angle=vulkan',
+    '--enable-unsafe-webgpu',
+    '--enable-features=Vulkan,UseSkiaRenderer,WebGPU',
+    '--ignore-gpu-blocklist',
+    '--enable-gpu-rasterization',
+    '--no-sandbox',
+    '--disable-dev-shm-usage',
+  ],
+  env: {
+    DISPLAY: ':99',
+    VK_ICD_FILENAMES: '/usr/share/vulkan/icd.d/nvidia_icd.json',
+  },
+});
 ```
 
-## Migration from WebGL
+## Troubleshooting
 
-**Breaking change** (commit `3bc59db`): WebGL fallback removed.
+### "WebGPU not supported" Error
 
-**Impact:**
-- Users on old browsers (Chrome <113) cannot play
-- Users without WebGPU-capable GPUs cannot play
-- Error screen shown instead of degraded experience
+**Cause**: Chrome cannot access WebGPU API
 
-**Rationale:**
-- TSL shaders require WebGPU (no WebGL compilation)
-- WebGPU adoption is high enough (Chrome 113+ = May 2023)
-- Maintaining two rendering pipelines is not sustainable
+**Solutions**:
+1. Verify browser version: `google-chrome-unstable --version` (should be 113+)
+2. Check `chrome://gpu` - WebGPU should show "Hardware accelerated"
+3. Verify Vulkan works: `vulkaninfo --summary`
+4. Check display server: `xdpyinfo -display $DISPLAY`
+5. Verify `VK_ICD_FILENAMES` is set correctly
 
-## Future Considerations
+### Black Screen / No Rendering
 
-### WebGPU Adoption
+**Cause**: WebGPU initialized but rendering failed
 
-As of February 2026:
-- **Chrome/Edge**: 113+ (May 2023) - ~95% of users
-- **Safari**: 18+ (September 2024) - macOS 15+ only
-- **Firefox**: Experimental - not recommended
+**Solutions**:
+1. Check browser console for WebGPU errors
+2. Verify shaders compiled: Look for TSL compilation errors
+3. Check GPU memory: `nvidia-smi` (should have free VRAM)
+4. Verify display server is using GPU: `glxinfo | grep renderer`
 
-### Mobile Support
+### Xorg Falls Back to Software Rendering
 
-**iOS**: Safari 18+ on iOS 18+ (September 2024)
-- iPhone 12 and newer
-- iPad Pro 2020 and newer
+**Symptoms**:
+- Xorg starts but uses swrast (software rendering)
+- `/var/log/Xorg.99.log` shows "IGLX: Loaded and initialized swrast"
 
-**Android**: Chrome 113+ (May 2023)
-- Most devices with Vulkan 1.1+ support
-- Requires Android 10+ with compatible GPU
+**Cause**: NVIDIA driver failed to initialize
 
-## Related Documentation
+**Solutions**:
+1. Check NVIDIA driver is installed: `nvidia-smi`
+2. Verify DRI devices exist: `ls -la /dev/dri/`
+3. Check Xorg config has correct BusID
+4. Review Xorg errors: `grep "(EE)" /var/log/Xorg.99.log`
+5. Try Xvfb fallback instead
 
-- [docs/vast-deployment.md](docs/vast-deployment.md) - Headless WebGPU rendering
-- [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) - Client deployment
-- [packages/shared/src/systems/client/ClientGraphics.ts](../packages/shared/src/systems/client/ClientGraphics.ts) - WebGPU initialization
-- [packages/shared/src/utils/rendering/RendererFactory.ts](../packages/shared/src/utils/rendering/RendererFactory.ts) - Renderer creation
+### Vulkan Initialization Failed
+
+**Symptoms**:
+- `vulkaninfo` fails or shows no devices
+- Chrome shows "Vulkan: Disabled"
+
+**Cause**: Vulkan ICD not found or broken
+
+**Solutions**:
+1. Install Vulkan packages: `apt install mesa-vulkan-drivers vulkan-tools libvulkan1`
+2. Verify ICD file exists: `ls -la /usr/share/vulkan/icd.d/nvidia_icd.json`
+3. Check ICD points to valid library: `cat /usr/share/vulkan/icd.d/nvidia_icd.json`
+4. Force NVIDIA ICD: `export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json`
+
+## Deployment Checklist
+
+Before deploying to a GPU server (Vast.ai, etc.):
+
+- [ ] NVIDIA GPU with Vulkan support
+- [ ] NVIDIA drivers installed (`nvidia-smi` works)
+- [ ] Vulkan tools installed (`vulkaninfo` works)
+- [ ] X server packages installed (Xorg or Xvfb)
+- [ ] Chrome Dev channel installed (`google-chrome-unstable`)
+- [ ] Display server starts successfully (`xdpyinfo -display :99`)
+- [ ] Vulkan ICD configured (`VK_ICD_FILENAMES` set)
+- [ ] WebGPU works in Chrome (`chrome://gpu` shows hardware accelerated)
+
+## See Also
+
+- [CLAUDE.md](../CLAUDE.md#critical-webgpu-required-no-webgl) - WebGPU development rules
+- [AGENTS.md](../AGENTS.md#critical-webgpu-required-no-webgl) - AI assistant guidance
+- [docs/vast-deployment.md](vast-deployment.md) - Vast.ai deployment with GPU setup
+- [docs/streaming-configuration.md](streaming-configuration.md) - Streaming configuration reference
+- [scripts/deploy-vast.sh](../scripts/deploy-vast.sh) - Deployment script with GPU setup
