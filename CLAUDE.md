@@ -432,17 +432,55 @@ Branch-based deployment:
 
 ### Vast.ai (GPU Streaming)
 
-Automated deployment with maintenance mode:
-- Workflow: `.github/workflows/deploy-vast.yml`
+Automated deployment with maintenance mode and WebGPU-capable GPU rendering:
+
+**Workflow**: `.github/workflows/deploy-vast.yml`
 - Triggers after CI passes on `main`
 - Manual trigger: `workflow_dispatch`
-- Features:
-  - Maintenance mode API (pauses duel cycles)
-  - Health checking before exit
-  - DATABASE_URL persistence through git reset
-  - Vulkan driver installation
-  - Chrome Dev channel for WebGPU
-- See [docs/vast-deployment.md](docs/vast-deployment.md)
+
+**GPU Rendering Setup** (WebGPU Required):
+1. **Xorg with NVIDIA** (preferred):
+   - Headless Xorg configuration with NVIDIA driver
+   - Config: `/etc/X11/xorg-nvidia-headless.conf`
+   - Options: `AllowEmptyInitialConfiguration`, `UseDisplayDevice=None`
+   - Auto-detects GPU BusID via `nvidia-smi`
+   - Verifies with `xdpyinfo` before use
+   - Checks for swrast fallback (software rendering) and rejects it
+
+2. **Xvfb with NVIDIA Vulkan** (fallback):
+   - Virtual framebuffer for X11 protocol
+   - Chrome uses NVIDIA GPU via ANGLE/Vulkan
+   - CDP captures frames from Chrome's internal GPU rendering
+   - Set `DUEL_CAPTURE_USE_XVFB=true` when active
+
+3. **Failure Mode**:
+   - If neither Xorg nor Xvfb can provide WebGPU, deployment FAILS
+   - No soft fallback to headless mode (doesn't support WebGPU)
+   - Explicit display accessibility verification required
+
+**Environment Variables**:
+- `DISPLAY=:99` - X server display number
+- `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json` - Force NVIDIA Vulkan ICD
+- `DUEL_CAPTURE_USE_XVFB=true/false` - Dynamically set based on GPU setup outcome
+- `GPU_RENDERING_MODE=xorg|xvfb-vulkan` - Rendering mode indicator
+- `STREAM_CAPTURE_HEADLESS=false` - Must be false for WebGPU
+- `STREAM_CAPTURE_CHANNEL=chrome-dev` - Use Chrome Dev for WebGPU support
+
+**Audio Capture** (PulseAudio):
+- User-mode PulseAudio with `chrome_audio` virtual sink
+- `XDG_RUNTIME_DIR=/tmp/pulse-runtime` for socket location
+- FFmpeg captures from `chrome_audio.monitor` device
+- Fallback to silent audio if PulseAudio unavailable
+
+**Deployment Features**:
+- Maintenance mode API (pauses duel cycles)
+- Health checking before exit (120s, 30 retries)
+- DATABASE_URL persistence through git reset
+- Comprehensive streaming diagnostics (FFmpeg, RTMP, PulseAudio checks)
+- Solana keypair setup from `SOLANA_DEPLOYER_PRIVATE_KEY`
+- Stream key management (explicit unset/re-export prevents stale values)
+
+See [docs/vast-deployment.md](docs/vast-deployment.md) for full deployment guide.
 
 ### Maintenance Mode API
 
