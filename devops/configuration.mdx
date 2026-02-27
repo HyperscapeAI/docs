@@ -96,7 +96,7 @@ PULSE_AUDIO_DEVICE=chrome_audio.monitor      # PulseAudio monitor device
 PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native  # PulseAudio socket path
 XDG_RUNTIME_DIR=/tmp/pulse-runtime           # Runtime directory for PulseAudio
 
-# GPU Rendering Configuration (commits e51a332, 30bdaf0, Feb 27 2026)
+# GPU Rendering Configuration (commits dd649da, e51a332, 30bdaf0, Feb 27 2026)
 # Rendering mode: xorg (preferred) or headless-egl (fallback)
 GPU_RENDERING_MODE=xorg                      # Auto-detected by deploy script
 DISPLAY=:99                                  # X display (empty for headless EGL)
@@ -106,14 +106,17 @@ VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json  # Force NVIDIA Vulkan 
 # Chrome Capture Configuration
 STREAM_CAPTURE_MODE=cdp                      # cdp (default), mediarecorder, or webcodecs
 STREAM_CAPTURE_HEADLESS=false                # false (Xorg), new (headless EGL), or true (legacy)
+                                             # NOTE: Playwright headless option only accepts boolean
+                                             # For Chrome's new headless mode, pass headless=false to Playwright
+                                             # and add --headless=new to args array (commit dd649da)
 STREAM_CAPTURE_USE_EGL=false                 # true for headless EGL mode
 STREAM_CAPTURE_CHANNEL=chrome-dev            # Use Chrome Dev channel for WebGPU
 STREAM_CAPTURE_ANGLE=vulkan                  # vulkan (default) or gl
 STREAM_CAPTURE_DISABLE_WEBGPU=false          # WebGPU enabled (required for TSL shaders)
 STREAM_CDP_QUALITY=80                        # JPEG quality for CDP screencast (1-100)
 STREAM_FPS=30                                # Target frames per second
-STREAM_CAPTURE_WIDTH=1280                    # Capture resolution width
-STREAM_CAPTURE_HEIGHT=720                    # Capture resolution height
+STREAM_CAPTURE_WIDTH=1280                    # Capture resolution width (must be even)
+STREAM_CAPTURE_HEIGHT=720                    # Capture resolution height (must be even)
 
 # Stream Health Monitoring (commit 14a1e1b, Feb 25 2026)
 STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000     # Recovery timeout (default: 30s)
