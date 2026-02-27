@@ -1,0 +1,649 @@
+---
+title: "February 2026 Updates"
+description: "Comprehensive changelog for February 2026 commits"
+icon: "clock"
+---
+
+## Overview
+
+February 2026 brought major improvements to streaming infrastructure, AI agent stability, and deployment automation. This changelog covers 100+ commits with focus on production reliability.
+
+## Streaming Infrastructure
+
+### GPU Rendering Overhaul (Feb 27, 2026)
+
+**Headless EGL Mode** (commit e51a332):
+- Added headless EGL mode for containers without DRM/DRI access
+- Auto-detect DRI devices and try Xorg if available
+- Fall back to headless EGL if DRI unavailable
+- Support `STREAM_CAPTURE_HEADLESS=new` for Chrome's new headless mode
+- Support `STREAM_CAPTURE_USE_EGL=true` for EGL rendering
+
+**Hardware GPU Required** (commit 30bdaf0):
+- WebGPU requires hardware GPU rendering
+- Xvfb software rendering too slow for streaming
+- Fail fast if Xorg/GPU setup fails
+- No software rendering fallback
+
+**Robust Xorg/Xvfb Fallback** (commit 5fe4a18):
+- Check if nvidia-smi works before attempting Xorg
+- Verify X server responds with xdpyinfo before using it
+- Add diagnostic logging for Xorg failures
+- Properly set DUEL_CAPTURE_USE_XVFB based on outcome
+
+**Xorg for NVIDIA GPU** (commit 263bfc5):
+- Use Xorg instead of Xvfb for NVIDIA GPU rendering
+- Xvfb is software framebuffer, cannot access physical GPU
+- Force NVIDIA-only Vulkan ICD (VK_ICD_FILENAMES)
+- Enable GPU rendering without physical display
+
+**NVIDIA Hardware Vulkan** (commit 89b78e3):
+- Force NVIDIA ICD via VK_ICD_FILENAMES
+- Use vulkan ANGLE backend (hardware accelerated)
+- Remove `--enable-unsafe-swiftshader` (not needed with hardware Vulkan)
+
+### Audio Streaming (Feb 26, 2026)
+
+**PulseAudio Integration** (commit 3b6f1ee):
+- Install PulseAudio and create virtual sink (chrome_audio)
+- Configure Chrome browser to use PulseAudio output
+- Update FFmpeg to capture from PulseAudio monitor
+- Add STREAM_AUDIO_ENABLED and PULSE_AUDIO_DEVICE config options
+- Improve FFmpeg buffering with 'film' tune and 4x buffer multiplier
+- Add input buffering with thread_queue_size for stability
+- Fix Kick RTMP URL default to working endpoint
+
+**PulseAudio Permissions** (commit aab66b0):
+- Add root user to pulse-access group for system-wide access
+- Create /run/pulse with proper permissions (777) for FFmpeg access
+- Export PULSE_SERVER env var in both deploy script and PM2 config
+- Add pactl check before using PulseAudio to gracefully fall back
+- Verify chrome_audio sink exists before attempting capture
+
+**Audio Stability** (commit b9d2e41):
+- Add thread_queue_size=1024 for audio input to prevent buffer underruns
+- Add use_wallclock_as_timestamps=1 for PulseAudio real-time timing
+- Add aresample=async=1000:first_pts=0 filter to recover from audio drift
+- Increase video thread_queue_size from 512 to 1024 for better a/v sync
+- Remove -shortest flag that caused audio dropouts during video buffering
+
+### Streaming Quality (Feb 26, 2026)
+
+**RTMP Buffering Improvements** (commit 4c630f12):
+- Changed default x264 tune from 'zerolatency' to 'film'
+  - Allows B-frames for better compression
+  - Better lookahead for smoother bitrate
+  - Set STREAM_LOW_LATENCY=true to restore old behavior
+- Increased buffer multiplier from 2x to 4x bitrate (18000k bufsize)
+- Added FLV flags for RTMP stability (flvflags=no_duration_filesize)
+- Improved input buffering with thread_queue_size and genpts+discardcorrupt
+
+**Stream Timing Changes** (commit 7f1b1fd):
+- Changed canonical platform from YouTube to Twitch (lower latency)
+- Changed public delay from 12000ms to 0ms for live betting
+- Configured Twitch, Kick, and X streaming destinations
+- Removed YouTube (not needed)
+
+**Stream Health Monitoring** (commit 14a1e1b):
+- Increased CDP stall threshold from 2 to 4 intervals (120s)
+- Added soft CDP recovery: restart screencast without browser/FFmpeg teardown
+- Increased FFmpeg MAX_RESTART_ATTEMPTS from 5 to 8
+- Added resetRestartAttempts() for recovery counter reset
+- Increased CAPTURE_RECOVERY_MAX_FAILURES default from 2 to 4
+
+### Stream Key Management (Feb 26, 2026)
+
+**Explicit Stream Key Export** (commits 7ee730d, a71d4ba, 50f8bec):
+- Explicitly unset and re-export stream keys before PM2 start
+- Prevents stale Vast.ai environment variables from overriding .env
+- Logs which keys are configured (masked) for debugging
+- Ensures PM2/ecosystem.config.cjs uses correct stream keys
+
+**Kick RTMP URL Fix** (commit 5dbd239):
+- Fixed Kick fallback URL from ingest.kick.com to correct IVS endpoint
+- Updated ecosystem.config.cjs Kick URL to include /app path
+- Added KICK_STREAM_KEY and KICK_RTMP_URL to GitHub secrets flow
+- Updated deploy-vast.yml to pass Kick credentials through SSH
+
+**YouTube Explicitly Disabled** (commits b466233, 8e6ae8d):
+- Add YOUTUBE_STREAM_KEY= to secrets file to override stale keys
+- Explicitly unset YOUTUBE_STREAM_KEY in deploy script
+- Ensures streaming only goes to Twitch, Kick, and X
+
+## AI Agent Improvements
+
+### Quest-Driven Tool Acquisition (Feb 26, 2026)
+
+**Replace Starter Chest** (commit 593cd56b):
+- Remove LOOT_STARTER_CHEST action and direct starter item grants
+- Update game knowledge to guide agents toward quests for tools
+  - Lumberjack's First Lesson (Bronze Hatchet + Tinderbox)
+  - Fresh Catch (Small Fishing Net)
+  - Torvin's Tools (Bronze Pickaxe)
+- Add questing goal with highest priority when agent lacks tools
+- Enhance questProvider to tell LLM exactly which quests give which tools
+
+### Autonomous Banking (Feb 26, 2026)
+
+**Bank Protocol Fix** (commit 593cd56b):
+- Replace broken bankAction with proper packet sequence:
+  - bankOpen → bankDeposit/bankDepositAll/bankWithdraw → bankClose
+- Add BANK_DEPOSIT_ALL action for autonomous bulk banking
+  - Dumps inventory, keeps essential tools (axe/pickaxe/tinderbox/net)
+- Add banking goal when inventory >= 25/28 slots
+- Add inventory count display with full/nearly-full warnings
+
+### Performance Improvements (Feb 26, 2026)
+
+**Action Locks and Fast-Tick** (commit 60a03f49):
+- Add action lock to skip LLM ticks while movement is in progress
+- Add fast-tick mode (2s) for quick follow-up after movement/goal changes
+- Short-circuit LLM for obvious decisions (repeat resource, banking, set goal)
+- Banking actions now await movement completion instead of returning early
+- Track last action name/result in prompt for LLM continuity
+- Add banking goal type with auto-restore of previous goal after deposit
+
+**Resource Detection Fix** (commit 60a03f49):
+- Increase resource approach range from 20 to 40 to match skills validation
+- Filter depleted resources from nearby entity checks
+- Fixes \"choppableTrees=0\" despite visible trees
+
+**Movement Tracking** (commit 60a03f49):
+- Add waitForMovementComplete() and isMoving tracking to HyperscapeService
+- Prevents LLM from issuing new commands while agent is moving
+
+### Stability Improvements (Feb 26, 2026)
+
+**Model Agent Stability Audit** (commit bddea54):
+- Remove POSTGRES_URL/DATABASE_URL from agent secrets to force PGLite
+  - SQL plugin was running destructive migrations against game DB
+- Add terrain fallback to duel arena lobby when no agents exist yet
+- Add 45s init timeout to ModelAgentSpawner runtime initialization
+- Add listener duplication guard to EmbeddedHyperscapeService
+- Add 10s timeout to all runtime.stop() calls to prevent hangs
+- Swallow dangling initPromise on timeout to prevent unhandled rejections
+- Add stopAllModelAgents() to graceful shutdown handler
+- Add max reconnect retry limit (8) to ElizaDuelMatchmaker
+- Add circuit breaker (3 consecutive failures) to agent spawn loop
+- Explicitly close DB adapter after agent stop for WASM heap cleanup
+- Fix ANNOUNCEMENT phase gap in agent recovery
+- Register model agents in duel scheduler via character-selection
+- Add isAgent field to PlayerJoinedPayload for agent detection
+- Switch duel-stack defaults to model agents (SPAWN_MODEL_AGENTS=true)
+
+## Deployment & CI/CD
+
+### Vast.ai Deployment (Feb 26-27, 2026)
+
+**First-Time Setup** (commit 6302fa4):
+- Handle first-time Vast.ai setup by cloning repo if it doesn't exist
+
+**Bun Installation** (commits abfe0ce, 6144c69, 84d598f):
+- Ensure bun is installed before running deploy script
+- Add debugging for bun installation
+- Install unzip before bun (required dependency)
+
+**Secrets Injection Overhaul** (commits b466233, dda4396, eec04b0, 4a6aaaf):
+- Add SOLANA_DEPLOYER_PRIVATE_KEY to secrets file
+- Use pm2 kill instead of pm2 delete to ensure daemon picks up new env vars
+- Explicitly set YOUTUBE_STREAM_KEY=\"\" to prevent stale values
+- Add logging for SOLANA_DEPLOYER_PRIVATE_KEY configuration status
+- Preserve DATABASE_URL after git reset operations
+- Write secrets to /tmp before git reset, restore after
+
+**Database Warmup** (commit d66d13a):
+- Add warmup step after schema push to verify connection
+- Retry up to 3 times to handle cold starts
+- Prevents server crash-loops from database connection failures
+
+**Solana Keypair Setup** (commit 8a677dc):
+- Update decode-key.ts to write keypair to ~/.config/solana/id.json
+- Remove hardcoded private keys from ecosystem.config.cjs
+- Add Solana keypair setup step to deploy-vast.sh
+- Pass SOLANA_DEPLOYER_PRIVATE_KEY secret in GitHub workflow
+- Add deployer-keypair.json to .gitignore
+
+**Streaming Diagnostics** (commits cf53ad4, 64d6e86):
+- Add detailed streaming diagnostics to deployment logs
+- Check FFmpeg/RTMP status after deployment
+- Show recent PM2 logs filtered for streaming keywords
+
+**Manual Deployment Trigger** (commit b1f41d5):
+- Add workflow_dispatch for manual Vast.ai deployments
+- Allows deploying hotfixes without waiting for CI
+- Useful for re-deploying after instance restart
+
+### Cloudflare Pages Deployment (Feb 26, 2026)
+
+**Automated Deployment** (commit 37c3629):
+- Add GitHub Actions workflow for Cloudflare Pages deployment
+- Triggers on changes to packages/client or packages/shared
+- Uses wrangler pages deploy instead of GitHub integration
+- Includes proper build steps for shared package first
+
+**Multi-Line Commit Message Fix** (commit 3e4bb48):
+- Handle multi-line commit messages in Pages deploy
+- Extract first line only to prevent wrangler failures
+
+**Build Command Fix** (commit 4c377ba):
+- Use build:client to include physx dependencies
+- Ensures PhysX WASM is included in client build
+
+**Wrangler Configuration** (commit 42a1a0e):
+- Update wrangler.toml to use assets directive for Pages deploy
+- Switch from pages_build_output_dir to [assets] directive
+- Works better with `wrangler deploy` for static asset hosting
+
+**Root Wrangler Cleanup** (commit f19a704):
+- Remove root wrangler.toml to avoid deployment confusion
+- Correct Pages configuration is in packages/client/wrangler.toml
+
+### CI/CD Reliability (Feb 25-26, 2026)
+
+**Frozen Lockfile** (commit 08aa151):
+- Use --frozen-lockfile in all workflows to prevent npm 403
+- Ensures bun uses only committed lockfile for resolution
+- Eliminates npm registry calls entirely in CI
+
+**NPM Retry Logic** (commit 7c9ff6c):
+- Add retry with backoff to bun install for npm 403 resilience
+- Retry up to 5 times with increasing backoff (15s, 30s, 45s, 60s, 75s)
+- Works around transient npm rate limits on GitHub Actions
+
+**Tauri Build Fixes** (commits 15250d2, f19a704, 8ce4819):
+- Split Tauri builds into unsigned/release to prevent empty APPLE_CERTIFICATE crash
+- Fix Linux and Windows desktop builds (replace --bundles app with --no-bundle)
+- Make beforeBuildCommand cross-platform using Node.js
+- Add retry logic for Windows NPM registry 403 errors
+- Make iOS build job release-only (unsigned iOS always fails)
+
+**Branch Validation** (commit b9a7c3b):
+- Explicitly checkout main before running deploy script
+- Breaks cycle where server was stuck on hackathon branch
+
+**Repository Secrets** (commits 4833b7e, 02be6bd):
+- Use repository secrets instead of environment secrets
+- Restore production environment for secrets access
+
+### Maintenance Mode API (Feb 26, 2026)
+
+**Graceful Deployment** (commit 30b52bd):
+- Add maintenance mode API for safe deployments:
+  - POST /admin/maintenance/enter - pauses new duel cycles
+  - POST /admin/maintenance/exit - resumes operations
+  - GET /admin/maintenance/status - check current state
+- Update CI/CD pipeline to use maintenance mode
+- Wait for active markets to resolve before deploying
+- Add helper scripts for manual maintenance mode control
+
+## Security & Type Safety
+
+### WebGPU Enforcement (Feb 26, 2026)
+
+**WebGPU-Only Rendering** (commit 3bc59db):
+- Enforce WebGPU-only rendering: all shaders use TSL which requires WebGPU
+- Added user-friendly error screen when WebGPU unavailable
+- No WebGL fallback possible without rewriting all shaders
+
+**JWT Secret Security** (commit 3bc59db):
+- JWT secret now throws in production/staging if not set
+- Warns in unknown environments
+- Prevents insecure production deployments
+
+### Type Safety (Feb 26, 2026)
+
+**Eliminate Explicit any Types** (commit d911359):
+- tile-movement.ts: Remove 13 any casts by properly typing BuildingCollisionService
+- proxy-routes.ts: Replace any with proper types (unknown, Buffer | string, Error)
+- ClientGraphics.ts: Add cast for setupGPUCompute after WebGPU verification
+- Remaining any types only in TSL shader code, browser polyfills, and test files
+
+**WebSocket Type Fix** (commit efba5a0):
+- Use ws WebSocket type for Fastify websocket connections
+- Fixes TypeScript errors about missing removeAllListeners and on methods
+
+**Asset-Forge Type Annotations** (commits 82f97da, 42e52af):
+- Add type annotations for traverse callbacks
+- Use bundler moduleResolution for Three.js WebGPU exports
+
+### CSRF Protection (Feb 26, 2026)
+
+**Cross-Origin CSRF Fix** (commit cd29a76):
+- Skip CSRF validation for known cross-origin clients
+- Cross-origin requests already protected by Origin validation + JWT auth
+- Add apex domain support (hyperscape.gg, hyperbet.win, hyperscape.bet)
+- Fixes "Missing CSRF token" errors from Cloudflare Pages → Railway
+
+### CSP Updates (Feb 26, 2026)
+
+**Allow data: URLs for WASM** (commit 8626299):
+- Add data: URLs for WASM loading
+- Remove broken report-uri
+
+**Allow Google Fonts** (commit e012ed2):
+- Update CSP to allow fonts.googleapis.com for style-src
+- Allow fonts.gstatic.com for font-src
+- Prevents Google Fonts loading errors
+
+### Vite Polyfills (Feb 26, 2026)
+
+**Node Polyfills Fix** (commit e012ed2):
+- Add aliases to resolve vite-plugin-node-polyfills shims
+- Disable protocolImports to avoid unresolved imports
+- Fixes "Failed to resolve module specifier" errors in production
+
+## Database & Migrations
+
+### Migration Fixes (Feb 26, 2026)
+
+**CI Integration Schema** (commit eb8652a):
+- Use drizzle-kit push for declarative schema creation in CI
+- Add SKIP_MIGRATIONS=true to skip server migration checks
+- Prevents "relation already exists" errors on fresh databases
+
+**Migration 0050 Idempotency** (commit e4b6489):
+- Add IF NOT EXISTS guards to migration 0050
+- Allows migration system to work on fresh databases
+- Fixes 42P07 errors when same table created twice
+
+**Skip Migrations Enhancement** (commit 6a5f4ee):
+- SKIP_MIGRATIONS now skips table validation AND recovery loop
+- Prevents failures when schema created externally via drizzle-kit push
+
+### Solana Configuration (Feb 26, 2026)
+
+**Market Token Migration** (commit 34255ee):
+- Replace GOLD_MINT with MARKET_MINT defaulting to WSOL
+- Markets now use native token of each chain by default
+- Disable perps oracle updates (program not deployed on devnet)
+- Add ENABLE_PERPS_ORACLE env var to re-enable when ready
+
+**Keypair Management** (commit 8a677dc):
+- Setup keypair from env var, remove hardcoded secrets
+- Update decode-key.ts to write keypair to ~/.config/solana/id.json
+- Add Solana keypair setup step to deploy-vast.sh
+- Pass SOLANA_DEPLOYER_PRIVATE_KEY secret in GitHub workflow
+
+## Code Quality
+
+### Dead Code Removal (Feb 26, 2026)
+
+**PacketHandlers Cleanup** (commit 7c3dc98):
+- Delete PacketHandlers.ts (3098 lines of dead code, never imported)
+- Update AUDIT-002 TODO: ServerNetwork already decomposed into 30+ modules
+- Update AUDIT-003 TODO: ClientNetwork handlers are intentional thin wrappers
+- Update AUDIT-005 TODO: any types reduced from 142 to ~46 after cleanup
+
+### Memory Leak Fixes (Feb 26, 2026)
+
+**InventoryInteractionSystem** (commit 3bc59db):
+- Fix memory leak using AbortController for proper event listener cleanup
+- 9 listeners were never removed, causing memory growth
+
+### Circular Dependency Fixes (Feb 25-26, 2026)
+
+**Shared/Procgen Cycle** (commits f355276, 3b9c0f2, 05c2892):
+- Move procgen from dependencies to optional peerDependencies in shared
+- Remove cross-references entirely from both package.json files
+- Add procgen as devDependency for TypeScript type resolution
+- Breaks Turbo graph cycle while allowing runtime imports
+
+**ESLint Import Plugin** (commits cadd3d5, b5c762c):
+- Disable crashing import/order rule from root config
+- eslint-plugin-import@2.32.0 incompatible with ESLint 10
+- Use 'eslint src' instead of 'eslint . --ext .ts,.tsx'
+
+## Performance Optimizations
+
+### Arena Rendering (Feb 25, 2026)
+
+**Instanced Arena Meshes** (commit c20d0fc):
+- Convert ~846 individual meshes to InstancedMesh (97% draw call reduction)
+- Remove all 28 PointLights, replace with GPU-driven TSL emissive brazier material
+- Remove "torch" particle preset, unify on enhanced "fire" preset
+- Rewrite fire particle fragment shader with smooth value noise
+- Add per-particle turbulent vertex motion for natural flame flickering
+- Delete dead code: createArenaMarker, createAmbientDust, createLobbyBenches
+
+### Renderer Initialization (Feb 25, 2026)
+
+**Best-Effort Limits** (commit 14a1e1b):
+- Make requiredLimits best-effort: try maxTextureArrayLayers: 2048 first
+- Retry with default limits if GPU rejects
+- Always WebGPU, never WebGL fallback
+
+## Duel System
+
+### Teleport VFX (Feb 25, 2026)
+
+**Fix Duplicate Teleport VFX** (commit 7bf0e14):
+- Remove premature clearDuelFlagsForCycle() that created race condition
+- Forward suppressEffect through ServerNetwork → ClientNetwork → VFX system
+- Remove duplicate PLAYER_TELEPORTED emit
+- Scale down teleport beam/ring/particle geometry to fit avatar size
+
+**Fade Beam Base** (commit ceb8909):
+- Fade beam base to prevent teleport VFX clipping through floor
+- Add bottomFade in TSL beam shader
+
+### Victory Emote (Feb 25, 2026)
+
+**Delay Victory Emote** (commit 6451373):
+- Delay victory emote by 600ms so combat cleanup doesn't override it
+- Reset emote to idle in stopCombat when agents teleport out
+
+## Dependency Updates
+
+### Security Fixes (February 2026)
+
+**Playwright** (commit a390b79):
+- Update to ^1.55.1 (fixes GHSA-7mvr-c777-76hp)
+
+**Vite** (commit a390b79):
+- Update to ^6.4.1 (fixes multiple vulnerabilities)
+
+**ajv** (commit a390b79):
+- Update to ^8.18.0 (fixes GHSA-2g4f-4pwh-qvx6)
+- ESLint compatibility fix (commit b344d9e): Only override in compatible packages
+
+### Major Updates (February 2026)
+
+**TypeScript Ecosystem:**
+- typescript: 5.9.3
+- @types/node: 25.3.0
+- @types/react: 19.2.14
+
+**Three.js:**
+- three: 0.183.1
+- @types/three: 0.183.1
+- three-mesh-bvh: 0.9.8
+
+**ElizaOS:**
+- @elizaos/core: 2.0.0-alpha.26
+
+**Development Tools:**
+- eslint: 10.0.2
+- @playwright/test: 1.58.2
+- chai: 6.2.2
+
+**UI Libraries:**
+- framer-motion: 12.34.3
+- lucide-react: 0.575.0
+- vite-plugin-node-polyfills: 0.25.0
+
+**Validation:**
+- zod: 4.3.6
+- dotenv: 17.3.1
+
+**Blockchain:**
+- @coral-xyz/anchor: 0.32.1
+- @ai-sdk/anthropic: 3.0.46
+
+## Bug Fixes
+
+### Duel System (Feb 25-26, 2026)
+
+**Loser Stuck in Arena** (commit from PR #875):
+- Split health restores into individual try/catch blocks
+- Prevents winner's exception from skipping loser's health restore
+
+**PvP Ranged XP** (commit from PR #875):
+- Fix PvP ranged attacks granting wrong XP
+- Detect weapon type (bow/crossbow/staff) for PvP kills
+- Previously used melee attack style, incorrectly granting Strength XP
+
+### Equipment & Avatars (Feb 25, 2026)
+
+**Equipment Not Visible** (commit from PR #875):
+- Subscribe to AVATAR_LOAD_COMPLETE to replay cached equipment
+- Re-send equipment on socket reconnect
+- Send existing players' equipment to joiner
+- Use all 11 EQUIPMENT_SLOT_NAMES instead of hardcoded 6
+
+**Remote Players Facing Sideways** (commit from PR #875):
+- Sync base.quaternion in PlayerRemote for correct facing
+- Force transform update after async avatar load
+- Update spatial index after teleport/respawn
+- Broadcast authoritative position to all players on join
+
+### Camera & Rendering (Feb 25, 2026)
+
+**Camera Facing Backwards** (commit from PR #829):
+- Initialize camera theta to Math.PI (behind player)
+- Previously theta=0 placed camera in front
+
+**Entity Outline Colors** (commit from PR #829):
+- Zero LUT intensity when color grading disabled
+- Prevents stale LUT data from leaking into outline rendering
+
+### Model Cache (Feb 25, 2026)
+
+**Missing Objects** (commit c98f1cc):
+- Use Map<Object3D, number> identity map instead of name-based lookup
+- Fixes duplicate mesh names causing missing objects (e.g., altars)
+
+**Lost Textures** (commit c98f1cc):
+- Extract raw RGBA pixels via canvas getImageData
+- Restore as THREE.DataTexture (no async loading race)
+- Fixes white/wrong colored textures after restart
+
+**Grey Trees in WebGPU** (commit c98f1cc):
+- Replace instanceof check with duck-type property check
+- Fixes MeshStandardNodeMaterial not matching instanceof MeshStandardMaterial
+
+### Terrain (Feb 25, 2026)
+
+**Height Offset Issues** (commit 21e0860):
+- Fix tile index calculation to account for PlaneGeometry's centered coordinates
+- Fix grid index formula to include halfSize offset
+- Fix terrain color key format (comma vs underscore typo)
+
+### Database (Feb 25, 2026)
+
+**Pool Starvation** (commit from PR #823):
+- Add write coalescing for inventory operations
+- Collapse N concurrent writes into ≤2 DB transactions per player
+- Prevents PostgreSQL deadlocks and pool exhaustion
+
+**Supavisor Compatibility** (commits 8aaaf28, f7ab9f7):
+- Disable prepared statements for Supavisor pooler compatibility
+- Fixes XX000 errors on Supabase deployments
+
+## Breaking Changes
+
+### WebGPU Required (Feb 26, 2026)
+
+**All shaders now use TSL** (commit 3bc59db):
+- WebGPU is required for rendering
+- No WebGL fallback possible
+- Browsers without WebGPU show error screen
+- Supported: Chrome 113+, Edge 113+, Safari 18+
+
+### Market Token Migration (Feb 26, 2026)
+
+**GOLD_MINT → MARKET_MINT** (commit 34255ee):
+- Markets now use native token (WSOL on Solana)
+- GOLD_MINT deprecated
+- Simplifies market operations
+- Better liquidity
+
+### YouTube Streaming Removed (Feb 26, 2026)
+
+**YouTube explicitly disabled** (commits b466233, 8e6ae8d):
+- YOUTUBE_STREAM_KEY set to empty string
+- Only stream to Twitch, Kick, and X
+- Prevents stale YouTube keys from being used
+
+## Documentation
+
+### New Guides
+
+- [GPU Rendering](/devops/gpu-rendering) - GPU configuration for streaming
+- [Audio Streaming](/devops/audio-streaming) - PulseAudio setup
+
+### Updated Guides
+
+- [Deployment](/guides/deployment) - Vast.ai, Cloudflare Pages, maintenance mode
+- [Configuration](/devops/configuration) - GPU rendering, audio streaming, stream keys
+- [Troubleshooting](/devops/troubleshooting) - GPU issues, audio issues, CI/CD fixes
+
+## Migration Guide
+
+### Upgrading from January 2026
+
+1. **Update GPU rendering configuration:**
+   ```bash
+   # Let deploy script auto-detect GPU mode
+   # No manual configuration needed
+   ```
+
+2. **Update stream keys:**
+   ```bash
+   # Add to GitHub secrets:
+   # - KICK_STREAM_KEY
+   # - KICK_RTMP_URL
+   # - X_STREAM_KEY
+   # - X_RTMP_URL
+   
+   # Remove YouTube keys (no longer used)
+   ```
+
+3. **Update Solana configuration:**
+   ```bash
+   # Replace GOLD_MINT with MARKET_MINT
+   MARKET_MINT=So11111111111111111111111111111111111112  # WSOL
+   
+   # Disable perps oracle on devnet
+   ENABLE_PERPS_ORACLE=false
+   ```
+
+4. **Update CI/CD workflows:**
+   ```bash
+   # Pull latest .github/workflows/
+   git pull origin main
+   
+   # Workflows now use --frozen-lockfile
+   # Tauri builds split into unsigned/release
+   ```
+
+5. **Verify WebGPU support:**
+   ```bash
+   # Check browser supports WebGPU
+   # Chrome 113+, Edge 113+, Safari 18+
+   ```
+
+## Contributors
+
+Special thanks to:
+- @lalalune (Shaw) - Streaming infrastructure, deployment automation
+- @dreaminglucid (Lucid) - AI agent improvements, duel system
+- @tcm390 (Ting Chien Meng) - Arena rendering optimizations
+- @SYMBaiEX - Mobile UI improvements
+
+## Related Documentation
+
+- [GPU Rendering](/devops/gpu-rendering)
+- [Audio Streaming](/devops/audio-streaming)
+- [Deployment](/guides/deployment)
+- [Configuration](/devops/configuration)
+- [Troubleshooting](/devops/troubleshooting)
