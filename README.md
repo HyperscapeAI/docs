@@ -328,28 +328,50 @@ GitHub Actions may hit npm rate limits. The CI now uses `--frozen-lockfile` and 
 
 ### AI Agents
 - ✅ **Model agent stability** - Circuit breakers, timeouts, memory leak fixes, graceful shutdown
-- ✅ **Quest-driven tools** - Replaced starter chest with quest-based tool acquisition
-- ✅ **Autonomous banking** - Agents auto-deposit at 25/28 slots, keep essential tools
-- ✅ **Action locks** - Skip LLM during movement, fast-tick mode for quick follow-up
-- ✅ **Resource detection** - Increased approach range from 20m to 40m
+- ✅ **Quest-driven tools** - Replaced starter chest with quest-based tool acquisition (Lumberjack's First Lesson, Fresh Catch, Torvin's Tools)
+- ✅ **Autonomous banking** - Agents auto-deposit at 25/28 slots, keep essential tools (axe, pickaxe, tinderbox, net)
+- ✅ **Action locks** - Skip LLM during movement, fast-tick mode (2s) for quick follow-up after movement/goal changes
+- ✅ **Short-circuit LLM** - Obvious decisions (repeat resource, banking, set goal) bypass LLM for faster response
+- ✅ **Resource detection** - Increased approach range from 20m to 40m to match skills validation
+- ✅ **Banking protocol fix** - Proper bankOpen/bankDeposit/bankDepositAll/bankWithdraw/bankClose sequence
+- ✅ **Movement awaiting** - Banking actions now await movement completion instead of returning early
 - ✅ **Database isolation** - Force PGLite for agents, prevent schema conflicts
 
 ### Streaming & Audio
-- ✅ **PulseAudio audio capture** - Game music and sound effects in streams
-- ✅ **Improved buffering** - Changed from 'zerolatency' to 'film' tune, 4x buffer size
-- ✅ **Audio stability** - Wall clock timestamps, async resampling, removed -shortest flag
-- ✅ **Multi-platform RTMP** - Twitch, Kick, X (YouTube removed)
-- ✅ **Stream key management** - Explicit unset/re-export prevents stale keys
+- ✅ **GPU rendering** - Xorg headless setup with NVIDIA for hardware-accelerated WebGPU
+- ✅ **Xvfb fallback** - Robust fallback to software rendering if Xorg fails
+- ✅ **PulseAudio audio capture** - Game music and sound effects in streams via virtual sink (chrome_audio.monitor)
+- ✅ **Improved buffering** - Changed from 'zerolatency' to 'film' tune, 4x buffer size (18000k bufsize)
+- ✅ **Audio stability** - Wall clock timestamps, async resampling (1000 samples/22ms threshold), removed -shortest flag
+- ✅ **Input buffering** - thread_queue_size=1024 for both audio and video prevents buffer underruns
+- ✅ **Multi-platform RTMP** - Twitch, Kick, X (YouTube explicitly disabled)
+- ✅ **Stream key management** - Explicit unset/re-export prevents stale keys from environment
+- ✅ **Kick URL fix** - Corrected to rtmps://fa723fc1b171.global-contribute.live-video.net/app
+- ✅ **Vulkan ICD isolation** - Force NVIDIA-only ICD (VK_ICD_FILENAMES) to avoid Mesa conflicts
+- ✅ **Chrome Dev channel** - google-chrome-unstable for WebGPU support
 - ✅ **Public delay to 0ms** - Live betting mode (was 12-15s)
 
 ### Deployment & Infrastructure
-- ✅ **Cloudflare Pages workflow** - Automated client deployment on push to main
-- ✅ **DATABASE_URL persistence** - Survives git reset operations in CI/CD
-- ✅ **Database warmup** - 3 retry attempts prevent cold start failures
-- ✅ **Vast.ai improvements** - Vulkan drivers, health checking, Chrome Dev channel, diagnostics
-- ✅ **CSRF cross-origin handling** - Apex domain support for Cloudflare Pages → Railway
-- ✅ **R2 CORS configuration** - Automated setup for cross-origin asset loading
+- ✅ **Cloudflare Pages workflow** - Automated client deployment on push to main (triggers on client/shared changes)
+- ✅ **Vast.ai maintenance mode** - Graceful deployment with pause/resume of duel cycles
+- ✅ **DATABASE_URL persistence** - Survives git reset via /tmp secrets file
+- ✅ **Database warmup** - 3 retry attempts after schema push prevent cold start failures
+- ✅ **Vast.ai diagnostics** - Comprehensive streaming diagnostics (FFmpeg, RTMP, PulseAudio checks)
+- ✅ **Health checking** - 120s wait for server health before deployment success
 - ✅ **Solana keypair setup** - Automated from SOLANA_DEPLOYER_PRIVATE_KEY env var
+- ✅ **Bun installation** - Automated check and install with unzip dependency
+- ✅ **First-time setup** - Auto-clone repo if not present on Vast.ai
+- ✅ **CSRF cross-origin handling** - Apex domain support for Cloudflare Pages → Railway
+- ✅ **R2 CORS automation** - Workflow step configures CORS for asset loading
+- ✅ **Vite polyfills fix** - Aliases resolve shims to dist files, disabled protocolImports
+- ✅ **CSP updates** - Allow Google Fonts (fonts.googleapis.com, fonts.gstatic.com), data: URLs for WASM
+
+### Security Enhancements
+- ✅ **JWT_SECRET enforcement** - Now required in production/staging (throws error if not set)
+- ✅ **ARENA_EXTERNAL_BET_WRITE_KEY** - Added to secrets for external betting integration
+- ✅ **Solana keypair management** - Setup from env var, removed hardcoded secrets
+- ✅ **Stream key security** - Masked logging, explicit unset of stale values
+- ✅ **Secrets injection overhaul** - pm2 kill instead of delete ensures daemon picks up new env vars
 
 ### Rendering & Performance
 - ✅ **WebGPU enforcement** - WebGL fallback removed (all shaders use TSL)
@@ -359,7 +381,7 @@ GitHub Actions may hit npm rate limits. The CI now uses `--frozen-lockfile` and 
 
 ### Solana Markets
 - ✅ **WSOL default** - Markets use native token (WSOL) instead of custom GOLD
-- ✅ **Perps oracle disabled** - Default off (program not deployed on devnet)
+- ✅ **Perps oracle disabled** - Default off (program not deployed on devnet), ENABLE_PERPS_ORACLE to re-enable
 - ✅ **MARKET_MINT variable** - Replaced GOLD_MINT for flexibility
 
 ## More Info
