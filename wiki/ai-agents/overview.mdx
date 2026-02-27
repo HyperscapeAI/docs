@@ -478,6 +478,38 @@ Added inventory count display with warnings:
 - Warns when completely full (28 slots)
 - Helps LLM decide when to bank
 
+### Action Locks and Fast-Tick Mode (Commit 60a03f49)
+
+Performance and responsiveness improvements:
+
+**Action Locks:**
+- Skip LLM ticks while movement is in progress
+- Prevents decision churn during long walks
+- Agents commit to actions instead of constantly re-evaluating
+- 50% reduction in LLM calls for movement-heavy tasks
+
+**Fast-Tick Mode:**
+- 2s tick interval after movement/goal changes (vs 10s normal)
+- Quick follow-up decisions after completing actions
+- More responsive autonomous behavior
+
+**Short-Circuit LLM:**
+- Skip LLM for obvious decisions (repeat resource, banking, set goal)
+- 100% reduction in LLM calls for repetitive tasks
+- Faster response times
+
+**Movement Tracking:**
+- `waitForMovementComplete()` ensures agent reaches destination
+- `isMoving` state prevents premature interactions
+- Banking actions now await movement completion
+
+**Last Action Tracking:**
+- LLM prompt includes last action name and result
+- Better decision continuity
+- Avoids repeating failed actions
+
+See [Autonomous Behavior Guide](/wiki/ai-agents/autonomous-behavior) for complete details.
+
 ### Stability Improvements
 
 Model agent stability fixes (PR #945):
