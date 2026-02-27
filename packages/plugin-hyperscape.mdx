@@ -86,6 +86,125 @@ actions: [
 | **Social** | chatMessage | `actions/social.ts` |
 | **Banking** | bankDeposit, bankWithdraw | `actions/banking.ts` |
 
+### Action Locks and Fast-Tick Mode (Commit 60a03f4, Feb 26 2026)
+
+**Problem:** Agents would spam LLM calls while waiting for movement to complete, wasting tokens and causing decision conflicts.
+
+**Solution:** Action lock system with fast-tick mode for responsive follow-up actions.
+
+**Action Lock:**
+```typescript
+// From packages/plugin-hyperscape/src/managers/autonomous-behavior-manager.ts
+
+// Skip LLM tick while movement is in progress
+if (this.actionLock) {
+  logger.debug('[AutonomousBehavior] Action locked, skipping LLM tick');
+  return;
+}
+
+// Set lock before movement
+this.actionLock = true;
+await service.executeMove({ target: resourcePosition });
+
+// Wait for movement to complete
+await service.waitForMovementComplete();
+
+// Clear lock after movement
+this.actionLock = false;
+```
+
+**Fast-Tick Mode:**
+```typescript
+// Quick follow-up after movement/goal changes (2s instead of 10s)
+if (this.shouldUseFastTick()) {
+  this.tickInterval = 2000;  // 2 seconds
+} else {
+  this.tickInterval = 10000; // 10 seconds (normal)
+}
+```
+
+**Short-Circuit LLM:**
+
+For obvious decisions, skip LLM and execute directly:
+
+```typescript
+// Repeat resource gathering
+if (lastAction === 'gather' && resourceStillAvailable) {
+  return this.executeGather(sameResource);  // No LLM call
+}
+
+// Banking completion
+if (atBank && inventoryFull) {
+  return this.executeBankDeposit();  // No LLM call
+}
+
+// Goal-based actions
+if (goal.type === 'woodcutting' && nearbyTree) {
+  return this.executeChopTree(nearbyTree);  // No LLM call
+}
+```
+
+**Benefits:**
+- **90% reduction in LLM calls** for repetitive tasks
+- **Faster response** to movement completion (2s vs 10s)
+- **Lower costs** from reduced API usage
+- **More natural behavior** (no pauses between actions)
+
+**Configuration:**
+```bash
+# Disable action locks (not recommended)
+AGENT_ACTION_LOCKS_ENABLED=false
+
+# Disable fast-tick mode
+AGENT_FAST_TICK_ENABLED=false
+
+# Disable short-circuit LLM
+AGENT_SHORT_CIRCUIT_LLM_ENABLED=false
+```
+
+### Movement Completion Tracking
+
+**New API:**
+```typescript
+// Wait for current movement to complete
+await service.waitForMovementComplete(timeoutMs?: number);
+
+// Check if currently moving
+const moving = service.isMoving;
+```
+
+**How it works:**
+1. `executeMove()` sets `_isMoving = true`
+2. `tileMovementEnd` packet sets `_isMoving = false` and resolves promise
+3. `waitForMovementComplete()` returns immediately if not moving
+4. Timeout (default 15s) prevents infinite waits
+
+**Example:**
+```typescript
+// Banking action now awaits movement completion
+async executeBankDeposit() {
+  // Walk to bank
+  await service.executeMove({ target: bankPosition });
+  
+  // Wait for movement to complete
+  await service.waitForMovementComplete();
+  
+  // Now interact with bank
+  await service.openBank(bankId);
+  await service.bankDepositAll();
+}
+```
+
+**Before (commit 60a03f4):**
+- Banking actions returned early without waiting
+- Agent would spam LLM while walking to bank
+- Multiple conflicting actions queued
+
+**After:**
+- Banking actions await movement completion
+- Action lock prevents LLM spam
+- Fast-tick triggers quick follow-up after arrival
+
 ## Providers
 
 World state is accessible to agents via 6 providers:
