@@ -920,6 +920,8 @@ google-chrome-unstable --headless=new --use-gl=egl \
 ```
 
 **Recent Fixes:**
+- **Commit 012450c** (Feb 28, 2026): Use headless=new with EGL for WebGPU without Xorg
+- **Commit 725e934** (Feb 27, 2026): Detect Xorg swrast fallback and switch to headless EGL
 - **Commit dd649da** (Feb 27, 2026): Fix headless mode flag passing (args vs Playwright option)
 - **Commit e51a332** (Feb 27, 2026): Added headless EGL mode for containers without DRM
 - **Commit 30bdaf0** (Feb 27, 2026): Require NVIDIA Xorg, no software rendering fallback
