@@ -23,6 +23,192 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="WebGPU Enforcement & Instanced Rendering" description="February 2026" date="2026-02-28">
+
+### 🚨 BREAKING: WebGL Removed (commit 47782ed)
+
+**All WebGL fallback code has been removed. WebGPU is now REQUIRED.**
+
+**Removed:**
+- All WebGL detection and fallback code in `RendererFactory`
+- `isWebGLForced`, `isWebGLFallbackForced`, `isWebGLFallbackAllowed` methods
+- `isWebGLAvailable`, `isOffscreenCanvasAvailable`, `canTransferCanvas` methods
+- `UniversalRenderer` type (now only `WebGPURenderer`)
+- `RendererBackend` type (now only `"webgpu"`)
+- `--disable-webgpu` and `forceWebGL` URL parameter support
+- Headless fallback in `deploy-vast.sh` (deployment now FAILS if WebGPU unavailable)
+
+**Why WebGPU-Only:**
+- All materials use TSL (Three Shading Language) which ONLY works with WebGPU
+- Post-processing effects use TSL-based node materials
+- There is NO WebGL fallback path - the game simply won't render
+
+**Browser Requirements:**
+- Chrome 113+, Edge 113+, Safari 18+ (macOS 15+)
+- Safari 17 support removed
+- Check compatibility: [webgpureport.org](https://webgpureport.org)
+
+**Deployment Impact:**
+- Vast.ai deployment now FAILS if Xorg/Xvfb cannot provide WebGPU support
+- No more soft fallback to headless mode (which doesn't support WebGPU)
+- Explicit display accessibility verification required
+
+**Files Changed:**
+- `packages/shared/src/utils/rendering/RendererFactory.ts` (removed WebGL code)
+- `scripts/deploy-vast.sh` (removed headless fallback)
+- `packages/server/scripts/stream-to-rtmp.ts` (removed WebGL flags)
+- `ecosystem.config.cjs` (updated comments, hardcoded headless=false)
+- `AGENTS.md` (created with WebGPU guidance)
+- `CLAUDE.md` (added critical WebGPU requirement section)
+
+### 🎨 Instanced Rendering for Resources (PR #946, #948)
+
+**Major performance optimization: Instanced rendering for ALL resource entities (rocks, ores, herbs, trees).**
+
+**New Features:**
+- **GLBResourceInstancer**: Pools instances by model path, separate `InstancedMesh` per LOD level
+  - Reduces draw calls from O(n) per resource to O(1) per unique model per LOD level
+  - Distance-based LOD switching with hysteresis to prevent flickering
+  - Supports depleted models (stumps, empty rocks) with separate instance pools
+  - Highlight mesh support for hover/selection effects
+- **InstancedModelVisualStrategy**: Thin wrapper with invisible collision proxies for raycasting
+  - Falls back to `StandardModelVisualStrategy` if instancing fails (pool full, model load failure)
+  - Creates invisible collision proxy for raycasting (InstancedMesh not raycastable)
+  - Proxy mesh has proper userData for interaction detection
+- **Depleted Model Support**: Resources can specify `depletedModelPath` and `depletedModelScale`
+  - Instancer maintains separate pools for normal and depleted states
+  - Automatic transition on resource depletion (e.g., tree → stump, rock → empty rock)
+  - Collision proxy persists across state transitions
+  - No individual model loading required for depleted states
+
+**API Changes (BREAKING):**
+- `ResourceVisualStrategy.onDepleted()` now returns `Promise<boolean>`
+  - `true` = strategy handled depletion (instanced stump)
+  - `false` = ResourceEntity should load individual depleted model
+- New optional method: `getHighlightMesh(ctx): THREE.Object3D | null`
+  - Returns positioned mesh for outline pass on instanced entities
+  - Used by `EntityHighlightService` for hover highlighting
+- `ResourceEntity.getHighlightRoot()` returns highlight mesh for instanced entities
+- `EntityHighlightService` supports instanced highlight meshes via `getHighlightRoot()`
+  - Temporarily adds highlight mesh to scene for outline rendering
+  - Removes stale highlight mesh on state transition (normal ↔ depleted)
+
+**Implementation:**
+- `packages/shared/src/entities/world/visuals/InstancedModelVisualStrategy.ts` (new, 163 lines)
+- `packages/shared/src/systems/shared/world/GLBResourceInstancer.ts` (new, 642 lines)
+- `packages/shared/src/systems/shared/world/GLBTreeInstancer.ts` (updated with depleted pools)
+- `packages/shared/src/entities/world/ResourceEntity.ts` (updated with highlight support)
+- `packages/shared/src/systems/client/interaction/services/EntityHighlightService.ts` (instanced highlight)
+
+**Migration Guide:**
+All resource visual strategies must update `onDepleted()` signature:
+```typescript
+// ❌ Old
+async onDepleted(ctx: ResourceVisualContext): Promise<void> {
+  // ...
+}
+
+// ✅ New
+async onDepleted(ctx: ResourceVisualContext): Promise<boolean> {
+  // ...
+  return false; // or true if strategy handles depletion
+}
+```
+
+### 🔧 Model Cache Index Buffer Fix (PR #949)
+
+**Fixed critical geometry corruption bug in processed model cache.**
+
+**Issue:**
+- IndexedDB serialization always deserialized geometry indices as `Uint32Array`
+- Three.js uses `Uint16Array` for meshes with <65536 vertices
+- Caused silent geometry corruption (even-count Uint16) or RangeError crashes (odd-count Uint16)
+
+**Fix:**
+- Store original index type (`Uint16` or `Uint32`) during serialization
+- Use correct typed array constructor during deserialization
+- Bumped cache version to 4 to invalidate all corrupt entries
+
+**Files Changed:**
+- `packages/shared/src/utils/rendering/ModelCache.ts` (+11/-4 lines)
+
+### 🎥 Streaming Improvements
+
+**WebGPU Diagnostics & Preflight Testing (commit d5c6884):**
+- `captureGpuDiagnostics()` extracts chrome://gpu info at startup
+- `testWebGpuInit()` preflight test detects WebGPU hangs early
+- Runs on blank page before loading heavy game content
+- Provides better debugging info when WebGPU fails on remote GPU servers
+
+**Stream Capture Resilience (commits 432ff84, cb0aaa9):**
+- 5s timeout on probe evaluate calls to prevent hanging
+- Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
+- Better handling of WebGPU initialization blocking JavaScript execution
+
+**Production Client Build (commit 4be263a):**
+- When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
+- Serves pre-built client via `vite preview` instead of dev server
+- Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
+- Significantly faster page loads for streaming (no on-demand module compilation)
+- Page navigation timeout increased to 180s for Vite dev mode compatibility
+
+**Secrets Management (commit 47167b6):**
+- Removed all hardcoded stream keys from `ecosystem.config.cjs`
+- All secrets now read from environment variables only
+- Added `.env.example` documenting required secrets
+- Updated `.gitignore` to block all `.env` files in subdirectories
+- Resolution tracking with automatic viewport recovery on mismatch
+- Added `STREAM_GOP_SIZE` environment variable support
+
+**Deployment Persistence (commit abd2783):**
+- GPU/display settings now persisted to `.env` for PM2 restarts
+- Prevents configuration loss on process restart
+- Ensures consistent rendering mode across deployments
+
+**X Server Cleanup (commits 8575215, 1025071):**
+- Properly clean up X server sockets before starting Xvfb
+- Remove ALL X lock files (`/tmp/.X*-lock`)
+- Remove and recreate `/tmp/.X11-unix` directory
+- Kill all X processes (X, Xorg, Xvfb) before starting new display server
+- Increased sleep time to 3s for processes to fully terminate
+
+**Missing Environment Variables (commit 77403a2):**
+- Added missing `STREAM_CAPTURE_USE_EGL` variable (was causing ReferenceError)
+- Added `STREAM_CAPTURE_EXECUTABLE` for custom browser path
+- Additional GPU rendering flags for better performance
+- Frame rate limit disable for smoother capture
+
+**Xvfb Fallback (commit 92ee48e):**
+- When Xorg with NVIDIA fails (common in containers), use Xvfb as X11 display server
+- Xvfb provides X11 protocol Chrome needs
+- Chrome still uses NVIDIA GPU for rendering via ANGLE/Vulkan
+- CDP captures frames from Chrome's internal GPU rendering, not X framebuffer
+
+**Client WebGPU References (commit 205f96491):**
+- Updated all WebGL references to WebGPU in client code
+- `GameClient.tsx`: Updated context lost handler comments
+- `SettingsPanel.tsx`: Always show 'WebGPU' instead of conditional
+- `errorCodes.ts`: Updated SYSTEM_WEBGL_ERROR message to mention WebGPU
+- `visualTesting.ts`: Use 2D canvas drawImage for WebGPU pixel reading instead of WebGL readPixels
+
+**CSP Update (commit 1b2e230):**
+- Allow Cloudflare Insights in CSP script-src for analytics
+
+### 📊 Environment Variables
+
+**New Variables:**
+- `STREAM_GOP_SIZE` - GOP size in frames (default: 60)
+- `DUEL_USE_PRODUCTION_CLIENT` - Use pre-built client for faster loads
+- `STREAM_CAPTURE_EXECUTABLE` - Custom browser path (optional)
+- `STREAM_CAPTURE_USE_EGL` - EGL vs ANGLE (always false for WebGPU)
+- `GPU_RENDERING_MODE` - Rendering mode (xorg | xvfb-vulkan)
+
+**Deprecated Variables (ignored):**
+- `STREAM_CAPTURE_DISABLE_WEBGPU` - WebGPU is required, flag ignored
+- `DUEL_FORCE_WEBGL_FALLBACK` - WebGL removed, flag ignored
+
+</Update>
+
 <Update label="Agent Progression Overhaul & Streaming Audio" description="February 2026" date="2026-02-26">
 
 ### 🤖 Quest-Driven Agent Progression (commit 593cd56b)
