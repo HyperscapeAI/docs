@@ -31,6 +31,13 @@ This is a hard requirement. DO NOT:
 - **GPU Diagnostics**: `captureGpuDiagnostics()` extracts chrome://gpu info for debugging
 - Timeouts help diagnose misconfigured GPU servers where WebGPU initialization hangs
 
+### macOS WebGPU Support
+- **Metal Backend**: macOS uses Metal (not Vulkan) for WebGPU
+- **System Chrome Required**: Auto-detects and uses system Chrome on macOS for WebGPU support
+- **Playwright Limitation**: Bundled Chromium doesn't have proper WebGPU support on macOS
+- **No Vulkan ICD**: Don't set `VK_ICD_FILENAMES` on macOS (not applicable)
+- **Chrome Flags**: Remove Vulkan from feature flags on macOS (Metal is the backend)
+
 ### Server/Streaming (Vast.ai)
 - NVIDIA GPU with Vulkan support is REQUIRED
 - Must run headful with Xorg or Xvfb (NOT headless Chrome)
@@ -159,6 +166,14 @@ packages/
 - **LLM Rate Limiting**: Exponential backoff for API calls (5s base, max 60s)
 - **Consecutive Failure Tracking**: Resets on successful tick
 - **Memory Leak Fixes**: Proper cleanup of COMBAT_DAMAGE_DEALT listeners in AgentManager and event handlers in AutonomousBehaviorManager
+- **Dynamic Combat Escalation**: Agents progress from goblins → bandits → barbarians as combat level grows
+- **Combat Style Rotation**: Agents cycle attack → strength → defense (train lowest skill)
+- **Cooking Phase**: Agents cook raw food immediately instead of waiting for full inventory
+- **Gear Upgrade Phase**: Agents smith better equipment when they have materials + levels
+- **Combat Food Threshold**: Increased from 5 → 10 for better survival
+- **World Data Manifest Loading**: Monster tiers and gear tiers loaded from world-data
+- **LLM Error Fallback**: Idle + retry when agent has active goal instead of derailing to explore
+- **Short-Circuit Dashboard Sync**: All agents show activity logs even when skipping LLM
 
 ### Resource Management
 - **Activity Logger Queue**: Max size 1000 with 25% eviction to prevent memory pressure
@@ -169,6 +184,7 @@ packages/
 - **GoldClob Fuzz Tests**: 120s timeout for randomized invariant tests (4 seeds × 140 operations)
 - **Precision Fixes**: Use larger amounts (10000n) to avoid gas cost precision issues
 - **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
+- **Anchor Test Configuration**: Use localnet instead of devnet for free SOL in `anchor test`
 
 ## Performance Optimizations
 
