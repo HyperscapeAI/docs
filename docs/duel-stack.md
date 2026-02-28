@@ -242,10 +242,12 @@ The deploy script automatically sets:
 
 ```bash
 DISPLAY=:99                                              # X display
-GPU_RENDERING_MODE=xorg|xvfb-vulkan                     # Rendering mode
+GPU_RENDERING_MODE=xorg|xvfb-vulkan|ozone-headless      # Rendering mode
 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json # Force NVIDIA Vulkan
 DUEL_CAPTURE_USE_XVFB=true|false                        # Xvfb vs Xorg
-STREAM_CAPTURE_HEADLESS=false                           # Always false
+STREAM_CAPTURE_HEADLESS=false                           # Always false (WebGPU requires display)
+STREAM_CAPTURE_OZONE_HEADLESS=true|false                # Ozone headless mode (experimental)
+STREAM_CAPTURE_EXECUTABLE=/path/to/chrome               # Custom Chrome executable
 XDG_RUNTIME_DIR=/tmp/pulse-runtime                      # PulseAudio runtime
 PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native       # PulseAudio socket
 ```
