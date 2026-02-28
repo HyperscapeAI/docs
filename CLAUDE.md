@@ -542,11 +542,19 @@ If streaming fails to start or produces black frames:
    cat /root/hyperscape/packages/server/public/live/rtmp-status.json
    ```
 
-6. **Common issues**:
+6. **Check WebGPU diagnostics**:
+   ```bash
+   # Look for GPU diagnostics in logs
+   bunx pm2 logs hyperscape-duel --lines 500 | grep -A 20 "GPU Diagnostics"
+   ```
+
+7. **Common issues**:
    - **Black frames**: Display server not running or WebGPU failed to initialize
    - **No audio**: PulseAudio not running or `chrome_audio` sink missing
-   - **Resolution mismatch**: Viewport size doesn't match stream dimensions
-   - **Timeout on page load**: Use production client build (`NODE_ENV=production`)
+   - **Resolution mismatch**: Viewport size doesn't match stream dimensions (auto-recovery enabled)
+   - **Timeout on page load**: Use production client build (`DUEL_USE_PRODUCTION_CLIENT=true`)
+   - **Browser hangs**: WebGPU initialization timeout - check preflight test logs
+   - **Probe timeouts**: Browser unresponsive - capture proceeds after 5 consecutive timeouts
 
 ## Performance Optimizations
 
