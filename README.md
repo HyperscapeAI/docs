@@ -248,60 +248,21 @@ That tag triggers cross-platform native packaging and publishes installers to a 
 
 ## Troubleshooting
 
-**Characters vanishing / not appearing on character select:**
-This happens when Privy credentials are missing. Each page refresh creates a new anonymous user, orphaning your characters. Fix: Set `PUBLIC_PRIVY_APP_ID` in client `.env` and both `PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` in server `.env`.
+For comprehensive troubleshooting, see **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)**.
 
-**Assets not loading (404 errors for models/avatars):**
-The CDN container needs to be running. It starts automatically with `bun run dev`, but if you're running services separately:
-```bash
-bun run cdn:up
-```
+### Quick Fixes
 
-**Database schema errors or stale data after pulling updates:**
-Migrations only run once, so pulling new code won't fix an outdated database schema. Reset to fresh:
-> ⚠️ **Warning:** This will delete all local data (characters, inventory, progress).
-```bash
-# Stop and remove postgres container
-docker stop hyperscape-postgres 2>/dev/null; docker rm hyperscape-postgres 2>/dev/null
+**Characters vanishing**: Missing Privy credentials. Set `PUBLIC_PRIVY_APP_ID` in both client and server `.env` files.
 
-# Remove postgres volumes
-docker volume rm hyperscape-postgres-data 2>/dev/null; docker volume rm server_postgres-data 2>/dev/null
+**Assets not loading (404)**: CDN not running. Run `bun run cdn:up`.
 
-# Remove any remaining hyperscape volumes
-docker volume ls | grep -i hyperscape | awk '{print $2}' | xargs -r docker volume rm
+**WebGPU not available**: Update browser to Chrome 113+, Edge 113+, or Safari 18+. Check: [webgpureport.org](https://webgpureport.org)
 
-# Verify volumes are gone
-docker volume ls | grep -i hyperscape
+**Port conflicts**: Kill processes with `lsof -ti:5555 | xargs kill -9` (repeat for ports 3333, 8080).
 
-# Restart with fresh database
-bun run dev
-```
+**Database errors**: Reset database with `docker stop hyperscape-postgres && docker rm hyperscape-postgres && docker volume rm hyperscape-postgres-data`.
 
-**Port conflicts:**
-```bash
-lsof -ti:5555 | xargs kill -9   # Server
-lsof -ti:3333 | xargs kill -9   # Client
-lsof -ti:8080 | xargs kill -9   # CDN
-```
-
-**Build errors:**
-```bash
-bun run clean
-rm -rf node_modules packages/*/node_modules
-bun install
-bun run build
-```
-
-**WebGPU not available:**
-Hyperscape requires WebGPU - WebGL will NOT work. Check browser compatibility:
-- Chrome 113+ (recommended)
-- Edge 113+
-- Safari 18+ (macOS 15+)
-- Check: [webgpureport.org](https://webgpureport.org)
-
-**No Docker?** You need external services:
-- Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
-- Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
+**Build errors**: Clean and rebuild with `npm run clean && rm -rf node_modules packages/*/node_modules && bun install && bun run build`.
 
 ## Documentation
 
