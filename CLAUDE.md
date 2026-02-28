@@ -20,16 +20,9 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 ### Browser Requirements
 - Chrome 113+ (recommended)
 - Edge 113+
-- Safari 18+ (macOS 15+) - Safari 17 support removed
+- Safari 18+ (macOS 15+) - Safari 17 support was removed
 - Firefox (behind flag, not recommended)
 - Check WebGPU availability: [webgpureport.org](https://webgpureport.org)
-
-### WebGPU Initialization
-- **Adapter Request Timeout**: 30s timeout on `navigator.gpu.requestAdapter()` prevents indefinite hangs
-- **Renderer Init Timeout**: 60s timeout on `renderer.init()` detects GPU driver issues
-- **Preflight Testing**: `testWebGpuInit()` runs on blank page before loading game content
-- **GPU Diagnostics**: `captureGpuDiagnostics()` extracts chrome://gpu info for debugging
-- Timeouts help diagnose misconfigured GPU servers where WebGPU initialization hangs
 
 ### Server/Streaming Requirements
 For Vast.ai and other GPU servers running the streaming pipeline:
@@ -38,6 +31,78 @@ For Vast.ai and other GPU servers running the streaming pipeline:
 - Chrome uses ANGLE/Vulkan backend to access WebGPU
 - **GPU Sandbox Bypass**: `--disable-gpu-sandbox` and `--disable-setuid-sandbox` required for container GPU access
 - If GPU cannot initialize WebGPU, deployment MUST FAIL (no soft fallbacks)
+
+#### WebGPU Initialization Safeguards
+- **Adapter Request Timeout**: 30s timeout on `navigator.gpu.requestAdapter()` to prevent indefinite hangs
+- **Renderer Init Timeout**: 60s timeout on `renderer.init()` to detect GPU driver issues
+- **Preflight Testing**: `testWebGpuInit()` runs on blank page before loading game content
+- **GPU Diagnostics**: `captureGpuDiagnostics()` extracts chrome://gpu info for debugging
+- Timeouts help diagnose misconfigured GPU servers where WebGPU initialization hangs
+
+#### Vast.ai Deployment Architecture
+The streaming pipeline requires specific GPU setup:
+
+1. **GPU Rendering Modes** (tried in order):
+   - **Xorg with NVIDIA**: Best performance, requires DRI/DRM device access
+   - **Xvfb with NVIDIA Vulkan**: Virtual framebuffer + GPU rendering via ANGLE/Vulkan
+   - **Ozone Headless with GPU**: Experimental mode using `--ozone-platform=headless` with GPU rendering
+   - **Headless mode (software)**: NOT SUPPORTED - WebGPU will not work
+
+2. **Audio Capture**:
+   - PulseAudio with `chrome_audio` virtual sink
+   - FFmpeg captures from PulseAudio monitor (`chrome_audio.monitor`)
+   - Configurable via `STREAM_AUDIO_ENABLED` and `PULSE_AUDIO_DEVICE`
+   - User-mode PulseAudio with XDG_RUNTIME_DIR at `/tmp/pulse-runtime`
+
+3. **RTMP Multi-Streaming**:
+   - Simultaneous streaming to Twitch, Kick, X/Twitter (YouTube disabled)
+   - FFmpeg tee muxer for single-encode multi-output
+   - Stream keys configured via environment variables (never hardcoded)
+   - All secrets read from `.env` file or GitHub Secrets
+
+4. **Deployment Validation**:
+   - Script verifies NVIDIA GPU is accessible via `nvidia-smi`
+   - Checks Vulkan ICD availability at `/usr/share/vulkan/icd.d/nvidia_icd.json`
+   - Logs actual ICD content and VK_LOADER_DEBUG output for diagnostics
+   - Ensures display server (Xorg/Xvfb) is running and accessible
+   - Runs WebGPU pre-check test with Chrome to verify navigator.gpu availability
+   - Extracts Chrome GPU info (WebGPU/Vulkan status) during deployment
+   - Fails deployment if WebGPU cannot be initialized (no soft fallbacks)
+   - Persists GPU/display settings to `.env` for PM2 restarts
+   - Exports working GPU mode (Xorg/Xvfb/ozone-headless) for ecosystem.config.cjs
+
+5. **Production Client Build**:
+   - When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
+   - Serves pre-built client via `vite preview` instead of dev server
+   - Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
+   - Significantly faster page loads for streaming (no on-demand module compilation)
+
+6. **Stream Capture Modes**:
+   - **CDP (default)**: Chrome DevTools Protocol screencast - fastest, most reliable
+   - **WebCodecs**: Native VideoEncoder API (experimental)
+   - **MediaRecorder**: Legacy fallback mode
+   - Automatic recovery with viewport restoration on resolution mismatch
+   - 5s timeout on probe evaluate calls to prevent hanging
+   - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
+   - **Chrome Executable**: Set `STREAM_CAPTURE_EXECUTABLE` to explicit Chrome path (e.g., `/usr/bin/google-chrome-unstable`) for reliable WebGPU
+   - **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
+
+7. **Stream Encoding Optimization**:
+   - Default: `film` tune with B-frames for better compression
+   - Set `STREAM_LOW_LATENCY=true` for `zerolatency` tune (faster playback start)
+   - Configurable GOP size via `STREAM_GOP_SIZE` (default: 60 frames)
+   - 2x bitrate buffer multiplier (reduced from 4x to prevent backpressure buildup)
+   - Audio buffering with `thread_queue_size=1024` and async resampling
+   - Health check timeout: 5s (data timeout: 15s) for faster failure detection
+
+8. **WebGPU Diagnostics**:
+   - `captureGpuDiagnostics()` extracts chrome://gpu info at startup
+   - `testWebGpuInit()` preflight test detects WebGPU hangs early
+   - Runs on blank page before loading heavy game content
+   - Provides debugging info when WebGPU fails on remote GPU servers
+   - 30s adapter timeout and 60s renderer init timeout prevent indefinite hangs
+
+See `scripts/deploy-vast.sh` for complete setup logic.
 
 ### Development Rules for WebGPU
 - **NEVER add WebGL fallback code** - it will not work with TSL shaders
@@ -149,8 +214,8 @@ packages/
 │   ├── Player controls
 │   └── UI/HUD
 ├── physx-js-webidl/     # PhysX WASM bindings
-├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
+├── procgen/             # Procedural generation (trees, rocks, terrain)
 └── docs-site/           # Docusaurus documentation site
 ```
 
@@ -202,6 +267,66 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 - Use existing Hyperscape abstractions (ECS, networking, physics)
 - Don't reinvent systems that Hyperscape already provides
 - Separation of concerns: core engine vs. game content
+
+## Performance Optimizations
+
+### Instanced Rendering
+Hyperscape uses instanced rendering for resource entities (rocks, ores, herbs, trees):
+- **GLBResourceInstancer**: Pools instances by model path, separate InstancedMesh per LOD level
+- **GLBTreeInstancer**: Specialized instancer for tree resources with dissolve materials
+- **InstancedModelVisualStrategy**: Thin wrapper with invisible collision proxies for raycasting
+- Reduces draw calls from O(n) per resource to O(1) per unique model per LOD level
+- Distance-based LOD switching with hysteresis to prevent flickering
+- Falls back to StandardModelVisualStrategy if instancing fails
+
+**Depleted Models** (NEW):
+- Resources can specify `depletedModelPath` and `depletedModelScale` in config
+- Instancer maintains separate pools for normal and depleted states (e.g., tree → stump)
+- Automatic transition on resource depletion without individual model loading
+- Collision proxy persists across state transitions
+- Highlight mesh support for hover/selection on instanced entities
+
+**API Changes**:
+- `ResourceVisualStrategy.onDepleted()` now returns `boolean`
+  - `true` = strategy handled depletion (instanced stump)
+  - `false` = ResourceEntity should load individual depleted model
+- New optional method: `getHighlightMesh(ctx)` for instanced entity highlighting
+- `EntityHighlightService` supports instanced highlight meshes via `getHighlightRoot()`
+
+### Model Cache Integrity
+- **Index Buffer Type Preservation**: Model cache now preserves original index buffer type (Uint16Array vs Uint32Array)
+- Fixes silent geometry corruption and RangeError crashes on cached model restore
+- Cache version bumped to 4 to invalidate corrupt entries
+- Affects all GLB models loaded via ModelCache (resources, NPCs, items)
+
+## Stability Improvements
+
+### Combat System
+- **Combat Retry Timer**: Aligned with tick system (3000ms = 5 ticks) for consistent timing
+- **Phase Timeout**: Reduced grace periods from 30s to 10s for faster failure detection
+- **Combat Stall Nudge**: Tracks last nudge timestamp instead of cycle ID to allow re-nudging when combat stalls again
+- **Damage Event Cache**: Cleanup every tick (was every 2 ticks), cap lowered from 5000 to 1000, evict 75% when exceeded
+
+### Agent System
+- **LLM Rate Limiting**: Exponential backoff for API calls (5s base, max 60s)
+- **Consecutive Failure Tracking**: Resets on successful tick
+- **Memory Leak Fixes**: Proper cleanup of COMBAT_DAMAGE_DEALT listeners in AgentManager and event handlers in AutonomousBehaviorManager
+
+### Resource Management
+- **Activity Logger Queue**: Max size 1000 with 25% eviction to prevent memory pressure
+- **Session Timeout**: 30-minute max via MAX_SESSION_TICKS for zombie session cleanup
+- **SessionCloseReason**: Added "timeout" to type for proper session termination tracking
+
+### Streaming Pipeline
+- **Browser Restart Interval**: Reduced from 1 hour to 45 minutes to prevent WebGPU OOM crashes
+- **Health Check Timing**: 5s health check, 15s data timeout (was 10s/30s) for faster failure detection
+- **Buffer Multiplier**: Lowered from 4x to 2x to reduce backpressure buildup
+- **CDP Session Recovery**: Fixed cleanup on recovery (recovery mode flag prevents double-handling)
+
+### Test Stability
+- **GoldClob Fuzz Tests**: 120s timeout for randomized invariant tests (4 seeds × 140 operations)
+- **Precision Fixes**: Use larger amounts (10000n) to avoid gas cost precision issues
+- **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
 
 ## Critical Development Rules
 
@@ -331,7 +456,7 @@ All services have unique default ports to avoid conflicts:
 **Package-specific `.env` files**: Each package has its own `.env.example` with deployment documentation:
 
 | Package | File | Purpose |
-|---------|------|---------| 
+|---------|------|---------|
 | Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
@@ -354,26 +479,29 @@ PUBLIC_WS_URL=wss://...          # Point to your server WebSocket
 - `PUBLIC_PRIVY_APP_ID` (client) must equal `PRIVY_APP_ID` (server)
 - `PUBLIC_WS_URL` and `PUBLIC_API_URL` must point to your server
 
-### Streaming Configuration
+**Streaming environment variables** (see `packages/server/.env.example` for full list):
+```bash
+# Stream capture configuration
+STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable  # Explicit Chrome path
+STREAM_CAPTURE_HEADLESS=new                                 # Chrome headless mode
+STREAM_CAPTURE_USE_EGL=true                                 # EGL rendering mode
+STREAM_CAPTURE_OZONE_HEADLESS=true                          # Ozone headless platform
+STREAM_LOW_LATENCY=true                                     # Low-latency encoding
+STREAM_GOP_SIZE=60                                          # GOP size in frames
+STREAM_AUDIO_ENABLED=true                                   # Enable audio capture
+PULSE_AUDIO_DEVICE=chrome_audio.monitor                     # PulseAudio device
 
-**Production Client Build**:
-- Set `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
-- Serves pre-built client via `vite preview` instead of dev server
-- Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
-- Significantly faster page loads for streaming (no on-demand module compilation)
+# Production client build for streaming
+NODE_ENV=production                                         # Use production build
+DUEL_USE_PRODUCTION_CLIENT=true                             # Force production client
 
-**Stream Capture Modes**:
-- **CDP (default)**: Chrome DevTools Protocol screencast - fastest, most reliable
-- **WebCodecs**: Native VideoEncoder API (experimental)
-- **MediaRecorder**: Legacy fallback mode
-- Set `STREAM_CAPTURE_EXECUTABLE` to explicit Chrome path for reliable WebGPU
-- Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
-
-**Stream Encoding**:
-- Default: `film` tune with B-frames for better compression
-- Set `STREAM_LOW_LATENCY=true` for `zerolatency` tune (faster playback start)
-- Configurable GOP size via `STREAM_GOP_SIZE` (default: 60 frames)
-- 2x bitrate buffer multiplier (reduced from 4x to prevent backpressure buildup)
+# RTMP streaming destinations
+TWITCH_STREAM_KEY=...
+KICK_STREAM_KEY=...
+KICK_RTMP_URL=...
+X_STREAM_KEY=...
+X_RTMP_URL=...
+```
 
 ## Package Manager
 
@@ -394,67 +522,6 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Testing**: Playwright, Vitest
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
-
-## Stability Improvements
-
-### Combat System
-- **Combat Retry Timer**: Aligned with tick system (3000ms = 5 ticks) for consistent timing
-- **Phase Timeout**: Reduced grace periods from 30s to 10s for faster failure detection
-- **Combat Stall Nudge**: Tracks last nudge timestamp instead of cycle ID to allow re-nudging when combat stalls again
-- **Damage Event Cache**: Cleanup every tick (was every 2 ticks), cap lowered from 5000 to 1000, evict 75% when exceeded
-
-### Agent System
-- **LLM Rate Limiting**: Exponential backoff for API calls (5s base, max 60s)
-- **Consecutive Failure Tracking**: Resets on successful tick
-- **Memory Leak Fixes**: Proper cleanup of COMBAT_DAMAGE_DEALT listeners in AgentManager and event handlers in AutonomousBehaviorManager
-
-### Resource Management
-- **Activity Logger Queue**: Max size 1000 with 25% eviction to prevent memory pressure
-- **Session Timeout**: 30-minute max via MAX_SESSION_TICKS for zombie session cleanup
-- **SessionCloseReason**: Added "timeout" to type for proper session termination tracking
-
-### Streaming Stability
-- **Health Check Timeout**: 5s (data timeout: 15s) for faster failure detection
-- **Buffer Multiplier**: Reduced from 4x to 2x to prevent backpressure buildup
-- **Browser Restart**: Automatic restart every 45 minutes to prevent WebGPU OOM crashes
-- **Probe Timeout**: 5s timeout on evaluate calls to prevent hanging
-- **Recovery Mode**: Proceeds with capture after 5 consecutive probe timeouts
-
-### Test Stability
-- **GoldClob Fuzz Tests**: 120s timeout for randomized invariant tests (4 seeds × 140 operations)
-- **Precision Fixes**: Use larger amounts (10000n) to avoid gas cost precision issues
-- **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
-
-## Performance Optimizations
-
-### Instanced Rendering
-Hyperscape uses instanced rendering for resource entities (rocks, ores, herbs, trees):
-- **GLBResourceInstancer**: Pools instances by model path, separate InstancedMesh per LOD level
-- **GLBTreeInstancer**: Specialized instancer for tree resources with dissolve materials
-- **InstancedModelVisualStrategy**: Thin wrapper with invisible collision proxies for raycasting
-- Reduces draw calls from O(n) per resource to O(1) per unique model per LOD level
-- Distance-based LOD switching with hysteresis to prevent flickering
-- Falls back to StandardModelVisualStrategy if instancing fails
-
-**Depleted Models**:
-- Resources can specify `depletedModelPath` and `depletedModelScale` in config
-- Instancer maintains separate pools for normal and depleted states (e.g., tree → stump)
-- Automatic transition on resource depletion without individual model loading
-- Collision proxy persists across state transitions
-- Highlight mesh support for hover/selection on instanced entities
-
-**API Changes**:
-- `ResourceVisualStrategy.onDepleted()` now returns `boolean`
-  - `true` = strategy handled depletion (instanced stump)
-  - `false` = ResourceEntity should load individual depleted model
-- New optional method: `getHighlightMesh(ctx)` for instanced entity highlighting
-- `EntityHighlightService` supports instanced highlight meshes via `getHighlightRoot()`
-
-### Model Cache Integrity
-- **Index Buffer Type Preservation**: Model cache now preserves original index buffer type (Uint16Array vs Uint32Array)
-- Fixes silent geometry corruption and RangeError crashes on cached model restore
-- Cache version bumped to 4 to invalidate corrupt entries
-- Affects all GLB models loaded via ModelCache (resources, NPCs, items)
 
 ## Troubleshooting
 
@@ -493,25 +560,24 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Tests spawn their own Hyperscape instances
 - Visual tests require WebGPU support (headful browser with GPU access)
 
-### WebGPU Issues
+### WebGPU Not Available
 
-**Browser not loading / black screen**:
-- Check browser console for WebGPU errors
-- Verify WebGPU is available: visit [webgpureport.org](https://webgpureport.org)
-- Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+) required
-- Try Chrome Canary/Dev channel for latest WebGPU fixes
+**Browser:**
+- Check [webgpureport.org](https://webgpureport.org) to verify WebGPU support
+- Update to Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
+- Ensure GPU drivers are up to date
 
-**Streaming/Server WebGPU failures**:
-- Check `nvidia-smi` output - GPU must be accessible
-- Verify Vulkan ICD: `ls /usr/share/vulkan/icd.d/nvidia_icd.json`
-- Check display server: `echo $DISPLAY` and `xdpyinfo -display $DISPLAY`
+**Server/Streaming:**
+- Verify NVIDIA GPU is accessible: `nvidia-smi`
+- Check Vulkan ICD: `ls /usr/share/vulkan/icd.d/nvidia_icd.json`
+- Ensure display server is running: `echo $DISPLAY` (should be `:0` or `:99`)
+- Check Chrome GPU status: Navigate to `chrome://gpu` in the browser
 - Review deployment logs for WebGPU preflight test results
-- Ensure `--disable-gpu-sandbox` flag is set for Chrome in containers
 
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
-- [AGENTS.md](AGENTS.md) - AI coding assistant instructions
+- [AGENTS.md](AGENTS.md) - AI assistant guidelines
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
