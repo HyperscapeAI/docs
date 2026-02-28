@@ -224,6 +224,8 @@ For live streaming to Twitch, Kick, X/Twitter, configure in `packages/server/.en
 ```bash
 # Stream capture settings
 STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable  # Explicit Chrome path
+STREAM_CAPTURE_HEADLESS=false                               # Must be false for WebGPU
+STREAM_CAPTURE_USE_EGL=false                                # Use EGL instead of Vulkan
 STREAM_LOW_LATENCY=true                                     # Low-latency encoding
 STREAM_GOP_SIZE=60                                          # GOP size in frames
 STREAM_AUDIO_ENABLED=true                                   # Enable audio capture
@@ -232,6 +234,10 @@ STREAM_AUDIO_ENABLED=true                                   # Enable audio captu
 NODE_ENV=production                                         # Use production build
 DUEL_USE_PRODUCTION_CLIENT=true                             # Force production client
 
+# Display configuration (GPU rendering)
+DISPLAY=:99                                                 # X display (Xorg or Xvfb)
+DUEL_CAPTURE_USE_XVFB=false                                 # true if using Xvfb
+
 # RTMP destinations (get keys from platform dashboards)
 TWITCH_STREAM_KEY=live_123456789_abcdefghij
 KICK_STREAM_KEY=your-kick-stream-key
@@ -239,6 +245,12 @@ KICK_RTMP_URL=rtmp://ingest.kick.com/live
 X_STREAM_KEY=your-x-stream-key
 X_RTMP_URL=rtmp://x-media-studio/your-path
 ```
+
+**GPU Rendering Modes** (deployment script tries in order):
+- **Xorg with NVIDIA**: Best performance, requires DRI/DRM device access
+- **Xvfb with NVIDIA Vulkan**: Virtual framebuffer + GPU rendering via ANGLE/Vulkan
+- **Headless EGL with NVIDIA**: Direct EGL rendering without X server
+- **Ozone Headless with GPU**: Experimental mode using `--ozone-platform=headless`
 
 See `packages/server/.env.example` for complete streaming configuration options.
 
