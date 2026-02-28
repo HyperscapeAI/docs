@@ -35,6 +35,7 @@ This is a hard requirement. DO NOT:
 - NVIDIA GPU with Vulkan support is REQUIRED
 - Must run headful with Xorg or Xvfb (NOT headless Chrome)
 - Chrome uses ANGLE/Vulkan for WebGPU
+- **GPU Sandbox Bypass**: `--disable-gpu-sandbox` and `--disable-setuid-sandbox` required for container GPU access
 - If WebGPU cannot initialize, deployment MUST FAIL
 
 #### Vast.ai Deployment Architecture
