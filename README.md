@@ -10,6 +10,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - **True OSRS Mechanics**: Authentic tick-based combat (600ms ticks), safespotting, tile-based movement, and classic progression systems
 - **Manifest-Driven Design**: Add NPCs, items, and content by editing JSON files—no code changes required
 - **Spectator Mode**: Watch agents play in real-time and observe their decision-making process
+- **WebGPU Rendering**: Modern GPU-accelerated graphics using Three.js WebGPURenderer with TSL shaders
 - **Open Source**: Built on open technology with extensible architecture
 
 ## Core Features
@@ -23,19 +24,23 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
 | **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics, WebGPU rendering |
 
-## Browser Requirements
+## Technical Highlights
 
-**Hyperscape requires WebGPU** - WebGL is not supported.
+### WebGPU-Only Rendering
+Hyperscape requires **WebGPU** (Chrome 113+, Edge 113+, Safari 18+). All materials use Three.js Shading Language (TSL) which only works with WebGPU. There is no WebGL fallback.
 
-All materials and post-processing effects use TSL (Three.js Shading Language), which only works with WebGPU. There is no WebGL fallback.
+### Instanced Rendering
+- Optimized rendering for resources (trees, rocks, ores, herbs)
+- Reduces draw calls from O(n) to O(1) per unique model
+- Distance-based LOD switching with automatic depleted state transitions
+- Supports hover highlighting on instanced meshes
 
-**Supported Browsers:**
-- Chrome 113+ (recommended)
-- Edge 113+
-- Safari 18+ (macOS 15+)
-- Check WebGPU availability: [webgpureport.org](https://webgpureport.org)
-
-**Note**: Safari 17 is no longer supported. Safari 18+ on macOS 15+ is required.
+### Streaming & Broadcasting
+- Live RTMP streaming to Twitch, Kick, X/Twitter
+- Chrome DevTools Protocol (CDP) screen capture
+- Production client build mode for faster page loads (fixes 180s timeout issues)
+- Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
+- WebGPU diagnostics and preflight testing for remote GPU servers
 
 ## Quick Start
 
@@ -44,7 +49,7 @@ All materials and post-processing effects use TSL (Three.js Shading Language), w
 - [Git LFS](https://git-lfs.com) - `brew install git-lfs` (macOS) or `apt install git-lfs` (Linux)
 - Docker - [Docker Desktop](https://docker.com/products/docker-desktop) for macOS/Windows, or `apt install docker.io` on Linux
 - [Privy](https://privy.io) account (required for authentication)
-- **WebGPU-compatible browser** (see Browser Requirements above)
+- **WebGPU-capable browser** - Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
 
 ```bash
 git clone https://github.com/HyperscapeAI/hyperscape.git
@@ -120,7 +125,7 @@ packages/
 ├── client/              # Web client (Vite, React)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
-├── procgen/             # Procedural generation
+├── procgen/             # Procedural generation (trees, rocks, terrain)
 ├── asset-forge/         # AI asset generation tools
 └── docs-site/           # Documentation (Docusaurus)
 ```
@@ -212,6 +217,31 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
 
+### Streaming Configuration
+
+For live streaming to Twitch, Kick, X/Twitter, configure in `packages/server/.env`:
+
+```bash
+# Stream capture settings
+STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable  # Explicit Chrome path
+STREAM_LOW_LATENCY=true                                     # Low-latency encoding
+STREAM_GOP_SIZE=60                                          # GOP size in frames
+STREAM_AUDIO_ENABLED=true                                   # Enable audio capture
+
+# Production client build (fixes 180s timeout issues)
+NODE_ENV=production                                         # Use production build
+DUEL_USE_PRODUCTION_CLIENT=true                             # Force production client
+
+# RTMP destinations (get keys from platform dashboards)
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+KICK_STREAM_KEY=your-kick-stream-key
+KICK_RTMP_URL=rtmp://ingest.kick.com/live
+X_STREAM_KEY=your-x-stream-key
+X_RTMP_URL=rtmp://x-media-studio/your-path
+```
+
+See `packages/server/.env.example` for complete streaming configuration options.
+
 ## Deployment (Railway)
 
 Railway deployment is set up for separate development and production targets:
@@ -223,21 +253,16 @@ For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps f
 
 - `docs/railway-dev-prod.md`
 
-### Vast.ai GPU Streaming
+### Vast.ai GPU Streaming Deployment
 
-For GPU-accelerated streaming on Vast.ai:
+For deploying the streaming duel arena on Vast.ai GPU servers:
 
-- **NVIDIA GPU with Vulkan support is REQUIRED**
-- WebGPU must be available (no WebGL fallback)
-- Deployment script (`scripts/deploy-vast.sh`) automatically configures GPU rendering
-- Supports Xorg, Xvfb, or headless EGL modes
-- See `packages/server/.env.example` for streaming configuration options
+- **GPU Requirements**: NVIDIA GPU with Vulkan support
+- **Display Modes**: Xorg (best), Xvfb (fallback), or Ozone headless
+- **WebGPU Validation**: Deployment fails if WebGPU cannot initialize
+- **Environment Persistence**: GPU/display settings saved to `.env` for PM2 restarts
 
-**Key Environment Variables:**
-- `STREAM_CAPTURE_EXECUTABLE` - Path to Chrome executable
-- `STREAM_GOP_SIZE` - GOP size for encoding (default: 60)
-- `STREAM_LOW_LATENCY` - Enable low-latency encoding
-- `DUEL_USE_PRODUCTION_CLIENT` - Use pre-built client for faster loads
+See `scripts/deploy-vast.sh` for deployment automation.
 
 ## Native App Distribution
 
@@ -257,13 +282,6 @@ That tag triggers cross-platform native packaging and publishes installers to a 
 
 ## Troubleshooting
 
-**Black screen / game not loading:**
-WebGPU is required. Check:
-1. Visit [webgpureport.org](https://webgpureport.org) to verify WebGPU is available
-2. Use Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
-3. Check browser console for WebGPU errors
-4. Try Chrome Canary/Dev channel for latest WebGPU fixes
-
 **Characters vanishing / not appearing on character select:**
 This happens when Privy credentials are missing. Each page refresh creates a new anonymous user, orphaning your characters. Fix: Set `PUBLIC_PRIVY_APP_ID` in client `.env` and both `PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` in server `.env`.
 
@@ -272,6 +290,12 @@ The CDN container needs to be running. It starts automatically with `bun run dev
 ```bash
 bun run cdn:up
 ```
+
+**WebGPU not available:**
+- Check [webgpureport.org](https://webgpureport.org) to verify browser support
+- Update to Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
+- Ensure GPU drivers are up to date
+- For servers: Verify NVIDIA GPU with `nvidia-smi` and Vulkan ICD availability
 
 **Database schema errors or stale data after pulling updates:**
 Migrations only run once, so pulling new code won't fix an outdated database schema. Reset to fresh:
@@ -308,15 +332,24 @@ bun install
 bun run build
 ```
 
+**Streaming timeout issues (browser takes >180s to load):**
+Enable production client build mode to serve pre-built assets instead of JIT compilation:
+```bash
+# In packages/server/.env
+NODE_ENV=production
+DUEL_USE_PRODUCTION_CLIENT=true
+```
+
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
 
 ## More Info
 
-See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
-
-See [AGENTS.md](AGENTS.md) for AI coding assistant instructions and WebGPU deployment architecture.
+- [CLAUDE.md](CLAUDE.md) - Detailed development guidelines and architecture
+- [AGENTS.md](AGENTS.md) - AI assistant guidelines
+- [docs/duel-stack.md](docs/duel-stack.md) - Streaming duel arena setup
+- [docs/railway-dev-prod.md](docs/railway-dev-prod.md) - Railway deployment guide
 
 ## License
 
