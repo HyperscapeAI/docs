@@ -305,13 +305,27 @@ Hyperscape requires WebGPU - WebGL will NOT work. Check browser compatibility:
 
 ## Documentation
 
+### Core Documentation
+- **[README.md](README.md)** - This file (project overview and quick start)
 - **[CLAUDE.md](CLAUDE.md)** - Development guide and architecture
 - **[AGENTS.md](AGENTS.md)** - AI coding assistant instructions
-- **[docs/vast-ai-streaming.md](docs/vast-ai-streaming.md)** - GPU streaming architecture
-- **[docs/instanced-rendering.md](docs/instanced-rendering.md)** - Instanced rendering system
+- **[CHANGELOG.md](CHANGELOG.md)** - Complete change history
+- **[docs/RECENT_CHANGES.md](docs/RECENT_CHANGES.md)** - Recent updates (February 2026)
+
+### Feature Documentation
+- **[docs/instanced-rendering.md](docs/instanced-rendering.md)** - GPU instancing system
 - **[docs/ai-agent-improvements.md](docs/ai-agent-improvements.md)** - AI agent optimizations
-- **[docs/api/renderer-factory.md](docs/api/renderer-factory.md)** - Renderer API reference
+- **[docs/vast-ai-streaming.md](docs/vast-ai-streaming.md)** - GPU streaming architecture
+
+### API Reference
+- **[docs/api/renderer-factory.md](docs/api/renderer-factory.md)** - Renderer API
+
+### Configuration
+- **[docs/configuration/environment-variables.md](docs/configuration/environment-variables.md)** - Complete env var reference
 - **[docs/security/content-security-policy.md](docs/security/content-security-policy.md)** - CSP configuration
+
+### Migration Guides
+- **[docs/migration/webgpu-only.md](docs/migration/webgpu-only.md)** - WebGPU migration guide
 
 ## More Info
 
