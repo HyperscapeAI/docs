@@ -170,6 +170,7 @@ Recent stability improvements have adjusted test timeouts for reliability:
 - **Precision Fixes**: Use larger amounts (10000n) to avoid gas cost precision issues
 - **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
 - **Playwright Tests**: Increased navigation timeout to 180s for Vite dev mode
+- **Anchor Test Configuration**: Use localnet instead of devnet for free SOL in `anchor test`
 
 ### Mobile Development
 ```bash
