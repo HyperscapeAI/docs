@@ -1,673 +1,390 @@
-# Instanced Rendering API
+# Instanced Rendering API Reference
 
-Hyperscape uses instanced rendering for resource entities (rocks, ores, herbs, trees) to dramatically reduce draw calls and improve performance.
+This document describes the instanced rendering system for resource entities (trees, rocks, ores, herbs) in Hyperscape.
 
 ## Overview
 
-**Instanced rendering** pools multiple instances of the same 3D model into a single `THREE.InstancedMesh`, reducing draw calls from O(n) per resource to O(1) per unique model per LOD level.
-
-**Key Benefits:**
-- Reduces draw calls by 100-1000x for resource-heavy scenes
-- Distance-based LOD switching with hysteresis to prevent flickering
-- Automatic depleted model transitions (e.g., tree → stump)
-- Highlight mesh support for hover/selection on instanced entities
-- Falls back to individual models if instancing fails
+Hyperscape uses instanced rendering to dramatically reduce draw calls for resource entities. Instead of O(n) draw calls per resource, the system uses O(1) draw calls per unique model per LOD level.
 
 ## Architecture
 
-### Components
-
-1. **GLBResourceInstancer** - Pools instances for rocks, ores, herbs (non-tree resources)
-2. **GLBTreeInstancer** - Specialized instancer for tree resources with dissolve materials
-3. **InstancedModelVisualStrategy** - Visual strategy that uses instancers
-4. **ResourceVisualStrategy** - Base interface for resource rendering
-
-### Model Pools
-
-Each unique model path gets a **ModelPool** with:
-- **LOD0, LOD1, LOD2 pools**: Separate `InstancedMesh` for each LOD level
-- **Depleted pool**: Separate pool for depleted state (e.g., tree stump)
-- **Highlight meshes**: Pre-loaded meshes for hover/selection highlighting
-- **Instance tracking**: Maps entity IDs to matrix indices
-
-### LOD System
-
-**Distance-based LOD switching:**
-- LOD0: < 30m (high detail)
-- LOD1: 30-60m (medium detail)
-- LOD2: > 60m (low detail)
-- **Hysteresis**: 0.81x multiplier prevents flickering at LOD boundaries
-
-**LOD file naming convention:**
-- LOD0: `model.glb`
-- LOD1: `model_lod1.glb` (auto-inferred)
-- LOD2: `model_lod2.glb` (auto-inferred)
-
-## API Reference
-
 ### GLBResourceInstancer
 
-#### `initGLBResourceInstancer(scene: THREE.Scene, world: World): void`
+**Location**: `packages/shared/src/systems/shared/world/GLBResourceInstancer.ts`
 
-Initialize the instancer system. Must be called before using any other functions.
+Pools instances by model path with separate `InstancedMesh` per LOD level.
 
-**Parameters:**
-- `scene` - Three.js scene to add instanced meshes to
-- `world` - Hyperscape world instance
+#### Constructor
 
-**Example:**
 ```typescript
-import { initGLBResourceInstancer } from '@hyperscape/shared';
-
-initGLBResourceInstancer(scene, world);
+constructor(
+  world: World,
+  modelPath: string,
+  maxInstances: number = 1000
+)
 ```
 
-#### `addInstance(modelPath, entityId, position, rotation, scale, depletedModelPath?, depletedScale?): Promise<boolean>`
+#### Methods
 
-Add a new instance to the pool.
+##### `addInstance(entity: ResourceEntity, lodLevel: number): number`
+Adds an entity instance at the specified LOD level.
 
-**Parameters:**
-- `modelPath: string` - Path to GLB model (LOD0)
-- `entityId: string` - Unique entity identifier
-- `position: THREE.Vector3` - World position
-- `rotation: number` - Y-axis rotation in radians
-- `scale: number` - Uniform scale factor
-- `depletedModelPath?: string | null` - Optional path to depleted model (e.g., stump)
-- `depletedScale?: number` - Scale for depleted model (defaults to `scale`)
+**Returns**: Instance index
 
-**Returns:** `Promise<boolean>` - `true` if instance was added successfully
-
-**Example:**
+**Example**:
 ```typescript
-const success = await addInstance(
-  '/assets/models/tree_oak.glb',
-  'tree_123',
-  new THREE.Vector3(10, 0, 20),
-  Math.PI / 4,  // 45° rotation
-  1.2,          // 120% scale
-  '/assets/models/stump_oak.glb',  // Depleted model
-  0.8           // Stump is 80% scale
-);
+const instancer = new GLBResourceInstancer(world, 'models/rock.glb');
+const index = instancer.addInstance(rockEntity, 0); // LOD 0
 ```
 
-#### `removeInstance(entityId: string): void`
+##### `removeInstance(entity: ResourceEntity): void`
+Removes an entity instance from all LOD levels.
 
-Remove an instance from the pool.
+##### `updateInstance(entity: ResourceEntity, lodLevel: number): void`
+Updates instance transform and visibility.
 
-**Parameters:**
-- `entityId: string` - Entity identifier to remove
+##### `setLODLevel(entity: ResourceEntity, newLOD: number): void`
+Switches entity to a different LOD level with hysteresis to prevent flickering.
 
-**Example:**
-```typescript
-removeInstance('tree_123');
-```
-
-#### `setDepleted(entityId: string, depleted: boolean): void`
-
-Toggle instance between normal and depleted state.
-
-**Parameters:**
-- `entityId: string` - Entity identifier
-- `depleted: boolean` - `true` for depleted state, `false` for normal
-
-**Example:**
-```typescript
-// Tree was chopped down - show stump
-setDepleted('tree_123', true);
-
-// Tree respawned - show full tree
-setDepleted('tree_123', false);
-```
-
-#### `hasInstance(entityId: string): boolean`
-
-Check if an entity is managed by the instancer.
-
-**Returns:** `boolean` - `true` if entity is instanced
-
-#### `hasDepleted(entityId: string): boolean`
-
-Check if an entity has a depleted model configured.
-
-**Returns:** `boolean` - `true` if depleted model is available
-
-#### `getHighlightMesh(entityId: string): THREE.Object3D | null`
-
-Get a highlight mesh for hover/selection effects.
-
-**Returns:** `THREE.Object3D | null` - Positioned highlight mesh, or `null` if not available
-
-**Example:**
-```typescript
-const highlightMesh = getHighlightMesh('tree_123');
-if (highlightMesh) {
-  scene.add(highlightMesh);
-  highlightMesh.material.opacity = 0.3;
-}
-```
-
-#### `updateGLBResourceInstancer(): void`
-
-Update LOD levels and materials. Call once per frame.
-
-**Example:**
-```typescript
-// In your render loop
-function tick() {
-  updateGLBResourceInstancer();
-  renderer.render(scene, camera);
-}
-```
-
-#### `destroyGLBResourceInstancer(): void`
-
-Clean up all resources. Call when shutting down.
-
-**Example:**
-```typescript
-destroyGLBResourceInstancer();
-```
+##### `dispose(): void`
+Cleans up all instanced meshes and releases GPU resources.
 
 ### GLBTreeInstancer
 
-Same API as `GLBResourceInstancer` but specialized for trees:
-- Uses dissolve materials for fade effects
-- Optimized for tree-specific rendering
-- Separate namespace to avoid conflicts
+**Location**: `packages/shared/src/systems/shared/world/GLBTreeInstancer.ts`
 
-**Functions:**
-- `initGLBTreeInstancer(scene, world)`
-- `addTreeInstance(modelPath, entityId, position, rotation, scale, depletedModelPath?, depletedScale?)`
-- `removeTreeInstance(entityId)`
-- `setTreeDepleted(entityId, depleted)`
-- `hasTreeInstance(entityId)`
-- `hasTreeDepleted(entityId)`
-- `getTreeHighlightMesh(entityId)`
-- `updateGLBTreeInstancer()`
-- `destroyGLBTreeInstancer()`
+Specialized instancer for tree resources with dissolve materials and depleted model support.
 
-## Visual Strategy Integration
+#### Depleted Models (NEW)
 
-### ResourceVisualStrategy Interface
+Trees can specify `depletedModelPath` and `depletedModelScale` in their resource configuration:
+
+```json
+{
+  "id": "tree_oak",
+  "modelPath": "models/tree_oak.glb",
+  "depletedModelPath": "models/stump_oak.glb",
+  "depletedModelScale": 0.8
+}
+```
+
+The instancer maintains separate pools for normal and depleted states:
 
 ```typescript
-interface ResourceVisualStrategy {
-  /**
-   * Called when resource is depleted.
-   * @returns true if strategy handled depletion (e.g., instanced stump)
-   *          false if ResourceEntity should load individual depleted model
-   */
-  onDepleted(): boolean;
+// Automatic transition on depletion
+treeInstancer.transitionToDepleted(treeEntity);
+```
 
-  /**
-   * Optional: Get highlight mesh for hover/selection.
-   * @returns Positioned highlight mesh, or null if not supported
-   */
-  getHighlightMesh?(ctx: ResourceContext): THREE.Object3D | null;
+#### Methods
+
+##### `transitionToDepleted(entity: ResourceEntity): boolean`
+Transitions entity from tree to stump model.
+
+**Returns**: `true` if transition succeeded, `false` if depleted model not configured
+
+**Example**:
+```typescript
+if (treeInstancer.transitionToDepleted(entity)) {
+  // Instancer handled depletion (tree → stump)
+} else {
+  // Load individual depleted model
+  await entity.loadDepletedModel();
+}
+```
+
+##### `getHighlightMesh(entity: ResourceEntity): Mesh | null` (NEW)
+Returns a highlight mesh for hover/selection on instanced entities.
+
+**Usage**:
+```typescript
+const highlightMesh = treeInstancer.getHighlightMesh(entity);
+if (highlightMesh) {
+  scene.add(highlightMesh);
 }
 ```
 
 ### InstancedModelVisualStrategy
 
-Visual strategy that uses `GLBResourceInstancer` for rendering.
+**Location**: `packages/shared/src/entities/world/visuals/InstancedModelVisualStrategy.ts`
 
-**Constructor:**
+Thin wrapper strategy that uses instancers with invisible collision proxies for raycasting.
+
+#### Constructor
+
 ```typescript
-new InstancedModelVisualStrategy(
-  modelPath: string,
-  depletedModelPath?: string | null,
-  depletedModelScale?: number
+constructor(
+  instancer: GLBResourceInstancer | GLBTreeInstancer,
+  config: ResourceConfig
 )
 ```
 
-**Methods:**
-- `onDepleted(): boolean` - Returns `true` (instancer handles depletion)
-- `getHighlightMesh(ctx): THREE.Object3D | null` - Returns highlight mesh from instancer
+#### Methods
 
-**Example:**
+##### `onDepleted(): boolean` (CHANGED)
+Handles resource depletion.
+
+**Returns**:
+- `true` = strategy handled depletion (instanced stump)
+- `false` = ResourceEntity should load individual depleted model
+
+**Breaking Change**: Return type changed from `void` to `boolean`
+
+**Migration**:
 ```typescript
-import { InstancedModelVisualStrategy } from '@hyperscape/shared';
+// Before
+onDepleted() {
+  // Handle depletion
+}
 
-const strategy = new InstancedModelVisualStrategy(
-  '/assets/models/rock_granite.glb',
-  null,  // No depleted model for rocks
-  1.0
-);
-```
-
-### TreeGLBVisualStrategy
-
-Visual strategy for trees using `GLBTreeInstancer`.
-
-**Constructor:**
-```typescript
-new TreeGLBVisualStrategy(
-  modelPath: string,
-  depletedModelPath?: string | null,
-  depletedModelScale?: number
-)
-```
-
-**Example:**
-```typescript
-import { TreeGLBVisualStrategy } from '@hyperscape/shared';
-
-const strategy = new TreeGLBVisualStrategy(
-  '/assets/models/tree_oak.glb',
-  '/assets/models/stump_oak.glb',
-  0.8  // Stump is 80% of tree scale
-);
-```
-
-## ResourceEntity Integration
-
-### getHighlightRoot()
-
-ResourceEntity now provides `getHighlightRoot()` method for instanced highlighting:
-
-```typescript
-class ResourceEntity {
-  /**
-   * Get the root object for highlighting (collision proxy or highlight mesh).
-   * For instanced resources, returns the highlight mesh from the instancer.
-   * For standard resources, returns the collision proxy.
-   */
-  getHighlightRoot(): THREE.Object3D | null {
-    // Try to get highlight mesh from strategy
-    if (this.visualStrategy?.getHighlightMesh) {
-      const highlightMesh = this.visualStrategy.getHighlightMesh(this);
-      if (highlightMesh) return highlightMesh;
-    }
-    // Fallback to collision proxy
-    return this.collisionProxy;
+// After
+onDepleted(): boolean {
+  if (this.instancer.transitionToDepleted(this.entity)) {
+    return true; // Instancer handled it
   }
+  return false; // Entity should load depleted model
 }
 ```
 
-### EntityHighlightService
+##### `getHighlightMesh(ctx: RenderContext): Mesh | null` (NEW)
+Returns highlight mesh for instanced entity.
 
-The highlight service now supports instanced meshes:
-
+**Usage**:
 ```typescript
-// EntityHighlightService.ts
-const highlightRoot = entity.getHighlightRoot?.() ?? entity.node;
-if (highlightRoot) {
-  // Apply highlight effect to instanced mesh or collision proxy
-  applyHighlight(highlightRoot);
-}
+const highlightMesh = strategy.getHighlightMesh(ctx);
 ```
+
+### ResourceEntity
+
+**Location**: `packages/shared/src/entities/world/ResourceEntity.ts`
+
+#### Methods
+
+##### `getHighlightRoot(): Object3D` (NEW)
+Returns the root object for highlighting (supports instanced meshes).
+
+**Usage**:
+```typescript
+const root = entity.getHighlightRoot();
+// Returns instanced highlight mesh if available, otherwise entity mesh
+```
+
+**Impact**: `EntityHighlightService` now supports instanced entity highlighting.
 
 ## Configuration
 
 ### Resource Manifest
 
-Configure instanced rendering in resource manifests:
+Add `depletedModelPath` and `depletedModelScale` to resource configs:
 
 ```json
 {
-  "id": "tree_oak",
-  "name": "Oak Tree",
-  "modelPath": "/assets/models/tree_oak.glb",
-  "depletedModelPath": "/assets/models/stump_oak.glb",
-  "depletedModelScale": 0.8,
-  "useInstancing": true,
-  "skill": "woodcutting",
-  "level": 1
+  "resources": [
+    {
+      "id": "tree_willow",
+      "name": "Willow tree",
+      "modelPath": "models/trees/willow.glb",
+      "depletedModelPath": "models/trees/willow_stump.glb",
+      "depletedModelScale": 0.75,
+      "respawnTime": 60,
+      "skill": "woodcutting",
+      "level": 30
+    }
+  ]
 }
 ```
 
-**Fields:**
-- `modelPath` - Path to LOD0 model (required)
-- `depletedModelPath` - Path to depleted model (optional)
-- `depletedModelScale` - Scale multiplier for depleted model (optional, defaults to 1.0)
-- `useInstancing` - Enable instanced rendering (optional, defaults to true for resources)
-
-### LOD Configuration
-
-LOD distances are configured in `GPUVegetation.ts`:
-
-```typescript
-export const GPU_VEG_CONFIG = {
-  RESOURCE_LOD1_DISTANCE: 30,  // Switch to LOD1 at 30m
-  RESOURCE_LOD2_DISTANCE: 60,  // Switch to LOD2 at 60m
-  TREE_LOD1_DISTANCE: 40,      // Trees use different distances
-  TREE_LOD2_DISTANCE: 80,
-};
-```
-
-## Performance Characteristics
+## Performance Benefits
 
 ### Draw Call Reduction
 
-**Without instancing:**
-- 1000 trees = 1000 draw calls
-- 500 rocks = 500 draw calls
-- **Total: 1500 draw calls**
+**Before** (individual meshes):
+- 1000 oak trees = 1000 draw calls
+- 500 willow trees = 500 draw calls
+- **Total**: 1500 draw calls
 
-**With instancing:**
-- 1000 oak trees = 3 draw calls (LOD0, LOD1, LOD2)
-- 500 granite rocks = 3 draw calls (LOD0, LOD1, LOD2)
-- **Total: 6 draw calls** (250x reduction!)
+**After** (instanced rendering):
+- 1000 oak trees = 1 draw call (per LOD level)
+- 500 willow trees = 1 draw call (per LOD level)
+- **Total**: 2-6 draw calls (depending on LOD levels active)
 
-### Memory Usage
+### Memory Efficiency
 
-**Geometry sharing:**
-- Each unique model loaded once
-- All instances share the same geometry
-- Only matrix data (16 floats) stored per instance
+- Single geometry shared across all instances
+- Minimal per-instance data (transform matrix)
+- Automatic LOD switching reduces vertex count at distance
 
-**Typical savings:**
-- 1000 trees without instancing: ~500MB geometry data
-- 1000 trees with instancing: ~500KB geometry + 64KB matrices = ~564KB (1000x reduction!)
+## LOD System Integration
 
-### LOD Switching Performance
+Instanced rendering integrates with distance-based LOD:
 
-- LOD updates run once per frame
-- O(n) complexity where n = number of instances
-- Hysteresis prevents flickering (0.81x multiplier)
-- Typical cost: ~0.1ms for 1000 instances
-
-## Limitations
-
-### Maximum Instances
-
-- **MAX_INSTANCES = 512** per model per LOD level
-- If exceeded, new instances fall back to `StandardModelVisualStrategy`
-- Logged as warning: `"LOD0 pool full for {modelPath}, cannot add {entityId}"`
-
-### Collision Proxies
-
-- Instanced meshes are not raycastable
-- Each instance has an invisible collision proxy for raycasting
-- Collision proxy persists across state transitions (normal ↔ depleted)
-
-### Material Limitations
-
-- All instances of a model share the same material
-- Per-instance material variations not supported
-- Use different models for material variants
-
-## Troubleshooting
-
-### Instances Not Rendering
-
-**Check:**
-1. `initGLBResourceInstancer()` was called
-2. Model path is correct and file exists
-3. Model has valid geometry (check with `extractGeometryAndMaterial`)
-4. Instance count < MAX_INSTANCES (512)
-
-**Debug:**
 ```typescript
-import { hasInstance } from '@hyperscape/shared';
+// LOD levels automatically managed
+const distance = entity.position.distanceTo(camera.position);
 
-if (!hasInstance('tree_123')) {
-  console.error('Instance not found - check addInstance() return value');
-}
-```
-
-### LOD Not Switching
-
-**Check:**
-1. `updateGLBResourceInstancer()` is called every frame
-2. Camera is set on world: `world.camera`
-3. LOD files exist (`model_lod1.glb`, `model_lod2.glb`)
-
-**Debug:**
-```typescript
-// Check LOD pool status
-const pool = pools.get('/assets/models/tree_oak.glb');
-console.log('LOD0 count:', pool?.lod0?.activeCount);
-console.log('LOD1 count:', pool?.lod1?.activeCount);
-console.log('LOD2 count:', pool?.lod2?.activeCount);
-```
-
-### Depleted Models Not Showing
-
-**Check:**
-1. `depletedModelPath` was provided to `addInstance()`
-2. Depleted model file exists
-3. `setDepleted(entityId, true)` was called
-
-**Debug:**
-```typescript
-import { hasDepleted } from '@hyperscape/shared';
-
-if (!hasDepleted('tree_123')) {
-  console.error('No depleted model configured for this instance');
-}
-```
-
-### Highlight Not Working
-
-**Check:**
-1. Strategy implements `getHighlightMesh()` method
-2. `getHighlightRoot()` is called instead of accessing `entity.node` directly
-3. Highlight mesh is added to scene
-
-**Debug:**
-```typescript
-const highlightMesh = entity.getHighlightRoot();
-if (!highlightMesh) {
-  console.error('No highlight mesh available');
+if (distance < 50) {
+  instancer.setLODLevel(entity, 0); // High detail
+} else if (distance < 100) {
+  instancer.setLODLevel(entity, 1); // Medium detail
 } else {
-  console.log('Highlight mesh:', highlightMesh);
-  scene.add(highlightMesh);
+  instancer.setLODLevel(entity, 2); // Low detail
 }
 ```
 
-## Migration Guide
+**Hysteresis**: LOD switching includes hysteresis to prevent flickering at LOD boundaries.
 
-### From StandardModelVisualStrategy to InstancedModelVisualStrategy
+## Fallback Behavior
 
-**Before:**
+If instancing fails (e.g., model loading error), the system automatically falls back to `StandardModelVisualStrategy`:
+
 ```typescript
-// Old approach - individual model per resource
-const strategy = new StandardModelVisualStrategy(
-  '/assets/models/tree_oak.glb',
-  '/assets/models/stump_oak.glb'
-);
+try {
+  return new InstancedModelVisualStrategy(instancer, config);
+} catch (error) {
+  console.warn('Instancing failed, using standard strategy:', error);
+  return new StandardModelVisualStrategy(config);
+}
 ```
 
-**After:**
+## Collision Proxies
+
+Instanced entities use invisible collision proxies for raycasting:
+
+- Proxy persists across state transitions (tree → stump)
+- Enables mouse hover and selection on instanced meshes
+- Minimal performance overhead
+
+## Model Cache Integration
+
+### Index Buffer Type Preservation (CRITICAL FIX)
+
+**Location**: `packages/shared/src/utils/rendering/ModelCache.ts`
+
+**Issue**: Model cache was not preserving original index buffer type (Uint16Array vs Uint32Array), causing silent geometry corruption and RangeError crashes.
+
+**Fix**: Cache version bumped to 4, now preserves index buffer type:
+
 ```typescript
-// New approach - instanced rendering
+// Cache entry now includes index buffer type
+interface CachedModel {
+  geometry: BufferGeometry;
+  indexType: 'uint16' | 'uint32'; // NEW
+  // ... other fields
+}
+```
+
+**Impact**: Affects all GLB models loaded via ModelCache (resources, NPCs, items).
+
+**Migration**: Existing cache entries are automatically invalidated (version 4).
+
+## Related APIs
+
+### EntityHighlightService
+
+**Location**: `packages/shared/src/systems/client/interaction/services/EntityHighlightService.ts`
+
+Now supports instanced highlight meshes via `getHighlightRoot()`:
+
+```typescript
+const root = entity.getHighlightRoot();
+// Returns instanced highlight mesh if available
+```
+
+### ResourceVisualStrategy
+
+**Location**: `packages/shared/src/entities/world/visuals/ResourceVisualStrategy.ts`
+
+Base interface for all resource visual strategies.
+
+#### `onDepleted(): boolean`
+Called when resource is depleted.
+
+**Returns**:
+- `true` = strategy handled depletion
+- `false` = entity should load depleted model
+
+#### `getHighlightMesh(ctx: RenderContext): Mesh | null` (OPTIONAL)
+Returns highlight mesh for entity.
+
+**Default**: Returns `null` (no custom highlight)
+
+## Example: Creating a Custom Instanced Resource
+
+```typescript
+import { GLBResourceInstancer } from '@hyperscape/shared';
+
+// 1. Create instancer for your model
+const rockInstancer = new GLBResourceInstancer(
+  world,
+  'models/rocks/granite.glb',
+  500 // max instances
+);
+
+// 2. Create visual strategy
 const strategy = new InstancedModelVisualStrategy(
-  '/assets/models/tree_oak.glb',
-  '/assets/models/stump_oak.glb',
-  0.8  // Stump scale
+  rockInstancer,
+  resourceConfig
 );
+
+// 3. Assign to resource entity
+resourceEntity.setVisualStrategy(strategy);
+
+// 4. Instancer automatically manages LOD and rendering
+// 5. Clean up on world shutdown
+rockInstancer.dispose();
 ```
 
-### Updating ResourceVisualStrategy Implementations
+## Debugging
 
-**Before:**
-```typescript
-class MyVisualStrategy implements ResourceVisualStrategy {
-  onDepleted(): void {
-    // Load depleted model
-    this.loadDepletedModel();
-  }
-}
-```
-
-**After:**
-```typescript
-class MyVisualStrategy implements ResourceVisualStrategy {
-  onDepleted(): boolean {
-    // Return true if strategy handles depletion
-    if (this.hasDepletedModel) {
-      this.loadDepletedModel();
-      return true;
-    }
-    // Return false to let ResourceEntity load individual model
-    return false;
-  }
-
-  // Optional: Provide highlight mesh for instanced entities
-  getHighlightMesh?(ctx: ResourceContext): THREE.Object3D | null {
-    return getHighlightMesh(ctx.entityId);
-  }
-}
-```
-
-### Updating EntityHighlightService
-
-**Before:**
-```typescript
-// Old approach - always use entity.node
-const targetObject = entity.node;
-applyHighlight(targetObject);
-```
-
-**After:**
-```typescript
-// New approach - use getHighlightRoot() for instanced support
-const targetObject = entity.getHighlightRoot?.() ?? entity.node;
-applyHighlight(targetObject);
-```
-
-## Best Practices
-
-### 1. Use Instancing for Repeated Models
-
-**Good:**
-```typescript
-// 100 oak trees - use instancing
-for (let i = 0; i < 100; i++) {
-  const strategy = new InstancedModelVisualStrategy(
-    '/assets/models/tree_oak.glb',
-    '/assets/models/stump_oak.glb',
-    0.8
-  );
-}
-```
-
-**Bad:**
-```typescript
-// 100 oak trees - individual models (1000x more draw calls!)
-for (let i = 0; i < 100; i++) {
-  const strategy = new StandardModelVisualStrategy(
-    '/assets/models/tree_oak.glb',
-    '/assets/models/stump_oak.glb'
-  );
-}
-```
-
-### 2. Provide LOD Models
-
-**Good:**
-```
-/assets/models/tree_oak.glb       (LOD0 - high detail)
-/assets/models/tree_oak_lod1.glb  (LOD1 - medium detail)
-/assets/models/tree_oak_lod2.glb  (LOD2 - low detail)
-```
-
-**Acceptable:**
-```
-/assets/models/tree_oak.glb       (LOD0 only)
-```
-Instancer will use LOD0 for all distances if LOD1/LOD2 don't exist.
-
-### 3. Configure Depleted Models
-
-**Good:**
-```typescript
-// Provide depleted model for smooth transitions
-new InstancedModelVisualStrategy(
-  '/assets/models/tree_oak.glb',
-  '/assets/models/stump_oak.glb',
-  0.8
-);
-```
-
-**Acceptable:**
-```typescript
-// No depleted model - instance is removed when depleted
-new InstancedModelVisualStrategy(
-  '/assets/models/rock_granite.glb',
-  null,
-  1.0
-);
-```
-
-### 4. Use Appropriate Scales
-
-**Good:**
-```typescript
-// Stump is smaller than tree
-depletedScale: 0.8  // 80% of original scale
-```
-
-**Bad:**
-```typescript
-// Stump same size as tree (unrealistic)
-depletedScale: 1.0
-```
-
-### 5. Call Update Every Frame
-
-**Good:**
-```typescript
-function tick() {
-  updateGLBResourceInstancer();
-  updateGLBTreeInstancer();
-  renderer.render(scene, camera);
-}
-```
-
-**Bad:**
-```typescript
-function tick() {
-  // Missing update - LOD won't switch!
-  renderer.render(scene, camera);
-}
-```
-
-## Advanced Usage
-
-### Custom LOD Distances
-
-Modify `GPU_VEG_CONFIG` in `GPUVegetation.ts`:
+### Check Instance Counts
 
 ```typescript
-export const GPU_VEG_CONFIG = {
-  RESOURCE_LOD1_DISTANCE: 40,  // Increase LOD1 distance
-  RESOURCE_LOD2_DISTANCE: 80,  // Increase LOD2 distance
-};
+console.log('Active instances:', instancer.getInstanceCount());
+console.log('LOD 0 instances:', instancer.getLODInstanceCount(0));
 ```
 
-### Custom Highlight Materials
+### Verify Geometry Disposal
 
 ```typescript
-const highlightMesh = getHighlightMesh('tree_123');
-if (highlightMesh instanceof THREE.Mesh) {
-  highlightMesh.material = new THREE.MeshBasicMaterial({
-    color: 0x00ff00,
-    opacity: 0.3,
-    transparent: true,
-  });
-}
+// Check if geometry is disposed after cache clear
+modelCache.clear();
+// All geometries should have geometry.dispose() called
 ```
 
-### Monitoring Instance Counts
+### Monitor Draw Calls
 
-```typescript
-// Access internal pools for debugging (not recommended for production)
-import { pools } from './GLBResourceInstancer';
+Use Chrome DevTools Performance tab:
+1. Record performance
+2. Look for "Draw calls" in GPU section
+3. Should see dramatic reduction with instancing
 
-for (const [modelPath, pool] of pools.entries()) {
-  console.log(`${modelPath}:`);
-  console.log(`  LOD0: ${pool.lod0?.activeCount ?? 0} instances`);
-  console.log(`  LOD1: ${pool.lod1?.activeCount ?? 0} instances`);
-  console.log(`  LOD2: ${pool.lod2?.activeCount ?? 0} instances`);
-  console.log(`  Depleted: ${pool.depleted?.activeCount ?? 0} instances`);
-}
-```
+## Performance Considerations
+
+### When to Use Instancing
+
+**Good candidates**:
+- Many instances of same model (>10)
+- Static or infrequently updated transforms
+- Shared material properties
+
+**Poor candidates**:
+- Unique models (only 1-2 instances)
+- Frequently changing materials
+- Per-instance material variations
+
+### Memory Trade-offs
+
+**Pros**:
+- Reduced draw calls (major GPU performance win)
+- Shared geometry (reduced VRAM)
+- Efficient transform updates
+
+**Cons**:
+- All instances share same material
+- Matrix updates require buffer uploads
+- Collision proxies add minimal overhead
 
 ## Related Documentation
 
-- [Model Cache Integrity](./model-cache-integrity.md) - Index buffer type preservation
-- [GPU Vegetation System](../packages/shared/src/systems/shared/world/GPUVegetation.ts) - Dissolve materials and LOD configuration
-- [Resource System](../packages/shared/src/entities/world/ResourceEntity.ts) - Resource entity implementation
-- [Visual Strategies](../packages/shared/src/entities/world/visuals/) - All visual strategy implementations
+- [CLAUDE.md](../CLAUDE.md) - Performance Optimizations section
+- [AGENTS.md](../AGENTS.md) - Instanced Rendering section
+- [Model Cache Integrity](../CLAUDE.md#model-cache-integrity)
