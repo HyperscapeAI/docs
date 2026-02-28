@@ -296,27 +296,15 @@ Hyperscape requires WebGPU - WebGL will NOT work. Check browser compatibility:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
 
-## Recent Updates
+## Documentation
 
-### Instanced Rendering (Feb 2026)
-- GPU instancing for trees, rocks, ores, and herbs
-- Reduces draw calls from O(n) to O(1) per model
-- Automatic LOD switching based on camera distance
-- Instanced depletion (stumps) for better performance
-- See: `docs/instanced-rendering.md`
-
-### AI Agent Improvements (Feb 2026)
-- Action locks prevent LLM calls during movement
-- Fast-tick mode (2s) for quick follow-up decisions
-- Short-circuit obvious decisions (70% fewer LLM calls)
-- Banking goal type with auto-restore
-- See: `docs/ai-agent-improvements.md`
-
-### WebGPU-Only Enforcement (Feb 2026)
-- Removed all WebGL fallback code
-- WebGPU is now strictly required
-- Vast.ai streaming validates WebGPU availability
-- See: `AGENTS.md` and `docs/vast-ai-streaming.md`
+- **[CLAUDE.md](CLAUDE.md)** - Development guide and architecture
+- **[AGENTS.md](AGENTS.md)** - AI coding assistant instructions
+- **[docs/vast-ai-streaming.md](docs/vast-ai-streaming.md)** - GPU streaming architecture
+- **[docs/instanced-rendering.md](docs/instanced-rendering.md)** - Instanced rendering system
+- **[docs/ai-agent-improvements.md](docs/ai-agent-improvements.md)** - AI agent optimizations
+- **[docs/api/renderer-factory.md](docs/api/renderer-factory.md)** - Renderer API reference
+- **[docs/security/content-security-policy.md](docs/security/content-security-policy.md)** - CSP configuration
 
 ## More Info
 
