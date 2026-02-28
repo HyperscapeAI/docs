@@ -79,8 +79,20 @@ GPU_RENDERING_MODE=xorg|xvfb-vulkan                     # Rendering mode
 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json # Force NVIDIA Vulkan
 DUEL_CAPTURE_USE_XVFB=true|false                        # Xvfb vs Xorg
 STREAM_CAPTURE_HEADLESS=false                           # Always false (WebGPU requires display)
+STREAM_CAPTURE_USE_EGL=false                            # EGL vs ANGLE (always false for WebGPU)
+STREAM_GOP_SIZE=60                                      # GOP size in frames (default: 60)
+DUEL_USE_PRODUCTION_CLIENT=true                         # Use pre-built client for faster loads
 XDG_RUNTIME_DIR=/tmp/pulse-runtime                      # PulseAudio runtime
 PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native       # PulseAudio socket
+```
+
+**Secrets Management** (BREAKING CHANGE):
+All stream keys must be set via environment variables - hardcoded secrets removed:
+```bash
+TWITCH_STREAM_KEY=live_...
+KICK_STREAM_KEY=...
+X_STREAM_KEY=...
+YOUTUBE_STREAM_KEY=""  # Explicitly disabled
 ```
 
 **Production Client Build**:
