@@ -254,6 +254,14 @@ Visit [webgpureport.org](https://webgpureport.org) to check if your browser supp
 - Update to Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
 - Ensure graphics drivers are up to date
 - Check `chrome://gpu` to see GPU feature status
+- Note: Safari 17 is no longer supported - Safari 18+ (macOS 15+) is required
+
+**WebGPU initialization hangs or times out:**
+If the game loads but hangs on a black screen:
+- Check browser console for "WebGPU adapter request timed out" or "WebGPU renderer initialization timed out"
+- Try restarting your browser
+- Update graphics drivers
+- For server deployments, ensure NVIDIA GPU is accessible and Vulkan ICD is configured (see CLAUDE.md)
 
 **Characters vanishing / not appearing on character select:**
 This happens when Privy credentials are missing. Each page refresh creates a new anonymous user, orphaning your characters. Fix: Set `PUBLIC_PRIVY_APP_ID` in client `.env` and both `PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` in server `.env`.
