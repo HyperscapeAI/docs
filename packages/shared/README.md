@@ -1,319 +1,314 @@
 # @hyperscape/shared
 
-Core 3D multiplayer engine for Hyperscape - Entity Component System (ECS), Three.js WebGPU rendering, PhysX physics, and real-time networking.
+Core 3D multiplayer engine for Hyperscape. Provides Entity Component System (ECS), Three.js WebGPU rendering, PhysX physics, real-time networking, and React UI components.
 
-## Overview
+## Features
 
-This package contains the shared game engine code used by both client and server. It provides:
-
-- **Entity Component System (ECS)** - Flexible architecture for game objects
+- **Entity Component System (ECS)** - Flexible game object architecture
 - **WebGPU Rendering** - Modern GPU-accelerated graphics with TSL shaders
+- **Instanced Rendering** - Optimized rendering for resources (trees, rocks, ores, herbs)
 - **PhysX Physics** - WASM-based physics simulation
-- **Networking** - Real-time multiplayer synchronization
-- **React UI** - Game interface components
-- **Instanced Rendering** - High-performance rendering for thousands of entities
-
-## Key Features
-
-### WebGPU-Only Rendering
-
-**CRITICAL**: This package requires WebGPU. WebGL is NOT supported.
-
-- All materials use TSL (Three Shading Language)
-- Post-processing effects use WebGPU node materials
-- No WebGL fallback path exists
-- Supported browsers: Chrome 113+, Edge 113+, Safari 18+ (macOS 15+)
-
-See `src/utils/rendering/RendererFactory.ts` for implementation.
-
-### Instanced Rendering System
-
-High-performance rendering for resource entities (rocks, ores, herbs, trees):
-
-**Components:**
-- `GLBResourceInstancer` - Pools instances by model path, separate InstancedMesh per LOD level
-- `GLBTreeInstancer` - Specialized instancer for trees with dissolve materials
-- `InstancedModelVisualStrategy` - Visual strategy with collision proxies for raycasting
-- `StandardModelVisualStrategy` - Fallback for non-instanced rendering
-
-**Benefits:**
-- Reduces draw calls from O(n) per resource to O(1) per unique model per LOD level
-- Distance-based LOD switching with hysteresis
-- Depleted model support (tree → stump transitions)
-- Highlight mesh support for hover/selection
-
-**Usage:**
-```typescript
-// Instancing is automatic for resource entities
-// Configure in resource manifest:
-{
-  "modelPath": "/assets/world/resources/trees/oak.glb",
-  "depletedModelPath": "/assets/world/resources/trees/oak-stump.glb",
-  "depletedModelScale": 0.8
-}
-```
-
-**API:**
-```typescript
-// ResourceVisualStrategy interface
-interface ResourceVisualStrategy {
-  createVisual(ctx: ResourceVisualContext): Promise<void>;
-  
-  // Returns true if strategy handled depletion (instanced stump)
-  // Returns false if ResourceEntity should load individual depleted model
-  onDepleted(ctx: ResourceVisualContext): Promise<boolean>;
-  
-  onRespawn(ctx: ResourceVisualContext): Promise<void>;
-  update(ctx: ResourceVisualContext, deltaTime: number): void;
-  destroy(ctx: ResourceVisualContext): void;
-  
-  // Optional: Return highlight mesh for instanced entities
-  getHighlightMesh?(ctx: ResourceVisualContext): THREE.Object3D | null;
-}
-```
-
-**Files:**
-- `src/entities/world/visuals/InstancedModelVisualStrategy.ts`
-- `src/systems/shared/world/GLBResourceInstancer.ts`
-- `src/systems/shared/world/GLBTreeInstancer.ts`
-
-### Model Cache Integrity
-
-**Index Buffer Type Preservation:**
-- Model cache preserves original index buffer type (Uint16Array vs Uint32Array)
-- Fixes silent geometry corruption and RangeError crashes
-- Cache version: 4 (invalidates old corrupt entries)
-
-**Technical Details:**
-- THREE.js uses Uint16Array for meshes with <65536 vertices
-- Previous cache always deserialized as Uint32Array
-- Caused corruption (even-count) or crashes (odd-count)
-- Now stores and restores correct typed array type
-
-**Implementation:**
-- `src/utils/rendering/ModelCache.ts`
-
-### Entity Component System
-
-**Core Concepts:**
-- **Entities** - Game objects (players, mobs, items, resources)
-- **Components** - Data containers (position, health, inventory)
-- **Systems** - Logic processors (combat, skills, movement)
-
-**Entity Types:**
-- `PlayerEntity` - Human and AI players
-- `MobEntity` - Hostile NPCs
-- `NPCEntity` - Friendly NPCs
-- `ResourceEntity` - Gatherable resources (trees, rocks, fishing spots)
-- `ItemEntity` - Dropped items
-- `InteractableEntity` - Banks, altars, furnaces, etc.
-
-**System Categories:**
-- `client/` - Client-only systems (rendering, input, audio)
-- `server/` - Server-only systems (persistence, AI, monitoring)
-- `shared/` - Shared systems (combat, skills, movement, world)
-
-### Physics Integration
-
-**PhysX WASM:**
-- Character controllers for player movement
-- Rigid bodies for physics objects
-- Collision detection and response
-- Raycasting for interaction
-
-**Collision Layers:**
-- Player layer
-- NPC layer
-- World layer
-- Item layer
-- Trigger layer
-
-**Files:**
-- `src/physics/PhysXManager.ts`
-- `src/physics/Layers.ts`
-
-### Networking
-
-**Real-time Multiplayer:**
-- WebSocket-based communication
-- Entity state synchronization
-- Client-side prediction
-- Server reconciliation
-- Interpolation for smooth movement
-
-**Packet Types:**
-- Entity updates (position, rotation, animation)
-- Action requests (attack, gather, interact)
-- Inventory operations
-- Chat messages
-- System events
-
-**Files:**
-- `src/platform/shared/Socket.ts`
-- `src/platform/shared/packets.ts`
-- `src/systems/client/ClientNetwork.ts`
+- **Real-time Networking** - WebSocket-based multiplayer synchronization
+- **React UI Components** - Game interface panels and HUD elements
+- **Procedural Integration** - Terrain, vegetation, and building generation
 
 ## Installation
 
 ```bash
-# From repository root
+cd packages/shared
 bun install
-
-# Build shared package (required before other packages)
-bun run build:shared
+bun run build
 ```
 
-## Development
+## Architecture
 
-```bash
-# Watch mode with auto-rebuild
-bun run dev:shared
+### Entity Component System
 
-# Run tests
-npm test --workspace=packages/shared
+The engine uses a pure ECS architecture:
 
-# Lint
-npm run lint --workspace=packages/shared
-```
+- **Entities**: Game objects (players, mobs, items, resources)
+- **Components**: Data containers (position, health, inventory, combat stats)
+- **Systems**: Logic processors (combat, movement, rendering, networking)
+
+All game logic runs through systems. Entities are just data containers with no behavior.
+
+### Key Systems
+
+**Client Systems** (`src/systems/client/`):
+- `ClientGraphics` - WebGPU rendering, post-processing, LOD management
+- `ClientInput` - Keyboard, mouse, touch input handling
+- `ClientNetwork` - Server synchronization, interpolation
+- `ClientCameraSystem` - Camera controls and positioning
+- `EquipmentVisualSystem` - Equipment rendering on player avatars
+- `HealthBars` - 3D health bar rendering above entities
+- `ProjectileRenderer` - Arrow/spell projectile visualization
+
+**Server Systems** (`src/systems/server/`):
+- `ServerRuntime` - Game loop, tick processing
+- `ServerLoader` - World loading, entity spawning
+- `PersistenceSystem` - Database save/load operations
+
+**Shared Systems** (`src/systems/shared/`):
+- `CombatSystem` - Tick-based combat mechanics
+- `InventorySystem` - Item management, stacking, transactions
+- `SkillsSystem` - XP tracking, leveling, skill unlocks
+- `TileSystem` - Tile-based movement and pathfinding
+- `ResourceSystem` - Resource gathering (woodcutting, mining, fishing)
+- `TerrainSystem` - Procedural terrain generation and rendering
+- `VegetationSystem` - GPU-accelerated grass and vegetation
+
+### Rendering Pipeline
+
+**WebGPU-Only Rendering:**
+- All materials use Three.js Shading Language (TSL)
+- Post-processing effects (bloom, tone mapping) use TSL node materials
+- No WebGL fallback - WebGPU is required
+
+**Instanced Rendering:**
+- `GLBResourceInstancer` - Rocks, ores, herbs (non-tree resources)
+- `GLBTreeInstancer` - Trees with dissolve materials
+- `PlaceholderInstancer` - Colored cube proxies for missing models
+- Reduces draw calls from O(n) to O(1) per unique model
+- Distance-based LOD switching (LOD0/LOD1/LOD2)
+- Automatic depleted state transitions (tree → stump)
+
+**Model Cache:**
+- IndexedDB-based model caching for faster loads
+- Preserves index buffer types (Uint16Array vs Uint32Array)
+- Cache version 4 (invalidates corrupt entries from v3)
+
+## Performance Optimizations
+
+### Instanced Rendering
+
+Resources (trees, rocks, ores, herbs) use instanced rendering for optimal performance:
+
+**GLBResourceInstancer** (`src/systems/shared/world/GLBResourceInstancer.ts`):
+- Pools instances by model path
+- Separate `InstancedMesh` per LOD level (LOD0, LOD1, LOD2)
+- Max 512 instances per model per LOD
+- Distance-based LOD switching with hysteresis to prevent flickering
+- Automatic depleted model transitions (e.g., tree → stump)
+
+**GLBTreeInstancer** (`src/systems/shared/world/GLBTreeInstancer.ts`):
+- Specialized instancer for tree resources
+- Dissolve materials for fade effects
+- Supports depleted models (stumps) with separate scale
+
+**InstancedModelVisualStrategy** (`src/entities/world/visuals/InstancedModelVisualStrategy.ts`):
+- Thin wrapper around GLBResourceInstancer
+- Creates invisible collision proxy for raycasting
+- Falls back to StandardModelVisualStrategy if instancing fails
+
+**Depleted Models** (NEW):
+- Resources can specify `depletedModelPath` and `depletedModelScale` in config
+- Instancer maintains separate pools for normal and depleted states
+- Automatic transition on resource depletion without individual model loading
+- Collision proxy persists across state transitions
+- Highlight mesh support for hover/selection on instanced entities
+
+**API Changes**:
+- `ResourceVisualStrategy.onDepleted()` now returns `boolean`
+  - `true` = strategy handled depletion (instanced stump)
+  - `false` = ResourceEntity should load individual depleted model
+- New optional method: `getHighlightMesh(ctx)` for instanced entity highlighting
+- `EntityHighlightService` supports instanced highlight meshes via `getHighlightRoot()`
+
+### Model Cache Integrity
+
+**Index Buffer Type Preservation** (Cache v4):
+- Model cache now preserves original index buffer type (Uint16Array vs Uint32Array)
+- Fixes silent geometry corruption and RangeError crashes on cached model restore
+- Three.js uses Uint16Array for meshes with <65536 vertices
+- Previous cache versions always deserialized as Uint32Array, causing corruption
+- Cache version bumped to 4 to invalidate corrupt entries
+- Affects all GLB models loaded via ModelCache (resources, NPCs, items)
 
 ## Usage
 
-### Client-Side
+### Creating a World
 
 ```typescript
 import { createClientWorld } from '@hyperscape/shared';
 
-const world = await createClientWorld({
-  canvas: document.querySelector('canvas'),
-  // ... options
-});
-
-// Start game loop
-world.start();
+const world = createClientWorld();
+await world.init();
 ```
 
-### Server-Side
+### Spawning Entities
 
 ```typescript
-import { createServerWorld } from '@hyperscape/shared';
+import { PlayerEntity } from '@hyperscape/shared';
 
-const world = await createServerWorld({
-  worldPath: './world',
-  // ... options
+const player = new PlayerEntity(world, {
+  id: 'player-1',
+  position: { x: 0, y: 0, z: 0 },
+  name: 'TestPlayer',
 });
 
-// Start server tick
-world.start();
+world.addEntity(player);
+```
+
+### Using Systems
+
+```typescript
+const combatSystem = world.getSystem('combat') as CombatSystem;
+combatSystem.startAttack(attackerId, targetId);
+```
+
+### Instanced Resources
+
+Resources automatically use instanced rendering when a GLB model is specified:
+
+```typescript
+// In resource config JSON
+{
+  "id": "oak_tree",
+  "name": "Oak tree",
+  "resourceType": "tree",
+  "model": "/assets/world/resources/trees/oak.glb",
+  "modelScale": 3.0,
+  "depletedModelPath": "/assets/world/resources/trees/oak_stump.glb",
+  "depletedModelScale": 0.3,
+  "skill": "woodcutting",
+  "level": 1,
+  "xp": 25
+}
+```
+
+The `InstancedModelVisualStrategy` will:
+1. Load the model once and create an instanced mesh pool
+2. Add this tree as an instance (no individual mesh)
+3. Create an invisible collision proxy for raycasting
+4. Automatically transition to stump model when depleted
+5. Support hover highlighting via temporary highlight mesh
+
+## Development
+
+### Building
+
+```bash
+bun run build        # Production build
+bun run dev          # Watch mode with hot reload
+```
+
+### Testing
+
+```bash
+npm test             # Run all tests
+npm test -- --ui     # Run with Vitest UI
+```
+
+Tests use real Playwright browser sessions with WebGPU support. No mocks allowed.
+
+### Linting
+
+```bash
+npm run lint         # Check for issues
+npm run lint:fix     # Auto-fix issues
 ```
 
 ## API Reference
 
 ### Core Classes
 
-**World** (`src/core/World.ts`):
-- `getSystem(name)` - Get system by name
-- `getEntity(id)` - Get entity by ID
-- `getEntitiesByType(type)` - Query entities by type
-- `on(event, handler)` - Subscribe to events
-- `emit(event, data)` - Emit events
-
-**Entity** (`src/entities/Entity.ts`):
-- Base class for all game objects
-- Component management
-- Transform hierarchy
-- Event emitters
-
-**System** (`src/systems/shared/infrastructure/System.ts`):
-- Base class for all systems
-- Lifecycle hooks (init, update, destroy)
-- World access
-- Event handling
+- `World` - Main world container, manages entities and systems
+- `Entity` - Base entity class
+- `PlayerEntity` - Player character with inventory, skills, equipment
+- `MobEntity` - NPC mob with AI and combat
+- `ResourceEntity` - Gatherable resource (tree, rock, ore, herb)
+- `ItemEntity` - Dropped item in the world
 
 ### Visual Strategies
 
-**ResourceVisualStrategy** (`src/entities/world/visuals/ResourceVisualStrategy.ts`):
-- Interface for resource rendering strategies
-- Handles mesh creation, LOD, depletion, and cleanup
-- Supports instanced and non-instanced rendering
+Resource entities use pluggable visual strategies:
 
-**Implementations:**
-- `InstancedModelVisualStrategy` - GPU instancing for resources
-- `TreeGLBVisualStrategy` - Tree-specific instancing with dissolve
-- `StandardModelVisualStrategy` - Non-instanced fallback
-- `PlaceholderVisualStrategy` - Colored cube proxies for testing
+- `InstancedModelVisualStrategy` - Instanced rendering for GLB models (default)
+- `TreeGLBVisualStrategy` - Instanced trees with dissolve materials
+- `TreeProcgenVisualStrategy` - Procedurally generated trees
+- `StandardModelVisualStrategy` - Individual mesh per resource (fallback)
+- `PlaceholderVisualStrategy` - Colored cube proxy
+- `FishingSpotVisualStrategy` - Fishing spot with glow effect
 
-### Rendering Utilities
+### Instancing API
 
-**RendererFactory** (`src/utils/rendering/RendererFactory.ts`):
-- `createRenderer(options)` - Create WebGPU renderer
-- `isWebGPUAvailable()` - Check WebGPU support (with timeout)
-- `detectRenderingCapabilities()` - Get rendering capabilities
-- `configureRenderer(renderer, options)` - Configure renderer settings
+**GLBResourceInstancer** (`src/systems/shared/world/GLBResourceInstancer.ts`):
 
-**ModelCache** (`src/utils/rendering/ModelCache.ts`):
-- `loadModel(path)` - Load and cache GLB models
-- `clearCache()` - Clear cached models
-- Preserves index buffer types (Uint16Array vs Uint32Array)
-- Cache version: 4
+```typescript
+// Initialize (called by createClientWorld)
+initGLBResourceInstancer(scene: THREE.Scene, world: World): void
 
-**LODManager** (`src/utils/rendering/LODManager.ts`):
-- Distance-based LOD switching
-- Hysteresis to prevent flickering
-- Per-entity LOD configuration
+// Add instance
+addInstance(
+  modelPath: string,
+  entityId: string,
+  position: THREE.Vector3,
+  rotation: number,
+  scale: number,
+  depletedModelPath?: string | null,
+  depletedScale?: number
+): Promise<boolean>
 
-## Testing
+// Remove instance
+removeInstance(entityId: string): void
 
-Tests use real Hyperscape instances with Playwright - NO MOCKS.
+// Set depleted state
+setDepleted(entityId: string, depleted: boolean): void
 
-```bash
-# Run all tests
-npm test --workspace=packages/shared
+// Check if entity is instanced
+hasInstance(entityId: string): boolean
 
-# Run specific test file
-npm test --workspace=packages/shared -- src/systems/shared/combat/__tests__/CombatSystem.test.ts
+// Check if instancer has depleted model
+hasDepleted(entityId: string): boolean
 
-# Visual tests require WebGPU support
-# Screenshots saved to __screenshots__/ directories
+// Get highlight mesh for outlining
+getHighlightMesh(entityId: string): THREE.Object3D | null
+
+// Update LOD switching (called every frame)
+updateGLBResourceInstancer(): void
+
+// Cleanup
+destroyGLBResourceInstancer(): void
 ```
 
-## Performance Considerations
+**GLBTreeInstancer** (`src/systems/shared/world/GLBTreeInstancer.ts`):
 
-### Instanced Rendering
-- Use for entities with many instances (>10 of same model)
-- Automatic LOD switching reduces GPU load
-- Collision proxies enable raycasting on instanced meshes
+Same API as GLBResourceInstancer, with tree-specific dissolve materials.
 
-### Model Cache
-- Models cached in IndexedDB for fast loading
-- Cache version bumped when format changes
-- Clear cache if seeing geometry corruption
+### ResourceVisualStrategy Interface
 
-### Memory Management
-- Dispose geometries and materials when removing entities
-- Use object pools for frequently created/destroyed objects
-- Monitor memory usage in DevStats panel
+```typescript
+interface ResourceVisualStrategy {
+  createVisual(ctx: ResourceVisualContext): Promise<void>;
+  
+  /**
+   * @returns true if strategy handled depletion (instanced stump),
+   *          false if ResourceEntity should load individual depleted model
+   */
+  onDepleted(ctx: ResourceVisualContext): Promise<boolean>;
+  
+  onRespawn(ctx: ResourceVisualContext): Promise<void>;
+  update(ctx: ResourceVisualContext, deltaTime: number): void;
+  destroy(ctx: ResourceVisualContext): void;
+  
+  /** Return a temporary mesh positioned at this instance for the outline pass. */
+  getHighlightMesh?(ctx: ResourceVisualContext): THREE.Object3D | null;
+}
+```
 
-## Breaking Changes
+## Dependencies
 
-### WebGL Removal (commit 47782ed)
-- All WebGL fallback code removed
-- `RendererFactory` only supports WebGPU
-- `--disable-webgpu` and `forceWebGL` flags ignored
-- Deployment fails if WebGPU unavailable
+- `three` (0.180.0) - 3D rendering engine
+- `@webgpu/types` - WebGPU TypeScript definitions
+- `physx-js-webidl` - PhysX WASM bindings
+- `react` (19.2.0) - UI components
+- `@hyperscape/procgen` - Procedural generation
 
-### ResourceVisualStrategy API (commit 9643d5d)
-- `onDepleted()` now returns `Promise<boolean>` instead of `Promise<void>`
-- New optional method: `getHighlightMesh(ctx)`
-- `ResourceEntity.getHighlightRoot()` added for instanced highlights
+## Browser Requirements
 
-### Model Cache Format (commit 6fd626a)
-- Cache version bumped to 4
-- Index buffer type now preserved
-- Old cache entries automatically invalidated
-
-## Contributing
-
-See [CLAUDE.md](../../CLAUDE.md) for development guidelines and coding standards.
+- **WebGPU support is REQUIRED**
+- Chrome 113+, Edge 113+, Safari 18+ (macOS 15+)
+- Check: [webgpureport.org](https://webgpureport.org)
 
 ## License
 
