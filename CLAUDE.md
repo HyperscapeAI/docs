@@ -20,7 +20,7 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 ### Browser Requirements
 - Chrome 113+ (recommended)
 - Edge 113+
-- Safari 18+ (macOS 15+)
+- Safari 18+ (macOS 15+) - Safari 17 support removed
 - Firefox (behind flag, not recommended)
 - Check: [webgpureport.org](https://webgpureport.org)
 
