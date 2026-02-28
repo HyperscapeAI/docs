@@ -1,435 +1,592 @@
 # Vast.ai GPU Streaming Architecture
 
-Hyperscape streams live gameplay to Twitch, Kick, and X/Twitter using GPU-accelerated rendering on Vast.ai instances.
+This document describes the GPU-accelerated streaming pipeline for Hyperscape on Vast.ai infrastructure.
 
 ## Overview
 
-The streaming pipeline captures WebGPU-rendered gameplay from Chrome and encodes it to RTMP using FFmpeg. This requires careful GPU setup because **WebGPU is mandatory** - there is no WebGL fallback.
+Hyperscape streams live gameplay to multiple platforms (Twitch, Kick, X/Twitter) using a GPU-accelerated rendering and encoding pipeline. The system requires WebGPU for rendering and uses Chrome DevTools Protocol (CDP) for efficient frame capture.
+
+## Critical Requirements
+
+### WebGPU is REQUIRED
+
+**WebGPU is mandatory** - there is NO WebGL fallback:
+- All materials use TSL (Three Shading Language) which only works with WebGPU
+- Post-processing effects require WebGPU node material pipeline
+- Deployment MUST FAIL if WebGPU cannot be initialized
+
+### GPU Hardware Requirements
+
+- **NVIDIA GPU** with Vulkan support
+- **Vulkan ICD** properly configured (`/usr/share/vulkan/icd.d/nvidia_icd.json`)
+- **Display server**: Xorg (preferred) or Xvfb (fallback)
+- **NO headless mode** - WebGPU requires a display
 
 ## Architecture
 
+### GPU Rendering Modes
+
+The deployment script (`scripts/deploy-vast.sh`) tries rendering modes in this order:
+
+1. **Xorg with NVIDIA** (best performance)
+   - Requires DRI/DRM device access (`/dev/dri/card0`)
+   - Full hardware GPU rendering
+   - Lowest latency
+
+2. **Xvfb with NVIDIA Vulkan** (fallback)
+   - Virtual framebuffer (no physical display needed)
+   - Chrome uses NVIDIA GPU via ANGLE/Vulkan
+   - CDP captures frames from Chrome's internal GPU rendering
+   - Slightly higher latency than Xorg
+
+3. **Headless mode** (NOT SUPPORTED)
+   - WebGPU will NOT work in headless mode
+   - Deployment fails if neither Xorg nor Xvfb can start
+
+### Frame Capture Pipeline
+
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Vast.ai Container (NVIDIA GPU)                              │
-│                                                              │
-│  ┌──────────────┐      ┌──────────────┐                    │
-│  │ Xorg/Xvfb    │─────▶│ Chrome       │                    │
-│  │ Display :99  │      │ (WebGPU)     │                    │
-│  └──────────────┘      └──────┬───────┘                    │
-│                               │                             │
-│                               │ CDP Screencast              │
-│                               ▼                             │
-│                        ┌──────────────┐                    │
-│                        │ FFmpeg       │                    │
-│                        │ (H.264)      │                    │
-│                        └──────┬───────┘                    │
-│                               │                             │
-│                               │ RTMP Tee Muxer             │
-│                ┌──────────────┼──────────────┐             │
-│                ▼              ▼              ▼             │
-│           ┌────────┐     ┌────────┐    ┌────────┐         │
-│           │ Twitch │     │  Kick  │    │   X    │         │
-│           └────────┘     └────────┘    └────────┘         │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## GPU Rendering Modes
-
-The deployment script (`scripts/deploy-vast.sh`) tries multiple approaches in order:
-
-### 1. Xorg with NVIDIA (Preferred)
-
-**Requirements:**
-- DRI/DRM devices available (`/dev/dri/card0`)
-- NVIDIA drivers installed
-- X server can initialize with GPU
-
-**Configuration:**
-```bash
-DISPLAY=:99
-DUEL_CAPTURE_USE_XVFB=false
-GPU_RENDERING_MODE=xorg
+Chromium Compositor (WebGPU)
+    ↓
+CDP Page.startScreencast (JPEG frames)
+    ↓
+Node.js Buffer Processing
+    ↓
+FFmpeg stdin (JPEG pipe)
+    ↓
+H.264 Encoding (hardware accelerated)
+    ↓
+RTMP Tee Muxer (multi-destination)
+    ↓
+Twitch / Kick / X/Twitter
 ```
 
-**How it works:**
-- Xorg runs headless with `AllowEmptyInitialConfiguration`
-- Chrome connects to X display and uses NVIDIA GPU via GLX
-- WebGPU uses ANGLE/Vulkan backend
-- Best performance, lowest latency
+### Audio Capture
 
-### 2. Xvfb with NVIDIA Vulkan (Fallback)
+1. **PulseAudio Setup**:
+   - Virtual sink: `chrome_audio`
+   - Chrome outputs audio to PulseAudio
+   - FFmpeg captures from `chrome_audio.monitor`
 
-**Requirements:**
-- NVIDIA GPU accessible via Vulkan
-- Xvfb installed
-- No DRI/DRM devices needed
+2. **Configuration**:
+   ```bash
+   STREAM_AUDIO_ENABLED=true
+   PULSE_AUDIO_DEVICE=chrome_audio.monitor
+   PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+   ```
 
-**Configuration:**
-```bash
-DISPLAY=:99
-DUEL_CAPTURE_USE_XVFB=true
-GPU_RENDERING_MODE=xvfb-vulkan
-VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
-```
+### RTMP Multi-Streaming
 
-**How it works:**
-- Xvfb provides virtual X11 display (software framebuffer)
-- Chrome uses NVIDIA GPU for rendering via ANGLE/Vulkan
-- CDP captures frames from Chrome's internal GPU compositor
-- Slightly higher latency than Xorg but still GPU-accelerated
-
-### 3. Headless Mode (NOT SUPPORTED)
-
-**Why it doesn't work:**
-- Chrome's headless mode uses software rendering
-- WebGPU requires hardware GPU access
-- Deployment script will FAIL if neither Xorg nor Xvfb can start
-
-## Audio Capture
-
-### PulseAudio Setup
-
-The deployment script configures PulseAudio for game audio capture:
-
-1. **Virtual Sink**: Creates `chrome_audio` null sink
-2. **Chrome Output**: Chrome outputs audio to `chrome_audio`
-3. **FFmpeg Input**: FFmpeg captures from `chrome_audio.monitor`
-
-**Configuration:**
-```bash
-# PulseAudio runs in user mode
-XDG_RUNTIME_DIR=/tmp/pulse-runtime
-PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
-
-# Chrome uses PulseAudio
---alsa-output-device=pulse
---audio-output-channels=2
-
-# FFmpeg captures from monitor
--f pulse -i chrome_audio.monitor
-```
-
-### Audio Sync
-
-FFmpeg uses these settings to maintain audio/video sync:
+FFmpeg uses the `tee` muxer for single-encode, multi-output streaming:
 
 ```bash
-# Audio input buffering
--thread_queue_size 1024
--use_wallclock_as_timestamps 1
-
-# Async resampling to recover from drift
--af aresample=async=1000:first_pts=0
-```
-
-## RTMP Multi-Streaming
-
-### Destinations
-
-The streaming bridge supports simultaneous streaming to multiple platforms:
-
-- **Twitch**: `rtmp://live.twitch.tv/app/{TWITCH_STREAM_KEY}`
-- **Kick**: `rtmps://fa723fc1b171.global-contribute.live-video.net/app/{KICK_STREAM_KEY}`
-- **X/Twitter**: `rtmp://sg.pscp.tv:80/x/{X_STREAM_KEY}`
-- **YouTube**: Explicitly disabled (set `YOUTUBE_STREAM_KEY=""`)
-
-### FFmpeg Tee Muxer
-
-Single encode, multiple outputs:
-
-```bash
-ffmpeg -i input.jpeg \
-  -f flv -c:v libx264 -preset veryfast -tune film \
-  -b:v 4500k -maxrate 4500k -bufsize 18000k \
+# Simultaneous streaming to 3 platforms
+ffmpeg -i input.mp4 \
   -f tee \
-  "[f=flv]rtmp://twitch|[f=flv]rtmps://kick|[f=flv]rtmp://x"
+  "[f=flv]rtmp://twitch.tv/app/key|[f=flv]rtmps://kick.com/app/key|[f=flv]rtmp://x.com/key"
 ```
 
-**Benefits:**
-- Single H.264 encode (saves CPU)
-- Consistent quality across platforms
-- Automatic retry on individual platform failures
+**Supported Platforms**:
+- Twitch (RTMP)
+- Kick (RTMPS)
+- X/Twitter (RTMP)
+- YouTube (disabled by default)
 
 ## Environment Variables
 
-### Required Secrets
+### Core Streaming Settings
 
-Set via GitHub Actions secrets and injected by `deploy-vast.yml`:
-
-```bash
-DATABASE_URL=postgresql://...
-TWITCH_STREAM_KEY=live_...
-KICK_STREAM_KEY=sk_...
-KICK_RTMP_URL=rtmps://...
-X_STREAM_KEY=...
-X_RTMP_URL=rtmp://...
-SOLANA_DEPLOYER_PRIVATE_KEY=...  # Base58 private key
-JWT_SECRET=...
-ARENA_EXTERNAL_BET_WRITE_KEY=...
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STREAM_CAPTURE_MODE` | `cdp` | Capture mode: `cdp`, `mediarecorder`, `webcodecs` |
+| `STREAM_CAPTURE_WIDTH` | `1280` | Stream width (must be even) |
+| `STREAM_CAPTURE_HEIGHT` | `720` | Stream height (must be even) |
+| `STREAM_FPS` | `30` | Target frames per second |
+| `STREAM_CDP_QUALITY` | `80` | JPEG quality for CDP (1-100) |
 
 ### GPU Configuration
 
-```bash
-# Display server
-DISPLAY=:99
-DUEL_CAPTURE_USE_XVFB=false  # or true for Xvfb mode
-GPU_RENDERING_MODE=xorg      # or xvfb-vulkan
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DISPLAY` | `:99` | X display server (`:0` for Xorg, `:99` for Xvfb) |
+| `DUEL_CAPTURE_USE_XVFB` | `false` | Set to `true` when using Xvfb |
+| `VK_ICD_FILENAMES` | `/usr/share/vulkan/icd.d/nvidia_icd.json` | Force NVIDIA Vulkan ICD |
+| `STREAM_CAPTURE_ANGLE` | `vulkan` | ANGLE backend (`vulkan` for NVIDIA, `metal` for macOS) |
+| `STREAM_CAPTURE_CHANNEL` | `chrome-dev` | Browser channel (chrome-dev = google-chrome-unstable) |
 
-# Vulkan
-VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+### Audio Configuration
 
-# WebGPU (always enabled)
-STREAM_CAPTURE_DISABLE_WEBGPU=false
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STREAM_AUDIO_ENABLED` | `true` | Enable audio capture |
+| `PULSE_AUDIO_DEVICE` | `chrome_audio.monitor` | PulseAudio monitor device |
+| `PULSE_SERVER` | `unix:/tmp/pulse-runtime/pulse/native` | PulseAudio socket |
+| `XDG_RUNTIME_DIR` | `/tmp/pulse-runtime` | PulseAudio runtime directory |
+
+### Encoding Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STREAM_GOP_SIZE` | `60` | Keyframe interval (frames) |
+| `STREAM_LOW_LATENCY` | `false` | Use zerolatency tune (true) or film tune (false) |
+
+### Recovery Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STREAM_CAPTURE_RECOVERY_TIMEOUT_MS` | `30000` | Timeout for recovery attempts |
+| `STREAM_CAPTURE_RECOVERY_MAX_FAILURES` | `6` | Max failures before fallback |
+
+### Stream Destinations
+
+| Variable | Description |
+|----------|-------------|
+| `TWITCH_STREAM_KEY` | Twitch stream key |
+| `KICK_STREAM_KEY` | Kick stream key |
+| `KICK_RTMP_URL` | Kick RTMP URL (default: `rtmps://fa723fc1b171.global-contribute.live-video.net/app`) |
+| `X_STREAM_KEY` | X/Twitter stream key |
+| `X_RTMP_URL` | X/Twitter RTMP URL (default: `rtmp://sg.pscp.tv:80/x`) |
+| `YOUTUBE_STREAM_KEY` | YouTube stream key (disabled by default) |
+
+## Deployment Validation
+
+The `scripts/deploy-vast.sh` script performs these validation steps:
+
+1. **GPU Detection**:
+   ```bash
+   nvidia-smi  # Verify NVIDIA GPU is accessible
+   ```
+
+2. **Vulkan Verification**:
+   ```bash
+   vulkaninfo --summary  # Check Vulkan ICD
+   ```
+
+3. **Display Server Setup**:
+   - Try Xorg with NVIDIA driver
+   - Fall back to Xvfb if DRI/DRM unavailable
+   - Verify display is accessible with `xdpyinfo`
+
+4. **WebGPU Validation**:
+   - Deployment FAILS if no display server can start
+   - No soft fallback to headless mode
+
+## Capture Modes
+
+### CDP Mode (Default, Recommended)
+
+**Chrome DevTools Protocol screencast capture**
+
+- Fastest capture method (2-3x faster than MediaRecorder)
+- Direct JPEG frames from Chromium compositor
+- No browser-side encoding overhead
+- Hardware-accelerated H.264 encoding in FFmpeg
+
+**How it works**:
+```typescript
+// Start CDP screencast
+await cdpSession.send('Page.startScreencast', {
+  format: 'jpeg',
+  quality: 80,
+  maxWidth: 1280,
+  maxHeight: 720,
+  everyNthFrame: 1
+});
+
+// Handle frames
+cdpSession.on('Page.screencastFrame', async (params) => {
+  const jpegBuffer = Buffer.from(params.data, 'base64');
+  bridge.feedFrame(jpegBuffer);  // Pipe to FFmpeg stdin
+  await cdpSession.send('Page.screencastFrameAck', { sessionId: params.sessionId });
+});
 ```
 
-### Streaming Configuration
+### MediaRecorder Mode (Legacy)
+
+**Browser MediaRecorder API with WebSocket**
+
+- Slower than CDP (browser-side VP8/VP9 encoding)
+- WebSocket serialization overhead
+- Automatic fallback if CDP fails
+
+### WebCodecs Mode (Experimental)
+
+**Native VideoEncoder API**
+
+- Browser-side H.264 encoding
+- FFmpeg uses `-c:v copy` (stream copy, no re-encoding)
+- Lowest CPU usage but requires WebCodecs support
+
+## Audio Pipeline
+
+### PulseAudio Configuration
+
+1. **Virtual Sink Creation**:
+   ```bash
+   pactl load-module module-null-sink \
+     sink_name=chrome_audio \
+     sink_properties=device.description="ChromeAudio"
+   ```
+
+2. **Chrome Audio Output**:
+   ```bash
+   google-chrome-unstable \
+     --alsa-output-device=pulse \
+     --audio-output-channels=2
+   ```
+
+3. **FFmpeg Capture**:
+   ```bash
+   ffmpeg -f pulse -i chrome_audio.monitor \
+     -thread_queue_size 1024 \
+     -use_wallclock_as_timestamps 1 \
+     ...
+   ```
+
+### Audio Stability Features
+
+- `thread_queue_size=1024` prevents buffer underruns
+- `use_wallclock_as_timestamps=1` maintains real-time timing
+- `aresample=async=1000:first_pts=0` recovers from audio drift
+
+## FFmpeg Encoding
+
+### Video Encoding Settings
 
 ```bash
-# Capture mode
-STREAM_CAPTURE_MODE=cdp              # CDP screencast (fastest)
-STREAM_CAPTURE_CHANNEL=chrome-dev    # Use Chrome Dev for WebGPU
-STREAM_CAPTURE_ANGLE=vulkan          # ANGLE backend
-STREAM_CAPTURE_WIDTH=1280
-STREAM_CAPTURE_HEIGHT=720
-
-# Audio
-STREAM_AUDIO_ENABLED=true
-PULSE_AUDIO_DEVICE=chrome_audio.monitor
-PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
-
-# Quality
-STREAM_CDP_QUALITY=80                # JPEG quality (1-100)
-STREAM_FPS=30                        # Target FPS
+-c:v libx264
+-preset veryfast
+-tune film              # Better compression (or 'zerolatency' if STREAM_LOW_LATENCY=true)
+-profile:v high
+-level 4.2
+-pix_fmt yuv420p
+-b:v 4500k
+-maxrate 4500k
+-bufsize 18000k         # 4x bitrate for stability
+-g 60                   # GOP size (keyframe interval)
+-keyint_min 60
+-sc_threshold 0
+-bf 2
+-refs 3
 ```
 
-## Deployment Process
-
-### 1. GPU Validation
+### Audio Encoding Settings
 
 ```bash
-# Check NVIDIA GPU
-nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
-
-# Check Vulkan
-vulkaninfo --summary
+-c:a aac
+-b:a 160k
+-ar 48000
+-ac 2
+-af aresample=async=1000:first_pts=0  # Drift recovery
 ```
 
-### 2. Display Server Setup
+### RTMP Output
 
 ```bash
-# Try Xorg first (if DRI devices exist)
-if [ -d "/dev/dri" ]; then
-  Xorg :99 -config /etc/X11/xorg-nvidia-headless.conf
-fi
-
-# Fallback to Xvfb
-if [ "$RENDERING_MODE" = "unknown" ]; then
-  Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX
-fi
-
-# Verify display is accessible
-xdpyinfo -display :99
+-f tee
+"[f=flv:flvflags=no_duration_filesize]rtmp://twitch.tv/app/key|
+ [f=flv:flvflags=no_duration_filesize]rtmps://kick.com/app/key|
+ [f=flv:flvflags=no_duration_filesize]rtmp://x.com/key"
 ```
 
-### 3. PulseAudio Setup
+## Monitoring and Recovery
 
-```bash
-# Create virtual sink
-pulseaudio --start
-pactl load-module module-null-sink sink_name=chrome_audio
-pactl set-default-sink chrome_audio
-```
+### Health Checks
 
-### 4. Database Migration
+The streaming system monitors:
+- **CDP FPS**: Frames per second from screencast
+- **Resolution**: Detects viewport mismatches
+- **Dropped Frames**: Tracks frames lost to backpressure
+- **Bytes Received**: Monitors data flow
 
-```bash
-cd packages/server
-bunx drizzle-kit push --force
-```
+### Automatic Recovery
 
-### 5. PM2 Startup
+1. **Soft Recovery** (CDP stall):
+   - Restart CDP screencast without killing browser
+   - No stream gap
+   - Triggered after 4 intervals without traffic
 
-```bash
-bunx pm2 start ecosystem.config.cjs
-bunx pm2 save
-```
+2. **Hard Recovery** (soft recovery fails):
+   - Full browser teardown and restart
+   - Brief stream interruption
+   - Triggered after soft recovery fails
+
+3. **Fallback to MediaRecorder**:
+   - Triggered after 6 consecutive recovery failures
+   - Switches to legacy capture mode
+   - Continues streaming with reduced performance
+
+### Resolution Mismatch Recovery
+
+If CDP reports wrong resolution for 10+ consecutive frames:
+- Automatically calls `page.setViewportSize()`
+- Resets resolution mismatch counter
+- Prevents stream quality degradation
 
 ## Troubleshooting
 
 ### WebGPU Not Available
 
-**Symptoms:**
-- Black screen in stream
-- Console errors: "WebGPU not supported"
-- Chrome falls back to software rendering
+**Symptoms**:
+- Deployment fails with "Cannot establish WebGPU-capable rendering mode"
+- Chrome reports "WebGPU not supported"
 
-**Diagnosis:**
+**Solutions**:
+1. Verify NVIDIA GPU: `nvidia-smi`
+2. Check Vulkan: `vulkaninfo --summary`
+3. Verify display: `xdpyinfo -display :99`
+4. Check Xorg logs: `cat /var/log/Xorg.99.log`
+
+### Audio Not Capturing
+
+**Symptoms**:
+- Stream has video but no audio
+- FFmpeg reports "pulse: Connection refused"
+
+**Solutions**:
+1. Check PulseAudio: `pulseaudio --check`
+2. List sinks: `pactl list short sinks`
+3. Verify chrome_audio sink exists
+4. Check permissions: `ls -la /tmp/pulse-runtime`
+
+### Stream Stalls/Buffering
+
+**Symptoms**:
+- Viewers experience buffering
+- FFmpeg reports "Past duration too large"
+
+**Solutions**:
+1. Increase `STREAM_GOP_SIZE` (e.g., 90 for 3-second keyframes)
+2. Enable low latency: `STREAM_LOW_LATENCY=true`
+3. Reduce bitrate in `ecosystem.config.cjs`
+4. Check network bandwidth
+
+### CDP Capture Stalls
+
+**Symptoms**:
+- "CDP capture stalled" warnings
+- No frames received for 30+ seconds
+
+**Automatic Recovery**:
+- System automatically attempts soft recovery
+- Falls back to hard recovery if needed
+- Switches to MediaRecorder after 6 failures
+
+**Manual Recovery**:
 ```bash
-# Check if Xorg is using NVIDIA
-grep -i nvidia /var/log/Xorg.99.log
-
-# Check for software rendering fallback
-grep -i swrast /var/log/Xorg.99.log
-
-# Check Vulkan
-vulkaninfo | grep -i nvidia
-```
-
-**Fix:**
-- Ensure NVIDIA drivers are installed
-- Verify `VK_ICD_FILENAMES` points to NVIDIA ICD
-- Check that `DISPLAY` is set and accessible
-
-### Audio Not Streaming
-
-**Symptoms:**
-- Video works but no audio
-- FFmpeg errors: "Cannot open audio device"
-
-**Diagnosis:**
-```bash
-# Check PulseAudio status
-pulseaudio --check && echo "Running" || echo "Not running"
-
-# List sinks
-pactl list short sinks
-
-# Check for chrome_audio sink
-pactl list short sinks | grep chrome_audio
-```
-
-**Fix:**
-```bash
-# Restart PulseAudio
-pulseaudio --kill
-pulseaudio --start
-
-# Recreate sink
-pactl load-module module-null-sink sink_name=chrome_audio
-pactl set-default-sink chrome_audio
-```
-
-### Stream Buffering/Stalling
-
-**Symptoms:**
-- Viewers see buffering
-- Inconsistent frame rate
-
-**Diagnosis:**
-```bash
-# Check FFmpeg logs
-pm2 logs hyperscape-duel | grep -i ffmpeg
-
-# Check for dropped frames
-pm2 logs hyperscape-duel | grep -i "drop"
-```
-
-**Fix:**
-- Increase bitrate buffer: `STREAM_BITRATE_BUFFER_MULTIPLIER=4`
-- Use `tune=film` instead of `tune=zerolatency`
-- Increase `thread_queue_size` for input buffering
-
-### Deployment Fails
-
-**Common causes:**
-1. **No GPU**: `nvidia-smi` fails
-2. **No Vulkan**: `vulkaninfo` fails
-3. **No Display**: Both Xorg and Xvfb fail to start
-4. **Missing Secrets**: `DATABASE_URL` or stream keys not set
-
-**Recovery:**
-```bash
-# Check deployment logs
-cat /root/hyperscape/logs/duel-out.log
-
-# Check PM2 status
-bunx pm2 status
-
-# Restart deployment
 bunx pm2 restart hyperscape-duel
 ```
 
-## Performance Tuning
+## Performance Optimization
 
-### Video Encoding
+### Capture Mode Comparison
 
+| Mode | CPU Usage | Latency | Quality | Stability |
+|------|-----------|---------|---------|-----------|
+| CDP | Low | Lowest | High | Excellent |
+| WebCodecs | Lowest | Low | Highest | Good |
+| MediaRecorder | High | Medium | Medium | Good |
+
+**Recommendation**: Use CDP mode (default) for best balance of performance and stability.
+
+### Encoding Tuning
+
+**For lower latency** (faster playback start):
 ```bash
-# Faster encoding (lower quality)
-STREAM_PRESET=ultrafast
-
-# Better quality (higher CPU)
-STREAM_PRESET=fast
-
-# Low latency (for interactive streams)
-STREAM_LOW_LATENCY=true  # Uses tune=zerolatency
-
-# Smooth playback (for VODs)
-STREAM_LOW_LATENCY=false # Uses tune=film
+STREAM_LOW_LATENCY=true
+STREAM_GOP_SIZE=30
 ```
 
-### Audio Buffering
-
+**For better quality** (smoother playback):
 ```bash
-# Increase audio buffer (reduces dropouts)
-STREAM_AUDIO_THREAD_QUEUE_SIZE=2048
-
-# Disable audio (video only)
-STREAM_AUDIO_ENABLED=false
+STREAM_LOW_LATENCY=false
+STREAM_GOP_SIZE=60
 ```
 
-### GPU Memory
+### Memory Management
+
+The browser automatically restarts every 1 hour to prevent WebGPU memory leaks:
+- Soft restart (no stream gap)
+- Preserves FFmpeg process
+- Configurable via `BROWSER_RESTART_INTERVAL_MS` in code
+
+## Deployment Workflow
+
+### 1. GitHub Secrets Configuration
+
+Required secrets in repository settings:
 
 ```bash
-# Restart browser every hour to clear WebGPU memory leaks
-BROWSER_RESTART_INTERVAL_MS=3600000
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+KICK_STREAM_KEY=your-kick-key
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
+X_STREAM_KEY=your-x-key
+X_RTMP_URL=rtmp://sg.pscp.tv:80/x
+DATABASE_URL=postgresql://user:pass@host:5432/db
+SOLANA_DEPLOYER_PRIVATE_KEY=base58-encoded-key
+VAST_HOST=ssh.vast.ai
+VAST_PORT=12345
+VAST_SSH_KEY=-----BEGIN OPENSSH PRIVATE KEY-----...
 ```
 
-## Monitoring
+### 2. Vast.ai Instance Setup
 
-### Health Checks
+**Minimum requirements**:
+- NVIDIA GPU (RTX 3060 or better recommended)
+- 16GB RAM
+- 50GB storage
+- Ubuntu 22.04 or newer
+
+**Template**:
+```bash
+# Install NVIDIA drivers and CUDA
+apt-get update
+apt-get install -y nvidia-driver-535 nvidia-cuda-toolkit
+
+# Verify GPU
+nvidia-smi
+vulkaninfo --summary
+```
+
+### 3. Deployment Trigger
+
+Push to `main` branch triggers `.github/workflows/deploy-vast.yml`:
+
+1. SSH into Vast.ai instance
+2. Write secrets to `/tmp/hyperscape-secrets.env`
+3. Run `scripts/deploy-vast.sh`
+4. Script validates GPU/WebGPU availability
+5. Starts PM2 with `ecosystem.config.cjs`
+
+### 4. Validation
+
+After deployment, check:
 
 ```bash
-# Server health
+# PM2 status
+bunx pm2 status
+
+# Streaming logs
+bunx pm2 logs hyperscape-duel --lines 100
+
+# Health endpoint
 curl http://localhost:5555/health
 
 # Streaming state
 curl http://localhost:5555/api/streaming/state
-
-# RTMP status
-cat /root/hyperscape/packages/server/public/live/rtmp-status.json
 ```
 
-### Logs
+## Monitoring
 
+### Stream Health Metrics
+
+Logged every 30 seconds:
+
+```
+[Stream Health] CDP FPS: 30 | Resolution: 1280x720 | Frames: 54321 | Dropped: 12 | BridgeDrops: 0 | Backpressure: off
+```
+
+**Metrics**:
+- **CDP FPS**: Frames per second from screencast (should match `STREAM_FPS`)
+- **Resolution**: Current frame dimensions (should match `STREAM_CAPTURE_WIDTH x STREAM_CAPTURE_HEIGHT`)
+- **Frames**: Total frames captured
+- **Dropped**: Frames dropped by CDP (browser too slow)
+- **BridgeDrops**: Frames dropped by FFmpeg (encoding too slow)
+- **Backpressure**: FFmpeg stdin buffer full
+
+### RTMP Status File
+
+Written to `packages/server/public/live/rtmp-status.json` every 2 seconds:
+
+```json
+{
+  "active": true,
+  "destinations": [
+    {"name": "Twitch", "connected": true, "url": "rtmp://live.twitch.tv/app"},
+    {"name": "Kick", "connected": true, "url": "rtmps://kick.com/app"},
+    {"name": "X", "connected": true, "url": "rtmp://sg.pscp.tv:80/x"}
+  ],
+  "stats": {
+    "bytesReceived": 1234567890,
+    "bytesReceivedMB": "1177.38",
+    "uptimeSeconds": 3600,
+    "droppedFrames": 0,
+    "backpressured": false
+  },
+  "captureMode": "cdp",
+  "updatedAt": 1709089234567
+}
+```
+
+## Security
+
+### Secrets Management
+
+**NEVER commit secrets to git**:
+- Stream keys are passed via GitHub Secrets
+- Written to `/tmp/hyperscape-secrets.env` (outside git repo)
+- Copied to `packages/server/.env` after `git reset --hard`
+- All secrets masked in logs
+
+### Secret Rotation
+
+To rotate stream keys:
+
+1. Update GitHub Secrets in repository settings
+2. Trigger redeployment (push to main or manual workflow dispatch)
+3. Old keys are overwritten automatically
+
+## Common Issues
+
+### "NVIDIA driver failed to initialize"
+
+Xorg started but fell back to software rendering (swrast).
+
+**Fix**: Container needs full DRM access. Use Xvfb fallback:
 ```bash
-# All logs
-pm2 logs hyperscape-duel
-
-# Streaming only
-pm2 logs hyperscape-duel | grep -iE "rtmp|ffmpeg|stream|capture"
-
-# Errors only
-pm2 logs hyperscape-duel --err
+# deploy-vast.sh automatically detects this and switches to Xvfb
 ```
 
-### Metrics
+### "Display :99 is not accessible"
 
+Display server failed to start.
+
+**Fix**: Check Xorg/Xvfb logs:
 ```bash
-# Process stats
-pm2 show hyperscape-duel
-
-# GPU usage
-nvidia-smi dmon -s u
-
-# Network bandwidth
-iftop -i eth0
+cat /var/log/Xorg.99.log
+# or
+ps aux | grep Xvfb
 ```
 
-## Related Files
+### "PulseAudio failed to start"
 
-- `scripts/deploy-vast.sh` - Deployment script with GPU setup
-- `packages/server/scripts/stream-to-rtmp.ts` - Streaming bridge
-- `ecosystem.config.cjs` - PM2 configuration
-- `.github/workflows/deploy-vast.yml` - CI/CD workflow
-- `packages/server/src/streaming/rtmp-bridge.ts` - RTMP multiplexer
+Audio capture unavailable.
+
+**Fix**: Restart PulseAudio:
+```bash
+pulseaudio --kill
+pulseaudio --start --exit-idle-time=-1
+pactl load-module module-null-sink sink_name=chrome_audio
+```
+
+### "FFmpeg process died"
+
+Encoding pipeline crashed.
+
+**Fix**: Check FFmpeg logs in PM2:
+```bash
+bunx pm2 logs hyperscape-duel --err --lines 200
+```
+
+Common causes:
+- Invalid stream key
+- Network connectivity issues
+- Insufficient CPU for encoding
+
+## References
+
+- **Deployment Script**: `scripts/deploy-vast.sh`
+- **Streaming Bridge**: `packages/server/src/streaming/rtmp-bridge.ts`
+- **CDP Capture**: `packages/server/scripts/stream-to-rtmp.ts`
+- **PM2 Config**: `ecosystem.config.cjs`
+- **GitHub Workflow**: `.github/workflows/deploy-vast.yml`
