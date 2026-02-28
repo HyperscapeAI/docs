@@ -311,16 +311,17 @@ bun run build
 ```
 
 **WebGPU not available:**
-Hyperscape requires WebGPU - WebGL will NOT work. Check browser compatibility:
+Hyperscape requires WebGPU - WebGL will NOT work (all WebGL fallback code removed in recent updates). Check browser compatibility:
 - Chrome 113+ (recommended)
 - Edge 113+
-- Safari 18+ (macOS 15+)
+- Safari 18+ (macOS 15+) - Safari 17 support removed
 - Check: [webgpureport.org](https://webgpureport.org)
 
 If WebGPU is available but not working:
 1. Enable hardware acceleration in browser settings
 2. Update GPU drivers
 3. Check for browser extensions that might block WebGPU
+4. Note: `--disable-webgpu` and `forceWebGL` flags are now ignored
 
 **Streaming issues (Vast.ai):**
 If GPU streaming fails or produces black frames:
