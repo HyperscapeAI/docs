@@ -294,6 +294,12 @@ STREAMING_COMBAT_STALL_NUDGE_MS=15000           # Fallback damage nudge delay (m
 DUEL_ARENA_VISUALS_ENABLED=true                 # Enable duel arena visuals system (default: true)
                                                 # Registers flat zones for arena floors to prevent player sinking
 
+# Production Client Build (commit 4be263a, Feb 28 2026)
+DUEL_USE_PRODUCTION_CLIENT=true                 # Use pre-built client via vite preview
+                                                # Fixes browser timeout issues (180s limit)
+                                                # Significantly faster page loads for streaming
+                                                # Alternative: Set NODE_ENV=production
+
 # Trash Talk System
 TRASH_TALK_COOLDOWN_MS=8000                     # Cooldown between trash talk messages (default: 8s)
 TRASH_TALK_LLM_TIMEOUT_MS=3000                  # LLM generation timeout (default: 3s)
