@@ -201,4 +201,86 @@ Hyperscape uses instanced rendering for resource entities (rocks, ores, herbs, t
 - Cache version bumped to 4 to invalidate corrupt entries
 - Affects all GLB models loaded via ModelCache (resources, NPCs, items)
 
+## Memory Management
+
+### Critical Memory Leak Fixes
+
+Recent commits addressed critical memory leaks across the codebase. All cleanup follows the established patterns in SystemBase for proper resource cleanup.
+
+#### ModelCache (CRITICAL)
+- **Issue**: GPU memory leaks when cache is cleared
+- **Fix**: Add geometry disposal on `clear()` and `remove()` methods
+- **Impact**: Prevents GPU memory accumulation during hot reload and cache invalidation
+
+#### EventBridge (HIGH)
+- **Issue**: 50+ world event listeners never removed, causing listener accumulation on hot reload
+- **Fix**: Add `destroy()` method to clean up all registered listeners
+- **Pattern**: Track listeners in Map, iterate and remove on destroy
+
+#### Logger (MEDIUM)
+- **Issue**: Cleanup interval not stored, preventing proper shutdown
+- **Fix**: Store cleanup interval in instance variable, add `destroy()` method
+- **Pattern**: Clear interval and release resources on destroy
+
+#### PlayerTokenManager (MEDIUM)
+- **Issue**: Heartbeat interval continues after logout
+- **Fix**: Add `stopHeartbeat()` method, call on logout/clear
+- **Pattern**: Clear interval on cleanup
+
+#### Connection Handler (MEDIUM)
+- **Issue**: Error handler not cleaned up during auth cleanup
+- **Fix**: Track and cleanup error handler during auth cleanup
+- **Pattern**: Store handler reference, remove on cleanup
+
+#### DuelBot (MEDIUM)
+- **Issue**: World event handlers not cleaned up on disconnect
+- **Fix**: Track `world.on()` handlers and clean them up on disconnect
+- **Pattern**: Store handler references, iterate and remove on cleanup
+
+#### AgentManager (HIGH)
+- **Issue**: COMBAT_DAMAGE_DEALT listener never removed
+- **Fix**: Store and cleanup listener in `shutdown()` method
+- **Pattern**: Track listener reference, remove on shutdown
+
+#### AutonomousBehaviorManager (HIGH)
+- **Issue**: Event handlers not cleaned up during agent lifecycle
+- **Fix**: Store and cleanup event handlers in `stop()` method
+- **Pattern**: Track handler references, remove on stop
+
+### Memory Management Best Practices
+
+When creating new systems or managers:
+
+1. **Track All Resources**: Store references to intervals, listeners, handlers
+2. **Implement Cleanup**: Add `destroy()`, `shutdown()`, or `stop()` methods
+3. **Follow SystemBase Pattern**: Use the same cleanup patterns as SystemBase
+4. **Clean Up on Hot Reload**: Ensure resources are released during development
+5. **Test for Leaks**: Monitor memory usage during long-running sessions
+
+Example cleanup pattern:
+```typescript
+class MySystem {
+  private listeners: Array<() => void> = [];
+  private intervals: NodeJS.Timeout[] = [];
+
+  init() {
+    const listener = world.on('event', this.handleEvent);
+    this.listeners.push(listener);
+    
+    const interval = setInterval(this.tick, 1000);
+    this.intervals.push(interval);
+  }
+
+  destroy() {
+    // Clean up listeners
+    this.listeners.forEach(remove => remove());
+    this.listeners = [];
+    
+    // Clear intervals
+    this.intervals.forEach(clearInterval);
+    this.intervals = [];
+  }
+}
+```
+
 See CLAUDE.md for complete documentation.
