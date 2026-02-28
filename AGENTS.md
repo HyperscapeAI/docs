@@ -139,4 +139,18 @@ Hyperscape uses instanced rendering for resource entities (rocks, ores, herbs, t
 - Distance-based LOD switching with hysteresis to prevent flickering
 - Falls back to StandardModelVisualStrategy if instancing fails
 
+**Depleted Models** (NEW):
+- Resources can specify `depletedModelPath` and `depletedModelScale` in config
+- Instancer maintains separate pools for normal and depleted states (e.g., tree → stump)
+- Automatic transition on resource depletion without individual model loading
+- Collision proxy persists across state transitions
+- Highlight mesh support for hover/selection on instanced entities
+
+**API Changes**:
+- `ResourceVisualStrategy.onDepleted()` now returns `boolean`
+  - `true` = strategy handled depletion (instanced stump)
+  - `false` = ResourceEntity should load individual depleted model
+- New optional method: `getHighlightMesh(ctx)` for instanced entity highlighting
+- `EntityHighlightService` supports instanced highlight meshes via `getHighlightRoot()`
+
 See CLAUDE.md for complete documentation.
