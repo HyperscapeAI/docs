@@ -339,29 +339,10 @@ See `scripts/deploy-vast.sh` for deployment troubleshooting.
 - **[CLAUDE.md](CLAUDE.md)** - Development guide and architecture
 - **[AGENTS.md](AGENTS.md)** - AI coding assistant instructions
 
-### Feature Documentation
-- **[docs/vast-ai-streaming.md](docs/vast-ai-streaming.md)** - GPU streaming architecture
-- **[docs/instanced-rendering.md](docs/instanced-rendering.md)** - Instanced rendering system
-- **[docs/ai-agent-improvements.md](docs/ai-agent-improvements.md)** - AI agent optimizations
-
-### API Reference
-- **[docs/api/renderer-factory.md](docs/api/renderer-factory.md)** - Renderer API reference
-
-## Documentation
-
-### Core Documentation
-- **[CLAUDE.md](CLAUDE.md)** - Development guide and architecture
-- **[AGENTS.md](AGENTS.md)** - AI coding assistant instructions
-
 ### Deployment Guides
 - **[docs/railway-dev-prod.md](docs/railway-dev-prod.md)** - Railway deployment setup
-- **[docs/vast-ai-streaming.md](docs/vast-ai-streaming.md)** - GPU streaming architecture
+- **[docs/duel-stack.md](docs/duel-stack.md)** - GPU streaming architecture (Vast.ai)
 - **[docs/native-release.md](docs/native-release.md)** - Native app distribution
-
-### Feature Documentation
-- **[docs/instanced-rendering.md](docs/instanced-rendering.md)** - Instanced rendering system
-- **[docs/api/renderer-factory.md](docs/api/renderer-factory.md)** - Renderer API reference
-- **[docs/migration/webgpu-only.md](docs/migration/webgpu-only.md)** - WebGPU migration guide
 
 ## More Info
 
