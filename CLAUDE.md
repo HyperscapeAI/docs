@@ -140,6 +140,8 @@ anchor deploy --provider.cluster mainnet
 
 **Note**: `Anchor.toml` is configured for `localnet` by default. This means `anchor test` spins up a local validator with free SOL instead of trying to deploy to devnet (which requires real SOL funding). For actual devnet/mainnet deployments, use the `--provider.cluster` flag.
 
+**Why localnet?** Using localnet for tests avoids the need to fund a devnet wallet with real SOL. The local validator provides unlimited test SOL, making tests faster and more reliable.
+
 ## Architecture Overview
 
 ### Monorepo Structure
