@@ -20,8 +20,7 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 ### Browser Requirements
 - Chrome 113+ (recommended)
 - Edge 113+
-- Safari 18+ (macOS 15+) - Safari 17 support was removed
-- Firefox (behind flag, not recommended)
+- Safari 18+ (macOS 15+) - **Safari 17 support was removed**
 - Check WebGPU availability: [webgpureport.org](https://webgpureport.org)
 
 ### Server/Streaming Requirements
@@ -32,77 +31,12 @@ For Vast.ai and other GPU servers running the streaming pipeline:
 - **GPU Sandbox Bypass**: `--disable-gpu-sandbox` and `--disable-setuid-sandbox` required for container GPU access
 - If GPU cannot initialize WebGPU, deployment MUST FAIL (no soft fallbacks)
 
-#### WebGPU Initialization Safeguards
+### WebGPU Initialization
 - **Adapter Request Timeout**: 30s timeout on `navigator.gpu.requestAdapter()` to prevent indefinite hangs
 - **Renderer Init Timeout**: 60s timeout on `renderer.init()` to detect GPU driver issues
 - **Preflight Testing**: `testWebGpuInit()` runs on blank page before loading game content
 - **GPU Diagnostics**: `captureGpuDiagnostics()` extracts chrome://gpu info for debugging
 - Timeouts help diagnose misconfigured GPU servers where WebGPU initialization hangs
-
-#### Vast.ai Deployment Architecture
-The streaming pipeline requires specific GPU setup:
-
-1. **GPU Rendering Modes** (tried in order):
-   - **Xorg with NVIDIA**: Best performance, requires DRI/DRM device access
-   - **Xvfb with NVIDIA Vulkan**: Virtual framebuffer + GPU rendering via ANGLE/Vulkan
-   - **Ozone Headless with GPU**: Experimental mode using `--ozone-platform=headless` with GPU rendering
-   - **Headless mode (software)**: NOT SUPPORTED - WebGPU will not work
-
-2. **Audio Capture**:
-   - PulseAudio with `chrome_audio` virtual sink
-   - FFmpeg captures from PulseAudio monitor (`chrome_audio.monitor`)
-   - Configurable via `STREAM_AUDIO_ENABLED` and `PULSE_AUDIO_DEVICE`
-   - User-mode PulseAudio with XDG_RUNTIME_DIR at `/tmp/pulse-runtime`
-
-3. **RTMP Multi-Streaming**:
-   - Simultaneous streaming to Twitch, Kick, X/Twitter (YouTube disabled)
-   - FFmpeg tee muxer for single-encode multi-output
-   - Stream keys configured via environment variables (never hardcoded)
-   - All secrets read from `.env` file or GitHub Secrets
-
-4. **Deployment Validation**:
-   - Script verifies NVIDIA GPU is accessible via `nvidia-smi`
-   - Checks Vulkan ICD availability at `/usr/share/vulkan/icd.d/nvidia_icd.json`
-   - Logs actual ICD content and VK_LOADER_DEBUG output for diagnostics
-   - Ensures display server (Xorg/Xvfb) is running and accessible
-   - Runs WebGPU pre-check test with Chrome to verify navigator.gpu availability
-   - Extracts Chrome GPU info (WebGPU/Vulkan status) during deployment
-   - Fails deployment if WebGPU cannot be initialized (no soft fallbacks)
-   - Persists GPU/display settings to `.env` for PM2 restarts
-   - Exports working GPU mode (Xorg/Xvfb/ozone-headless) for ecosystem.config.cjs
-
-5. **Production Client Build**:
-   - When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
-   - Serves pre-built client via `vite preview` instead of dev server
-   - Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
-   - Significantly faster page loads for streaming (no on-demand module compilation)
-
-6. **Stream Capture Modes**:
-   - **CDP (default)**: Chrome DevTools Protocol screencast - fastest, most reliable
-   - **WebCodecs**: Native VideoEncoder API (experimental)
-   - **MediaRecorder**: Legacy fallback mode
-   - Automatic recovery with viewport restoration on resolution mismatch
-   - 5s timeout on probe evaluate calls to prevent hanging
-   - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
-   - **Chrome Executable**: Set `STREAM_CAPTURE_EXECUTABLE` to explicit Chrome path (e.g., `/usr/bin/google-chrome-unstable`) for reliable WebGPU
-   - **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
-
-7. **Stream Encoding Optimization**:
-   - Default: `film` tune with B-frames for better compression
-   - Set `STREAM_LOW_LATENCY=true` for `zerolatency` tune (faster playback start)
-   - Configurable GOP size via `STREAM_GOP_SIZE` (default: 60 frames)
-   - 2x bitrate buffer multiplier (reduced from 4x to prevent backpressure buildup)
-   - Audio buffering with `thread_queue_size=1024` and async resampling
-   - Health check timeout: 5s (data timeout: 15s) for faster failure detection
-
-8. **WebGPU Diagnostics**:
-   - `captureGpuDiagnostics()` extracts chrome://gpu info at startup
-   - `testWebGpuInit()` preflight test detects WebGPU hangs early
-   - Runs on blank page before loading heavy game content
-   - Provides debugging info when WebGPU fails on remote GPU servers
-   - 30s adapter timeout and 60s renderer init timeout prevent indefinite hangs
-
-See `scripts/deploy-vast.sh` for complete setup logic.
 
 ### Development Rules for WebGPU
 - **NEVER add WebGL fallback code** - it will not work with TSL shaders
@@ -192,6 +126,20 @@ bun run docs:dev
 npm run docs:build
 ```
 
+### Solana/Anchor Development
+```bash
+# Run Anchor tests (uses localnet, not devnet)
+anchor test
+
+# Deploy to devnet (requires funded wallet)
+anchor deploy --provider.cluster devnet
+
+# Deploy to mainnet (requires funded wallet)
+anchor deploy --provider.cluster mainnet
+```
+
+**Note**: `Anchor.toml` is configured for `localnet` by default. This means `anchor test` spins up a local validator with free SOL instead of trying to deploy to devnet (which requires real SOL funding). For actual devnet/mainnet deployments, use the `--provider.cluster` flag.
+
 ## Architecture Overview
 
 ### Monorepo Structure
@@ -215,7 +163,7 @@ packages/
 │   └── UI/HUD
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
-├── procgen/             # Procedural generation (trees, rocks, terrain)
+├── procgen/             # Procedural generation
 └── docs-site/           # Docusaurus documentation site
 ```
 
@@ -254,7 +202,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -317,16 +265,77 @@ Hyperscape uses instanced rendering for resource entities (rocks, ores, herbs, t
 - **Session Timeout**: 30-minute max via MAX_SESSION_TICKS for zombie session cleanup
 - **SessionCloseReason**: Added "timeout" to type for proper session termination tracking
 
-### Streaming Pipeline
-- **Browser Restart Interval**: Reduced from 1 hour to 45 minutes to prevent WebGPU OOM crashes
-- **Health Check Timing**: 5s health check, 15s data timeout (was 10s/30s) for faster failure detection
-- **Buffer Multiplier**: Lowered from 4x to 2x to reduce backpressure buildup
-- **CDP Session Recovery**: Fixed cleanup on recovery (recovery mode flag prevents double-handling)
-
 ### Test Stability
 - **GoldClob Fuzz Tests**: 120s timeout for randomized invariant tests (4 seeds × 140 operations)
 - **Precision Fixes**: Use larger amounts (10000n) to avoid gas cost precision issues
 - **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
+
+## Streaming Pipeline (Vast.ai)
+
+### Deployment Architecture
+The streaming pipeline requires specific GPU setup:
+
+1. **GPU Rendering Modes** (tried in order):
+   - **Xorg with NVIDIA**: Best performance, requires DRI/DRM device access
+   - **Xvfb with NVIDIA Vulkan**: Virtual framebuffer + GPU rendering via ANGLE/Vulkan
+   - **Ozone Headless with GPU**: Experimental mode using `--ozone-platform=headless` with GPU rendering
+   - **Headless mode (software)**: NOT SUPPORTED - WebGPU will not work
+
+2. **Audio Capture**:
+   - PulseAudio with `chrome_audio` virtual sink
+   - FFmpeg captures from PulseAudio monitor (`chrome_audio.monitor`)
+   - Configurable via `STREAM_AUDIO_ENABLED` and `PULSE_AUDIO_DEVICE`
+   - User-mode PulseAudio with XDG_RUNTIME_DIR at `/tmp/pulse-runtime`
+
+3. **RTMP Multi-Streaming**:
+   - Simultaneous streaming to Twitch, Kick, X/Twitter (YouTube disabled)
+   - FFmpeg tee muxer for single-encode multi-output
+   - Stream keys configured via environment variables (never hardcoded)
+   - All secrets read from `.env` file or GitHub Secrets
+
+4. **Deployment Validation**:
+   - Script verifies NVIDIA GPU is accessible via `nvidia-smi`
+   - Checks Vulkan ICD availability at `/usr/share/vulkan/icd.d/nvidia_icd.json`
+   - Logs actual ICD content and VK_LOADER_DEBUG output for diagnostics
+   - Ensures display server (Xorg/Xvfb) is running and accessible
+   - Runs WebGPU pre-check test with Chrome to verify navigator.gpu availability
+   - Extracts Chrome GPU info (WebGPU/Vulkan status) during deployment
+   - Fails deployment if WebGPU cannot be initialized (no soft fallbacks)
+   - Persists GPU/display settings to `.env` for PM2 restarts
+   - Exports working GPU mode (Xorg/Xvfb/ozone-headless) for ecosystem.config.cjs
+
+5. **Production Client Build**:
+   - When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
+   - Serves pre-built client via `vite preview` instead of dev server
+   - Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
+   - Significantly faster page loads for streaming (no on-demand module compilation)
+
+6. **Stream Capture Modes**:
+   - **CDP (default)**: Chrome DevTools Protocol screencast - fastest, most reliable
+   - **WebCodecs**: Native VideoEncoder API (experimental)
+   - **MediaRecorder**: Legacy fallback mode
+   - Automatic recovery with viewport restoration on resolution mismatch
+   - 5s timeout on probe evaluate calls to prevent hanging
+   - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
+   - **Chrome Executable**: Set `STREAM_CAPTURE_EXECUTABLE` to explicit Chrome path (e.g., `/usr/bin/google-chrome-unstable`) for reliable WebGPU
+   - **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
+
+7. **Stream Encoding Optimization**:
+   - Default: `film` tune with B-frames for better compression
+   - Set `STREAM_LOW_LATENCY=true` for `zerolatency` tune (faster playback start)
+   - Configurable GOP size via `STREAM_GOP_SIZE` (default: 60 frames)
+   - 2x bitrate buffer multiplier (reduced from 4x to prevent backpressure buildup)
+   - Audio buffering with `thread_queue_size=1024` and async resampling
+   - Health check timeout: 5s (data timeout: 15s) for faster failure detection
+
+8. **WebGPU Diagnostics**:
+   - `captureGpuDiagnostics()` extracts chrome://gpu info at startup
+   - `testWebGpuInit()` preflight test detects WebGPU hangs early
+   - Runs on blank page before loading heavy game content
+   - Provides debugging info when WebGPU fails on remote GPU servers
+   - 30s adapter timeout and 60s renderer init timeout prevent indefinite hangs
+
+See `scripts/deploy-vast.sh` for complete setup logic.
 
 ## Critical Development Rules
 
@@ -380,7 +389,7 @@ Visual testing uses colored cube proxies:
 
 ### Production Code Only
 
-- No TODOs or \"will fill this out later\" - implement completely
+- No TODOs or "will fill this out later" - implement completely
 - No hardcoded data - use JSON files and general systems
 - No shortcuts or workarounds - fix root causes
 - Build toward the general case (many items, players, mobs)
@@ -475,33 +484,33 @@ PUBLIC_API_URL=https://...       # Point to your server
 PUBLIC_WS_URL=wss://...          # Point to your server WebSocket
 ```
 
+**Streaming/GPU variables** (Vast.ai deployment):
+```bash
+# GPU Configuration
+DISPLAY=:99                      # X11 display (Xorg or Xvfb)
+GPU_RENDERING_MODE=xorg          # xorg | xvfb-vulkan | ozone-headless
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+DUEL_CAPTURE_USE_XVFB=false      # true if using Xvfb instead of Xorg
+
+# Stream Capture
+STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable
+STREAM_CAPTURE_HEADLESS=false    # MUST be false for WebGPU
+STREAM_CAPTURE_USE_EGL=false     # Use EGL instead of Vulkan
+STREAM_CAPTURE_OZONE_HEADLESS=false  # Use ozone-platform=headless
+
+# Stream Encoding
+STREAM_LOW_LATENCY=false         # true for zerolatency tune
+STREAM_GOP_SIZE=60               # GOP size in frames
+STREAM_AUDIO_ENABLED=true        # Enable audio capture
+
+# Production Client Build
+NODE_ENV=production              # Use production client build
+DUEL_USE_PRODUCTION_CLIENT=true  # Force production client even in dev
+```
+
 **Split deployment** (client and server on different hosts):
 - `PUBLIC_PRIVY_APP_ID` (client) must equal `PRIVY_APP_ID` (server)
 - `PUBLIC_WS_URL` and `PUBLIC_API_URL` must point to your server
-
-**Streaming environment variables** (see `packages/server/.env.example` for full list):
-```bash
-# Stream capture configuration
-STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable  # Explicit Chrome path
-STREAM_CAPTURE_HEADLESS=new                                 # Chrome headless mode
-STREAM_CAPTURE_USE_EGL=true                                 # EGL rendering mode
-STREAM_CAPTURE_OZONE_HEADLESS=true                          # Ozone headless platform
-STREAM_LOW_LATENCY=true                                     # Low-latency encoding
-STREAM_GOP_SIZE=60                                          # GOP size in frames
-STREAM_AUDIO_ENABLED=true                                   # Enable audio capture
-PULSE_AUDIO_DEVICE=chrome_audio.monitor                     # PulseAudio device
-
-# Production client build for streaming
-NODE_ENV=production                                         # Use production build
-DUEL_USE_PRODUCTION_CLIENT=true                             # Force production client
-
-# RTMP streaming destinations
-TWITCH_STREAM_KEY=...
-KICK_STREAM_KEY=...
-KICK_RTMP_URL=...
-X_STREAM_KEY=...
-X_RTMP_URL=...
-```
 
 ## Package Manager
 
@@ -562,22 +571,28 @@ See [Port Allocation](#port-allocation) section for full port list.
 
 ### WebGPU Not Available
 
-**Browser:**
-- Check [webgpureport.org](https://webgpureport.org) to verify WebGPU support
-- Update to Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
-- Ensure GPU drivers are up to date
+If WebGPU is not available in your browser:
+1. Check [webgpureport.org](https://webgpureport.org) for browser compatibility
+2. Ensure you're using Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
+3. Update your graphics drivers
+4. On Linux, ensure Vulkan is properly installed (`vulkaninfo`)
+5. For streaming servers, check `scripts/deploy-vast.sh` GPU validation logic
 
-**Server/Streaming:**
-- Verify NVIDIA GPU is accessible: `nvidia-smi`
-- Check Vulkan ICD: `ls /usr/share/vulkan/icd.d/nvidia_icd.json`
-- Ensure display server is running: `echo $DISPLAY` (should be `:0` or `:99`)
-- Check Chrome GPU status: Navigate to `chrome://gpu` in the browser
-- Review deployment logs for WebGPU preflight test results
+### Streaming Pipeline Issues
+
+If streaming fails on Vast.ai or other GPU servers:
+1. Check `bunx pm2 logs hyperscape-duel` for errors
+2. Verify NVIDIA GPU is accessible: `nvidia-smi`
+3. Check Vulkan support: `vulkaninfo --summary`
+4. Ensure display server is running: `xdpyinfo -display :99`
+5. Review WebGPU diagnostics in deployment logs
+6. Verify Chrome executable path: `which google-chrome-unstable`
+7. Check GPU rendering mode in `.env`: `GPU_RENDERING_MODE`
 
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
-- [AGENTS.md](AGENTS.md) - AI assistant guidelines
+- [AGENTS.md](AGENTS.md) - AI coding assistant instructions
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
