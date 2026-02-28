@@ -24,6 +24,8 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 - Firefox (behind flag, not recommended)
 - Check: [webgpureport.org](https://webgpureport.org)
 
+> **Note**: Safari 18 requires macOS 15 (Sequoia) or later. Earlier macOS versions do not support WebGPU.
+
 ### Server/Streaming Requirements
 For Vast.ai and other GPU servers running the streaming pipeline:
 - **NVIDIA GPU with Vulkan support is REQUIRED**
