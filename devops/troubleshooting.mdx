@@ -886,12 +886,13 @@ export GPU_RENDERING_MODE=xorg
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
 Xorg :99 -config /etc/X11/xorg-nvidia-headless.conf &
 
-# Manual headless EGL mode (for containers without DRM/DRI)
+# Manual headless EGL mode (for containers without DRM/DRI or when Xorg falls back to swrast)
 export DISPLAY=
 export STREAM_CAPTURE_HEADLESS=new
 export STREAM_CAPTURE_USE_EGL=true
 export GPU_RENDERING_MODE=headless-egl
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+# Uses Chrome's --headless=new with --use-gl=egl --ozone-platform=headless
 ```
 
 **Verify GPU access:**
