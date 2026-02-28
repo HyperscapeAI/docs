@@ -232,11 +232,21 @@ Hyperscape streams live gameplay to Twitch, Kick, and X/Twitter using GPU-accele
 - Direct JPEG frame piping to FFmpeg
 - Hardware-accelerated H.264 encoding
 - RTMP tee muxer for multi-platform streaming
-- Production client build mode for faster page loads
 
-**Deployment Script:** `scripts/deploy-vast.sh` handles GPU setup, display server configuration, PulseAudio, and PM2 process management.
+**Deployment:**
+```bash
+# Triggered automatically via GitHub Actions on push to main
+# See .github/workflows/deploy-vast.yml
+```
 
-**See:** [AGENTS.md](AGENTS.md#vastai-deployment-architecture) for complete streaming architecture documentation.
+**Manual deployment:**
+```bash
+ssh root@<vast-instance-ip>
+cd /root/hyperscape
+./scripts/deploy-vast.sh
+```
+
+**See:** `scripts/deploy-vast.sh` for complete deployment logic and troubleshooting.
 
 ## Native App Distribution
 
