@@ -444,9 +444,12 @@ The `scripts/deploy-vast.sh` script handles the full deployment with recent impr
 2. Pull latest code from main branch
 3. Restore environment variables after git reset (commits eec04b0, dda4396, 4a6aaaf)
 4. Install system dependencies (build-essential, ffmpeg, Vulkan drivers, Chrome Dev, PulseAudio)
-5. **GPU rendering detection and configuration** (commits dd649da, e51a332, 30bdaf0):
+5. **GPU rendering detection and configuration** (commits dd649da, e51a332, 30bdaf0, 725e934, 012450c):
    - Check for NVIDIA GPU and DRI devices
-   - Configure Xorg mode (if DRI available) or headless EGL mode (fallback)
+   - Try Xorg mode first (if DRI available)
+   - Detect Xorg swrast fallback and switch to headless EGL if needed
+   - Fall back to Xvfb mode if Xorg fails
+   - Fall back to headless EGL mode if X11 not available
    - Install NVIDIA Xorg drivers and configure headless X server
    - Force NVIDIA-only Vulkan ICD to avoid Mesa conflicts
 6. Install Chrome Dev channel for WebGPU support
