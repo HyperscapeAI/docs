@@ -97,6 +97,7 @@ The streaming pipeline requires specific GPU setup:
    - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
    - **Chrome Executable**: Set `STREAM_CAPTURE_EXECUTABLE` to explicit Chrome path (e.g., `/usr/bin/google-chrome-unstable`) for reliable WebGPU
    - **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
+   - **Page Navigation Timeout**: Increased to 180s for Vite dev mode (production build recommended)
 
 7. **Stream Encoding Optimization**:
    - Default: `film` tune with B-frames for better compression
