@@ -37,158 +37,45 @@ bun run duel --skip-stream
 bun run duel --verify
 ```
 
-## Production Client Build (Streaming Optimization)
+## WebGPU Requirements
 
-**Problem**: Vite's dev server uses on-demand JIT compilation, which can take 60-180 seconds to load the game page. This causes browser timeout issues in the RTMP bridge.
+**CRITICAL**: Hyperscape requires WebGPU for rendering. WebGL will NOT work.
 
-**Solution**: When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`, the duel stack serves the pre-built client via `vite preview` instead of the dev server.
+- All materials use TSL (Three Shading Language) which only works with WebGPU
+- WebGL fallback code has been completely removed
+- Deployment fails if WebGPU cannot initialize
 
-### Configuration
+**Browser Requirements:**
+- Chrome 113+ (recommended)
+- Edge 113+
+- Safari 18+ (macOS 15+) - Safari 17 support removed
+- Check: [webgpureport.org](https://webgpureport.org)
 
-Set in `.env` or environment:
-
-```bash
-# Enable production client build for streaming
-DUEL_USE_PRODUCTION_CLIENT=true
-
-# Or set NODE_ENV to production
-NODE_ENV=production
-```
-
-### Benefits
-
-- **Faster page loads**: Pre-built client loads in <5 seconds (vs 60-180s for dev server)
-- **No browser timeouts**: RTMP bridge can load game page within 180s timeout
-- **Consistent performance**: No JIT compilation overhead during streaming
-- **Production-ready**: Same build used in production deployments
-
-### Build Process
-
-The duel stack automatically:
-1. Builds the client if not already built: `bun run build:client`
-2. Starts `vite preview` instead of `vite dev`
-3. Serves pre-built assets from `packages/client/dist/`
-
-### Troubleshooting
-
-If the production client fails to load:
-
-```bash
-# Rebuild client manually
-cd packages/client
-bun run build
-
-# Verify build output exists
-ls -la dist/
-
-# Check for build errors
-bun run build 2>&1 | grep -i error
-```
+**Server/Streaming Requirements:**
+- NVIDIA GPU with Vulkan support
+- Xorg or Xvfb display server (headless mode NOT supported)
+- Chrome uses ANGLE/Vulkan backend for WebGPU
+- `--disable-gpu-sandbox` and `--disable-setuid-sandbox` required for container GPU access
 
 ## Streaming Outputs
 
 Configure the following env vars (root `.env` or `packages/server/.env`):
 
-- `RTMP_MULTIPLEXER_URL` (+ optional `RTMP_MULTIPLEXER_STREAM_KEY`, `RTMP_MULTIPLEXER_NAME`)
 - `TWITCH_STREAM_KEY` (or `TWITCH_RTMP_STREAM_KEY`)
   Optional ingest override: `TWITCH_STREAM_URL` / `TWITCH_RTMP_URL` / `TWITCH_RTMP_SERVER`
-- `YOUTUBE_STREAM_KEY` (or `YOUTUBE_RTMP_STREAM_KEY`) - **Disabled by default**
-  Optional ingest override: `YOUTUBE_STREAM_URL` / `YOUTUBE_RTMP_URL`
 - `KICK_STREAM_KEY` (+ optional `KICK_RTMP_URL`)
-- `PUMPFUN_RTMP_URL` (+ optional `PUMPFUN_STREAM_KEY`)
-- `X_RTMP_URL` (+ optional `X_STREAM_KEY`)
+- `X_STREAM_KEY` (+ optional `X_RTMP_URL`)
+- `YOUTUBE_STREAM_KEY=""` (explicitly disabled - set to empty string)
 - `RTMP_DESTINATIONS_JSON` for additional/custom fanout destinations
 - `STREAMING_VIEWER_ACCESS_TOKEN` optional gate for live WebSocket stream/spectator viewers
 
-### Audio Capture
-
-Audio streaming is enabled by default via PulseAudio:
-
-```bash
-# Enable/disable audio capture
-STREAM_AUDIO_ENABLED=true
-
-# PulseAudio monitor device
-PULSE_AUDIO_DEVICE=chrome_audio.monitor
-
-# PulseAudio server socket
-PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
-
-# PulseAudio runtime directory
-XDG_RUNTIME_DIR=/tmp/pulse-runtime
-```
-
-The deploy script automatically:
-1. Installs PulseAudio
-2. Creates `chrome_audio` virtual sink
-3. Configures Chrome to output to PulseAudio
-4. Configures FFmpeg to capture from PulseAudio monitor
-
-### Video Encoding
-
-Configure encoding settings:
-
-```bash
-# Video bitrate (default: 4500000 = 4.5 Mbps)
-STREAM_BITRATE=4500000
-
-# FFmpeg buffer size (default: 4x bitrate)
-STREAM_BUFFER_SIZE=18000000
-
-# x264 preset (ultrafast, veryfast, faster, fast, medium, slow)
-STREAM_PRESET=medium
-
-# Low-latency mode (enables zerolatency tune, disables B-frames)
-STREAM_LOW_LATENCY=false
-
-# GOP size (keyframe interval in frames, default: 60 = 2s at 30fps)
-STREAM_GOP_SIZE=60
-
-# Stream resolution (must be even numbers)
-STREAM_CAPTURE_WIDTH=1280
-STREAM_CAPTURE_HEIGHT=720
-
-# Target frame rate
-STREAM_FPS=30
-```
-
-### Capture Modes
-
-The RTMP bridge supports multiple capture modes:
-
-1. **CDP (Chrome DevTools Protocol)** - Default, fastest, most reliable
-   - Uses Chrome's built-in screencast API
-   - JPEG quality configurable via `STREAM_CDP_QUALITY` (1-100, default: 80)
-   - Automatic resolution tracking and viewport recovery
-   - 5s timeout on probe evaluate calls to prevent hanging
-   - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
-
-2. **WebCodecs** - Experimental, native VideoEncoder API
-   - Uses browser's native video encoding
-   - May have better performance on some systems
-   - Set `STREAM_CAPTURE_MODE=webcodecs`
-
-3. **MediaRecorder** - Legacy fallback
-   - Browser's MediaRecorder API
-   - Set `STREAM_CAPTURE_MODE=mediarecorder`
-
-### Capture Reliability
-
-The capture system includes automatic recovery:
-
-- **Resolution Mismatch Detection**: Tracks CDP frame resolution vs expected dimensions
-- **Viewport Recovery**: Automatically restores viewport when resolution mismatch persists
-- **Probe Timeouts**: 5s timeout on browser readiness checks
-- **Unresponsive Browser Handling**: Proceeds with capture after 5 consecutive probe timeouts
-- **Page Load Timeout**: 180s timeout for Vite dev mode compatibility (use production client to avoid)
-
-### Anti-Cheat Timing
+**BREAKING CHANGE**: All stream keys must be set via environment variables. Hardcoded secrets have been removed from `ecosystem.config.cjs`.
 
 Default anti-cheat timing policy (no env required):
 
-- Canonical platform: `twitch` (changed from `youtube` for lower latency)
-- Default public delay: `12000ms` for Twitch, `15000ms` for YouTube
-- Optional: `STREAMING_CANONICAL_PLATFORM` (`youtube` | `twitch` | `hls`)
+- Canonical platform: `twitch` (changed from `youtube`)
+- Default public delay: `0ms` (changed from `15000ms`)
+- Optional: `STREAMING_CANONICAL_PLATFORM` (`youtube` | `twitch`)
 - Optional override: `STREAMING_PUBLIC_DELAY_MS`
 
 Optional client-side extra delay (usually keep `0` if server delay is enabled):
@@ -206,86 +93,154 @@ When `STREAMING_PUBLIC_DELAY_MS > 0`, live `mode=streaming` WebSocket viewers ar
 
 `stream-to-rtmp` automatically appends `streamToken` to capture URLs when `STREAMING_VIEWER_ACCESS_TOKEN` is set.
 
-## GPU Rendering (Vast.ai)
+## Stream Capture Configuration
 
-**CRITICAL**: WebGPU requires a display server. Headless mode does NOT work.
+### Capture Modes
 
-### Rendering Modes
+- **CDP (default)**: Chrome DevTools Protocol screencast - fastest, most reliable
+- **WebCodecs (experimental)**: Native VideoEncoder API with stream copy
+- **MediaRecorder (legacy)**: Fallback mode with VP8/VP9 encoding
 
-The deploy script tries rendering modes in order:
+Set via `STREAM_CAPTURE_MODE=cdp|webcodecs|mediarecorder`
+
+### Stream Quality Settings
+
+```bash
+# Resolution (must be even numbers)
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+
+# Target FPS
+STREAM_FPS=30
+
+# JPEG quality for CDP mode (1-100)
+STREAM_CDP_QUALITY=80
+
+# Encoding optimization
+STREAM_LOW_LATENCY=false  # false = film tune (better compression), true = zerolatency tune
+STREAM_GOP_SIZE=60        # Keyframe interval in frames (60 = 2s at 30fps)
+```
+
+### Browser Configuration
+
+**CRITICAL**: WebGPU requires specific browser configuration:
+
+```bash
+# Chrome executable path (recommended for reliability)
+STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable
+
+# Browser channel (alternative to executable path)
+STREAM_CAPTURE_CHANNEL=chrome-dev
+
+# Headless mode (always false for WebGPU)
+STREAM_CAPTURE_HEADLESS=false
+
+# ANGLE backend (vulkan for NVIDIA, metal for macOS)
+STREAM_CAPTURE_ANGLE=vulkan
+
+# Experimental ozone-platform=headless mode
+STREAM_CAPTURE_OZONE_HEADLESS=false
+```
+
+### Audio Capture
+
+```bash
+# Enable audio streaming
+STREAM_AUDIO_ENABLED=true
+
+# PulseAudio device (monitor of chrome_audio sink)
+PULSE_AUDIO_DEVICE=chrome_audio.monitor
+
+# PulseAudio runtime (user-mode)
+XDG_RUNTIME_DIR=/tmp/pulse-runtime
+PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+```
+
+### Recovery Settings
+
+```bash
+# Timeout for recovery operations (ms)
+STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000
+
+# Max failures before fallback to MediaRecorder
+STREAM_CAPTURE_RECOVERY_MAX_FAILURES=6
+```
+
+### Production Client Build
+
+```bash
+# Use pre-built client for faster page loads
+# Fixes 180s timeout caused by Vite's JIT compilation
+DUEL_USE_PRODUCTION_CLIENT=true
+```
+
+## GPU Rendering Modes (Vast.ai)
+
+The deployment script (`scripts/deploy-vast.sh`) tries multiple GPU rendering modes in order:
 
 1. **Xorg with NVIDIA** (preferred):
-   - Direct GPU access via DRI/DRM devices
-   - Best performance
-   - Requires `/dev/dri/card0` or similar
-   - Uses `--disable-gpu-sandbox` and `--disable-setuid-sandbox` for container GPU access
+   - Best performance with direct GPU access
+   - Requires DRI/DRM device access (`/dev/dri/card0`)
+   - Uses NVIDIA Xorg driver with headless configuration
+   - Validates GPU rendering (not software fallback)
 
 2. **Xvfb with NVIDIA Vulkan** (fallback):
    - Virtual framebuffer provides X11 protocol
    - Chrome uses NVIDIA GPU via ANGLE/Vulkan
+   - CDP captures frames from Chrome's internal GPU rendering
    - Works in containers without DRM access
-   - Uses `--disable-gpu-sandbox` for container GPU access
 
 3. **Ozone Headless with GPU** (experimental):
    - Uses `--ozone-platform=headless` for Wayland-like headless rendering
    - Enabled via `STREAM_CAPTURE_OZONE_HEADLESS=true`
    - May work on systems where X11/Xvfb fails but GPU is accessible
-   - Requires `--disable-gpu-sandbox` for container GPU access
 
 4. **Headless mode (software)**: NOT SUPPORTED
-   - Deployment fails if no GPU-capable mode can be established
    - WebGPU requires GPU rendering
+   - Deployment fails if no GPU-capable mode can be established
 
-### Environment Variables (Auto-Configured)
-
-The deploy script automatically sets:
-
+**Auto-configured environment variables:**
 ```bash
 DISPLAY=:99                                              # X display
 GPU_RENDERING_MODE=xorg|xvfb-vulkan|ozone-headless      # Rendering mode
 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json # Force NVIDIA Vulkan
 DUEL_CAPTURE_USE_XVFB=true|false                        # Xvfb vs Xorg
-STREAM_CAPTURE_HEADLESS=false                           # Always false (WebGPU requires display)
-STREAM_CAPTURE_OZONE_HEADLESS=true|false                # Ozone headless mode (experimental)
-STREAM_CAPTURE_EXECUTABLE=/path/to/chrome               # Custom Chrome executable
-XDG_RUNTIME_DIR=/tmp/pulse-runtime                      # PulseAudio runtime
-PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native       # PulseAudio socket
 ```
 
-### Troubleshooting GPU Issues
+## WebGPU Diagnostics
 
-If streaming produces black frames or fails to start:
+The streaming pipeline includes comprehensive WebGPU diagnostics:
 
-```bash
-# Check GPU access
-nvidia-smi
+### Preflight Testing
 
-# Check Vulkan support
-vulkaninfo --summary
+- `testWebGpuInit()` runs on blank page before loading game content
+- Detects WebGPU initialization hangs early (30s adapter timeout, 60s renderer timeout)
+- Provides debugging info when WebGPU fails on remote GPU servers
 
-# Verify display server
-echo $DISPLAY
-xdpyinfo -display $DISPLAY
+### GPU Diagnostics
 
-# Check PulseAudio
-pulseaudio --check
-pactl list short sinks
+- `captureGpuDiagnostics()` extracts chrome://gpu info at startup
+- Logs WebGPU status, Vulkan support, and hardware acceleration
+- Helps diagnose GPU driver and display configuration issues
 
-# Review deployment logs
-bunx pm2 logs hyperscape-duel --lines 200
+### Probe Timeouts
 
-# Check RTMP status
-cat /root/hyperscape/packages/server/public/live/rtmp-status.json
-```
+- 5s timeout on probe evaluate calls to prevent hanging
+- Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
+- Useful when WebGPU is rendering but JavaScript is blocked
 
-See `scripts/deploy-vast.sh` for complete deployment logic.
+### Resolution Tracking
+
+- Automatic detection of resolution mismatches
+- Viewport restoration when resolution persists incorrectly
+- Logs resolution changes and mismatch counts
 
 ## Spectator + Betting URLs
 
 - Game stream view: `http://localhost:3333/?page=stream`
 - Embedded spectator: `http://localhost:3333/?embedded=true&mode=spectator`
 - Betting app: `http://localhost:4179`
-- Betting video source: `VITE_STREAM_EMBED_URL` (YouTube/Twitch embed URL)
+- Betting video source: `VITE_STREAM_EMBED_URL` (Twitch/Kick embed URL)
 
 ## Open APIs (duel telemetry + monologues)
 
@@ -308,35 +263,81 @@ bun run duel:verify --require-destinations=twitch,kick
 This validates server/client/betting uptime, active duel combat, RTMP bridge status evidence, and telemetry endpoints.
 RTMP bridge status is best-effort by default, and can be made strict with `--require-destinations`.
 
-## PM2 Production Deployment (Vast.ai)
+## Troubleshooting
 
-For production deployment on Vast.ai, use PM2 with the ecosystem config:
+### Black Frames / No Video
 
-```bash
-# Deploy via GitHub Actions
-# Workflow: .github/workflows/deploy-vast.yml
-# Triggers on push to main branch
+1. **Check GPU access**:
+   ```bash
+   nvidia-smi  # Should show GPU info
+   vulkaninfo --summary  # Should show Vulkan support
+   ```
 
-# Manual deployment
-ssh root@vast-instance
-cd /root/hyperscape
-./scripts/deploy-vast.sh
-```
+2. **Verify display server**:
+   ```bash
+   echo $DISPLAY  # Should be :99 or :0
+   xdpyinfo -display $DISPLAY  # Should show display info
+   ```
 
-The deploy script:
-1. Pulls latest code from main
-2. Installs system dependencies (FFmpeg, PulseAudio, Vulkan, Chrome Dev)
-3. Configures GPU rendering (Xorg or Xvfb)
-4. Sets up PulseAudio for audio capture
-5. Builds core packages
-6. Pushes database schema
-7. Starts duel stack via PM2
+3. **Check WebGPU diagnostics**:
+   ```bash
+   bunx pm2 logs hyperscape-duel --lines 500 | grep -A 20 \"GPU Diagnostics\"
+   ```
 
-### PM2 Commands
+4. **Review preflight test**:
+   ```bash
+   bunx pm2 logs hyperscape-duel --lines 500 | grep -A 10 \"WebGPU preflight\"
+   ```
+
+### Browser Hangs / Timeouts
+
+- **Page load timeout**: Use production client build (`DUEL_USE_PRODUCTION_CLIENT=true`)
+- **WebGPU initialization timeout**: Check preflight test logs for adapter/renderer timeouts
+- **Probe timeouts**: Capture proceeds after 5 consecutive timeouts (browser unresponsive but rendering)
+
+### No Audio
+
+1. **Check PulseAudio**:
+   ```bash
+   pulseaudio --check  # Should exit silently if running
+   pactl list short sinks  # Should show chrome_audio sink
+   ```
+
+2. **Verify audio device**:
+   ```bash
+   echo $PULSE_AUDIO_DEVICE  # Should be chrome_audio.monitor
+   echo $PULSE_SERVER  # Should be unix:/tmp/pulse-runtime/pulse/native
+   ```
+
+### Resolution Mismatch
+
+- Automatic viewport recovery enabled
+- Check logs for resolution mismatch warnings
+- Viewport restoration triggers after 10 consecutive mismatched frames
+
+### Stream Stalls / Recovery
+
+- CDP capture includes automatic recovery with soft/hard restart
+- Soft recovery: restart screencast without killing browser
+- Hard recovery: full browser teardown and restart
+- Falls back to MediaRecorder after max failures (default: 6)
+- Browser restart interval: 45 minutes (prevents WebGPU OOM)
+
+### Memory Issues
+
+- Browser restart interval: 45 minutes (prevents WebGPU OOM crashes)
+- Damage event cache: cleanup every tick, max 1000 entries
+- Activity logger queue: max 1000 entries with 25% eviction
+- Session timeout: 30 minutes for zombie sessions
+- Agent LLM rate limiting: exponential backoff (5s base, 60s max)
+
+## PM2 Management (Production)
+
+The duel stack runs under PM2 on Vast.ai:
 
 ```bash
 # View logs
-bunx pm2 logs hyperscape-duel
+bunx pm2 logs hyperscape-duel --lines 200
 
 # Restart stack
 bunx pm2 restart hyperscape-duel
@@ -347,75 +348,22 @@ bunx pm2 stop hyperscape-duel
 # View status
 bunx pm2 status
 
-# Monitor resources
+# Monitor in real-time
 bunx pm2 monit
-```
-
-### Health Monitoring
-
-The deploy script waits for server health check:
-
-```bash
-# Check server health
-curl http://localhost:5555/health
-
-# Check streaming status
-curl http://localhost:5555/api/streaming/state
-
-# Check RTMP status file
-cat /root/hyperscape/packages/server/public/live/rtmp-status.json
 ```
 
 ## Environment Variables Reference
 
-See `.env.example` for complete list of streaming configuration options.
+See `.env.example` for complete list of streaming and deployment variables.
 
-### Required for Streaming
-
-```bash
-# At least one stream destination
-TWITCH_STREAM_KEY=live_123456789_abcdefghij
-# OR
-KICK_STREAM_KEY=your-kick-key
-KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
-# OR
-X_STREAM_KEY=your-x-key
-X_RTMP_URL=rtmp://sg.pscp.tv:80/x
-```
-
-### Required for Production
-
-```bash
-# Database
-DATABASE_URL=postgresql://user:pass@host:5432/db
-
-# Authentication
-JWT_SECRET=your-jwt-secret
-
-# Solana (for on-chain features)
-SOLANA_DEPLOYER_PRIVATE_KEY=your-base58-key
-```
-
-### Optional Optimizations
-
-```bash
-# Use production client build (recommended)
-DUEL_USE_PRODUCTION_CLIENT=true
-
-# Disable YouTube streaming (enabled by default)
-YOUTUBE_STREAM_KEY=
-
-# Custom FFmpeg path
-FFMPEG_PATH=/usr/bin/ffmpeg
-
-# Custom browser executable
-STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable
-```
-
-## Related Documentation
-
-- [CLAUDE.md](../CLAUDE.md) - WebGPU requirements and troubleshooting
-- [AGENTS.md](../AGENTS.md) - AI assistant WebGPU guidelines
-- [.env.example](../.env.example) - Complete environment variable reference
-- [scripts/deploy-vast.sh](../scripts/deploy-vast.sh) - Deployment script
-- [ecosystem.config.cjs](../ecosystem.config.cjs) - PM2 configuration
+**Key variables:**
+- `STREAM_CAPTURE_MODE` - Capture mode (cdp, webcodecs, mediarecorder)
+- `STREAM_CAPTURE_EXECUTABLE` - Chrome executable path (recommended for reliability)
+- `STREAM_CAPTURE_WIDTH/HEIGHT` - Stream resolution (must be even)
+- `STREAM_FPS` - Target frames per second
+- `STREAM_CDP_QUALITY` - JPEG quality for CDP mode (1-100)
+- `STREAM_LOW_LATENCY` - Encoding tune (false = film, true = zerolatency)
+- `STREAM_GOP_SIZE` - Keyframe interval in frames
+- `DUEL_USE_PRODUCTION_CLIENT` - Use pre-built client for faster loads
+- `GPU_RENDERING_MODE` - Auto-configured by deploy script
+- `VK_ICD_FILENAMES` - Force NVIDIA Vulkan ICD
