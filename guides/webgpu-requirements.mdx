@@ -1,0 +1,288 @@
+---
+title: WebGPU requirements
+description: Browser and hardware requirements for running Hyperscape
+---
+
+# WebGPU Requirements
+
+Hyperscape requires WebGPU for rendering. **WebGL is NOT supported.**
+
+## Why WebGPU-Only?
+
+All Hyperscape materials use TSL (Three Shading Language) which **only works with WebGPU**:
+
+- Terrain shaders
+- Water rendering
+- Vegetation materials
+- Building materials
+- Post-processing effects (bloom, tone mapping)
+- Dissolve animations
+- Animated impostor atlases
+
+**There is NO WebGL fallback** - the game will not render without WebGPU.
+
+## Browser Support
+
+### Desktop Browsers
+
+| Browser | Minimum Version | Release Date | Status |
+|---------|----------------|--------------|--------|
+| Chrome | 113+ | May 2023 | ✅ Recommended |
+| Edge | 113+ | May 2023 | ✅ Supported |
+| Safari | 18+ (macOS 15+) | September 2024 | ✅ Supported |
+| Firefox | 121+ | December 2023 | ⚠️ Behind flag |
+
+### Mobile Browsers
+
+| Browser | Minimum Version | Status |
+|---------|----------------|--------|
+| iOS Safari | 18+ (iOS 18+) | ✅ Supported |
+| Android Chrome | 113+ | ⚠️ Limited GPU support |
+
+**Note:** Use the native app (Capacitor) for better mobile performance.
+
+## Checking WebGPU Support
+
+### Online Checker
+
+Visit [webgpureport.org](https://webgpureport.org) to check if your browser supports WebGPU.
+
+### Browser Console
+
+```javascript
+if ('gpu' in navigator) {
+  const adapter = await navigator.gpu.requestAdapter();
+  if (adapter) {
+    console.log('✅ WebGPU supported');
+    const info = await adapter.requestAdapterInfo();
+    console.log('GPU:', info.description);
+  } else {
+    console.log('❌ WebGPU not supported');
+  }
+} else {
+  console.log('❌ WebGPU API not available');
+}
+```
+
+### Chrome GPU Info
+
+Visit `chrome://gpu` and look for:
+- **WebGPU:** Hardware accelerated
+
+## Enabling WebGPU
+
+### Chrome/Edge
+
+WebGPU is enabled by default in Chrome 113+.
+
+**If disabled:**
+1. Visit `chrome://flags`
+2. Search for "WebGPU"
+3. Enable "Unsafe WebGPU"
+4. Restart browser
+
+**Check hardware acceleration:**
+1. Visit `chrome://settings`
+2. System → "Use hardware acceleration when available"
+3. Ensure it's enabled
+
+### Safari
+
+WebGPU is enabled by default in Safari 18+ (macOS 15+).
+
+**Requirements:**
+- macOS Sequoia (15.0+)
+- Safari 18+
+
+**If not working:**
+1. Safari → Preferences → Advanced
+2. Check "Show Develop menu in menu bar"
+3. Develop → Experimental Features
+4. Ensure "WebGPU" is checked
+
+### Firefox
+
+**Not recommended** - WebGPU is behind a flag.
+
+**To enable:**
+1. Visit `about:config`
+2. Search for `dom.webgpu.enabled`
+3. Set to `true`
+4. Restart browser
+
+## Hardware Requirements
+
+### Minimum GPU
+
+**Desktop:**
+- NVIDIA GTX 1060 or newer
+- AMD RX 580 or newer
+- Intel Arc A380 or newer
+- Apple M1 or newer (macOS)
+
+**Laptop:**
+- NVIDIA GTX 1650 or newer
+- AMD RX 5500M or newer
+- Intel Iris Xe or newer
+- Apple M1 or newer
+
+### GPU Drivers
+
+**NVIDIA:**
+- Driver version 470.0 or newer
+- Download: [nvidia.com/drivers](https://nvidia.com/drivers)
+
+**AMD:**
+- Driver version 21.10.2 or newer
+- Download: [amd.com/support](https://amd.com/support)
+
+**Intel:**
+- Driver version 30.0.100.9684 or newer
+- Download: [intel.com/content/www/us/en/download-center](https://intel.com/content/www/us/en/download-center)
+
+## Troubleshooting
+
+### "WebGPU is REQUIRED but not available"
+
+**Cause:** Browser doesn't support WebGPU or hardware acceleration is disabled.
+
+**Solution:**
+1. Update browser to minimum version
+2. Enable hardware acceleration in browser settings
+3. Update GPU drivers
+4. Check [webgpureport.org](https://webgpureport.org)
+
+### "Renderer initialization FAILED"
+
+**Cause:** WebGPU is available but initialization failed.
+
+**Solution:**
+1. Update GPU drivers
+2. Try different browser
+3. Check for browser extensions blocking WebGPU
+4. Restart browser
+5. Check `chrome://gpu` for errors
+
+### Black Screen / No Rendering
+
+**Cause:** WebGPU initialized but rendering failed.
+
+**Solution:**
+1. Check browser console for errors
+2. Verify GPU is not overheating
+3. Close other GPU-intensive applications
+4. Restart browser
+5. Update GPU drivers
+
+### "Hardware acceleration unavailable"
+
+**Cause:** GPU drivers not installed or outdated.
+
+**Solution:**
+1. Update GPU drivers (see links above)
+2. Restart computer
+3. Check Device Manager (Windows) or System Information (macOS)
+4. Verify GPU is recognized by OS
+
+### WebView Restrictions
+
+**Cause:** Running in WebView that blocks WebGPU.
+
+**Solution:**
+1. Use native browser instead of WebView
+2. Enable WebGPU in WebView configuration
+3. Use native app (Capacitor) for mobile
+
+## Server-Side Rendering (Vast.ai)
+
+### Requirements
+
+- NVIDIA GPU with Vulkan support
+- Xorg or Xvfb display server
+- Chrome Dev channel (google-chrome-unstable)
+- ANGLE/Vulkan backend
+
+### Validation
+
+```bash
+# Check GPU
+nvidia-smi
+
+# Check Vulkan
+vulkaninfo --summary
+
+# Check display
+xdpyinfo -display $DISPLAY
+```
+
+### Configuration
+
+```bash
+# Display server
+DISPLAY=:99
+
+# GPU rendering mode
+GPU_RENDERING_MODE=xorg  # or xvfb-vulkan
+
+# Vulkan ICD
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+
+# Chrome configuration
+STREAM_CAPTURE_CHANNEL=chrome-dev
+STREAM_CAPTURE_ANGLE=vulkan
+STREAM_CAPTURE_HEADLESS=false  # Must be false for WebGPU
+```
+
+## FAQ
+
+### Can I use WebGL?
+
+**No.** WebGL is not supported. All materials use TSL which requires WebGPU.
+
+### What if my users don't have WebGPU?
+
+They must update their browser. WebGPU is widely available:
+- Chrome/Edge 113+ (May 2023)
+- Safari 18+ (September 2024)
+- ~95% of desktop browsers support WebGPU as of 2026
+
+### Can I run Hyperscape in headless mode?
+
+**No.** WebGPU requires a display server (Xorg or Xvfb). Pure headless mode is not supported.
+
+For server-side rendering (streaming), use Xvfb with NVIDIA Vulkan.
+
+### Does WebGPU work on mobile?
+
+**Limited support:**
+- iOS Safari 18+ (iOS 18+) - Good support
+- Android Chrome 113+ - Limited GPU support
+
+Use the native app (Capacitor) for better mobile performance.
+
+### How do I check if WebGPU is working?
+
+**Browser:**
+```javascript
+const hasWebGPU = 'gpu' in navigator;
+console.log('WebGPU API:', hasWebGPU);
+
+if (hasWebGPU) {
+  const adapter = await navigator.gpu.requestAdapter();
+  console.log('WebGPU adapter:', adapter !== null);
+}
+```
+
+**Chrome:**
+- Visit `chrome://gpu`
+- Look for "WebGPU: Hardware accelerated"
+
+**Safari:**
+- Develop → Experimental Features → "WebGPU" (should be checked)
+
+## Related Documentation
+
+- [WebGPU Migration Guide](../docs/migration/webgpu-only.md)
+- [RendererFactory API](../docs/api/renderer-factory.md)
+- [Vast.ai Streaming](./gpu-streaming.mdx)
+- [Browser Compatibility](https://caniuse.com/webgpu)
