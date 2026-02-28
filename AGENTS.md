@@ -53,6 +53,12 @@ The streaming pipeline requires specific GPU setup:
    - Ensures display server (Xorg/Xvfb) is running
    - Fails deployment if WebGPU cannot be initialized
 
+5. **Production Client Build**:
+   - When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
+   - Serves pre-built client via `vite preview` instead of dev server
+   - Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
+   - Significantly faster page loads for streaming
+
 See `scripts/deploy-vast.sh` for complete setup logic.
 
 ## Project Overview
@@ -80,7 +86,7 @@ Hyperscape is a RuneScape-style MMORPG built on Three.js WebGPURenderer with TSL
 
 ```bash
 bun install          # Install dependencies
-nbun run build        # Build all packages
+bun run build        # Build all packages
 bun run dev          # Development mode
 npm test             # Run tests
 ```
