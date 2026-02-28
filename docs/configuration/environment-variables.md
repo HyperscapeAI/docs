@@ -1,243 +1,490 @@
 # Environment Variables Reference
 
-Complete reference for all environment variables used in Hyperscape.
+Complete reference for all Hyperscape environment variables.
 
-## Quick Links
+## Overview
 
-- [Core Configuration](#core-configuration)
-- [Streaming & GPU](#streaming--gpu)
-- [Database](#database)
-- [Authentication](#authentication)
-- [AI Agents](#ai-agents)
-- [Deployment](#deployment)
+Hyperscape uses environment variables for configuration across packages. Variables are organized by category and package.
+
+**Configuration Files:**
+- `.env.example` - Root-level streaming and deployment
+- `packages/server/.env.example` - Server configuration
+- `packages/client/.env.example` - Client configuration
+- `packages/plugin-hyperscape/.env.example` - AI agent configuration
+- `packages/asset-forge/.env.example` - Asset generation tools
 
 ## Core Configuration
 
+### Authentication
+
+#### PRIVY_APP_ID
+**Package:** Server  
+**Required:** Yes (production)  
+**Description:** Privy application ID for authentication  
+**Example:** `clxxx...`
+
+#### PRIVY_APP_SECRET
+**Package:** Server  
+**Required:** Yes (production)  
+**Description:** Privy application secret  
+**Example:** `secret_xxx...`
+
+#### PUBLIC_PRIVY_APP_ID
+**Package:** Client  
+**Required:** Yes (production)  
+**Description:** Privy app ID (must match server)  
+**Example:** `clxxx...`
+
+#### JWT_SECRET
+**Package:** Server  
+**Required:** Yes (production)  
+**Description:** Secret for signing JWT tokens  
+**Example:** Generate with `openssl rand -base64 32`
+
+### Database
+
+#### DATABASE_URL
+**Package:** Server  
+**Required:** Yes (production)  
+**Description:** PostgreSQL connection string  
+**Example:** `postgresql://user:pass@host:5432/hyperscape`  
+**Default:** `postgresql://hyperscape:hyperscape_dev_password@localhost:5488/hyperscape`
+
 ### Server
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NODE_ENV` | `development` | Environment: `development`, `production`, `test` |
-| `PORT` | `5555` | HTTP server port |
-| `WORLD` | `world` | World folder to load |
-| `SAVE_INTERVAL` | `60` | Auto-save interval (seconds) |
+#### PORT
+**Package:** Server  
+**Required:** No  
+**Description:** Server HTTP/WebSocket port  
+**Default:** `5555`
 
-### Client
+#### PUBLIC_API_URL
+**Package:** Client  
+**Required:** No  
+**Description:** Server API URL  
+**Default:** `http://localhost:5555`
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VITE_PORT` | `3333` | Vite dev server port |
-| `PUBLIC_API_URL` | `http://localhost:5555` | Game server API URL |
-| `PUBLIC_WS_URL` | `ws://localhost:5555/ws` | WebSocket URL |
-| `PUBLIC_CDN_URL` | `http://localhost:8080` | Asset CDN URL |
+#### PUBLIC_WS_URL
+**Package:** Client  
+**Required:** No  
+**Description:** Server WebSocket URL  
+**Default:** `ws://localhost:5555/ws`
 
-## Streaming & GPU
+## GPU Rendering (Vast.ai)
 
-### Capture Configuration
+### Display Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `STREAM_CAPTURE_MODE` | `cdp` | Capture mode: `cdp`, `mediarecorder`, `webcodecs` |
-| `STREAM_CAPTURE_WIDTH` | `1280` | Stream width (must be even) |
-| `STREAM_CAPTURE_HEIGHT` | `720` | Stream height (must be even) |
-| `STREAM_FPS` | `30` | Target frames per second |
-| `STREAM_CDP_QUALITY` | `80` | JPEG quality for CDP (1-100) |
+#### DISPLAY
+**Package:** Server (streaming)  
+**Required:** Yes (streaming)  
+**Description:** X display server  
+**Example:** `:99` (Xorg/Xvfb), `:0` (local)  
+**Auto-configured:** Yes (by deploy script)
 
-### GPU Configuration
+#### GPU_RENDERING_MODE
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** GPU rendering mode  
+**Values:** `xorg`, `xvfb-vulkan`  
+**Auto-configured:** Yes (by deploy script)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DISPLAY` | `:99` | X display server |
-| `DUEL_CAPTURE_USE_XVFB` | `false` | Use Xvfb virtual display |
-| `VK_ICD_FILENAMES` | `/usr/share/vulkan/icd.d/nvidia_icd.json` | Vulkan ICD path |
-| `STREAM_CAPTURE_ANGLE` | `vulkan` | ANGLE backend (`vulkan`, `metal`) |
-| `STREAM_CAPTURE_CHANNEL` | `chrome-dev` | Browser channel |
-| `STREAM_CAPTURE_EXECUTABLE` | - | Custom browser path |
-| `STREAM_CAPTURE_HEADLESS` | `false` | Headless mode (NOT supported for WebGPU) |
-| `STREAM_CAPTURE_USE_EGL` | `false` | Use EGL (NOT supported for WebGPU) |
-| `GPU_RENDERING_MODE` | `xorg` | Rendering mode: `xorg`, `xvfb-vulkan` |
+#### DUEL_CAPTURE_USE_XVFB
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Use Xvfb virtual display  
+**Values:** `true`, `false`  
+**Default:** `false`  
+**Auto-configured:** Yes (by deploy script)
 
-### Audio Configuration
+#### VK_ICD_FILENAMES
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Force specific Vulkan ICD  
+**Example:** `/usr/share/vulkan/icd.d/nvidia_icd.json`  
+**Auto-configured:** Yes (by deploy script)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `STREAM_AUDIO_ENABLED` | `true` | Enable audio capture |
-| `PULSE_AUDIO_DEVICE` | `chrome_audio.monitor` | PulseAudio monitor device |
-| `PULSE_SERVER` | `unix:/tmp/pulse-runtime/pulse/native` | PulseAudio socket |
-| `XDG_RUNTIME_DIR` | `/tmp/pulse-runtime` | PulseAudio runtime dir |
+### Video Capture
 
-### Encoding Settings
+#### STREAM_CAPTURE_MODE
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Capture mode  
+**Values:** `cdp` (recommended), `mediarecorder`, `webcodecs`  
+**Default:** `cdp`
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `STREAM_GOP_SIZE` | `60` | GOP size (keyframe interval) |
-| `STREAM_LOW_LATENCY` | `false` | Low latency mode (zerolatency tune) |
-| `FFMPEG_PATH` | `/usr/bin/ffmpeg` | FFmpeg executable path |
+#### STREAM_CAPTURE_HEADLESS
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Headless mode (WebGPU requires display)  
+**Values:** `false`, `true`, `new`  
+**Default:** `false`  
+**Note:** Always `false` for WebGPU support
 
-### Recovery Settings
+#### STREAM_CAPTURE_CHANNEL
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Browser channel  
+**Values:** `chrome`, `chrome-dev`, `msedge`, etc.  
+**Default:** `chrome-dev` (for WebGPU)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `STREAM_CAPTURE_RECOVERY_TIMEOUT_MS` | `30000` | Recovery timeout (ms) |
-| `STREAM_CAPTURE_RECOVERY_MAX_FAILURES` | `6` | Max failures before fallback |
+#### STREAM_CAPTURE_EXECUTABLE
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Custom browser executable path  
+**Example:** `/usr/bin/google-chrome-unstable`
 
-### Stream Destinations
+#### STREAM_CAPTURE_ANGLE
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** ANGLE backend for WebGPU  
+**Values:** `vulkan`, `metal`, `d3d11`  
+**Default:** `vulkan` (Linux), `metal` (macOS)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `TWITCH_STREAM_KEY` | - | Twitch stream key |
-| `TWITCH_RTMP_URL` | `rtmp://live.twitch.tv/app` | Twitch ingest URL |
-| `KICK_STREAM_KEY` | - | Kick stream key |
-| `KICK_RTMP_URL` | `rtmps://fa723fc1b171.global-contribute.live-video.net/app` | Kick ingest URL |
-| `X_STREAM_KEY` | - | X/Twitter stream key |
-| `X_RTMP_URL` | `rtmp://sg.pscp.tv:80/x` | X/Twitter ingest URL |
-| `YOUTUBE_STREAM_KEY` | - | YouTube stream key (disabled by default) |
-| `YOUTUBE_RTMP_URL` | `rtmp://a.rtmp.youtube.com/live2` | YouTube ingest URL |
+#### STREAM_CDP_QUALITY
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** JPEG quality for CDP screencast  
+**Range:** 1-100  
+**Default:** `80`
 
-## Database
+#### STREAM_FPS
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Target frame rate  
+**Default:** `30`
 
-### PostgreSQL
+#### STREAM_CAPTURE_WIDTH
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Stream width (must be even)  
+**Default:** `1280`
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | - | PostgreSQL connection string |
-| `USE_LOCAL_POSTGRES` | `true` | Use Docker PostgreSQL (dev only) |
-| `POSTGRES_CONTAINER` | `hyperscape-postgres` | Docker container name |
-| `POSTGRES_USER` | `hyperscape` | PostgreSQL username |
-| `POSTGRES_PASSWORD` | `hyperscape_dev_password` | PostgreSQL password |
-| `POSTGRES_DB` | `hyperscape` | Database name |
-| `POSTGRES_PORT` | `5488` | PostgreSQL port |
+#### STREAM_CAPTURE_HEIGHT
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Stream height (must be even)  
+**Default:** `720`
 
-## Authentication
+### Audio Capture
 
-### Privy
+#### STREAM_AUDIO_ENABLED
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Enable audio capture via PulseAudio  
+**Values:** `true`, `false`  
+**Default:** `true`
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PUBLIC_PRIVY_APP_ID` | - | Privy app ID (public) |
-| `PRIVY_APP_SECRET` | - | Privy app secret (private) |
-| `JWT_SECRET` | - | JWT signing secret |
+#### PULSE_AUDIO_DEVICE
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** PulseAudio monitor device  
+**Default:** `chrome_audio.monitor`
 
-### Admin
+#### PULSE_SERVER
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** PulseAudio server socket  
+**Default:** `unix:/tmp/pulse-runtime/pulse/native`  
+**Auto-configured:** Yes (by deploy script)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ADMIN_CODE` | - | Admin access code |
-| `GRANT_DEV_ADMIN` | `false` | Grant admin to all users (dev only) |
+#### XDG_RUNTIME_DIR
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** PulseAudio runtime directory  
+**Default:** `/tmp/pulse-runtime`  
+**Auto-configured:** Yes (by deploy script)
+
+### Encoding
+
+#### STREAM_BITRATE
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Video bitrate in bits per second  
+**Default:** `4500000` (4.5 Mbps)
+
+#### STREAM_BUFFER_SIZE
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** FFmpeg buffer size  
+**Default:** `18000000` (4x bitrate)
+
+#### STREAM_PRESET
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** x264 encoding preset  
+**Values:** `ultrafast`, `veryfast`, `faster`, `fast`, `medium`, `slow`, `slower`, `veryslow`  
+**Default:** `medium`
+
+#### STREAM_LOW_LATENCY
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Enable zerolatency tune (disables B-frames)  
+**Values:** `true`, `false`  
+**Default:** `false`
+
+#### STREAM_GOP_SIZE
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Keyframe interval in frames  
+**Default:** `60` (2 seconds at 30fps)  
+**Note:** Lower = faster playback start, higher bitrate
+
+### Recovery
+
+#### STREAM_CAPTURE_RECOVERY_TIMEOUT_MS
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Recovery timeout in milliseconds  
+**Default:** `30000` (30 seconds)
+
+#### STREAM_CAPTURE_RECOVERY_MAX_FAILURES
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Max failures before fallback  
+**Default:** `6`
+
+## RTMP Streaming
+
+### Twitch
+
+#### TWITCH_STREAM_KEY
+**Package:** Server (streaming)  
+**Required:** Yes (for Twitch)  
+**Description:** Twitch stream key  
+**Example:** `live_xxxxx_yyyyy`  
+**Get from:** [dashboard.twitch.tv/settings/stream](https://dashboard.twitch.tv/settings/stream)
+
+#### TWITCH_RTMP_URL
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** Twitch ingest URL  
+**Default:** `rtmps://live.twitch.tv/app`
+
+### Kick
+
+#### KICK_STREAM_KEY
+**Package:** Server (streaming)  
+**Required:** Yes (for Kick)  
+**Description:** Kick stream key  
+**Get from:** [kick.com/dashboard/settings/stream](https://kick.com/dashboard/settings/stream)
+
+#### KICK_RTMP_URL
+**Package:** Server (streaming)  
+**Required:** Yes (for Kick)  
+**Description:** Kick ingest URL  
+**Example:** `rtmps://fa723fc1b171.global-contribute.live-video.net/app`
+
+### X/Twitter
+
+#### X_STREAM_KEY
+**Package:** Server (streaming)  
+**Required:** Yes (for X)  
+**Description:** X/Twitter stream key  
+**Get from:** [studio.twitter.com](https://studio.twitter.com)
+
+#### X_RTMP_URL
+**Package:** Server (streaming)  
+**Required:** Yes (for X)  
+**Description:** X/Twitter ingest URL  
+**Example:** `rtmp://sg.pscp.tv:80/x`
+
+### YouTube
+
+#### YOUTUBE_STREAM_KEY
+**Package:** Server (streaming)  
+**Required:** No  
+**Description:** YouTube stream key (disabled by default)  
+**Default:** `""` (empty = disabled)
+
+## Solana
+
+### Deployment Keys
+
+#### SOLANA_DEPLOYER_PRIVATE_KEY
+**Package:** Server  
+**Required:** Yes (on-chain features)  
+**Description:** Base58-encoded Solana private key (used for all roles)  
+**Example:** `5J...` (base58)
+
+#### SOLANA_ARENA_AUTHORITY_SECRET
+**Package:** Server  
+**Required:** No  
+**Description:** Arena authority keypair (fee payer)  
+**Default:** Falls back to `SOLANA_DEPLOYER_PRIVATE_KEY`
+
+#### SOLANA_ARENA_REPORTER_SECRET
+**Package:** Server  
+**Required:** No  
+**Description:** Arena reporter keypair  
+**Default:** Falls back to `SOLANA_DEPLOYER_PRIVATE_KEY`
+
+#### SOLANA_ARENA_KEEPER_SECRET
+**Package:** Server  
+**Required:** No  
+**Description:** Arena keeper keypair  
+**Default:** Falls back to `SOLANA_DEPLOYER_PRIVATE_KEY`
+
+#### SOLANA_MM_PRIVATE_KEY
+**Package:** Server  
+**Required:** No  
+**Description:** Market maker keypair  
+**Default:** None
+
+### Network
+
+#### SOLANA_RPC_URL
+**Package:** Server  
+**Required:** No  
+**Description:** Solana RPC endpoint  
+**Default:** `https://api.devnet.solana.com`
+
+#### SOLANA_WS_URL
+**Package:** Server  
+**Required:** No  
+**Description:** Solana WebSocket endpoint  
+**Default:** `wss://api.devnet.solana.com/`
 
 ## AI Agents
 
-### ElizaOS
+### Connection
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ELIZAOS_API_URL` | `http://localhost:4001` | ElizaOS API URL |
-| `AUTO_START_AGENTS` | `true` | Auto-start agents from database |
-| `AUTO_START_AGENTS_MAX` | `10` | Max agents to auto-start |
-| `SPAWN_MODEL_AGENTS` | `true` | Spawn LLM-powered agents |
+#### HYPERSCAPE_SERVER_URL
+**Package:** plugin-hyperscape  
+**Required:** No  
+**Description:** WebSocket URL to game server  
+**Default:** `ws://localhost:5555/ws`
 
-### AI Providers
+#### HYPERSCAPE_API_URL
+**Package:** plugin-hyperscape  
+**Required:** No  
+**Description:** HTTP API URL  
+**Default:** `http://localhost:5555`
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OPENAI_API_KEY` | - | OpenAI API key |
-| `ANTHROPIC_API_KEY` | - | Anthropic API key |
-| `OPENROUTER_API_KEY` | - | OpenRouter API key |
+#### HYPERSCAPE_AUTO_RECONNECT
+**Package:** plugin-hyperscape  
+**Required:** No  
+**Description:** Auto-reconnect on disconnect  
+**Values:** `true`, `false`  
+**Default:** `true`
 
-## Deployment
+### Authentication
 
-### Vast.ai
+#### HYPERSCAPE_AUTH_TOKEN
+**Package:** plugin-hyperscape  
+**Required:** Yes (agents)  
+**Description:** Agent authentication token  
+**Note:** Auto-generated via wallet auth if not set
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VAST_HOST` | - | Vast.ai SSH host |
-| `VAST_PORT` | - | Vast.ai SSH port |
-| `VAST_SSH_KEY` | - | Vast.ai SSH private key |
+#### HYPERSCAPE_PRIVY_USER_ID
+**Package:** plugin-hyperscape  
+**Required:** No  
+**Description:** Privy user ID for agent  
 
-### Solana
+#### HYPERSCAPE_CHARACTER_ID
+**Package:** plugin-hyperscape  
+**Required:** Yes (agents)  
+**Description:** Character ID for agent to control  
+**Note:** Auto-generated via wallet auth if not set
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SOLANA_DEPLOYER_PRIVATE_KEY` | - | Base58 private key (sets all roles) |
-| `SOLANA_ARENA_AUTHORITY_SECRET` | - | Arena authority key |
-| `SOLANA_ARENA_REPORTER_SECRET` | - | Arena reporter key |
-| `SOLANA_ARENA_KEEPER_SECRET` | - | Arena keeper key |
-| `SOLANA_MM_PRIVATE_KEY` | - | Market maker key |
-| `SOLANA_RPC_URL` | `https://api.mainnet-beta.solana.com` | Solana RPC endpoint |
-| `SOLANA_WS_URL` | `wss://api.mainnet-beta.solana.com` | Solana WebSocket endpoint |
+### Behavior
 
-### Arena Betting
+#### HYPERSCAPE_AUTO_ACCEPT_DUELS
+**Package:** plugin-hyperscape  
+**Required:** No  
+**Description:** Auto-accept duel challenges (duel bot mode)  
+**Values:** `true`, `false`  
+**Default:** `false`
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ARENA_EXTERNAL_BET_WRITE_KEY` | - | External bet API key |
-| `SOLANA_MARKET_FEE_BPS` | `100` | Platform fee (basis points) |
+#### HYPERSCAPE_SILENT_CHAT
+**Package:** plugin-hyperscape  
+**Required:** No  
+**Description:** Disable chat message processing  
+**Values:** `true`, `false`  
+**Default:** `false`
+
+#### HYPERSCAPE_TICK_INTERVAL
+**Package:** plugin-hyperscape  
+**Required:** No  
+**Description:** Normal tick interval in milliseconds  
+**Default:** `10000` (10 seconds)
+
+#### HYPERSCAPE_FAST_TICK_ENABLED
+**Package:** plugin-hyperscape  
+**Required:** No  
+**Description:** Enable fast-tick mode  
+**Values:** `true`, `false`  
+**Default:** `true`
+
+## Asset Generation
+
+### AI APIs
+
+#### OPENAI_API_KEY
+**Package:** asset-forge  
+**Required:** Yes (asset generation)  
+**Description:** OpenAI API key for GPT-4  
+**Get from:** [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+
+#### MESHY_API_KEY
+**Package:** asset-forge  
+**Required:** Yes (3D generation)  
+**Description:** Meshy AI API key  
+**Get from:** [meshy.ai](https://meshy.ai)
 
 ## Deprecated Variables
 
-### Removed (February 2026)
+### Removed (v0.2.0)
 
-| Variable | Status | Reason |
-|----------|--------|--------|
-| `STREAM_CAPTURE_DISABLE_WEBGPU` | Ignored | WebGPU always enabled |
-| `DUEL_FORCE_WEBGL_FALLBACK` | Ignored | WebGL not supported |
+These variables have been removed and are no longer used:
+
+- `DUEL_FORCE_WEBGL_FALLBACK` - WebGL not supported
+- `isWebGLForced` - WebGL forcing removed
+- `isWebGLFallbackAllowed` - No fallback path
+
+### Ignored (Still Present)
+
+These variables are kept for backwards compatibility but ignored:
+
+#### STREAM_CAPTURE_DISABLE_WEBGPU
+**Status:** Ignored  
+**Reason:** WebGPU is required  
+**Default:** `false` (always)
+
+#### STREAM_CAPTURE_USE_EGL
+**Status:** Ignored  
+**Reason:** WebGPU requires display server  
+**Default:** `false` (always)
 
 ## Variable Precedence
 
-Environment variables are loaded in this order (highest priority first):
+Variables are loaded in this order (later overrides earlier):
 
-1. **System environment** (highest)
-2. **Package `.env` file** (`packages/server/.env`)
-3. **Parent `.env` file** (`packages/.env`)
-4. **Root `.env` file** (`./.env`)
-5. **Defaults in code** (lowest)
+1. Package `.env.example` defaults
+2. Package `.env` file
+3. Root `.env` file
+4. Environment variables
+5. GitHub Secrets (CI/CD only)
 
-## Security Best Practices
+## Security
 
-### 1. Never Commit Secrets
+### Secrets Management
 
-❌ **Bad**:
-```bash
-# .env (committed to git)
-TWITCH_STREAM_KEY=live_123456789_abcdefghij
-```
+**Never commit secrets to git.** Use:
 
-✅ **Good**:
-```bash
-# .env.example (committed to git)
-TWITCH_STREAM_KEY=
+1. **Local development:** `.env` files (gitignored)
+2. **Production:** GitHub Secrets
+3. **CI/CD:** Injected via workflow
 
-# .env (in .gitignore)
-TWITCH_STREAM_KEY=live_123456789_abcdefghij
-```
+### Required Secrets
 
-### 2. Use GitHub Secrets for CI/CD
-
-```yaml
-# .github/workflows/deploy-vast.yml
-env:
-  TWITCH_STREAM_KEY: ${{ secrets.TWITCH_STREAM_KEY }}
-  DATABASE_URL: ${{ secrets.DATABASE_URL }}
-```
-
-### 3. Rotate Secrets Regularly
-
-- Stream keys: Rotate monthly
-- Database passwords: Rotate quarterly
-- JWT secrets: Rotate on suspected compromise
-- API keys: Rotate when team members leave
-
-### 4. Validate Required Variables
-
-```typescript
-// In startup/config.ts
-const requiredVars = ['DATABASE_URL', 'JWT_SECRET', 'PRIVY_APP_SECRET'];
-for (const varName of requiredVars) {
-  if (!process.env[varName]) {
-    throw new Error(`Missing required environment variable: ${varName}`);
-  }
-}
-```
+**Production deployment requires:**
+- `DATABASE_URL` - PostgreSQL connection
+- `JWT_SECRET` - JWT signing
+- `PRIVY_APP_SECRET` - Privy authentication
+- `TWITCH_STREAM_KEY` - Twitch streaming (if enabled)
+- `KICK_STREAM_KEY` + `KICK_RTMP_URL` - Kick streaming (if enabled)
+- `X_STREAM_KEY` + `X_RTMP_URL` - X streaming (if enabled)
+- `SOLANA_DEPLOYER_PRIVATE_KEY` - Solana on-chain (if enabled)
 
 ## Examples
 
@@ -245,63 +492,118 @@ for (const varName of requiredVars) {
 
 ```bash
 # packages/server/.env
-NODE_ENV=development
-PORT=5555
-USE_LOCAL_POSTGRES=true
-PUBLIC_PRIVY_APP_ID=your-privy-app-id
-PRIVY_APP_SECRET=your-privy-secret
+PUBLIC_PRIVY_APP_ID=clxxx...
+PRIVY_APP_SECRET=secret_xxx...
+DATABASE_URL=postgresql://hyperscape:password@localhost:5488/hyperscape
+```
+
+```bash
+# packages/client/.env
+PUBLIC_PRIVY_APP_ID=clxxx...
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5555/ws
 ```
 
 ### Production (Railway)
 
 ```bash
 # Set via Railway dashboard
-NODE_ENV=production
 DATABASE_URL=postgresql://user:pass@host:5432/db
-JWT_SECRET=your-jwt-secret
+JWT_SECRET=xxx...
+PUBLIC_PRIVY_APP_ID=clxxx...
+PRIVY_APP_SECRET=secret_xxx...
 PUBLIC_CDN_URL=https://assets.hyperscape.club
-PUBLIC_PRIVY_APP_ID=your-privy-app-id
-PRIVY_APP_SECRET=your-privy-secret
 ```
 
-### Vast.ai Streaming
+### Streaming (Vast.ai)
 
 ```bash
 # Set via GitHub Secrets
-DATABASE_URL=postgresql://user:pass@host:5432/db
-TWITCH_STREAM_KEY=live_123456789_abcdefghij
-KICK_STREAM_KEY=your-kick-key
-KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
-X_STREAM_KEY=your-x-key
-X_RTMP_URL=rtmp://sg.pscp.tv:80/x
-SOLANA_DEPLOYER_PRIVATE_KEY=base58-encoded-key
+DATABASE_URL=postgresql://...
+TWITCH_STREAM_KEY=live_xxx...
+KICK_STREAM_KEY=xxx...
+KICK_RTMP_URL=rtmps://...
+X_STREAM_KEY=xxx...
+X_RTMP_URL=rtmp://...
+SOLANA_DEPLOYER_PRIVATE_KEY=base58...
+
+# Auto-configured by deploy script
+DISPLAY=:99
+GPU_RENDERING_MODE=xorg
+DUEL_CAPTURE_USE_XVFB=false
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+```
+
+### AI Agents
+
+```bash
+# packages/plugin-hyperscape/.env
+HYPERSCAPE_SERVER_URL=ws://localhost:5555/ws
+HYPERSCAPE_API_URL=http://localhost:5555
+HYPERSCAPE_CHARACTER_ID=char_xxx...
+HYPERSCAPE_AUTH_TOKEN=token_xxx...
 ```
 
 ## Validation
 
-### Check Configuration
+### Required Variables Check
 
 ```bash
-# Run configuration check script
-bun run packages/server/scripts/check-config.mjs
+# Check if required variables are set
+if [ -z "$DATABASE_URL" ]; then
+  echo "ERROR: DATABASE_URL not set"
+  exit 1
+fi
+
+if [ -z "$JWT_SECRET" ]; then
+  echo "ERROR: JWT_SECRET not set"
+  exit 1
+fi
 ```
 
-**Checks**:
-- Required variables are set
-- Database connection works
-- CDN is accessible
-- Stream keys are valid format
-
-### Test Streaming Configuration
+### Streaming Variables Check
 
 ```bash
-# Test RTMP bridge locally
-bun run packages/server/scripts/test-rtmp-local.ts
+# Check if streaming is configured
+if [ -n "$TWITCH_STREAM_KEY" ] || [ -n "$KICK_STREAM_KEY" ] || [ -n "$X_STREAM_KEY" ]; then
+  echo "Streaming enabled"
+else
+  echo "WARNING: No stream keys configured"
+fi
 ```
+
+## Troubleshooting
+
+### Variable Not Loading
+
+1. **Check file location** - `.env` must be in package root
+2. **Check syntax** - No spaces around `=`
+3. **Check quotes** - Use quotes for values with spaces
+4. **Restart server** - Changes require restart
+
+### Secrets Not Injected (CI/CD)
+
+1. **Check GitHub Secrets** - Verify secrets are set in repository settings
+2. **Check workflow** - Verify secrets are passed to deployment script
+3. **Check deploy script** - Verify secrets are written to `.env` file
+
+### Display Server Not Found
+
+```bash
+# Check DISPLAY variable
+echo $DISPLAY
+
+# Check if display server is running
+xdpyinfo -display $DISPLAY
+```
+
+If not running, deploy script should have started it. Check deploy logs.
 
 ## References
 
-- **Server .env.example**: `packages/server/.env.example`
-- **Client .env.example**: `packages/client/.env.example`
-- **Root .env.example**: `.env.example`
-- **Config Validation**: `packages/server/src/startup/config.ts`
+- [.env.example](../../.env.example) - Root-level variables
+- [packages/server/.env.example](../../packages/server/.env.example) - Server variables
+- [packages/client/.env.example](../../packages/client/.env.example) - Client variables
+- [scripts/deploy-vast.sh](../../scripts/deploy-vast.sh) - Auto-configuration logic
+- [ecosystem.config.cjs](../../ecosystem.config.cjs) - PM2 environment
