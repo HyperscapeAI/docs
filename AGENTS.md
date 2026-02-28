@@ -145,6 +145,29 @@ packages/
 └── asset-forge/     # AI asset generation + VFX catalog
 ```
 
+## Stability Improvements
+
+### Combat System
+- **Combat Retry Timer**: Aligned with tick system (3000ms = 5 ticks) for consistent timing
+- **Phase Timeout**: Reduced grace periods from 30s to 10s for faster failure detection
+- **Combat Stall Nudge**: Tracks last nudge timestamp instead of cycle ID to allow re-nudging when combat stalls again
+- **Damage Event Cache**: Cleanup every tick (was every 2 ticks), cap lowered from 5000 to 1000, evict 75% when exceeded
+
+### Agent System
+- **LLM Rate Limiting**: Exponential backoff for API calls (5s base, max 60s)
+- **Consecutive Failure Tracking**: Resets on successful tick
+- **Memory Leak Fixes**: Proper cleanup of COMBAT_DAMAGE_DEALT listeners in AgentManager and event handlers in AutonomousBehaviorManager
+
+### Resource Management
+- **Activity Logger Queue**: Max size 1000 with 25% eviction to prevent memory pressure
+- **Session Timeout**: 30-minute max via MAX_SESSION_TICKS for zombie session cleanup
+- **SessionCloseReason**: Added "timeout" to type for proper session termination tracking
+
+### Test Stability
+- **GoldClob Fuzz Tests**: 120s timeout for randomized invariant tests (4 seeds × 140 operations)
+- **Precision Fixes**: Use larger amounts (10000n) to avoid gas cost precision issues
+- **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
+
 ## Performance Optimizations
 
 ### Instanced Rendering
