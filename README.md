@@ -11,9 +11,6 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - **Manifest-Driven Design**: Add NPCs, items, and content by editing JSON files—no code changes required
 - **Spectator Mode**: Watch agents play in real-time and observe their decision-making process
 - **Open Source**: Built on open technology with extensible architecture
-- **WebGPU-Only Rendering**: Modern GPU-accelerated graphics with TSL shaders (Chrome 113+, Edge 113+, Safari 18+) - WebGL fallbacks removed
-- **Instanced Rendering**: Thousands of resources rendered with minimal draw calls using GPU instancing, with depleted model support (tree → stump transitions)
-- **Live Streaming**: Multi-platform streaming to Twitch, Kick, and X/Twitter with GPU-accelerated encoding, WebGPU diagnostics, and automatic recovery
 
 ## Core Features
 
@@ -22,11 +19,23 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **Combat** | Tick-based OSRS mechanics (600ms ticks), attack styles, accuracy formulas, death/respawn system |
 | **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking + combat skills with XP/leveling |
 | **Economy** | 480-slot bank, shops, item weights, loot drops |
-| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, action locks, fast-tick mode |
+| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
-| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
-| **Rendering** | WebGPU-only with TSL shaders, instanced rendering, LOD system, dissolve materials, model cache integrity |
-| **Streaming** | Multi-platform RTMP streaming, CDP/WebCodecs/MediaRecorder capture, PulseAudio, GPU-accelerated encoding, probe timeouts |
+| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics, WebGPU rendering |
+
+## Browser Requirements
+
+**Hyperscape requires WebGPU** - WebGL is not supported.
+
+All materials and post-processing effects use TSL (Three.js Shading Language), which only works with WebGPU. There is no WebGL fallback.
+
+**Supported Browsers:**
+- Chrome 113+ (recommended)
+- Edge 113+
+- Safari 18+ (macOS 15+)
+- Check WebGPU availability: [webgpureport.org](https://webgpureport.org)
+
+**Note**: Safari 17 is no longer supported. Safari 18+ on macOS 15+ is required.
 
 ## Quick Start
 
@@ -35,7 +44,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - [Git LFS](https://git-lfs.com) - `brew install git-lfs` (macOS) or `apt install git-lfs` (Linux)
 - Docker - [Docker Desktop](https://docker.com/products/docker-desktop) for macOS/Windows, or `apt install docker.io` on Linux
 - [Privy](https://privy.io) account (required for authentication)
-- **WebGPU-capable browser** - Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
+- **WebGPU-compatible browser** (see Browser Requirements above)
 
 ```bash
 git clone https://github.com/HyperscapeAI/hyperscape.git
@@ -111,6 +120,7 @@ packages/
 ├── client/              # Web client (Vite, React)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
+├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation tools
 └── docs-site/           # Documentation (Docusaurus)
 ```
@@ -185,11 +195,10 @@ bun run assets:sync    # Pull latest assets from repo (local dev only)
 Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.privy.io).
 
 **Optional configuration** - see `.env.example` files for all options:
-- `packages/server/.env.example` - Database, ports, LiveKit voice chat, GPU streaming
+- `packages/server/.env.example` - Database, ports, LiveKit voice chat, streaming
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
-- `.env.example` - Root-level streaming and deployment variables
 
 ### Default Ports
 
@@ -203,9 +212,7 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
 
-## Deployment
-
-### Railway (Web Hosting)
+## Deployment (Railway)
 
 Railway deployment is set up for separate development and production targets:
 
@@ -216,39 +223,21 @@ For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps f
 
 - `docs/railway-dev-prod.md`
 
-### Vast.ai (GPU Streaming)
+### Vast.ai GPU Streaming
 
-Hyperscape streams live gameplay to Twitch, Kick, and X/Twitter using GPU-accelerated rendering with WebGPU.
+For GPU-accelerated streaming on Vast.ai:
 
-**Requirements:**
-- NVIDIA GPU with Vulkan support (WebGPU required)
-- Xorg or Xvfb display server (headless mode NOT supported)
-- PulseAudio for audio capture
-- FFmpeg for H.264 encoding
-- Chrome Dev channel with WebGPU enabled
+- **NVIDIA GPU with Vulkan support is REQUIRED**
+- WebGPU must be available (no WebGL fallback)
+- Deployment script (`scripts/deploy-vast.sh`) automatically configures GPU rendering
+- Supports Xorg, Xvfb, or headless EGL modes
+- See `packages/server/.env.example` for streaming configuration options
 
-**Architecture:**
-- CDP (Chrome DevTools Protocol) screencast capture
-- Direct JPEG frame piping to FFmpeg
-- Hardware-accelerated H.264 encoding
-- RTMP tee muxer for multi-platform streaming
-- WebGPU diagnostics and preflight testing
-- Automatic recovery with viewport restoration
-
-**Deployment:**
-```bash
-# Triggered automatically via GitHub Actions on push to main
-# See .github/workflows/deploy-vast.yml
-```
-
-**Manual deployment:**
-```bash
-ssh root@<vast-instance-ip>
-cd /root/hyperscape
-./scripts/deploy-vast.sh
-```
-
-**See:** `scripts/deploy-vast.sh` for complete deployment logic and troubleshooting.
+**Key Environment Variables:**
+- `STREAM_CAPTURE_EXECUTABLE` - Path to Chrome executable
+- `STREAM_GOP_SIZE` - GOP size for encoding (default: 60)
+- `STREAM_LOW_LATENCY` - Enable low-latency encoding
+- `DUEL_USE_PRODUCTION_CLIENT` - Use pre-built client for faster loads
 
 ## Native App Distribution
 
@@ -267,6 +256,13 @@ git push origin v1.0.0
 That tag triggers cross-platform native packaging and publishes installers to a GitHub Release.
 
 ## Troubleshooting
+
+**Black screen / game not loading:**
+WebGPU is required. Check:
+1. Visit [webgpureport.org](https://webgpureport.org) to verify WebGPU is available
+2. Use Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
+3. Check browser console for WebGPU errors
+4. Try Chrome Canary/Dev channel for latest WebGPU fixes
 
 **Characters vanishing / not appearing on character select:**
 This happens when Privy credentials are missing. Each page refresh creates a new anonymous user, orphaning your characters. Fix: Set `PUBLIC_PRIVY_APP_ID` in client `.env` and both `PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` in server `.env`.
@@ -312,67 +308,15 @@ bun install
 bun run build
 ```
 
-**WebGPU not available:**
-Hyperscape requires WebGPU - WebGL will NOT work (all WebGL fallback code removed in recent updates). Check browser compatibility:
-- Chrome 113+ (recommended)
-- Edge 113+
-- Safari 18+ (macOS 15+) - Safari 17 support removed
-- Check: [webgpureport.org](https://webgpureport.org)
-
-If WebGPU is available but not working:
-1. Enable hardware acceleration in browser settings
-2. Update GPU drivers
-3. Check for browser extensions that might block WebGPU
-4. Note: `--disable-webgpu` and `forceWebGL` flags are now ignored
-
-**Streaming issues (Vast.ai):**
-If GPU streaming fails or produces black frames:
-```bash
-# Check GPU access
-nvidia-smi
-vulkaninfo --summary
-
-# Verify display server
-echo $DISPLAY
-xdpyinfo -display $DISPLAY
-
-# Check PulseAudio
-pulseaudio --check
-pactl list short sinks
-
-# Check WebGPU diagnostics
-bunx pm2 logs hyperscape-duel --lines 500 | grep -A 20 "GPU Diagnostics"
-
-# Review logs
-bunx pm2 logs hyperscape-duel --lines 200
-```
-
-Common issues:
-- **Black frames**: WebGPU failed to initialize - check preflight test logs
-- **Browser hangs**: WebGPU initialization timeout - capture proceeds after 5 consecutive probe timeouts
-- **Timeout on page load**: Use production client build (`DUEL_USE_PRODUCTION_CLIENT=true`)
-- **Resolution mismatch**: Auto-recovery enabled, check viewport restoration logs
-
-See `scripts/deploy-vast.sh` for deployment troubleshooting.
-
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
 
-## Documentation
-
-### Core Documentation
-- **[CLAUDE.md](CLAUDE.md)** - Development guide and architecture
-- **[AGENTS.md](AGENTS.md)** - AI coding assistant instructions
-
-### Deployment Guides
-- **[docs/railway-dev-prod.md](docs/railway-dev-prod.md)** - Railway deployment setup
-- **[docs/duel-stack.md](docs/duel-stack.md)** - GPU streaming architecture (Vast.ai)
-- **[docs/native-release.md](docs/native-release.md)** - Native app distribution
-
 ## More Info
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
+
+See [AGENTS.md](AGENTS.md) for AI coding assistant instructions and WebGPU deployment architecture.
 
 ## License
 
