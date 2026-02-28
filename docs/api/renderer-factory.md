@@ -1,63 +1,59 @@
 # RendererFactory API Reference
 
-Factory for creating WebGPU renderers in Hyperscape.
+WebGPU renderer creation and configuration for Hyperscape.
 
 ## Overview
 
-`RendererFactory` provides utilities for creating and configuring WebGPU renderers. **WebGPU is REQUIRED** - there is no WebGL fallback.
+The `RendererFactory` module provides utilities for creating and configuring WebGPU renderers. **WebGPU is REQUIRED** - there is no WebGL fallback.
 
-**Location:** `packages/shared/src/utils/rendering/RendererFactory.ts`
+## Breaking Changes (v0.180.0)
 
-## Breaking Changes
+### WebGPU-Only Enforcement
 
-### v0.2.0 (February 2026)
+**BREAKING:** WebGL support has been completely removed. All fallback code and detection logic has been eliminated.
 
-**WebGL support removed** - WebGPU is now required.
-
-**Removed:**
-- `isWebGLAvailable()` - No longer needed
-- `isWebGLForced()` - WebGL forcing removed
-- `isWebGLFallbackAllowed()` - No fallback path
-- `UniversalRenderer` type - Now just `WebGPURenderer`
-- `forceWebGL` parameter - Ignored if present
+**Removed APIs:**
+- `isWebGLAvailable()` - No longer exists
+- `isWebGLForced()` - No longer exists
+- `isWebGLFallbackForced()` - No longer exists
+- `isWebGLFallbackAllowed()` - No longer exists
+- `isOffscreenCanvasAvailable()` - No longer exists
+- `canTransferCanvas()` - No longer exists
+- `UniversalRenderer` type - Use `WebGPURenderer` instead
 
 **Migration:**
 ```typescript
-// Before (v0.1.x)
-const renderer = await createRenderer({ forceWebGL: false });
-if (isWebGLRenderer(renderer)) {
-  // Handle WebGL
-} else {
-  // Handle WebGPU
-}
+// Before
+import { UniversalRenderer } from './RendererFactory';
+const renderer: UniversalRenderer = await createRenderer();
 
-// After (v0.2.0)
-const renderer = await createRenderer();
-// Always WebGPU, no type checking needed
+// After
+import { WebGPURenderer } from './RendererFactory';
+const renderer: WebGPURenderer = await createRenderer();
 ```
 
 ## Types
 
-### RendererBackend
-
-```typescript
-type RendererBackend = "webgpu";
-```
-
-Only WebGPU is supported.
-
 ### WebGPURenderer
 
 ```typescript
-type WebGPURenderer = InstanceType<typeof THREE.WebGPURenderer>;
+export type WebGPURenderer = InstanceType<typeof THREE.WebGPURenderer>;
 ```
 
-The renderer type used across the app.
+The only supported renderer type. All materials use TSL (Three Shading Language) which requires WebGPU.
+
+### RendererBackend
+
+```typescript
+export type RendererBackend = "webgpu";
+```
+
+Only `"webgpu"` is supported. This type exists for future extensibility.
 
 ### RendererOptions
 
 ```typescript
-interface RendererOptions {
+export interface RendererOptions {
   antialias?: boolean;
   alpha?: boolean;
   powerPreference?: "high-performance" | "low-power" | "default";
@@ -66,93 +62,83 @@ interface RendererOptions {
 }
 ```
 
-**Properties:**
-- `antialias` - Enable MSAA (default: true)
-- `alpha` - Enable alpha channel (default: false)
-- `powerPreference` - GPU power preference (default: "high-performance")
-- `preserveDrawingBuffer` - Preserve buffer for screenshots (default: false)
-- `canvas` - Existing canvas element (optional)
+Configuration options for renderer creation.
 
 ### RenderingCapabilities
 
 ```typescript
-interface RenderingCapabilities {
+export interface RenderingCapabilities {
   supportsWebGPU: boolean;
   backend: RendererBackend;
 }
 ```
 
-**Properties:**
-- `supportsWebGPU` - Always true (throws if false)
-- `backend` - Always "webgpu"
+Detected rendering capabilities. `supportsWebGPU` will always be `true` if detection succeeds (otherwise throws).
 
 ## Functions
 
-### isWebGPUAvailable()
-
-Check if WebGPU is available in the current browser.
+### isWebGPUAvailable
 
 ```typescript
 async function isWebGPUAvailable(): Promise<boolean>
 ```
 
-**Returns:** `Promise<boolean>` - True if WebGPU is available
+Check if WebGPU is available in the current browser.
+
+**Returns:** `true` if WebGPU is supported, `false` otherwise.
 
 **Example:**
 ```typescript
-const available = await isWebGPUAvailable();
-if (!available) {
-  alert('WebGPU not supported. Please use Chrome 113+');
+const hasWebGPU = await isWebGPUAvailable();
+if (!hasWebGPU) {
+  throw new Error('WebGPU required');
 }
 ```
 
-### detectRenderingCapabilities()
-
-Detect rendering capabilities.
+### detectRenderingCapabilities
 
 ```typescript
 async function detectRenderingCapabilities(): Promise<RenderingCapabilities>
 ```
 
-**Returns:** `Promise<RenderingCapabilities>` - Capabilities object
+Detect rendering capabilities.
 
-**Throws:** `Error` if WebGPU is unavailable
+**Returns:** Capabilities object with `supportsWebGPU` and `backend`.
+
+**Throws:** Error if WebGPU is unavailable.
 
 **Example:**
 ```typescript
 try {
   const caps = await detectRenderingCapabilities();
-  console.log('Backend:', caps.backend);  // "webgpu"
-} catch (error) {
-  console.error('WebGPU not available:', error.message);
+  console.log('Backend:', caps.backend); // "webgpu"
+} catch (err) {
+  console.error('WebGPU not supported:', err);
 }
 ```
 
-### createRenderer()
+### createRenderer
+
+```typescript
+async function createRenderer(options?: RendererOptions): Promise<WebGPURenderer>
+```
 
 Create a WebGPU renderer.
 
-```typescript
-async function createRenderer(
-  options?: RendererOptions
-): Promise<WebGPURenderer>
-```
-
 **Parameters:**
-- `options` - Renderer options (optional)
+- `options` - Optional renderer configuration
 
-**Returns:** `Promise<WebGPURenderer>` - Initialized WebGPU renderer
+**Returns:** Initialized WebGPU renderer.
 
-**Throws:** `Error` if WebGPU is unavailable or initialization fails
+**Throws:** Error if WebGPU is unavailable or initialization fails.
 
 **Example:**
 ```typescript
 const renderer = await createRenderer({
   antialias: true,
   powerPreference: 'high-performance',
+  canvas: document.getElementById('canvas')
 });
-
-await renderer.init();
 ```
 
 **Extended Limits:**
@@ -160,22 +146,15 @@ await renderer.init();
 The renderer attempts to request extended texture array layers (2048) for animated impostor atlases. If the GPU doesn't support this, it falls back to default limits.
 
 ```typescript
-// First attempt: Extended limits
-renderer = new THREE.WebGPURenderer({
-  requiredLimits: {
-    maxTextureArrayLayers: 2048,
-  },
-});
-
-// Fallback: Default limits
-if (init fails) {
-  renderer = new THREE.WebGPURenderer(baseOptions);
+// First attempt: extended limits
+requiredLimits: {
+  maxTextureArrayLayers: 2048
 }
+
+// Fallback: default limits (no requiredLimits)
 ```
 
-### configureRenderer()
-
-Configure renderer with common settings.
+### configureRenderer
 
 ```typescript
 function configureRenderer(
@@ -193,9 +172,7 @@ function configureRenderer(
 ): void
 ```
 
-**Parameters:**
-- `renderer` - WebGPU renderer
-- `options` - Configuration options
+Configure renderer with common settings.
 
 **Example:**
 ```typescript
@@ -205,13 +182,11 @@ configureRenderer(renderer, {
   height: window.innerHeight,
   toneMapping: THREE.ACESFilmicToneMapping,
   toneMappingExposure: 1.0,
-  outputColorSpace: THREE.SRGBColorSpace,
+  outputColorSpace: THREE.SRGBColorSpace
 });
 ```
 
-### configureShadowMaps()
-
-Configure shadow maps.
+### configureShadowMaps
 
 ```typescript
 function configureShadowMaps(
@@ -223,27 +198,55 @@ function configureShadowMaps(
 ): void
 ```
 
-**Parameters:**
-- `renderer` - WebGPU renderer
-- `options` - Shadow map options
+Configure shadow maps.
 
 **Example:**
 ```typescript
 configureShadowMaps(renderer, {
   enabled: true,
-  type: THREE.PCFSoftShadowMap,
+  type: THREE.PCFSoftShadowMap
 });
 ```
 
-### getMaxAnisotropy()
+### isWebGPURenderer
 
-Get maximum anisotropy from renderer.
+```typescript
+function isWebGPURenderer(renderer: WebGPURenderer): renderer is WebGPURenderer
+```
+
+Type guard to check if renderer is WebGPU. Always returns `true` since WebGPU is the only supported backend.
+
+**Example:**
+```typescript
+if (isWebGPURenderer(renderer)) {
+  // Always true
+  console.log('Using WebGPU');
+}
+```
+
+### getRendererBackend
+
+```typescript
+function getRendererBackend(renderer: WebGPURenderer): RendererBackend
+```
+
+Get renderer backend type. Always returns `"webgpu"`.
+
+**Example:**
+```typescript
+const backend = getRendererBackend(renderer);
+console.log(backend); // "webgpu"
+```
+
+### getMaxAnisotropy
 
 ```typescript
 function getMaxAnisotropy(renderer: WebGPURenderer): number
 ```
 
-**Returns:** `number` - Max anisotropy (typically 16)
+Get maximum anisotropic filtering level supported by the GPU.
+
+**Returns:** Max anisotropy (typically 16).
 
 **Example:**
 ```typescript
@@ -251,9 +254,7 @@ const maxAniso = getMaxAnisotropy(renderer);
 texture.anisotropy = maxAniso;
 ```
 
-### getWebGPUCapabilities()
-
-Get WebGPU capabilities for logging and debugging.
+### getWebGPUCapabilities
 
 ```typescript
 function getWebGPUCapabilities(renderer: WebGPURenderer): {
@@ -262,7 +263,9 @@ function getWebGPUCapabilities(renderer: WebGPURenderer): {
 }
 ```
 
-**Returns:** Object with backend and feature list
+Get WebGPU capabilities for logging and debugging.
+
+**Returns:** Object with backend type and array of supported features.
 
 **Example:**
 ```typescript
@@ -272,13 +275,13 @@ console.log('Features:', caps.features);
 // Features: ['depth-clip-control', 'texture-compression-bc', ...]
 ```
 
-### logWebGPUInfo()
-
-Log WebGPU info for debugging.
+### logWebGPUInfo
 
 ```typescript
 function logWebGPUInfo(renderer: WebGPURenderer): void
 ```
+
+Log WebGPU info for debugging.
 
 **Example:**
 ```typescript
@@ -286,30 +289,22 @@ logWebGPUInfo(renderer);
 // [RendererFactory] WebGPU initialized { features: 42 }
 ```
 
-### optimizeMaterialForWebGPU()
-
-Optimize materials for WebGPU rendering.
+### optimizeMaterialForWebGPU
 
 ```typescript
 function optimizeMaterialForWebGPU(material: THREE.Material): void
 ```
 
-**Optimizations:**
-- Sets anisotropy to 16 on all textures
-- Enables texture filtering
+Optimize materials for WebGPU rendering. Enables anisotropic filtering on all textures.
 
 **Example:**
 ```typescript
 const material = new THREE.MeshStandardMaterial({ map: texture });
 optimizeMaterialForWebGPU(material);
-// texture.anisotropy now 16
+// texture.anisotropy = 16
 ```
 
-### Mesh Utilities
-
-#### createOptimizedInstancedMesh()
-
-Create optimized instanced mesh.
+### createOptimizedInstancedMesh
 
 ```typescript
 function createOptimizedInstancedMesh(
@@ -319,90 +314,113 @@ function createOptimizedInstancedMesh(
 ): THREE.InstancedMesh
 ```
 
+Create optimized instanced mesh with frustum culling enabled.
+
 **Example:**
 ```typescript
+const geometry = new THREE.BoxGeometry(1, 1, 1);
+const material = new THREE.MeshStandardMaterial();
 const mesh = createOptimizedInstancedMesh(geometry, material, 1000);
-mesh.frustumCulled = true;  // Auto-enabled
+scene.add(mesh);
 ```
 
-#### mergeStaticMeshes()
-
-Merge multiple meshes with same material into single mesh.
+### mergeStaticMeshes
 
 ```typescript
 function mergeStaticMeshes(meshes: THREE.Mesh[]): THREE.Mesh | null
 ```
 
-**Returns:** Merged mesh or null if merging failed
+Merge multiple meshes with the same material into a single mesh. Reduces draw calls for static geometry.
+
+**Parameters:**
+- `meshes` - Array of meshes to merge (must share same material)
+
+**Returns:** Single merged mesh, or `null` if merging failed.
 
 **Example:**
 ```typescript
-const rocks = scene.children.filter(c => c.name.startsWith('rock'));
-const merged = mergeStaticMeshes(rocks);
-
+const trees = scene.children.filter(obj => obj.name.startsWith('tree'));
+const merged = mergeStaticMeshes(trees);
 if (merged) {
   scene.add(merged);
-  rocks.forEach(r => scene.remove(r));
+  trees.forEach(tree => tree.removeFromParent());
 }
 ```
 
-#### groupMeshesByMaterial()
+### groupMeshesByMaterial
+
+```typescript
+function groupMeshesByMaterial(meshes: THREE.Mesh[]): Map<string, THREE.Mesh[]>
+```
 
 Group meshes by material for efficient merging.
 
-```typescript
-function groupMeshesByMaterial(
-  meshes: THREE.Mesh[]
-): Map<string, THREE.Mesh[]>
-```
-
-**Returns:** Map of material UUID to mesh array
+**Returns:** Map of material UUID to array of meshes using that material.
 
 **Example:**
 ```typescript
+const allMeshes = scene.children.filter(obj => obj instanceof THREE.Mesh);
 const groups = groupMeshesByMaterial(allMeshes);
 
-for (const [materialId, meshes] of groups) {
-  console.log(`Material ${materialId}: ${meshes.length} meshes`);
+for (const [materialUuid, meshes] of groups) {
+  console.log(`Material ${materialUuid}: ${meshes.length} meshes`);
 }
 ```
 
-#### mergeStaticMeshesInGroup()
-
-Merge all static meshes in a scene/group by material.
+### mergeStaticMeshesInGroup
 
 ```typescript
 function mergeStaticMeshesInGroup(
   parent: THREE.Object3D,
-  minMeshesToMerge?: number
+  minMeshesToMerge = 3
 ): void
 ```
 
+Merge all static meshes in a scene/group by material. Replaces original meshes with merged versions.
+
 **Parameters:**
-- `parent` - Parent object containing meshes
-- `minMeshesToMerge` - Minimum meshes before merging (default: 3)
+- `parent` - The parent object containing meshes to merge
+- `minMeshesToMerge` - Minimum meshes with same material before merging (default: 3)
 
 **Example:**
 ```typescript
 // Merge all static meshes in scene
 mergeStaticMeshesInGroup(scene, 3);
-// Meshes with same material (3+) are merged
+
+// Result: Meshes with same material are merged
+// - 100 tree meshes → 5 merged meshes (by material)
+// - 50 rock meshes → 2 merged meshes (by material)
 ```
 
 ## Error Handling
 
-### WebGPU Not Available
+### WebGPU Unavailable
 
 ```typescript
 try {
   const renderer = await createRenderer();
-} catch (error) {
+} catch (err) {
   // Error message includes:
-  // - Browser requirements (Chrome 113+, etc.)
+  // - Browser compatibility info
   // - Hardware acceleration check
   // - GPU driver update instructions
-  console.error(error.message);
+  console.error(err.message);
 }
+```
+
+**Error message example:**
+```
+WebGPU is REQUIRED but not available in this browser.
+
+Hyperscape requires WebGPU for rendering. Please use a supported browser:
+  - Chrome 113+ (recommended)
+  - Edge 113+
+  - Safari 18+ (macOS 15+)
+
+If you're using a supported browser, ensure:
+  - Hardware acceleration is enabled in browser settings
+  - Your GPU drivers are up to date
+  - You're not running in a WebView that blocks WebGPU
 ```
 
 ### Initialization Failed
@@ -410,338 +428,163 @@ try {
 ```typescript
 try {
   const renderer = await createRenderer();
-  await renderer.init();
-} catch (error) {
+} catch (err) {
   // Error message includes:
-  // - GPU driver update instructions
-  // - Browser version check
-  // - Hardware/backend limitations
-  console.error(error.message);
+  // - Specific initialization error
+  // - Common causes
+  // - Troubleshooting steps
+  console.error(err.message);
 }
 ```
 
-### Backend Mismatch
-
-```typescript
-const backend = getRendererBackend(renderer);
-if (backend !== 'webgpu') {
-  throw new Error('Expected WebGPU but got ' + backend);
-}
+**Error message example:**
 ```
+Renderer initialization FAILED.
 
-This should never happen - if it does, it indicates a browser/driver issue.
+Error: Failed to create GPUDevice
 
-## Usage Examples
+This usually indicates:
+  • GPU drivers need updating
+  • Browser GPU backend limitations
+  • Hardware/backend doesn't fully support required features
 
-### Basic Setup
-
-```typescript
-import { createRenderer, configureRenderer } from '@hyperscape/shared';
-
-// Create renderer
-const renderer = await createRenderer({
-  antialias: true,
-  powerPreference: 'high-performance',
-});
-
-// Configure
-configureRenderer(renderer, {
-  pixelRatio: window.devicePixelRatio,
-  width: window.innerWidth,
-  height: window.innerHeight,
-  toneMapping: THREE.ACESFilmicToneMapping,
-});
-
-// Add to DOM
-document.body.appendChild(renderer.domElement);
+Please try:
+  1. Update your browser to the latest version
+  2. Update your GPU drivers
+  3. Try a different browser (Chrome recommended)
 ```
-
-### With Shadow Maps
-
-```typescript
-const renderer = await createRenderer();
-
-configureShadowMaps(renderer, {
-  enabled: true,
-  type: THREE.PCFSoftShadowMap,
-});
-```
-
-### With Custom Canvas
-
-```typescript
-const canvas = document.getElementById('game-canvas');
-
-const renderer = await createRenderer({
-  canvas: canvas as HTMLCanvasElement,
-  antialias: true,
-});
-```
-
-### Capability Detection
-
-```typescript
-// Check WebGPU availability before creating app
-const available = await isWebGPUAvailable();
-
-if (!available) {
-  showErrorMessage('WebGPU not supported. Please use Chrome 113+');
-  return;
-}
-
-// Create renderer
-const renderer = await createRenderer();
-
-// Log capabilities
-const caps = getWebGPUCapabilities(renderer);
-console.log('WebGPU features:', caps.features);
-```
-
-### Material Optimization
-
-```typescript
-// Load model
-const { scene } = await loadModel('model.glb');
-
-// Optimize all materials
-scene.traverse((child) => {
-  if (child instanceof THREE.Mesh) {
-    optimizeMaterialForWebGPU(child.material);
-  }
-});
-```
-
-### Mesh Merging
-
-```typescript
-// Load multiple static objects
-const trees = await loadTrees();
-
-// Group by material
-const groups = groupMeshesByMaterial(trees);
-
-// Merge each group
-for (const [materialId, meshes] of groups) {
-  if (meshes.length >= 3) {
-    const merged = mergeStaticMeshes(meshes);
-    if (merged) {
-      scene.add(merged);
-      meshes.forEach(m => scene.remove(m));
-    }
-  }
-}
-```
-
-## Performance Tips
-
-1. **Use high-performance power preference** - Ensures GPU is used
-2. **Enable frustum culling** - Automatically enabled on InstancedMesh
-3. **Optimize materials** - Call `optimizeMaterialForWebGPU()` on all materials
-4. **Merge static meshes** - Reduces draw calls for static geometry
-5. **Use instanced rendering** - For repeated geometry (trees, rocks, etc.)
 
 ## Browser Compatibility
 
 ### Supported Browsers
 
-| Browser | Version | Notes |
-|---------|---------|-------|
+| Browser | Minimum Version | Notes |
+|---------|----------------|-------|
 | Chrome | 113+ | Recommended, best performance |
 | Edge | 113+ | Chromium-based, same as Chrome |
-| Safari | 18+ | Requires macOS 15+ |
+| Safari | 18+ (macOS 15+) | Requires macOS Sequoia |
 | Firefox | 121+ | Behind flag, not recommended |
 
-### Checking Compatibility
+### Checking WebGPU Support
 
-```typescript
-const available = await isWebGPUAvailable();
-
-if (!available) {
-  // Show browser upgrade message
-  const message = `
-    WebGPU is required but not available.
-    
-    Please use a supported browser:
-    - Chrome 113+ (recommended)
-    - Edge 113+
-    - Safari 18+ (macOS 15+)
-    
-    Check your browser: https://webgpureport.org
-  `;
-  alert(message);
-}
-```
-
-### Feature Detection
-
-```typescript
-const caps = getWebGPUCapabilities(renderer);
-
-// Check for specific features
-if (caps.features.includes('texture-compression-bc')) {
-  // Use BC texture compression
-}
-
-if (caps.features.includes('depth-clip-control')) {
-  // Use depth clip control
-}
-```
-
-## Troubleshooting
-
-### "WebGPU is REQUIRED but not available"
-
-**Causes:**
-- Browser too old (need Chrome 113+)
-- Hardware acceleration disabled
-- GPU drivers outdated
-- Running in WebView that blocks WebGPU
-
-**Solutions:**
-1. Update browser to latest version
-2. Enable hardware acceleration in browser settings
-3. Update GPU drivers
-4. Check [webgpureport.org](https://webgpureport.org) for compatibility
-
-### "Renderer initialization FAILED"
-
-**Causes:**
-- GPU drivers need updating
-- Browser GPU backend limitations
-- Hardware doesn't support required features
-
-**Solutions:**
-1. Update GPU drivers
-2. Try different browser (Chrome recommended)
-3. Check GPU compatibility at [webgpureport.org](https://webgpureport.org)
-
-### "Expected WebGPU backend but got..."
-
-This should never happen. If it does:
-1. Check browser version
-2. Verify WebGPU is enabled (not disabled via flags)
-3. Check for browser extensions that might interfere
-
-## Testing
-
-### Unit Tests
-
-```typescript
-import { createRenderer, isWebGPUAvailable } from './RendererFactory';
-
-test('WebGPU is available', async () => {
-  const available = await isWebGPUAvailable();
-  expect(available).toBe(true);
-});
-
-test('creates WebGPU renderer', async () => {
-  const renderer = await createRenderer();
-  expect(renderer).toBeInstanceOf(THREE.WebGPURenderer);
-});
-
-test('configures renderer correctly', async () => {
-  const renderer = await createRenderer();
-  
-  configureRenderer(renderer, {
-    pixelRatio: 2,
-    width: 1920,
-    height: 1080,
-  });
-  
-  expect(renderer.getPixelRatio()).toBe(2);
-  expect(renderer.getSize(new THREE.Vector2())).toEqual({ x: 1920, y: 1080 });
-});
-```
-
-### Integration Tests
-
-```typescript
-test('renderer works with scene', async () => {
-  const renderer = await createRenderer();
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
-  
-  // Add test geometry
-  const geometry = new THREE.BoxGeometry();
-  const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-  const cube = new THREE.Mesh(geometry, material);
-  scene.add(cube);
-  
-  // Render
-  await renderer.renderAsync(scene, camera);
-  
-  // Verify render info
-  expect(renderer.info.render.calls).toBeGreaterThan(0);
-});
-```
-
-## Migration Guide
-
-### From WebGL/Universal Renderer
-
-**Before (v0.1.x):**
-```typescript
-import { createRenderer, isWebGLRenderer } from './RendererFactory';
-
-const renderer = await createRenderer({ forceWebGL: false });
-
-if (isWebGLRenderer(renderer)) {
-  // WebGL-specific code
-  renderer.setPixelRatio(window.devicePixelRatio);
+**In browser console:**
+```javascript
+if ('gpu' in navigator) {
+  const adapter = await navigator.gpu.requestAdapter();
+  console.log('WebGPU supported:', adapter !== null);
 } else {
-  // WebGPU-specific code
-  await renderer.init();
+  console.log('WebGPU not supported');
 }
 ```
 
-**After (v0.2.0):**
-```typescript
-import { createRenderer } from './RendererFactory';
+**Online checker:**
+- [webgpureport.org](https://webgpureport.org)
 
-const renderer = await createRenderer();
-// Always WebGPU, no type checking needed
-// renderer.init() called automatically by createRenderer
+### Enabling WebGPU
+
+**Chrome/Edge:**
+- WebGPU enabled by default in 113+
+- Check: `chrome://gpu` → "WebGPU" should show "Hardware accelerated"
+
+**Safari:**
+- Requires macOS 15+ (Sequoia)
+- Enabled by default in Safari 18+
+- Check: Develop → Experimental Features → "WebGPU" (should be checked)
+
+**Firefox:**
+- Not recommended (behind flag)
+- Enable: `about:config` → `dom.webgpu.enabled` → `true`
+
+## Server-Side Rendering (Vast.ai)
+
+### Requirements
+
+- NVIDIA GPU with Vulkan support
+- Xorg or Xvfb display server
+- Chrome Dev channel (google-chrome-unstable)
+- ANGLE/Vulkan backend
+
+### Configuration
+
+```bash
+# Display server
+DISPLAY=:99
+
+# GPU rendering mode
+GPU_RENDERING_MODE=xorg  # or xvfb-vulkan
+
+# Vulkan ICD
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+
+# Chrome configuration
+STREAM_CAPTURE_CHANNEL=chrome-dev
+STREAM_CAPTURE_ANGLE=vulkan
+STREAM_CAPTURE_HEADLESS=false  # Must be false for WebGPU
 ```
 
-### Removing WebGL Fallbacks
+### Validation
 
-**Before:**
+The deploy script validates WebGPU availability:
+
+```bash
+# Check GPU
+nvidia-smi || exit 1
+
+# Check Vulkan
+vulkaninfo --summary || echo "WARNING"
+
+# Check display
+xdpyinfo -display $DISPLAY || exit 1
+```
+
+## Performance Optimization
+
+### Texture Array Limits
+
+The renderer requests extended texture array layers for animated impostor atlases:
+
 ```typescript
-// Check if WebGL is forced
-if (isWebGLForced()) {
-  // Use WebGL renderer
-} else {
-  // Use WebGPU renderer
+// Attempt extended limits
+requiredLimits: {
+  maxTextureArrayLayers: 2048
 }
+
+// Fallback to default if GPU doesn't support
 ```
 
-**After:**
+**Why:** Animated impostor system needs >256 layers for mob atlases.
+
+### Anisotropic Filtering
+
+Enable on all textures for better quality:
+
 ```typescript
-// Always WebGPU
-const renderer = await createRenderer();
+const maxAniso = getMaxAnisotropy(renderer);
+texture.anisotropy = maxAniso; // Typically 16
 ```
 
-### Updating Material Code
+### Instanced Rendering
 
-**Before:**
+Use `createOptimizedInstancedMesh` for repeated geometry:
+
 ```typescript
-// Different materials for WebGL vs WebGPU
-const material = isWebGLRenderer(renderer)
-  ? new THREE.MeshStandardMaterial()
-  : new MeshStandardNodeMaterial();
+const mesh = createOptimizedInstancedMesh(geometry, material, 1000);
+// Renders 1000 instances in 1 draw call
 ```
 
-**After:**
+### Static Mesh Merging
+
+Merge static meshes to reduce draw calls:
+
 ```typescript
-// Always use TSL node materials
-import { MeshStandardNodeMaterial } from 'three/webgpu';
-
-const material = new MeshStandardNodeMaterial();
+mergeStaticMeshesInGroup(scene, 3);
+// Merges meshes with same material (minimum 3 per group)
 ```
 
-## References
+## Related Documentation
 
-- [RendererFactory.ts](../../packages/shared/src/utils/rendering/RendererFactory.ts) - Source code
-- [Three.js WebGPU Docs](https://threejs.org/docs/#api/en/renderers/WebGPURenderer) - Three.js documentation
-- [WebGPU Spec](https://gpuweb.github.io/gpuweb/) - WebGPU specification
-- [webgpureport.org](https://webgpureport.org) - Browser compatibility checker
+- [WebGPU Specification](https://www.w3.org/TR/webgpu/)
+- [Three.js WebGPU Renderer](https://threejs.org/docs/#api/en/renderers/WebGPURenderer)
+- [TSL (Three Shading Language)](https://github.com/mrdoob/three.js/wiki/Three.js-Shading-Language)
+- [Instanced Rendering](./instanced-rendering.md)
+- [Vast.ai Streaming](./vast-ai-streaming.md)
