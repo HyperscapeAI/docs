@@ -24,6 +24,13 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 - Firefox (behind flag, not recommended)
 - Check: [webgpureport.org](https://webgpureport.org)
 
+### WebGPU Initialization
+- **Adapter Request Timeout**: 30s timeout on `navigator.gpu.requestAdapter()` to prevent indefinite hangs
+- **Renderer Init Timeout**: 60s timeout on `renderer.init()` to detect GPU driver issues
+- **Preflight Testing**: `testWebGpuInit()` runs on blank page before loading game content
+- **GPU Diagnostics**: `captureGpuDiagnostics()` extracts chrome://gpu info for debugging
+- Timeouts help diagnose misconfigured GPU servers where WebGPU initialization hangs
+
 ### Server/Streaming Requirements
 For Vast.ai and other GPU servers running the streaming pipeline:
 - **NVIDIA GPU with Vulkan support is REQUIRED**
@@ -58,6 +65,7 @@ The streaming pipeline requires specific GPU setup. See `scripts/deploy-vast.sh`
 - FFmpeg captures from PulseAudio monitor (`chrome_audio.monitor`)
 - Configurable via `STREAM_AUDIO_ENABLED` and `PULSE_AUDIO_DEVICE`
 - User-mode PulseAudio (more reliable than system mode)
+- Audio buffering with `thread_queue_size=1024` and async resampling
 
 **RTMP Multi-Streaming**:
 - Simultaneous streaming to Twitch, Kick, X/Twitter
@@ -103,11 +111,21 @@ YOUTUBE_STREAM_KEY=""  # Explicitly disabled
 - Page navigation timeout increased to 180s for Vite dev mode compatibility
 
 **Stream Capture Enhancements**:
+- **CDP Mode (default)**: Chrome DevTools Protocol screencast - fastest, most reliable
+- **WebCodecs Mode**: Native VideoEncoder API (experimental)
+- **MediaRecorder Mode**: Legacy fallback
 - 5s timeout on probe evaluate calls to prevent hanging
 - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
 - Resolution tracking with automatic viewport recovery on mismatch
 - WebGPU diagnostics (`captureGpuDiagnostics()`) extract chrome://gpu info at startup
 - Preflight test (`testWebGpuInit()`) detects WebGPU hangs before loading game content
+
+**Stream Encoding Optimization**:
+- Default: `film` tune with B-frames for better compression
+- Set `STREAM_LOW_LATENCY=true` for `zerolatency` tune (faster playback start)
+- Configurable GOP size via `STREAM_GOP_SIZE` (default: 60 frames)
+- 4x bitrate buffer multiplier for smoother playback
+- Audio buffering with `thread_queue_size=1024` and async resampling
 
 ### Development Rules for WebGPU
 - **NEVER add WebGL fallback code** - it will not work with TSL shaders
@@ -424,6 +442,36 @@ PUBLIC_WS_URL=wss://...          # Point to your server WebSocket
 - `PUBLIC_PRIVY_APP_ID` (client) must equal `PRIVY_APP_ID` (server)
 - `PUBLIC_WS_URL` and `PUBLIC_API_URL` must point to your server
 
+**Streaming Configuration** (Vast.ai):
+```bash
+# Stream capture mode
+STREAM_CAPTURE_MODE=cdp                    # cdp (default), webcodecs, mediarecorder
+STREAM_CAPTURE_WIDTH=1280                  # Stream width (must be even)
+STREAM_CAPTURE_HEIGHT=720                  # Stream height (must be even)
+STREAM_FPS=30                              # Target FPS
+STREAM_CDP_QUALITY=80                      # JPEG quality for CDP mode (1-100)
+
+# Stream encoding
+STREAM_LOW_LATENCY=false                   # true = zerolatency tune, false = film tune
+STREAM_GOP_SIZE=60                         # Keyframe interval in frames
+
+# Audio capture
+STREAM_AUDIO_ENABLED=true                  # Enable audio streaming
+PULSE_AUDIO_DEVICE=chrome_audio.monitor    # PulseAudio source
+
+# Stream destinations (set via GitHub Secrets)
+TWITCH_STREAM_KEY=live_...
+KICK_STREAM_KEY=...
+KICK_RTMP_URL=rtmps://...
+X_STREAM_KEY=...
+X_RTMP_URL=rtmp://...
+YOUTUBE_STREAM_KEY=""                      # Explicitly disabled
+
+# Recovery settings
+STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000   # Timeout for recovery operations
+STREAM_CAPTURE_RECOVERY_MAX_FAILURES=6     # Max failures before fallback
+```
+
 ## Package Manager
 
 This project uses **Bun** (v1.1.38+) as the package manager and runtime.
@@ -576,9 +624,9 @@ Hyperscape uses GPU instancing to render thousands of resource entities (rocks, 
 
 **Implementation:**
 ```typescript
-// packages/shared/src/visual/strategies/InstancedModelVisualStrategy.ts
-// packages/shared/src/visual/instancers/GLBResourceInstancer.ts
-// packages/shared/src/visual/instancers/GLBTreeInstancer.ts
+// packages/shared/src/entities/world/visuals/InstancedModelVisualStrategy.ts
+// packages/shared/src/systems/shared/world/GLBResourceInstancer.ts
+// packages/shared/src/systems/shared/world/GLBTreeInstancer.ts
 ```
 
 **Configuration:**
@@ -601,6 +649,20 @@ Hyperscape uses GPU instancing to render thousands of resource entities (rocks, 
   - Returns positioned mesh for outline pass on instanced entities
 - `ResourceEntity.getHighlightRoot()` returns highlight mesh for instanced entities
 - `EntityHighlightService` supports instanced highlight via `getHighlightRoot()`
+
+### Model Cache Integrity
+
+**Index Buffer Type Preservation** (commit 6fd626a):
+- Model cache now preserves original index buffer type (Uint16Array vs Uint32Array)
+- Fixes silent geometry corruption and RangeError crashes on cached model restore
+- Cache version bumped to 4 to invalidate corrupt entries
+- Affects all GLB models loaded via ModelCache (resources, NPCs, items)
+
+**Technical Details:**
+- IndexedDB serialization previously always deserialized indices as Uint32Array
+- THREE.js uses Uint16Array for meshes with <65536 vertices
+- Caused silent corruption (even-count Uint16) or crashes (odd-count Uint16)
+- Now stores original index type during serialization and uses correct typed array constructor
 
 ## Additional Resources
 
