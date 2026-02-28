@@ -24,9 +24,11 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **Combat** | Tick-based OSRS mechanics (600ms ticks), attack styles, accuracy formulas, death/respawn system |
 | **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking + combat skills with XP/leveling |
 | **Economy** | 480-slot bank, shops, item weights, loot drops |
-| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
+| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, action locks, fast-tick mode |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
 | **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
+| **Rendering** | WebGPU-only with TSL shaders, instanced rendering, LOD system, dissolve materials |
+| **Streaming** | Multi-platform RTMP streaming, CDP capture, PulseAudio, GPU-accelerated encoding |
 | **Rendering** | WebGPU-only with TSL shaders, instanced rendering, LOD system |
 
 ## Quick Start
