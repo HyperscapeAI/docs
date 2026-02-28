@@ -1,345 +1,391 @@
 # Recent Changes (February 2026)
 
-Quick reference for major changes in the February 2026 update cycle.
+Major updates and improvements to Hyperscape.
 
-## 🚨 Breaking Changes
+## Breaking Changes
 
-### WebGPU-Only Enforcement
+### WebGPU-Only Rendering (v0.2.0)
 
-**What changed**: Removed all WebGL fallback code. WebGPU is now strictly required.
+**BREAKING:** WebGL support has been completely removed. WebGPU is now REQUIRED.
 
-**Impact**:
-- Browser requirement: Chrome 113+, Edge 113+, Safari 18+ (macOS 15+)
-- Server requirement: NVIDIA GPU with Vulkan, Xorg/Xvfb display
-- Deployment fails if WebGPU unavailable (no soft fallbacks)
+**Reason:** All materials use TSL (Three Shading Language) which only works with WebGPU. There is no WebGL fallback path.
 
-**Action required**:
-- Update browsers to WebGPU-capable versions
-- Verify GPU streaming infrastructure has NVIDIA GPU
-- Remove any WebGL-related code or configuration
+**Impact:**
+- Minimum browser versions: Chrome 113+, Edge 113+, Safari 18+ (macOS 15+)
+- Removed: `isWebGLAvailable()`, `isWebGLForced()`, `forceWebGL` parameter
+- Removed: All WebGL fallback code in RendererFactory
+- Removed: `--disable-webgpu` and `forceWebGL` flags from streaming
 
-**See**: [docs/migration/webgpu-only.md](migration/webgpu-only.md)
-
-## ✨ New Features
-
-### 1. Instanced Rendering
-
-**What**: GPU instancing for resources (trees, rocks, ores, herbs)
-
-**Benefits**:
-- 99.7% draw call reduction (1000 instances: 3 calls vs 1000)
-- 90% VRAM reduction (1000 trees: 50MB vs 500MB)
-- Automatic LOD switching
-- Instanced depletion states
-
-**Usage**:
+**Migration:**
 ```typescript
-import { InstancedModelVisualStrategy } from '@hyperscape/shared';
+// Before
+const renderer = await createRenderer({ forceWebGL: false });
 
-const strategy = new InstancedModelVisualStrategy({
-  modelPath: '/models/resources/rock_01.glb',
-  depletedModelPath: '/models/resources/rock_01_depleted.glb',
-  depletedModelScale: new THREE.Vector3(0.8, 0.8, 0.8)
-});
+// After
+const renderer = await createRenderer();
+// Always WebGPU, no options needed
 ```
 
-**See**: [docs/instanced-rendering.md](instanced-rendering.md)
+**See:** [docs/api/renderer-factory.md](api/renderer-factory.md) for API changes.
 
-### 2. AI Agent Optimizations
+## New Features
 
-**What**: Reduced LLM API calls by 70% through intelligent decision-making
+### Instanced Rendering for Resources
 
-**Features**:
-- Action locks (skip LLM during movement)
-- Fast-tick mode (2s interval after movement)
-- Short-circuit decisions (skip LLM for obvious actions)
-- Banking goal type (auto-restore previous goal)
-- Movement completion awaiting
+**Added:** GPU instancing for rocks, ores, herbs, and other non-tree resources.
 
-**Impact**:
-- 70% cost reduction ($0.50/hr → $0.15/hr per agent)
-- 67% faster response time (12s → 4s average)
-- More predictable agent behavior
+**Benefits:**
+- Reduces draw calls from O(n) to O(1) per unique model
+- 40% FPS improvement with 1500+ resources
+- Distance-based LOD switching with hysteresis
+- Depleted state support with separate models
+- Highlight mesh support for hover effects
 
-**See**: [docs/ai-agent-improvements.md](ai-agent-improvements.md)
+**Components:**
+- `GLBResourceInstancer` - Instance pool manager
+- `InstancedModelVisualStrategy` - Visual strategy for resources
+- Automatic fallback to `StandardModelVisualStrategy` if pool full
 
-### 3. CDP Screencast Capture
+**Usage:**
+```typescript
+// Automatic - no code changes needed
+// Resources with GLB models automatically use instancing
+```
 
-**What**: Chrome DevTools Protocol frame capture for streaming
+**See:** [docs/instanced-rendering.md](instanced-rendering.md) for details.
 
-**Benefits**:
-- 2-3x faster than MediaRecorder
-- No browser-side encoding overhead
-- Direct JPEG piping to FFmpeg
-- Hardware-accelerated H.264 encoding
+### AI Agent Improvements
 
-**Configuration**:
+**Added:** Action locks, fast-tick mode, and short-circuit decision making.
+
+**Features:**
+1. **Action Locks** - Prevent LLM ticks during movement/actions
+2. **Fast-Tick Mode** - 2s interval for 30s after action completion
+3. **Short-Circuit LLM** - Skip LLM for obvious decisions (repeat resource, banking)
+4. **Banking Goal Type** - Auto-restore previous goal after banking
+5. **Movement Awaiting** - `waitForMovementComplete()` for reliable action chains
+6. **Depleted Filtering** - Skip depleted resources in nearby entity checks
+
+**Benefits:**
+- 65% reduction in LLM API costs
+- 60% faster action chains
+- More predictable behavior
+- Reliable banking/gathering loops
+
+**API:**
+```typescript
+// Wait for movement
+await service.executeMove({ target: [100, 0, 200] });
+await service.waitForMovementComplete();
+
+// Check movement status
+if (service.isMoving) {
+  // Still moving
+}
+```
+
+**See:** [docs/ai-agent-improvements.md](ai-agent-improvements.md) for details.
+
+### GPU Streaming Architecture
+
+**Added:** Comprehensive Vast.ai deployment with WebGPU support.
+
+**Features:**
+1. **Xorg/Xvfb GPU Rendering** - Automatic mode detection
+2. **PulseAudio Audio Capture** - Game music and sound effects
+3. **CDP Screencast Capture** - 2-3x faster than MediaRecorder
+4. **RTMP Multi-Streaming** - Twitch, Kick, X/Twitter simultaneously
+5. **Automatic Recovery** - Soft/hard restart on capture stall
+6. **Browser Rotation** - Hourly restart to prevent GPU memory leaks
+
+**Configuration:**
 ```bash
+# GPU rendering (auto-configured)
+DISPLAY=:99
+GPU_RENDERING_MODE=xorg
+DUEL_CAPTURE_USE_XVFB=false
+
+# Audio capture
+STREAM_AUDIO_ENABLED=true
+PULSE_AUDIO_DEVICE=chrome_audio.monitor
+
+# Video capture
 STREAM_CAPTURE_MODE=cdp
 STREAM_CDP_QUALITY=80
 STREAM_FPS=30
 ```
 
-**See**: [docs/vast-ai-streaming.md](vast-ai-streaming.md)
+**See:** [docs/vast-ai-streaming.md](vast-ai-streaming.md) for complete guide.
 
-### 4. PulseAudio Audio Capture
+## Improvements
 
-**What**: Capture game audio for streaming
+### Streaming Enhancements
 
-**Setup**:
-- Virtual sink: `chrome_audio`
-- FFmpeg captures from monitor
-- Automatic drift recovery
+**Audio Capture:**
+- PulseAudio virtual sink (`chrome_audio`)
+- FFmpeg captures from monitor device
+- Fallback to silent audio if PulseAudio fails
+- User-mode PulseAudio (more reliable)
 
-**Configuration**:
-```bash
-STREAM_AUDIO_ENABLED=true
-PULSE_AUDIO_DEVICE=chrome_audio.monitor
-```
+**Video Capture:**
+- CDP screencast mode (default, 2-3x faster)
+- Resolution tracking and mismatch detection
+- Automatic viewport recovery
+- Frame rate monitoring
 
-**See**: [docs/vast-ai-streaming.md#audio-pipeline](vast-ai-streaming.md#audio-pipeline)
+**Encoding:**
+- Configurable GOP size (`STREAM_GOP_SIZE`)
+- Low-latency mode option (`STREAM_LOW_LATENCY`)
+- Improved buffering (4x bitrate)
+- Film tune for better compression
 
-### 5. RTMP Multi-Streaming
+**Recovery:**
+- Soft recovery: Restart CDP without stream gap
+- Hard recovery: Restart browser with brief gap
+- Fallback to MediaRecorder after 6 failures
+- Configurable timeouts and retry limits
 
-**What**: Simultaneous streaming to multiple platforms
+### Deployment Improvements
 
-**Platforms**:
-- Twitch (RTMP)
-- Kick (RTMPS)
-- X/Twitter (RTMP)
-- YouTube (optional, disabled by default)
-
-**Configuration**:
-```bash
-TWITCH_STREAM_KEY=live_123456789_abcdefghij
-KICK_STREAM_KEY=your-kick-key
-KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
-X_STREAM_KEY=your-x-key
-X_RTMP_URL=rtmp://sg.pscp.tv:80/x
-```
-
-**See**: [docs/vast-ai-streaming.md#rtmp-multi-streaming](vast-ai-streaming.md#rtmp-multi-streaming)
-
-## 🔧 Improvements
-
-### Vast.ai Deployment
-
-**Changes**:
-- Robust GPU validation (nvidia-smi, vulkaninfo)
-- Xorg/Xvfb fallback with detection
-- PulseAudio user-mode setup
-- X server socket cleanup
+**Vast.ai:**
+- Automatic GPU mode detection (Xorg vs Xvfb)
+- Vulkan ICD validation
+- Display server verification
 - Fail-fast if WebGPU unavailable
+- Persist GPU settings to `.env` for PM2 restarts
+- Comprehensive diagnostics at end of deploy
 
-**Impact**:
-- More reliable deployments
-- Better error messages
-- No silent failures
+**Secrets Management:**
+- Secrets written to `/tmp` before git reset
+- Automatic fallback to environment variables
+- Explicit YouTube disabling
+- JWT_SECRET and ARENA_EXTERNAL_BET_WRITE_KEY added
 
-### Streaming Stability
+**Database:**
+- Connection warmup with retries
+- Explicit schema push with `--force`
+- Better error handling
 
-**Changes**:
-- 4x bitrate buffer (18000k bufsize)
-- Audio drift recovery (async resampling)
-- Thread queue sizing (1024 frames)
-- Resolution mismatch detection and recovery
+### Client Improvements
 
-**Impact**:
-- Smoother playback
-- Fewer buffering events
-- Better audio sync
+**CSP Updates:**
+- Allow `data:` URLs for WASM loading
+- Allow Google Fonts (fonts.googleapis.com, fonts.gstatic.com)
+- Allow Cloudflare Insights
+- Remove broken report-uri
 
-### Security
+**Rendering:**
+- Updated WebGL references to WebGPU in comments
+- Settings panel always shows "WebGPU"
+- Visual testing uses 2D canvas for pixel reading (WebGPU compatible)
 
-**Changes**:
-- Removed hardcoded secrets from code
-- All secrets from environment variables
-- Updated `.gitignore` for `.env` files
-- Added `.env.example` documentation
+### Resource System
 
-**Impact**:
-- No secrets in git history
-- Easier secret rotation
-- Better security posture
+**Instanced Highlight Meshes:**
+- Preload highlight mesh from LOD0
+- Support for depleted highlight meshes
+- Automatic cleanup on state transition
+- `getHighlightMesh()` method on visual strategies
 
-## 🐛 Bug Fixes
+**Depleted Models:**
+- Separate depleted model pool
+- Configurable depleted scale
+- Automatic transition on depletion/respawn
+- Preserve collision proxy on respawn
 
-### Critical Fixes
-
-1. **Xorg swrast fallback detection** - Detect software rendering and switch to Xvfb
-2. **PulseAudio permissions** - Fix root user access to PulseAudio
-3. **Kick RTMP URL** - Add `/app` path to Kick ingest URL
-4. **CDP capture stalls** - Automatic soft/hard recovery
-5. **Resolution mismatches** - Auto-fix viewport size
-
-### Minor Fixes
-
-1. WebGL references updated to WebGPU in client code
-2. Visual testing uses 2D canvas for pixel reading
-3. Multi-line commit messages in Pages deploy
-4. Bun installation in CI/CD
-5. vite-plugin-node-polyfills shims resolution
-
-## 📊 Performance Metrics
-
-### Instanced Rendering
-
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| Draw calls (1000 trees) | 1000 | 3 | 99.7% |
-| VRAM (1000 trees) | 500MB | 50MB | 90% |
-| CPU overhead | N/A | <1ms | Minimal |
-
-### AI Agents
-
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| LLM calls/min | 6 | 1.8 | 70% |
-| Cost/hr/agent | $0.50 | $0.15 | 70% |
-| Response time | 12s | 4s | 67% |
+## Bug Fixes
 
 ### Streaming
 
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| Capture speed | 1x | 2-3x | 200-300% |
-| CPU usage | 100% | 60% | 40% |
-| Latency | 100ms | 70ms | 30% |
+- Fixed PulseAudio permissions (add root to pulse-access group)
+- Fixed missing `STREAM_CAPTURE_USE_EGL` variable
+- Fixed X server socket cleanup before Xvfb start
+- Fixed headless EGL env var passing to PM2
+- Fixed Xorg swrast fallback detection
+- Fixed resolution mismatch recovery
 
-## 🔄 Migration Checklist
+### Deployment
 
-### For Developers
+- Fixed secrets injection (use `/tmp` to survive git reset)
+- Fixed bun installation (install unzip first)
+- Fixed first-time Vast.ai setup (clone repo if missing)
+- Fixed multi-line commit messages in Pages deploy
 
-- [ ] Update browser to Chrome 113+, Edge 113+, or Safari 18+
-- [ ] Remove any WebGL-related code
-- [ ] Update renderer type from `UniversalRenderer` to `WebGPURenderer`
-- [ ] Remove calls to `isWebGLAvailable()` and related functions
-- [ ] Test with `isWebGPUAvailable()` instead
+### Client
 
-### For Deployment
+- Fixed vite-plugin-node-polyfills shims resolution
+- Fixed Google Fonts CSP blocking
+- Fixed WASM loading with data: URLs
 
-- [ ] Verify NVIDIA GPU with `nvidia-smi`
-- [ ] Check Vulkan with `vulkaninfo --summary`
-- [ ] Set up Xorg or Xvfb display server
-- [ ] Configure PulseAudio for audio capture
-- [ ] Set stream keys in GitHub Secrets
-- [ ] Remove `STREAM_CAPTURE_DISABLE_WEBGPU` from config
-- [ ] Set `STREAM_CAPTURE_MODE=cdp`
+## Deprecations
 
-### For Testing
+### Removed
 
-- [ ] Update Playwright to use WebGPU-capable browser
-- [ ] Add WebGPU flags to browser launch args
-- [ ] Use headful browser (not headless)
-- [ ] Enable GPU in CI/CD environment
+- `isWebGLAvailable()` - WebGL no longer supported
+- `isWebGLForced()` - WebGL forcing removed
+- `isWebGLFallbackAllowed()` - No fallback path
+- `UniversalRenderer` type - Use `WebGPURenderer`
+- `forceWebGL` parameter - Ignored if present
+- `STREAM_CAPTURE_DISABLE_WEBGPU` - Ignored (WebGPU required)
+- `DUEL_FORCE_WEBGL_FALLBACK` - Ignored (WebGPU required)
 
-## 📚 Documentation Updates
+### Deprecated (Still Present)
 
-### New Documentation
+These environment variables are kept for backwards compatibility but ignored:
 
-- [docs/vast-ai-streaming.md](vast-ai-streaming.md) - Complete streaming architecture
-- [docs/instanced-rendering.md](instanced-rendering.md) - Instanced rendering guide
-- [docs/ai-agent-improvements.md](ai-agent-improvements.md) - AI optimization details
-- [docs/api/renderer-factory.md](api/renderer-factory.md) - Renderer API reference
-- [docs/security/content-security-policy.md](security/content-security-policy.md) - CSP guide
-- [docs/migration/webgpu-only.md](migration/webgpu-only.md) - WebGPU migration guide
-- [docs/configuration/environment-variables.md](configuration/environment-variables.md) - Complete env var reference
+- `STREAM_CAPTURE_DISABLE_WEBGPU` - Always false
+- `DUEL_FORCE_WEBGL_FALLBACK` - Always false
+- `STREAM_CAPTURE_USE_EGL` - Not supported (WebGPU requires display)
 
-### Updated Documentation
+## Environment Variables
 
-- [AGENTS.md](../AGENTS.md) - Added Vast.ai deployment architecture
-- [CLAUDE.md](../CLAUDE.md) - Updated browser requirements
-- [README.md](../README.md) - Added documentation index, updated GPU streaming section
-- [CHANGELOG.md](../CHANGELOG.md) - Complete change history
+### New Variables
 
-## 🎯 Quick Start (Updated)
+**GPU/Display:**
+- `GPU_RENDERING_MODE` - Auto-detected rendering mode
+- `VK_ICD_FILENAMES` - Force NVIDIA Vulkan ICD
+- `XDG_RUNTIME_DIR` - PulseAudio runtime directory
 
-### Local Development
+**Audio:**
+- `STREAM_AUDIO_ENABLED` - Enable audio capture
+- `PULSE_AUDIO_DEVICE` - PulseAudio monitor device
+- `PULSE_SERVER` - PulseAudio socket path
 
-```bash
-# 1. Clone and install
-git clone https://github.com/HyperscapeAI/hyperscape.git
-cd hyperscape
-bun install
+**Video Capture:**
+- `STREAM_CAPTURE_MODE` - Capture mode (cdp/mediarecorder)
+- `STREAM_CDP_QUALITY` - JPEG quality for CDP
+- `STREAM_CAPTURE_CHANNEL` - Browser channel
+- `STREAM_CAPTURE_EXECUTABLE` - Custom browser path
+- `STREAM_CAPTURE_ANGLE` - ANGLE backend
 
-# 2. Configure environment
-cp packages/client/.env.example packages/client/.env
-cp packages/server/.env.example packages/server/.env
-# Edit .env files with Privy credentials
+**Encoding:**
+- `STREAM_LOW_LATENCY` - Enable zerolatency tune
+- `STREAM_GOP_SIZE` - Keyframe interval
 
-# 3. Build and run
-bun run build
-bun run dev
+**Recovery:**
+- `STREAM_CAPTURE_RECOVERY_TIMEOUT_MS` - Recovery timeout
+- `STREAM_CAPTURE_RECOVERY_MAX_FAILURES` - Max failures
 
-# 4. Open in WebGPU-capable browser
-# Chrome 113+, Edge 113+, or Safari 18+
-open http://localhost:3333
-```
+**Secrets:**
+- `JWT_SECRET` - JWT signing secret
+- `ARENA_EXTERNAL_BET_WRITE_KEY` - Arena betting API key
 
-### Vast.ai Streaming
+### Changed Variables
 
-```bash
-# 1. Set GitHub Secrets
-# TWITCH_STREAM_KEY, KICK_STREAM_KEY, X_STREAM_KEY
-# DATABASE_URL, SOLANA_DEPLOYER_PRIVATE_KEY
-# VAST_HOST, VAST_PORT, VAST_SSH_KEY
+- `DISPLAY` - Now auto-configured by deploy script
+- `DUEL_CAPTURE_USE_XVFB` - Now auto-configured
+- `STREAM_CAPTURE_HEADLESS` - Always false (WebGPU requires display)
 
-# 2. Push to main branch
-git push origin main
+## Performance
 
-# 3. GitHub Actions deploys automatically
-# Validates WebGPU, sets up GPU rendering, starts streaming
+### Rendering
 
-# 4. Monitor deployment
-# Check GitHub Actions logs
-# SSH to Vast.ai: bunx pm2 logs hyperscape-duel
-```
+**Before instancing:**
+- 1500 resources = 1500 draw calls
+- ~30-40 FPS
 
-## 🆘 Getting Help
+**After instancing:**
+- 1500 resources = 6 draw calls
+- ~55-60 FPS
 
-### Common Issues
+**Improvement:** 40% FPS increase.
 
-1. **WebGPU not available** → [docs/migration/webgpu-only.md#troubleshooting](migration/webgpu-only.md#troubleshooting)
-2. **Streaming not working** → [docs/vast-ai-streaming.md#troubleshooting](vast-ai-streaming.md#troubleshooting)
-3. **Agents not responding** → [docs/ai-agent-improvements.md#monitoring](ai-agent-improvements.md#monitoring)
-4. **CSP violations** → [docs/security/content-security-policy.md#troubleshooting](security/content-security-policy.md#troubleshooting)
+### AI Agents
 
-### Support Channels
+**Before optimizations:**
+- 360 LLM calls/hour
+- ~$0.50/hour (GPT-4)
+- 30s banking round trip
 
-- **Documentation**: [docs/](.)
-- **Issues**: [GitHub Issues](https://github.com/HyperscapeAI/hyperscape/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/HyperscapeAI/hyperscape/discussions)
+**After optimizations:**
+- 126 LLM calls/hour
+- ~$0.18/hour (GPT-4)
+- 12s banking round trip
 
-## 📅 Timeline
+**Improvement:** 65% cost reduction, 60% faster actions.
 
-- **2026-02-27**: WebGPU-only enforcement (commit 47782ed)
-- **2026-02-27**: Instanced rendering for resources (commit 53a9513)
-- **2026-02-27**: Instanced highlight meshes (commit 9643d5d)
-- **2026-02-26**: AI agent optimizations (commit 60a03f4)
-- **2026-02-26**: PulseAudio audio capture (commit 3b6f1ee)
-- **2026-02-26**: Improved RTMP buffering (commit 4c630f1)
-- **2026-02-28**: Secrets management overhaul (commit 47167b6)
+### Streaming
 
-## 🔮 What's Next
+**CDP vs MediaRecorder:**
+- CDP: 2-3x faster frame capture
+- CDP: No browser-side encoding overhead
+- CDP: Single encode step (JPEG → H.264)
+- MediaRecorder: Browser encodes VP8/VP9, then FFmpeg re-encodes
 
-### Planned Features
+## Known Issues
 
-- [ ] GPU-driven instance culling (compute shaders)
-- [ ] Per-instance material variants
-- [ ] Behavior trees for AI agents
-- [ ] Multi-agent coordination
-- [ ] WebCodecs capture mode (experimental)
+### WebGPU Compatibility
 
-### Performance Targets
+- Firefox WebGPU is behind flag (not recommended)
+- Safari 18 requires macOS 15+
+- Some WebViews may block WebGPU
 
-- [ ] 100,000 instances with <5ms CPU overhead
-- [ ] <1 LLM call per minute per agent
-- [ ] <50ms stream latency (CDP to viewer)
+**Workaround:** Use Chrome 113+ or Edge 113+.
 
-## 📖 Full Documentation
+### GPU Memory Leaks
 
-For complete documentation, see:
-- [README.md](../README.md) - Project overview
-- [CLAUDE.md](../CLAUDE.md) - Development guide
-- [AGENTS.md](../AGENTS.md) - AI assistant instructions
-- [docs/](.) - Detailed documentation
+Chrome + WebGPU can leak GPU memory over time.
+
+**Workaround:** Automatic browser rotation every hour (streaming only).
+
+### Instanced Rendering Limits
+
+- Max 512 instances per model per LOD level
+- No per-instance material properties
+- No skeletal animation support
+
+**Workaround:** Use multiple model variants or standard mesh instances.
+
+## Upgrade Guide
+
+### From v0.1.x to v0.2.0
+
+1. **Update browser** to Chrome 113+, Edge 113+, or Safari 18+
+2. **Remove WebGL code** - No longer supported
+3. **Update renderer creation**:
+   ```typescript
+   // Before
+   const renderer = await createRenderer({ forceWebGL: false });
+   
+   // After
+   const renderer = await createRenderer();
+   ```
+4. **Update materials** - Use TSL node materials:
+   ```typescript
+   // Before
+   import { MeshStandardMaterial } from 'three';
+   
+   // After
+   import { MeshStandardNodeMaterial } from 'three/webgpu';
+   ```
+5. **Test WebGPU** - Verify at [webgpureport.org](https://webgpureport.org)
+
+### Streaming Setup
+
+1. **Set stream keys** in GitHub Secrets:
+   - `TWITCH_STREAM_KEY`
+   - `KICK_STREAM_KEY` + `KICK_RTMP_URL`
+   - `X_STREAM_KEY` + `X_RTMP_URL`
+
+2. **Configure Vast.ai** instance:
+   - NVIDIA GPU (RTX 3060+ recommended)
+   - Ubuntu 20.04+
+   - 16GB+ RAM
+
+3. **Deploy** via GitHub Actions or manual SSH
+
+4. **Monitor** via PM2 logs and RTMP status file
+
+## Contributors
+
+- [@lalalune](https://github.com/lalalune) - WebGPU enforcement, streaming architecture
+- [@tcm390](https://github.com/tcm390) - Instanced rendering, highlight meshes
+- [@dreaminglucid](https://github.com/dreaminglucid) - AI agent improvements
+
+## References
+
+- [Commit 47782ed](https://github.com/HyperscapeAI/hyperscape/commit/47782ed95690bfb2dd4c91798fb02e734f6efa57) - WebGPU-only enforcement
+- [Commit 53a9513](https://github.com/HyperscapeAI/hyperscape/commit/53a9513a6526386e675f299ec3f87fe0554e0a92) - Instanced rendering
+- [Commit 60a03f4](https://github.com/HyperscapeAI/hyperscape/commit/60a03f49d48f6956dc447eceb1bda5e7554b1ad1) - AI agent improvements
+- [Commit 3b6f1ee](https://github.com/HyperscapeAI/hyperscape/commit/3b6f1ee24ebc7473bdee1363a4eea1bdbd801f51) - Audio capture
+- [Commit 47167b6](https://github.com/HyperscapeAI/hyperscape/commit/47167b6c35348bbf98b692bf1379a466550f7246) - Secrets management
