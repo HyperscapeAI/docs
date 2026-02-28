@@ -14,8 +14,6 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - **WebGPU-Only Rendering**: Modern GPU-accelerated graphics with TSL shaders (Chrome 113+, Edge 113+, Safari 18+)
 - **Instanced Rendering**: Thousands of resources rendered with minimal draw calls using GPU instancing
 - **Live Streaming**: Multi-platform streaming to Twitch, Kick, and X/Twitter with GPU-accelerated encoding
-- **GPU-Accelerated Rendering**: WebGPU-only rendering with TSL shaders for modern graphics
-- **Instanced Rendering**: Thousands of resources rendered with minimal draw calls
 
 ## Core Features
 
@@ -29,7 +27,6 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
 | **Rendering** | WebGPU-only with TSL shaders, instanced rendering, LOD system, dissolve materials |
 | **Streaming** | Multi-platform RTMP streaming, CDP capture, PulseAudio, GPU-accelerated encoding |
-| **Rendering** | WebGPU-only with TSL shaders, instanced rendering, LOD system |
 
 ## Quick Start
 
@@ -38,7 +35,6 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - [Git LFS](https://git-lfs.com) - `brew install git-lfs` (macOS) or `apt install git-lfs` (Linux)
 - Docker - [Docker Desktop](https://docker.com/products/docker-desktop) for macOS/Windows, or `apt install docker.io` on Linux
 - [Privy](https://privy.io) account (required for authentication)
-- **WebGPU-capable browser** - Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
 - **WebGPU-capable browser** - Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
 
 ```bash
@@ -193,6 +189,7 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
+- `.env.example` - Root-level streaming and deployment variables
 
 ### Default Ports
 
@@ -238,25 +235,6 @@ Hyperscape streams live gameplay to Twitch, Kick, and X/Twitter using GPU-accele
 
 **See:** [docs/vast-ai-streaming.md](docs/vast-ai-streaming.md) for complete setup and troubleshooting.
 
-## GPU Streaming (Vast.ai)
-
-Hyperscape streams live gameplay to Twitch, Kick, and X/Twitter using GPU-accelerated rendering with WebGPU.
-
-**Requirements:**
-- NVIDIA GPU with Vulkan support (WebGPU required)
-- Xorg or Xvfb display server (headless mode NOT supported)
-- PulseAudio for audio capture
-- FFmpeg for H.264 encoding
-- Chrome Dev channel with WebGPU enabled
-
-**Architecture:**
-- CDP (Chrome DevTools Protocol) screencast capture
-- Direct JPEG frame piping to FFmpeg
-- Hardware-accelerated H.264 encoding
-- RTMP tee muxer for multi-platform streaming
-
-**See:** [docs/vast-ai-streaming.md](docs/vast-ai-streaming.md) for complete setup and troubleshooting.
-
 ## Native App Distribution
 
 - Desktop and mobile build artifacts are published from tagged releases (`v*`) via `.github/workflows/build-app.yml`.
@@ -275,46 +253,79 @@ That tag triggers cross-platform native packaging and publishes installers to a 
 
 ## Troubleshooting
 
-For comprehensive troubleshooting, see **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)**.
+**Characters vanishing / not appearing on character select:**
+This happens when Privy credentials are missing. Each page refresh creates a new anonymous user, orphaning your characters. Fix: Set `PUBLIC_PRIVY_APP_ID` in client `.env` and both `PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` in server `.env`.
 
-### Quick Fixes
+**Assets not loading (404 errors for models/avatars):**
+The CDN container needs to be running. It starts automatically with `bun run dev`, but if you're running services separately:
+```bash
+bun run cdn:up
+```
 
-**Characters vanishing**: Missing Privy credentials. Set `PUBLIC_PRIVY_APP_ID` in both client and server `.env` files.
+**Database schema errors or stale data after pulling updates:**
+Migrations only run once, so pulling new code won't fix an outdated database schema. Reset to fresh:
+> ⚠️ **Warning:** This will delete all local data (characters, inventory, progress).
+```bash
+# Stop and remove postgres container
+docker stop hyperscape-postgres 2>/dev/null; docker rm hyperscape-postgres 2>/dev/null
 
-**Assets not loading (404)**: CDN not running. Run `bun run cdn:up`.
+# Remove postgres volumes
+docker volume rm hyperscape-postgres-data 2>/dev/null; docker volume rm server_postgres-data 2>/dev/null
 
-**WebGPU not available**: Update browser to Chrome 113+, Edge 113+, or Safari 18+. Check: [webgpureport.org](https://webgpureport.org)
+# Remove any remaining hyperscape volumes
+docker volume ls | grep -i hyperscape | awk '{print $2}' | xargs -r docker volume rm
 
-**Port conflicts**: Kill processes with `lsof -ti:5555 | xargs kill -9` (repeat for ports 3333, 8080).
+# Verify volumes are gone
+docker volume ls | grep -i hyperscape
 
-**Database errors**: Reset database with `docker stop hyperscape-postgres && docker rm hyperscape-postgres && docker volume rm hyperscape-postgres-data`.
+# Restart with fresh database
+bun run dev
+```
 
-**Build errors**: Clean and rebuild with `npm run clean && rm -rf node_modules packages/*/node_modules && bun install && bun run build`.
+**Port conflicts:**
+```bash
+lsof -ti:5555 | xargs kill -9   # Server
+lsof -ti:3333 | xargs kill -9   # Client
+lsof -ti:8080 | xargs kill -9   # CDN
+```
+
+**Build errors:**
+```bash
+bun run clean
+rm -rf node_modules packages/*/node_modules
+bun install
+bun run build
+```
+
+**WebGPU not available:**
+Hyperscape requires WebGPU - WebGL will NOT work. Check browser compatibility:
+- Chrome 113+ (recommended)
+- Edge 113+
+- Safari 18+ (macOS 15+)
+- Check: [webgpureport.org](https://webgpureport.org)
+
+If WebGPU is available but not working:
+1. Enable hardware acceleration in browser settings
+2. Update GPU drivers
+3. Check for browser extensions that might block WebGPU
+
+**No Docker?** You need external services:
+- Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
+- Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
 
 ## Documentation
 
 ### Core Documentation
-- **[README.md](README.md)** - This file (project overview and quick start)
 - **[CLAUDE.md](CLAUDE.md)** - Development guide and architecture
 - **[AGENTS.md](AGENTS.md)** - AI coding assistant instructions
-- **[CHANGELOG.md](CHANGELOG.md)** - Complete change history
-- **[docs/RECENT_CHANGES.md](docs/RECENT_CHANGES.md)** - Recent updates (February 2026)
-- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Troubleshooting guide
 
 ### Feature Documentation
-- **[docs/instanced-rendering.md](docs/instanced-rendering.md)** - GPU instancing system
-- **[docs/ai-agent-improvements.md](docs/ai-agent-improvements.md)** - AI agent optimizations
 - **[docs/vast-ai-streaming.md](docs/vast-ai-streaming.md)** - GPU streaming architecture
+- **[docs/instanced-rendering.md](docs/instanced-rendering.md)** - Instanced rendering system
+- **[docs/ai-agent-improvements.md](docs/ai-agent-improvements.md)** - AI agent optimizations
 
 ### API Reference
-- **[docs/api/renderer-factory.md](docs/api/renderer-factory.md)** - Renderer API
-
-### Configuration
-- **[docs/configuration/environment-variables.md](docs/configuration/environment-variables.md)** - Complete env var reference
-- **[docs/security/content-security-policy.md](docs/security/content-security-policy.md)** - CSP configuration
-
-### Migration Guides
-- **[docs/migration/webgpu-only.md](docs/migration/webgpu-only.md)** - WebGPU migration guide
+- **[docs/api/renderer-factory.md](docs/api/renderer-factory.md)** - Renderer API reference
 
 ## More Info
 
