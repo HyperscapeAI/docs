@@ -50,10 +50,13 @@ The streaming pipeline requires specific GPU setup:
 
 1. **GPU Rendering Modes** (tried in order):
    - **Xorg with NVIDIA**: Best performance, requires DRI/DRM device access
-   - **Xvfb with NVIDIA Vulkan**: Virtual framebuffer + GPU rendering via ANGLE/Vulkan
-   - **Headless EGL with NVIDIA**: Direct EGL rendering without X server using `--headless=new --use-gl=egl`
-   - **Ozone Headless with GPU**: Experimental mode using `--ozone-platform=headless` with GPU rendering
-   - **Headless mode (software)**: NOT SUPPORTED - WebGPU will not work
+   - **Xvfb with NVIDIA Vulkan**: Virtual framebuffer + GPU rendering via ANGLE/Vulkan (non-headless Chrome)
+   - **Headless Vulkan**: Chrome `--headless=new` with `--use-vulkan` and `--use-angle=vulkan`
+   - **Headless EGL**: Direct EGL rendering without X server using `--headless=new --use-gl=egl`
+   - **Ozone Headless**: Experimental mode using `--ozone-platform=headless` with GPU rendering
+   - **SwiftShader**: Software Vulkan fallback (poor performance, last resort)
+   - Deployment detects Xorg swrast software rendering and switches to alternative modes
+   - Xvfb mode uses **non-headless Chrome** connecting to virtual display (WebGPU requires window context)
 
 2. **Audio Capture**:
    - PulseAudio with `chrome_audio` virtual sink
