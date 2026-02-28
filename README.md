@@ -347,6 +347,22 @@ See `scripts/deploy-vast.sh` for deployment troubleshooting.
 ### API Reference
 - **[docs/api/renderer-factory.md](docs/api/renderer-factory.md)** - Renderer API reference
 
+## Documentation
+
+### Core Documentation
+- **[CLAUDE.md](CLAUDE.md)** - Development guide and architecture
+- **[AGENTS.md](AGENTS.md)** - AI coding assistant instructions
+
+### Deployment Guides
+- **[docs/railway-dev-prod.md](docs/railway-dev-prod.md)** - Railway deployment setup
+- **[docs/vast-ai-streaming.md](docs/vast-ai-streaming.md)** - GPU streaming architecture
+- **[docs/native-release.md](docs/native-release.md)** - Native app distribution
+
+### Feature Documentation
+- **[docs/instanced-rendering.md](docs/instanced-rendering.md)** - Instanced rendering system
+- **[docs/api/renderer-factory.md](docs/api/renderer-factory.md)** - Renderer API reference
+- **[docs/migration/webgpu-only.md](docs/migration/webgpu-only.md)** - WebGPU migration guide
+
 ## More Info
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
