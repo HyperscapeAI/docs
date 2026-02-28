@@ -629,6 +629,14 @@ Streams simultaneously to:
 - X/Twitter (rtmp://sg.pscp.tv:80/x)
 - YouTube explicitly disabled (commit b466233)
 
+**BREAKING CHANGE - WebGPU Required (commit 47782ed, Feb 27 2026):**
+- All WebGL fallback code removed
+- `STREAM_CAPTURE_DISABLE_WEBGPU` and `DUEL_FORCE_WEBGL_FALLBACK` flags ignored
+- Deployment FAILS if WebGPU cannot initialize (no soft fallbacks)
+- Headless mode NOT supported (WebGPU requires display server: Xorg or Xvfb)
+- `DUEL_USE_PRODUCTION_CLIENT=true` recommended for faster page loads (180s timeout fix)
+- `STREAM_GOP_SIZE` now configurable via environment variable (default: 60 frames)
+
 **Audio Streaming (commits 3b6f1ee, aab66b0, b9d2e41):**
 - Game music and sound effects captured via PulseAudio
 - Virtual sink (`chrome_audio`) routes Chrome audio to FFmpeg
