@@ -270,9 +270,11 @@ For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps f
 For deploying the streaming duel arena on Vast.ai GPU servers:
 
 - **GPU Requirements**: NVIDIA GPU with Vulkan support
-- **Display Modes**: Xorg (best), Xvfb (fallback), or Ozone headless
+- **Display Modes**: Xorg (best), Xvfb (fallback), headless EGL, or Ozone headless
 - **WebGPU Validation**: Deployment fails if WebGPU cannot initialize
+- **Swrast Detection**: Automatically switches to headless EGL if Xorg falls back to software rendering
 - **Environment Persistence**: GPU/display settings saved to `.env` for PM2 restarts
+- **Chrome Executable**: Explicit Chrome path recommended for reliable WebGPU
 
 See `scripts/deploy-vast.sh` for deployment automation.
 
