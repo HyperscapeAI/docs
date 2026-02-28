@@ -354,6 +354,36 @@ Recent commits addressed critical memory leaks across the codebase. All cleanup 
 - **Fix**: Store and cleanup event handlers in `stop()` method
 - **Pattern**: Track handler references, remove on stop
 
+#### ColliderComponent (MEDIUM)
+- **Issue**: Collision event handlers never unsubscribed
+- **Fix**: Track collision event handlers and unsubscribe in `destroy()`
+- **Pattern**: Store handler references, remove on destroy
+
+#### MobEntity (MEDIUM)
+- **Issue**: PLAYER_SET_DEAD listener never removed
+- **Fix**: Track PLAYER_SET_DEAD listener and remove on destroy
+- **Pattern**: Store listener reference, remove on destroy
+
+#### Socket (MEDIUM)
+- **Issue**: WebSocket event handlers not cleaned up
+- **Fix**: Track WebSocket event handlers and clean up in `disconnect()`
+- **Pattern**: Store handler references, remove on disconnect
+
+#### ClientLiveKit (MEDIUM)
+- **Issue**: Voices Map and room listeners not cleaned up
+- **Fix**: Properly clean up voices Map and room listeners in `destroy()`
+- **Pattern**: Clear Map and remove listeners on destroy
+
+#### AggroSystem (MEDIUM)
+- **Issue**: playerSkills, combatLevelCache, and aggro maps growing unboundedly
+- **Fix**: Clean up playerSkills, combatLevelCache, and aggro on player disconnect
+- **Pattern**: Remove player-specific data from Maps on disconnect
+
+#### StarterChestEntity (MEDIUM)
+- **Issue**: lootedByCharacters Set growing unboundedly over server lifetime
+- **Fix**: Add size limit (10k) with LRU pruning for lootedByCharacters Set
+- **Pattern**: Implement bounded collection with eviction policy
+
 ### Memory Management Best Practices
 
 When creating new systems or managers:
