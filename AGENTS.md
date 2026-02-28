@@ -68,6 +68,7 @@ The streaming pipeline requires specific GPU setup:
    - **MediaRecorder**: Legacy fallback mode
    - Automatic recovery with viewport restoration on resolution mismatch
    - 5s timeout on probe evaluate calls to prevent hanging
+   - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
 
 7. **Stream Encoding Optimization**:
    - Default: `film` tune with B-frames for better compression
@@ -75,6 +76,12 @@ The streaming pipeline requires specific GPU setup:
    - Configurable GOP size via `STREAM_GOP_SIZE` (default: 60 frames)
    - 4x bitrate buffer multiplier for smoother playback
    - Audio buffering with `thread_queue_size=1024` and async resampling
+
+8. **WebGPU Diagnostics**:
+   - `captureGpuDiagnostics()` extracts chrome://gpu info at startup
+   - `testWebGpuInit()` preflight test detects WebGPU hangs early
+   - Runs on blank page before loading heavy game content
+   - Provides debugging info when WebGPU fails on remote GPU servers
 
 See `scripts/deploy-vast.sh` for complete setup logic.
 
