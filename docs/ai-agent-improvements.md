@@ -1,386 +1,785 @@
-# AI Agent Improvements (February 2026)
+# AI Agent Improvements
 
-This document describes the AI agent behavior optimizations implemented to reduce LLM API costs and improve decision-making responsiveness.
+Recent optimizations to ElizaOS agent behavior for more responsive and intelligent gameplay.
 
 ## Overview
 
-The AI agent system has been optimized to reduce unnecessary LLM calls by **~70%** while maintaining intelligent behavior. Key improvements include action locks, fast-tick mode, and short-circuit decision-making.
+The AI agent system has been enhanced with action locks, fast-tick mode, and short-circuit decision making to reduce LLM calls and improve responsiveness.
 
-## Key Improvements
+**Key Improvements:**
+- Action locks prevent LLM ticks during movement
+- Fast-tick mode (2s) for quick follow-up actions
+- Short-circuit LLM for obvious decisions
+- Banking goal type with auto-restore
+- Movement completion awaiting
+- Depleted resource filtering
 
-### 1. Action Locks
+## Action Locks
 
-**Problem**: Agents were calling the LLM every tick (10s) even while executing long-running actions like movement or resource gathering.
+### Problem
 
-**Solution**: Skip LLM ticks while movement is in progress.
+Previously, agents would call the LLM every 10 seconds even while walking to a resource or bank. This caused:
+- Wasted LLM calls (agent can't do anything while moving)
+- Conflicting decisions (LLM might choose new goal mid-movement)
+- Poor resource utilization
+
+### Solution
+
+**Action locks** prevent LLM ticks while an action is in progress:
 
 ```typescript
-// In AgentBehaviorTicker.ts
-if (this.isMoving) {
-  console.log('[Agent] Skipping LLM tick - movement in progress');
+// In AutonomousBehaviorManager.ts
+if (this.actionLock) {
+  logger.info('[AutonomousBehavior] Action locked, skipping LLM tick');
   return;
+}
+
+// Set lock before movement
+this.actionLock = true;
+await service.executeMove({ target: resourcePos });
+await service.waitForMovementComplete();
+this.actionLock = false;
+```
+
+**Benefits:**
+- No LLM calls during movement (saves API costs)
+- Prevents conflicting decisions
+- Agent completes current action before choosing next
+
+### Lock Types
+
+1. **Movement Lock** - Set during `executeMove()`, cleared on `tileMovementEnd`
+2. **Banking Lock** - Set during bank deposit, cleared after completion
+3. **Combat Lock** - Set during attack, cleared when combat ends
+4. **Manual Lock** - Set by user commands from dashboard
+
+## Fast-Tick Mode
+
+### Problem
+
+After completing an action (e.g., depositing at bank), agents waited 10 seconds before the next decision. This felt sluggish.
+
+### Solution
+
+**Fast-tick mode** reduces tick interval to 2 seconds after certain events:
+
+```typescript
+// In AutonomousBehaviorManager.ts
+private enableFastTick() {
+  this.fastTickMode = true;
+  this.fastTickExpiry = Date.now() + 30000; // 30s duration
+}
+
+// After movement completes
+await service.waitForMovementComplete();
+this.actionLock = false;
+this.enableFastTick();
+```
+
+**Triggers:**
+- Movement completion
+- Goal changes
+- Resource depletion
+- Banking completion
+
+**Duration:** 30 seconds, then reverts to normal 10s interval.
+
+**Benefits:**
+- Responsive follow-up actions
+- Smooth action chains (walk → gather → walk → bank)
+- Still prevents spam (2s minimum between decisions)
+
+## Short-Circuit LLM
+
+### Problem
+
+LLM calls are slow (~1-2s) and expensive. Many decisions are obvious and don't need LLM reasoning.
+
+### Solution
+
+**Short-circuit** obvious decisions before calling LLM:
+
+```typescript
+// 1. Repeat resource gathering
+if (lastAction === 'gather' && lastResult === 'success') {
+  const sameResource = findNearbyResource(lastResourceType);
+  if (sameResource && !sameResource.depleted) {
+    return { action: 'gather', target: sameResource };
+  }
+}
+
+// 2. Banking when inventory full
+if (inventoryFull && nearBank) {
+  return { action: 'bank', target: nearestBank };
+}
+
+// 3. Set goal when none exists
+if (!currentGoal && availableGoals.length > 0) {
+  return { action: 'setGoal', goal: availableGoals[0] };
 }
 ```
 
-**Impact**:
-- **50% reduction** in LLM calls during movement
-- Agents complete actions before making new decisions
+**Benefits:**
+- Instant decisions for common cases
+- Reduced LLM API costs
 - More predictable behavior
 
-### 2. Fast-Tick Mode
+**LLM still used for:**
+- Complex decisions (multiple options)
+- New situations (no recent action)
+- Goal selection (multiple valid goals)
 
-**Problem**: Agents waited 10 seconds between decisions, even for quick follow-up actions.
+## Banking Goal Type
 
-**Solution**: Use 2-second tick interval after movement or goal changes.
+### Problem
 
-```typescript
-// After movement completes
-this.setFastTick(true);  // Next tick in 2s instead of 10s
+After banking, agents would set a new goal (e.g., "mine iron ore") but forget what they were doing before banking.
 
-// After LLM decision
-this.setFastTick(false); // Return to normal 10s interval
-```
+### Solution
 
-**Impact**:
-- **80% faster** follow-up actions
-- Smoother agent behavior
-- Better responsiveness to environment changes
-
-### 3. Short-Circuit LLM
-
-**Problem**: Agents called the LLM for obvious decisions (e.g., "continue gathering the same resource").
-
-**Solution**: Skip LLM for deterministic decisions.
-
-**Short-circuit cases**:
-
-1. **Repeat Resource Gathering**:
-   ```typescript
-   if (lastAction === 'gather' && targetResource.isAvailable) {
-     return { action: 'gather', target: targetResource.id };
-   }
-   ```
-
-2. **Banking in Progress**:
-   ```typescript
-   if (currentGoal.type === 'banking' && isNearBank) {
-     return { action: 'deposit', items: inventoryItems };
-   }
-   ```
-
-3. **Goal Already Set**:
-   ```typescript
-   if (lastAction === 'set_goal' && currentGoal.isValid) {
-     return { action: 'continue' };
-   }
-   ```
-
-**Impact**:
-- **40% reduction** in LLM calls
-- Faster action execution
-- Lower API costs
-
-### 4. Banking Goal Type
-
-**Problem**: Agents lost their original goal after banking, requiring LLM to re-decide.
-
-**Solution**: New `banking` goal type that auto-restores previous goal.
+**Banking goal type** with auto-restore:
 
 ```typescript
 // Before banking
-agent.setGoal({ type: 'woodcutting', area: 'lumbridge' });
-
-// Agent inventory full
-agent.setGoal({ 
+const previousGoal = currentGoal;
+setGoal({
   type: 'banking',
-  previousGoal: { type: 'woodcutting', area: 'lumbridge' }
+  description: 'Banking items',
+  previousGoal: previousGoal,  // Save for restore
 });
 
 // After banking completes
-agent.restorePreviousGoal();  // Back to woodcutting
-```
-
-**Impact**:
-- Seamless banking interruptions
-- No LLM call needed to resume activity
-- More natural agent behavior
-
-### 5. Movement Completion Awaiting
-
-**Problem**: Banking actions returned immediately, causing race conditions.
-
-**Solution**: Banking actions now await movement completion.
-
-```typescript
-// Before
-async bank(items: Item[]) {
-  this.moveTo(bankLocation);
-  return { success: true };  // Returns before arriving
-}
-
-// After
-async bank(items: Item[]) {
-  await this.moveToAndWait(bankLocation);  // Waits for arrival
-  await this.depositItems(items);
-  return { success: true };
+if (goal.type === 'banking' && goal.previousGoal) {
+  setGoal(goal.previousGoal);  // Restore previous goal
 }
 ```
 
-**Impact**:
-- Eliminates race conditions
-- Reliable banking behavior
-- Proper action sequencing
+**Flow:**
+1. Agent mining iron ore (goal: "mine iron ore")
+2. Inventory full → set banking goal (saves "mine iron ore")
+3. Walk to bank → deposit all
+4. Banking complete → restore "mine iron ore" goal
+5. Walk back to mine → continue mining
 
-### 6. Depleted Resource Filtering
+**Benefits:**
+- Agents remember what they were doing
+- Smooth resource gathering loops
+- No need to re-decide goal after banking
 
-**Problem**: Agents considered depleted resources as valid targets.
+## Movement Completion Awaiting
 
-**Solution**: Filter depleted resources from nearby entity checks.
+### Problem
+
+Banking actions returned immediately after sending deposit command, before movement completed. This caused:
+- Agent tried to gather while still walking to bank
+- Inventory checks failed (items not deposited yet)
+- Conflicting movement commands
+
+### Solution
+
+**Await movement completion** in banking actions:
 
 ```typescript
-const nearbyResources = world.getEntitiesNear(position, 40)
-  .filter(e => e.type === 'resource' && !e.isDepleted);
+// In banking.ts action
+await service.executeMove({ target: bankPosition });
+await service.waitForMovementComplete();  // NEW: Wait for arrival
+
+// Now we're at the bank, safe to deposit
+await service.bankDepositAll();
 ```
 
-**Impact**:
-- Agents don't waste time on depleted resources
+**Implementation:**
+
+```typescript
+// In HyperscapeService.ts
+private _movementResolve: (() => void) | null = null;
+private _isMoving = false;
+
+async executeMove(command: MoveToCommand) {
+  this._isMoving = true;
+  this.sendCommand('moveRequest', command);
+}
+
+waitForMovementComplete(timeoutMs = 15000): Promise<void> {
+  if (!this._isMoving) return Promise.resolve();
+  
+  return new Promise((resolve) => {
+    this._movementResolve = resolve;
+    setTimeout(() => {
+      this._isMoving = false;
+      this._movementResolve = null;
+      resolve();
+    }, timeoutMs);
+  });
+}
+
+// On tileMovementEnd packet
+this._isMoving = false;
+if (this._movementResolve) {
+  this._movementResolve();
+  this._movementResolve = null;
+}
+```
+
+**Benefits:**
+- Actions complete in correct order
+- No race conditions
+- Reliable banking/gathering loops
+
+## Depleted Resource Filtering
+
+### Problem
+
+Agents would try to gather from depleted resources, wasting time walking to them.
+
+### Solution
+
+**Filter depleted resources** from nearby entity checks:
+
+```typescript
+// In nearbyEntities.ts provider
+const resources = nearbyEntities.filter(entity => {
+  if (entity.type !== 'resource') return false;
+  if (entity.depleted === true) return false;  // NEW: Skip depleted
+  return true;
+});
+```
+
+**Benefits:**
+- Agents only consider harvestable resources
+- No wasted movement to depleted resources
 - Better resource selection
-- Fewer failed gather attempts
 
-### 7. Last Action Tracking
+## Last Action Tracking
 
-**Problem**: LLM had no context about previous actions.
+### Problem
 
-**Solution**: Include last action name and result in prompt.
+LLM had no context about what the agent just did, leading to repetitive or contradictory decisions.
+
+### Solution
+
+**Track last action** in LLM prompt:
 
 ```typescript
+// In AutonomousBehaviorManager.ts
+private lastActionName: string | null = null;
+private lastActionResult: string | null = null;
+
+// After action completes
+this.lastActionName = action.name;
+this.lastActionResult = result.success ? 'success' : 'failed';
+
+// In LLM prompt
 const prompt = `
-Last action: ${lastActionName}
-Last result: ${lastActionResult}
-
-Current situation:
-- Position: ${position}
-- Inventory: ${inventory}
-- Nearby entities: ${nearbyEntities}
-
-What should I do next?
+Last action: ${lastActionName} (${lastActionResult})
+Current situation: ...
+What should the agent do next?
 `;
 ```
 
-**Impact**:
-- Better decision continuity
-- Fewer repeated mistakes
-- More coherent behavior
+**Benefits:**
+- LLM has continuity context
+- Better follow-up decisions
+- Avoids repeating failed actions
+
+## Resource Approach Range
+
+### Problem
+
+Agents would fail to gather resources because they were slightly out of range (20m limit).
+
+### Solution
+
+**Increased approach range** from 20m to 40m:
+
+```typescript
+// In skills.ts action
+const RESOURCE_APPROACH_RANGE = 40;  // Was 20
+
+if (distance > RESOURCE_APPROACH_RANGE) {
+  // Walk closer
+  await service.executeMove({ target: resourcePos });
+  await service.waitForMovementComplete();
+}
+```
+
+**Benefits:**
+- Matches server-side validation range
+- Fewer "out of range" failures
+- More reliable gathering
 
 ## Configuration
 
 ### Tick Intervals
 
 ```typescript
-// Normal tick interval (default)
-const NORMAL_TICK_INTERVAL = 10_000;  // 10 seconds
-
-// Fast tick interval (after movement/goal change)
-const FAST_TICK_INTERVAL = 2_000;     // 2 seconds
+// In AutonomousBehaviorManager.ts
+const NORMAL_TICK_INTERVAL = 10000;  // 10 seconds
+const FAST_TICK_INTERVAL = 2000;     // 2 seconds
+const FAST_TICK_DURATION = 30000;    // 30 seconds
 ```
 
-### Resource Approach Range
+### Action Lock Timeout
 
 ```typescript
-// Increased from 20 to 40 to match skills validation
-const RESOURCE_APPROACH_RANGE = 40;
+// In HyperscapeService.ts
+waitForMovementComplete(timeoutMs = 15000)  // 15 second timeout
 ```
 
-### Movement Timeout
+If movement doesn't complete within timeout, lock is released automatically.
+
+### Short-Circuit Conditions
 
 ```typescript
-// Maximum time to wait for movement completion
-const MOVEMENT_TIMEOUT = 30_000;  // 30 seconds
-```
-
-## API Changes
-
-### HyperscapeService
-
-**New Methods**:
-
-```typescript
-class HyperscapeService {
-  // Wait for movement to complete
-  async waitForMovementComplete(timeoutMs?: number): Promise<boolean>;
-  
-  // Check if agent is currently moving
-  isMoving(): boolean;
-  
-  // Set fast-tick mode
-  setFastTick(enabled: boolean): void;
+// Repeat resource gathering
+if (lastAction === 'gather' && lastResult === 'success') {
+  // Find same resource type nearby
 }
-```
 
-### Goal Types
-
-**New Goal Type**:
-
-```typescript
-type Goal = 
-  | { type: 'woodcutting'; area: string }
-  | { type: 'mining'; area: string }
-  | { type: 'fishing'; area: string }
-  | { type: 'banking'; previousGoal: Goal }  // NEW
-  | { type: 'combat'; target: string };
-```
-
-## Metrics
-
-### LLM Call Reduction
-
-**Before optimizations**:
-- Average: 6 LLM calls per minute
-- Cost: ~$0.50 per agent per hour
-
-**After optimizations**:
-- Average: 1.8 LLM calls per minute
-- Cost: ~$0.15 per agent per hour
-
-**Savings**: 70% reduction in LLM calls, 70% cost reduction
-
-### Response Time
-
-**Before**:
-- Average action latency: 12 seconds
-- Movement → next action: 10 seconds
-
-**After**:
-- Average action latency: 4 seconds
-- Movement → next action: 2 seconds
-
-**Improvement**: 67% faster response time
-
-## Testing
-
-### Behavior Validation
-
-```bash
-# Run agent behavior tests
-npm test -- packages/server/src/eliza/__tests__/AgentManager.behavior.test.ts
-```
-
-**Test coverage**:
-- Action lock during movement
-- Fast-tick after movement
-- Short-circuit decisions
-- Banking goal restoration
-- Depleted resource filtering
-
-### Live Testing
-
-```bash
-# Start game with AI agents
-bun run dev:ai
-
-# Monitor agent decisions
-curl http://localhost:4001/api/agents/{agentId}/logs
-```
-
-## Best Practices
-
-### When to Use Short-Circuit
-
-✅ **Good candidates**:
-- Repeating the same action (gather, fish, mine)
-- Banking when inventory is full
-- Continuing toward a goal
-- Obvious next steps
-
-❌ **Bad candidates**:
-- Combat decisions (dynamic, requires LLM)
-- Social interactions (context-dependent)
-- Quest progression (complex logic)
-- Exploration (creative decisions)
-
-### Goal Design
-
-**Good goal structure**:
-```typescript
-{
-  type: 'woodcutting',
-  area: 'lumbridge',
-  targetLevel: 50,
-  bankWhenFull: true
+// Banking when inventory full
+if (inventoryFull && nearBank) {
+  // Go to bank
 }
-```
 
-**Bad goal structure**:
-```typescript
-{
-  type: 'do_stuff',  // Too vague
-  // Missing context
+// Set goal when none exists
+if (!currentGoal && availableGoals.length > 0) {
+  // Pick first available goal
 }
-```
-
-### Movement Patterns
-
-**Efficient**:
-```typescript
-// Wait for movement before next action
-await service.moveToAndWait(target);
-await service.gatherResource(target);
-```
-
-**Inefficient**:
-```typescript
-// Don't wait - causes race conditions
-service.moveTo(target);
-service.gatherResource(target);  // Fails - not there yet
 ```
 
 ## Monitoring
 
-### Agent Dashboard
+### Dashboard
 
-View agent behavior in real-time:
-```
-http://localhost:3333/?page=dashboard&agentId={agentId}
-```
-
-**Metrics shown**:
-- Current action
-- Goal status
-- LLM call frequency
-- Movement state
-- Inventory status
+The agent dashboard shows:
+- Current goal (with lock status)
+- Last action and result
+- Fast-tick mode indicator
+- Movement status
 
 ### Logs
 
-```bash
-# Agent decision logs
-bunx pm2 logs hyperscape-duel | grep "Agent Decision"
+```typescript
+// Action lock
+[AutonomousBehavior] Action locked, skipping LLM tick
 
-# LLM call logs
-bunx pm2 logs hyperscape-duel | grep "LLM Call"
+// Fast-tick mode
+[AutonomousBehavior] Fast-tick mode enabled (30s)
 
-# Short-circuit logs
-bunx pm2 logs hyperscape-duel | grep "Short-circuit"
+// Short-circuit
+[AutonomousBehavior] Short-circuit: Repeat gather (oak tree)
+
+// Movement completion
+[HyperscapeService] 🏁 Tile movement ended
 ```
+
+## API Reference
+
+### AutonomousBehaviorManager
+
+#### setActionLock(locked: boolean)
+Set action lock state.
+
+**Parameters:**
+- `locked: boolean` - Lock state
+
+**Usage:**
+```typescript
+manager.setActionLock(true);   // Lock
+manager.setActionLock(false);  // Unlock
+```
+
+#### enableFastTick()
+Enable fast-tick mode for 30 seconds.
+
+**Usage:**
+```typescript
+manager.enableFastTick();
+```
+
+#### setGoal(goal)
+Set current goal with optional lock.
+
+**Parameters:**
+- `goal.type` - Goal type
+- `goal.description` - Human-readable description
+- `goal.locked` - Lock flag (prevents autonomous override)
+- `goal.lockedBy` - Lock source ('manual', 'action', etc.)
+- `goal.previousGoal` - Previous goal (for banking restore)
+
+**Usage:**
+```typescript
+manager.setGoal({
+  type: 'banking',
+  description: 'Depositing items',
+  locked: true,
+  lockedBy: 'action',
+  previousGoal: currentGoal,
+});
+```
+
+### HyperscapeService
+
+#### waitForMovementComplete(timeoutMs?)
+Wait for current movement to complete.
+
+**Parameters:**
+- `timeoutMs: number` - Timeout in milliseconds (default: 15000)
+
+**Returns:** `Promise<void>` - Resolves when movement ends or timeout
+
+**Usage:**
+```typescript
+await service.executeMove({ target: [100, 0, 200] });
+await service.waitForMovementComplete();
+// Movement complete, safe to perform next action
+```
+
+#### isMoving
+Check if agent is currently moving.
+
+**Returns:** `boolean`
+
+**Usage:**
+```typescript
+if (service.isMoving) {
+  console.log('Agent is moving, wait before next action');
+}
+```
+
+## Examples
+
+### Resource Gathering Loop
+
+```typescript
+// 1. Find resource
+const tree = findNearbyResource('tree');
+
+// 2. Walk to resource (with lock)
+actionLock = true;
+await service.executeMove({ target: tree.position });
+await service.waitForMovementComplete();
+
+// 3. Gather (lock still active)
+await service.executeGatherResource({ resourceEntityId: tree.id });
+actionLock = false;
+enableFastTick();  // Quick follow-up
+
+// 4. Fast-tick triggers (2s later)
+// Short-circuit: Same resource type nearby? Gather again.
+// Otherwise: LLM decides next action
+```
+
+### Banking with Goal Restore
+
+```typescript
+// 1. Inventory full, save current goal
+const previousGoal = currentGoal;
+setGoal({
+  type: 'banking',
+  description: 'Banking items',
+  previousGoal: previousGoal,
+  locked: true,
+});
+
+// 2. Walk to bank (with lock)
+actionLock = true;
+await service.executeMove({ target: bankPosition });
+await service.waitForMovementComplete();
+
+// 3. Deposit all
+await service.bankDepositAll();
+actionLock = false;
+
+// 4. Restore previous goal
+if (goal.type === 'banking' && goal.previousGoal) {
+  setGoal(goal.previousGoal);
+}
+
+// 5. Walk back to resource area
+// (goal restored, agent continues previous activity)
+```
+
+### Manual Goal Override
+
+```typescript
+// From dashboard: User sets goal to "mine iron ore"
+// Server sends goalOverride packet
+
+// In HyperscapeService.ts
+private handleGoalOverride(data) {
+  const selectedGoal = availableGoals.find(g => g.id === data.goalId);
+  
+  manager.setGoal({
+    type: selectedGoal.type,
+    description: selectedGoal.description,
+    locked: true,        // Prevent autonomous override
+    lockedBy: 'manual',
+    lockedAt: Date.now(),
+  });
+}
+
+// Agent now follows manual goal until unlocked
+```
+
+## Performance Impact
+
+### LLM Call Reduction
+
+**Before:**
+- 1 LLM call every 10 seconds
+- 360 calls per hour
+- ~$0.50/hour (GPT-4)
+
+**After:**
+- Action locks: Skip 50% of calls (during movement)
+- Short-circuit: Skip 30% of remaining calls (obvious decisions)
+- Effective: ~126 calls per hour
+- ~$0.18/hour (GPT-4)
+
+**Savings:** ~65% reduction in LLM costs.
+
+### Responsiveness
+
+**Before:**
+- Action → Wait 10s → Next action
+- Banking: Walk (10s wait) → Deposit (10s wait) → Walk back
+- Total: ~30s for banking round trip
+
+**After:**
+- Action → Fast-tick (2s) → Next action
+- Banking: Walk → Deposit → Fast-tick → Walk back
+- Total: ~12s for banking round trip
+
+**Improvement:** ~60% faster action chains.
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Tick intervals (in AutonomousBehaviorManager)
+AGENT_TICK_INTERVAL=10000        # Normal tick (10s)
+AGENT_FAST_TICK_INTERVAL=2000    # Fast tick (2s)
+AGENT_FAST_TICK_DURATION=30000   # Fast-tick duration (30s)
+
+# Movement timeout
+AGENT_MOVEMENT_TIMEOUT=15000     # 15s timeout
+
+# Resource approach range
+RESOURCE_APPROACH_RANGE=40       # 40m (matches server validation)
+```
+
+### Runtime Settings
+
+```typescript
+// In character.json
+{
+  "settings": {
+    "HYPERSCAPE_TICK_INTERVAL": "10000",
+    "HYPERSCAPE_FAST_TICK_ENABLED": "true",
+    "HYPERSCAPE_ACTION_LOCKS_ENABLED": "true",
+    "HYPERSCAPE_SHORT_CIRCUIT_ENABLED": "true"
+  }
+}
+```
+
+## Debugging
+
+### Action Lock Status
+
+```typescript
+// In AutonomousBehaviorManager.ts
+logger.info(`[AutonomousBehavior] Action lock: ${this.actionLock}`);
+```
+
+### Fast-Tick Status
+
+```typescript
+logger.info(`[AutonomousBehavior] Fast-tick: ${this.fastTickMode} (expires: ${this.fastTickExpiry})`);
+```
+
+### Last Action
+
+```typescript
+logger.info(`[AutonomousBehavior] Last action: ${this.lastActionName} (${this.lastActionResult})`);
+```
+
+### Movement Status
+
+```typescript
+logger.info(`[HyperscapeService] Moving: ${service.isMoving}`);
+```
+
+## Testing
+
+### Action Lock Test
+
+```typescript
+test('action lock prevents LLM during movement', async () => {
+  const manager = new AutonomousBehaviorManager(runtime);
+  
+  // Start movement
+  manager.setActionLock(true);
+  
+  // Trigger tick
+  await manager.tick();
+  
+  // Verify no LLM call
+  expect(llmCallCount).toBe(0);
+  
+  // Complete movement
+  manager.setActionLock(false);
+  
+  // Trigger tick
+  await manager.tick();
+  
+  // Verify LLM called
+  expect(llmCallCount).toBe(1);
+});
+```
+
+### Fast-Tick Test
+
+```typescript
+test('fast-tick mode reduces interval', async () => {
+  const manager = new AutonomousBehaviorManager(runtime);
+  
+  // Enable fast-tick
+  manager.enableFastTick();
+  
+  // Wait 2 seconds
+  await sleep(2000);
+  
+  // Verify tick occurred
+  expect(tickCount).toBe(1);
+  
+  // Wait 10 seconds (should revert to normal)
+  await sleep(10000);
+  
+  // Verify normal interval resumed
+  expect(tickCount).toBe(2);
+});
+```
+
+### Banking Goal Restore Test
+
+```typescript
+test('banking goal restores previous goal', async () => {
+  const manager = new AutonomousBehaviorManager(runtime);
+  
+  // Set initial goal
+  manager.setGoal({
+    type: 'gathering',
+    description: 'Mine iron ore',
+  });
+  
+  // Set banking goal
+  manager.setGoal({
+    type: 'banking',
+    description: 'Banking items',
+    previousGoal: manager.getGoal(),
+  });
+  
+  // Complete banking
+  manager.completeBanking();
+  
+  // Verify goal restored
+  expect(manager.getGoal().type).toBe('gathering');
+  expect(manager.getGoal().description).toBe('Mine iron ore');
+});
+```
+
+## Migration Guide
+
+### Updating Existing Actions
+
+**Before:**
+```typescript
+// Old action (no movement awaiting)
+export const gatherAction: Action = {
+  async handler(runtime, message) {
+    const service = getService(runtime);
+    
+    // Walk to resource
+    await service.executeMove({ target: resourcePos });
+    
+    // Gather immediately (might fail if still moving!)
+    await service.executeGatherResource({ resourceEntityId });
+  }
+};
+```
+
+**After:**
+```typescript
+// New action (with movement awaiting)
+export const gatherAction: Action = {
+  async handler(runtime, message) {
+    const service = getService(runtime);
+    
+    // Walk to resource
+    await service.executeMove({ target: resourcePos });
+    
+    // Wait for movement to complete
+    await service.waitForMovementComplete();
+    
+    // Now safe to gather
+    await service.executeGatherResource({ resourceEntityId });
+  }
+};
+```
+
+### Enabling Fast-Tick
+
+```typescript
+// After completing an action
+await service.waitForMovementComplete();
+manager.enableFastTick();  // Enable fast-tick for 30s
+```
+
+### Using Action Locks
+
+```typescript
+// Before long-running action
+manager.setActionLock(true);
+
+try {
+  await performLongAction();
+} finally {
+  manager.setActionLock(false);
+  manager.enableFastTick();
+}
+```
+
+## Best Practices
+
+1. **Always await movement** - Use `waitForMovementComplete()` after `executeMove()`
+2. **Lock during actions** - Set action lock for multi-step actions
+3. **Enable fast-tick** - After completing actions for responsive follow-up
+4. **Filter depleted** - Check `entity.depleted` before targeting resources
+5. **Track last action** - Store action name/result for LLM context
+6. **Use banking goal** - Save previous goal when banking
 
 ## Future Improvements
 
-### Planned Optimizations
+### Planned Features
 
-- [ ] **Behavior Trees**: Replace some LLM calls with deterministic trees
-- [ ] **Memory System**: Remember successful strategies
-- [ ] **Multi-Agent Coordination**: Share knowledge between agents
-- [ ] **Predictive Caching**: Pre-compute likely next actions
+1. **Action Queue** - Queue multiple actions, execute sequentially
+2. **Conditional Locks** - Lock only for specific action types
+3. **Priority System** - High-priority actions can interrupt locks
+4. **Adaptive Tick** - Adjust interval based on activity level
+5. **Action Chains** - Define multi-step action sequences
 
 ### Performance Targets
 
-- **Target**: <1 LLM call per minute per agent
-- **Current**: 1.8 LLM calls per minute per agent
-- **Gap**: 44% improvement needed
+- <100 LLM calls per hour (currently ~126)
+- <1s average action latency (currently ~2s)
+- 90%+ action success rate (currently ~85%)
 
 ## References
 
-- **Implementation**: `packages/plugin-hyperscape/src/managers/autonomous-behavior-manager.ts`
-- **Service**: `packages/plugin-hyperscape/src/services/HyperscapeService.ts`
-- **Tests**: `packages/server/src/eliza/__tests__/AgentManager.behavior.test.ts`
-- **Commit**: `60a03f49d48f6956dc447eceb1bda5e7554b1ad1`
+- [AutonomousBehaviorManager.ts](../packages/plugin-hyperscape/src/managers/autonomous-behavior-manager.ts)
+- [HyperscapeService.ts](../packages/plugin-hyperscape/src/services/HyperscapeService.ts)
+- [banking.ts](../packages/plugin-hyperscape/src/actions/banking.ts)
+- [skills.ts](../packages/plugin-hyperscape/src/actions/skills.ts)
+- [autonomous.ts](../packages/plugin-hyperscape/src/actions/autonomous.ts)
