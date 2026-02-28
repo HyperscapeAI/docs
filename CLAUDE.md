@@ -31,6 +31,58 @@ For Vast.ai and other GPU servers running the streaming pipeline:
 - Chrome uses ANGLE/Vulkan backend to access WebGPU
 - If GPU cannot initialize WebGPU, deployment MUST FAIL (no soft fallbacks)
 
+#### Vast.ai Deployment Architecture
+
+The streaming pipeline requires specific GPU setup. See `scripts/deploy-vast.sh` for implementation.
+
+**GPU Rendering Modes** (tried in order):
+
+1. **Xorg with NVIDIA** (preferred):
+   - Best performance with direct GPU access
+   - Requires DRI/DRM device access (`/dev/dri/card0`)
+   - Uses NVIDIA Xorg driver with headless configuration
+   - Validates GPU rendering (not software fallback)
+
+2. **Xvfb with NVIDIA Vulkan** (fallback):
+   - Virtual framebuffer provides X11 protocol
+   - Chrome uses NVIDIA GPU via ANGLE/Vulkan
+   - CDP captures frames from Chrome's internal GPU rendering
+   - Works in containers without DRM access
+
+3. **Headless mode**: NOT SUPPORTED
+   - WebGPU requires a display server
+   - Deployment fails if neither Xorg nor Xvfb can start
+
+**Audio Capture**:
+- PulseAudio with `chrome_audio` virtual sink
+- FFmpeg captures from PulseAudio monitor (`chrome_audio.monitor`)
+- Configurable via `STREAM_AUDIO_ENABLED` and `PULSE_AUDIO_DEVICE`
+- User-mode PulseAudio (more reliable than system mode)
+
+**RTMP Multi-Streaming**:
+- Simultaneous streaming to Twitch, Kick, X/Twitter
+- FFmpeg tee muxer for single-encode multi-output
+- Stream keys configured via environment variables
+- YouTube explicitly disabled (set `YOUTUBE_STREAM_KEY=""`)
+
+**Deployment Validation**:
+- Verifies NVIDIA GPU accessible via `nvidia-smi`
+- Checks Vulkan ICD availability
+- Ensures display server (Xorg/Xvfb) responds to `xdpyinfo`
+- Fails deployment if WebGPU cannot be initialized
+- Persists GPU/display settings to `.env` for PM2 restarts
+
+**Environment Variables** (auto-configured by deploy script):
+```bash
+DISPLAY=:99                                              # X display
+GPU_RENDERING_MODE=xorg|xvfb-vulkan                     # Rendering mode
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json # Force NVIDIA Vulkan
+DUEL_CAPTURE_USE_XVFB=true|false                        # Xvfb vs Xorg
+STREAM_CAPTURE_HEADLESS=false                           # Always false (WebGPU requires display)
+XDG_RUNTIME_DIR=/tmp/pulse-runtime                      # PulseAudio runtime
+PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native       # PulseAudio socket
+```
+
 ### Development Rules for WebGPU
 - **NEVER add WebGL fallback code** - it will not work with TSL shaders
 - **NEVER use `--disable-webgpu`** or `forceWebGL` flags
@@ -142,6 +194,7 @@ packages/
 │   └── UI/HUD
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
+├── plugin-hyperscape/   # ElizaOS AI agent plugin
 └── docs-site/           # Docusaurus documentation site
 ```
 
@@ -153,7 +206,7 @@ packages/
 2. **shared** - Depends on physx-js-webidl
 3. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
 
 > **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
 >
@@ -180,7 +233,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -322,7 +375,7 @@ All services have unique default ports to avoid conflicts:
 **Package-specific `.env` files**: Each package has its own `.env.example` with deployment documentation:
 
 | Package | File | Purpose |
-|---------|------|------------|
+|---------|------|---------|
 | Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
@@ -401,6 +454,29 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Check `/logs/` folder for error details
 - Tests spawn their own Hyperscape instances
 - Visual tests require WebGPU support (headful browser with GPU access)
+
+### WebGPU Not Available
+
+Hyperscape requires WebGPU - WebGL will NOT work. If you see WebGPU errors:
+
+1. **Check browser version**:
+   - Chrome 113+ (recommended)
+   - Edge 113+
+   - Safari 18+ (macOS 15+)
+   - Verify at [webgpureport.org](https://webgpureport.org)
+
+2. **Enable hardware acceleration**:
+   - Chrome: `chrome://settings` → System → "Use hardware acceleration"
+   - Safari: Preferences → Advanced → "Show Develop menu" → Develop → Experimental Features → "WebGPU"
+
+3. **Update GPU drivers**:
+   - NVIDIA: [nvidia.com/drivers](https://nvidia.com/drivers)
+   - AMD: [amd.com/support](https://amd.com/support)
+   - Intel: [intel.com/content/www/us/en/download-center](https://intel.com/content/www/us/en/download-center)
+
+4. **Check for WebView restrictions**:
+   - Some WebViews (Electron, Tauri) may block WebGPU
+   - Ensure WebGPU is enabled in WebView configuration
 
 ## Additional Resources
 
