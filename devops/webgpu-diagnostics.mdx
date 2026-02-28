@@ -1,0 +1,478 @@
+---
+title: "WebGPU Diagnostics"
+description: "WebGPU initialization diagnostics and preflight testing for remote GPU servers"
+icon: "stethoscope"
+---
+
+## Overview
+
+Hyperscape includes WebGPU diagnostics and preflight testing to detect GPU initialization issues early, especially on remote GPU servers (Vast.ai). These tools were added in commit d5c6884 (February 28, 2026).
+
+**Purpose:**
+- Extract chrome://gpu information at startup for debugging
+- Detect WebGPU initialization hangs before loading heavy game content
+- Provide actionable debugging info when WebGPU fails on remote servers
+
+---
+
+## WebGPU Diagnostics
+
+### captureGpuDiagnostics()
+
+Extracts GPU information from Chrome's internal `chrome://gpu` page.
+
+**Location:** `packages/server/scripts/stream-to-rtmp.ts`
+
+**Implementation:**
+```typescript
+async function captureGpuDiagnostics(page: Page): Promise<void> {
+  try {
+    console.log("[Main] Capturing GPU diagnostics from chrome://gpu...");
+    
+    // Navigate to chrome://gpu
+    await page.goto("chrome://gpu", { waitUntil: "domcontentloaded" });
+    
+    // Extract GPU info from the page
+    const gpuInfo = await page.evaluate(() => {
+      const infoDiv = document.querySelector("#basic-info");
+      const problemsDiv = document.querySelector("#problems-list");
+      const driverDiv = document.querySelector("#driver-info");
+      
+      return {
+        basicInfo: infoDiv?.textContent || "Not available",
+        problems: problemsDiv?.textContent || "None",
+        driverInfo: driverDiv?.textContent || "Not available"
+      };
+    });
+    
+    console.log("[Main] GPU Diagnostics:");
+    console.log("  Basic Info:", gpuInfo.basicInfo);
+    console.log("  Problems:", gpuInfo.problems);
+    console.log("  Driver Info:", gpuInfo.driverInfo);
+  } catch (error) {
+    console.warn("[Main] Failed to capture GPU diagnostics:", error);
+  }
+}
+```
+
+**Output Example:**
+```
+[Main] Capturing GPU diagnostics from chrome://gpu...
+[Main] GPU Diagnostics:
+  Basic Info: Graphics Feature Status
+    Canvas: Hardware accelerated
+    Canvas out-of-process rasterization: Enabled
+    Direct Rendering Display Compositor: Disabled
+    Compositing: Hardware accelerated
+    Multiple Raster Threads: Enabled
+    OpenGL: Enabled
+    Rasterization: Hardware accelerated
+    Raw Draw: Disabled
+    Video Decode: Hardware accelerated
+    Video Encode: Hardware accelerated
+    Vulkan: Enabled
+    WebGL: Hardware accelerated
+    WebGL2: Hardware accelerated
+    WebGPU: Hardware accelerated
+  Problems: None
+  Driver Info: ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)
+    GL_VERSION: OpenGL ES 3.1 (ANGLE 2.1.0....)
+```
+
+**When to Use:**
+- Debugging WebGPU initialization failures
+- Verifying GPU driver configuration
+- Checking ANGLE backend selection
+- Identifying GPU feature support
+
+---
+
+## WebGPU Preflight Test
+
+### testWebGpuInit()
+
+Runs a lightweight WebGPU initialization test on a blank page before loading the game.
+
+**Location:** `packages/server/scripts/stream-to-rtmp.ts`
+
+**Implementation:**
+```typescript
+async function testWebGpuInit(page: Page): Promise<boolean> {
+  try {
+    console.log("[Main] Running WebGPU preflight test...");
+    
+    // Navigate to blank page
+    await page.goto("about:blank");
+    
+    // Test WebGPU initialization
+    const webgpuAvailable = await page.evaluate(async () => {
+      if (!navigator.gpu) {
+        return { success: false, error: "navigator.gpu not available" };
+      }
+      
+      try {
+        const adapter = await navigator.gpu.requestAdapter();
+        if (!adapter) {
+          return { success: false, error: "No WebGPU adapter found" };
+        }
+        
+        const device = await adapter.requestDevice();
+        if (!device) {
+          return { success: false, error: "Failed to create WebGPU device" };
+        }
+        
+        // Success - cleanup
+        device.destroy();
+        return { success: true };
+      } catch (error) {
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : String(error)
+        };
+      }
+    });
+    
+    if (!webgpuAvailable.success) {
+      console.error("[Main] WebGPU preflight test FAILED:", webgpuAvailable.error);
+      return false;
+    }
+    
+    console.log("[Main] WebGPU preflight test PASSED");
+    return true;
+  } catch (error) {
+    console.error("[Main] WebGPU preflight test error:", error);
+    return false;
+  }
+}
+```
+
+**Test Flow:**
+1. Navigate to `about:blank` (minimal page, fast load)
+2. Check `navigator.gpu` availability
+3. Request WebGPU adapter
+4. Create WebGPU device
+5. Destroy device (cleanup)
+6. Return success/failure
+
+**Benefits:**
+- Detects WebGPU hangs before loading heavy game content
+- Fails fast if WebGPU unavailable
+- Provides specific error messages for debugging
+- Runs on minimal page (no asset loading overhead)
+
+**Failure Scenarios:**
+- `navigator.gpu` not available (browser doesn't support WebGPU)
+- No adapter found (GPU driver issue)
+- Device creation fails (GPU initialization hang)
+- Timeout (WebGPU initialization blocking)
+
+---
+
+## Integration with Streaming
+
+### Startup Sequence
+
+The diagnostics run during browser setup:
+
+```typescript
+async function setupBrowser() {
+  if (browser) await cleanup();
+
+  console.log("[Main] Launching browser...");
+  browser = await launchCaptureBrowser();
+
+  const context = await browser.newContext({
+    viewport: { width: STREAM_WIDTH, height: STREAM_HEIGHT },
+    deviceScaleFactor: 1,
+  });
+
+  page = await context.newPage();
+
+  // Run diagnostics BEFORE loading game
+  await captureGpuDiagnostics(page);
+  
+  const webgpuOk = await testWebGpuInit(page);
+  if (!webgpuOk) {
+    console.error("[Main] WebGPU preflight test failed - streaming may not work");
+    // Continue anyway - let game page fail with better error
+  }
+
+  // Now load game page
+  console.log(`[Main] Navigating to game URL: ${gameUrl}`);
+  await page.goto(gameUrl, { 
+    waitUntil: "domcontentloaded",
+    timeout: 180000 // 180s for Vite dev mode
+  });
+
+  // ... rest of setup ...
+}
+```
+
+**Why This Order:**
+1. **Diagnostics first** - Capture GPU info before any WebGPU usage
+2. **Preflight test** - Detect hangs on minimal page
+3. **Game load** - Only load heavy content if WebGPU works
+
+---
+
+## Probe Timeout Handling
+
+### 5-Second Timeout
+
+The streaming system includes a 5-second timeout on probe evaluate calls to prevent hanging (commit cb0aaa9):
+
+```typescript
+async function probeStreamReadiness(page: Page): Promise<boolean> {
+  try {
+    // 5s timeout on evaluate call
+    const result = await Promise.race([
+      page.evaluate(() => {
+        const canvas = document.querySelector("canvas");
+        return !!canvas;
+      }),
+      new Promise<boolean>((resolve) => 
+        setTimeout(() => resolve(false), 5000)
+      )
+    ]);
+    
+    return result;
+  } catch (error) {
+    console.warn("[Main] Probe evaluate failed:", error);
+    return false;
+  }
+}
+```
+
+**Why This Matters:**
+- WebGPU initialization can block JavaScript execution
+- Without timeout, probe hangs indefinitely
+- 5s timeout allows detection of unresponsive browser
+- Prevents deployment from hanging forever
+
+### Consecutive Timeout Handling
+
+After 5 consecutive probe timeouts, the system proceeds with capture anyway (commit 432ff84):
+
+```typescript
+let consecutiveTimeouts = 0;
+const MAX_CONSECUTIVE_TIMEOUTS = 5;
+
+while (!ready && attempts < maxAttempts) {
+  const probeResult = await probeStreamReadiness(page);
+  
+  if (!probeResult) {
+    consecutiveTimeouts++;
+    console.warn(
+      `[Main] Probe timeout ${consecutiveTimeouts}/${MAX_CONSECUTIVE_TIMEOUTS}`
+    );
+    
+    if (consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS) {
+      console.warn(
+        "[Main] Browser unresponsive after 5 consecutive probe timeouts. " +
+        "Proceeding with capture anyway - stream may start even if canvas not verified."
+      );
+      break; // Proceed with capture
+    }
+  } else {
+    consecutiveTimeouts = 0; // Reset on success
+    ready = true;
+  }
+  
+  attempts++;
+  await new Promise(resolve => setTimeout(resolve, 1000));
+}
+```
+
+**Rationale:**
+- When browser page isn't responding to JS (e.g., WebGPU taking all resources)
+- Skip readiness check and proceed with CDP capture
+- Stream will start even if we can't verify canvas presence
+- Better than hanging forever waiting for probe response
+
+---
+
+## Troubleshooting
+
+### WebGPU Initialization Hangs
+
+**Symptoms:**
+- Browser page loads but JavaScript doesn't execute
+- Probe timeouts every attempt
+- No canvas element detected
+- Stream shows black frames
+
+**Diagnosis:**
+```bash
+# Check GPU diagnostics in logs
+bunx pm2 logs hyperscape-duel --lines 500 | grep -A 20 "GPU Diagnostics"
+
+# Check for probe timeouts
+bunx pm2 logs hyperscape-duel --lines 200 | grep -i "probe timeout"
+
+# Check for preflight test results
+bunx pm2 logs hyperscape-duel --lines 200 | grep -i "preflight"
+```
+
+**Common Causes:**
+1. **GPU driver issue** - Update NVIDIA drivers
+2. **Vulkan ICD missing** - Install vulkan-tools and mesa-vulkan-drivers
+3. **Display server not running** - Check `echo $DISPLAY` and `xdpyinfo`
+4. **Headless mode** - WebGPU requires display (Xorg or Xvfb)
+
+**Solutions:**
+```bash
+# Verify GPU access
+nvidia-smi
+vulkaninfo --summary
+
+# Verify display server
+echo $DISPLAY  # Should be :99 or :0
+xdpyinfo -display $DISPLAY
+
+# Check Vulkan ICD
+ls -la /usr/share/vulkan/icd.d/nvidia_icd.json
+
+# Force NVIDIA Vulkan (avoid Mesa conflicts)
+export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+```
+
+### GPU Diagnostics Show Software Rendering
+
+**Symptoms:**
+```
+[Main] GPU Diagnostics:
+  Basic Info: WebGPU: Software only, hardware acceleration unavailable
+  Problems: GPU process was unable to boot: GPU access is disabled in chrome://settings
+```
+
+**Causes:**
+- Chrome launched with `--disable-gpu`
+- No display server (headless mode)
+- GPU drivers not installed
+- DRM/DRI devices not accessible
+
+**Solutions:**
+```bash
+# Remove --disable-gpu flag
+# Ensure STREAM_CAPTURE_HEADLESS=false
+
+# Start display server
+Xvfb :99 -screen 0 1920x1080x24 &
+export DISPLAY=:99
+
+# Install GPU drivers
+apt-get install -y nvidia-driver-535 vulkan-tools mesa-vulkan-drivers
+
+# Check DRM devices
+ls -la /dev/dri/
+```
+
+### Preflight Test Fails
+
+**Symptoms:**
+```
+[Main] WebGPU preflight test FAILED: No WebGPU adapter found
+```
+
+**Diagnosis:**
+- GPU not accessible to Chrome
+- Vulkan backend not working
+- ANGLE backend misconfigured
+
+**Solutions:**
+```bash
+# Try different ANGLE backend
+export STREAM_CAPTURE_ANGLE=gl  # Instead of vulkan
+
+# Check Chrome flags
+bunx pm2 logs hyperscape-duel --lines 100 | grep "use-angle"
+
+# Verify Chrome can see GPU
+google-chrome-unstable --headless=new --use-gl=angle --use-angle=vulkan \
+  --enable-unsafe-webgpu --print-to-pdf=test.pdf about:blank
+```
+
+---
+
+## Environment Variables
+
+### Diagnostic Configuration
+
+```bash
+# Enable WebGPU diagnostics (always enabled, no flag needed)
+# Diagnostics run automatically during browser setup
+
+# Custom browser executable (for testing different Chrome versions)
+STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable
+
+# ANGLE backend selection
+STREAM_CAPTURE_ANGLE=vulkan  # or gl, metal (macOS)
+
+# Force NVIDIA Vulkan ICD
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+```
+
+### Deprecated Variables
+
+```bash
+# BREAKING CHANGE: These flags are now IGNORED (commit 47782ed)
+STREAM_CAPTURE_DISABLE_WEBGPU=false  # WebGPU is REQUIRED
+DUEL_FORCE_WEBGL_FALLBACK=false      # WebGL removed
+```
+
+---
+
+## Logging
+
+### GPU Diagnostics Log Format
+
+```
+[Main] Capturing GPU diagnostics from chrome://gpu...
+[Main] GPU Diagnostics:
+  Basic Info: <GPU feature status>
+  Problems: <GPU problems or "None">
+  Driver Info: <GPU driver information>
+```
+
+### Preflight Test Log Format
+
+```
+[Main] Running WebGPU preflight test...
+[Main] WebGPU preflight test PASSED
+```
+
+Or on failure:
+```
+[Main] Running WebGPU preflight test...
+[Main] WebGPU preflight test FAILED: No WebGPU adapter found
+```
+
+### Probe Timeout Log Format
+
+```
+[Main] Probe timeout 1/5
+[Main] Probe timeout 2/5
+[Main] Probe timeout 3/5
+[Main] Probe timeout 4/5
+[Main] Probe timeout 5/5
+[Main] Browser unresponsive after 5 consecutive probe timeouts. Proceeding with capture anyway - stream may start even if canvas not verified.
+```
+
+---
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Deployment Guide" icon="rocket" href="/guides/deployment">
+    Vast.ai deployment with GPU configuration
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/devops/troubleshooting">
+    Common issues and solutions
+  </Card>
+  <Card title="Streaming Setup" icon="video" href="/devops/streaming">
+    RTMP streaming configuration
+  </Card>
+  <Card title="WebGPU Requirements" icon="gpu" href="/guides/webgpu">
+    Browser and GPU requirements for WebGPU
+  </Card>
+</CardGroup>
