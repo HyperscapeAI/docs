@@ -29,7 +29,10 @@ bun run dev
 - Node.js 18+ or Bun 1.0+
 - Bun recommended for fastest installation
 - 4GB+ RAM (for 3D rendering)
-- Modern browser with WebGL support
+- **Modern browser with WebGPU support** (Chrome 113+, Edge 113+, Safari 18+)
+- Check WebGPU availability: [webgpureport.org](https://webgpureport.org)
+
+> **Note**: Hyperscape requires WebGPU. WebGL is not supported. All materials and post-processing effects use TSL (Three.js Shading Language), which only works with WebGPU.
 
 ### Installation
 
@@ -47,7 +50,7 @@ bun run dev
 
 The frontend will start on `http://localhost:3333` and backend on `http://localhost:5555`
 
-> **Note**: Authentication with Privy is **optional**. The app works perfectly fine without it for development/testing. Users will be anonymous but can still play. See "Authentication Setup" below to enable persistent accounts.
+> **Note**: Authentication with Privy is **optional**. The app works perfectly fine without it for development/testing. Users will be anonymous but can still play. See \"Authentication Setup\" below to enable persistent accounts.
 
 ## Game Systems
 
@@ -214,7 +217,7 @@ The client is built using Hyperscape's Entity Component System:
 ### Key Systems
 
 - **ClientNetwork**: WebSocket communication
-- **ClientGraphics**: 3D rendering with Three.js
+- **ClientGraphics**: 3D rendering with Three.js WebGPURenderer
 - **ClientInput**: Keyboard/mouse controls
 - **ClientInterface**: UI panel management
 - **ClientAudio**: Sound effects and music
@@ -295,6 +298,12 @@ wrangler pages deploy dist
 
 ### Common Issues
 
+**Black screen / game not loading**
+- WebGPU is required. Check [webgpureport.org](https://webgpureport.org) to verify WebGPU is available
+- Use Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
+- Check browser console for WebGPU errors
+- Try Chrome Canary/Dev channel for latest WebGPU fixes
+
 **Server won't connect**
 - Verify WebSocket connection (check browser dev tools)
 - Confirm server is running on correct port
@@ -306,15 +315,11 @@ wrangler pages deploy dist
 - For Farcaster: Enable Farcaster login in Privy dashboard settings
 - For mobile: Add `hyperscape://` scheme to Privy allowed redirect URIs
 
-**Visual rendering issues**
-- Ensure WebGL is supported in browser
-- Check for GPU driver updates
-- Try different browser if issues persist
-
 **Performance problems**
 - Reduce graphics settings in Settings panel
 - Close other browser tabs
 - Check system meets minimum requirements (4GB RAM)
+- Ensure GPU drivers are up to date
 
 ### Debug Mode
 
@@ -337,4 +342,4 @@ MIT License - see LICENSE file for details
 
 ---
 
-Built with ❤️ using Hyperscape, Three.js, and modern web technologies.
+Built with ❤️ using Hyperscape, Three.js WebGPURenderer, and modern web technologies.
