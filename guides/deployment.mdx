@@ -714,6 +714,24 @@ nvidia-smi
 
 If Vulkan fails, the system falls back to GL ANGLE backend.
 
+**WebGPU diagnostics (NEW - commit d5c6884):**
+
+Check WebGPU initialization logs:
+```bash
+bunx pm2 logs hyperscape-duel --lines 500 | grep -A 20 "GPU Diagnostics"
+bunx pm2 logs hyperscape-duel --lines 500 | grep -i "webgpu\\|preflight"
+```
+
+**Browser timeout issues (NEW - commit 4be263a):**
+
+If page load times out (180s limit), enable production client build:
+```bash
+# In packages/server/.env
+DUEL_USE_PRODUCTION_CLIENT=true
+```
+
+This serves pre-built client via `vite preview` instead of dev server, eliminating JIT compilation delays.
+
 ## CI/CD Configuration
 
 ### GitHub Actions
