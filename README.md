@@ -272,6 +272,7 @@ For comprehensive troubleshooting, see **[docs/TROUBLESHOOTING.md](docs/TROUBLES
 - **[AGENTS.md](AGENTS.md)** - AI coding assistant instructions
 - **[CHANGELOG.md](CHANGELOG.md)** - Complete change history
 - **[docs/RECENT_CHANGES.md](docs/RECENT_CHANGES.md)** - Recent updates (February 2026)
+- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Troubleshooting guide
 
 ### Feature Documentation
 - **[docs/instanced-rendering.md](docs/instanced-rendering.md)** - GPU instancing system
