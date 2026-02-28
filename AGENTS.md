@@ -80,7 +80,7 @@ Hyperscape is a RuneScape-style MMORPG built on Three.js WebGPURenderer with TSL
 
 ```bash
 bun install          # Install dependencies
-bun run build        # Build all packages
+nbun run build        # Build all packages
 bun run dev          # Development mode
 npm test             # Run tests
 ```
