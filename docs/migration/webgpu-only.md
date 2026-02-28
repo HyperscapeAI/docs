@@ -1,324 +1,247 @@
-# Migration Guide: WebGPU-Only Rendering
+# WebGPU-Only Migration Guide
 
-This guide helps you migrate from the old WebGL fallback system to WebGPU-only rendering.
-
-## Breaking Changes
-
-### Commit: 47782ed (2026-02-27)
-
-**BREAKING:** WebGL support has been completely removed. WebGPU is now REQUIRED.
+**BREAKING CHANGE**: As of commit `47782ed` (2026-02-27), Hyperscape requires WebGPU. WebGL is no longer supported.
 
 ## Why WebGPU-Only?
 
-All Hyperscape materials use TSL (Three Shading Language) which **only works with WebGPU**. There is no WebGL fallback path - the game simply won't render without WebGPU.
+All Hyperscape materials and post-processing effects use **TSL (Three Shading Language)**, which only works with Three.js's WebGPU node material pipeline. There is no WebGL fallback path.
 
-**TSL-dependent features:**
-- All material shaders (terrain, water, vegetation, buildings)
-- Post-processing effects (bloom, tone mapping, color grading)
-- Dissolve animations for resource respawning
-- Animated impostor atlases for mobs
-- GPU-accelerated grass rendering
+### What Changed
 
-## What Changed
+1. **Renderer**: `WebGLRenderer` → `WebGPURenderer` (always)
+2. **Materials**: All materials use TSL node materials
+3. **Post-processing**: Bloom, tone mapping, etc. use TSL-based effects
+4. **Fallback code**: All WebGL detection and fallback code removed
 
-### Removed Code
+## Browser Compatibility
 
-**RendererFactory.ts:**
-- ❌ `isWebGLAvailable()` - Removed
-- ❌ `isWebGLForced()` - Removed
-- ❌ `isWebGLFallbackForced()` - Removed
-- ❌ `isWebGLFallbackAllowed()` - Removed
-- ❌ `isOffscreenCanvasAvailable()` - Removed
-- ❌ `canTransferCanvas()` - Removed
-- ❌ `UniversalRenderer` type - Removed
-- ❌ WebGL detection and fallback logic - Removed
+### Supported Browsers
 
-**deploy-vast.sh:**
-- ❌ Headless fallback mode - Removed
-- ❌ Software rendering fallback - Removed
-- ✅ Deployment now FAILS if WebGPU cannot be initialized
+| Browser | Minimum Version | Notes |
+|---------|----------------|-------|
+| Chrome | 113+ | Recommended, best performance |
+| Edge | 113+ | Chromium-based, same as Chrome |
+| Safari | 18+ | **Requires macOS 15+** |
+| Firefox | Nightly only | Behind flag, not recommended |
 
-**stream-to-rtmp.ts:**
-- ❌ `STREAM_CAPTURE_DISABLE_WEBGPU` logic - Removed
-- ❌ `forceWebGL` URL parameter - Removed
-- ❌ `disableWebGPU` URL parameter - Removed
+### Check WebGPU Support
 
-**ecosystem.config.cjs:**
-- ❌ `DUEL_FORCE_WEBGL_FALLBACK` - Removed (kept as deprecated flag)
-- ✅ `STREAM_CAPTURE_HEADLESS` hardcoded to `false`
+Visit [webgpureport.org](https://webgpureport.org) to verify your browser supports WebGPU.
 
-## Migration Steps
+### Safari 18+ Requirement
 
-### 1. Update Type Imports
+**Important**: Safari 18 requires **macOS 15 (Sequoia)** or later. Earlier macOS versions cannot run Safari 18.
 
-**Before:**
+- macOS 14 (Sonoma): Safari 17 (no WebGPU)
+- macOS 15 (Sequoia): Safari 18+ (WebGPU supported)
+
+If you're on macOS 14 or earlier, you must:
+1. Upgrade to macOS 15+, OR
+2. Use Chrome 113+ or Edge 113+
+
+## Code Changes
+
+### Removed APIs
+
+The following APIs and flags have been removed:
+
 ```typescript
-import { UniversalRenderer } from '@hyperscape/shared';
+// ❌ REMOVED - No longer exists
+RendererFactory.isWebGLForced()
+RendererFactory.isWebGLFallbackForced()
+RendererFactory.isWebGLFallbackAllowed()
+RendererFactory.isWebGLAvailable()
+RendererFactory.isOffscreenCanvasAvailable()
+RendererFactory.canTransferCanvas()
 
-const renderer: UniversalRenderer = await createRenderer();
+// ❌ REMOVED - No longer exists
+type RendererBackend = 'webgl' | 'webgpu'; // Now only 'webgpu'
+
+// ❌ REMOVED - No longer exists
+UniversalRenderer // Now always WebGPURenderer
 ```
 
-**After:**
+### Updated APIs
+
 ```typescript
-import { WebGPURenderer } from '@hyperscape/shared';
+// ✅ CORRECT - Always returns WebGPURenderer
+import { RendererFactory } from '@hyperscape/shared';
 
-const renderer: WebGPURenderer = await createRenderer();
+const renderer = RendererFactory.createRenderer(canvas);
+// Type: WebGPURenderer (not UniversalRenderer)
 ```
 
-### 2. Remove WebGL Checks
+### Environment Variables
 
-**Before:**
-```typescript
-if (isWebGLAvailable()) {
-  // WebGL fallback code
-} else {
-  // WebGPU code
-}
-```
-
-**After:**
-```typescript
-// WebGPU is always used - no checks needed
-const renderer = await createRenderer();
-```
-
-### 3. Update Error Handling
-
-**Before:**
-```typescript
-try {
-  const renderer = await createRenderer();
-} catch (err) {
-  // Try WebGL fallback
-  const webglRenderer = createWebGLRenderer();
-}
-```
-
-**After:**
-```typescript
-try {
-  const renderer = await createRenderer();
-} catch (err) {
-  // Show error to user - no fallback available
-  showWebGPURequiredError(err);
-}
-```
-
-### 4. Remove Renderer Backend Checks
-
-**Before:**
-```typescript
-const backend = getRendererBackend(renderer);
-if (backend === 'webgl') {
-  // WebGL-specific code
-} else {
-  // WebGPU-specific code
-}
-```
-
-**After:**
-```typescript
-// Backend is always WebGPU - no checks needed
-const backend = getRendererBackend(renderer); // Always "webgpu"
-```
-
-### 5. Update Deployment Scripts
-
-**Before:**
-```bash
-# deploy-vast.sh
-if [ "$GPU_FAILED" = "true" ]; then
-  # Fall back to headless mode
-  export STREAM_CAPTURE_HEADLESS=true
-  export DUEL_FORCE_WEBGL_FALLBACK=true
-fi
-```
-
-**After:**
-```bash
-# deploy-vast.sh
-if [ "$GPU_FAILED" = "true" ]; then
-  # FAIL deployment - no fallback
-  echo "FATAL: WebGPU required but GPU setup failed"
-  exit 1
-fi
-```
-
-### 6. Remove WebGL Environment Variables
-
-**Before:**
-```bash
-# .env
-DUEL_FORCE_WEBGL_FALLBACK=true
-STREAM_CAPTURE_DISABLE_WEBGPU=true
-```
-
-**After:**
-```bash
-# .env
-# These variables are ignored (kept for backwards compatibility)
-# DUEL_FORCE_WEBGL_FALLBACK=false
-# STREAM_CAPTURE_DISABLE_WEBGPU=false
-```
-
-## Browser Requirements
-
-### Minimum Versions
-
-| Browser | Minimum Version | Release Date |
-|---------|----------------|--------------|
-| Chrome | 113 | May 2023 |
-| Edge | 113 | May 2023 |
-| Safari | 18 (macOS 15+) | September 2024 |
-| Firefox | 121+ (behind flag) | December 2023 |
-
-### Checking Support
-
-**Online:**
-- Visit [webgpureport.org](https://webgpureport.org)
-
-**In browser console:**
-```javascript
-if ('gpu' in navigator) {
-  const adapter = await navigator.gpu.requestAdapter();
-  console.log('WebGPU:', adapter ? 'Supported' : 'Not supported');
-} else {
-  console.log('WebGPU: Not supported');
-}
-```
-
-**In Chrome:**
-- Visit `chrome://gpu`
-- Look for "WebGPU: Hardware accelerated"
-
-## Server/Streaming Requirements
-
-### Vast.ai Deployment
-
-**REQUIRED:**
-- NVIDIA GPU with Vulkan support
-- Xorg or Xvfb display server
-- Chrome Dev channel (google-chrome-unstable)
-- ANGLE/Vulkan backend
-
-**NOT SUPPORTED:**
-- Headless mode without display server
-- Software rendering (swrast, llvmpipe)
-- WebGL fallback
-
-### Validation
-
-The deploy script validates WebGPU availability:
+The following environment variables are **ignored** (kept for backwards compatibility):
 
 ```bash
-# Check GPU
-nvidia-smi || exit 1
-
-# Check Vulkan
-vulkaninfo --summary
-
-# Check display server
-xdpyinfo -display $DISPLAY || exit 1
-
-# Deployment FAILS if any check fails
+# ❌ IGNORED - WebGPU is always enabled
+STREAM_CAPTURE_DISABLE_WEBGPU=false
+DUEL_FORCE_WEBGL_FALLBACK=false
 ```
 
-## Troubleshooting
+### URL Parameters
 
-### "WebGPU is REQUIRED but not available"
+The following URL parameters are **ignored**:
 
-**Cause:** Browser doesn't support WebGPU or hardware acceleration is disabled.
+```
+# ❌ IGNORED - WebGPU is always enabled
+?forceWebGL=true
+?disableWebGPU=true
+```
 
-**Solution:**
-1. Update browser to minimum version
+## Deployment Changes
+
+### Vast.ai Streaming
+
+**CRITICAL**: Headless mode no longer works. WebGPU requires a display server.
+
+#### Before (Broken)
+
+```bash
+# ❌ BROKEN - Headless mode doesn't support WebGPU
+google-chrome --headless=new --disable-gpu
+```
+
+#### After (Correct)
+
+```bash
+# ✅ CORRECT - Use Xorg or Xvfb with GPU access
+# Option 1: Xorg with NVIDIA (best performance)
+Xorg :99 -config /etc/X11/xorg-nvidia-headless.conf
+
+# Option 2: Xvfb with NVIDIA Vulkan (fallback)
+Xvfb :99 -screen 0 1920x1080x24 +extension GLX
+export DISPLAY=:99
+export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+
+# Launch Chrome with GPU access
+google-chrome-unstable --use-gl=angle --use-angle=vulkan
+```
+
+See `scripts/deploy-vast.sh` for complete implementation.
+
+### Docker Containers
+
+If running in Docker, ensure:
+
+1. **GPU access**: Container has access to NVIDIA GPU
+   ```bash
+   docker run --gpus all ...
+   ```
+
+2. **Display server**: Xvfb or Xorg running inside container
+   ```dockerfile
+   RUN apt-get install -y xvfb mesa-utils
+   ENV DISPLAY=:99
+   CMD Xvfb :99 -screen 0 1920x1080x24 & your-app
+   ```
+
+3. **Vulkan ICD**: NVIDIA Vulkan driver accessible
+   ```bash
+   apt-get install -y vulkan-tools libvulkan1
+   export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+   ```
+
+## Testing Changes
+
+### Visual Tests
+
+All visual tests now require WebGPU:
+
+```typescript
+// ✅ CORRECT - Tests use real browser with WebGPU
+test('renders player model', async ({ page }) => {
+  await page.goto('http://localhost:3333');
+  // WebGPU is available in Playwright's Chromium
+});
+```
+
+### Headless Testing
+
+Playwright's headless mode **does not support WebGPU**. Use headful mode:
+
+```typescript
+// playwright.config.ts
+export default {
+  use: {
+    headless: false, // Required for WebGPU
+  },
+};
+```
+
+Or use Xvfb in CI:
+
+```yaml
+# .github/workflows/test.yml
+- name: Run tests
+  run: |
+    Xvfb :99 -screen 0 1920x1080x24 &
+    export DISPLAY=:99
+    npm test
+```
+
+## Error Messages
+
+### "WebGPU is not supported"
+
+**Cause**: Browser doesn't support WebGPU or hardware acceleration is disabled.
+
+**Fix**:
+1. Update browser to Chrome 113+, Edge 113+, or Safari 18+
 2. Enable hardware acceleration in browser settings
 3. Update GPU drivers
-4. Check [webgpureport.org](https://webgpureport.org)
+4. Check [webgpureport.org](https://webgpureport.org) for compatibility
 
-### "Renderer initialization FAILED"
+### "Failed to create WebGPU device"
 
-**Cause:** WebGPU is available but initialization failed.
+**Cause**: GPU is blocked or drivers are outdated.
 
-**Solution:**
-1. Update GPU drivers
-2. Try different browser
-3. Check for browser extensions blocking WebGPU
-4. Restart browser
+**Fix**:
+1. Update GPU drivers (NVIDIA, AMD, Intel)
+2. Check browser flags: `chrome://flags/#enable-unsafe-webgpu`
+3. Disable browser extensions that might block WebGPU
+4. Try a different browser (Chrome recommended)
 
-### "FATAL: WebGPU required but GPU setup failed" (Vast.ai)
+### "Execution context was destroyed"
 
-**Cause:** GPU rendering mode could not be established.
+**Cause**: Page navigation or reload during WebGPU initialization.
 
-**Solution:**
-1. Verify NVIDIA GPU: `nvidia-smi`
-2. Check Vulkan: `vulkaninfo --summary`
-3. Verify display server: `xdpyinfo -display :99`
-4. Check deploy logs for specific error
-5. Ensure container has GPU access
+**Fix**: This is usually transient. The game will retry automatically.
 
-### "Display :99 is not accessible"
+### "No screens found" (Vast.ai)
 
-**Cause:** Xorg/Xvfb failed to start.
+**Cause**: Xorg cannot access GPU or DRI devices.
 
-**Solution:**
-1. Clean X lock files: `rm -f /tmp/.X*-lock`
-2. Remove X sockets: `rm -rf /tmp/.X11-unix`
-3. Restart display server
-4. Check Xorg logs: `cat /var/log/Xorg.99.log`
+**Fix**:
+1. Check GPU access: `nvidia-smi`
+2. Check DRI devices: `ls -la /dev/dri/`
+3. Fall back to Xvfb: `Xvfb :99 -screen 0 1920x1080x24`
+4. Verify Vulkan: `vulkaninfo --summary`
 
-## FAQ
+## Rollback (Not Recommended)
 
-### Can I still use WebGL?
+If you absolutely must use an older version with WebGL support, checkout commit before the breaking change:
 
-**No.** WebGL is not supported and will not work. All materials use TSL which requires WebGPU.
-
-### What if my users don't have WebGPU?
-
-They must update their browser or use a supported browser. WebGPU is widely available:
-- Chrome/Edge 113+ (May 2023)
-- Safari 18+ (September 2024)
-- ~95% of desktop browsers support WebGPU as of 2026
-
-### Can I run Hyperscape in headless mode?
-
-**No.** WebGPU requires a display server (Xorg or Xvfb). Pure headless mode is not supported.
-
-For server-side rendering (streaming), use Xvfb with NVIDIA Vulkan.
-
-### What about mobile browsers?
-
-Mobile WebGPU support is limited:
-- iOS Safari 18+ (iOS 18+)
-- Android Chrome 113+ (limited GPU support)
-
-Use the native app (Capacitor) for better mobile performance.
-
-### How do I check if WebGPU is working?
-
-**Browser:**
-```javascript
-const hasWebGPU = await isWebGPUAvailable();
-console.log('WebGPU:', hasWebGPU);
-```
-
-**Server (Vast.ai):**
 ```bash
-# Check GPU
-nvidia-smi
-
-# Check Vulkan
-vulkaninfo --summary
-
-# Check display
-xdpyinfo -display $DISPLAY
-
-# Check Chrome WebGPU
-google-chrome-unstable --headless=new --enable-unsafe-webgpu --use-gl=angle --use-angle=vulkan about:blank
+git checkout 47782ed~1  # One commit before WebGPU-only enforcement
 ```
+
+**Warning**: This version is no longer maintained and missing critical features and bug fixes.
+
+## Support
+
+If you encounter issues after this migration:
+
+1. Check browser compatibility at [webgpureport.org](https://webgpureport.org)
+2. Review [CLAUDE.md](../../CLAUDE.md) troubleshooting section
+3. Open an issue at [github.com/HyperscapeAI/hyperscape/issues](https://github.com/HyperscapeAI/hyperscape/issues)
+4. Join our Discord for community support
 
 ## Related Documentation
 
-- [RendererFactory API](../api/renderer-factory.md)
-- [Vast.ai Streaming](../vast-ai-streaming.md)
-- [CLAUDE.md](../../CLAUDE.md) - Development guide
-- [AGENTS.md](../../AGENTS.md) - AI assistant instructions
+- [CLAUDE.md](../../CLAUDE.md) - WebGPU requirements and troubleshooting
+- [AGENTS.md](../../AGENTS.md) - AI assistant WebGPU guidelines
+- [docs/duel-stack.md](../duel-stack.md) - GPU streaming setup
+- [packages/shared/src/utils/rendering/RendererFactory.ts](../../packages/shared/src/utils/rendering/RendererFactory.ts) - Renderer implementation
