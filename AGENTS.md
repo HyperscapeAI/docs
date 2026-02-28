@@ -84,13 +84,15 @@ The streaming pipeline requires specific GPU setup:
    - 5s timeout on probe evaluate calls to prevent hanging
    - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
    - **Chrome Executable**: Set `STREAM_CAPTURE_EXECUTABLE` to explicit Chrome path (e.g., `/usr/bin/google-chrome-unstable`) for reliable WebGPU
+   - **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
 
 7. **Stream Encoding Optimization**:
    - Default: `film` tune with B-frames for better compression
    - Set `STREAM_LOW_LATENCY=true` for `zerolatency` tune (faster playback start)
    - Configurable GOP size via `STREAM_GOP_SIZE` (default: 60 frames)
-   - 4x bitrate buffer multiplier for smoother playback
+   - 2x bitrate buffer multiplier (reduced from 4x to prevent backpressure buildup)
    - Audio buffering with `thread_queue_size=1024` and async resampling
+   - Health check timeout: 5s (data timeout: 15s) for faster failure detection
 
 8. **WebGPU Diagnostics**:
    - `captureGpuDiagnostics()` extracts chrome://gpu info at startup
