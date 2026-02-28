@@ -106,6 +106,7 @@ The streaming pipeline requires specific GPU setup:
    - 2x bitrate buffer multiplier (reduced from 4x to prevent backpressure buildup)
    - Audio buffering with `thread_queue_size=1024` and async resampling
    - Health check timeout: 5s (data timeout: 15s) for faster failure detection
+   - Resolution tracking and mismatch detection with automatic viewport recovery
 
 8. **WebGPU Diagnostics**:
    - `captureGpuDiagnostics()` extracts chrome://gpu info at startup
