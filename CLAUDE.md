@@ -433,6 +433,16 @@ class MySystem {
 - **LLM Rate Limiting**: Exponential backoff for API calls (5s base, max 60s)
 - **Consecutive Failure Tracking**: Resets on successful tick
 - **Memory Leak Fixes**: Proper cleanup of COMBAT_DAMAGE_DEALT listeners in AgentManager and event handlers in AutonomousBehaviorManager
+- **Dynamic Combat Escalation**: Agents progress from goblins → bandits → barbarians as combat level grows
+- **Combat Style Rotation**: Agents cycle attack → strength → defense (train lowest skill)
+- **Cooking Phase**: Agents cook raw food immediately instead of waiting for full inventory
+- **Gear Upgrade Phase**: Agents smith better equipment when they have materials + levels
+- **Combat Food Threshold**: Increased from 5 → 10 for better survival
+- **World Data Manifest Loading**: Monster tiers and gear tiers loaded from world-data
+- **LLM Error Fallback**: Idle + retry when agent has active goal instead of derailing to explore
+- **Short-Circuit Dashboard Sync**: All agents show activity logs even when skipping LLM
+- **Critical Crash Fix**: Fixed `weapon.toLowerCase is not a function` crash in getEquippedWeaponTier that broke ALL agents every tick
+- **Quest Goal Detection**: Added quest goal status change detection for proper quest lifecycle transitions
 
 ### Resource Management
 - **Activity Logger Queue**: Max size 1000 with 25% eviction to prevent memory pressure
