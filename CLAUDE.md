@@ -61,7 +61,6 @@ The streaming pipeline requires specific GPU setup. See `scripts/deploy-vast.sh`
    - Uses `--ozone-platform=headless` for Wayland-like headless rendering
    - Enabled via `STREAM_CAPTURE_OZONE_HEADLESS=true`
    - May work on systems where X11/Xvfb fails but GPU is accessible
-   - Requires `--disable-gpu-sandbox` for container GPU access
 
 4. **Headless mode (software)**: NOT SUPPORTED
    - WebGPU requires GPU rendering
@@ -71,21 +70,55 @@ The streaming pipeline requires specific GPU setup. See `scripts/deploy-vast.sh`
 - PulseAudio with `chrome_audio` virtual sink
 - FFmpeg captures from PulseAudio monitor (`chrome_audio.monitor`)
 - Configurable via `STREAM_AUDIO_ENABLED` and `PULSE_AUDIO_DEVICE`
-- User-mode PulseAudio (more reliable than system mode)
-- Audio buffering with `thread_queue_size=1024` and async resampling
+- User-mode PulseAudio with XDG_RUNTIME_DIR at `/tmp/pulse-runtime`
 
 **RTMP Multi-Streaming**:
-- Simultaneous streaming to Twitch, Kick, X/Twitter
+- Simultaneous streaming to Twitch, Kick, X/Twitter (YouTube disabled)
 - FFmpeg tee muxer for single-encode multi-output
-- Stream keys configured via environment variables
-- YouTube explicitly disabled (set `YOUTUBE_STREAM_KEY=""`)
+- Stream keys configured via environment variables (never hardcoded)
+- All secrets read from `.env` file or GitHub Secrets
 
 **Deployment Validation**:
 - Verifies NVIDIA GPU accessible via `nvidia-smi`
-- Checks Vulkan ICD availability
-- Ensures display server (Xorg/Xvfb) responds to `xdpyinfo`
-- Fails deployment if WebGPU cannot be initialized
+- Checks Vulkan ICD availability at `/usr/share/vulkan/icd.d/nvidia_icd.json`
+- Logs actual ICD content and VK_LOADER_DEBUG output for diagnostics
+- Ensures display server (Xorg/Xvfb) is running and accessible
+- Runs WebGPU pre-check test with Chrome to verify navigator.gpu availability
+- Extracts Chrome GPU info (WebGPU/Vulkan status) during deployment
+- Fails deployment if WebGPU cannot be initialized (no soft fallbacks)
 - Persists GPU/display settings to `.env` for PM2 restarts
+- Exports working GPU mode (Xorg/Xvfb/ozone-headless) for ecosystem.config.cjs
+
+**Production Client Build**:
+- When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
+- Serves pre-built client via `vite preview` instead of dev server
+- Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
+- Significantly faster page loads for streaming (no on-demand module compilation)
+
+**Stream Capture Modes**:
+- **CDP (default)**: Chrome DevTools Protocol screencast - fastest, most reliable
+- **WebCodecs**: Native VideoEncoder API (experimental)
+- **MediaRecorder**: Legacy fallback mode
+- Automatic recovery with viewport restoration on resolution mismatch
+- 5s timeout on probe evaluate calls to prevent hanging
+- Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
+- **Chrome Executable**: Set `STREAM_CAPTURE_EXECUTABLE` to explicit Chrome path (e.g., `/usr/bin/google-chrome-unstable`) for reliable WebGPU
+- **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
+
+**Stream Encoding Optimization**:
+- Default: `film` tune with B-frames for better compression
+- Set `STREAM_LOW_LATENCY=true` for `zerolatency` tune (faster playback start)
+- Configurable GOP size via `STREAM_GOP_SIZE` (default: 60 frames)
+- 2x bitrate buffer multiplier (reduced from 4x to prevent backpressure buildup)
+- Audio buffering with `thread_queue_size=1024` and async resampling
+- Health check timeout: 5s (data timeout: 15s) for faster failure detection
+
+**WebGPU Diagnostics**:
+- `captureGpuDiagnostics()` extracts chrome://gpu info at startup
+- `testWebGpuInit()` preflight test detects WebGPU hangs early
+- Runs on blank page before loading heavy game content
+- Provides debugging info when WebGPU fails on remote GPU servers
+- 30s adapter timeout and 60s renderer init timeout prevent indefinite hangs
 
 **Environment Variables** (auto-configured by deploy script):
 ```bash
@@ -94,7 +127,7 @@ GPU_RENDERING_MODE=xorg|xvfb-vulkan|ozone-headless      # Rendering mode
 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json # Force NVIDIA Vulkan
 DUEL_CAPTURE_USE_XVFB=true|false                        # Xvfb vs Xorg
 STREAM_CAPTURE_HEADLESS=false                           # Always false (WebGPU requires display)
-STREAM_CAPTURE_USE_EGL=false                            # EGL vs ANGLE (always false for WebGPU)
+STREAM_CAPTURE_USE_EGL=false                            # EGL vs ANGLE
 STREAM_CAPTURE_OZONE_HEADLESS=true|false                # Use ozone-platform=headless mode
 STREAM_CAPTURE_EXECUTABLE=/path/to/chrome               # Custom Chrome executable path
 STREAM_GOP_SIZE=60                                      # GOP size in frames (default: 60)
@@ -111,30 +144,6 @@ KICK_STREAM_KEY=...
 X_STREAM_KEY=...
 YOUTUBE_STREAM_KEY=""  # Explicitly disabled
 ```
-
-**Production Client Build**:
-- When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
-- Serves pre-built client via `vite preview` instead of dev server
-- Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
-- Significantly faster page loads for streaming (no on-demand module compilation)
-- Page navigation timeout increased to 180s for Vite dev mode compatibility
-
-**Stream Capture Enhancements**:
-- **CDP Mode (default)**: Chrome DevTools Protocol screencast - fastest, most reliable
-- **WebCodecs Mode**: Native VideoEncoder API (experimental)
-- **MediaRecorder Mode**: Legacy fallback
-- 5s timeout on probe evaluate calls to prevent hanging
-- Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
-- Resolution tracking with automatic viewport recovery on mismatch
-- WebGPU diagnostics (`captureGpuDiagnostics()`) extract chrome://gpu info at startup
-- Preflight test (`testWebGpuInit()`) detects WebGPU hangs before loading game content
-
-**Stream Encoding Optimization**:
-- Default: `film` tune with B-frames for better compression
-- Set `STREAM_LOW_LATENCY=true` for `zerolatency` tune (faster playback start)
-- Configurable GOP size via `STREAM_GOP_SIZE` (default: 60 frames)
-- 4x bitrate buffer multiplier for smoother playback
-- Audio buffering with `thread_queue_size=1024` and async resampling
 
 ### Development Rules for WebGPU
 - **NEVER add WebGL fallback code** - it will not work with TSL shaders
@@ -248,6 +257,7 @@ packages/
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
+├── procgen/             # Procedural generation
 └── docs-site/           # Docusaurus documentation site
 ```
 
@@ -501,118 +511,6 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
 
-## Troubleshooting
-
-### Build Issues
-
-```bash
-# Clean everything and rebuild
-npm run clean
-rm -rf node_modules packages/*/node_modules
-bun install
-bun run build
-```
-
-### PhysX Build Fails
-
-PhysX is pre-built and committed. If it needs rebuilding:
-```bash
-cd packages/physx-js-webidl
-./make.sh  # Requires emscripten toolchain
-```
-
-### Port Conflicts
-
-```bash
-# Kill processes on common Hyperscape ports
-lsof -ti:3333 | xargs kill -9  # Game Client
-lsof -ti:5555 | xargs kill -9  # Game Server
-```
-
-See [Port Allocation](#port-allocation) section for full port list.
-
-### Tests Failing
-
-- Ensure server is not running before tests
-- Check `/logs/` folder for error details
-- Tests spawn their own Hyperscape instances
-- Visual tests require WebGPU support (headful browser with GPU access)
-
-### WebGPU Not Available
-
-Hyperscape requires WebGPU - WebGL will NOT work. If you see WebGPU errors:
-
-1. **Check browser version**:
-   - Chrome 113+ (recommended)
-   - Edge 113+
-   - Safari 18+ (macOS 15+) - Safari 17 support removed
-   - Verify at [webgpureport.org](https://webgpureport.org)
-
-2. **Enable hardware acceleration**:
-   - Chrome: `chrome://settings` → System → "Use hardware acceleration"
-   - Safari: Preferences → Advanced → "Show Develop menu" → Develop → Experimental Features → "WebGPU"
-
-3. **Update GPU drivers**:
-   - NVIDIA: [nvidia.com/drivers](https://nvidia.com/drivers)
-   - AMD: [amd.com/support](https://amd.com/support)
-   - Intel: [intel.com/content/www/us/en/download-center](https://intel.com/content/www/us/en/download-center)
-
-4. **Check for WebView restrictions**:
-   - Some WebViews (Electron, Tauri) may block WebGPU
-   - Ensure WebGPU is enabled in WebView configuration
-
-5. **BREAKING CHANGE - WebGL Removed**:
-   - All WebGL fallback code has been removed (commit 47782ed)
-   - `RendererFactory` no longer detects or supports WebGL
-   - `--disable-webgpu` and `forceWebGL` flags are ignored
-   - Deployment fails if WebGPU cannot initialize (no soft fallbacks)
-
-### Streaming Issues (Vast.ai)
-
-If streaming fails to start or produces black frames:
-
-1. **Check GPU access**:
-   ```bash
-   nvidia-smi  # Should show GPU info
-   vulkaninfo --summary  # Should show Vulkan support
-   ```
-
-2. **Verify display server**:
-   ```bash
-   echo $DISPLAY  # Should be :99 or :0
-   xdpyinfo -display $DISPLAY  # Should show display info
-   ```
-
-3. **Check PulseAudio**:
-   ```bash
-   pulseaudio --check  # Should exit silently if running
-   pactl list short sinks  # Should show chrome_audio sink
-   ```
-
-4. **Review deployment logs**:
-   ```bash
-   bunx pm2 logs hyperscape-duel --lines 200
-   ```
-
-5. **Check RTMP status**:
-   ```bash
-   cat /root/hyperscape/packages/server/public/live/rtmp-status.json
-   ```
-
-6. **Check WebGPU diagnostics**:
-   ```bash
-   # Look for GPU diagnostics in logs
-   bunx pm2 logs hyperscape-duel --lines 500 | grep -A 20 "GPU Diagnostics"
-   ```
-
-7. **Common issues**:
-   - **Black frames**: Display server not running or WebGPU failed to initialize
-   - **No audio**: PulseAudio not running or `chrome_audio` sink missing
-   - **Resolution mismatch**: Viewport size doesn't match stream dimensions (auto-recovery enabled)
-   - **Timeout on page load**: Use production client build (`DUEL_USE_PRODUCTION_CLIENT=true`)
-   - **Browser hangs**: WebGPU initialization timeout - check preflight test logs
-   - **Probe timeouts**: Browser unresponsive - capture proceeds after 5 consecutive timeouts
-
 ## Performance Optimizations
 
 ### Instanced Rendering
@@ -683,11 +581,239 @@ Hyperscape uses GPU instancing to render thousands of resource entities (rocks, 
 
 ### Combat System Stability
 
-**Combat Stall Nudge** (commit 3357379):\n- DuelOrchestrator now tracks last nudge timestamp instead of cycle ID\n- Allows re-nudging when combat stalls again after cooldown period\n- Prevents fights from getting stuck after first nudge attempt\n- Improves reliability of autonomous agent combat\n\n**Combat Retry Timer Alignment** (commit 0b2ff71):\n- Aligned combat retry timer with tick system (1500ms → 3000ms = 5 ticks)\n- Reduced phase timeout grace periods (30s → 10s) for faster failure detection\n- Improves responsiveness of combat system error recovery\n\n**Implementation:**\n```typescript\n// packages/server/src/systems/server/duel/DuelOrchestrator.ts\n// Tracks lastNudgeTimestamp per duel for re-nudge capability\n// Combat retry timer: 3000ms (5 ticks)\n```\n\n### Memory Leak Fixes
+**Combat Stall Nudge** (commit 3357379):
+- DuelOrchestrator now tracks last nudge timestamp instead of cycle ID
+- Allows re-nudging when combat stalls again after cooldown period
+- Prevents fights from getting stuck after first nudge attempt
+- Improves reliability of autonomous agent combat
 
-**AgentManager Memory Leak** (commit 3357379):\n- Now stores and properly cleans up COMBAT_DAMAGE_DEALT event listener\n- Prevents memory accumulation during agent lifecycle\n- Listener removed in shutdown() method\n\n**AutonomousBehaviorManager Memory Leak** (commit 3357379):\n- Stores and cleans up all event handlers in stop() method\n- Prevents memory leaks when agents are stopped/restarted\n- Affects COMBAT_DAMAGE_DEALT, COMBAT_DEATH, and other event listeners\n\n**Implementation:**\n```typescript\n// packages/server/src/systems/server/agent/AgentManager.ts\n// packages/server/src/systems/server/agent/AutonomousBehaviorManager.ts\n// Event handlers stored as class properties for proper cleanup\n```\n\n### Resource Management
+**Combat Retry Timer Alignment** (commit 0b2ff71):
+- Aligned combat retry timer with tick system (1500ms → 3000ms = 5 ticks)
+- Reduced phase timeout grace periods (30s → 10s) for faster failure detection
+- Improves responsiveness of combat system error recovery
 
-**Damage Event Cache Optimization** (commit 3357379):\n- Cleanup frequency increased from every 2 ticks to every tick\n- Cache cap lowered from 5000 to 1000 entries\n- Evicts 75% of entries when cap exceeded (was 50%)\n- Prevents memory pressure during heavy combat scenarios\n\n**Activity Logger Queue Management** (commit 0b2ff71):\n- Added max size (1000) to activity logger queue with 25% eviction\n- Prevents unbounded memory growth from activity logging\n- Evicts oldest entries when queue exceeds capacity\n\n**Session Timeout** (commit 0b2ff71):\n- Added session timeout for zombie sessions (30 min max via MAX_SESSION_TICKS)\n- New \"timeout\" added to SessionCloseReason type\n- Prevents resource leaks from abandoned sessions\n\n**Streaming Stability** (commit 3357379, 0b2ff71):\n- Browser restart interval reduced from 1 hour to 45 minutes\n- Prevents WebGPU OOM (out of memory) crashes before scheduled rotation\n- Fixed health check vs data timeout mismatch (5s/15s instead of 10s/30s)\n- Lowered buffer multiplier from 4x to 2x (reduces backpressure buildup)\n- Fixed CDP session handler cleanup on recovery (recovery mode flag prevents double-handling)\n- Improves long-running stream reliability\n\n**Agent System Rate Limiting** (commit 0b2ff71):\n- Added exponential backoff rate limiting for LLM API calls\n- Tracks consecutive failures with 5s base backoff, max 60s\n- Resets on successful tick\n- Prevents API rate limit exhaustion and improves agent stability\n\n**Implementation:**\n```typescript\n// packages/shared/src/systems/shared/combat/CombatSystem.ts\n// Damage event cache with aggressive cleanup\n\n// packages/server/src/systems/server/duel/stream-to-rtmp.ts\n// Browser restart interval: 45 minutes\n// Health check: 5s, data timeout: 15s\n// Buffer multiplier: 2x\n\n// packages/server/src/systems/server/agent/AgentManager.ts\n// Exponential backoff for LLM API calls\n\n// packages/server/src/systems/server/session/SessionManager.ts\n// Session timeout: 30 minutes (MAX_SESSION_TICKS)\n```\n\n## Additional Resources
+**Implementation:**
+```typescript
+// packages/server/src/systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts
+// Tracks lastNudgeTimestamp per duel for re-nudge capability
+// Combat retry timer: 3000ms (5 ticks)
+```
+
+### Memory Leak Fixes
+
+**AgentManager Memory Leak** (commit 3357379):
+- Now stores and properly cleans up COMBAT_DAMAGE_DEALT event listener
+- Prevents memory accumulation during agent lifecycle
+- Listener removed in shutdown() method
+
+**AutonomousBehaviorManager Memory Leak** (commit 3357379):
+- Stores and cleans up all event handlers in stop() method
+- Prevents memory leaks when agents are stopped/restarted
+- Affects COMBAT_DAMAGE_DEALT, COMBAT_DEATH, and other event listeners
+
+**Implementation:**
+```typescript
+// packages/server/src/eliza/AgentManager.ts
+// packages/plugin-hyperscape/src/managers/autonomous-behavior-manager.ts
+// Event handlers stored as class properties for proper cleanup
+```
+
+### Resource Management
+
+**Damage Event Cache Optimization** (commit 3357379):
+- Cleanup frequency increased from every 2 ticks to every tick
+- Cache cap lowered from 5000 to 1000 entries
+- Evicts 75% of entries when cap exceeded (was 50%)
+- Prevents memory pressure during heavy combat scenarios
+
+**Activity Logger Queue Management** (commit 0b2ff71):
+- Added max size (1000) to activity logger queue with 25% eviction
+- Prevents unbounded memory growth from activity logging
+- Evicts oldest entries when queue exceeds capacity
+
+**Session Timeout** (commit 0b2ff71):
+- Added session timeout for zombie sessions (30 min max via MAX_SESSION_TICKS)
+- New "timeout" added to SessionCloseReason type
+- Prevents resource leaks from abandoned sessions
+
+**Streaming Stability** (commits 3357379, 0b2ff71, 432ff84):
+- Browser restart interval reduced from 1 hour to 45 minutes
+- Prevents WebGPU OOM (out of memory) crashes before scheduled rotation
+- Fixed health check vs data timeout mismatch (5s/15s instead of 10s/30s)
+- Lowered buffer multiplier from 4x to 2x (reduces backpressure buildup)
+- Fixed CDP session handler cleanup on recovery (recovery mode flag prevents double-handling)
+- Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
+- Improves long-running stream reliability
+
+**Agent System Rate Limiting** (commit 0b2ff71):
+- Added exponential backoff rate limiting for LLM API calls
+- Tracks consecutive failures with 5s base backoff, max 60s
+- Resets on successful tick
+- Prevents API rate limit exhaustion and improves agent stability
+
+**Implementation:**
+```typescript
+// packages/shared/src/systems/shared/combat/CombatSystem.ts
+// Damage event cache with aggressive cleanup
+
+// packages/server/src/streaming/rtmp-bridge.ts
+// Browser restart interval: 45 minutes
+// Health check: 5s, data timeout: 15s
+// Buffer multiplier: 2x
+
+// packages/server/src/eliza/AgentManager.ts
+// Exponential backoff for LLM API calls
+
+// packages/server/src/systems/ServerNetwork/save-manager.ts
+// Session timeout: 30 minutes (MAX_SESSION_TICKS)
+
+// packages/server/src/systems/ActivityLoggerSystem/index.ts
+// Activity logger queue: max 1000 entries with 25% eviction
+```
+
+### Test Stability
+
+**GoldClob Fuzz Tests** (commit 583b6bc):
+- Added 120s timeout for randomized invariant tests
+- Processes 4 seeds × 140 operations plus claims
+- Prevents test timeouts on slower CI runners
+
+**Precision Fixes** (commit 583b6bc):
+- Use larger amounts (10000n) to avoid gas cost precision issues
+- Add explicit BigInt conversion for gasCost calculations
+- Fixes flaky tests due to rounding errors
+
+**Dynamic Import Timeout** (commit 583b6bc):
+- Increased beforeEach hook timeout to 60s for EmbeddedHyperscapeService
+- Allows time for dynamic imports to complete
+- Prevents test failures on slower systems
+
+**Implementation:**
+```typescript
+// packages/evm-contracts/test/GoldClob.fuzz.ts
+// 120s timeout for fuzz tests
+
+// packages/evm-contracts/test/GoldClob.round2.ts
+// Larger amounts (10000n) for precision
+
+// packages/server/src/eliza/__tests__/EmbeddedHyperscapeService.test.ts
+// 60s timeout for beforeEach hooks
+```
+
+## Troubleshooting
+
+### Build Issues
+
+```bash
+# Clean everything and rebuild
+npm run clean
+rm -rf node_modules packages/*/node_modules
+bun install
+bun run build
+```
+
+### PhysX Build Fails
+
+PhysX is pre-built and committed. If it needs rebuilding:
+```bash
+cd packages/physx-js-webidl
+./make.sh  # Requires emscripten toolchain
+```
+
+### Port Conflicts
+
+```bash
+# Kill processes on common Hyperscape ports
+lsof -ti:3333 | xargs kill -9  # Game Client
+lsof -ti:5555 | xargs kill -9  # Game Server
+```
+
+See [Port Allocation](#port-allocation) section for full port list.
+
+### Tests Failing
+
+- Ensure server is not running before tests
+- Check `/logs/` folder for error details
+- Tests spawn their own Hyperscape instances
+- Visual tests require WebGPU support (headful browser with GPU access)
+
+### WebGPU Not Available
+
+Hyperscape requires WebGPU - WebGL will NOT work. If you see WebGPU errors:
+
+1. **Check browser version**:
+   - Chrome 113+ (recommended)
+   - Edge 113+
+   - Safari 18+ (macOS 15+) - Safari 17 support removed
+   - Verify at [webgpureport.org](https://webgpureport.org)
+
+2. **Enable hardware acceleration**:
+   - Chrome: `chrome://settings` → System → "Use hardware acceleration"
+   - Safari: Preferences → Advanced → "Show Develop menu" → Develop → Experimental Features → "WebGPU"
+
+3. **Update GPU drivers**:
+   - NVIDIA: [nvidia.com/drivers](https://nvidia.com/drivers)
+   - AMD: [amd.com/support](https://amd.com/support)
+   - Intel: [intel.com/content/www/us/en/download-center](https://intel.com/content/www/us/en/download-center)
+
+4. **Check for WebView restrictions**:
+   - Some WebViews (Electron, Tauri) may block WebGPU
+   - Ensure WebGPU is enabled in WebView configuration
+
+5. **BREAKING CHANGE - WebGL Removed** (commit 47782ed):
+   - All WebGL fallback code has been removed
+   - `RendererFactory` no longer detects or supports WebGL
+   - `UniversalRenderer` type replaced with `WebGPURenderer`
+   - `--disable-webgpu` and `forceWebGL` flags are ignored
+   - Deployment fails if WebGPU cannot initialize (no soft fallbacks)
+
+### Streaming Issues (Vast.ai)
+
+If streaming fails to start or produces black frames:
+
+1. **Check GPU access**:
+   ```bash
+   nvidia-smi  # Should show GPU info
+   vulkaninfo --summary  # Should show Vulkan support
+   ```
+
+2. **Verify display server**:
+   ```bash
+   echo $DISPLAY  # Should be :99 or :0
+   xdpyinfo -display $DISPLAY  # Should show display info
+   ```
+
+3. **Check PulseAudio**:
+   ```bash
+   pulseaudio --check  # Should exit silently if running
+   pactl list short sinks  # Should show chrome_audio sink
+   ```
+
+4. **Review deployment logs**:
+   ```bash
+   bunx pm2 logs hyperscape-duel --lines 200
+   ```
+
+5. **Check RTMP status**:
+   ```bash
+   cat /root/hyperscape/packages/server/public/live/rtmp-status.json
+   ```
+
+6. **Check WebGPU diagnostics**:
+   ```bash
+   # Look for GPU diagnostics in logs
+   bunx pm2 logs hyperscape-duel --lines 500 | grep -A 20 "GPU Diagnostics"
+   ```
+
+7. **Common issues**:
+   - **Black frames**: Display server not running or WebGPU failed to initialize
+   - **No audio**: PulseAudio not running or `chrome_audio` sink missing
+   - **Resolution mismatch**: Viewport size doesn't match stream dimensions (auto-recovery enabled)
+   - **Timeout on page load**: Use production client build (`DUEL_USE_PRODUCTION_CLIENT=true`)
+   - **Browser hangs**: WebGPU initialization timeout - check preflight test logs
+   - **Probe timeouts**: Browser unresponsive - capture proceeds after 5 consecutive timeouts
+
+## Additional Resources
 
 - [README.md](README.md) - Full project documentation
 - [AGENTS.md](AGENTS.md) - AI assistant guidelines with WebGPU requirements
