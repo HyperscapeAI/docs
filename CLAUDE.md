@@ -24,6 +24,13 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 - WebGPU must be available and working
 - Check: [webgpureport.org](https://webgpureport.org)
 
+### macOS WebGPU Support
+- **Metal Backend**: macOS uses Metal (not Vulkan) for WebGPU
+- **System Chrome Required**: Auto-detects and uses system Chrome on macOS for WebGPU support
+- **Playwright Limitation**: Bundled Chromium doesn't have proper WebGPU support on macOS
+- **No Vulkan ICD**: Don't set `VK_ICD_FILENAMES` on macOS (not applicable)
+- **Chrome Flags**: Remove Vulkan from feature flags on macOS (Metal is the backend)
+
 ### WebGPU Initialization
 - **Adapter Request Timeout**: 30s timeout on `navigator.gpu.requestAdapter()` to prevent indefinite hangs
 - **Renderer Init Timeout**: 60s timeout on `renderer.init()` to detect GPU driver issues
