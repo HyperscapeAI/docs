@@ -488,7 +488,7 @@ Hyperscape requires WebGPU - WebGL will NOT work. If you see WebGPU errors:
 1. **Check browser version**:
    - Chrome 113+ (recommended)
    - Edge 113+
-   - Safari 18+ (macOS 15+)
+   - Safari 18+ (macOS 15+) - Safari 17 support removed
    - Verify at [webgpureport.org](https://webgpureport.org)
 
 2. **Enable hardware acceleration**:
@@ -503,6 +503,12 @@ Hyperscape requires WebGPU - WebGL will NOT work. If you see WebGPU errors:
 4. **Check for WebView restrictions**:
    - Some WebViews (Electron, Tauri) may block WebGPU
    - Ensure WebGPU is enabled in WebView configuration
+
+5. **BREAKING CHANGE - WebGL Removed**:
+   - All WebGL fallback code has been removed (commit 47782ed)
+   - `RendererFactory` no longer detects or supports WebGL
+   - `--disable-webgpu` and `forceWebGL` flags are ignored
+   - Deployment fails if WebGPU cannot initialize (no soft fallbacks)
 
 ### Streaming Issues (Vast.ai)
 
