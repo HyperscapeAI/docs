@@ -1,404 +1,681 @@
-# Streaming Configuration Reference
+# Streaming Configuration Guide
 
-Complete reference for Hyperscape's RTMP streaming system with WebGPU rendering.
+This guide covers the complete streaming configuration for Hyperscape, including GPU rendering, audio capture, video encoding, and multi-platform RTMP streaming.
 
 ## Overview
 
-Hyperscape's streaming pipeline captures gameplay via Chrome DevTools Protocol (CDP) and streams to multiple platforms simultaneously (Twitch, Kick, X/Twitter). The system requires WebGPU for rendering and uses NVIDIA GPU acceleration via Vulkan.
+Hyperscape streams live gameplay to multiple platforms (Twitch, Kick, X/Twitter) using:
 
-## Critical Requirements
+- **CDP (Chrome DevTools Protocol)** for frame capture
+- **WebGPU** for GPU-accelerated rendering
+- **PulseAudio** for audio capture
+- **FFmpeg** for H.264 encoding and RTMP fanout
 
-### WebGPU is REQUIRED
-- **NO WebGL fallback** - All shaders use TSL (Three Shading Language)
-- Chrome must have WebGPU enabled and working
-- NVIDIA GPU with Vulkan support required for server/streaming
-- Headless Chrome modes that don't support WebGPU will NOT work
+## Architecture
 
-### GPU Rendering Modes
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Chrome (WebGPU)                                             │
+│ ┌─────────────────┐                                         │
+│ │ Game Client     │                                         │
+│ │ (Three.js)      │                                         │
+│ └────────┬────────┘                                         │
+│          │                                                   │
+│          ▼                                                   │
+│ ┌─────────────────┐      ┌──────────────┐                  │
+│ │ WebGPU Renderer │─────▶│ PulseAudio   │                  │
+│ │ (TSL Shaders)   │      │ chrome_audio │                  │
+│ └────────┬────────┘      └──────┬───────┘                  │
+└──────────┼────────────────────────┼──────────────────────────┘
+           │                        │
+           ▼                        ▼
+    ┌──────────────┐         ┌──────────────┐
+    │ CDP Session  │         │ FFmpeg Audio │
+    │ screencast   │         │ Capture      │
+    └──────┬───────┘         └──────┬───────┘
+           │                        │
+           ▼                        ▼
+    ┌──────────────────────────────────┐
+    │ FFmpeg H.264 Encoder             │
+    │ (Hardware Accelerated)           │
+    └──────┬───────────────────────────┘
+           │
+           ▼
+    ┌──────────────────────────────────┐
+    │ RTMP Tee Muxer                   │
+    │ (Single encode, multi-output)    │
+    └──────┬───────────────────────────┘
+           │
+           ├─────▶ Twitch
+           ├─────▶ Kick
+           └─────▶ X/Twitter
+```
 
-The deployment script (`scripts/deploy-vast.sh`) tries multiple approaches in order:
+## GPU Rendering Setup
 
-1. **Xorg with NVIDIA** (preferred):
-   - Full hardware acceleration
-   - Best performance and quality
-   - Requires DRI/DRM device access
-   - Config: `/etc/X11/xorg-nvidia-headless.conf`
+### Requirements
+
+- **NVIDIA GPU** with Vulkan support
+- **Display server**: Xorg or Xvfb (headless mode NOT supported)
+- **Vulkan ICD**: NVIDIA Vulkan driver
+- **Chrome Dev channel**: For WebGPU support
+
+### Rendering Modes
+
+The deploy script tries modes in order:
+
+1. **Xorg with NVIDIA** (best performance):
+   ```bash
+   # Requires DRI/DRM device access
+   ls -la /dev/dri/card0
+   
+   # Start Xorg
+   Xorg :99 -config /etc/X11/xorg-nvidia-headless.conf
+   export DISPLAY=:99
+   ```
 
 2. **Xvfb with NVIDIA Vulkan** (fallback):
-   - Virtual framebuffer for X11 protocol
-   - Chrome uses NVIDIA GPU via ANGLE/Vulkan
-   - CDP captures from Chrome's internal GPU rendering
-   - Works in containers without DRM access
+   ```bash
+   # Virtual framebuffer + GPU rendering
+   Xvfb :99 -screen 0 1920x1080x24 +extension GLX
+   export DISPLAY=:99
+   export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+   ```
 
-3. **Deployment FAILS** if neither works:
-   - No soft fallback to headless mode
-   - WebGPU is non-negotiable
+3. **Headless mode**: NOT SUPPORTED
+   - WebGPU requires a display server
+   - Deployment fails if neither Xorg nor Xvfb works
 
-## Environment Variables
-
-### GPU & Display Configuration
+### Environment Variables
 
 ```bash
-# X Server Display
-DISPLAY=:99                                                    # X server display number
+# Display configuration (auto-set by deploy script)
+DISPLAY=:99
+GPU_RENDERING_MODE=xorg  # or xvfb-vulkan
+DUEL_CAPTURE_USE_XVFB=false  # true for Xvfb, false for Xorg
 
-# Vulkan Driver (Force NVIDIA-only to avoid Mesa conflicts)
-VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json     # NVIDIA Vulkan ICD path
+# Vulkan configuration
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
 
-# Rendering Mode (set automatically by deploy script)
-GPU_RENDERING_MODE=xorg                                       # xorg | xvfb-vulkan
-DUEL_CAPTURE_USE_XVFB=false                                   # true if using Xvfb
-
-# WebGPU Enforcement
-STREAM_CAPTURE_HEADLESS=false                                 # Must be false for WebGPU
-STREAM_CAPTURE_DISABLE_WEBGPU=false                           # Deprecated, always false
-DUEL_FORCE_WEBGL_FALLBACK=false                               # Removed, always false
+# Stream capture settings
+STREAM_CAPTURE_HEADLESS=false  # Must be false for WebGPU
+STREAM_CAPTURE_CHANNEL=chrome-dev  # Use Chrome Dev for WebGPU
+STREAM_CAPTURE_ANGLE=vulkan  # ANGLE backend (vulkan for NVIDIA)
 ```
 
-### Chrome Configuration
+### Verification
 
 ```bash
-# Browser Channel (Chrome Dev has WebGPU enabled by default)
-STREAM_CAPTURE_CHANNEL=chrome-dev                             # Playwright channel name
+# Check GPU
+nvidia-smi
 
-# ANGLE Backend (Vulkan required for WebGPU)
-STREAM_CAPTURE_ANGLE=vulkan                                   # vulkan | metal (macOS only)
+# Check Vulkan
+vulkaninfo --summary
 
-# Capture Mode
-STREAM_CAPTURE_MODE=cdp                                       # cdp | mediarecorder | webcodecs
+# Check display server
+echo $DISPLAY
+xdpyinfo -display $DISPLAY
 
-# Viewport Resolution
-STREAM_CAPTURE_WIDTH=1280                                     # Must be even number
-STREAM_CAPTURE_HEIGHT=720                                     # Must be even number
-
-# Frame Rate
-STREAM_FPS=30                                                 # Target FPS (default: 30)
-
-# CDP Quality (JPEG compression for CDP mode)
-STREAM_CDP_QUALITY=80                                         # 1-100 (default: 80)
-```
-
-### Audio Configuration
-
-```bash
-# PulseAudio Setup
-XDG_RUNTIME_DIR=/tmp/pulse-runtime                            # PulseAudio runtime directory
-PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native             # PulseAudio socket path
-
-# Audio Capture
-STREAM_AUDIO_ENABLED=true                                     # Enable audio capture
-PULSE_AUDIO_DEVICE=chrome_audio.monitor                       # PulseAudio monitor device
-```
-
-### RTMP Destinations
-
-```bash
-# Twitch
-TWITCH_STREAM_KEY=live_xxxxx_yyyyy                           # Twitch stream key
-TWITCH_RTMP_URL=rtmp://live.twitch.tv/app                    # Optional (auto-detected)
-
-# Kick (uses RTMPS)
-KICK_STREAM_KEY=sk_us-west-2_xxxxx                           # Kick stream key
-KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
-
-# X/Twitter
-X_STREAM_KEY=xxxxx                                            # X stream key
-X_RTMP_URL=rtmp://sg.pscp.tv:80/x                            # X RTMP ingest URL
-
-# YouTube (explicitly disabled)
-YOUTUBE_STREAM_KEY=                                           # Empty string disables YouTube
-```
-
-### Streaming Behavior
-
-```bash
-# Platform Selection
-STREAMING_CANONICAL_PLATFORM=twitch                           # Primary platform for timing
-
-# Latency & Buffering
-STREAMING_PUBLIC_DELAY_MS=0                                   # Public data delay (0 for live betting)
-STREAM_LOW_LATENCY=false                                      # Use 'zerolatency' tune (default: false)
-
-# Recovery & Health
-STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000                      # CDP recovery timeout
-STREAM_CAPTURE_RECOVERY_MAX_FAILURES=6                        # Max failures before fallback
-
-# Game URL
-GAME_URL=http://localhost:3333/?page=stream                   # Primary game URL
-GAME_FALLBACK_URLS=http://localhost:3333/?embedded=true&mode=spectator  # Fallback URLs
+# Check Chrome
+google-chrome-unstable --version
 ```
 
 ## Audio Capture Setup
 
 ### PulseAudio Configuration
 
-The deployment script sets up PulseAudio in user mode with a virtual sink:
-
-1. **Create runtime directory**:
-   ```bash
-   export XDG_RUNTIME_DIR=/tmp/pulse-runtime
-   mkdir -p "$XDG_RUNTIME_DIR"
-   chmod 700 "$XDG_RUNTIME_DIR"
-   ```
-
-2. **Create PulseAudio config** (`~/.config/pulse/default.pa`):
-   ```
-   .fail
-   load-module module-null-sink sink_name=chrome_audio sink_properties=device.description="ChromeAudio"
-   set-default-sink chrome_audio
-   load-module module-native-protocol-unix auth-anonymous=1
-   ```
-
-3. **Start PulseAudio**:
-   ```bash
-   pulseaudio --start --exit-idle-time=-1 --daemonize=yes
-   ```
-
-4. **Verify sink exists**:
-   ```bash
-   pactl list short sinks | grep chrome_audio
-   ```
-
-### FFmpeg Audio Capture
-
-FFmpeg captures from the PulseAudio monitor device:
+Audio is captured via PulseAudio virtual sink:
 
 ```bash
-# Audio input configuration
--f pulse -i chrome_audio.monitor \
--thread_queue_size 1024 \
--use_wallclock_as_timestamps 1 \
--af "aresample=async=1000:first_pts=0"
+# Install PulseAudio
+apt-get install -y pulseaudio pulseaudio-utils
+
+# Create virtual sink
+pactl load-module module-null-sink sink_name=chrome_audio
+
+# Set as default
+pactl set-default-sink chrome_audio
+
+# Verify
+pactl list short sinks
 ```
 
-**Parameters**:
-- `thread_queue_size=1024` - Prevents buffer underruns
-- `use_wallclock_as_timestamps=1` - Real-time timing
-- `aresample=async=1000:first_pts=0` - Recovers from audio drift (22ms threshold)
-
-## FFmpeg Encoding Configuration
-
-### Video Encoding
+### Environment Variables
 
 ```bash
-# H.264 encoding with hardware acceleration
--c:v libx264 \
--preset veryfast \
--tune film \                    # Changed from 'zerolatency' for better compression
--profile:v high \
--level 4.2 \
--pix_fmt yuv420p \
--b:v 4500k \
--maxrate 4500k \
--bufsize 18000k \               # 4x bitrate (was 2x)
--g 60 \                         # 2-second GOP at 30fps
--keyint_min 60 \
--sc_threshold 0 \
--thread_queue_size 1024         # Input buffering
+# Enable audio capture
+STREAM_AUDIO_ENABLED=true
+
+# PulseAudio monitor device
+PULSE_AUDIO_DEVICE=chrome_audio.monitor
+
+# PulseAudio server socket
+PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+
+# Runtime directory
+XDG_RUNTIME_DIR=/tmp/pulse-runtime
 ```
 
-### Audio Encoding
+### Troubleshooting Audio
 
 ```bash
-# AAC audio encoding
--c:a aac \
--b:a 128k \
--ar 44100 \
--ac 2 \
--thread_queue_size 1024         # Prevents buffer underruns
+# Check PulseAudio status
+pulseaudio --check
+
+# List sinks
+pactl list short sinks
+
+# Test audio capture
+ffmpeg -f pulse -i chrome_audio.monitor -t 5 test.wav
+
+# Check Chrome audio output
+pactl list sink-inputs
 ```
 
-### Output Flags
+## Video Capture Modes
 
-```bash
-# FLV/RTMP flags
--f flv \
--flvflags no_duration_filesize \  # Prevents FLV header issues
--fflags +genpts+discardcorrupt    # Stream recovery
-```
+### CDP Mode (Recommended)
 
-## Capture Modes
-
-### CDP Mode (Default)
-
-Chrome DevTools Protocol screencast capture:
+**Chrome DevTools Protocol** screencast capture - fastest and most reliable.
 
 ```bash
 STREAM_CAPTURE_MODE=cdp
+STREAM_CDP_QUALITY=80  # JPEG quality (1-100)
+STREAM_FPS=30
 ```
 
-**Advantages**:
-- 2-3x faster than MediaRecorder
-- No browser-side encoding overhead
-- Single encode step: JPEG → H.264
-- Works in headful and headless modes
-- Hardware accelerated on supported platforms
-
 **How it works**:
-1. CDP `Page.startScreencast` captures compositor frames
-2. Frames sent as base64 JPEG to Node.js
-3. Decoded and piped to FFmpeg stdin
-4. FFmpeg encodes to H.264 and sends to RTMP
+1. CDP `Page.startScreencast` captures frames from compositor
+2. Frames delivered as base64 JPEG
+3. Decoded and piped directly to FFmpeg stdin
+4. No browser-side encoding overhead
+
+**Performance**: ~2-3x faster than MediaRecorder mode
 
 ### MediaRecorder Mode (Legacy)
 
-Browser MediaRecorder API with WebSocket:
+**MediaRecorder API** with WebSocket transfer - legacy fallback.
 
 ```bash
 STREAM_CAPTURE_MODE=mediarecorder
 ```
 
-**Fallback mode** - Used if CDP capture fails or stalls.
+**How it works**:
+1. Browser encodes frames with MediaRecorder (VP8/VP9)
+2. Chunks sent via WebSocket to Node.js
+3. FFmpeg re-encodes to H.264
+4. Double encoding overhead
+
+**Use when**: CDP mode fails or for debugging
 
 ### WebCodecs Mode (Experimental)
 
-Native VideoEncoder API with stream copy:
+**VideoEncoder API** with direct H.264 encoding - experimental.
 
 ```bash
 STREAM_CAPTURE_MODE=webcodecs
 ```
 
-**Experimental** - Falls back to CDP if no traffic within 20s.
+**Status**: Experimental, may not work on all platforms
 
-## Troubleshooting
+## Video Encoding Settings
 
-### WebGPU Not Available
-
-**Symptoms**:
-- Black screen in stream
-- "WebGPU not supported" errors
-- Chrome falls back to software rendering
-
-**Solutions**:
-1. Verify NVIDIA GPU is accessible: `nvidia-smi`
-2. Check Vulkan support: `vulkaninfo --summary`
-3. Verify X server is running: `xdpyinfo -display :99`
-4. Check Chrome WebGPU: Navigate to `chrome://gpu` in browser
-5. Verify `VK_ICD_FILENAMES` points to NVIDIA ICD
-
-### Audio Not Captured
-
-**Symptoms**:
-- Stream has video but no audio
-- FFmpeg shows audio input errors
-
-**Solutions**:
-1. Verify PulseAudio is running: `pulseaudio --check`
-2. Check chrome_audio sink exists: `pactl list short sinks`
-3. Verify monitor device: `pactl list short sources | grep monitor`
-4. Check FFmpeg can access PulseAudio: `ffmpeg -f pulse -list_devices true -i dummy`
-5. Verify `PULSE_SERVER` environment variable is set
-
-### Stream Buffering/Stuttering
-
-**Symptoms**:
-- Viewers see buffering
-- Inconsistent frame rate
-- Audio/video desync
-
-**Solutions**:
-1. Increase buffer size: `STREAM_BUFFER_MULTIPLIER=4` (or higher)
-2. Use film tune for better compression: `STREAM_LOW_LATENCY=false`
-3. Check network bandwidth to RTMP servers
-4. Verify CDP FPS matches target: Check logs for "CDP FPS: X"
-5. Monitor dropped frames: Check logs for "Dropped: X"
-
-### Xorg/Xvfb Failures
-
-**Symptoms**:
-- Deployment fails with "Cannot establish WebGPU-capable rendering mode"
-- Xorg falls back to swrast (software rendering)
-
-**Solutions**:
-1. Verify NVIDIA drivers are installed: `nvidia-smi`
-2. Check DRI devices exist: `ls -la /dev/dri/`
-3. Review Xorg logs: `cat /var/log/Xorg.99.log`
-4. Verify GPU BusID is correct in xorg config
-5. Check for conflicting X servers: `pkill -9 Xorg; pkill -9 Xvfb`
-6. Clean up lock files: `rm -f /tmp/.X99-lock`
-
-## Performance Tuning
-
-### Low Latency Mode
-
-For minimal latency (at cost of compression efficiency):
+### Basic Settings
 
 ```bash
-STREAM_LOW_LATENCY=true          # Use 'zerolatency' tune
-STREAM_BUFFER_MULTIPLIER=2       # Smaller buffer (was 4)
-STREAMING_PUBLIC_DELAY_MS=0      # No artificial delay
+# Resolution (must be even numbers)
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+
+# Frame rate
+STREAM_FPS=30
+
+# Bitrate (bits per second)
+STREAM_BITRATE=4500000  # 4.5 Mbps
+
+# x264 preset (speed vs quality tradeoff)
+STREAM_PRESET=veryfast  # ultrafast | veryfast | fast | medium | slow
 ```
 
-### High Quality Mode
-
-For better compression and smoother playback:
+### Advanced Settings
 
 ```bash
-STREAM_LOW_LATENCY=false         # Use 'film' tune (default)
-STREAM_BUFFER_MULTIPLIER=4       # Larger buffer (default)
-STREAM_CDP_QUALITY=90            # Higher JPEG quality (default: 80)
+# Low-latency mode (faster playback start, higher bitrate)
+STREAM_LOW_LATENCY=false  # true = tune=zerolatency, false = tune=film
+
+# GOP size (keyframe interval in frames)
+STREAM_GOP_SIZE=60  # 2 seconds at 30fps
+
+# Buffer size (default: 4x bitrate)
+STREAM_BUFFER_SIZE=18000000  # 18 Mbps for 4.5 Mbps bitrate
 ```
 
-### Resource Optimization
+### Preset Comparison
 
-For lower CPU/memory usage:
+| Preset | Speed | Quality | CPU Usage | Bitrate Efficiency |
+|--------|-------|---------|-----------|-------------------|
+| ultrafast | Fastest | Lowest | Low | Poor |
+| veryfast | Very Fast | Low | Medium | Fair |
+| fast | Fast | Medium | Medium | Good |
+| medium | Medium | High | High | Very Good |
+| slow | Slow | Very High | Very High | Excellent |
+
+**Recommendation**: Use `veryfast` for streaming (good balance of speed and quality).
+
+## RTMP Destinations
+
+### Twitch
 
 ```bash
-STREAM_CAPTURE_WIDTH=1280        # Lower resolution
-STREAM_CAPTURE_HEIGHT=720        # 720p (default)
-STREAM_FPS=30                    # Lower FPS (default: 30)
-STREAM_CDP_QUALITY=70            # Lower JPEG quality
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+TWITCH_RTMP_URL=rtmp://live.twitch.tv/app  # Optional override
 ```
 
-## Monitoring & Diagnostics
+Get your stream key from: [dashboard.twitch.tv/settings/stream](https://dashboard.twitch.tv/settings/stream)
 
-### Health Checks
+### Kick
 
-The streaming system exposes health endpoints:
+```bash
+KICK_STREAM_KEY=your-kick-stream-key
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
+```
+
+Get your stream key from: [kick.com/dashboard/settings/stream](https://kick.com/dashboard/settings/stream)
+
+### X/Twitter
+
+```bash
+X_STREAM_KEY=your-x-stream-key
+X_RTMP_URL=rtmp://sg.pscp.tv:80/x
+```
+
+Get RTMP URL from: Media Studio → Producer → Create Broadcast → Create Source
+
+**Note**: Requires X Premium subscription for desktop streaming.
+
+### YouTube (Disabled by Default)
+
+```bash
+# Explicitly disable YouTube
+YOUTUBE_STREAM_KEY=
+```
+
+To enable YouTube streaming:
+
+```bash
+YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+YOUTUBE_RTMP_URL=rtmp://a.rtmp.youtube.com/live2
+```
+
+Get your stream key from: [studio.youtube.com](https://studio.youtube.com) → Go Live → Stream
+
+### Custom Destinations
+
+```bash
+# Single custom destination
+CUSTOM_RTMP_NAME=Custom
+CUSTOM_RTMP_URL=rtmp://your-server/live
+CUSTOM_STREAM_KEY=your-key
+
+# Multiple destinations via JSON
+RTMP_DESTINATIONS_JSON=[
+  {
+    "name": "Custom1",
+    "url": "rtmp://server1/live",
+    "key": "key1",
+    "enabled": true
+  },
+  {
+    "name": "Custom2",
+    "url": "rtmp://server2/live",
+    "key": "key2",
+    "enabled": true
+  }
+]
+```
+
+## Production Client Build
+
+**Problem**: Vite's dev server uses JIT compilation, causing 60-180s page load times that trigger browser timeouts.
+
+**Solution**: Use pre-built client for streaming.
+
+### Configuration
+
+```bash
+# Enable production client build
+DUEL_USE_PRODUCTION_CLIENT=true
+
+# Or set NODE_ENV
+NODE_ENV=production
+```
+
+### How It Works
+
+1. Duel stack checks if client is built: `packages/client/dist/`
+2. If not built, runs: `bun run build:client`
+3. Starts `vite preview` instead of `vite dev`
+4. Serves pre-built assets (loads in <5s vs 60-180s)
+
+### Benefits
+
+- **Faster page loads**: <5 seconds (vs 60-180s for dev server)
+- **No browser timeouts**: RTMP bridge loads within 180s limit
+- **Consistent performance**: No JIT compilation during streaming
+- **Production-ready**: Same build used in production
+
+## Stream Health Monitoring
+
+### Status Endpoints
 
 ```bash
 # Streaming state
 curl http://localhost:5555/api/streaming/state
 
+# Duel context
+curl http://localhost:5555/api/streaming/duel-context
+
 # RTMP status file
 cat /root/hyperscape/packages/server/public/live/rtmp-status.json
 ```
 
-### Log Monitoring
+### Health Checks
+
+The streaming system monitors:
+
+- **Frame rate**: Target 30 FPS
+- **Resolution**: 1280x720 (configurable)
+- **Audio sync**: PulseAudio monitor active
+- **RTMP connections**: All destinations connected
+- **Memory usage**: Process RSS and heap
+- **Dropped frames**: CDP and FFmpeg drops
+
+### Recovery Mechanisms
+
+1. **CDP Stall Recovery**:
+   - Detects no-traffic periods (4x 30s intervals)
+   - Soft recovery: Restart CDP screencast
+   - Hard recovery: Restart browser
+   - Fallback: Switch to MediaRecorder mode
+
+2. **Resolution Mismatch Recovery**:
+   - Detects frame size != viewport size
+   - Auto-resizes viewport after 10 mismatched frames
+   - Logs resolution changes
+
+3. **Browser Rotation**:
+   - Restarts browser every hour to clear memory leaks
+   - Prevents WebGPU memory accumulation
+   - Configurable via `BROWSER_RESTART_INTERVAL_MS`
+
+### Monitoring Commands
 
 ```bash
-# PM2 logs (filtered for streaming)
-bunx pm2 logs hyperscape-duel --lines 200 | grep -iE "rtmp|ffmpeg|stream|capture"
+# PM2 logs
+bunx pm2 logs hyperscape-duel
 
-# FFmpeg processes
-ps aux | grep ffmpeg
+# Filter for streaming events
+bunx pm2 logs hyperscape-duel | grep -iE "rtmp|ffmpeg|stream|capture"
 
-# PulseAudio status
-pactl list short sinks
-pactl list short sources
+# Check process status
+bunx pm2 status
+
+# Monitor resources
+bunx pm2 monit
 ```
 
-### Diagnostic Commands
+## Anti-Cheat Timing
+
+### Default Delays
+
+| Platform | Default Delay | Notes |
+|----------|--------------|-------|
+| Twitch | 12000ms | Lower latency |
+| YouTube | 15000ms | Higher latency |
+| HLS | 4000ms | Local streaming |
+
+### Configuration
 
 ```bash
-# Check GPU rendering mode
-echo $GPU_RENDERING_MODE
+# Set canonical platform
+STREAMING_CANONICAL_PLATFORM=twitch  # youtube | twitch | hls
 
-# Verify display is accessible
-xdpyinfo -display $DISPLAY
+# Override delay
+STREAMING_PUBLIC_DELAY_MS=12000
 
-# Check Vulkan ICD
-echo $VK_ICD_FILENAMES
-vulkaninfo --summary
-
-# Verify PulseAudio
-pulseaudio --check
-pactl info
+# Viewer access token (optional)
+STREAMING_VIEWER_ACCESS_TOKEN=your-secret-token
 ```
 
-## See Also
+### Gated Viewers
 
-- [docs/vast-deployment.md](vast-deployment.md) - Vast.ai deployment guide
-- [docs/streaming-audio-capture.md](streaming-audio-capture.md) - Audio capture setup
-- [CLAUDE.md](../CLAUDE.md) - Development guide
+When `STREAMING_PUBLIC_DELAY_MS > 0`, live WebSocket viewers are restricted to:
+
+- **Loopback clients**: `localhost` or `127.0.0.1`
+- **Authenticated clients**: Provide `streamToken` query parameter
+
+The RTMP bridge automatically appends `streamToken` to capture URLs.
+
+## Troubleshooting
+
+### Black Frames / No Video
+
+1. **Check GPU access**:
+   ```bash
+   nvidia-smi
+   vulkaninfo --summary
+   ```
+
+2. **Verify display server**:
+   ```bash
+   echo $DISPLAY
+   xdpyinfo -display $DISPLAY
+   ```
+
+3. **Check Chrome launch**:
+   ```bash
+   google-chrome-unstable --version
+   ps aux | grep chrome
+   ```
+
+4. **Review logs**:
+   ```bash
+   bunx pm2 logs hyperscape-duel --lines 200 | grep -i error
+   ```
+
+### No Audio
+
+1. **Check PulseAudio**:
+   ```bash
+   pulseaudio --check
+   pactl list short sinks | grep chrome_audio
+   ```
+
+2. **Verify Chrome audio output**:
+   ```bash
+   pactl list sink-inputs
+   ```
+
+3. **Test audio capture**:
+   ```bash
+   ffmpeg -f pulse -i chrome_audio.monitor -t 5 test.wav
+   ```
+
+4. **Check environment**:
+   ```bash
+   echo $PULSE_SERVER
+   echo $XDG_RUNTIME_DIR
+   ```
+
+### RTMP Connection Failures
+
+1. **Verify stream keys**:
+   ```bash
+   # Check environment (masked)
+   env | grep -E "TWITCH|KICK|X_" | sed 's/=.*/=***/'
+   ```
+
+2. **Test RTMP endpoint**:
+   ```bash
+   # Test Twitch
+   ffmpeg -re -f lavfi -i testsrc -t 10 \
+     -f flv "rtmp://live.twitch.tv/app/$TWITCH_STREAM_KEY"
+   ```
+
+3. **Check FFmpeg logs**:
+   ```bash
+   bunx pm2 logs hyperscape-duel | grep -i "rtmp\|ffmpeg"
+   ```
+
+4. **Verify RTMP status**:
+   ```bash
+   cat /root/hyperscape/packages/server/public/live/rtmp-status.json
+   ```
+
+### High CPU Usage
+
+1. **Lower encoding preset**:
+   ```bash
+   STREAM_PRESET=ultrafast  # Fastest, lowest quality
+   ```
+
+2. **Reduce resolution**:
+   ```bash
+   STREAM_CAPTURE_WIDTH=1280
+   STREAM_CAPTURE_HEIGHT=720
+   ```
+
+3. **Disable audio**:
+   ```bash
+   STREAM_AUDIO_ENABLED=false
+   ```
+
+4. **Use hardware encoding** (if available):
+   ```bash
+   # NVIDIA NVENC (requires CUDA)
+   STREAM_ENCODER=h264_nvenc
+   ```
+
+### Memory Leaks
+
+1. **Enable browser rotation**:
+   ```bash
+   BROWSER_RESTART_INTERVAL_MS=3600000  # 1 hour
+   ```
+
+2. **Monitor memory**:
+   ```bash
+   bunx pm2 monit
+   ```
+
+3. **Check for leaks**:
+   ```bash
+   # Process RSS should stabilize after initial ramp-up
+   watch -n 5 'ps aux | grep chrome | grep -v grep'
+   ```
+
+## Performance Tuning
+
+### Low-Latency Streaming
+
+For minimal latency (e.g., interactive streams):
+
+```bash
+STREAM_LOW_LATENCY=true
+STREAM_GOP_SIZE=30  # 1 second at 30fps
+STREAM_PRESET=ultrafast
+STREAMING_CANONICAL_PLATFORM=twitch
+STREAMING_PUBLIC_DELAY_MS=0
+```
+
+**Tradeoffs**: Higher bitrate, lower quality, faster playback start
+
+### High-Quality Streaming
+
+For best quality (e.g., VODs, highlights):
+
+```bash
+STREAM_LOW_LATENCY=false
+STREAM_GOP_SIZE=60  # 2 seconds at 30fps
+STREAM_PRESET=medium
+STREAM_BITRATE=6000000  # 6 Mbps
+```
+
+**Tradeoffs**: Higher CPU usage, slower playback start, better compression
+
+### Balanced (Recommended)
+
+```bash
+STREAM_LOW_LATENCY=false
+STREAM_GOP_SIZE=60
+STREAM_PRESET=veryfast
+STREAM_BITRATE=4500000  # 4.5 Mbps
+STREAM_AUDIO_ENABLED=true
+```
+
+## Related Documentation
+
+- [docs/duel-stack.md](duel-stack.md) - Duel stack overview
+- [scripts/deploy-vast.sh](../scripts/deploy-vast.sh) - Deployment script
 - [ecosystem.config.cjs](../ecosystem.config.cjs) - PM2 configuration
+- [packages/server/scripts/stream-to-rtmp.ts](../packages/server/scripts/stream-to-rtmp.ts) - Streaming implementation
+- [.env.example](../.env.example) - Root environment variables
+- [packages/server/.env.example](../packages/server/.env.example) - Server environment variables
+
+## Examples
+
+### Local Testing
+
+```bash
+# Start local RTMP server
+docker run -d -p 1935:1935 tiangolo/nginx-rtmp
+
+# Configure test destination
+export CUSTOM_RTMP_URL=rtmp://localhost:1935/live
+export CUSTOM_STREAM_KEY=test
+
+# Start streaming
+bun run stream:rtmp
+
+# View stream
+ffplay rtmp://localhost:1935/live/test
+```
+
+### Production Deployment
+
+```bash
+# Set stream keys
+export TWITCH_STREAM_KEY=live_123456789_abcdefghij
+export KICK_STREAM_KEY=your-kick-key
+export KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
+export X_STREAM_KEY=your-x-key
+export X_RTMP_URL=rtmp://sg.pscp.tv:80/x
+
+# Disable YouTube
+export YOUTUBE_STREAM_KEY=
+
+# Enable production client build
+export DUEL_USE_PRODUCTION_CLIENT=true
+
+# Start duel stack
+bun run duel
+```
+
+### Vast.ai Deployment
+
+```bash
+# Deploy via GitHub Actions
+# Workflow: .github/workflows/deploy-vast.yml
+
+# Or manually
+ssh root@vast-instance
+cd /root/hyperscape
+./scripts/deploy-vast.sh
+```
+
+The deploy script automatically:
+1. Configures GPU rendering (Xorg or Xvfb)
+2. Sets up PulseAudio
+3. Installs Chrome Dev
+4. Configures environment variables
+5. Starts duel stack via PM2
