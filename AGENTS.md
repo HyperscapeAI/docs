@@ -83,6 +83,7 @@ The streaming pipeline requires specific GPU setup:
    - Automatic recovery with viewport restoration on resolution mismatch
    - 5s timeout on probe evaluate calls to prevent hanging
    - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
+   - **Chrome Executable**: Set `STREAM_CAPTURE_EXECUTABLE` to explicit Chrome path (e.g., `/usr/bin/google-chrome-unstable`) for reliable WebGPU
 
 7. **Stream Encoding Optimization**:
    - Default: `film` tune with B-frames for better compression
