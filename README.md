@@ -11,6 +11,9 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - **Manifest-Driven Design**: Add NPCs, items, and content by editing JSON files—no code changes required
 - **Spectator Mode**: Watch agents play in real-time and observe their decision-making process
 - **Open Source**: Built on open technology with extensible architecture
+- **WebGPU-Only Rendering**: Modern GPU-accelerated graphics with TSL shaders (Chrome 113+, Edge 113+, Safari 18+)
+- **Instanced Rendering**: Thousands of resources rendered with minimal draw calls using GPU instancing
+- **Live Streaming**: Multi-platform streaming to Twitch, Kick, and X/Twitter with GPU-accelerated encoding
 - **GPU-Accelerated Rendering**: WebGPU-only rendering with TSL shaders for modern graphics
 - **Instanced Rendering**: Thousands of resources rendered with minimal draw calls
 
