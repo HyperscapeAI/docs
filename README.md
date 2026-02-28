@@ -19,9 +19,9 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **Combat** | Tick-based OSRS mechanics (600ms ticks), attack styles, accuracy formulas, death/respawn system |
 | **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking + combat skills with XP/leveling |
 | **Economy** | 480-slot bank, shops, item weights, loot drops |
-| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
+| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode, dynamic combat escalation |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
-| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
+| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics, instanced rendering |
 
 ## System Requirements
 
@@ -123,6 +123,7 @@ packages/
 ├── client/              # Web client (Vite, React)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
+├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation tools
 └── docs-site/           # Documentation (Docusaurus)
 ```
@@ -197,10 +198,11 @@ bun run assets:sync    # Pull latest assets from repo (local dev only)
 Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.privy.io).
 
 **Optional configuration** - see `.env.example` files for all options:
-- `packages/server/.env.example` - Database, ports, LiveKit voice chat
+- `packages/server/.env.example` - Database, ports, LiveKit voice chat, streaming
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
+- `.env.example` (root) - Streaming keys, Solana keys, GPU configuration
 
 ### Default Ports
 
@@ -304,6 +306,18 @@ bun run build
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
+
+## Recent Improvements
+
+### Stability & Performance (Feb 2026)
+- **Memory Leak Fixes**: Fixed 12+ memory leaks across ModelCache, EventBridge, Logger, AgentManager, and more
+- **Combat System**: Improved timing alignment, faster failure detection, better stall recovery
+- **Agent System**: Dynamic combat escalation, gear progression, cooking phase, LLM rate limiting
+- **Streaming**: Production client build mode, multiple GPU rendering modes, improved diagnostics
+- **Instanced Rendering**: Optimized resource rendering with depleted model support
+- **Test Stability**: Increased timeouts for complex tests, fixed precision issues
+
+See [CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md) for detailed technical documentation.
 
 ## More Info
 
