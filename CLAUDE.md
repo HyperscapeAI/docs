@@ -425,6 +425,7 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Testing**: Playwright, Vitest
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
+- **Streaming**: FFmpeg, PulseAudio, Chrome DevTools Protocol (CDP)
 
 ## Troubleshooting
 
