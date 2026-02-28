@@ -574,22 +574,33 @@ All three roles (authority, reporter, keeper) default to the same deployer keypa
 - PulseAudio (for audio capture)
 - socat (for port proxying)
 
-**GPU Rendering Requirements (commits e51a332, 30bdaf0, Feb 27 2026):**
+**GPU Rendering Requirements (commits e51a332, 30bdaf0, 012450c, Feb 27-28 2026):**
 
-The system requires hardware GPU rendering for WebGPU. Two modes are supported:
+The system requires hardware GPU rendering for WebGPU. Three modes are supported (tried in order):
 
 1. **Xorg Mode** (preferred if DRI/DRM available):
    - Requires `/dev/dri/card0` or similar DRM device
    - Full hardware GPU acceleration
    - Best performance
 
-2. **Headless EGL Mode** (fallback for containers without DRM):
-   - Works without X server or DRM/DRI access
-   - Uses Chrome's new headless mode with EGL
-   - Hardware GPU acceleration via NVIDIA EGL
-   - Ideal for Vast.ai containers
+2. **Xvfb Mode** (fallback when Xorg fails):
+   - Virtual framebuffer + GPU rendering via ANGLE/Vulkan
+   - Works when DRI/DRM not available
+   - Requires X11 protocol support
 
-**Software rendering (Xvfb, SwiftShader, Lavapipe) is NOT supported** - too slow for streaming.
+3. **Headless EGL Mode** (fallback for containers without X11):
+   - Works without X server or DRM/DRI access
+   - Uses Chrome's `--headless=new` with direct EGL rendering
+   - Hardware GPU acceleration via NVIDIA EGL
+   - Ideal for Vast.ai containers where NVIDIA kernel module fails to initialize for Xorg
+   - Uses `--use-gl=egl --ozone-platform=headless` flags
+
+**Swrast Detection (commit 725e934):**
+- Deployment script detects when Xorg falls back to swrast (software rendering)
+- Automatically switches to headless EGL mode when swrast detected
+- Prevents unusable software rendering for WebGPU streaming
+
+**Software rendering (SwiftShader, Lavapipe) is NOT supported** - too slow for streaming.
 
 **See Also:** [GPU Rendering Guide](/devops/gpu-rendering) for complete GPU configuration
 
