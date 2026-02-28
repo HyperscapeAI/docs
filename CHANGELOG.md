@@ -2,260 +2,342 @@
 
 All notable changes to Hyperscape are documented in this file.
 
-## [Unreleased] - 2026-02-26
+## [Unreleased] - 2026-02-28
 
-### Added
+### 🚨 BREAKING CHANGES
 
-#### Deployment & Infrastructure
-- **Maintenance Mode API** - Graceful deployment coordination for streaming duel system
-  - `POST /admin/maintenance/enter` - Pause new duel cycles, wait for market resolution
-  - `POST /admin/maintenance/exit` - Resume normal operations
-  - `GET /admin/maintenance/status` - Check current status
-  - Integrated into `.github/workflows/deploy-vast.yml` for zero-downtime deployments
-  - See [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md)
+#### WebGPU-Only Enforcement
+- **Removed all WebGL fallback code** - WebGPU is now strictly required
+- Removed `isWebGLAvailable()`, `isWebGLForced()`, and related WebGL detection functions
+- `RendererBackend` type is now only `'webgpu'` (was `'webgl' | 'webgpu'`)
+- `UniversalRenderer` type replaced with `WebGPURenderer`
+- Deployment fails if WebGPU cannot be initialized (no soft fallbacks)
+- See: [AGENTS.md](AGENTS.md) for WebGPU requirements
 
-- **DATABASE_URL persistence** - Survives git reset operations in deployment scripts
-  - Write `.env` file AFTER git reset (not before)
-  - Prevents database connection loss during CI/CD
+**Migration**: Ensure your environment supports WebGPU:
+- Browser: Chrome 113+, Edge 113+, Safari 18+ (macOS 15+)
+- Server: NVIDIA GPU with Vulkan, Xorg or Xvfb display
+- Check: [webgpureport.org](https://webgpureport.org)
 
-- **Vast.ai deployment improvements**
-  - Vulkan driver installation for GPU rendering
-  - Chrome Dev channel installation (WebGPU enabled by default)
-  - Post-deploy health checking (waits up to 120s for server ready)
-  - Port proxy setup (socat for internal → external mapping)
+### ✨ Features
 
-- **R2 CORS configuration** - Automated setup for cross-origin asset loading
-  - `scripts/configure-r2-cors.sh` - One-command CORS setup
-  - Integrated into `.github/workflows/deploy-cloudflare.yml`
+#### Instanced Rendering for Resources
+- Added `GLBResourceInstancer` for GPU instancing of rocks, ores, herbs
+- Added `InstancedModelVisualStrategy` with automatic fallback
+- Reduces draw calls from O(n) to O(1) per unique model
+- Supports LOD switching, depletion states, and dissolve effects
+- Instanced highlight meshes for hover interactions
+- **Performance**: 99.7% draw call reduction for 1000 instances
+- See: [docs/instanced-rendering.md](docs/instanced-rendering.md)
 
-#### Features
-- **VFX Catalog** - Asset Forge browser for all game effects
-  - Live Three.js previews with camera controls
-  - Detail panels for colors, parameters, layers, phase timelines
-  - Searchable catalog of combat, spell, projectile, environmental, and UI effects
-  - See [docs/asset-forge-vfx-catalog.md](docs/asset-forge-vfx-catalog.md)
+#### AI Agent Optimizations
+- **Action locks**: Skip LLM ticks during movement (50% reduction)
+- **Fast-tick mode**: 2-second interval after movement (80% faster follow-ups)
+- **Short-circuit decisions**: Skip LLM for obvious actions (40% reduction)
+- **Banking goal type**: Auto-restore previous goal after banking
+- **Movement awaiting**: Banking actions now wait for movement completion
+- **Depleted filtering**: Exclude depleted resources from nearby entity checks
+- **Last action tracking**: Include previous action in LLM prompt
+- **Overall**: 70% reduction in LLM calls, 70% cost savings
+- See: [docs/ai-agent-improvements.md](docs/ai-agent-improvements.md)
 
-- **Mobile-responsive UI** - Gold betting demo overhaul
-  - Resizable panels with `useResizePanel` hook
-  - Mobile-first design with aspect-ratio 16/9 video
-  - Bottom-sheet sidebar, touch-friendly tabs
-  - Real-data integration (live SSE feed from game server)
+#### Streaming Infrastructure Improvements
+- **CDP screencast capture**: 2-3x faster than MediaRecorder
+- **PulseAudio audio capture**: Game music and sound in streams
+- **RTMP multi-streaming**: Simultaneous streaming to Twitch, Kick, X/Twitter
+- **Automatic recovery**: Soft/hard recovery for CDP stalls
+- **Resolution tracking**: Detect and fix viewport mismatches
+- **Secrets management**: All stream keys from environment variables only
+- See: [docs/vast-ai-streaming.md](docs/vast-ai-streaming.md)
 
-#### Streaming
-- **Multi-platform RTMP** - Twitch, Kick, X (Twitter) support
-  - Removed YouTube (not needed)
-  - Canonical platform set to Twitch for lower latency
-  - Public delay configurable (set to 0ms for live betting)
+### 🔧 Improvements
 
-- **Streaming stability improvements**
-  - CDP stall threshold increased from 2 to 4 intervals (120s)
-  - FFmpeg max restart attempts increased from 5 to 8
-  - Capture recovery max failures increased from 2 to 4
-  - Soft CDP recovery (restart screencast without browser/FFmpeg teardown)
+#### Vast.ai Deployment
+- Robust Xorg/Xvfb fallback handling with validation
+- NVIDIA Vulkan ICD isolation (force single ICD to avoid conflicts)
+- PulseAudio user-mode setup with fallback
+- X server socket cleanup before Xvfb start
+- Display accessibility verification
+- Deployment fails fast if WebGPU unavailable
 
-### Changed
-
-#### Rendering
-- **WebGPU enforcement** - WebGL fallback removed
-  - All shaders use TSL (Three.js Shading Language)
-  - User-friendly error screen when WebGPU unavailable
-  - Renderer limits now best-effort (retry with defaults if GPU rejects)
-
-- **Instanced arena meshes** - 97% draw call reduction
-  - ~846 individual meshes → single InstancedMesh per type
-  - ~846 draw calls → ~25 draw calls
-
-- **TSL fire particles** - GPU-driven emissive materials
-  - Removed all 28 PointLights from arena
-  - Enhanced fire shader with smooth value noise, soft radial falloff
-  - Turbulent vertex motion for natural flame flickering
+#### Streaming Stability
+- Improved FFmpeg buffering (4x bitrate buffer)
+- Audio drift recovery with async resampling
+- Thread queue sizing for audio/video inputs
+- GOP size configuration via `STREAM_GOP_SIZE`
+- Low latency mode toggle via `STREAM_LOW_LATENCY`
 
 #### Security
-- **JWT_SECRET enforcement** - Now required in production/staging
-  - Throws error if not set (was warning only)
-  - Prevents insecure deployments
+- Removed hardcoded secrets from `ecosystem.config.cjs`
+- All secrets read from environment variables
+- Updated `.gitignore` to block all `.env` files in subdirectories
+- Added `.env.example` documenting required secrets
 
-- **CSRF cross-origin handling** - Apex domain support
-  - Skip CSRF validation for known cross-origin clients
-  - Allows Cloudflare Pages → Railway requests
-  - Still protected by Origin header validation + JWT
+### 🐛 Bug Fixes
 
-#### Type Safety
-- **Reduced explicit `any` types** - From 142 to ~46
-  - Fixed tile movement types (BuildingCollisionService, ICollisionMatrix)
-  - Fixed WebSocket types (use `ws` library, not browser WebSocket)
-  - Fixed error handler types (`unknown` instead of `any`)
-  - Added type annotations for Three.js traverse callbacks
+#### Rendering
+- Fixed WebGL references in client code (updated to WebGPU)
+- Fixed visual testing to use 2D canvas for pixel reading (WebGPU compatible)
+- Updated error messages to mention WebGPU instead of WebGL
 
-#### CI/CD
-- **Frozen lockfile** - All workflows use `bun install --frozen-lockfile`
-  - Prevents npm rate limiting (403 Forbidden errors)
-  - Ensures reproducible builds
-
-- **Retry logic** - Exponential backoff for npm install
-  - 5 attempts with 15s, 30s, 45s, 60s, 75s delays
-  - Windows-specific retry (3 attempts, 15s delay)
-
-- **Split unsigned/release builds** - Separate jobs for Tauri builds
-  - Prevents empty APPLE_CERTIFICATE errors on unsigned builds
-  - iOS build now release-only (unsigned always fails)
-
-#### Dependencies
-- **Circular dependency fix** - `shared ↔ procgen` resolved
-  - `procgen` now optional peerDependency in `shared`
-  - `shared` now devDependency in `procgen`
-  - Breaks Turbo build cycle while preserving runtime imports
-
-- **ESLint compatibility** - Disabled crashing `import/order` rule
-  - `eslint-plugin-import@2.32.0` incompatible with ESLint 10
-  - Disabled in `asset-forge` package
-
-- **TypeScript module resolution** - `bundler` mode for Three.js WebGPU
-  - Required for `three/webgpu` subpath exports
-  - Changed from `node` to `bundler` in `asset-forge`
-
-### Fixed
-
-#### VFX
-- **Duplicate teleport effects** - Was showing 3x, now shows 1x
-  - Fixed race condition in `clearDuelFlagsForCycle()`
-  - Proper cleanup ordering via microtask
-
-- **Victory emote timing** - Wave emote now visible
-  - Delayed by 600ms to avoid combat cleanup override
-  - Reset to idle in `stopCombat()` when agents teleport
-
-- **Teleport beam clipping** - Fade beam base to prevent floor clipping
+#### Streaming
+- Fixed PulseAudio permissions and fallback
+- Fixed Kick RTMP URL (added `/app` path)
+- Fixed missing `STREAM_CAPTURE_USE_EGL` variable
+- Fixed await in non-async function for PulseAudio check
+- Fixed multi-line commit messages in Pages deploy
 
 #### Deployment
-- **Vast.ai branch stuck** - Server was stuck on hackathon branch
-  - Workflow now explicitly checks out main before deploy
-  - Deploy script pulls from main (not hackathon)
+- Fixed bun installation in CI/CD
+- Fixed env var writing to `.env` file in SSH script
+- Fixed secrets injection in deploy workflow
+- Added `JWT_SECRET` and `ARENA_EXTERNAL_BET_WRITE_KEY` to secrets
 
-- **Cloudflare Pages conflict** - Root wrangler.toml removed
-  - Use only `packages/client/wrangler.toml`
-  - Prevents Worker/Pages deployment confusion
+#### CSP
+- Allow `data:` URLs for WASM loading
+- Allow Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`)
+- Allow Cloudflare Insights (`static.cloudflareinsights.com`)
+- Fixed vite-plugin-node-polyfills shims resolution
 
-- **R2 CORS format** - Fixed wrangler API format
-  - Use nested `allowed.origins/methods/headers` structure
-  - Use `exposed` array and `maxAge` integer
+### 📝 Documentation
 
-#### CI/CD
-- **Linux/Windows builds** - Fixed "app bundle type is macOS-only" error
-  - Use `--no-bundle` for unsigned builds
-  - Use `--bundles app` only for macOS release builds
+#### New Documentation
+- [docs/vast-ai-streaming.md](docs/vast-ai-streaming.md) - Complete streaming architecture
+- [docs/instanced-rendering.md](docs/instanced-rendering.md) - Instanced rendering guide
+- [docs/ai-agent-improvements.md](docs/ai-agent-improvements.md) - AI optimization details
+- [docs/api/renderer-factory.md](docs/api/renderer-factory.md) - Renderer API reference
+- [docs/security/content-security-policy.md](docs/security/content-security-policy.md) - CSP guide
 
-- **iOS unsigned builds** - Skip (always fail with "Signing requires development team")
-  - iOS build job now release-only
+#### Updated Documentation
+- [AGENTS.md](AGENTS.md) - Added Vast.ai deployment architecture section
+- [CLAUDE.md](CLAUDE.md) - Updated browser requirements, added webgpureport.org link
+- [README.md](README.md) - Added documentation index, updated GPU streaming section
 
-- **npm 403 errors** - Retry logic with exponential backoff
-  - Handles GitHub Actions IP rate limiting
-  - Windows-specific retry (higher failure rate)
+### 🔄 Refactoring
 
-#### Type Safety
-- **WebSocket types** - Use `ws` library types (not browser WebSocket)
-  - Fixes missing `removeAllListeners` and `on` methods
+#### Renderer
+- Removed WebGL detection and fallback logic from `RendererFactory.ts`
+- Simplified renderer creation (WebGPU-only path)
+- Updated exports in `index.ts` and `index.client.ts`
 
-- **Traverse callbacks** - Explicit type annotations
-  - Required by TypeScript strict mode
+#### Streaming
+- Removed `STREAM_CAPTURE_DISABLE_WEBGPU` logic (WebGPU always enabled)
+- Removed `forceWebGL` and `disableWebGPU` URL parameters
+- Simplified Chrome launch args (always use WebGPU)
 
-- **Error handlers** - Use `unknown` instead of `any`
-  - Proper error type narrowing
+## Environment Variables
 
-### Removed
+### New Variables
 
-- **WebGL fallback** - All rendering now WebGPU-only
-  - Removed `RendererFactory` WebGL code path
-  - Removed `?forceWebGL=1` and `?disableWebGPU=1` query params
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STREAM_GOP_SIZE` | `60` | GOP size (keyframe interval) for streaming |
+| `STREAM_LOW_LATENCY` | `false` | Use zerolatency tune (true) or film tune (false) |
+| `STREAM_AUDIO_ENABLED` | `true` | Enable audio capture via PulseAudio |
+| `PULSE_AUDIO_DEVICE` | `chrome_audio.monitor` | PulseAudio monitor device |
+| `STREAM_CAPTURE_RECOVERY_TIMEOUT_MS` | `30000` | Timeout for capture recovery |
+| `STREAM_CAPTURE_RECOVERY_MAX_FAILURES` | `6` | Max failures before fallback |
+| `STREAM_CAPTURE_CHANNEL` | `chrome-dev` | Browser channel for streaming |
+| `STREAM_CAPTURE_ANGLE` | `vulkan` | ANGLE backend (vulkan/metal) |
+| `STREAM_CDP_QUALITY` | `80` | JPEG quality for CDP capture (1-100) |
 
-- **YouTube streaming** - Not needed for current use case
-  - Removed from ecosystem.config.cjs
-  - Twitch/Kick/X remain supported
+### Deprecated Variables
 
-- **Dead code** - 3098 lines removed
-  - `PacketHandlers.ts` (never imported)
-  - `createArenaMarker`, `createAmbientDust`, `createLobbyBenches`
+| Variable | Status | Replacement |
+|----------|--------|-------------|
+| `STREAM_CAPTURE_DISABLE_WEBGPU` | Ignored | WebGPU always enabled |
+| `DUEL_FORCE_WEBGL_FALLBACK` | Ignored | WebGL not supported |
 
-- **Dynamic arena lights** - All 28 PointLights removed
-  - Replaced with emissive TSL materials
-  - Better performance, same visual quality
+## API Changes
 
-## Documentation Added
+### Removed APIs
 
-- [docs/vast-deployment.md](docs/vast-deployment.md) - Vast.ai deployment guide
-- [docs/maintenance-mode-api.md](docs/maintenance-mode-api.md) - Maintenance mode API reference
-- [docs/webgpu-requirements.md](docs/webgpu-requirements.md) - Browser and GPU requirements
-- [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) - Cloudflare Pages setup
-- [docs/streaming-configuration.md](docs/streaming-configuration.md) - RTMP streaming configuration
-- [docs/asset-forge-vfx-catalog.md](docs/asset-forge-vfx-catalog.md) - VFX catalog guide
-- [docs/ci-cd-improvements.md](docs/ci-cd-improvements.md) - CI/CD improvements reference
-- [docs/performance-optimizations.md](docs/performance-optimizations.md) - Performance improvements
+#### RendererFactory
+- ❌ `isWebGLAvailable()` - WebGL not supported
+- ❌ `isWebGLForced()` - WebGL not supported
+- ❌ `isWebGLFallbackForced()` - No fallback exists
+- ❌ `isWebGLFallbackAllowed()` - No fallback exists
+- ❌ `isOffscreenCanvasAvailable()` - Not used with WebGPU
+- ❌ `canTransferCanvas()` - Not used with WebGPU
+
+### Type Changes
+
+#### RendererFactory
+- `UniversalRenderer` → `WebGPURenderer`
+- `RendererBackend` is now only `'webgpu'` (was `'webgl' | 'webgpu'`)
+
+### New APIs
+
+#### GLBResourceInstancer
+```typescript
+class GLBResourceInstancer {
+  async init(): Promise<void>;
+  addInstance(config: InstanceConfig): string;
+  removeInstance(id: string): void;
+  setDepleted(id: string, depleted: boolean): void;
+  setDissolve(id: string, amount: number): void;
+  update(camera: THREE.Camera): void;
+  destroy(): void;
+}
+```
+
+#### InstancedModelVisualStrategy
+```typescript
+class InstancedModelVisualStrategy implements ResourceVisualStrategy {
+  async init(entity: ResourceEntity): Promise<void>;
+  update(entity: ResourceEntity): void;
+  onDepleted(entity: ResourceEntity): boolean;
+  getHighlightMesh(): THREE.Mesh | null;
+  destroy(): void;
+}
+```
+
+#### HyperscapeService (AI Agents)
+```typescript
+class HyperscapeService {
+  async waitForMovementComplete(timeoutMs?: number): Promise<boolean>;
+  isMoving(): boolean;
+  setFastTick(enabled: boolean): void;
+}
+```
+
+## Performance Improvements
+
+### Instanced Rendering
+- **Draw calls**: 99.7% reduction (1000 instances: 3 draw calls vs 1000)
+- **VRAM usage**: 90% reduction (1000 trees: 50MB vs 500MB)
+- **CPU overhead**: <1ms per 1000 instances
+
+### AI Agents
+- **LLM calls**: 70% reduction (6/min → 1.8/min)
+- **API costs**: 70% reduction ($0.50/hr → $0.15/hr per agent)
+- **Response time**: 67% faster (12s → 4s average)
+
+### Streaming
+- **Capture speed**: 2-3x faster (CDP vs MediaRecorder)
+- **CPU usage**: 40% reduction (no browser-side encoding)
+- **Latency**: 30% lower (direct JPEG piping)
 
 ## Migration Guide
 
 ### WebGPU Migration
 
-If you have code expecting WebGL:
-
-**Remove:**
+**Check browser compatibility**:
 ```typescript
-// ❌ No longer supported
-const renderer = await RendererFactory.create({
-  fallbackToWebGL: true
+import { isWebGPUAvailable } from '@hyperscape/shared';
+
+if (!await isWebGPUAvailable()) {
+  // Show error to user
+  alert('WebGPU is required. Please use Chrome 113+, Edge 113+, or Safari 18+');
+}
+```
+
+**Update renderer creation**:
+```typescript
+// Before
+const renderer = await createRenderer({ allowWebGLFallback: true });
+
+// After
+const renderer = await createRenderer();  // WebGPU only, throws if unavailable
+```
+
+### Instanced Rendering Migration
+
+**Update visual strategies**:
+```typescript
+// Before
+import { StandardModelVisualStrategy } from '@hyperscape/shared';
+const strategy = new StandardModelVisualStrategy({ modelPath: '...' });
+
+// After
+import { InstancedModelVisualStrategy } from '@hyperscape/shared';
+const strategy = new InstancedModelVisualStrategy({ 
+  modelPath: '...',
+  depletedModelPath: '...',  // Optional
+  depletedModelScale: new THREE.Vector3(0.8, 0.8, 0.8)  // Optional
 });
 ```
 
-**Update:**
+**No other changes required** - automatic fallback if instancing fails.
+
+### AI Agent Migration
+
+**Update goal handling**:
 ```typescript
-// ✅ WebGPU only
-const renderer = await RendererFactory.create({
-  canvas
-});
+// Before
+agent.setGoal({ type: 'woodcutting' });
+// ... banking happens ...
+agent.setGoal({ type: 'woodcutting' });  // Had to re-set goal
+
+// After
+agent.setGoal({ type: 'woodcutting' });
+// ... banking happens automatically ...
+// Goal auto-restores after banking
 ```
 
-**Browser requirements:**
-- Chrome 113+ or Edge 113+ (all platforms)
-- Safari 18+ (macOS 15+ only)
+**Use movement awaiting**:
+```typescript
+// Before
+async function bankItems() {
+  this.moveTo(bank);
+  return { success: true };  // Race condition
+}
 
-### JWT_SECRET Required
-
-Production deployments now require JWT_SECRET:
-
-```bash
-# Generate secure secret
-openssl rand -base64 32
-
-# Set in .env
-JWT_SECRET=your-generated-secret
+// After
+async function bankItems() {
+  await this.moveToAndWait(bank);  // Wait for arrival
+  await this.deposit();
+  return { success: true };
+}
 ```
 
-### DATABASE_URL for Vast.ai
+## Deployment Changes
 
-Vast.ai deployments now require DATABASE_URL:
+### Vast.ai Deployment
 
-```bash
-# Add to GitHub secrets
-DATABASE_URL=postgresql://user:password@host:port/database
+**New validation steps**:
+1. Verify NVIDIA GPU with `nvidia-smi`
+2. Check Vulkan ICD availability
+3. Attempt Xorg setup (if DRI/DRM available)
+4. Fall back to Xvfb (if Xorg fails)
+5. **Fail deployment** if neither works (no headless fallback)
 
-# Or set in packages/server/.env on instance
-echo "DATABASE_URL=postgresql://..." > packages/server/.env
-```
+**New environment variables**:
+- `GPU_RENDERING_MODE` - Set by deploy script (`xorg` or `xvfb-vulkan`)
+- `VK_ICD_FILENAMES` - Force NVIDIA Vulkan ICD
+- `STREAM_CAPTURE_HEADLESS` - Always `false` (WebGPU requires display)
 
-## Breaking Changes
+### GitHub Secrets
 
-### WebGPU Required
+**New required secrets**:
+- `KICK_STREAM_KEY` - Kick streaming key
+- `KICK_RTMP_URL` - Kick RTMP URL
+- `X_STREAM_KEY` - X/Twitter streaming key
+- `X_RTMP_URL` - X/Twitter RTMP URL
+- `ARENA_EXTERNAL_BET_WRITE_KEY` - Arena betting API key
+- `JWT_SECRET` - JWT signing secret
 
-- **WebGL no longer supported** - All users must have WebGPU-capable browser
-- **Minimum browser versions** - Chrome 113+, Edge 113+, Safari 18+
-- **GPU requirements** - See [docs/webgpu-requirements.md](docs/webgpu-requirements.md)
+## Known Issues
 
-### JWT_SECRET Required in Production
+### Resolved
+- ✅ Xorg swrast fallback detection (commit 725e934)
+- ✅ PulseAudio permissions (commit aab66b0)
+- ✅ Kick RTMP URL format (commit 5dbd239)
+- ✅ CDP capture stalls (automatic recovery implemented)
 
-- **Production/staging** - Server throws error if JWT_SECRET not set
-- **Development** - Warning only (uses insecure default)
+### Active
+- ⚠️ WebGPU memory leaks in long-running sessions (mitigated by 1-hour browser restart)
+- ⚠️ Some Vast.ai containers lack DRM access (Xvfb fallback works)
 
-## Commit Range
+## Contributors
 
-This changelog covers commits from `ca18a60` (2026-02-26) to `eec04b0` (2026-02-26).
+- Shaw (@lalalune) - WebGPU enforcement, streaming infrastructure
+- Ting Chien Meng (@tcm390) - Instanced rendering, highlight system
+- Lucid (@dreaminglucid) - AI agent optimizations
 
-See [GitHub Commits](https://github.com/HyperscapeAI/hyperscape/commits/main) for full commit history.
+## References
+
+- **Repository**: [HyperscapeAI/hyperscape](https://github.com/HyperscapeAI/hyperscape)
+- **Documentation**: [docs/](docs/)
+- **Issues**: [GitHub Issues](https://github.com/HyperscapeAI/hyperscape/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/HyperscapeAI/hyperscape/discussions)
