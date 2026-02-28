@@ -1,0 +1,553 @@
+---
+title: "WebGPU Requirements"
+description: "Browser and GPU requirements for Hyperscape's WebGPU-only rendering"
+icon: "gpu"
+---
+
+## CRITICAL: WebGPU Required
+
+**Hyperscape requires WebGPU. WebGL WILL NOT WORK.**
+
+This is a hard requirement due to our use of TSL (Three Shading Language) for all materials and post-processing effects. TSL only works with the WebGPU node material pipeline.
+
+<Warning>
+**BREAKING CHANGE (February 27, 2026):** All WebGL fallback code has been removed in commit 47782ed. The game will not render without WebGPU support.
+</Warning>
+
+---
+
+## Why WebGPU-Only?
+
+### TSL Shaders
+
+All materials use Three.js Shading Language (TSL) which requires WebGPU:
+
+```typescript
+// Example TSL shader (from ProceduralGrass.ts)
+import { MeshStandardNodeMaterial, uniform, vec3, color } from "three/webgpu";
+
+const material = new MeshStandardNodeMaterial();
+material.colorNode = color(0x4a7c3e); // TSL color node
+material.roughnessNode = uniform(0.8); // TSL uniform node
+```
+
+**TSL Features Used:**
+- Node-based material system
+- GPU-computed animations (dissolve, fade, flicker)
+- Procedural noise and patterns
+- Custom vertex/fragment shaders
+
+### Post-Processing Effects
+
+All post-processing uses TSL-based node materials:
+
+```typescript
+// From PostProcessingComposer.ts
+import { pass, bloom, toneMappingACES } from "three/webgpu";
+
+const bloomPass = bloom(scene, camera);
+const toneMappingPass = toneMappingACES();
+```
+
+**Effects:**
+- Bloom (glow effects)
+- Tone mapping (HDR to SDR)
+- Color grading (LUT-based)
+- Outline rendering (entity highlights)
+
+### No Fallback Path
+
+There is NO WebGL fallback because:
+- TSL compiles to WGSL (WebGPU Shading Language)
+- WGSL cannot run on WebGL
+- Rewriting all shaders for WebGL would require months of work
+- WebGPU provides better performance and features
+
+---
+
+## Browser Requirements
+
+### Supported Browsers
+
+| Browser | Minimum Version | Notes |
+|---------|----------------|-------|
+| **Chrome** | 113+ | Recommended, best performance |
+| **Edge** | 113+ | Chromium-based, same as Chrome |
+| **Safari** | 18+ (macOS 15+) | Safari 17 support removed Feb 2026 |
+| **Firefox** | Nightly only | Behind flag, not recommended |
+
+<Info>
+Check your browser's WebGPU support at [webgpureport.org](https://webgpureport.org)
+</Info>
+
+### Safari 17 Support Removed
+
+**BREAKING CHANGE (commit 205f96491, February 27, 2026):**
+
+Safari 17 support was removed. Safari 18+ (macOS 15 Sequoia or later) is now required.
+
+**Reason:**
+- Safari 17 had incomplete WebGPU implementation
+- Missing features caused rendering bugs
+- Safari 18 provides full WebGPU support
+
+**Migration:**
+- Update macOS to 15.0+ (Sequoia)
+- Update Safari to 18.0+
+- Or use Chrome 113+ / Edge 113+
+
+---
+
+## GPU Requirements
+
+### Desktop GPUs
+
+**Minimum:**
+- NVIDIA GTX 1060 or equivalent
+- AMD RX 580 or equivalent
+- Intel Arc A380 or equivalent
+
+**Recommended:**
+- NVIDIA RTX 3060 or better
+- AMD RX 6600 or better
+- Intel Arc A750 or better
+
+### Mobile GPUs
+
+**iOS:**
+- iPhone 12 or newer (A14 Bionic+)
+- iPad Air 4th gen or newer
+- iPad Pro 3rd gen or newer
+
+**Android:**
+- Snapdragon 888 or newer
+- Mali-G78 or newer
+- Adreno 660 or newer
+
+<Warning>
+Mobile WebGPU support is experimental. Desktop browsers provide the best experience.
+</Warning>
+
+---
+
+## Enabling WebGPU
+
+### Chrome / Edge
+
+WebGPU is enabled by default in Chrome 113+ and Edge 113+.
+
+**Verify:**
+1. Open `chrome://gpu`
+2. Check "WebGPU" status
+3. Should show "Hardware accelerated"
+
+**If disabled:**
+1. Go to `chrome://settings`
+2. System → "Use hardware acceleration when available"
+3. Enable the toggle
+4. Restart browser
+
+### Safari
+
+WebGPU is enabled by default in Safari 18+ (macOS 15+).
+
+**Verify:**
+1. Safari → Preferences → Advanced
+2. Check "Show Develop menu in menu bar"
+3. Develop → Experimental Features
+4. Verify "WebGPU" is checked
+
+**If disabled:**
+1. Develop → Experimental Features → WebGPU
+2. Check the box
+3. Restart Safari
+
+### Firefox
+
+WebGPU is behind a flag in Firefox (not recommended for production use).
+
+**Enable:**
+1. Open `about:config`
+2. Search for `dom.webgpu.enabled`
+3. Set to `true`
+4. Restart Firefox
+
+<Warning>
+Firefox WebGPU support is incomplete. Use Chrome or Edge for best experience.
+</Warning>
+
+---
+
+## Server/Streaming Requirements
+
+For Vast.ai and other GPU servers running the streaming pipeline:
+
+### Hardware Requirements
+
+**GPU:**
+- NVIDIA GPU with Vulkan support (REQUIRED)
+- RTX 3060 Ti or better recommended
+- Vulkan 1.2+ support
+
+**Display:**
+- Must run headful with Xorg or Xvfb (NOT headless Chrome)
+- Chrome uses ANGLE/Vulkan backend to access WebGPU
+- Headless mode does NOT support WebGPU
+
+**Drivers:**
+- NVIDIA driver 535+ recommended
+- Vulkan ICD installed (`/usr/share/vulkan/icd.d/nvidia_icd.json`)
+
+### Software Requirements
+
+```bash
+# Required packages
+apt-get install -y \
+  nvidia-driver-535 \
+  vulkan-tools \
+  mesa-vulkan-drivers \
+  xvfb \
+  google-chrome-unstable
+
+# Verify installation
+nvidia-smi
+vulkaninfo --summary
+```
+
+### Environment Configuration
+
+```bash
+# Display server (REQUIRED for WebGPU)
+DISPLAY=:99
+DUEL_CAPTURE_USE_XVFB=false  # true for Xvfb, false for Xorg
+
+# GPU rendering mode (auto-detected by deploy script)
+GPU_RENDERING_MODE=xorg  # or xvfb-vulkan
+
+# Force NVIDIA Vulkan ICD (avoid Mesa conflicts)
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+
+# ANGLE backend
+STREAM_CAPTURE_ANGLE=vulkan
+
+# Headless mode (MUST be false for WebGPU)
+STREAM_CAPTURE_HEADLESS=false
+```
+
+<Warning>
+**BREAKING CHANGE:** Headless mode is NOT supported. Deployment FAILS if WebGPU cannot initialize (no soft fallbacks).
+</Warning>
+
+---
+
+## Deployment Validation
+
+The `deploy-vast.sh` script validates WebGPU requirements:
+
+```bash
+# From scripts/deploy-vast.sh
+
+# 1. Verify NVIDIA GPU accessible
+if ! nvidia-smi &>/dev/null; then
+  echo "ERROR: NVIDIA GPU not accessible"
+  exit 1
+fi
+
+# 2. Check Vulkan ICD availability
+if [ ! -f /usr/share/vulkan/icd.d/nvidia_icd.json ]; then
+  echo "ERROR: NVIDIA Vulkan ICD not found"
+  exit 1
+fi
+
+# 3. Ensure display server running
+if ! xdpyinfo -display $DISPLAY &>/dev/null; then
+  echo "ERROR: Display server not accessible"
+  exit 1
+fi
+
+# 4. Run WebGPU preflight test
+# (handled by stream-to-rtmp.ts during browser setup)
+```
+
+**Deployment Fails If:**
+- NVIDIA GPU not detected
+- Vulkan ICD missing
+- Display server not running
+- WebGPU preflight test fails
+
+**No Soft Fallbacks:**
+- Previous versions fell back to headless mode
+- Headless mode doesn't support WebGPU
+- Now deployment FAILS immediately if WebGPU unavailable
+
+---
+
+## Removed Features
+
+### WebGL Fallback (BREAKING)
+
+**Removed in commit 47782ed (February 27, 2026):**
+
+```typescript
+// ❌ REMOVED - No longer exists
+class RendererFactory {
+  isWebGLForced(): boolean { /* ... */ }
+  isWebGLFallbackForced(): boolean { /* ... */ }
+  isWebGLFallbackAllowed(): boolean { /* ... */ }
+  isWebGLAvailable(): boolean { /* ... */ }
+  createWebGLRenderer(): THREE.WebGLRenderer { /* ... */ }
+}
+
+// ❌ REMOVED - No longer supported
+type RendererBackend = "webgpu" | "webgl";
+type UniversalRenderer = THREE.WebGPURenderer | THREE.WebGLRenderer;
+```
+
+**Now:**
+```typescript
+// ✅ WebGPU only
+type RendererBackend = "webgpu";
+type UniversalRenderer = THREE.WebGPURenderer;
+```
+
+### URL Parameters (REMOVED)
+
+```typescript
+// ❌ REMOVED - These parameters are now IGNORED
+?forceWebGL=1
+?disableWebGPU=1
+```
+
+### Environment Variables (DEPRECATED)
+
+```bash
+# ❌ DEPRECATED - These flags are now IGNORED
+STREAM_CAPTURE_DISABLE_WEBGPU=false
+DUEL_FORCE_WEBGL_FALLBACK=false
+```
+
+**Why Kept:**
+- Backwards compatibility with old configs
+- Prevents deployment failures from stale env files
+- Logged as warnings when set
+
+---
+
+## Error Messages
+
+### User-Facing Errors
+
+When WebGPU is unavailable, users see:
+
+```
+Graphics error. WebGPU is required. 
+Please use Chrome 113+, Edge 113+, or Safari 18+.
+```
+
+**Error Code:** `SYSTEM_WEBGL_ERROR` (renamed from WebGL, kept for compatibility)
+
+**Location:** `packages/client/src/lib/errorCodes.ts`
+
+### Developer Errors
+
+When WebGPU fails during development:
+
+```typescript
+// From RendererFactory.ts
+if (!navigator.gpu) {
+  throw new Error(
+    "WebGPU not supported. " +
+    "Hyperscape requires WebGPU for TSL shaders. " +
+    "Please use Chrome 113+, Edge 113+, or Safari 18+."
+  );
+}
+```
+
+---
+
+## Migration Guide
+
+### For Developers
+
+If you have code that checks for WebGL:
+
+```typescript
+// ❌ Old code (no longer works)
+if (world.graphics?.isWebGPU) {
+  // WebGPU path
+} else {
+  // WebGL fallback
+}
+
+// ✅ New code (WebGPU only)
+// No conditional needed - always WebGPU
+const renderer = world.graphics.renderer; // Always WebGPURenderer
+```
+
+### For Deployment
+
+Update your deployment configs:
+
+```bash
+# ❌ Remove these (no longer needed)
+STREAM_CAPTURE_DISABLE_WEBGPU=false
+DUEL_FORCE_WEBGL_FALLBACK=false
+
+# ✅ Add these (required for WebGPU)
+STREAM_CAPTURE_HEADLESS=false
+DISPLAY=:99
+GPU_RENDERING_MODE=xorg
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+```
+
+### For Users
+
+**If you see "WebGPU not supported" error:**
+
+1. **Check browser version:**
+   - Chrome: `chrome://version` (need 113+)
+   - Edge: `edge://version` (need 113+)
+   - Safari: Safari → About Safari (need 18+)
+
+2. **Update browser:**
+   - Chrome: [google.com/chrome](https://google.com/chrome)
+   - Edge: [microsoft.com/edge](https://microsoft.com/edge)
+   - Safari: Update macOS to 15.0+ (Sequoia)
+
+3. **Enable hardware acceleration:**
+   - Chrome/Edge: `chrome://settings` → System → "Use hardware acceleration"
+   - Safari: Preferences → Advanced → Experimental Features → WebGPU
+
+4. **Update GPU drivers:**
+   - NVIDIA: [nvidia.com/drivers](https://nvidia.com/drivers)
+   - AMD: [amd.com/support](https://amd.com/support)
+   - Intel: [intel.com/download-center](https://intel.com/download-center)
+
+---
+
+## Testing WebGPU Support
+
+### Browser Console Test
+
+Open browser console and run:
+
+```javascript
+// Check if WebGPU is available
+if (navigator.gpu) {
+  console.log("✅ WebGPU is available");
+  
+  // Try to get adapter
+  navigator.gpu.requestAdapter().then(adapter => {
+    if (adapter) {
+      console.log("✅ WebGPU adapter found:", adapter);
+      
+      // Try to create device
+      adapter.requestDevice().then(device => {
+        console.log("✅ WebGPU device created successfully");
+        device.destroy();
+      }).catch(err => {
+        console.error("❌ Failed to create WebGPU device:", err);
+      });
+    } else {
+      console.error("❌ No WebGPU adapter found");
+    }
+  }).catch(err => {
+    console.error("❌ Failed to request WebGPU adapter:", err);
+  });
+} else {
+  console.error("❌ WebGPU not available in this browser");
+}
+```
+
+### WebGPU Report
+
+Visit [webgpureport.org](https://webgpureport.org) to see:
+- WebGPU availability
+- GPU adapter information
+- Supported features and limits
+- Browser compatibility
+
+---
+
+## Common Issues
+
+### "WebGPU not supported" Error
+
+**Cause:** Browser doesn't support WebGPU
+
+**Solutions:**
+1. Update browser to Chrome 113+, Edge 113+, or Safari 18+
+2. Enable hardware acceleration in browser settings
+3. Update GPU drivers
+4. Check for browser extensions blocking WebGPU
+
+### Black Screen / No Rendering
+
+**Cause:** WebGPU initialized but rendering failed
+
+**Solutions:**
+1. Check browser console for WebGPU errors
+2. Verify GPU drivers are up to date
+3. Try different browser (Chrome vs Edge vs Safari)
+4. Disable browser extensions
+5. Clear browser cache and reload
+
+### "GPU process was unable to boot"
+
+**Cause:** GPU access disabled or driver issue
+
+**Solutions:**
+1. Enable hardware acceleration: `chrome://settings` → System
+2. Update GPU drivers
+3. Check for GPU blocklist: `chrome://gpu` → "Problems Detected"
+4. Try `--ignore-gpu-blocklist` flag (development only)
+
+### Streaming Shows Black Frames
+
+**Cause:** WebGPU not initializing on remote server
+
+**Solutions:**
+1. Check GPU diagnostics: `bunx pm2 logs hyperscape-duel --lines 500 | grep "GPU Diagnostics"`
+2. Verify display server: `echo $DISPLAY && xdpyinfo`
+3. Check Vulkan: `vulkaninfo --summary`
+4. Review preflight test: `bunx pm2 logs hyperscape-duel | grep preflight`
+5. Ensure `STREAM_CAPTURE_HEADLESS=false`
+
+---
+
+## Development Rules
+
+### DO NOT:
+
+- ❌ Add WebGL fallback code
+- ❌ Use `--disable-webgpu` flags
+- ❌ Use `forceWebGL` parameters
+- ❌ Create headless Chrome configurations without GPU/WebGPU support
+- ❌ Suggest WebGL as an alternative
+
+### DO:
+
+- ✅ Assume WebGPU availability in all renderer code
+- ✅ Throw errors immediately if WebGPU unavailable
+- ✅ Use TSL for all custom shaders
+- ✅ Test on WebGPU-capable browsers only
+- ✅ Document WebGPU requirements in user-facing docs
+
+---
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="WebGPU Diagnostics" icon="stethoscope" href="/devops/webgpu-diagnostics">
+    GPU diagnostics and preflight testing
+  </Card>
+  <Card title="Deployment Guide" icon="rocket" href="/guides/deployment">
+    Production deployment with GPU configuration
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/devops/troubleshooting">
+    Common issues and solutions
+  </Card>
+  <Card title="Rendering Architecture" icon="cube" href="/wiki/engine/rendering">
+    Three.js WebGPU renderer architecture
+  </Card>
+</CardGroup>
