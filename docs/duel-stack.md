@@ -218,15 +218,23 @@ The deploy script tries rendering modes in order:
    - Direct GPU access via DRI/DRM devices
    - Best performance
    - Requires `/dev/dri/card0` or similar
+   - Uses `--disable-gpu-sandbox` and `--disable-setuid-sandbox` for container GPU access
 
 2. **Xvfb with NVIDIA Vulkan** (fallback):
    - Virtual framebuffer provides X11 protocol
    - Chrome uses NVIDIA GPU via ANGLE/Vulkan
    - Works in containers without DRM access
+   - Uses `--disable-gpu-sandbox` for container GPU access
 
-3. **Headless mode**: NOT SUPPORTED
-   - Deployment fails if neither Xorg nor Xvfb can start
-   - WebGPU requires a display server
+3. **Ozone Headless with GPU** (experimental):
+   - Uses `--ozone-platform=headless` for Wayland-like headless rendering
+   - Enabled via `STREAM_CAPTURE_OZONE_HEADLESS=true`
+   - May work on systems where X11/Xvfb fails but GPU is accessible
+   - Requires `--disable-gpu-sandbox` for container GPU access
+
+4. **Headless mode (software)**: NOT SUPPORTED
+   - Deployment fails if no GPU-capable mode can be established
+   - WebGPU requires GPU rendering
 
 ### Environment Variables (Auto-Configured)
 
