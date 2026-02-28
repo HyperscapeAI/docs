@@ -22,6 +22,7 @@ This is a hard requirement. DO NOT:
 - Chrome 113+, Edge 113+, Safari 18+ (macOS 15+)
 - WebGPU must be available and working
 - Check: [webgpureport.org](https://webgpureport.org)
+- Note: Safari 17 support was removed - Safari 18+ (macOS 15+) is now required
 
 ### Server/Streaming (Vast.ai)
 - NVIDIA GPU with Vulkan support is REQUIRED
