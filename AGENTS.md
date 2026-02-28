@@ -40,7 +40,7 @@ This is a hard requirement. DO NOT:
 
 ### Server/Streaming (Vast.ai)
 - NVIDIA GPU with Vulkan support is REQUIRED
-- Must run headful with Xorg or Xvfb (NOT headless Chrome)
+- Must run non-headless with Xorg or Xvfb (WebGPU requires window context)
 - Chrome uses ANGLE/Vulkan for WebGPU
 - **GPU Sandbox Bypass**: `--disable-gpu-sandbox` and `--disable-setuid-sandbox` required for container GPU access
 - If WebGPU cannot initialize, deployment MUST FAIL
@@ -50,10 +50,13 @@ The streaming pipeline requires specific GPU setup:
 
 1. **GPU Rendering Modes** (tried in order):
    - **Xorg with NVIDIA**: Best performance, requires DRI/DRM device access
-   - **Xvfb with NVIDIA Vulkan**: Virtual framebuffer + GPU rendering via ANGLE/Vulkan
-   - **Headless EGL with NVIDIA**: Direct EGL rendering without X server using `--headless=new --use-gl=egl`
-   - **Ozone Headless with GPU**: Experimental mode using `--ozone-platform=headless` with GPU rendering
-   - **Headless mode (software)**: NOT SUPPORTED - WebGPU will not work
+   - **Xvfb with NVIDIA Vulkan**: Virtual framebuffer + GPU rendering via ANGLE/Vulkan (non-headless Chrome)
+   - **Headless Vulkan**: Chrome `--headless=new` with `--use-vulkan` and `--use-angle=vulkan`
+   - **Headless EGL**: Direct EGL rendering without X server using `--headless=new --use-gl=egl`
+   - **Ozone Headless**: Experimental mode using `--ozone-platform=headless` with GPU rendering
+   - **SwiftShader**: Software Vulkan fallback (poor performance, last resort)
+   - Deployment detects Xorg swrast software rendering and switches to alternative modes
+   - Xvfb mode uses **non-headless Chrome** connecting to virtual display (WebGPU requires window context)
 
 2. **Audio Capture**:
    - PulseAudio with `chrome_audio` virtual sink
@@ -71,13 +74,13 @@ The streaming pipeline requires specific GPU setup:
    - Script verifies NVIDIA GPU is accessible via `nvidia-smi`
    - Checks Vulkan ICD availability at `/usr/share/vulkan/icd.d/nvidia_icd.json`
    - Logs actual ICD content and VK_LOADER_DEBUG output for diagnostics
-   - Ensures display server (Xorg/Xvfb) is running and accessible (or uses headless EGL)
-   - Runs WebGPU pre-check test with Chrome to verify navigator.gpu availability
+   - Ensures display server (Xorg/Xvfb) is running and accessible
+   - Runs 6 WebGPU pre-check tests with different Chrome configurations
    - Extracts Chrome GPU info (WebGPU/Vulkan status) during deployment
-   - Detects Xorg swrast software rendering fallback and switches to headless EGL
+   - Detects Xorg swrast software rendering fallback and switches to alternative modes
    - Fails deployment if WebGPU cannot be initialized (no soft fallbacks)
    - Persists GPU/display settings to `.env` for PM2 restarts
-   - Exports working GPU mode (Xorg/Xvfb/headless-egl/ozone-headless) for ecosystem.config.cjs
+   - Exports working GPU mode for ecosystem.config.cjs
 
 5. **Production Client Build**:
    - When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
@@ -94,6 +97,7 @@ The streaming pipeline requires specific GPU setup:
    - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
    - **Chrome Executable**: Set `STREAM_CAPTURE_EXECUTABLE` to explicit Chrome path (e.g., `/usr/bin/google-chrome-unstable`) for reliable WebGPU
    - **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
+   - **Page Navigation Timeout**: Increased to 180s for Vite dev mode (production build recommended)
 
 7. **Stream Encoding Optimization**:
    - Default: `film` tune with B-frames for better compression
@@ -102,6 +106,7 @@ The streaming pipeline requires specific GPU setup:
    - 2x bitrate buffer multiplier (reduced from 4x to prevent backpressure buildup)
    - Audio buffering with `thread_queue_size=1024` and async resampling
    - Health check timeout: 5s (data timeout: 15s) for faster failure detection
+   - Resolution tracking and mismatch detection with automatic viewport recovery
 
 8. **WebGPU Diagnostics**:
    - `captureGpuDiagnostics()` extracts chrome://gpu info at startup
@@ -109,6 +114,7 @@ The streaming pipeline requires specific GPU setup:
    - Runs on blank page before loading heavy game content
    - Provides debugging info when WebGPU fails on remote GPU servers
    - 30s adapter timeout and 60s renderer init timeout prevent indefinite hangs
+   - 6-stage WebGPU testing during deployment (headless-vulkan, headless-egl, xvfb-vulkan, ozone-headless, swiftshader, playwright-xvfb)
 
 See `scripts/deploy-vast.sh` for complete setup logic.
 
@@ -174,6 +180,8 @@ packages/
 - **World Data Manifest Loading**: Monster tiers and gear tiers loaded from world-data
 - **LLM Error Fallback**: Idle + retry when agent has active goal instead of derailing to explore
 - **Short-Circuit Dashboard Sync**: All agents show activity logs even when skipping LLM
+- **Critical Crash Fix**: Fixed `weapon.toLowerCase is not a function` crash in getEquippedWeaponTier that broke ALL agents every tick
+- **Quest Goal Detection**: Added quest goal status change detection for proper quest lifecycle transitions
 
 ### Resource Management
 - **Activity Logger Queue**: Max size 1000 with 25% eviction to prevent memory pressure
