@@ -274,11 +274,114 @@ await service.closeBank();
 - `bankWithdraw(itemId, quantity)` - Withdraw items
 - `closeBank()` - End bank session
 
+## Agent Progression System (Feb 28 2026)
+
+### Dynamic Combat Escalation
+
+Agents automatically progress to harder monsters as they level up:
+
+```typescript
+// Monster tier progression based on combat level
+const monsterTiers = {
+  beginner: { minLevel: 1, maxLevel: 10, monsters: ['goblin', 'chicken'] },
+  intermediate: { minLevel: 10, maxLevel: 30, monsters: ['bandit', 'guard'] },
+  advanced: { minLevel: 30, maxLevel: 99, monsters: ['barbarian', 'warrior'] }
+};
+```
+
+**How It Works:**
+1. Agent starts fighting goblins at level 1
+2. At level 10, switches to bandits and guards
+3. At level 30, progresses to barbarians and warriors
+4. Ensures agents always face appropriate challenges
+
+### Combat Style Rotation
+
+Agents cycle through attack styles to train all combat skills evenly:
+
+```typescript
+// Train lowest combat skill
+const lowestSkill = Math.min(attackLevel, strengthLevel, defenseLevel);
+if (attackLevel === lowestSkill) style = 'accurate';      // Train Attack
+else if (strengthLevel === lowestSkill) style = 'aggressive'; // Train Strength
+else style = 'defensive';                                  // Train Defense
+```
+
+**Benefits:**
+- Balanced combat stat progression
+- Matches OSRS player behavior
+- Prevents over-specialization in single combat stat
+
+### Cooking Phase
+
+Agents cook raw food immediately instead of waiting for full inventory:
+
+```typescript
+// Check for raw food in inventory
+const rawFood = inventory.filter(item => item.itemId.startsWith('raw_'));
+if (rawFood.length > 0 && fireNearby) {
+  return { type: 'cooking', priority: 85 };  // High priority
+}
+```
+
+**Why This Matters:**
+- Prevents inventory clogging with raw food
+- Ensures agents always have cooked food for combat
+- Reduces food waste from inventory overflow
+
+### Gear Upgrade Phase
+
+Agents smith better equipment when they have materials and levels:
+
+```typescript
+// Check if agent can smith better gear
+const smithingLevel = skills.smithing;
+const hasBars = inventory.some(item => item.itemId.endsWith('_bar'));
+const hasHammer = inventory.some(item => item.itemId === 'hammer');
+
+if (smithingLevel >= 15 && hasBars && hasHammer) {
+  return { type: 'smithing', priority: 80 };
+}
+```
+
+**Gear Progression:**
+- Bronze gear at level 1
+- Iron gear at level 15
+- Steel gear at level 30
+- Mithril gear at level 50
+- Adamant gear at level 70
+- Rune gear at level 90
+
+### World Data Manifest Loading
+
+Monster tiers and gear tiers are now loaded from world-data manifests:
+
+```json
+// monster-tiers.json
+{
+  "beginner": {
+    "minLevel": 1,
+    "maxLevel": 10,
+    "monsters": ["goblin", "chicken", "rat"]
+  },
+  "intermediate": {
+    "minLevel": 10,
+    "maxLevel": 30,
+    "monsters": ["bandit", "guard", "dark_wizard"]
+  }
+}
+```
+
+**Benefits:**
+- Easy to tune agent progression without code changes
+- Centralized configuration for all agents
+- Can add new monster tiers without redeploying
+
 ## Agent Capabilities
 
 ### Available Actions
 
-AI agents have 22 actions across 9 categories (updated Feb 26 2026):
+AI agents have 22 actions across 9 categories (updated Feb 28 2026):
 
 ```typescript
 // From packages/plugin-hyperscape/src/index.ts
