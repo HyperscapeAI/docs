@@ -57,9 +57,15 @@ The streaming pipeline requires specific GPU setup. See `scripts/deploy-vast.sh`
    - CDP captures frames from Chrome's internal GPU rendering
    - Works in containers without DRM access
 
-3. **Headless mode**: NOT SUPPORTED
-   - WebGPU requires a display server
-   - Deployment fails if neither Xorg nor Xvfb can start
+3. **Ozone Headless with GPU** (experimental):
+   - Uses `--ozone-platform=headless` for Wayland-like headless rendering
+   - Enabled via `STREAM_CAPTURE_OZONE_HEADLESS=true`
+   - May work on systems where X11/Xvfb fails but GPU is accessible
+   - Requires `--disable-gpu-sandbox` for container GPU access
+
+4. **Headless mode (software)**: NOT SUPPORTED
+   - WebGPU requires GPU rendering
+   - Deployment fails if no GPU-capable mode can be established
 
 **Audio Capture**:
 - PulseAudio with `chrome_audio` virtual sink
