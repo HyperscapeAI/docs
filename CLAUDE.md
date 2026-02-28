@@ -673,9 +673,16 @@ Hyperscape uses GPU instancing to render thousands of resource entities (rocks, 
 - Caused silent corruption (even-count Uint16) or crashes (odd-count Uint16)
 - Now stores original index type during serialization and uses correct typed array constructor
 
+**Implementation:**
+```typescript
+// packages/shared/src/utils/rendering/ModelCache.ts
+// Cache version: 4 (invalidates old corrupt entries)
+```
+
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
+- [AGENTS.md](AGENTS.md) - AI assistant guidelines with WebGPU requirements
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
