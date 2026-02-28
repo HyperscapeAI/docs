@@ -338,9 +338,19 @@ xdpyinfo -display $DISPLAY
 pulseaudio --check
 pactl list short sinks
 
+# Check WebGPU diagnostics
+bunx pm2 logs hyperscape-duel --lines 500 | grep -A 20 "GPU Diagnostics"
+
 # Review logs
 bunx pm2 logs hyperscape-duel --lines 200
 ```
+
+Common issues:
+- **Black frames**: WebGPU failed to initialize - check preflight test logs
+- **Browser hangs**: WebGPU initialization timeout - capture proceeds after 5 consecutive probe timeouts
+- **Timeout on page load**: Use production client build (`DUEL_USE_PRODUCTION_CLIENT=true`)
+- **Resolution mismatch**: Auto-recovery enabled, check viewport restoration logs
+
 See `scripts/deploy-vast.sh` for deployment troubleshooting.
 
 **No Docker?** You need external services:
