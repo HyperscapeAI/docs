@@ -83,6 +83,12 @@ XDG_RUNTIME_DIR=/tmp/pulse-runtime                      # PulseAudio runtime
 PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native       # PulseAudio socket
 ```
 
+**Production Client Build**:
+- When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
+- Serves pre-built client via `vite preview` instead of dev server
+- Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
+- Significantly faster page loads for streaming
+
 ### Development Rules for WebGPU
 - **NEVER add WebGL fallback code** - it will not work with TSL shaders
 - **NEVER use `--disable-webgpu`** or `forceWebGL` flags
@@ -509,84 +515,6 @@ If streaming fails to start or produces black frames:
    ```bash
    cat /root/hyperscape/packages/server/public/live/rtmp-status.json
    ```
-
-### WebGPU Not Available
-
-Hyperscape requires WebGPU - WebGL will NOT work. If you see WebGPU errors:
-
-1. **Check browser version**:
-   - Chrome 113+ (recommended)
-   - Edge 113+
-   - Safari 18+ (macOS 15+)
-   - Verify at [webgpureport.org](https://webgpureport.org)
-
-2. **Enable hardware acceleration**:
-   - Chrome: `chrome://settings` → System → "Use hardware acceleration"
-   - Safari: Preferences → Advanced → "Show Develop menu" → Develop → Experimental Features → "WebGPU"
-
-3. **Update GPU drivers**:
-   - NVIDIA: [nvidia.com/drivers](https://nvidia.com/drivers)
-   - AMD: [amd.com/support](https://amd.com/support)
-   - Intel: [intel.com/content/www/us/en/download-center](https://intel.com/content/www/us/en/download-center)
-
-4. **Check for WebView restrictions**:
-   - Some WebViews (Electron, Tauri) may block WebGPU
-   - Ensure WebGPU is enabled in WebView configuration
-
-### Streaming Issues (Vast.ai)
-
-If streaming fails to start or produces black frames:
-
-1. **Check GPU access**:
-   ```bash
-   nvidia-smi  # Should show GPU info
-   vulkaninfo --summary  # Should show Vulkan support
-   ```
-
-2. **Verify display server**:
-   ```bash
-   echo $DISPLAY  # Should be :99 or :0
-   xdpyinfo -display $DISPLAY  # Should show display info
-   ```
-
-3. **Check PulseAudio**:
-   ```bash
-   pulseaudio --check  # Should exit silently if running
-   pactl list short sinks  # Should show chrome_audio sink
-   ```
-
-4. **Review deployment logs**:
-   ```bash
-   bunx pm2 logs hyperscape-duel --lines 200
-   ```
-
-5. **Check RTMP status**:
-   ```bash
-   cat /root/hyperscape/packages/server/public/live/rtmp-status.json
-   ```
-
-### WebGPU Not Available
-
-Hyperscape requires WebGPU - WebGL will NOT work. If you see WebGPU errors:
-
-1. **Check browser version**:
-   - Chrome 113+ (recommended)
-   - Edge 113+
-   - Safari 18+ (macOS 15+)
-   - Verify at [webgpureport.org](https://webgpureport.org)
-
-2. **Enable hardware acceleration**:
-   - Chrome: `chrome://settings` → System → "Use hardware acceleration"
-   - Safari: Preferences → Advanced → "Show Develop menu" → Develop → Experimental Features → "WebGPU"
-
-3. **Update GPU drivers**:
-   - NVIDIA: [nvidia.com/drivers](https://nvidia.com/drivers)
-   - AMD: [amd.com/support](https://amd.com/support)
-   - Intel: [intel.com/content/www/us/en/download-center](https://intel.com/content/www/us/en/download-center)
-
-4. **Check for WebView restrictions**:
-   - Some WebViews (Electron, Tauri) may block WebGPU
-   - Ensure WebGPU is enabled in WebView configuration
 
 ## Additional Resources
 
