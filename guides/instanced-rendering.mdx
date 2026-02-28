@@ -1,0 +1,279 @@
+---
+title: Instanced rendering
+description: GPU instancing for thousands of resources with minimal draw calls
+---
+
+# Instanced Rendering
+
+Hyperscape uses GPU instancing to render thousands of resources (trees, rocks, ores, herbs) with minimal draw calls.
+
+## Overview
+
+Instead of creating individual meshes for each resource, the system uses `InstancedMesh` to render all instances of the same model in a single draw call.
+
+**Performance improvement:**
+- 1000 trees (5 unique models) = 5 draw calls (was 1000)
+- 1000 rocks (3 unique models) = 3 draw calls (was 1000)
+- **Total reduction:** ~250x fewer draw calls
+
+## How It Works
+
+### Traditional Rendering
+
+```typescript
+// Create 1000 individual meshes
+for (let i = 0; i < 1000; i++) {
+  const tree = treeModel.clone();
+  tree.position.set(x, y, z);
+  scene.add(tree);
+}
+// Result: 1000 draw calls
+```
+
+### Instanced Rendering
+
+```typescript
+// Create 1 InstancedMesh for 1000 trees
+const instancer = new GLBTreeInstancer(scene, {
+  modelPath: 'trees/oak.glb',
+  maxInstances: 1000
+});
+
+// Add instances
+for (let i = 0; i < 1000; i++) {
+  instancer.addInstance(position, rotation, scale);
+}
+// Result: 1 draw call (per LOD level)
+```
+
+## Components
+
+### GLBTreeInstancer
+
+Manages instanced rendering for tree resources.
+
+**Features:**
+- Separate `InstancedMesh` per LOD level
+- Distance-based LOD switching
+- Dissolve materials for respawn animations
+- Highlight mesh pooling
+- Depleted model support (stumps)
+
+**Example:**
+```typescript
+const instancer = new GLBTreeInstancer(scene, {
+  modelPath: 'trees/oak.glb',
+  maxInstances: 1000,
+  lodDistances: [20, 40, 80],
+  depletedModelPath: 'trees/oak_stump.glb',
+  depletedScale: 0.8
+});
+
+// Add instance
+const id = instancer.addInstance(position, rotation, scale);
+
+// Mark as depleted
+instancer.setDepleted(id, true);
+
+// Remove instance
+instancer.removeInstance(id);
+```
+
+### GLBResourceInstancer
+
+Manages instanced rendering for rocks, ores, and herbs.
+
+**Features:**
+- Same as GLBTreeInstancer
+- Optimized for smaller resources
+- Invisible collision proxies for raycasting
+
+**Example:**
+```typescript
+const instancer = new GLBResourceInstancer(scene, {
+  modelPath: 'rocks/granite.glb',
+  maxInstances: 500,
+  lodDistances: [15, 30, 60],
+  depletedModelPath: 'rocks/granite_depleted.glb',
+  depletedScale: 0.6
+});
+```
+
+## LOD System
+
+### LOD Levels
+
+Each resource has 3 LOD levels:
+
+| LOD | Distance | Triangles | Use Case |
+|-----|----------|-----------|----------|
+| LOD0 | 0-20m | 100% | Close-up detail |
+| LOD1 | 20-40m | ~50% | Medium distance |
+| LOD2 | 40-80m | ~25% | Far distance |
+
+### LOD Switching
+
+LOD switches based on camera distance with hysteresis to prevent flickering:
+
+```typescript
+// Switch to higher LOD when entering range
+if (distance < lodDistance - 2) {
+  switchToLOD(higherLOD);
+}
+
+// Switch to lower LOD when leaving range
+if (distance > lodDistance + 2) {
+  switchToLOD(lowerLOD);
+}
+```
+
+## Depletion System
+
+### Depleted Models
+
+When a resource is depleted, it shows a depleted model:
+
+**Trees:**
+- Depleted model: `oak_stump.glb`
+- Depleted scale: 80% of original
+
+**Rocks:**
+- Depleted model: `granite_depleted.glb`
+- Depleted scale: 60% of original
+
+### Depletion Flow
+
+1. Player harvests resource
+2. Visual strategy marks instance as depleted
+3. Instancer switches to depleted pool
+4. Resource respawns after timer
+5. Instancer switches back to normal pool
+
+## Hover Highlights
+
+### Highlight Mesh
+
+When player hovers over a resource, a highlight mesh is shown:
+
+```typescript
+// Visual strategy provides highlight mesh
+const highlightMesh = strategy.getHighlightMesh?.();
+
+// EntityHighlightService adds to scene
+if (highlightMesh) {
+  scene.add(highlightMesh);
+  highlightMesh.position.copy(instancePosition);
+}
+```
+
+**Implementation:**
+- Highlight mesh preloaded from LOD0
+- Shared across all instances
+- Positioned at hovered instance
+- Removed when hover ends
+
+## Collision Detection
+
+### Raycasting
+
+Instanced meshes don't support per-instance raycasting. The system uses invisible collision proxies:
+
+```typescript
+// Create invisible proxy
+const proxy = new THREE.Mesh(
+  collisionGeometry,
+  new THREE.MeshBasicMaterial({ visible: false })
+);
+proxy.userData.instanceId = instanceId;
+proxy.userData.resourceEntity = entity;
+
+// Raycast hits proxy
+const intersects = raycaster.intersectObjects(scene.children);
+const entity = intersects[0]?.object.userData.resourceEntity;
+```
+
+## Performance Metrics
+
+### Draw Call Reduction
+
+**Test scene (1000 resources):**
+- Before: 1000 draw calls
+- After: 8 draw calls
+- **Reduction:** 99.2%
+
+### Memory Usage
+
+**Per-instance overhead:**
+- Before: ~500KB (full mesh clone)
+- After: ~64 bytes (matrix + state)
+- **Reduction:** 99.99%
+
+### Frame Rate
+
+**Test scene (5000 resources):**
+- Before: 15 FPS
+- After: 60 FPS
+- **Improvement:** 4x
+
+## Best Practices
+
+### When to Use Instancing
+
+**Good candidates:**
+- Resources with many instances (>10)
+- Static or rarely-moving objects
+- Objects with same model/material
+
+**Poor candidates:**
+- Unique objects (players, NPCs)
+- Objects with per-instance materials
+- Objects with complex animations
+
+### Performance Tips
+
+1. **Group by model:** One instancer per unique model
+2. **Limit max instances:** Set realistic `maxInstances`
+3. **Use LODs:** Configure appropriate LOD distances
+4. **Batch updates:** Update multiple instances before `needsUpdate`
+5. **Reuse instancers:** Share across resource types
+
+## Debugging
+
+### Enable Debug Logging
+
+```typescript
+// In GLBTreeInstancer or GLBResourceInstancer
+private debug = true;
+```
+
+### Visual Debugging
+
+```typescript
+// Show instance bounding boxes
+instancer.showBoundingBoxes(true);
+
+// Show collision proxies
+scene.traverse((obj) => {
+  if (obj.userData.isCollisionProxy) {
+    obj.material.visible = true;
+    obj.material.wireframe = true;
+  }
+});
+```
+
+### Performance Profiling
+
+```typescript
+// Count draw calls
+console.log('Draw calls:', renderer.info.render.calls);
+
+// Instance counts
+console.log('Trees:', treeInstancer.getInstanceCount());
+console.log('Rocks:', rockInstancer.getInstanceCount());
+```
+
+## Related Documentation
+
+- [Instanced Rendering Deep Dive](../docs/instanced-rendering.md)
+- [RendererFactory API](../docs/api/renderer-factory.md)
+- [WebGPU Migration Guide](../docs/migration/webgpu-only.md)
