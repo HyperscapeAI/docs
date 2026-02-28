@@ -152,6 +152,36 @@ STREAM_CAPTURE_HEIGHT=720
 STREAM_FPS=30
 ```
 
+### Capture Modes
+
+The RTMP bridge supports multiple capture modes:
+
+1. **CDP (Chrome DevTools Protocol)** - Default, fastest, most reliable
+   - Uses Chrome's built-in screencast API
+   - JPEG quality configurable via `STREAM_CDP_QUALITY` (1-100, default: 80)
+   - Automatic resolution tracking and viewport recovery
+   - 5s timeout on probe evaluate calls to prevent hanging
+   - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
+
+2. **WebCodecs** - Experimental, native VideoEncoder API
+   - Uses browser's native video encoding
+   - May have better performance on some systems
+   - Set `STREAM_CAPTURE_MODE=webcodecs`
+
+3. **MediaRecorder** - Legacy fallback
+   - Browser's MediaRecorder API
+   - Set `STREAM_CAPTURE_MODE=mediarecorder`
+
+### Capture Reliability
+
+The capture system includes automatic recovery:
+
+- **Resolution Mismatch Detection**: Tracks CDP frame resolution vs expected dimensions
+- **Viewport Recovery**: Automatically restores viewport when resolution mismatch persists
+- **Probe Timeouts**: 5s timeout on browser readiness checks
+- **Unresponsive Browser Handling**: Proceeds with capture after 5 consecutive probe timeouts
+- **Page Load Timeout**: 180s timeout for Vite dev mode compatibility (use production client to avoid)
+
 ### Anti-Cheat Timing
 
 Default anti-cheat timing policy (no env required):
