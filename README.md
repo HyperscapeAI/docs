@@ -206,7 +206,9 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
 
-## Deployment (Railway)
+## Deployment
+
+### Railway (Web Hosting)
 
 Railway deployment is set up for separate development and production targets:
 
@@ -216,6 +218,25 @@ Railway deployment is set up for separate development and production targets:
 For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps for `hyperscape.gg`), see:
 
 - `docs/railway-dev-prod.md`
+
+### Vast.ai (GPU Streaming)
+
+Hyperscape streams live gameplay to Twitch, Kick, and X/Twitter using GPU-accelerated rendering with WebGPU.
+
+**Requirements:**
+- NVIDIA GPU with Vulkan support (WebGPU required)
+- Xorg or Xvfb display server (headless mode NOT supported)
+- PulseAudio for audio capture
+- FFmpeg for H.264 encoding
+- Chrome Dev channel with WebGPU enabled
+
+**Architecture:**
+- CDP (Chrome DevTools Protocol) screencast capture
+- Direct JPEG frame piping to FFmpeg
+- Hardware-accelerated H.264 encoding
+- RTMP tee muxer for multi-platform streaming
+
+**See:** [docs/vast-ai-streaming.md](docs/vast-ai-streaming.md) for complete setup and troubleshooting.
 
 ## GPU Streaming (Vast.ai)
 
