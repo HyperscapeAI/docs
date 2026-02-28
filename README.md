@@ -232,6 +232,8 @@ Hyperscape streams live gameplay to Twitch, Kick, and X/Twitter using GPU-accele
 - Direct JPEG frame piping to FFmpeg
 - Hardware-accelerated H.264 encoding
 - RTMP tee muxer for multi-platform streaming
+- WebGPU diagnostics and preflight testing
+- Automatic recovery with viewport restoration
 
 **Deployment:**
 ```bash
