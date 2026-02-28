@@ -1,514 +1,332 @@
 # Instanced Rendering System
 
-This document describes Hyperscape's instanced rendering system for resources and vegetation.
+Hyperscape uses GPU instancing to render thousands of resources (trees, rocks, ores, herbs) with minimal draw calls. This document explains the instanced rendering architecture and how to use it.
 
 ## Overview
 
-Hyperscape uses GPU instancing to render thousands of resources (trees, rocks, ores, herbs) with minimal draw calls. Instead of creating individual meshes for each resource, the system uses `InstancedMesh` to render all instances of the same model in a single draw call.
+**Problem**: Rendering 1000+ individual resources (trees, rocks, etc.) with separate draw calls causes severe performance degradation.
+
+**Solution**: Use `THREE.InstancedMesh` to batch all instances of the same model into a single draw call per LOD level.
+
+**Performance Impact**:
+- **Before**: O(n) draw calls per resource type (1000 trees = 1000 draw calls)
+- **After**: O(1) draw calls per unique model per LOD level (1000 trees = 3 draw calls for LOD0/LOD1/LOD2)
 
 ## Architecture
 
-### Before Instancing
-```
-1000 trees = 1000 draw calls
-1000 rocks = 1000 draw calls
-Total: 2000 draw calls
-```
+### Components
 
-### After Instancing
-```
-1000 trees (5 unique models) = 5 draw calls
-1000 rocks (3 unique models) = 3 draw calls
-Total: 8 draw calls
-```
+1. **GLBTreeInstancer** (`packages/shared/src/systems/shared/world/GLBTreeInstancer.ts`)
+   - Handles tree-specific instancing
+   - Supports dissolve materials for fade effects
+   - Distance-based LOD switching with hysteresis
 
-**Performance improvement:** ~250x reduction in draw calls for typical scenes.
+2. **GLBResourceInstancer** (`packages/shared/src/systems/shared/world/GLBResourceInstancer.ts`)
+   - Handles rocks, ores, herbs, and other non-tree resources
+   - Separate depleted model pool for harvested resources
+   - Invisible collision proxies for raycasting
 
-## Components
+3. **Visual Strategies**:
+   - **TreeGLBVisualStrategy** - Uses GLBTreeInstancer
+   - **InstancedModelVisualStrategy** - Uses GLBResourceInstancer
+   - **StandardModelVisualStrategy** - Fallback for non-instanced rendering
 
-### GLBTreeInstancer
+### How It Works
 
-Manages instanced rendering for tree resources.
+1. **Model Loading**:
+   - Each unique model path creates a pool
+   - LOD0, LOD1, LOD2 variants loaded automatically
+   - Geometry extracted by reference (shared across instances)
 
-**Features:**
-- Separate `InstancedMesh` per LOD level (LOD0, LOD1, LOD2)
-- Distance-based LOD switching with hysteresis
-- Dissolve material support for respawn animations
-- Highlight mesh pooling for hover effects
-- Depleted model support (stumps)
+2. **Instance Management**:
+   - Each entity calls `addInstance(modelPath, entityId, position, rotation, scale)`
+   - Instance matrix stored in `InstancedMesh.instanceMatrix`
+   - Entities tracked in `Map<entityId, ResourceSlot>`
 
-**Usage:**
+3. **LOD Switching**:
+   - Every frame, check distance from camera to each instance
+   - Move instances between LOD pools (swap-and-pop algorithm)
+   - Hysteresis prevents LOD thrashing at boundaries
+
+4. **Depleted State**:
+   - Resources can transition to depleted model (e.g., tree stump)
+   - Separate `InstancedMesh` for depleted instances
+   - Collision proxy remains for interaction
+
+## Usage
+
+### Adding Instanced Rendering to a Resource
+
+1. **Set visual strategy** in `createVisualStrategy.ts`:
+
 ```typescript
-const instancer = new GLBTreeInstancer(scene, {
-  modelPath: 'trees/oak.glb',
-  maxInstances: 1000,
-  lodDistances: [20, 40, 80],
-  depletedModelPath: 'trees/oak_stump.glb',
-  depletedScale: 0.8
-});
+import { InstancedModelVisualStrategy } from './InstancedModelVisualStrategy';
+
+export function createVisualStrategy(config: ResourceConfig): ResourceVisualStrategy {
+  if (config.model && config.resourceType !== 'tree') {
+    return new InstancedModelVisualStrategy();
+  }
+  // ... other strategies
+}
+```
+
+2. **Configure resource manifest** with LOD models:
+
+```json
+{
+  "id": "iron_ore",
+  "name": "Iron ore",
+  "model": "rocks/iron_ore.glb",
+  "modelScale": 1.0,
+  "depletedModelPath": "rocks/iron_ore_depleted.glb",
+  "depletedModelScale": 0.3
+}
+```
+
+3. **LOD models** (auto-detected):
+   - `iron_ore.glb` → LOD0 (high detail)
+   - `iron_ore_lod1.glb` → LOD1 (medium detail)
+   - `iron_ore_lod2.glb` → LOD2 (low detail)
+
+### Initialization
+
+Instancers are initialized in `createClientWorld.ts`:
+
+```typescript
+import { initGLBTreeInstancer } from './systems/shared/world/GLBTreeInstancer';
+import { initGLBResourceInstancer } from './systems/shared/world/GLBResourceInstancer';
+
+export function createClientWorld() {
+  // ... world setup
+  
+  initGLBTreeInstancer(scene, world);
+  initGLBResourceInstancer(scene, world);
+  
+  // ... rest of setup
+}
+```
+
+### API Reference
+
+#### GLBResourceInstancer
+
+```typescript
+// Initialize (called once at world creation)
+initGLBResourceInstancer(scene: THREE.Scene, world: World): void
 
 // Add instance
-const instanceId = instancer.addInstance(position, rotation, scale);
-
-// Update instance
-instancer.updateInstance(instanceId, newPosition);
-
-// Mark as depleted
-instancer.setDepleted(instanceId, true);
+addInstance(
+  modelPath: string,
+  entityId: string,
+  position: THREE.Vector3,
+  rotation: number,
+  scale: number,
+  depletedModelPath?: string | null,
+  depletedScale?: number
+): Promise<boolean>
 
 // Remove instance
-instancer.removeInstance(instanceId);
+removeInstance(entityId: string): void
+
+// Set depleted state
+setDepleted(entityId: string, depleted: boolean): void
+
+// Check if entity is instanced
+hasInstance(entityId: string): boolean
+
+// Check if depleted model is available
+hasDepleted(entityId: string): boolean
+
+// Get highlight mesh for hover effects
+getHighlightMesh(entityId: string): THREE.Object3D | null
+
+// Update LOD switching (called every frame)
+updateGLBResourceInstancer(): void
+
+// Cleanup
+destroyGLBResourceInstancer(): void
 ```
-
-### GLBResourceInstancer
-
-Manages instanced rendering for non-tree resources (rocks, ores, herbs).
-
-**Features:**
-- Same as GLBTreeInstancer but optimized for smaller resources
-- Supports custom depleted models and scales
-- Invisible collision proxies for raycasting
-- Automatic LOD management
-
-**Usage:**
-```typescript
-const instancer = new GLBResourceInstancer(scene, {
-  modelPath: 'rocks/granite.glb',
-  maxInstances: 500,
-  lodDistances: [15, 30, 60],
-  depletedModelPath: 'rocks/granite_depleted.glb',
-  depletedScale: 0.6
-});
-```
-
-### Visual Strategies
-
-#### TreeGLBVisualStrategy
-
-Uses `GLBTreeInstancer` for tree resources.
-
-**Features:**
-- Preloads highlight mesh from LOD0
-- Returns highlight mesh for hover effects
-- Handles depletion state (returns `true` to skip entity-level stump loading)
-- Removes stale highlight mesh on state transition
 
 #### InstancedModelVisualStrategy
 
-Uses `GLBResourceInstancer` for rocks, ores, herbs, and other resources.
-
-**Features:**
-- Thin wrapper around `GLBResourceInstancer`
-- Invisible collision proxies for raycasting
-- Falls back to `StandardModelVisualStrategy` if instancing fails
-- Supports custom depleted models and scales
-
-#### StandardModelVisualStrategy (Fallback)
-
-Traditional per-entity mesh cloning.
-
-**When used:**
-- Instancing initialization fails
-- Resource type doesn't support instancing
-- Debugging/testing individual resources
-
-## LOD System
-
-### LOD Levels
-
-Each instanced resource has 3 LOD levels:
-
-| LOD | Distance | Triangles | Use Case |
-|-----|----------|-----------|----------|
-| LOD0 | 0-20m | 100% | Close-up detail |
-| LOD1 | 20-40m | ~50% | Medium distance |
-| LOD2 | 40-80m | ~25% | Far distance |
-
-### LOD Switching
-
-**Hysteresis prevents flickering:**
 ```typescript
-// Switch to higher LOD when entering range
-if (distance < lodDistance - hysteresis) {
-  switchToLOD(higherLOD);
-}
-
-// Switch to lower LOD when leaving range
-if (distance > lodDistance + hysteresis) {
-  switchToLOD(lowerLOD);
+class InstancedModelVisualStrategy implements ResourceVisualStrategy {
+  // Create visual (adds instance to pool)
+  async createVisual(ctx: ResourceVisualContext): Promise<void>
+  
+  // Handle depletion (switches to depleted pool)
+  async onDepleted(ctx: ResourceVisualContext): Promise<boolean>
+  
+  // Get highlight mesh for hover effects
+  getHighlightMesh(ctx: ResourceVisualContext): THREE.Object3D | null
+  
+  // Handle respawn (switches back to normal pool)
+  async onRespawn(ctx: ResourceVisualContext): Promise<void>
+  
+  // Update (calls updateGLBResourceInstancer)
+  update(ctx: ResourceVisualContext, deltaTime: number): void
+  
+  // Cleanup (removes instance from pool)
+  destroy(ctx: ResourceVisualContext): void
 }
 ```
 
-**Default hysteresis:** 2 meters
+## LOD Configuration
 
-### LOD Distance Configuration
-
-Configured per resource type in visual strategy factory:
+LOD distances are configured in `GPUVegetation.ts`:
 
 ```typescript
-// Trees (larger, visible from farther)
-lodDistances: [20, 40, 80]
-
-// Rocks/Ores (smaller, closer LOD switches)
-lodDistances: [15, 30, 60]
-
-// Herbs (very small, aggressive LOD)
-lodDistances: [10, 20, 40]
+export const GPU_VEG_CONFIG = {
+  // Resource LOD distances
+  RESOURCE_LOD1_DISTANCE: 30,  // Switch to LOD1 at 30 units
+  RESOURCE_LOD2_DISTANCE: 60,  // Switch to LOD2 at 60 units
+  
+  // Tree LOD distances
+  TREE_LOD1_DISTANCE: 40,
+  TREE_LOD2_DISTANCE: 80,
+  
+  // Fade distances for dissolve materials
+  FADE_START: 100,
+  FADE_END: 120,
+};
 ```
 
-## Depletion System
+### Hysteresis
 
-### Depleted Models
+LOD switching uses hysteresis to prevent thrashing at boundaries:
 
-When a resource is depleted (e.g., tree chopped down), it can show a depleted model:
-
-**Trees:**
-- Depleted model: `oak_stump.glb`
-- Depleted scale: `0.8` (80% of original size)
-
-**Rocks:**
-- Depleted model: `granite_depleted.glb`
-- Depleted scale: `0.6` (60% of original size)
-
-### Depletion Flow
-
-1. Player harvests resource
-2. `ResourceEntity.onDepleted()` called
-3. Visual strategy handles depletion:
-   - `TreeGLBVisualStrategy`: Switches to depleted pool, returns `true`
-   - `InstancedModelVisualStrategy`: Switches to depleted pool, returns `true`
-   - `StandardModelVisualStrategy`: Returns `false`, entity loads stump
-4. Resource respawns after timer
-5. Visual strategy switches back to normal pool
-
-## Highlight System
-
-### Hover Highlights
-
-When player hovers over a resource, a highlight mesh is shown:
-
-**Implementation:**
 ```typescript
-// Visual strategy provides highlight mesh
-const highlightMesh = strategy.getHighlightMesh?.();
+const hysteresisSq = 0.81; // 90% of distance
 
-// EntityHighlightService adds to scene
-if (highlightMesh) {
-  scene.add(highlightMesh);
-  highlightMesh.position.copy(entity.position);
+if (distSq < lod1DistSq * hysteresisSq) {
+  targetLOD = 0; // Stay in LOD0
+} else if (distSq < lod1DistSq) {
+  targetLOD = currentLOD === 0 ? 0 : 1; // Don't downgrade immediately
 }
 ```
 
-**Highlight mesh:**
-- Preloaded from LOD0 model
-- Shared across all instances of same resource type
-- Positioned at hovered instance location
-- Removed when hover ends
-
-### Highlight Root
-
-For instanced resources, `ResourceEntity.getHighlightRoot()` returns the highlight mesh instead of the entity's mesh:
-
-```typescript
-getHighlightRoot(): Object3D | null {
-  const highlightMesh = this.visualStrategy?.getHighlightMesh?.();
-  return highlightMesh || this.mesh;
-}
-```
-
-This allows `EntityHighlightService` to highlight instanced meshes correctly.
-
-## Collision Proxies
-
-### Raycasting with Instanced Meshes
-
-Instanced meshes don't support per-instance raycasting by default. The system uses invisible collision proxies:
-
-**Implementation:**
-```typescript
-// Create invisible collision proxy
-const proxy = new THREE.Mesh(
-  collisionGeometry,
-  new THREE.MeshBasicMaterial({ visible: false })
-);
-proxy.position.copy(instancePosition);
-proxy.userData.instanceId = instanceId;
-proxy.userData.resourceEntity = entity;
-
-// Add to scene for raycasting
-scene.add(proxy);
-```
-
-**Raycasting:**
-1. Raycast hits invisible proxy
-2. Proxy's `userData.resourceEntity` provides entity reference
-3. Entity handles interaction (gather, examine, etc.)
-
-## Performance Metrics
-
-### Draw Call Reduction
-
-**Test scene (1000 resources):**
-- Before instancing: 1000 draw calls
-- After instancing: 8 draw calls (5 tree models + 3 rock models)
-- **Reduction:** 99.2%
+## Performance Characteristics
 
 ### Memory Usage
 
-**Per-instance overhead:**
-- Before: ~500KB (full mesh clone)
-- After: ~64 bytes (matrix + state)
-- **Reduction:** 99.99%
+- **Per Model Pool**: ~2-5 MB (geometry + materials for 3 LOD levels)
+- **Per Instance**: ~64 bytes (4x4 matrix in `instanceMatrix` buffer)
+- **1000 instances**: ~64 KB + model pool overhead
 
-### Frame Rate
+### Draw Calls
 
-**Test scene (5000 resources):**
-- Before instancing: 15 FPS
-- After instancing: 60 FPS
-- **Improvement:** 4x
+- **Without instancing**: 1000 resources = 1000 draw calls
+- **With instancing**: 1000 resources = 3 draw calls (LOD0 + LOD1 + LOD2)
+- **Reduction**: 99.7% fewer draw calls
 
-## Implementation Details
+### CPU Overhead
 
-### Instance Pools
+- **LOD switching**: O(n) per frame (checks distance for each instance)
+- **Matrix updates**: Only when instances move between LOD pools
+- **Typical cost**: <1ms for 1000 instances on modern CPUs
 
-Each instancer maintains separate pools:
+## Limitations
 
-**Normal pool:**
-- Active, harvestable resources
-- Full LOD support
-- Highlight mesh support
+1. **Max instances per pool**: 512 (configurable via `MAX_INSTANCES`)
+2. **Static instances**: Instances cannot move after creation
+3. **Shared materials**: All instances of a model share the same material
+4. **No per-instance colors**: Use vertex colors in the model instead
 
-**Depleted pool:**
-- Depleted resources (stumps, depleted rocks)
-- Separate `InstancedMesh` with depleted model
-- Custom scale factor
-- No highlight support
+## Fallback Behavior
 
-### Matrix Management
-
-Instance transforms stored in `InstancedMesh.instanceMatrix`:
+If instancing fails (pool full, model load error), the strategy automatically falls back to `StandardModelVisualStrategy`:
 
 ```typescript
-// Set instance transform
-const matrix = new THREE.Matrix4();
-matrix.compose(position, rotation, scale);
-instancedMesh.setMatrixAt(instanceId, matrix);
-instancedMesh.instanceMatrix.needsUpdate = true;
-```
+const success = await addResourceInstance(...);
 
-### Dissolve Materials
-
-Resources use dissolve materials for respawn animations:
-
-```typescript
-// Fade in over 1 second
-material.uniforms.dissolveAmount.value = 0; // Start invisible
-// Animate to 1 over time
-material.uniforms.dissolveAmount.value = progress; // 0 → 1
-```
-
-## Migration Guide
-
-### Converting to Instanced Rendering
-
-**Before (StandardModelVisualStrategy):**
-```typescript
-export class MyResourceVisualStrategy implements ResourceVisualStrategy {
-  async onInit(entity: ResourceEntity): Promise<void> {
-    const model = await loadModel(this.modelPath);
-    entity.mesh = model.clone();
-    entity.scene.add(entity.mesh);
-  }
-  
-  onDepleted(entity: ResourceEntity): boolean {
-    return false; // Entity loads stump
-  }
+if (success) {
+  this.instanced = true;
+  createCollisionProxy(ctx, baseScale);
+  return;
 }
+
+// Fallback to standard rendering
+this.fallback = new StandardModelVisualStrategy();
+await this.fallback.createVisual(ctx);
 ```
-
-**After (InstancedModelVisualStrategy):**
-```typescript
-export class MyResourceVisualStrategy implements ResourceVisualStrategy {
-  private instancer: GLBResourceInstancer;
-  
-  constructor(scene: Scene, instancer: GLBResourceInstancer) {
-    this.instancer = instancer;
-  }
-  
-  async onInit(entity: ResourceEntity): Promise<void> {
-    const instanceId = this.instancer.addInstance(
-      entity.position,
-      entity.rotation,
-      entity.scale
-    );
-    entity.userData.instanceId = instanceId;
-    
-    // Create invisible collision proxy
-    const proxy = createCollisionProxy(entity);
-    entity.mesh = proxy;
-    entity.scene.add(proxy);
-  }
-  
-  onDepleted(entity: ResourceEntity): boolean {
-    const instanceId = entity.userData.instanceId;
-    this.instancer.setDepleted(instanceId, true);
-    return true; // Instancer handles depletion
-  }
-  
-  getHighlightMesh(): Object3D | null {
-    return this.instancer.getHighlightMesh();
-  }
-}
-```
-
-### Factory Integration
-
-Wire up instancers in `createClientWorld`:
-
-```typescript
-// Initialize instancers
-const treeInstancer = new GLBTreeInstancer(scene, {
-  modelPath: 'trees/oak.glb',
-  maxInstances: 1000,
-  lodDistances: [20, 40, 80],
-  depletedModelPath: 'trees/oak_stump.glb'
-});
-
-const rockInstancer = new GLBResourceInstancer(scene, {
-  modelPath: 'rocks/granite.glb',
-  maxInstances: 500,
-  lodDistances: [15, 30, 60],
-  depletedModelPath: 'rocks/granite_depleted.glb'
-});
-
-// Register in visual strategy factory
-visualStrategyFactory.register('tree', (entity) => 
-  new TreeGLBVisualStrategy(scene, treeInstancer)
-);
-
-visualStrategyFactory.register('rock', (entity) =>
-  new InstancedModelVisualStrategy(scene, rockInstancer)
-);
-
-// Cleanup on world destroy
-world.on('destroy', () => {
-  treeInstancer.destroy();
-  rockInstancer.destroy();
-});
-```
-
-## Best Practices
-
-### When to Use Instancing
-
-**Good candidates:**
-- Resources with many instances (>10)
-- Static or rarely-moving objects
-- Objects with same model/material
-- Objects that don't need per-instance materials
-
-**Poor candidates:**
-- Unique objects (players, NPCs)
-- Objects with per-instance materials
-- Objects with complex animations
-- Objects that change frequently
-
-### Performance Tips
-
-1. **Group by model:** Use one instancer per unique model
-2. **Limit max instances:** Set realistic `maxInstances` to avoid over-allocation
-3. **Use LODs:** Configure appropriate LOD distances for resource type
-4. **Batch updates:** Update multiple instances before setting `needsUpdate`
-5. **Reuse instancers:** Share instancers across resource types when possible
-
-### Memory Management
-
-1. **Preallocate:** Set `maxInstances` to expected peak count
-2. **Cleanup:** Call `instancer.destroy()` when no longer needed
-3. **Monitor:** Track instance count and memory usage
-4. **Limit:** Use separate instancers for different resource types
 
 ## Debugging
 
-### Enable Debug Logging
+### Enable Instancer Logging
+
+Set `DEBUG=hyperscape:instancer` to see detailed logs:
+
+```bash
+DEBUG=hyperscape:instancer bun run dev
+```
+
+### Check Instance Counts
 
 ```typescript
-// In GLBTreeInstancer or GLBResourceInstancer
-private debug = true;
-
-// Logs:
-// - Instance add/remove
-// - LOD switches
-// - Depletion state changes
-// - Highlight mesh operations
+// In browser console
+const world = window.__HYPERSCAPE_WORLD__;
+const stats = world.getSystem('vegetation').getInstancerStats();
+console.log(stats);
+// {
+//   trees: { lod0: 234, lod1: 456, lod2: 310 },
+//   resources: { lod0: 123, lod1: 234, lod2: 345, depleted: 45 }
+// }
 ```
 
 ### Visual Debugging
 
+Enable wireframe mode to see instanced meshes:
+
 ```typescript
-// Show instance bounding boxes
-instancer.showBoundingBoxes(true);
-
-// Show LOD levels with color coding
-instancer.debugLOD(true);
-
-// Show collision proxies
+// In browser console
+const scene = window.__HYPERSCAPE_WORLD__.scene;
 scene.traverse((obj) => {
-  if (obj.userData.isCollisionProxy) {
-    obj.material.visible = true;
+  if (obj instanceof THREE.InstancedMesh) {
     obj.material.wireframe = true;
   }
 });
 ```
 
-### Performance Profiling
+## Migration Guide
 
-```typescript
-// Count draw calls
-console.log('Draw calls:', renderer.info.render.calls);
+### Converting from Standard to Instanced Rendering
 
-// Count triangles
-console.log('Triangles:', renderer.info.render.triangles);
+1. **Update visual strategy factory**:
 
-// Instance counts
-console.log('Tree instances:', treeInstancer.getInstanceCount());
-console.log('Rock instances:', rockInstancer.getInstanceCount());
+```diff
+// packages/shared/src/entities/world/visuals/createVisualStrategy.ts
++ import { InstancedModelVisualStrategy } from './InstancedModelVisualStrategy';
+
+  export function createVisualStrategy(config: ResourceConfig) {
++   if (config.model && config.resourceType !== 'tree') {
++     return new InstancedModelVisualStrategy();
++   }
+    // ... existing strategies
+  }
 ```
+
+2. **Add LOD models** (optional but recommended):
+   - Create `model_lod1.glb` and `model_lod2.glb` variants
+   - Use decimation tools: `bun run scripts/optimize-models-full.mjs`
+
+3. **Test performance**:
+   - Spawn 100+ instances of the resource
+   - Check FPS and draw calls in DevTools Performance panel
+   - Verify LOD switching works correctly
+
+## Best Practices
+
+1. **Use LOD models**: Provide LOD1 and LOD2 variants for better performance
+2. **Optimize geometry**: Keep triangle count low (LOD0: <5k, LOD1: <2k, LOD2: <500)
+3. **Share textures**: Use texture atlases to reduce memory usage
+4. **Batch similar resources**: Group resources by model to maximize instancing benefits
+5. **Monitor pool usage**: If pools fill up (512 instances), consider splitting into sub-types
 
 ## Related Files
 
-### Core Implementation
-- `packages/shared/src/systems/shared/world/GLBTreeInstancer.ts` - Tree instancing
-- `packages/shared/src/systems/shared/world/GLBResourceInstancer.ts` - Resource instancing
+- `packages/shared/src/systems/shared/world/GLBResourceInstancer.ts` - Resource instancer implementation
+- `packages/shared/src/systems/shared/world/GLBTreeInstancer.ts` - Tree instancer implementation
+- `packages/shared/src/entities/world/visuals/InstancedModelVisualStrategy.ts` - Visual strategy wrapper
 - `packages/shared/src/entities/world/visuals/TreeGLBVisualStrategy.ts` - Tree visual strategy
-- `packages/shared/src/entities/world/visuals/InstancedModelVisualStrategy.ts` - Resource visual strategy
-
-### Integration
+- `packages/shared/src/systems/shared/world/GPUVegetation.ts` - LOD configuration and dissolve materials
 - `packages/shared/src/runtime/createClientWorld.ts` - Instancer initialization
-- `packages/shared/src/entities/world/visuals/createVisualStrategy.ts` - Strategy factory
-- `packages/shared/src/entities/world/ResourceEntity.ts` - Resource entity
-
-### Testing
-- `packages/shared/src/systems/shared/world/__tests__/ProcgenTreeInstancer.test.ts` - Tree instancing tests
-- `packages/shared/src/systems/shared/world/__tests__/ProcgenRocksPlants.test.ts` - Resource instancing tests
-
-## Future Improvements
-
-### Planned Features
-- [ ] Frustum culling per instance (currently per InstancedMesh)
-- [ ] Occlusion culling for instances
-- [ ] Dynamic LOD distances based on screen size
-- [ ] GPU-based instance culling with compute shaders
-- [ ] Instanced shadow casting optimization
-
-### Known Limitations
-- Raycasting requires collision proxies (overhead)
-- All instances share same material (no per-instance colors)
-- LOD switching affects all instances simultaneously
-- Highlight mesh is shared (only one instance can be highlighted)
-
-## References
-
-- [Three.js InstancedMesh Documentation](https://threejs.org/docs/#api/en/objects/InstancedMesh)
-- [WebGPU Instancing](https://webgpufundamentals.org/webgpu/lessons/webgpu-instancing.html)
-- [GPU Instancing Best Practices](https://developer.nvidia.com/blog/opengl-performance-tips-the-basics-of-instancing/)
