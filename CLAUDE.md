@@ -522,6 +522,42 @@ If streaming fails to start or produces black frames:
    - **Resolution mismatch**: Viewport size doesn't match stream dimensions
    - **Timeout on page load**: Use production client build (`NODE_ENV=production`)
 
+## Performance Optimizations
+
+### Instanced Rendering
+
+Hyperscape uses GPU instancing to render thousands of resource entities (rocks, ores, herbs, trees) with minimal draw calls.
+
+**Architecture:**
+- **GLBResourceInstancer**: Pools instances by model path, separate `InstancedMesh` per LOD level
+- **GLBTreeInstancer**: Specialized instancer for tree resources with dissolve materials
+- **InstancedModelVisualStrategy**: Thin wrapper with invisible collision proxies for raycasting
+- **StandardModelVisualStrategy**: Fallback for non-instanced rendering
+
+**Benefits:**
+- Reduces draw calls from O(n) per resource to O(1) per unique model per LOD level
+- Distance-based LOD switching with hysteresis to prevent flickering
+- Supports depleted models (stumps, empty rocks) with separate instance pools
+- Highlight mesh support for hover/selection effects
+
+**Implementation:**
+```typescript
+// packages/shared/src/visual/strategies/InstancedModelVisualStrategy.ts
+// packages/shared/src/visual/instancers/GLBResourceInstancer.ts
+// packages/shared/src/visual/instancers/GLBTreeInstancer.ts
+```
+
+**Configuration:**
+- Instancing is enabled by default for all resource entities
+- Falls back to `StandardModelVisualStrategy` if instancing fails
+- LOD distances and hysteresis configurable per instancer
+
+**Depleted Models:**
+- Resources can specify `depletedModelPath` and `depletedModelScale`
+- Instancer maintains separate pools for normal and depleted states
+- Automatic transition on resource depletion (e.g., tree → stump)
+- Collision proxy persists across state transitions
+
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
