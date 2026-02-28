@@ -233,23 +233,24 @@ packages/
 **Critical**: Packages must build in this order due to dependencies:
 
 1. **physx-js-webidl** - PhysX WASM (takes longest, ~5-10 min first time)
-2. **shared** - Depends on physx-js-webidl
-3. **All other packages** - Depend on shared
+2. **decimation** - Mesh decimation utilities
+3. **impostors** - Impostor rendering system (required by shared)
+4. **procgen** - Procedural generation (required by shared)
+5. **shared** - Core engine (depends on physx-js-webidl, impostors, procgen)
+6. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
 
-> **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
->
-> There is a circular dependency between `@hyperscape/shared` and `@hyperscape/procgen`.
-> - shared imports procgen for vegetation/terrain generation
-> - procgen imports shared for TileCoord type in viewers
->
-> **Current workaround**: procgen build ignores TypeScript errors.
->
-> **Recommended fix**: Extract shared types to `@hyperscape/types` package:
-> - Create new package with only type definitions (no runtime code)
-> - Both shared and procgen depend on types (no circular dep)
-> - Move TileCoord, Position3D, EntityData to types package
+**Manual Build Order** (for CI or troubleshooting):
+```bash
+cd packages/physx-js-webidl && bun run build
+cd ../decimation && bun run build
+cd ../impostors && bun run build
+cd ../procgen && bun run build
+cd ../shared && bun run build
+cd ../plugin-hyperscape && bun run build
+cd ../server && bun run build
+```
 
 ### Entity Component System (ECS)
 
