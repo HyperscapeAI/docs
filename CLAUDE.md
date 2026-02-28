@@ -298,12 +298,13 @@ The streaming pipeline requires specific GPU setup:
    - Script verifies NVIDIA GPU is accessible via `nvidia-smi`
    - Checks Vulkan ICD availability at `/usr/share/vulkan/icd.d/nvidia_icd.json`
    - Logs actual ICD content and VK_LOADER_DEBUG output for diagnostics
-   - Ensures display server (Xorg/Xvfb) is running and accessible
+   - Ensures display server (Xorg/Xvfb) is running and accessible (or uses headless EGL)
    - Runs WebGPU pre-check test with Chrome to verify navigator.gpu availability
    - Extracts Chrome GPU info (WebGPU/Vulkan status) during deployment
+   - Detects Xorg swrast software rendering fallback and switches to headless EGL
    - Fails deployment if WebGPU cannot be initialized (no soft fallbacks)
    - Persists GPU/display settings to `.env` for PM2 restarts
-   - Exports working GPU mode (Xorg/Xvfb/ozone-headless) for ecosystem.config.cjs
+   - Exports working GPU mode (Xorg/Xvfb/headless-egl/ozone-headless) for ecosystem.config.cjs
 
 5. **Production Client Build**:
    - When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
