@@ -623,9 +623,10 @@ STREAMING_CANONICAL_PLATFORM=twitch        # Lower latency than YouTube
 STREAMING_PUBLIC_DELAY_MS=0                # No delay (real-time)
 
 # GPU Rendering (auto-detected)
-GPU_RENDERING_MODE=xorg                    # or headless-egl
+GPU_RENDERING_MODE=xorg                    # xorg | xvfb-vulkan | headless-egl
 DISPLAY=:99                                # or empty for headless EGL
-DUEL_CAPTURE_USE_XVFB=false               # Hardware GPU, not software
+DUEL_CAPTURE_USE_XVFB=false               # true for Xvfb mode
+STREAM_CAPTURE_USE_EGL=false              # true for headless EGL mode
 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
 
 # Audio Capture (commits 3b6f1ee, aab66b0, b9d2e41)
