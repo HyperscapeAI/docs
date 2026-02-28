@@ -309,6 +309,26 @@ If WebGPU is available but not working:
 2. Update GPU drivers
 3. Check for browser extensions that might block WebGPU
 
+**Streaming issues (Vast.ai):**
+If GPU streaming fails or produces black frames:
+```bash
+# Check GPU access
+nvidia-smi
+vulkaninfo --summary
+
+# Verify display server
+echo $DISPLAY
+xdpyinfo -display $DISPLAY
+
+# Check PulseAudio
+pulseaudio --check
+pactl list short sinks
+
+# Review logs
+bunx pm2 logs hyperscape-duel --lines 200
+```
+See `scripts/deploy-vast.sh` for deployment troubleshooting.
+
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
