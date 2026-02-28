@@ -36,6 +36,7 @@ For Vast.ai and other GPU servers running the streaming pipeline:
 - **NVIDIA GPU with Vulkan support is REQUIRED**
 - **Must run headful** with Xorg or Xvfb (NOT headless Chrome)
 - Chrome uses ANGLE/Vulkan backend to access WebGPU
+- **GPU Sandbox Bypass**: `--disable-gpu-sandbox` and `--disable-setuid-sandbox` required for container GPU access
 - If GPU cannot initialize WebGPU, deployment MUST FAIL (no soft fallbacks)
 
 #### Vast.ai Deployment Architecture
