@@ -87,7 +87,15 @@ PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native       # PulseAudio socket
 - When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
 - Serves pre-built client via `vite preview` instead of dev server
 - Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
-- Significantly faster page loads for streaming
+- Significantly faster page loads for streaming (no on-demand module compilation)
+- Page navigation timeout increased to 180s for Vite dev mode compatibility
+
+**Stream Capture Enhancements**:
+- 5s timeout on probe evaluate calls to prevent hanging
+- Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
+- Resolution tracking with automatic viewport recovery on mismatch
+- WebGPU diagnostics (`captureGpuDiagnostics()`) extract chrome://gpu info at startup
+- Preflight test (`testWebGpuInit()`) detects WebGPU hangs before loading game content
 
 ### Development Rules for WebGPU
 - **NEVER add WebGL fallback code** - it will not work with TSL shaders
