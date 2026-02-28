@@ -573,10 +573,20 @@ Hyperscape uses GPU instancing to render thousands of resource entities (rocks, 
 - LOD distances and hysteresis configurable per instancer
 
 **Depleted Models:**
-- Resources can specify `depletedModelPath` and `depletedModelScale`
+- Resources can specify `depletedModelPath` and `depletedModelScale` in config
 - Instancer maintains separate pools for normal and depleted states
 - Automatic transition on resource depletion (e.g., tree → stump)
 - Collision proxy persists across state transitions
+- Highlight mesh support for hover/selection on instanced entities
+
+**API Changes (BREAKING):**
+- `ResourceVisualStrategy.onDepleted()` now returns `Promise<boolean>`
+  - `true` = strategy handled depletion (instanced stump)
+  - `false` = ResourceEntity should load individual depleted model
+- New optional method: `getHighlightMesh(ctx): THREE.Object3D | null`
+  - Returns positioned mesh for outline pass on instanced entities
+- `ResourceEntity.getHighlightRoot()` returns highlight mesh for instanced entities
+- `EntityHighlightService` supports instanced highlight via `getHighlightRoot()`
 
 ## Additional Resources
 
