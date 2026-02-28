@@ -278,6 +278,7 @@ The streaming pipeline requires specific GPU setup:
 1. **GPU Rendering Modes** (tried in order):
    - **Xorg with NVIDIA**: Best performance, requires DRI/DRM device access
    - **Xvfb with NVIDIA Vulkan**: Virtual framebuffer + GPU rendering via ANGLE/Vulkan
+   - **Headless EGL with NVIDIA**: Direct EGL rendering without X server using `--headless=new --use-gl=egl`
    - **Ozone Headless with GPU**: Experimental mode using `--ozone-platform=headless` with GPU rendering
    - **Headless mode (software)**: NOT SUPPORTED - WebGPU will not work
 
