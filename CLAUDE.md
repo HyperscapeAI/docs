@@ -679,7 +679,15 @@ Hyperscape uses GPU instancing to render thousands of resource entities (rocks, 
 // Cache version: 4 (invalidates old corrupt entries)
 ```
 
-## Additional Resources
+## Stability Improvements
+
+### Combat System Stability
+
+**Combat Stall Nudge** (commit 3357379):\n- DuelOrchestrator now tracks last nudge timestamp instead of cycle ID\n- Allows re-nudging when combat stalls again after cooldown period\n- Prevents fights from getting stuck after first nudge attempt\n- Improves reliability of autonomous agent combat\n\n**Implementation:**\n```typescript\n// packages/server/src/systems/server/duel/DuelOrchestrator.ts\n// Tracks lastNudgeTimestamp per duel for re-nudge capability\n```\n\n### Memory Leak Fixes
+
+**AgentManager Memory Leak** (commit 3357379):\n- Now stores and properly cleans up COMBAT_DAMAGE_DEALT event listener\n- Prevents memory accumulation during agent lifecycle\n- Listener removed in shutdown() method\n\n**AutonomousBehaviorManager Memory Leak** (commit 3357379):\n- Stores and cleans up all event handlers in stop() method\n- Prevents memory leaks when agents are stopped/restarted\n- Affects COMBAT_DAMAGE_DEALT, COMBAT_DEATH, and other event listeners\n\n**Implementation:**\n```typescript\n// packages/server/src/systems/server/agent/AgentManager.ts\n// packages/server/src/systems/server/agent/AutonomousBehaviorManager.ts\n// Event handlers stored as class properties for proper cleanup\n```\n\n### Resource Management
+
+**Damage Event Cache Optimization** (commit 3357379):\n- Cleanup frequency increased from every 2 ticks to every tick\n- Cache cap lowered from 5000 to 1000 entries\n- Evicts 75% of entries when cap exceeded (was 50%)\n- Prevents memory pressure during heavy combat scenarios\n\n**Streaming Stability** (commit 3357379):\n- Browser restart interval reduced from 1 hour to 45 minutes\n- Prevents WebGPU OOM (out of memory) crashes before scheduled rotation\n- Improves long-running stream reliability\n\n**Implementation:**\n```typescript\n// packages/shared/src/systems/shared/combat/CombatSystem.ts\n// Damage event cache with aggressive cleanup\n\n// packages/server/src/systems/server/duel/stream-to-rtmp.ts\n// Browser restart interval: 45 minutes\n```\n\n## Additional Resources
 
 - [README.md](README.md) - Full project documentation
 - [AGENTS.md](AGENTS.md) - AI assistant guidelines with WebGPU requirements
