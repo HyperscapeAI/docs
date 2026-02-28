@@ -469,6 +469,16 @@ class MySystem {
 - **Buffer Multiplier**: Lowered from 4x to 2x to reduce backpressure buildup
 - **CDP Session Recovery**: Fixed handler cleanup on recovery (recovery mode flag prevents double-handling)
 
+### Quest System
+- **acceptQuestAction Validation**: Now requires a `not_started` quest in state to validate/work
+- **No Fallback to Interaction**: acceptQuestAction no longer falls back to interactWithEntity when quest state is missing
+- **Test Updates**: Updated test expectations to match current implementation behavior
+
+### Blockchain Testing
+- **Anchor Configuration**: Use localnet instead of devnet for `anchor test` to spin up local validator with free SOL
+- **Deployment**: For actual devnet/mainnet deployments, use `anchor deploy --provider.cluster devnet`
+- **Test Isolation**: Tests no longer require real SOL funding on devnet
+
 ## Critical Development Rules
 
 ### TypeScript Strong Typing
