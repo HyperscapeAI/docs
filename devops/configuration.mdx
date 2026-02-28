@@ -96,12 +96,13 @@ PULSE_AUDIO_DEVICE=chrome_audio.monitor      # PulseAudio monitor device
 PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native  # PulseAudio socket path
 XDG_RUNTIME_DIR=/tmp/pulse-runtime           # Runtime directory for PulseAudio
 
-# GPU Rendering Configuration (commits dd649da, e51a332, 30bdaf0, Feb 27 2026)
-# Rendering mode: xorg (preferred) or headless-egl (fallback)
+# GPU Rendering Configuration (Feb 28 2026)
+# Rendering mode: xorg, xvfb-vulkan, headless-vulkan, headless-egl, ozone-headless, swiftshader
 GPU_RENDERING_MODE=xorg                      # Auto-detected by deploy script
-DISPLAY=:99                                  # X display (empty for headless EGL)
-DUEL_CAPTURE_USE_XVFB=false                  # Use Xorg/EGL, not Xvfb software rendering
+DISPLAY=:99                                  # X display (empty for headless modes)
+DUEL_CAPTURE_USE_XVFB=false                  # true for Xvfb mode, false for Xorg/headless
 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json  # Force NVIDIA Vulkan ICD
+WEBGPU_MODE=xorg                             # Working WebGPU mode from 6-stage testing
 
 # Chrome Capture Configuration
 STREAM_CAPTURE_MODE=cdp                      # cdp (default), mediarecorder, or webcodecs
