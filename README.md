@@ -310,12 +310,55 @@ bun run build
 ## Recent Improvements
 
 ### Stability & Performance (Feb 2026)
-- **Memory Leak Fixes**: Fixed 12+ memory leaks across ModelCache, EventBridge, Logger, AgentManager, and more
-- **Combat System**: Improved timing alignment, faster failure detection, better stall recovery
-- **Agent System**: Dynamic combat escalation, gear progression, cooking phase, LLM rate limiting
-- **Streaming**: Production client build mode, multiple GPU rendering modes, improved diagnostics
+
+#### Memory Management
+- **Critical Memory Leak Fixes**: Fixed 13+ memory leaks across the codebase
+  - ModelCache: GPU memory disposal on clear/remove
+  - EventBridge: 50+ world event listeners now properly cleaned up
+  - AgentManager, AutonomousBehaviorManager: Event handler cleanup
+  - ColliderComponent, MobEntity, Socket, ClientLiveKit: Proper resource cleanup
+  - AggroSystem: Bounded maps with player disconnect cleanup
+  - StarterChestEntity: LRU pruning for lootedByCharacters Set
+- **Resource Bounds**: Activity logger queue (max 1000), damage event cache (max 1000), session timeout (30 min)
+
+#### Combat System
+- **Timing Improvements**: Combat retry timer aligned with tick system (3000ms = 5 ticks)
+- **Faster Failure Detection**: Phase timeout reduced from 30s to 10s
+- **Stall Recovery**: Re-nudging support when combat stalls again after cooldown
+- **Cache Optimization**: Damage event cleanup every tick, 75% eviction when cap exceeded
+
+#### AI Agent System
+- **Dynamic Combat Escalation**: Agents progress from goblins → bandits → barbarians as they level
+- **Combat Style Rotation**: Agents cycle attack → strength → defense (train lowest skill)
+- **Cooking Phase**: Agents cook raw food immediately instead of waiting for full inventory
+- **Gear Upgrade Phase**: Agents smith better equipment when they have materials + levels
+- **LLM Rate Limiting**: Exponential backoff (5s base, max 60s) with consecutive failure tracking
+- **Critical Crash Fix**: Fixed `weapon.toLowerCase is not a function` that broke ALL agents
+- **Quest Lifecycle**: Proper quest goal status change detection
+- **Dashboard Sync**: All agents show activity logs even when skipping LLM
+
+#### Streaming & WebGPU
+- **Production Client Build**: Vite preview mode for faster page loads (fixes 180s timeout)
+- **Multiple GPU Modes**: Xorg, Xvfb, headless-vulkan, headless-egl, ozone-headless, swiftshader
+- **macOS Support**: Auto-detects system Chrome, uses Metal backend (not Vulkan)
+- **6-Stage WebGPU Testing**: Comprehensive pre-deployment validation
+- **Browser Restart**: Every 45 minutes to prevent WebGPU OOM crashes
+- **Resolution Tracking**: Automatic viewport recovery on mismatch
+- **Improved Diagnostics**: GPU info extraction, preflight testing, timeout detection
+
+#### Rendering Optimizations
 - **Instanced Rendering**: Optimized resource rendering with depleted model support
-- **Test Stability**: Increased timeouts for complex tests, fixed precision issues
+  - Separate pools for normal and depleted states (tree → stump)
+  - Highlight mesh support for instanced entities
+  - `ResourceVisualStrategy.onDepleted()` now returns boolean
+- **Model Cache Integrity**: Preserves index buffer type (Uint16Array vs Uint32Array)
+  - Fixes silent geometry corruption and RangeError crashes
+  - Cache version bumped to 4
+
+#### Test Stability
+- **Timeout Increases**: GoldClob fuzz (120s), dynamic imports (60s), Playwright navigation (180s)
+- **Precision Fixes**: Larger amounts (10000n) to avoid gas cost precision issues
+- **Anchor Configuration**: Use localnet for tests (free SOL, no devnet funding required)
 
 See [CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md) for detailed technical documentation.
 
