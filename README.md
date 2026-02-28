@@ -213,15 +213,22 @@ For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps f
 
 ## GPU Streaming (Vast.ai)
 
-Hyperscape streams live gameplay to Twitch, Kick, and X/Twitter using GPU-accelerated rendering.
+Hyperscape streams live gameplay to Twitch, Kick, and X/Twitter using GPU-accelerated rendering with WebGPU.
 
 **Requirements:**
-- NVIDIA GPU with Vulkan support
-- Xorg or Xvfb display server
+- NVIDIA GPU with Vulkan support (WebGPU required)
+- Xorg or Xvfb display server (headless mode NOT supported)
 - PulseAudio for audio capture
-- FFmpeg for encoding
+- FFmpeg for H.264 encoding
+- Chrome Dev channel with WebGPU enabled
 
-**See:** `docs/vast-ai-streaming.md` for complete architecture documentation.
+**Architecture:**
+- CDP (Chrome DevTools Protocol) screencast capture
+- Direct JPEG frame piping to FFmpeg
+- Hardware-accelerated H.264 encoding
+- RTMP tee muxer for multi-platform streaming
+
+**See:** [docs/vast-ai-streaming.md](docs/vast-ai-streaming.md) for complete setup and troubleshooting.
 
 ## Native App Distribution
 
