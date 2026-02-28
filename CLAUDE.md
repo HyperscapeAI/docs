@@ -22,6 +22,7 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 - Edge 113+
 - Safari 18+ (macOS 15+)
 - Firefox (behind flag, not recommended)
+- Check: [webgpureport.org](https://webgpureport.org)
 
 ### Server/Streaming Requirements
 For Vast.ai and other GPU servers running the streaming pipeline:
