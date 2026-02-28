@@ -114,6 +114,7 @@ The streaming pipeline requires specific GPU setup:
    - Runs on blank page before loading heavy game content
    - Provides debugging info when WebGPU fails on remote GPU servers
    - 30s adapter timeout and 60s renderer init timeout prevent indefinite hangs
+   - 6-stage WebGPU testing during deployment (headless-vulkan, headless-egl, xvfb-vulkan, ozone-headless, swiftshader, playwright-xvfb)
 
 See `scripts/deploy-vast.sh` for complete setup logic.
 
