@@ -24,6 +24,13 @@ This is a hard requirement. DO NOT:
 - Check: [webgpureport.org](https://webgpureport.org)
 - Note: Safari 17 support was removed - Safari 18+ (macOS 15+) is now required
 
+### WebGPU Initialization
+- **Adapter Request Timeout**: 30s timeout on `navigator.gpu.requestAdapter()` to prevent indefinite hangs
+- **Renderer Init Timeout**: 60s timeout on `renderer.init()` to detect GPU driver issues
+- **Preflight Testing**: `testWebGpuInit()` runs on blank page before loading game content
+- **GPU Diagnostics**: `captureGpuDiagnostics()` extracts chrome://gpu info for debugging
+- Timeouts help diagnose misconfigured GPU servers where WebGPU initialization hangs
+
 ### Server/Streaming (Vast.ai)
 - NVIDIA GPU with Vulkan support is REQUIRED
 - Must run headful with Xorg or Xvfb (NOT headless Chrome)
@@ -83,6 +90,7 @@ The streaming pipeline requires specific GPU setup:
    - `testWebGpuInit()` preflight test detects WebGPU hangs early
    - Runs on blank page before loading heavy game content
    - Provides debugging info when WebGPU fails on remote GPU servers
+   - 30s adapter timeout and 60s renderer init timeout prevent indefinite hangs
 
 See `scripts/deploy-vast.sh` for complete setup logic.
 
@@ -152,5 +160,11 @@ Hyperscape uses instanced rendering for resource entities (rocks, ores, herbs, t
   - `false` = ResourceEntity should load individual depleted model
 - New optional method: `getHighlightMesh(ctx)` for instanced entity highlighting
 - `EntityHighlightService` supports instanced highlight meshes via `getHighlightRoot()`
+
+### Model Cache Integrity
+- **Index Buffer Type Preservation**: Model cache now preserves original index buffer type (Uint16Array vs Uint32Array)
+- Fixes silent geometry corruption and RangeError crashes on cached model restore
+- Cache version bumped to 4 to invalidate corrupt entries
+- Affects all GLB models loaded via ModelCache (resources, NPCs, items)
 
 See CLAUDE.md for complete documentation.
