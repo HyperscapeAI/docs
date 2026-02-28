@@ -24,8 +24,6 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 - Firefox (behind flag, not recommended)
 - Check: [webgpureport.org](https://webgpureport.org)
 
-> **Note**: Safari 18 requires macOS 15 (Sequoia) or later. Earlier macOS versions do not support WebGPU.
-
 ### Server/Streaming Requirements
 For Vast.ai and other GPU servers running the streaming pipeline:
 - **NVIDIA GPU with Vulkan support is REQUIRED**
@@ -425,7 +423,6 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Testing**: Playwright, Vitest
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
-- **Streaming**: FFmpeg, PulseAudio, Chrome DevTools Protocol (CDP)
 
 ## Troubleshooting
 
@@ -518,6 +515,12 @@ If streaming fails to start or produces black frames:
    ```bash
    cat /root/hyperscape/packages/server/public/live/rtmp-status.json
    ```
+
+6. **Common issues**:
+   - **Black frames**: Display server not running or WebGPU failed to initialize
+   - **No audio**: PulseAudio not running or `chrome_audio` sink missing
+   - **Resolution mismatch**: Viewport size doesn't match stream dimensions
+   - **Timeout on page load**: Use production client build (`NODE_ENV=production`)
 
 ## Additional Resources
 
