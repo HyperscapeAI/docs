@@ -1,0 +1,399 @@
+---
+title: GPU streaming
+description: Set up GPU-accelerated streaming to Twitch, Kick, and X/Twitter
+---
+
+# GPU Streaming
+
+Hyperscape supports GPU-accelerated streaming to multiple platforms simultaneously using WebGPU rendering and hardware H.264 encoding.
+
+## Overview
+
+The streaming pipeline captures frames directly from Chrome's compositor via CDP (Chrome DevTools Protocol) and pipes them to FFmpeg for multi-platform RTMP distribution.
+
+**Supported platforms:**
+- Twitch (RTMPS)
+- Kick (RTMPS)
+- X/Twitter (RTMP)
+- YouTube (disabled by default)
+
+## Requirements
+
+### Hardware
+- **NVIDIA GPU** with Vulkan support (WebGPU required)
+- Minimum 8GB VRAM recommended
+- CUDA drivers installed
+
+### Software
+- Ubuntu 20.04+ or Debian 11+
+- NVIDIA drivers
+- Vulkan ICD
+- Xorg or Xvfb display server
+- PulseAudio for audio capture
+- FFmpeg with H.264 support
+- Chrome Dev channel (google-chrome-unstable)
+- Bun runtime
+
+## Quick Start
+
+### 1. Set Stream Keys
+
+Create `.env` file with your stream keys:
+
+```bash
+# Twitch
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+
+# Kick
+KICK_STREAM_KEY=your-kick-stream-key
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
+
+# X/Twitter
+X_STREAM_KEY=your-x-stream-key
+X_RTMP_URL=rtmp://sg.pscp.tv:80/x
+
+# Database
+DATABASE_URL=postgresql://user:password@host:5432/database
+```
+
+### 2. Deploy to Vast.ai
+
+The deployment is automated via GitHub Actions:
+
+```bash
+# Trigger deployment
+git push origin main
+
+# Or manually deploy
+ssh root@<vast-instance> -p <port>
+cd hyperscape
+./scripts/deploy-vast.sh
+```
+
+### 3. Monitor Stream
+
+```bash
+# Check PM2 status
+bunx pm2 status
+
+# View logs
+bunx pm2 logs hyperscape-duel
+
+# Check RTMP status
+cat /root/hyperscape/packages/server/public/live/rtmp-status.json
+```
+
+## Architecture
+
+### Capture Pipeline
+
+```
+Chrome (WebGPU) → CDP Screencast → Node.js → FFmpeg → RTMP Tee → Platforms
+     ↓                  JPEG          ↓        H.264      ↓
+PulseAudio ────────────────────────────────────────────→ Audio
+```
+
+### GPU Rendering Modes
+
+The deploy script tries multiple modes in order:
+
+1. **Xorg with NVIDIA** (preferred):
+   - Direct GPU access
+   - Requires DRI/DRM devices
+   - Best performance
+
+2. **Xvfb with NVIDIA Vulkan** (fallback):
+   - Virtual framebuffer
+   - GPU rendering via ANGLE/Vulkan
+   - Works without DRM access
+
+3. **Headless mode**: NOT SUPPORTED
+   - WebGPU requires display server
+   - Deployment fails if neither Xorg nor Xvfb works
+
+## Configuration
+
+### Video Settings
+
+```bash
+# Capture mode (cdp recommended)
+STREAM_CAPTURE_MODE=cdp
+
+# Resolution (must be even numbers)
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+
+# Frame rate
+STREAM_FPS=30
+
+# JPEG quality for CDP (1-100)
+STREAM_CDP_QUALITY=80
+```
+
+### Audio Settings
+
+```bash
+# Enable audio capture
+STREAM_AUDIO_ENABLED=true
+
+# PulseAudio device
+PULSE_AUDIO_DEVICE=chrome_audio.monitor
+
+# PulseAudio server
+PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+```
+
+### Encoding Settings
+
+```bash
+# Video bitrate (4.5 Mbps)
+STREAM_BITRATE=4500000
+
+# FFmpeg buffer (4x bitrate)
+STREAM_BUFFER_SIZE=18000000
+
+# x264 preset (veryfast recommended)
+STREAM_PRESET=veryfast
+
+# Low-latency mode (false = better quality)
+STREAM_LOW_LATENCY=false
+
+# GOP size (keyframe interval)
+STREAM_GOP_SIZE=60
+```
+
+## Monitoring
+
+### PM2 Commands
+
+```bash
+# View status
+bunx pm2 status
+
+# View logs (live)
+bunx pm2 logs hyperscape-duel
+
+# View last 200 lines
+bunx pm2 logs hyperscape-duel --lines 200
+
+# Restart
+bunx pm2 restart hyperscape-duel
+
+# Stop
+bunx pm2 stop hyperscape-duel
+```
+
+### RTMP Status
+
+The bridge writes status every 2 seconds:
+
+```bash
+cat /root/hyperscape/packages/server/public/live/rtmp-status.json
+```
+
+**Status fields:**
+```json
+{
+  "active": true,
+  "clientConnected": true,
+  "destinations": [
+    { "name": "Twitch", "connected": true },
+    { "name": "Kick", "connected": true },
+    { "name": "X", "connected": true }
+  ],
+  "stats": {
+    "bytesReceived": 1234567890,
+    "bytesReceivedMB": "1177.38",
+    "uptimeSeconds": 3600,
+    "droppedFrames": 0,
+    "healthy": true
+  },
+  "captureMode": "cdp",
+  "processRssBytes": 524288000
+}
+```
+
+### Health Checks
+
+```bash
+# Server health
+curl http://localhost:5555/health
+
+# Streaming state
+curl http://localhost:5555/api/streaming/state
+```
+
+## Troubleshooting
+
+### GPU Not Accessible
+
+**Symptom:** `nvidia-smi` fails
+
+**Solution:**
+```bash
+# Check GPU
+nvidia-smi
+
+# Verify Vast.ai instance has GPU allocated
+# Reinstall drivers if needed
+```
+
+### Display Server Fails
+
+**Symptom:** Xorg/Xvfb won't start
+
+**Solution:**
+```bash
+# Clean X lock files
+rm -f /tmp/.X*-lock
+rm -rf /tmp/.X11-unix
+
+# Check Xorg logs
+cat /var/log/Xorg.99.log
+
+# Verify DRI devices
+ls /dev/dri/
+```
+
+### PulseAudio Not Running
+
+**Symptom:** No audio in stream
+
+**Solution:**
+```bash
+# Check PulseAudio
+pulseaudio --check
+
+# List sinks
+pactl list short sinks
+
+# Restart
+pulseaudio --kill
+pulseaudio --start
+
+# Verify chrome_audio sink
+pactl list short sinks | grep chrome_audio
+```
+
+### Black Screen
+
+**Symptom:** Stream shows black screen
+
+**Solution:**
+```bash
+# Check CDP capture in logs
+bunx pm2 logs hyperscape-duel | grep "CDP FPS"
+
+# Verify display
+echo $DISPLAY
+xdpyinfo -display $DISPLAY
+
+# Check GPU rendering mode
+echo $GPU_RENDERING_MODE
+
+# Restart
+bunx pm2 restart hyperscape-duel
+```
+
+### Stream Not Starting
+
+**Symptom:** PM2 running but no stream
+
+**Solution:**
+```bash
+# Check logs
+bunx pm2 logs hyperscape-duel --lines 200
+
+# Check RTMP status
+cat /root/hyperscape/packages/server/public/live/rtmp-status.json
+
+# Verify stream keys
+grep STREAM_KEY packages/server/.env
+
+# Check FFmpeg
+ps aux | grep ffmpeg
+```
+
+## Performance Optimization
+
+### Reduce CPU Usage
+
+```bash
+# Use faster preset
+STREAM_PRESET=ultrafast
+
+# Lower resolution
+STREAM_CAPTURE_WIDTH=960
+STREAM_CAPTURE_HEIGHT=540
+
+# Lower frame rate
+STREAM_FPS=24
+```
+
+### Reduce Memory Usage
+
+```bash
+# Shorter browser restart interval (default: 1 hour)
+BROWSER_RESTART_INTERVAL_MS=1800000  # 30 minutes
+```
+
+### Reduce Bandwidth
+
+```bash
+# Lower bitrate
+STREAM_BITRATE=3000000  # 3 Mbps
+
+# Disable audio
+STREAM_AUDIO_ENABLED=false
+```
+
+## Advanced Configuration
+
+### Custom RTMP Destinations
+
+Add custom destinations via JSON:
+
+```bash
+RTMP_DESTINATIONS_JSON='[
+  {
+    "name": "Custom Server",
+    "url": "rtmp://your-server/live",
+    "key": "your-stream-key",
+    "enabled": true
+  }
+]'
+```
+
+### Production Client Build
+
+Use pre-built client for faster page loads:
+
+```bash
+# Build client first
+cd packages/client
+bun run build
+
+# Enable production client mode
+DUEL_USE_PRODUCTION_CLIENT=true
+```
+
+This serves the pre-built client via `vite preview` instead of the slow JIT dev server, preventing browser timeout issues during Vite's on-demand compilation.
+
+### Recovery Settings
+
+Configure automatic recovery from capture failures:
+
+```bash
+# Recovery timeout (default: 30s)
+STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000
+
+# Max recovery failures before fallback (default: 6)
+STREAM_CAPTURE_RECOVERY_MAX_FAILURES=6
+```
+
+## Related Documentation
+
+- [Vast.ai Streaming Architecture](../docs/vast-ai-streaming.md)
+- [Environment Variables](./.env.example)
+- [Deployment Script](../scripts/deploy-vast.sh)
+- [PM2 Configuration](../ecosystem.config.cjs)
