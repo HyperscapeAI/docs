@@ -131,6 +131,7 @@ The `scripts/vast-provision.sh` script automates GPU instance provisioning with 
 - Automatically rents best available instance
 - Waits for instance to be ready
 - Outputs SSH connection details and GitHub secret commands
+- Ensures only instances with NVIDIA display driver support are rented
 
 **Usage**:
 ```bash
@@ -140,11 +141,24 @@ The `scripts/vast-provision.sh` script automates GPU instance provisioning with 
 **Requirements**:
 - Vast.ai CLI installed: `pip install vastai`
 - Logged in: `vastai set api-key YOUR_API_KEY`
+- Get API key from: https://cloud.vast.ai/account/
 
 **Output**:
 - SSH connection command
-- GitHub secrets for CI/CD (`VAST_HOST`, `VAST_PORT`)
+- GitHub secrets for CI/CD (`VAST_HOST`, `VAST_PORT`, `VAST_SSH_KEY`)
 - Configuration file saved to `/tmp/vast-instance-config.env`
+
+**After Provisioning**:
+1. Update GitHub secrets with the provided commands
+2. Trigger deployment: `gh workflow run deploy-vast.yml`
+
+**Deployment Validation**:
+- 6-stage WebGPU testing (headless-vulkan, headless-egl, xvfb-vulkan, ozone-headless, swiftshader, playwright-xvfb)
+- Early display driver checks (nvidia_drm kernel module, DRM device nodes)
+- GPU display mode validation via nvidia-smi
+- Vulkan ICD detection and diagnostics
+- Automatic fallback between GPU rendering modes
+- Fails deployment if WebGPU cannot be initialized (no soft fallbacks)
 
 This ensures you only rent instances with NVIDIA display driver support, which is required for WebGPU streaming (not just compute access).
 
