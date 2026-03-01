@@ -113,7 +113,7 @@ The streaming pipeline requires specific GPU setup:
    - **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
    - **Page Navigation Timeout**: Increased to 180s for Vite dev mode (production build recommended)
 
-7. **Stream Encoding Optimization**:
+8. **Stream Encoding Optimization**:
    - Default: `film` tune with B-frames for better compression
    - Set `STREAM_LOW_LATENCY=true` for `zerolatency` tune (faster playback start)
    - Configurable GOP size via `STREAM_GOP_SIZE` (default: 60 frames)
