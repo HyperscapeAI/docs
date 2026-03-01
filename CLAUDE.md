@@ -197,6 +197,35 @@ npm run lint
 npm run clean
 ```
 
+### Vast.ai GPU Instance Management
+
+```bash
+# Search for WebGPU-capable instances
+VAST_API_KEY=xxx bun run vast:search
+
+# Provision new instance automatically
+VAST_API_KEY=xxx bun run vast:provision
+
+# Check current instance status
+VAST_API_KEY=xxx bun run vast:status
+
+# Destroy current instance
+VAST_API_KEY=xxx bun run vast:destroy
+```
+
+**Requirements:**
+- Install Vast.ai CLI: `pip install vastai`
+- Set API key: `vastai set api-key YOUR_API_KEY`
+- Get API key from: https://cloud.vast.ai/account/
+
+**What `vast:provision` does:**
+- Searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
+- Filters by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr)
+- Automatically rents best available instance
+- Waits for instance to be ready
+- Outputs SSH connection details and GitHub secret commands
+- Saves configuration to `/tmp/vast-instance-config.env`
+
 ### Package-Specific Commands
 ```bash
 # Build individual packages
