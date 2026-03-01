@@ -554,10 +554,11 @@ Complete journey tests verify full gameplay flow:
 
 ### Test Stability
 
-- **GoldClob Fuzz Tests**: 120s timeout for randomized invariant tests
+- **GoldClob Fuzz Tests**: 120s timeout for randomized invariant tests (4 seeds × 140 operations)
 - **Precision Fixes**: Use larger amounts (10000n) to avoid gas cost precision issues
 - **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
-- **Anchor Test Configuration**: Use localnet instead of devnet for free SOL
+- **Anchor Test Configuration**: Use localnet instead of devnet for free SOL in `anchor test`
+- **Quest Actions Tests**: Updated to match current implementation (acceptQuestAction requires not_started quest state)
 
 ## Troubleshooting
 
