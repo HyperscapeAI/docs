@@ -178,6 +178,13 @@ The streaming pipeline requires specific GPU setup:
    - Probe checks for "Stream-to-RTMP bridge is ready" message
    - Ensures streaming bridge is fully initialized before marking deployment successful
 
+16. **PostgreSQL Connection Pool Configuration**:
+   - **POSTGRES_POOL_MAX=3** (down from 6) to prevent connection exhaustion during crash loops
+   - **POSTGRES_POOL_MIN=0** to not hold idle connections during crashes
+   - **restart_delay=10s** (up from 5s) to allow connections to fully close before PM2 restart
+   - **exp_backoff_restart_delay=2s** for more gradual backoff on repeated failures
+   - Prevents PostgreSQL error 53300 (too many connections) during crash loop scenarios
+
 See `scripts/deploy-vast.sh` for complete setup logic.
 
 ## Project Overview
