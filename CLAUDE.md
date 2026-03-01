@@ -78,12 +78,14 @@ The streaming pipeline requires specific GPU setup:
    - Checks Vulkan ICD availability at `/usr/share/vulkan/icd.d/nvidia_icd.json`
    - Logs actual ICD content and VK_LOADER_DEBUG output for diagnostics
    - Ensures display server (Xorg/Xvfb) is running and accessible
+   - **X Server Detection**: Uses socket check (`/tmp/.X11-unix/X99`) instead of `xdpyinfo` for reliability
    - Runs 6 WebGPU pre-check tests with different Chrome configurations
    - Extracts Chrome GPU info (WebGPU/Vulkan status) during deployment
    - Detects Xorg swrast software rendering fallback and switches to alternative modes
    - Fails deployment if WebGPU cannot be initialized (no soft fallbacks)
    - Persists GPU/display settings to `.env` for PM2 restarts
    - Exports working GPU mode for ecosystem.config.cjs
+   - **Display Environment Reuse**: `duel-stack.mjs` respects existing DISPLAY from deployment script
 
 5. **Production Client Build**:
    - When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
