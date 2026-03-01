@@ -79,7 +79,7 @@ The streaming pipeline requires specific GPU setup:
    - Stream keys configured via environment variables (never hardcoded)
    - All secrets read from `.env` file or GitHub Secrets
 
-4. **Deployment Validation**:
+5. **Deployment Validation**:
    - Script verifies NVIDIA GPU is accessible via `nvidia-smi`
    - **Early Display Driver Check**: Checks nvidia_drm kernel module and DRM device nodes (/dev/dri/)
    - **GPU Display Mode Query**: Queries GPU display_mode via nvidia-smi to verify display driver support
