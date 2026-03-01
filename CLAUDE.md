@@ -121,6 +121,33 @@ The streaming pipeline requires specific GPU setup:
 
 See `scripts/deploy-vast.sh` for complete setup logic.
 
+### Vast.ai CLI Provisioner
+
+The `scripts/vast-provision.sh` script automates GPU instance provisioning with display driver support:
+
+**Features**:
+- Searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
+- Filters by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr)
+- Automatically rents best available instance
+- Waits for instance to be ready
+- Outputs SSH connection details and GitHub secret commands
+
+**Usage**:
+```bash
+./scripts/vast-provision.sh
+```
+
+**Requirements**:
+- Vast.ai CLI installed: `pip install vastai`
+- Logged in: `vastai set api-key YOUR_API_KEY`
+
+**Output**:
+- SSH connection command
+- GitHub secrets for CI/CD (`VAST_HOST`, `VAST_PORT`)
+- Configuration file saved to `/tmp/vast-instance-config.env`
+
+This ensures you only rent instances with NVIDIA display driver support, which is required for WebGPU streaming (not just compute access).
+
 ### Development Rules for WebGPU
 - **NEVER add WebGL fallback code** - it will not work with TSL shaders
 - **NEVER use `--disable-webgpu`** or `forceWebGL` flags
