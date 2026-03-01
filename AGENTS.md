@@ -194,6 +194,12 @@ packages/
 - **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
 - **Anchor Test Configuration**: Use localnet instead of devnet for free SOL in `anchor test`
 
+### E2E Journey Tests
+- **Complete Journey Tests**: Full login→loading→spawn→walk gameplay tests in `complete-journey.spec.ts`
+- **Screenshot Comparison**: Utilities to verify game is rendering correctly
+- **Loading Screen Detection**: `waitForLoadingScreenHidden` helper for reliable test synchronization
+- **Real Browser Testing**: Uses Playwright with actual WebGPU rendering (no mocks)
+
 ## Performance Optimizations
 
 ### Instanced Rendering
