@@ -50,7 +50,14 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 #### Vast.ai Deployment Architecture
 The streaming pipeline requires specific GPU setup:
 
-1. **GPU Rendering Modes** (tried in order):
+1. **GPU Display Driver Requirement** (CRITICAL):
+   - **gpu_display_active=true**: REQUIRED when renting Vast.ai instances
+   - WebGPU needs GPU display driver, not just compute access
+   - Instances without display driver will fail WebGPU initialization
+   - Early deployment check verifies nvidia_drm kernel module and /dev/dri/ device nodes
+   - Deployment fails with clear guidance if display driver is missing
+
+2. **GPU Rendering Modes** (tried in order):
    - **Xorg with NVIDIA**: Best performance, requires DRI/DRM device access
    - **Xvfb with NVIDIA Vulkan**: Virtual framebuffer + GPU rendering via ANGLE/Vulkan (non-headless Chrome)
    - **Headless Vulkan**: Chrome `--headless=new` with `--use-vulkan` and `--use-angle=vulkan`
