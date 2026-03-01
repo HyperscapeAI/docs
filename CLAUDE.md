@@ -96,7 +96,7 @@ The streaming pipeline requires specific GPU setup:
    - Exports working GPU mode for ecosystem.config.cjs
    - **Display Environment Reuse**: `duel-stack.mjs` respects existing DISPLAY from deployment script
 
-5. **Production Client Build**:
+6. **Production Client Build**:
    - When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
    - Serves pre-built client via `vite preview` instead of dev server
    - Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
