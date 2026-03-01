@@ -122,7 +122,7 @@ The streaming pipeline requires specific GPU setup:
    - Health check timeout: 5s (data timeout: 15s) for faster failure detection
    - Resolution tracking and mismatch detection with automatic viewport recovery
 
-8. **WebGPU Diagnostics**:
+9. **WebGPU Diagnostics**:
    - `captureGpuDiagnostics()` extracts chrome://gpu info at startup
    - `testWebGpuInit()` preflight test detects WebGPU hangs early
    - Runs on blank page before loading heavy game content
