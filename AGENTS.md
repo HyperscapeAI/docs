@@ -125,7 +125,8 @@ The streaming pipeline requires specific GPU setup:
 9. **WebGPU Diagnostics**:
    - `captureGpuDiagnostics()` extracts chrome://gpu info at startup
    - `testWebGpuInit()` preflight test detects WebGPU hangs early
-   - Runs on blank page before loading heavy game content
+   - Runs on localhost HTTP server (secure context) before loading heavy game content
+   - **Secure Context Fix**: Changed from about:blank to localhost:3333 for proper navigator.gpu exposure
    - Provides debugging info when WebGPU fails on remote GPU servers
    - 30s adapter timeout and 60s renderer init timeout prevent indefinite hangs
    - 6-stage WebGPU testing during deployment (headless-vulkan, headless-egl, xvfb-vulkan, ozone-headless, swiftshader, playwright-xvfb)
@@ -133,6 +134,8 @@ The streaming pipeline requires specific GPU setup:
    - **In-Process GPU Test**: `--in-process-gpu` flag for clearer GPU error messages during diagnostics
    - **XAUTHORITY Setup**: X11 authentication configured for container environments
    - **Chrome Crash Dumps**: Crash dump directory checked for debugging GPU failures
+   - **Dawn Feature Flags**: `allow_unsafe_apis`, `disable_blob_cache` for container compatibility
+   - **VulkanFromANGLE Test**: Tests both ANGLE passthrough and native Vulkan paths
 
 10. **Vast.ai CLI Provisioner**:
    - Automated provisioner script: `./scripts/vast-provision.sh`
