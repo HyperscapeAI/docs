@@ -1,654 +1,554 @@
 ---
-title: "February 2026 Changelog"
-description: "Comprehensive changelog for all updates pushed to main in February 2026"
+title: "February 2026 Updates"
+description: "Comprehensive changelog for February 2026 - Memory leak fixes, performance optimizations, and streaming improvements"
 icon: "clock-rotate-left"
 ---
 
-# February 2026 Changelog
+# February 2026 Updates
 
-This document summarizes all significant changes pushed to the main branch in February 2026, organized by category.
-
-## Breaking Changes
-
-### WebGPU-Only Rendering (Commit 47782ed, Feb 27 2026)
-
-**BREAKING**: WebGPU is now REQUIRED. WebGL fallback has been completely removed.
-
-**What Changed:**
-- Removed all WebGL detection and fallback code from `RendererFactory.ts`
-- Removed `isWebGLForced`, `isWebGLFallbackForced`, `isWebGLFallbackAllowed` functions
-- Removed `isWebGLAvailable`, `isOffscreenCanvasAvailable`, `canTransferCanvas` functions
-- Changed `UniversalRenderer` type to `WebGPURenderer` only
-- `RendererBackend` type is now only `"webgpu"` (removed `"webgl"`)
-- Removed `--disable-webgpu` and `forceWebGL` URL parameters from streaming
-- Removed `DUEL_FORCE_WEBGL_FALLBACK` environment variable
-
-**Why:**
-- All materials use TSL (Three Shading Language) which ONLY works with WebGPU
-- Post-processing effects use TSL-based node materials
-- There is NO WebGL fallback path - the game simply won't render
-
-**Browser Requirements:**
-- Chrome 113+ (recommended)
-- Edge 113+
-- Safari 18+ (macOS 15+ only)
-- Check compatibility: [webgpureport.org](https://webgpureport.org)
-
-**Migration Guide:**
-- Update browser to Chrome 113+ or Edge 113+
-- Remove any `forceWebGL` or `--disable-webgpu` flags from configurations
-- Server/streaming deployments must use Xorg or Xvfb with GPU access (no headless mode)
-
-**Files Changed:**
-- `packages/shared/src/utils/rendering/RendererFactory.ts`
-- `packages/server/src/streaming/stream-to-rtmp.ts`
-- `packages/server/ecosystem.config.cjs`
-- `scripts/deploy-vast.sh`
-- `CLAUDE.md`
-- `AGENTS.md`
+This document covers all major changes pushed to the `main` branch during February 2026, including critical memory leak fixes, client performance optimizations, streaming infrastructure improvements, and agent system enhancements.
 
 ---
 
-## Vast.ai Deployment & Streaming
-
-### GPU Rendering Pipeline (Commits 263bfc5, 92ee48e, 47782ed, Feb 27 2026)
-
-**Major architectural changes to GPU rendering for WebGPU support:**
-
-**GPU Rendering Modes** (tried in order):
-1. **Xorg with NVIDIA** (preferred):
-   - Requires DRI/DRM device access (`/dev/dri/card0`)
-   - Full hardware GPU acceleration
-   - Best performance
-   - Config: `/etc/X11/xorg-nvidia-headless.conf`
-   - Options: `AllowEmptyInitialConfiguration`, `UseDisplayDevice=None`
-
-2. **Xvfb with NVIDIA Vulkan** (fallback):
-   - Virtual framebuffer for X11 protocol
-   - Chrome uses NVIDIA GPU via ANGLE/Vulkan
-   - CDP captures frames from Chrome's internal GPU rendering
-   - Set `DUEL_CAPTURE_USE_XVFB=true` when active
-
-3. **Failure Mode**:
-   - If neither Xorg nor Xvfb can provide WebGPU, deployment FAILS
-   - No soft fallback to headless mode (doesn't support WebGPU)
-   - Explicit display accessibility verification required
-
-**Environment Variables:**
-```bash
-DISPLAY=:99                                                    # X server display
-VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json      # Force NVIDIA Vulkan ICD
-DUEL_CAPTURE_USE_XVFB=true/false                              # Dynamically set
-GPU_RENDERING_MODE=xorg|xvfb-vulkan                           # Rendering mode indicator
-STREAM_CAPTURE_HEADLESS=false                                 # Must be false for WebGPU
-STREAM_CAPTURE_CHANNEL=chrome-dev                             # Use Chrome Dev
-```
-
-**Deployment Validation:**
-- Script verifies NVIDIA GPU is accessible via `nvidia-smi`
-- Checks Vulkan ICD availability via `vulkaninfo`
-- Ensures display server (Xorg/Xvfb) is running via `xdpyinfo`
-- Fails deployment if WebGPU cannot be initialized
-
-**Files Changed:**
-- `scripts/deploy-vast.sh` - Complete GPU setup logic
-- `ecosystem.config.cjs` - Environment variable passthrough
-- `AGENTS.md` - Deployment architecture documentation
-
-### Audio Capture via PulseAudio (Commits 3b6f1ee, aab66b0, b9d2e41, Feb 26 2026)
-
-**Feature**: Capture game music and sound effects in RTMP streams.
-
-**Setup:**
-- User-mode PulseAudio with `chrome_audio` virtual sink
-- `XDG_RUNTIME_DIR=/tmp/pulse-runtime` for socket location
-- FFmpeg captures from `chrome_audio.monitor` device
-- Graceful fallback to silent audio if PulseAudio unavailable
-
-**Audio Stability Improvements:**
-- `thread_queue_size=1024` prevents buffer underruns
-- `use_wallclock_as_timestamps=1` for real-time timing
-- `aresample=async=1000:first_pts=0` recovers from audio drift (22ms threshold)
-- Removed `-shortest` flag that caused audio dropouts during video buffering
-
-**Configuration:**
-```bash
-STREAM_AUDIO_ENABLED=true
-PULSE_AUDIO_DEVICE=chrome_audio.monitor
-PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
-XDG_RUNTIME_DIR=/tmp/pulse-runtime
-```
-
-**Files Changed:**
-- `scripts/deploy-vast.sh` - PulseAudio setup
-- `packages/server/src/streaming/rtmp-bridge.ts` - Audio capture
-- `ecosystem.config.cjs` - Environment variables
-- `packages/server/.env.example` - Documentation
-
-### RTMP Streaming Improvements (Commits 4c630f12, 5dbd239, Feb 26 2026)
-
-**Buffering Improvements:**
-- Changed x264 tune from 'zerolatency' to 'film' (allows B-frames for better compression)
-- Increased buffer multiplier from 2x to 4x bitrate (18000k bufsize)
-- Added FLV flags: `flvflags=no_duration_filesize`
-- Improved input buffering: `thread_queue_size` + `genpts+discardcorrupt`
-
-**Multi-Platform Streaming:**
-- Twitch: `rtmp://live.twitch.tv/app`
-- Kick: `rtmps://fa723fc1b171.global-contribute.live-video.net/app` (fixed URL)
-- X/Twitter: `rtmp://sg.pscp.tv:80/x`
-- YouTube: Explicitly disabled (set `YOUTUBE_STREAM_KEY=""`)
-
-**Stream Key Management:**
-- Explicit unset/re-export prevents stale environment values
-- Masked logging for security (`***configured***`)
-- Passed through GitHub secrets → SSH → .env file
-
-**Configuration:**
-```bash
-STREAM_LOW_LATENCY=false  # Use 'film' tune (default)
-STREAMING_CANONICAL_PLATFORM=twitch  # Changed from youtube
-STREAMING_PUBLIC_DELAY_MS=0  # Live betting mode (was 12-15s)
-```
-
-**Files Changed:**
-- `packages/server/src/streaming/rtmp-bridge.ts`
-- `scripts/deploy-vast.sh`
-- `ecosystem.config.cjs`
-- `.github/workflows/deploy-vast.yml`
+## Critical Memory Leak Fixes
+
+A comprehensive memory leak audit identified and fixed **20+ memory leaks** across the codebase. All fixes follow the established `SystemBase` cleanup pattern.
+
+### Server-Side Leaks (HIGH Priority)
+
+<AccordionGroup>
+  <Accordion title="ModelCache - GPU Memory Leak (CRITICAL)">
+    **Issue**: GPU memory accumulated during hot reload and cache invalidation
+    
+    **Fix**: Added geometry disposal on `clear()` and `remove()` methods
+    
+    **Impact**: Prevents GPU memory exhaustion in long-running sessions
+    
+    ```typescript
+    // ModelCache.ts
+    clear() {
+      for (const entry of this.cache.values()) {
+        entry.geometry?.dispose(); // NEW: Dispose GPU resources
+      }
+      this.cache.clear();
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="EventBridge - 50+ Listener Accumulation (HIGH)">
+    **Issue**: World event listeners never removed, causing listener accumulation on hot reload
+    
+    **Fix**: Added `destroy()` method to clean up all registered listeners
+    
+    **Pattern**: Track listeners in Map, iterate and remove on destroy
+    
+    ```typescript
+    destroy() {
+      for (const [event, handlers] of this.listeners) {
+        handlers.forEach(handler => world.off(event, handler));
+      }
+      this.listeners.clear();
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="GameTickProcessor, TradingSystem, AgentManager (HIGH)">
+    **Issue**: Event handlers not cleaned up on destroy/shutdown
+    
+    **Fix**: Store bound event handlers, cleanup in `destroy()` method
+    
+    **Files Fixed**:
+    - `GameTickProcessor.ts` - Tick event handlers
+    - `TradingSystem/index.ts` - PLAYER_LEFT/LOGOUT/DIED handlers
+    - `AgentManager.ts` - COMBAT_DAMAGE_DEALT listener
+    - `AutonomousBehaviorManager.ts` - Agent lifecycle handlers
+  </Accordion>
+
+  <Accordion title="RTMPBridge - WebSocket Listeners (HIGH)">
+    **Issue**: WebSocket server listeners not cleaned up on close
+    
+    **Fix**: Call `removeAllListeners()` before closing WebSocket servers
+  </Accordion>
+
+  <Accordion title="AggroSystem - Unbounded Maps (MEDIUM)">
+    **Issue**: playerSkills, combatLevelCache, and aggro maps growing unboundedly
+    
+    **Fix**: Clean up player-specific data from Maps on disconnect
+  </Accordion>
+
+  <Accordion title="StarterChestEntity - Unbounded Set (MEDIUM)">
+    **Issue**: lootedByCharacters Set growing unboundedly over server lifetime
+    
+    **Fix**: Add size limit (10k) with LRU pruning
+  </Accordion>
+</AccordionGroup>
+
+### Client-Side Leaks (MEDIUM-HIGH Priority)
+
+<AccordionGroup>
+  <Accordion title="GPU Resource Hygiene">
+    **XPDropSystem**: Object pool for CanvasTexture/SpriteMaterial reuse, warn on pool exhaustion
+    
+    **DuelCountdownSplatSystem**: Pre-render count textures once, pool sprite/material pairs
+    
+    **HealthBars**: Add destroy() to clear hideTimeout handles and dispose InstancedMesh/texture/geometry
+    
+    **ProjectileRenderer**: Track pending setTimeout handles in Set, cancel all on destroy(), reference-counted geometry disposal
+  </Accordion>
+
+  <Accordion title="Component Lifecycle">
+    **PlayerTokenManager**: Named beforeUnloadHandler property enables proper removeEventListener on dispose()
+    
+    **EmbeddedGameClient**: Guard async state updates with cancelled flag to prevent setState on unmounted component
+    
+    **ThreeResourceManager**: Add teardown() to stop dev monitor interval and reset WeakSet on hot-reload
+    
+    **ClientLiveKit**: Properly clean up voices Map and room listeners in destroy()
+  </Accordion>
+
+  <Accordion title="World Initialization Race Condition">
+    **Issue**: world.destroy() could race world.init() mid-await during fast navigation/hot-reload
+    
+    **Fix**: Two-flag handshake (initComplete + needsCleanup) ensures destroy() runs exactly once after init() completes
+    
+    **Impact**: Prevents resource leaks from partial initialization
+  </Accordion>
+</AccordionGroup>
 
-### Deployment Automation (Commits 6302fa4, abfe0ce, b466233, Feb 26 2026)
-
-**First-Time Setup Support:**
-- Auto-clone repository if `/root/hyperscape` doesn't exist
-- Automated bun installation with unzip dependency
-- Handles fresh Vast.ai instances without manual setup
-
-**Secrets Injection Overhaul:**
-- Write secrets to `/tmp` before git reset
-- Restore from `/tmp` after git reset
-- Prevents DATABASE_URL and stream keys from being lost
-
-**PM2 Environment Handling:**
-- Use `pm2 kill` instead of `pm2 delete` to restart daemon with fresh env
-- Ensures environment variables are properly loaded on every deployment
-
-**Database Warmup:**
-- 3 retry attempts after schema push
-- Prevents cold start failures
-- Uses pg Pool with max: 5 connections
-
-**Solana Keypair Setup:**
-- Automated from `SOLANA_DEPLOYER_PRIVATE_KEY` env var
-- Writes to `~/.config/solana/id.json` via `scripts/decode-key.ts`
-- Used by keeper bot and Anchor tools
-
-**Diagnostics:**
-- Comprehensive streaming diagnostics after deployment
-- FFmpeg process check, RTMP status file check
-- PulseAudio sink verification
-- PM2 logs filtered for streaming keywords
-- 30s wait for streaming initialization
-
-**Files Changed:**
-- `scripts/deploy-vast.sh`
-- `.github/workflows/deploy-vast.yml`
-- `ecosystem.config.cjs`
-
----
-
-## AI Agent Improvements
-
-### Action Locks and Fast-Tick Mode (Commit 60a03f49, Feb 26 2026)
-
-**Performance and responsiveness improvements:**
-
-**Action Locks:**
-- Skip LLM ticks while movement is in progress
-- Prevents decision churn during long walks
-- 50% reduction in LLM calls for movement-heavy tasks
-
-**Fast-Tick Mode:**
-- 2s tick interval after movement/goal changes (vs 10s normal)
-- Quick follow-up decisions after completing actions
-- More responsive autonomous behavior
-
-**Short-Circuit LLM:**
-- Skip LLM for obvious decisions (repeat resource, banking, set goal)
-- 100% reduction in LLM calls for repetitive tasks
-- Faster response times
-
-**Movement Tracking:**
-- `waitForMovementComplete()` ensures agent reaches destination
-- `isMoving` state prevents premature interactions
-- Banking actions now await movement completion
-
-**Last Action Tracking:**
-- LLM prompt includes last action name and result
-- Better decision continuity
-- Avoids repeating failed actions
-
-**Files Changed:**
-- `packages/plugin-hyperscape/src/managers/autonomous-behavior-manager.ts`
-- `packages/plugin-hyperscape/src/services/HyperscapeService.ts`
-- `packages/plugin-hyperscape/src/actions/banking.ts`
+### Memory Management Best Practices
 
-### Quest-Driven Tool Acquisition (Commit 60a03f49, Feb 26 2026)
+When creating new systems or managers:
 
-**Replaced starter chest system with quest-based tool acquisition:**
+1. **Track All Resources**: Store references to intervals, listeners, handlers
+2. **Implement Cleanup**: Add `destroy()`, `shutdown()`, or `stop()` methods
+3. **Follow SystemBase Pattern**: Use the same cleanup patterns as SystemBase
+4. **Clean Up on Hot Reload**: Ensure resources are released during development
+5. **Test for Leaks**: Monitor memory usage during long-running sessions
 
-**Tool-Granting Quests:**
-- `lumberjacks_first_lesson` (Forester Wilma) → Bronze Hatchet + Tinderbox
-- `fresh_catch` (Fisherman Pete) → Small Fishing Net
-- `torvins_tools` (Torvin) → Bronze Pickaxe + Hammer
-
-**Behavior:**
-- Tools granted immediately on quest accept (no need to complete)
-- Questing goal has highest priority when agent lacks tools
-- More realistic gameplay progression
-
-**Files Changed:**
-- `packages/plugin-hyperscape/src/actions/quests.ts`
-- `packages/plugin-hyperscape/src/providers/goalProvider.ts`
-- Removed `lootStarterChestAction`
-
-### Autonomous Banking (Commit 60a03f49, Feb 26 2026)
-
-**Agents automatically manage inventory:**
-
-**Banking Protocol:**
-- Proper packet sequence: `bankOpen` → `bankDeposit/bankDepositAll/bankWithdraw` → `bankClose`
-- Replaces broken `bankAction` packet
-- Banking actions now await movement completion
-- Auto-walks to nearest bank if distance > 5 units
-
-**Essential Tools** (never deposited by `bankDepositAll`):
-- Hatchets (bronze, iron, steel, mithril)
-- Pickaxes (bronze, iron, steel, mithril)
-- Tinderbox
-- Small Fishing Net
-
-**Banking Goal:**
-- Triggers when inventory >= 25/28 slots
-- Auto-restores previous goal after banking
-- Inventory count displayed with warnings
-
-**Files Changed:**
-- `packages/plugin-hyperscape/src/actions/banking.ts`
-- `packages/plugin-hyperscape/src/providers/goalProvider.ts`
-- `packages/plugin-hyperscape/src/services/HyperscapeService.ts`
-
-### Resource Detection Fix (Commit 60a03f49, Feb 26 2026)
-
-**Increased resource approach range from 20m to 40m:**
-- Fixes "choppableTrees=0" errors despite visible trees
-- Matches server-side skills validation range
-- Applied to CHOP_TREE, MINE_ROCK, and CATCH_FISH actions
-
-**Files Changed:**
-- `packages/plugin-hyperscape/src/actions/skills.ts`
-
-### Model Agent Stability (PR #945, Feb 26 2026)
-
-**Database Isolation:**
-- Force PGLite for agents
-- Prevent destructive migrations on game DB
-- Separate database per agent runtime
-
-**Initialization Timeout:**
-- 45s timeout on runtime init prevents indefinite hangs
-- Graceful error handling with cleanup
-
-**Event Listener Cleanup:**
-- Duplication guard prevents memory leaks
-- Proper AbortController usage
-
-**Graceful Shutdown:**
-- 10s timeout on runtime.stop()
-- Dangling promise cleanup
-- WASM heap cleanup via explicit DB adapter close
-
-**Circuit Breaker:**
-- 3 consecutive failure limit
-- 8 max reconnect retries
-- Exponential backoff
-
-**Duel Recovery:**
-- Check contestant status independently during ANNOUNCEMENT phase
-- Prevents stuck duels from agent crashes
-
-**Files Changed:**
-- `packages/server/src/eliza/AgentManager.ts`
-- `packages/server/src/eliza/EmbeddedHyperscapeService.ts`
-- `packages/plugin-hyperscape/src/services/HyperscapeService.ts`
-
----
-
-## Client & Build Fixes
-
-### Vite Polyfills Fix (Commit e012ed2, Feb 26 2026)
-
-**Problem:** Production builds failed with "Failed to resolve module specifier" errors for `vite-plugin-node-polyfills/shims/*` imports.
-
-**Solution:** Add aliases to resolve shims to actual dist files:
-
+Example cleanup pattern:
 ```typescript
-// vite.config.ts
-resolve: {
-  alias: {
-    'vite-plugin-node-polyfills/shims/buffer': 'vite-plugin-node-polyfills/dist/shims/buffer',
-    'vite-plugin-node-polyfills/shims/global': 'vite-plugin-node-polyfills/dist/shims/global',
-    'vite-plugin-node-polyfills/shims/process': 'vite-plugin-node-polyfills/dist/shims/process',
+class MySystem {
+  private listeners: Array<() => void> = [];
+  private intervals: NodeJS.Timeout[] = [];
+
+  init() {
+    const listener = world.on('event', this.handleEvent);
+    this.listeners.push(listener);
+    
+    const interval = setInterval(this.tick, 1000);
+    this.intervals.push(interval);
   }
-},
-plugins: [
-  nodePolyfills({
-    protocolImports: false,  // Disable to avoid unresolved imports
-  })
-]
-```
 
-**Files Changed:**
-- `packages/client/vite.config.ts`
-
-### CSP Updates (Commits 8626299, e012ed2, 1b2e230, Feb 26 2026)
-
-**Allow data: URLs for WASM loading:**
-```
-img-src 'self' data: https: blob:;
-font-src 'self' data: https://fonts.gstatic.com;
-```
-
-**Allow Google Fonts:**
-```
-style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-font-src 'self' data: https://fonts.gstatic.com;
-```
-
-**Allow Cloudflare Insights:**
-```
-script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com;
-```
-
-**Removed broken report-uri:**
-- `/api/csp-report` endpoint didn't exist
-- CSP violations no longer reported to server
-
-**Files Changed:**
-- `packages/client/public/_headers`
-
-### Visual Testing Fix (Commit 205f964, Feb 27 2026)
-
-**Problem:** WebGPU doesn't support `readPixels()` for pixel reading.
-
-**Solution:** Use 2D canvas `drawImage()` for WebGPU pixel reading:
-
-```typescript
-// visualTesting.ts
-// WebGPU: Use 2D canvas drawImage instead of readPixels
-const canvas2d = document.createElement('canvas');
-canvas2d.width = width;
-canvas2d.height = height;
-const ctx = canvas2d.getContext('2d');
-ctx.drawImage(renderer.domElement, 0, 0);
-const imageData = ctx.getImageData(0, 0, width, height);
-```
-
-**Files Changed:**
-- `packages/client/tests/e2e/utils/visualTesting.ts`
-
-### Error Message Updates (Commit 205f964, Feb 27 2026)
-
-**Updated error messages to reference WebGPU:**
-- `GameClient.tsx`: Updated context lost handler comments
-- `SettingsPanel.tsx`: Always show 'WebGPU' instead of conditional
-- `errorCodes.ts`: Updated `SYSTEM_WEBGL_ERROR` message to mention WebGPU
-
-**Files Changed:**
-- `packages/client/src/screens/GameClient.tsx`
-- `packages/client/src/game/panels/SettingsPanel.tsx`
-- `packages/client/src/lib/errorCodes.ts`
-
----
-
-## Security & Configuration
-
-### JWT Secret Enforcement (Commit 3bc59db, Feb 26 2026)
-
-**JWT_SECRET is now REQUIRED in production/staging:**
-
-```typescript
-// config.ts
-if (NODE_ENV === 'production' || NODE_ENV === 'staging') {
-  if (!JWT_SECRET) {
-    throw new Error('JWT_SECRET is required in production/staging');
+  destroy() {
+    // Clean up listeners
+    this.listeners.forEach(remove => remove());
+    this.listeners = [];
+    
+    // Clear intervals
+    this.intervals.forEach(clearInterval);
+    this.intervals = []
   }
 }
 ```
 
-**Generate secure secret:**
-```bash
-openssl rand -base64 32
-```
+---
 
-**Files Changed:**
-- `packages/server/src/startup/config.ts`
-- `packages/server/.env.example`
+## Client Performance Optimizations
 
-### Secrets Management (Commits b466233, 55f93c6, b56b0fd, Feb 26 2026)
+### Movement System Overhaul
 
-**Added to GitHub secrets:**
-- `ARENA_EXTERNAL_BET_WRITE_KEY` - External betting integration
-- `JWT_SECRET` - Session signing (required for production)
-- `SOLANA_DEPLOYER_PRIVATE_KEY` - Solana keypair for all roles
+<CardGroup cols={2}>
+  <Card title="Immediate Move Processing" icon="zap">
+    Bypasses ActionQueue for instant response to player clicks (eliminates 0-600ms latency)
+  </Card>
+  <Card title="Pathfinding Rate Limit" icon="route">
+    Raised from 5/sec to 15/sec to match tile movement limiter
+  </Card>
+  <Card title="BFS Iterations" icon="expand">
+    Increased from 2000 to 8000 (~44 tile radius vs ~22 tile)
+  </Card>
+  <Card title="Path Continuation" icon="arrows-split-up-and-left">
+    Seamless long-distance movement with automatic re-pathfinding when BFS limit reached
+  </Card>
+</CardGroup>
 
-**Stream Key Security:**
-- Masked logging (`***configured***` instead of plaintext)
-- Explicit unset of stale values before PM2 start
-- Prevents accidental exposure in logs
+**Skating Fix**: Server-side pre-computation + client-side path appending eliminates stop-lurch at segment boundaries
 
-**Files Changed:**
-- `.github/workflows/deploy-vast.yml`
-- `scripts/deploy-vast.sh`
-- `ecosystem.config.cjs`
+**Multi-Click Feel**: Optimistic target pivoting + pending move queue ensures last click always reaches server
+
+**Per-Frame Allocation Elimination**: Pre-allocated buffers and squared distance comparisons in hot paths
+
+### Minimap Rendering Optimization
+
+<Steps>
+  <Step title="Async Terrain Generation">
+    Chunked sampling (50×50 grid) runs off RAF callback via setTimeout(0) yields
+    
+    **Impact**: Zero RAF blocking - terrain generation happens in background macrotasks
+  </Step>
+  
+  <Step title="Canvas Rotation Transform">
+    Decouples terrain regeneration from camera rotation (only regenerates on player move/zoom)
+    
+    **Terrain Overshoot**: √2 × 1.1 sampling ensures corners stay filled at any rotation angle
+  </Step>
+  
+  <Step title="Layer Synchronization">
+    All layers (terrain, roads, buildings, pips) use same camera snapshot
+    
+    **Cached Contexts**: Canvas 2D contexts cached in refs to avoid getContext() DOM queries
+  </Step>
+  
+  <Step title="Performance Results">
+    Reduced terrain sampling from up to **40,000 pixels to 2,500** (16× reduction)
+  </Step>
+</Steps>
+
+### Client Memory Optimizations
+
+- **Machine ID Caching**: Browser fingerprint cached in `_cachedMachineId` (avoids canvas allocation on every token operation)
+- **Activity Debouncing**: 500ms debounce on saveSession() localStorage writes (was synchronous on every interaction)
+- **XP Drop Listener**: Store bound handler so destroy() can call world.off() (eliminates leak that survived world teardown)
+- **Stale Health Bar Sweep**: Reverse iteration to remove bars for despawned entities
 
 ---
 
-## Solana Markets
+## Streaming Infrastructure Improvements
 
-### WSOL Migration (Commit 34255ee, Feb 26 2026)
+### WebGPU Initialization & Diagnostics
 
-**Markets now use native token (WSOL) instead of custom GOLD:**
+<CardGroup cols={2}>
+  <Card title="Adapter Request Timeout" icon="clock">
+    30s timeout on `navigator.gpu.requestAdapter()` to prevent indefinite hangs
+  </Card>
+  <Card title="Renderer Init Timeout" icon="hourglass">
+    60s timeout on `renderer.init()` to detect GPU driver issues
+  </Card>
+  <Card title="Preflight Testing" icon="flask">
+    `testWebGpuInit()` runs on blank page before loading game content
+  </Card>
+  <Card title="GPU Diagnostics" icon="stethoscope">
+    `captureGpuDiagnostics()` extracts chrome://gpu info for debugging
+  </Card>
+</CardGroup>
+
+### Vast.ai Deployment Architecture
+
+The streaming pipeline requires specific GPU setup:
+
+#### 1. GPU Rendering Modes (tried in order)
+
+<Steps>
+  <Step title="Xorg with NVIDIA">
+    Best performance, requires DRI/DRM device access
+  </Step>
+  <Step title="Xvfb with NVIDIA Vulkan">
+    Virtual framebuffer + GPU rendering via ANGLE/Vulkan (non-headless Chrome)
+    
+    <Note>Xvfb mode uses **non-headless Chrome** connecting to virtual display (WebGPU requires window context)</Note>
+  </Step>
+  <Step title="Headless Vulkan">
+    Chrome `--headless=new` with `--use-vulkan` and `--use-angle=vulkan`
+  </Step>
+  <Step title="Headless EGL">
+    Direct EGL rendering without X server using `--headless=new --use-gl=egl`
+  </Step>
+  <Step title="Ozone Headless">
+    Experimental mode using `--ozone-platform=headless` with GPU rendering
+  </Step>
+  <Step title="SwiftShader">
+    Software Vulkan fallback (poor performance, last resort)
+  </Step>
+</Steps>
+
+Deployment detects Xorg swrast software rendering and switches to alternative modes.
+
+#### 2. Deployment Validation
+
+<Accordion title="Early Display Driver Check">
+  - Checks nvidia_drm kernel module
+  - Checks DRM device nodes (/dev/dri/)
+  - Queries GPU display_mode via nvidia-smi to verify display driver support
+  - Provides clear guidance to rent instances with `gpu_display_active=true` on Vast.ai
+</Accordion>
+
+<Accordion title="Vulkan ICD Validation">
+  - Checks Vulkan ICD availability at `/usr/share/vulkan/icd.d/nvidia_icd.json`
+  - Logs actual ICD content and VK_LOADER_DEBUG output for diagnostics
+  - **XDG_RUNTIME_DIR**: Required for Vulkan/EGL initialization (set to `/tmp/runtime-root`)
+</Accordion>
+
+<Accordion title="WebGPU Pre-Check Tests">
+  Runs 6 WebGPU tests with different Chrome configurations:
+  1. Headless Vulkan
+  2. Headless EGL
+  3. Xvfb Vulkan
+  4. Ozone Headless
+  5. SwiftShader
+  6. Playwright Xvfb
+  
+  Extracts Chrome GPU info (WebGPU/Vulkan status) during deployment
+</Accordion>
+
+<Warning>
+  Deployment **FAILS** if WebGPU cannot be initialized (no soft fallbacks)
+</Warning>
+
+#### 3. Vast.ai CLI Provisioner
+
+New automated provisioner script: `./scripts/vast-provision.sh`
+
+<Steps>
+  <Step title="Search">
+    Searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
+  </Step>
+  <Step title="Filter">
+    Filters by reliability, GPU RAM, price
+  </Step>
+  <Step title="Rent">
+    Automatically rents best available instance
+  </Step>
+  <Step title="Wait">
+    Waits for instance to be ready
+  </Step>
+  <Step title="Output">
+    Outputs SSH connection details and GitHub secret commands
+  </Step>
+</Steps>
 
 ```bash
-# Old
-GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump
-
-# New
-MARKET_MINT=So11111111111111111111111111111111111112  # WSOL
+./scripts/vast-provision.sh
 ```
 
-**Why:**
-- Simplifies market operations (no custom token minting/distribution)
-- Uses native token of each chain (WSOL on Solana, WETH on EVM)
-- Better liquidity (native tokens more liquid than custom tokens)
+Ensures only instances with NVIDIA display driver support are rented.
 
-**Perps Oracle Disabled:**
-- Default off (program not deployed on devnet)
-- `ENABLE_PERPS_ORACLE=false` by default
-- Re-enable when perps program deployed
+#### 4. Stream Capture Improvements
 
-**Files Changed:**
-- `packages/gold-betting-demo/keeper/src/bot.ts`
-- `packages/server/src/arena/config.ts`
-- `packages/server/.env.example`
+- **Chrome Executable**: Set `STREAM_CAPTURE_EXECUTABLE` to explicit Chrome path (e.g., `/usr/bin/google-chrome-unstable`) for reliable WebGPU
+- **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
+- **Page Navigation Timeout**: Increased to 180s for Vite dev mode (production build recommended)
+- **Resolution Tracking**: Automatic viewport recovery on resolution mismatch
+- **Probe Timeout**: 5s timeout on probe evaluate calls to prevent hanging
+
+#### 5. macOS WebGPU Support
+
+- **Metal Backend**: macOS uses Metal (not Vulkan) for WebGPU
+- **System Chrome Required**: Auto-detects and uses system Chrome on macOS for WebGPU support
+- **Playwright Limitation**: Bundled Chromium doesn't have proper WebGPU support on macOS
+- **No Vulkan ICD**: Don't set `VK_ICD_FILENAMES` on macOS (not applicable)
+- **Chrome Flags**: Remove Vulkan from feature flags on macOS (Metal is the backend)
 
 ---
 
-## Cloudflare Pages Deployment
+## Agent System Improvements
 
-### Automated Client Deployment (Commit 37c3629, Feb 26 2026)
+### Dynamic Combat Progression
 
-**Workflow triggers on:**
-- Pushes to main branch
-- Changes to `packages/client/**` or `packages/shared/**`
-- Changes to `package.json` or `bun.lockb`
-- Manual workflow dispatch
+<CardGroup cols={2}>
+  <Card title="Monster Escalation" icon="arrow-up-right">
+    Agents progress from goblins → bandits → barbarians as combat level grows
+  </Card>
+  <Card title="Combat Style Rotation" icon="rotate">
+    Agents cycle attack → strength → defense (train lowest skill)
+  </Card>
+  <Card title="Cooking Phase" icon="fire">
+    Agents cook raw food immediately instead of waiting for full inventory
+  </Card>
+  <Card title="Gear Upgrade Phase" icon="hammer">
+    Agents smith better equipment when they have materials + levels
+  </Card>
+</CardGroup>
 
-**Multi-Line Commit Message Fix (Commit 3e4bb48, Feb 26 2026):**
+### Stability Fixes
 
-Wrangler fails on multi-line commit messages. Extract only first line:
+<Accordion title="Critical Crash Fix">
+  Fixed `weapon.toLowerCase is not a function` crash in `getEquippedWeaponTier` that broke **ALL agents every tick**
+  
+  **Root Cause**: Weapon could be an object instead of string
+  
+  **Fix**: Added type guard and proper string extraction
+</Accordion>
 
-```bash
-COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1 | tr -d '"' | cut -c1-100)
-```
+<Accordion title="LLM Error Fallback">
+  **Old Behavior**: Agents derailed to explore on LLM errors
+  
+  **New Behavior**: Idle + retry when agent has active goal
+  
+  **Impact**: Agents maintain goal focus through temporary LLM failures
+</Accordion>
 
-**Production URLs:**
-- Primary: `https://hyperscape.gg`
-- Alternative: `https://hyperscape.club`
-- Preview: `https://<commit-sha>.hyperscape.pages.dev`
+<Accordion title="Quest Goal Detection">
+  Added quest goal status change detection for proper quest lifecycle transitions
+  
+  Agents now properly detect when quest objectives are completed
+</Accordion>
 
-**Files Changed:**
-- `.github/workflows/deploy-pages.yml`
-- `.github/workflows/deploy-cloudflare.yml`
+### Configuration Improvements
 
----
-
-## Environment Variables
-
-### New Variables (February 2026)
-
-**GPU Rendering:**
-```bash
-GPU_RENDERING_MODE=xorg|xvfb-vulkan  # Auto-detected
-DUEL_CAPTURE_USE_XVFB=true/false     # Dynamically set
-VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
-STREAM_CAPTURE_CHANNEL=chrome-dev
-```
-
-**Audio Streaming:**
-```bash
-STREAM_AUDIO_ENABLED=true
-PULSE_AUDIO_DEVICE=chrome_audio.monitor
-PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
-XDG_RUNTIME_DIR=/tmp/pulse-runtime
-```
-
-**Streaming Quality:**
-```bash
-STREAM_LOW_LATENCY=false  # Use 'film' tune (default)
-STREAMING_CANONICAL_PLATFORM=twitch
-STREAMING_PUBLIC_DELAY_MS=0
-```
-
-**Solana Markets:**
-```bash
-MARKET_MINT=So11111111111111111111111111111111111112  # WSOL
-ENABLE_PERPS_ORACLE=false
-ARENA_EXTERNAL_BET_WRITE_KEY=your-secret-key
-```
-
-**Security:**
-```bash
-JWT_SECRET=your-secret-key  # REQUIRED in production
-ADMIN_CODE=your-admin-code  # REQUIRED for production
-```
-
-### Deprecated Variables
-
-**Removed:**
-- `GOLD_MINT` → Use `MARKET_MINT` instead
-- `DUEL_FORCE_WEBGL_FALLBACK` → WebGL no longer supported
-- `STREAM_CAPTURE_DISABLE_WEBGPU` → WebGPU always enabled
-- `YOUTUBE_STREAM_KEY` → YouTube streaming disabled
+- **Combat Food Threshold**: Increased from 5 → 10 for better survival
+- **World Data Manifest Loading**: Monster tiers and gear tiers loaded from world-data
+- **Short-Circuit Dashboard Sync**: All agents show activity logs even when skipping LLM
+- **LLM Rate Limiting**: Exponential backoff for API calls (5s base, max 60s)
+- **Consecutive Failure Tracking**: Resets on successful tick
 
 ---
 
-## Documentation Updates
+## Combat System Stability
 
-### New Documentation Files
+### Duel System Improvements
 
-The following documentation files are referenced in CLAUDE.md and README.md but may need to be created:
-
-- `docs/webgpu-requirements.md` - Browser and GPU requirements
-- `docs/vast-deployment.md` - Vast.ai deployment guide
-- `docs/cloudflare-deployment.md` - Cloudflare Pages deployment
-- `docs/streaming-improvements-feb-2026.md` - RTMP streaming improvements
-- `docs/streaming-audio-capture.md` - PulseAudio setup
-- `docs/agent-stability-improvements.md` - Model agent stability fixes
-- `docs/solana-market-wsol-migration.md` - WSOL market token migration
-- `docs/maintenance-mode-api.md` - Maintenance mode API reference
-
-### Updated Documentation
-
-**AGENTS.md:**
-- Added Vast.ai deployment architecture section
-- Documented GPU rendering modes
-- Documented audio capture via PulseAudio
-- Documented RTMP multi-streaming
-
-**CLAUDE.md:**
-- Updated WebGPU requirements
-- Added Safari 18+ (macOS 15+) requirement
-- Documented deployment improvements
-- Added troubleshooting for WebGPU
-
-**README.md:**
-- Added WebGPU system requirements
-- Updated browser compatibility
-- Added Recent Updates section
-- Documented AI agent improvements
+<CardGroup cols={2}>
+  <Card title="Combat Retry Timer" icon="clock">
+    Aligned with tick system (3000ms = 5 ticks) for consistent timing
+  </Card>
+  <Card title="Phase Timeout" icon="timer">
+    Reduced grace periods from 30s to 10s for faster failure detection
+  </Card>
+  <Card title="Combat Stall Nudge" icon="hand">
+    Tracks last nudge timestamp instead of cycle ID to allow re-nudging when combat stalls again
+  </Card>
+  <Card title="Damage Event Cache" icon="database">
+    Cleanup every tick (was every 2 ticks), cap lowered from 5000 to 1000, evict 75% when exceeded
+  </Card>
+</CardGroup>
 
 ---
 
-## Bug Fixes
+## Gold Betting Demo - Mobile UI
 
-### X Server Socket Cleanup (Commits 8575215, 1025071, 47782ed, Feb 27 2026)
+### Mobile Responsive Overhaul
 
-**Problem:** Xvfb failed to start because `/tmp/.X11-unix/X99` socket was still present after killing Xorg.
+<CardGroup cols={2}>
+  <Card title="Resizable Panels" icon="arrows-left-right-to-line">
+    Desktop layout with useResizePanel hook + ResizeHandle component
+  </Card>
+  <Card title="Mobile Detection" icon="mobile">
+    useIsMobile hook gates JS inline styles so CSS media queries control layout
+  </Card>
+  <Card title="Mobile Layout" icon="rectangle-vertical">
+    16:9 aspect-ratio video, bottom-sheet sidebar, touch-friendly tab targets, dvh units
+  </Card>
+  <Card title="Mobile Header" icon="bars">
+    Stacked HYPERSCAPE/MARKET logo, phase strip above video, SOL + EVM wallet buttons
+  </Card>
+</CardGroup>
 
-**Solution:**
-- Clean up ALL X lock files (`/tmp/.X*-lock`)
-- Remove and recreate `/tmp/.X11-unix` directory
-- Kill 'X' process in addition to Xorg/Xvfb
-- Increase sleep time to 3s for processes to fully terminate
+### Data Integration
 
-**Files Changed:**
-- `scripts/deploy-vast.sh`
+- **Real Data Integration**: Live SSE feed from game server (devnet mode) replaces mock data
+- **Simulation Mode**: Available via `bun run dev:stream-ui` (dev mode uses real endpoints only)
+- **Tab Reordering**: Trades tab moved first for better mobile UX
 
-### Missing Environment Variable (Commit 77403a2, Feb 27 2026)
+### Console Noise Reduction
 
-**Problem:** `ReferenceError: STREAM_CAPTURE_USE_EGL is not defined` crashed RTMP bridge on startup.
+<Accordion title="Recharts Warning Fix">
+  Raised `.hm-chart-container` min-height to 120px (eliminates width/height=0 warnings)
+</Accordion>
 
-**Solution:**
-- Added `STREAM_CAPTURE_USE_EGL` variable to ecosystem.config.cjs
-- Added `STREAM_CAPTURE_EXECUTABLE` for custom browser path
-- Added GPU rendering flags for better performance
-- Added frame rate limit disable for smoother capture
+<Accordion title="EventSource Auto-Reconnect">
+  Close EventSource on onerror to stop browser's built-in reconnect loop
+</Accordion>
 
-**Files Changed:**
-- `ecosystem.config.cjs`
+<Accordion title="Exponential Backoff">
+  useDuelContext switched from fixed setInterval to setTimeout with backoff (3s → 6s → 60s cap)
+</Accordion>
 
 ---
 
-## Commit Summary
+## Testing Infrastructure
 
-**Total Commits Analyzed:** 35 commits from Feb 26-27, 2026
+### E2E Journey Tests
 
-**Categories:**
-- WebGPU Enforcement: 5 commits
-- Vast.ai Deployment: 12 commits
-- Audio Streaming: 4 commits
-- AI Agent Improvements: 2 commits
-- Security: 4 commits
-- Client Fixes: 3 commits
-- Deployment Automation: 5 commits
+New comprehensive end-to-end tests in `packages/client/tests/e2e/complete-journey.spec.ts`:
 
-**Lines Changed:**
-- Estimated 2000+ lines of documentation updates
-- 500+ lines of deployment script improvements
-- 300+ lines of AI agent behavior improvements
-- 200+ lines of streaming configuration
+<Steps>
+  <Step title="Login Flow">
+    Full authentication and character selection
+  </Step>
+  <Step title="Loading Screen">
+    `waitForLoadingScreenHidden` helper for reliable test synchronization
+  </Step>
+  <Step title="Spawn">
+    Character spawns in world with proper initialization
+  </Step>
+  <Step title="Walk">
+    Movement and pathfinding validation
+  </Step>
+  <Step title="Screenshot Comparison">
+    Utilities to verify game is rendering correctly
+  </Step>
+</Steps>
+
+**Real Browser Testing**: Uses Playwright with actual WebGPU rendering (no mocks)
+
+### Test Stability Improvements
+
+- **GoldClob Fuzz Tests**: 120s timeout for randomized invariant tests (4 seeds × 140 operations)
+- **Precision Fixes**: Use larger amounts (10000n) to avoid gas cost precision issues
+- **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
+- **Anchor Test Configuration**: Use localnet instead of devnet for free SOL in `anchor test`
+- **CI Build Order**: Build impostors/procgen before shared (dependency fix)
+
+---
+
+## Model Cache & Rendering
+
+### Index Buffer Type Preservation
+
+<Warning>
+  **Critical Fix**: Model cache now preserves original index buffer type (Uint16Array vs Uint32Array)
+</Warning>
+
+**Issue**: Silent geometry corruption and RangeError crashes on cached model restore
+
+**Fix**: Cache version bumped to 4 to invalidate corrupt entries
+
+**Impact**: Affects all GLB models loaded via ModelCache (resources, NPCs, items)
+
+---
+
+## Resource Management
+
+### Activity Logger Queue
+
+- **Max Size**: 1000 entries with 25% eviction to prevent memory pressure
+- **Eviction Policy**: LRU-style pruning when limit exceeded
+
+### Session Timeout
+
+- **30-Minute Max**: Via MAX_SESSION_TICKS for zombie session cleanup
+- **SessionCloseReason**: Added "timeout" to type for proper session termination tracking
+
+---
+
+## Breaking Changes
+
+<Warning>
+  **Safari 17 Support Removed**: Safari 18+ (macOS 15+) is now required for WebGPU support
+</Warning>
+
+### API Changes
+
+<Accordion title="ResourceVisualStrategy.onDepleted()">
+  Now returns `boolean`:
+  - `true` = strategy handled depletion (instanced stump)
+  - `false` = ResourceEntity should load individual depleted model
+  
+  New optional method: `getHighlightMesh(ctx)` for instanced entity highlighting
+</Accordion>
+
+<Accordion title="TileMovementState">
+  Added new required fields:
+  - `requestedDestination: TileCoord | null`
+  - `lastPathPartial: boolean`
+  - `nextSegmentPrecomputed: boolean`
+  
+  These fields are always initialized by `createTileMovementState()` - optional typing was removed
+</Accordion>
+
+<Accordion title="tileMovementStart Packet">
+  Added optional `isContinuation?: boolean` field for path continuation support
+</Accordion>
 
 ---
 
@@ -656,41 +556,229 @@ The following documentation files are referenced in CLAUDE.md and README.md but 
 
 ### For Developers
 
-1. **Update browser to Chrome 113+ or Edge 113+** (WebGPU required)
-2. **Set JWT_SECRET in production** (now required)
-3. **Set ADMIN_CODE in production** (recommended for security)
-4. **Update MARKET_MINT** if using Solana markets (GOLD_MINT deprecated)
-5. **Remove WebGL fallback code** from any custom implementations
+<Steps>
+  <Step title="Update Dependencies">
+    ```bash
+    bun install
+    bun run build
+    ```
+  </Step>
+  
+  <Step title="Review Memory Cleanup">
+    If you've created custom systems, ensure they implement proper cleanup:
+    - Add `destroy()` or `shutdown()` methods
+    - Track and cleanup all event listeners
+    - Clear intervals and timeouts
+  </Step>
+  
+  <Step title="Test Movement">
+    Movement system changes may affect custom pathfinding logic:
+    - ActionQueue no longer buffers move requests
+    - Path continuation handles long-distance clicks automatically
+  </Step>
+  
+  <Step title="Update Safari Requirements">
+    Update browser compatibility documentation to require Safari 18+ (macOS 15+)
+  </Step>
+</Steps>
 
-### For Deployers
+### For Vast.ai Deployments
 
-1. **Vast.ai instances must have NVIDIA GPU** with Vulkan support
-2. **Configure stream keys** in GitHub secrets (Twitch, Kick, X)
-3. **Set SOLANA_DEPLOYER_PRIVATE_KEY** for automated keypair setup
-4. **Disable YouTube streaming** (set `YOUTUBE_STREAM_KEY=""`)
-5. **Update KICK_RTMP_URL** to correct RTMPS endpoint
+<Steps>
+  <Step title="Use Provisioner Script">
+    ```bash
+    ./scripts/vast-provision.sh
+    ```
+    
+    This ensures you rent instances with `gpu_display_active=true`
+  </Step>
+  
+  <Step title="Update GitHub Secrets">
+    ```bash
+    gh secret set VAST_HOST --body 'your-host'
+    gh secret set VAST_PORT --body 'your-port'
+    ```
+  </Step>
+  
+  <Step title="Trigger Deployment">
+    ```bash
+    gh workflow run deploy-vast.yml
+    ```
+  </Step>
+</Steps>
 
-### For Users
+---
 
-1. **Update browser** to Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
-2. **Check WebGPU support** at [webgpureport.org](https://webgpureport.org)
-3. **No action required** if already using supported browser
+## Performance Metrics
+
+### Before vs After
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| **Move Click Latency** | 0-600ms | ~0ms | Instant response |
+| **Pathfinding Range** | ~22 tiles | ~44 tiles | 2× radius |
+| **Minimap Terrain Sampling** | 40,000 pixels | 2,500 pixels | 16× reduction |
+| **Memory Leaks Fixed** | 20+ leaks | 0 known leaks | 100% |
+| **Browser Restart Interval** | 60 min | 45 min | Prevents OOM |
+| **Combat Retry Timer** | 1500ms | 3000ms | Tick-aligned |
+| **Phase Timeout** | 30s | 10s | 3× faster detection |
+
+---
+
+## Files Changed
+
+### Core Engine (packages/shared/)
+
+<AccordionGroup>
+  <Accordion title="Movement System">
+    - `systems/shared/movement/TileSystem.ts` - Path continuation, immediate processing
+    - `systems/client/TileInterpolator.ts` - Skating fix, optimistic targeting, allocation elimination
+    - `systems/ServerNetwork/tile-movement.ts` - Server-side pre-computation
+    - `systems/ServerNetwork/mob-tile-movement.ts` - Mob movement state updates
+  </Accordion>
+
+  <Accordion title="Rendering & GPU">
+    - `utils/rendering/ModelCache.ts` - Index buffer type preservation, geometry disposal
+    - `systems/client/XPDropSystem.ts` - Object pooling
+    - `systems/client/DuelCountdownSplatSystem.ts` - Texture pre-rendering
+    - `systems/client/HealthBars.ts` - Timeout cleanup, stale bar sweep
+    - `systems/client/ProjectileRenderer.ts` - Reference-counted geometry
+    - `lib/ThreeResourceManager.ts` - Teardown method
+  </Accordion>
+
+  <Accordion title="Memory Management">
+    - `components/ColliderComponent.ts` - Collision handler cleanup
+    - `entities/npc/MobEntity.ts` - PLAYER_SET_DEAD listener cleanup
+    - `platform/shared/Socket.ts` - WebSocket handler cleanup
+    - `systems/client/ClientLiveKit.ts` - Voice Map and room listener cleanup
+  </Accordion>
+</AccordionGroup>
+
+### Server (packages/server/)
+
+<AccordionGroup>
+  <Accordion title="Systems">
+    - `systems/GameTickProcessor.ts` - Event handler cleanup
+    - `systems/TradingSystem/index.ts` - Player lifecycle handler cleanup
+    - `systems/ServerNetwork/event-bridge.ts` - Listener tracking and cleanup
+    - `systems/ServerNetwork/action-queue.ts` - PlayerQueues cleanup
+    - `systems/ServerNetwork/ScriptQueue.ts` - Queue cleanup methods
+    - `systems/shared/combat/AggroSystem.ts` - Player data cleanup on disconnect
+  </Accordion>
+
+  <Accordion title="Entities">
+    - `entities/world/StarterChestEntity.ts` - Bounded lootedByCharacters Set
+  </Accordion>
+
+  <Accordion title="Infrastructure">
+    - `startup/shutdown.ts` - Rate limiter and idempotency service cleanup
+    - `streaming/rtmp-bridge.ts` - WebSocket listener cleanup
+    - `streaming/stream-capture.ts` - Browser restart, timeout improvements
+    - `systems/ServerNetwork/services/Logger.ts` - Cleanup interval tracking
+  </Accordion>
+
+  <Accordion title="Eliza/Agents">
+    - `eliza/AgentManager.ts` - COMBAT_DAMAGE_DEALT listener cleanup, LLM rate limiting
+    - `eliza/managers/autonomous-behavior-manager.ts` - Event handler cleanup
+  </Accordion>
+
+  <Accordion title="Duel System">
+    - `systems/DuelSystem/index.ts` - Combat retry timer, phase timeout
+    - `systems/StreamingDuelScheduler/managers/DuelOrchestrator.ts` - Combat stall nudge
+  </Accordion>
+</AccordionGroup>
+
+### Client (packages/client/)
+
+<AccordionGroup>
+  <Accordion title="Game Client">
+    - `game/EmbeddedGameClient.tsx` - Cancelled flag for async state
+    - `game/hud/Minimap.tsx` - Async terrain generation, canvas rotation, layer sync
+    - `auth/PlayerTokenManager.ts` - beforeUnloadHandler cleanup, machine ID caching, activity debouncing
+  </Accordion>
+
+  <Accordion title="Tests">
+    - `tests/e2e/complete-journey.spec.ts` - NEW: Full journey tests
+    - `tests/e2e/utils/visualTesting.ts` - Screenshot comparison utilities
+  </Accordion>
+</AccordionGroup>
+
+### Scripts
+
+- `scripts/vast-provision.sh` - NEW: Automated Vast.ai provisioner
+- `scripts/deploy-vast.sh` - Enhanced WebGPU validation and diagnostics
+
+### Gold Betting Demo (packages/gold-betting-demo/)
+
+- `app/src/App.tsx` - Mobile responsive UI
+- `app/src/AppRoot.tsx` - Mode routing (stream-ui vs normal)
+- `app/src/lib/useResizePanel.ts` - NEW: Resizable panel hook
+- `app/src/components/ResizeHandle.tsx` - NEW: Resize handle component
+- `app/src/spectator/useStreamingState.ts` - EventSource auto-reconnect fix
+- `app/src/spectator/useDuelContext.ts` - Exponential backoff polling
+- `keeper/src/db.ts` - NEW: Persistence layer
+
+---
+
+## Documentation Updates
+
+This changelog itself is a new addition. Additional documentation updates needed:
+
+<CardGroup cols={2}>
+  <Card title="AGENTS.md" icon="file-code">
+    Already updated with all memory leak fixes and performance optimizations
+  </Card>
+  <Card title="README.md" icon="book">
+    Needs update for vast-provision.sh script
+  </Card>
+  <Card title="CLAUDE.md" icon="file-text">
+    Needs update for new architecture patterns
+  </Card>
+  <Card title="Deployment Guides" icon="rocket">
+    Needs update for Vast.ai provisioner workflow
+  </Card>
+</CardGroup>
+
+---
+
+## Next Steps
+
+<Steps>
+  <Step title="Monitor Memory">
+    Use the new cleanup patterns in all future systems
+  </Step>
+  <Step title="Test Streaming">
+    Validate WebGPU initialization on your target platform
+  </Step>
+  <Step title="Update Deployments">
+    Use `vast-provision.sh` for new Vast.ai instances
+  </Step>
+  <Step title="Review Agent Behavior">
+    Monitor agent combat progression and gear upgrades
+  </Step>
+</Steps>
 
 ---
 
 ## Related Documentation
 
-<CardGroup cols={2}>
-  <Card title="WebGPU Requirements" icon="display" href="/docs/webgpu-requirements">
-    Browser and GPU compatibility guide
+<CardGroup cols={3}>
+  <Card title="Memory Management" icon="memory" href="/devops/troubleshooting#memory-leaks">
+    Troubleshooting memory issues
   </Card>
-  <Card title="Vast.ai Deployment" icon="server" href="/docs/vast-deployment">
-    GPU streaming deployment guide
+  <Card title="Streaming Setup" icon="video" href="/guides/deployment#streaming">
+    Configure streaming infrastructure
   </Card>
-  <Card title="AI Agent Guide" icon="bot" href="/wiki/ai-agents/overview">
-    ElizaOS integration and improvements
+  <Card title="Agent Development" icon="bot" href="/guides/ai-agents">
+    Build custom AI agents
   </Card>
-  <Card title="Deployment Guide" icon="rocket" href="/guides/deployment">
-    Complete deployment documentation
+  <Card title="Combat System" icon="swords" href="/concepts/combat">
+    Understanding combat mechanics
+  </Card>
+  <Card title="Testing Guide" icon="flask" href="/guides/development#testing">
+    Writing E2E tests
+  </Card>
+  <Card title="Performance" icon="gauge" href="/guides/development#performance">
+    Optimization techniques
   </Card>
 </CardGroup>
