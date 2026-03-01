@@ -8,6 +8,9 @@ Standalone demo package for a binary YES/NO betting market settled from a separa
 - `anchor/programs/gold_binary_market`: on-chain GOLD-only binary market, fee routing, market-maker seed logic, and winner claims.
 - `anchor/tests/gold-betting-demo.ts`: local end-to-end tests using mock GOLD token accounts and local validator.
 - `app`: standalone Vite app for wallet connect, market creation, bet placement, Jupiter conversion (SOL/USDC -> GOLD), settlement, and claiming.
+  - **Mobile Responsive UI**: Full mobile overhaul with resizable panels (desktop), bottom-sheet sidebar (mobile), touch-friendly targets
+  - **Real Data Integration**: Live SSE feed from game server (devnet mode) replaces mock data
+  - **Simulation Mode**: Available via `bun run dev:stream-ui` for testing with mock data
 - `keeper`: CLI automation scripts for market-maker seeding and oracle resolution, using Helius RPC.
   - includes a market bot that keeps rounds running, resolves finished rounds, and seeds liquidity.
 
@@ -28,27 +31,48 @@ Standalone demo package for a binary YES/NO betting market settled from a separa
 - Market program id: `23YJWaC8AhEufH8eYdPMAouyWEgJ5MQWyvz3z8akTtR6`
 - Mainnet GOLD mint: `DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump`
 
+## Mobile Responsive UI
+
+The app features a complete mobile-responsive overhaul:
+
+### Desktop Layout
+- **Resizable Panels**: useResizePanel hook + ResizeHandle component for adjustable sidebar width
+- **Drag-to-Resize**: Smooth panel resizing with visual feedback
+- **Persistent Layout**: Panel sizes saved to localStorage
+
+### Mobile Layout
+- **16:9 Aspect Ratio Video**: Optimized for mobile viewing
+- **Bottom-Sheet Sidebar**: Slides up from bottom with touch-friendly tab targets
+- **dvh Units**: Dynamic viewport height units for proper mobile browser chrome handling
+- **Stacked Header**: HYPERSCAPE/MARKET logo stacked vertically, phase strip above video
+- **Dual Wallet Buttons**: Both SOL and EVM wallet buttons visible on mobile
+- **Tab Reordering**: Trades tab moved first for better mobile UX
+
+### Responsive Behavior
+- **useIsMobile Hook**: Detects mobile viewport and gates JS inline styles
+- **CSS Media Queries**: Control layout breakpoints without JS interference
+- **Touch Targets**: Minimum 44px touch targets for accessibility
+- **Optimized Charts**: Recharts min-height raised to 120px to eliminate width/height=0 warnings
+
+### Console Noise Reduction
+- **Recharts Warning Fix**: Raised .hm-chart-container min-height to 120px (eliminates ResponsiveContainer width/height=0 warning spam on mobile)
+- **EventSource Auto-Reconnect**: Close EventSource on onerror to stop browser's built-in auto-reconnect loop from flooding console with ERR_CONNECTION_REFUSED when game server is unreachable
+- **Exponential Backoff**: useDuelContext switched from fixed setInterval to setTimeout with exponential backoff (3s → 6s → … → 60s cap) so repeated connection failures produce far fewer console errors
+
+### Mode Routing
+- **AppRoot.tsx**: Routes `MODE=stream-ui` to StreamUIApp, all other modes to App
+- **App.tsx**: Fully purged of isStreamUIMode checks and useMockStreamingEngine import
+- **Dev Mode**: `bun run dev` (devnet) now connects only to real SSE/duel-context endpoints
+- **Simulation Mode**: `bun run dev:stream-ui` provides mock data for testing without game server
+
 ## Local E2E tests (Anchor + mock GOLD)
 
-From `packages/gold-betting-demo/anchor`:
+From `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/anchor`:
 
 ```bash
 bun install
 anchor build
 anchor test --skip-build
-```
-
-**Note**: `anchor test` uses **localnet** (local validator with free SOL) instead of devnet. This is configured in `Anchor.toml`:
-
-```toml
-[provider]
-cluster = "localnet"
-```
-
-For actual devnet/mainnet deployments, use:
-```bash
-anchor deploy --provider.cluster devnet
-anchor deploy --provider.cluster mainnet-beta
 ```
 
 Passing tests currently:
@@ -58,7 +82,7 @@ Passing tests currently:
 
 ## UI E2E tests (headless wallet + mock GOLD localnet)
 
-From `packages/gold-betting-demo/app`:
+From `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/app`:
 
 ```bash
 bun run test:e2e
@@ -84,7 +108,7 @@ The app runs in `--mode e2e` with generated `/app/.env.e2e`.
 
 ## UI E2E tests on public clusters (headless wallet)
 
-From `packages/gold-betting-demo/app`:
+From `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/app`:
 
 ```bash
 bun run test:e2e:testnet
@@ -118,7 +142,7 @@ Notes for balances:
 
 ## Run the Vite app
 
-From `packages/gold-betting-demo`:
+From `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo`:
 
 ```bash
 bun run dev
@@ -149,6 +173,12 @@ For testnet mode:
 bun run dev:testnet
 ```
 
+For stream-ui simulation mode (mock data):
+
+```bash
+bun run dev:stream-ui
+```
+
 Build:
 
 ```bash
@@ -159,7 +189,7 @@ bun run build:mainnet
 
 ## Keeper scripts
 
-From `packages/gold-betting-demo/keeper`:
+From `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/keeper`:
 
 ```bash
 bun install
@@ -212,9 +242,9 @@ Bot behavior:
 
 Prepared files:
 
-- `packages/gold-betting-demo/.env.mainnet`
-- `packages/gold-betting-demo/.env.testnet`
-- `packages/gold-betting-demo/app/.env.mainnet`
+- `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/.env.mainnet`
+- `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/.env.testnet`
+- `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/app/.env.mainnet`
 
 These include provided Helius and Birdeye keys and default GOLD mint settings.
 They now also include fee + bot defaults (`BET_FEE_BPS`, poll loop settings).
