@@ -185,6 +185,16 @@ Recent stability improvements have adjusted test timeouts for reliability:
 - **Playwright Tests**: Increased navigation timeout to 180s for Vite dev mode
 - **Anchor Test Configuration**: Use localnet instead of devnet for free SOL in `anchor test`
 
+#### E2E Journey Tests
+Complete end-to-end gameplay testing with real browser sessions:
+
+- **Complete Journey Tests**: Full login→loading→spawn→walk gameplay tests in `complete-journey.spec.ts`
+- **Screenshot Comparison**: Utilities to verify game is rendering correctly
+- **Loading Screen Detection**: `waitForLoadingScreenHidden` helper for reliable test synchronization
+- **Real Browser Testing**: Uses Playwright with actual WebGPU rendering (no mocks)
+- **Visual Verification**: Captures screenshots at key gameplay moments for regression testing
+- **Three.js Scene Introspection**: Queries actual scene state to verify entity spawning and movement
+
 ### Mobile Development
 ```bash
 # iOS
