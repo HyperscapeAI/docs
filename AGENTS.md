@@ -123,11 +123,24 @@ The streaming pipeline requires specific GPU setup:
 9. **Vast.ai CLI Provisioner**:
    - Automated provisioner script: `./scripts/vast-provision.sh`
    - Searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
-   - Filters by reliability, GPU RAM, price
+   - Filters by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr)
    - Automatically rents best available instance
    - Waits for instance to be ready
    - Outputs SSH connection details and GitHub secret commands
    - Ensures only instances with NVIDIA display driver support are rented
+   - **Requirements**: Vast.ai CLI (`pip install vastai`), API key configured (`vastai set api-key`)
+   - **Usage**: `./scripts/vast-provision.sh`
+
+10. **Display Environment Reuse**:
+   - `duel-stack.mjs` checks if DISPLAY is already set before spawning new Xvfb
+   - Reuses existing display from `deploy-vast.sh` with proper Vulkan/VK_ICD config
+   - Prevents spawning new Xvfb (:100) that lacks Vulkan ICD configuration
+   - Ensures WebGPU works with properly configured display from deployment script
+
+11. **X Server Detection**:
+   - Uses socket check (`/tmp/.X11-unix/X99`) instead of `xdpyinfo` for X server detection
+   - More reliable and doesn't require additional packages
+   - Prevents false negatives when `xdpyinfo` is not installed
 
 See `scripts/deploy-vast.sh` for complete setup logic.
 
