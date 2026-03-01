@@ -21,6 +21,7 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 - Chrome 113+ (recommended)
 - Edge 113+
 - Safari 18+ (macOS 15+) - **Note: Safari 17 support was removed**
+- Firefox (behind flag, not recommended)
 - WebGPU must be available and working
 - Check: [webgpureport.org](https://webgpureport.org)
 
