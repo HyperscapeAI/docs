@@ -167,6 +167,22 @@ bun run cdn:up        # Start CDN container (needed for bun start)
 bun run cdn:down      # Stop CDN container
 ```
 
+### Vast.ai GPU Instance Management
+
+```bash
+# Search for WebGPU-capable instances
+VAST_API_KEY=xxx bun run vast:search
+
+# Provision new instance automatically
+VAST_API_KEY=xxx bun run vast:provision
+
+# Check current instance status
+VAST_API_KEY=xxx bun run vast:status
+
+# Destroy current instance
+VAST_API_KEY=xxx bun run vast:destroy
+```
+
 ### Database (Drizzle)
 
 Run from `packages/server/`:
