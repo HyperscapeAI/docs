@@ -27,8 +27,10 @@ This is a hard requirement. DO NOT:
 ### WebGPU Initialization
 - **Adapter Request Timeout**: 30s timeout on `navigator.gpu.requestAdapter()` to prevent indefinite hangs
 - **Renderer Init Timeout**: 60s timeout on `renderer.init()` to detect GPU driver issues
-- **Preflight Testing**: `testWebGpuInit()` runs on blank page before loading game content
+- **Preflight Testing**: `testWebGpuInit()` runs on localhost server (secure context) before loading game content
+- **Secure Context Requirement**: WebGPU requires HTTPS or localhost - about:blank is NOT a secure context
 - **GPU Diagnostics**: `captureGpuDiagnostics()` extracts chrome://gpu info for debugging
+- **Adapter Info Compatibility**: Falls back to direct adapter properties when `requestAdapterInfo()` unavailable (older Chromium)
 - Timeouts help diagnose misconfigured GPU servers where WebGPU initialization hangs
 
 ### macOS WebGPU Support
