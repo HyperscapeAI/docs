@@ -37,6 +37,21 @@ bun run duel --skip-stream
 bun run duel --verify
 ```
 
+## Production Client Build
+
+For faster page loads and to avoid browser timeout issues:
+
+- Set `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
+- Serves pre-built client via `vite preview` instead of dev server
+- Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
+- Significantly faster page loads for streaming (no on-demand module compilation)
+
+When using production client mode, build the client first:
+
+```bash
+cd packages/client && bun run build
+```
+
 ## Streaming Outputs
 
 Configure the following env vars (root `.env` or `packages/server/.env`):
