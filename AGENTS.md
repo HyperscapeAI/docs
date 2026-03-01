@@ -301,6 +301,36 @@ Recent commits addressed critical memory leaks across the codebase. All cleanup 
 - **Fix**: Add size limit (10k) with LRU pruning for lootedByCharacters Set
 - **Pattern**: Implement bounded collection with eviction policy
 
+#### GameTickProcessor (HIGH)
+- **Issue**: Event handlers not cleaned up on destroy
+- **Fix**: Store bound event handlers, cleanup in `destroy()` method
+- **Pattern**: Track handler references, remove on destroy
+
+#### TradingSystem (HIGH)
+- **Issue**: PLAYER_LEFT/LOGOUT/DIED event handlers never removed
+- **Fix**: Store bound handlers for player lifecycle events, cleanup in `destroy()`
+- **Pattern**: Track handler references, remove on destroy
+
+#### RTMPBridge (HIGH)
+- **Issue**: WebSocket server listeners not cleaned up on close
+- **Fix**: Call `removeAllListeners()` before closing WebSocket servers
+- **Pattern**: Clear all listeners before resource disposal
+
+#### ActionQueue (MEDIUM)
+- **Issue**: playerQueues Map never cleared
+- **Fix**: Add `destroy()` method to clear playerQueues
+- **Pattern**: Clear collections on destroy
+
+#### ScriptQueue (MEDIUM)
+- **Issue**: PlayerScriptQueue and NPCScriptQueue not cleaned up
+- **Fix**: Add `destroy()` methods to both queue classes
+- **Pattern**: Implement cleanup methods for queue management
+
+#### Shutdown Process (HIGH)
+- **Issue**: Rate limiters and idempotency service not destroyed on shutdown
+- **Fix**: Call `destroyAllRateLimiters()` and `destroyIdempotencyService()` in shutdown.ts
+- **Pattern**: Explicit cleanup of global services during shutdown
+
 ### Memory Management Best Practices
 
 When creating new systems or managers:
