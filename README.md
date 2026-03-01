@@ -216,7 +216,9 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
 
-## Deployment (Railway)
+## Deployment
+
+### Railway Deployment
 
 Railway deployment is set up for separate development and production targets:
 
@@ -226,6 +228,32 @@ Railway deployment is set up for separate development and production targets:
 For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps for `hyperscape.gg`), see:
 
 - `docs/railway-dev-prod.md`
+
+### Vast.ai GPU Streaming Deployment
+
+For GPU-accelerated streaming with WebGPU support, use the automated Vast.ai provisioner:
+
+```bash
+./scripts/vast-provision.sh
+```
+
+**What it does:**
+- Searches for GPU instances with `gpu_display_active=true` (REQUIRED for WebGPU)
+- Filters by reliability (95%+), GPU RAM (20GB+), and price (<$2/hr)
+- Automatically rents the best available instance
+- Waits for instance to be ready
+- Outputs SSH connection details and GitHub secret commands
+
+**Requirements:**
+- Install Vast.ai CLI: `pip install vastai`
+- Set API key: `vastai set api-key YOUR_API_KEY`
+- Get API key from: https://cloud.vast.ai/account/
+
+**After provisioning:**
+1. Update GitHub secrets with the provided commands
+2. Trigger deployment: `gh workflow run deploy-vast.yml`
+
+See `scripts/deploy-vast.sh` for the full deployment pipeline and WebGPU validation process.
 
 ## Native App Distribution
 
