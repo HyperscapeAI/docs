@@ -19,35 +19,17 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **Combat** | Tick-based OSRS mechanics (600ms ticks), attack styles, accuracy formulas, death/respawn system |
 | **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking + combat skills with XP/leveling |
 | **Economy** | 480-slot bank, shops, item weights, loot drops |
-| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode, dynamic combat escalation, gear progression, cooking |
+| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
-| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics, instanced rendering |
+| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
 
-## System Requirements
+## Quick Start
 
-### Browser Requirements (CRITICAL)
-
-**Hyperscape requires WebGPU. WebGL is NOT supported.**
-
-- **Chrome 113+** (recommended)
-- **Edge 113+**
-- **Safari 18+** (macOS 15+) - Note: Safari 17 is no longer supported
-- WebGPU must be available and working
-- Check your browser support at: [webgpureport.org](https://webgpureport.org)
-
-**Why WebGPU-Only?**
-- All materials use TSL (Three Shading Language) which requires WebGPU
-- Post-processing effects use TSL-based node materials
-- There is NO WebGL fallback - the game will not render without WebGPU
-
-### Development Requirements
-
+**Prerequisites:**
 - [Bun](https://bun.sh) (v1.1.38+)
 - [Git LFS](https://git-lfs.com) - `brew install git-lfs` (macOS) or `apt install git-lfs` (Linux)
 - Docker - [Docker Desktop](https://docker.com/products/docker-desktop) for macOS/Windows, or `apt install docker.io` on Linux
 - [Privy](https://privy.io) account (required for authentication)
-
-## Quick Start
 
 ```bash
 git clone https://github.com/HyperscapeAI/hyperscape.git
@@ -124,11 +106,13 @@ packages/
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation
+├── impostor/            # Impostor system for LOD
 ├── asset-forge/         # AI asset generation tools
+├── vast-keeper/         # Vast.ai instance management
 └── docs-site/           # Documentation (Docusaurus)
 ```
 
-Build order: `physx-js-webidl` → `shared` → everything else (handled automatically by Turbo)
+Build order: `physx-js-webidl` → `impostor` → `procgen` → `shared` → everything else (handled automatically by Turbo)
 
 ## Commands
 
@@ -160,14 +144,9 @@ bun run docs:dev      # Documentation site (port 3402)
 bun run dev:all       # Everything: game + AI + AssetForge
 ```
 
-### Docker services
+### Vast.ai Commands
 
-```bash
-bun run cdn:up        # Start CDN container (needed for bun start)
-bun run cdn:down      # Stop CDN container
-```
-
-### Vast.ai GPU Instance Management
+For GPU server deployment and streaming:
 
 ```bash
 # Search for WebGPU-capable instances
@@ -181,6 +160,23 @@ VAST_API_KEY=xxx bun run vast:status
 
 # Destroy current instance
 VAST_API_KEY=xxx bun run vast:destroy
+
+# Run vast-keeper monitoring service
+VAST_API_KEY=xxx bun run vast:keeper
+```
+
+The Vast.ai provisioner automatically:
+- Searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
+- Filters by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr), disk space (≥120GB)
+- Rents best available instance
+- Waits for instance to be ready
+- Outputs SSH connection details and GitHub secret commands
+
+### Docker services
+
+```bash
+bun run cdn:up        # Start CDN container (needed for bun start)
+bun run cdn:down      # Stop CDN container
 ```
 
 ### Database (Drizzle)
@@ -214,11 +210,10 @@ bun run assets:sync    # Pull latest assets from repo (local dev only)
 Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.privy.io).
 
 **Optional configuration** - see `.env.example` files for all options:
-- `packages/server/.env.example` - Database, ports, LiveKit voice chat, streaming
+- `packages/server/.env.example` - Database, ports, LiveKit voice chat
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
-- `.env.example` (root) - Streaming keys, Solana keys, GPU configuration
 
 ### Default Ports
 
@@ -232,9 +227,68 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
 
-## Deployment
+## Recent Improvements
 
-### Railway Deployment
+### Performance Optimizations
+
+**Movement System**:
+- Immediate move processing (eliminates 0-600ms latency)
+- Pathfinding rate limit raised from 5/sec to 15/sec
+- BFS iterations increased from 2000 to 8000 (~44 tile radius)
+- Path continuation for seamless long-distance movement
+- Skating fix with server-side pre-computation
+- Multi-click feel with optimistic target pivoting
+
+**Minimap Rendering**:
+- Async terrain generation (50×50 grid) runs off RAF callback
+- Zero RAF blocking - terrain generation in background macrotasks
+- Canvas rotation transform decouples regeneration from camera rotation
+- Reduced terrain sampling from 40,000 pixels to 2,500 (16× reduction)
+
+**GPU Resource Hygiene**:
+- Object pools for XPDropSystem and DuelCountdownSplatSystem
+- Proper destroy() methods for HealthBars and ProjectileRenderer
+- Machine ID caching and activity debouncing
+- Stale health bar sweep for despawned entities
+
+### Stability Improvements
+
+**Combat System**:
+- Combat retry timer aligned with tick system (3000ms = 5 ticks)
+- Phase timeout reduced from 30s to 10s
+- Combat stall nudge tracks last nudge timestamp
+- Damage event cache cleanup every tick, cap lowered to 1000
+
+**Agent System**:
+- LLM rate limiting with exponential backoff (5s base, max 60s)
+- Dynamic combat escalation (goblins → bandits → barbarians)
+- Combat style rotation (attack → strength → defense)
+- Cooking phase for immediate food preparation
+- Gear upgrade phase for smithing better equipment
+- Combat food threshold increased from 5 → 10
+
+**Memory Leak Fixes**:
+- 20+ critical memory leaks fixed across codebase
+- ModelCache geometry disposal
+- EventBridge listener cleanup
+- Proper destroy() methods for all systems
+- Session timeout (30-minute max)
+
+### Testing
+
+**E2E Journey Tests**:
+- Complete journey tests (login→loading→spawn→walk)
+- Screenshot comparison utilities
+- Loading screen detection helpers
+- Real browser testing with Playwright and WebGPU
+
+**Test Stability**:
+- GoldClob fuzz tests with 120s timeout
+- Precision fixes for gas cost calculations
+- Dynamic import timeout for service tests
+- Anchor test configuration using localnet
+
+## Deployment (Railway)
 
 Railway deployment is set up for separate development and production targets:
 
@@ -244,42 +298,6 @@ Railway deployment is set up for separate development and production targets:
 For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps for `hyperscape.gg`), see:
 
 - `docs/railway-dev-prod.md`
-
-### Vast.ai GPU Streaming Deployment
-
-For GPU-accelerated streaming with WebGPU support, use the automated Vast.ai provisioner:
-
-```bash
-./scripts/vast-provision.sh
-```
-
-**What it does:**
-- Searches for GPU instances with `gpu_display_active=true` (REQUIRED for WebGPU)
-- Filters by reliability (≥95%), GPU RAM (≥20GB), and price (≤$2/hr)
-- Automatically rents the best available instance
-- Waits for instance to be ready
-- Outputs SSH connection details and GitHub secret commands
-- Ensures only instances with NVIDIA display driver support are rented
-
-**Requirements:**
-- Install Vast.ai CLI: `pip install vastai`
-- Set API key: `vastai set api-key YOUR_API_KEY`
-- Get API key from: https://cloud.vast.ai/account/
-
-**After provisioning:**
-1. Update GitHub secrets with the provided commands
-2. Trigger deployment: `gh workflow run deploy-vast.yml`
-
-**Deployment Features:**
-- 6-stage WebGPU testing (headless-vulkan, headless-egl, xvfb-vulkan, ozone-headless, swiftshader, playwright-xvfb)
-- Early display driver checks (nvidia_drm kernel module, DRM device nodes)
-- GPU display mode validation via nvidia-smi
-- Vulkan ICD detection and diagnostics
-- Automatic fallback between GPU rendering modes
-- Production client build for faster page loads (eliminates Vite JIT compilation timeout)
-- Browser restart every 45 minutes to prevent WebGPU OOM crashes
-
-See `scripts/deploy-vast.sh` for the full deployment pipeline and WebGPU validation process.
 
 ## Native App Distribution
 
@@ -298,20 +316,6 @@ git push origin v1.0.0
 That tag triggers cross-platform native packaging and publishes installers to a GitHub Release.
 
 ## Troubleshooting
-
-**WebGPU not available:**
-Visit [webgpureport.org](https://webgpureport.org) to check if your browser supports WebGPU. If not:
-- Update to Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+)
-- Ensure graphics drivers are up to date
-- Check `chrome://gpu` to see GPU feature status
-- Note: Safari 17 is no longer supported - Safari 18+ (macOS 15+) is required
-
-**WebGPU initialization hangs or times out:**
-If the game loads but hangs on a black screen:
-- Check browser console for "WebGPU adapter request timed out" or "WebGPU renderer initialization timed out"
-- Try restarting your browser
-- Update graphics drivers
-- For server deployments, ensure NVIDIA GPU is accessible and Vulkan ICD is configured (see CLAUDE.md)
 
 **Characters vanishing / not appearing on character select:**
 This happens when Privy credentials are missing. Each page refresh creates a new anonymous user, orphaning your characters. Fix: Set `PUBLIC_PRIVY_APP_ID` in client `.env` and both `PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` in server `.env`.
@@ -361,94 +365,11 @@ bun run build
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
 
-## Recent Improvements
-
-### Stability & Performance (Feb 2026)
-
-#### Memory Management
-- **Critical Memory Leak Fixes**: Fixed 20+ memory leaks across the codebase
-  - **Client**: ModelCache GPU memory disposal, EventBridge listener cleanup, ClientLiveKit voices Map
-  - **Server**: GameTickProcessor, TradingSystem, RTMPBridge, ActionQueue, ScriptQueue
-  - **Agent System**: AgentManager, AutonomousBehaviorManager event handler cleanup
-  - **Entity System**: ColliderComponent, MobEntity, Socket proper resource cleanup
-  - **Game Systems**: AggroSystem bounded maps, StarterChestEntity LRU pruning
-  - **Shutdown Process**: Rate limiters and idempotency service cleanup
-- **Resource Bounds**: Activity logger queue (max 1000), damage event cache (max 1000), session timeout (30 min)
-- **E2E Journey Tests**: Complete login→loading→spawn→walk tests with screenshot comparison and loading screen detection
-
-#### Combat System
-- **Timing Improvements**: Combat retry timer aligned with tick system (3000ms = 5 ticks)
-- **Faster Failure Detection**: Phase timeout reduced from 30s to 10s
-- **Stall Recovery**: Re-nudging support when combat stalls again after cooldown
-- **Cache Optimization**: Damage event cleanup every tick, 75% eviction when cap exceeded
-
-#### AI Agent System
-- **Dynamic Combat Escalation**: Agents progress from goblins → bandits → barbarians as they level
-- **Combat Style Rotation**: Agents cycle attack → strength → defense (train lowest skill)
-- **Cooking Phase**: Agents cook raw food immediately instead of waiting for full inventory
-- **Gear Upgrade Phase**: Agents smith better equipment when they have materials + levels
-- **LLM Rate Limiting**: Exponential backoff (5s base, max 60s) with consecutive failure tracking
-- **Critical Crash Fix**: Fixed `weapon.toLowerCase is not a function` that broke ALL agents
-- **Quest Lifecycle**: Proper quest goal status change detection
-- **Dashboard Sync**: All agents show activity logs even when skipping LLM
-
-#### Streaming & WebGPU
-- **Production Client Build**: Vite preview mode for faster page loads (fixes 180s timeout)
-- **Multiple GPU Modes**: Xorg, Xvfb, headless-vulkan, headless-egl, ozone-headless, swiftshader
-- **macOS Support**: Auto-detects system Chrome, uses Metal backend (not Vulkan)
-- **6-Stage WebGPU Testing**: Comprehensive pre-deployment validation
-- **Browser Restart**: Every 45 minutes to prevent WebGPU OOM crashes
-- **Resolution Tracking**: Automatic viewport recovery on mismatch
-- **Improved Diagnostics**: GPU info extraction, preflight testing, timeout detection
-
-#### Client Performance
-- **GPU Memory Management**: Fixed memory leaks in XPDropSystem, DuelCountdownSplatSystem, HealthBars, ProjectileRenderer
-  - Object pooling for CanvasTexture/SpriteMaterial reuse
-  - Proper cleanup of setTimeout handles and event listeners
-  - Stale health bar sweep when entities are removed
-- **Movement Optimizations**: Eliminated per-frame allocations in TileInterpolator
-  - Pre-allocated position vectors, squared distance comparisons
-  - Single sqrt for both normalization and distance checks
-  - Push loops instead of array.map() to avoid intermediate allocations
-- **Minimap Rendering**: 16× faster terrain generation with async chunked sampling
-  - 50×50 grid sampling instead of per-pixel (40,000 → 2,500 calls)
-  - Async generation with setTimeout(0) yields - zero RAF blocking
-  - Canvas rotation transform for instant rotation (no regeneration)
-  - Canvas 2D terrain background (eliminates WebGPU context switching)
-  - Cached road/building data and canvas contexts
-- **State Management**: Debounced localStorage writes (500ms), cached machine ID generation
-  - World init/destroy race condition fix with two-flag handshake
-
-#### Movement System
-- **Immediate Move Processing**: Bypass ActionQueue for 0-latency move requests
-- **Pathfinding**: 15/sec rate limit (up from 5/sec), 8000 BFS iterations (up from 2000)
-- **Path Continuation**: Seamless long-distance movement beyond ~44-tile BFS radius
-  - Automatic re-pathfinding from new tile toward original destination
-  - Death/duel state guards, respawn/teleport destination clearing
-- **Skating Fix**: Server-side pre-computation + client-side path appending
-  - Next segment sent 1 tick early, path-append fast-path in TileInterpolator
-  - Max catch-up multiplier reduced from 4x to 2x
-- **Multi-Click**: Optimistic target pivoting, pending-move queue for rapid clicks
-
-#### Rendering Optimizations
-- **Instanced Rendering**: Optimized resource rendering with depleted model support
-  - Separate pools for normal and depleted states (tree → stump)
-  - Highlight mesh support for instanced entities
-  - `ResourceVisualStrategy.onDepleted()` now returns boolean
-- **Model Cache Integrity**: Preserves index buffer type (Uint16Array vs Uint32Array)
-  - Fixes silent geometry corruption and RangeError crashes
-  - Cache version bumped to 4
-
-#### Test Stability
-- **Timeout Increases**: GoldClob fuzz (120s), dynamic imports (60s), Playwright navigation (180s)
-- **Precision Fixes**: Larger amounts (10000n) to avoid gas cost precision issues
-- **Anchor Configuration**: Use localnet for tests (free SOL, no devnet funding required)
-
-See [CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md) for detailed technical documentation.
-
 ## More Info
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
+
+See [AGENTS.md](AGENTS.md) for AI coding assistant instructions and WebGPU streaming architecture.
 
 ## License
 
