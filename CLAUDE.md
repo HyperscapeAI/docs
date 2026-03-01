@@ -102,7 +102,7 @@ The streaming pipeline requires specific GPU setup:
    - Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
    - Significantly faster page loads for streaming (no on-demand module compilation)
 
-6. **Stream Capture Modes**:
+7. **Stream Capture Modes**:
    - **CDP (default)**: Chrome DevTools Protocol screencast - fastest, most reliable
    - **WebCodecs**: Native VideoEncoder API (experimental)
    - **MediaRecorder**: Legacy fallback mode
