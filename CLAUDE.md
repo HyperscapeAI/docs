@@ -67,7 +67,7 @@ The streaming pipeline requires specific GPU setup:
    - Deployment detects Xorg swrast software rendering and switches to alternative modes
    - Xvfb mode uses **non-headless Chrome** connecting to virtual display (WebGPU requires window context)
 
-2. **Audio Capture**:
+3. **Audio Capture**:
    - PulseAudio with `chrome_audio` virtual sink
    - FFmpeg captures from PulseAudio monitor (`chrome_audio.monitor`)
    - Configurable via `STREAM_AUDIO_ENABLED` and `PULSE_AUDIO_DEVICE`
