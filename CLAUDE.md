@@ -129,6 +129,21 @@ The streaming pipeline requires specific GPU setup:
    - Provides debugging info when WebGPU fails on remote GPU servers
    - 30s adapter timeout and 60s renderer init timeout prevent indefinite hangs
    - 6-stage WebGPU testing during deployment (headless-vulkan, headless-egl, xvfb-vulkan, ozone-headless, swiftshader, playwright-xvfb)
+   - **Verbose Chrome GPU Logging**: `--enable-logging=stderr --v=1` with `--vmodule` for GPU/Dawn/Vulkan debug output
+   - **In-Process GPU Test**: `--in-process-gpu` flag for clearer GPU error messages during diagnostics
+   - **XAUTHORITY Setup**: X11 authentication configured for container environments
+   - **Chrome Crash Dumps**: Crash dump directory checked for debugging GPU failures
+
+10. **Display Environment Reuse**:
+   - `duel-stack.mjs` checks if DISPLAY is already set before spawning new Xvfb
+   - Reuses existing display from `deploy-vast.sh` with proper Vulkan/VK_ICD config
+   - Prevents spawning new Xvfb (:100) that lacks Vulkan ICD configuration
+   - Ensures WebGPU works with properly configured display from deployment script
+
+11. **X Server Detection**:
+   - Uses socket check (`/tmp/.X11-unix/X99`) instead of `xdpyinfo` for X server detection
+   - More reliable and doesn't require additional packages
+   - Prevents false negatives when `xdpyinfo` is not installed
 
 See `scripts/deploy-vast.sh` for complete setup logic.
 
