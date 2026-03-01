@@ -809,6 +809,232 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
 
+## Memory Management
+
+### Critical Memory Leak Fixes
+
+Recent commits addressed critical memory leaks across the codebase. All cleanup follows the established patterns in SystemBase for proper resource cleanup.
+
+#### Memory Management Best Practices
+
+When creating new systems or managers:
+
+1. **Track All Resources**: Store references to intervals, listeners, handlers
+2. **Implement Cleanup**: Add `destroy()`, `shutdown()`, or `stop()` methods
+3. **Follow SystemBase Pattern**: Use the same cleanup patterns as SystemBase
+4. **Clean Up on Hot Reload**: Ensure resources are released during development
+5. **Test for Leaks**: Monitor memory usage during long-running sessions
+
+Example cleanup pattern:
+```typescript
+class MySystem {
+  private listeners: Array<() => void> = [];
+  private intervals: NodeJS.Timeout[] = [];
+
+  init() {
+    const listener = world.on('event', this.handleEvent);
+    this.listeners.push(listener);
+    
+    const interval = setInterval(this.tick, 1000);
+    this.intervals.push(interval);
+  }
+
+  destroy() {
+    // Clean up listeners
+    this.listeners.forEach(remove => remove());
+    this.listeners = [];
+    
+    // Clear intervals
+    this.intervals.forEach(clearInterval);
+    this.intervals = [];
+  }
+}
+```
+
+#### Known Memory Leak Patterns Fixed
+
+**CRITICAL:**
+- **ModelCache**: GPU memory leaks when cache is cleared - Add geometry disposal on `clear()` and `remove()` methods
+- **Index Buffer Type Preservation**: Model cache now preserves original index buffer type (Uint16Array vs Uint32Array) to prevent silent geometry corruption
+
+**HIGH:**
+- **EventBridge**: 50+ world event listeners never removed - Add `destroy()` method to clean up all registered listeners
+- **AgentManager**: COMBAT_DAMAGE_DEALT listener never removed - Store and cleanup listener in `shutdown()` method
+- **AutonomousBehaviorManager**: Event handlers not cleaned up - Store and cleanup event handlers in `stop()` method
+- **GameTickProcessor**: Event handlers not cleaned up - Store bound event handlers, cleanup in `destroy()` method
+- **TradingSystem**: PLAYER_LEFT/LOGOUT/DIED event handlers never removed - Store bound handlers, cleanup in `destroy()`
+- **RTMPBridge**: WebSocket server listeners not cleaned up - Call `removeAllListeners()` before closing WebSocket servers
+
+**MEDIUM:**
+- **Logger**: Cleanup interval not stored - Store cleanup interval in instance variable, add `destroy()` method
+- **PlayerTokenManager**: Heartbeat interval continues after logout - Add `stopHeartbeat()` method, call on logout/clear
+- **Connection Handler**: Error handler not cleaned up - Track and cleanup error handler during auth cleanup
+- **DuelBot**: World event handlers not cleaned up - Track `world.on()` handlers and clean them up on disconnect
+- **ColliderComponent**: Collision event handlers never unsubscribed - Track handlers and unsubscribe in `destroy()`
+- **MobEntity**: PLAYER_SET_DEAD listener never removed - Track listener and remove on destroy
+- **Socket**: WebSocket event handlers not cleaned up - Track handlers and clean up in `disconnect()`
+- **ClientLiveKit**: Voices Map and room listeners not cleaned up - Properly clean up in `destroy()`
+- **AggroSystem**: playerSkills, combatLevelCache, and aggro maps growing unboundedly - Clean up on player disconnect
+- **StarterChestEntity**: lootedByCharacters Set growing unboundedly - Add size limit (10k) with LRU pruning
+- **ActionQueue**: playerQueues Map never cleared - Add `destroy()` method to clear playerQueues
+- **ScriptQueue**: PlayerScriptQueue and NPCScriptQueue not cleaned up - Add `destroy()` methods to both queue classes
+
+**Shutdown Process:**
+- Rate limiters and idempotency service not destroyed - Call `destroyAllRateLimiters()` and `destroyIdempotencyService()` in shutdown.ts
+
+### Client Performance Optimizations
+
+#### GPU Resource Management
+- **XPDropSystem**: Object pool for CanvasTexture/SpriteMaterial reuse instead of per-drop allocation
+- **DuelCountdownSplatSystem**: Pre-render count textures once; pool sprite/material pairs
+- **HealthBars**: Add destroy() to clear hideTimeout handles and dispose InstancedMesh/texture/geometry
+- **ProjectileRenderer**: Track pending setTimeout handles in a Set; cancel all on destroy()
+- **PlayerTokenManager**: Named beforeUnloadHandler property enables proper removeEventListener on dispose()
+- **EmbeddedGameClient**: Guard async state updates with cancelled flag to prevent setState on unmounted component
+- **ThreeResourceManager**: Add teardown() to stop dev monitor interval and reset WeakSet on hot-reload
+- **GameClient**: Call ThreeResourceManager.teardown() in useEffect cleanup after world.destroy()
+
+#### Per-Frame Allocation Elimination
+- **TileInterpolator**: Use pre-allocated `_destWorldPos` instead of `tileToWorld()` which allocates {x,y,z} each frame
+- **TileInterpolator**: Replace sqrt in backward-tile-skip with squared distance comparison
+- **TileInterpolator**: Defer sqrt in arrival check - compute distSq first, only sqrt when arriving
+- **TileInterpolator**: Reuse distSq for normalize via divideScalar(sqrt(distSq))
+- **TileInterpolator**: Replace path.map() with push loop to avoid intermediate array allocation
+- **ProjectileRenderer**: Use lengthSq() for hit check + single sqrt for both normalization and fade
+
+#### Performance Monitoring
+- **generateMachineId()**: Cache result in `_cachedMachineId` - browser fingerprint is session-stable
+- **updateActivity()**: Debounce the saveSession() localStorage write to 500ms
+- **endSession()**: Flush any pending debounced write before marking session inactive
+- **dispose()**: Cancel the debounce timer to prevent post-teardown write
+
+### Movement System Improvements
+
+#### Path Continuation for Long-Distance Movement
+- **requestedDestination** and **lastPathPartial** fields added to TileMovementState
+- When a partial BFS path ends (iteration limit reached), `onTick` calls `_continuePathToDestination()`
+- Re-pathfinds from new tile toward original click target
+- Suppresses tileMovementEnd packet while segments continue for uninterrupted client animation
+- Eliminates premature stopping on clicks beyond ~44-tile BFS radius
+
+#### Rate Limiting and BFS Improvements
+- **Pathfind Rate Limiter**: Raised from 5/sec to 15/sec (aligned with tile movement limiter)
+- **MAX_BFS_ITERATIONS**: Raised from 2000 to 8000 (~22-tile → ~44-tile reliable radius)
+- **ActionQueue Bypass**: moveRequest bypasses ActionQueue for immediate processing (0-600ms latency eliminated)
+
+#### Skating Fix (Server-Side Pre-computation + Client-Side Path Appending)
+- **nextSegmentPrecomputed** flag added to TileMovementState
+- Look-ahead block in onTick/processPlayerTick sends next segment 1 tick early via `_precomputeAndSendNextSegment`
+- Clears RTT/2 idle gap that caused stop-then-lurch at segment boundaries
+- **isContinuation** flag added to tileMovementStart packet type
+- **TileInterpolator**: Path-append fast-path when isContinuation=true keeps entity walking continuously
+- Max catch-up multiplier reduced from 4x to 2x for smoother sync
+
+#### Multi-Click Improvements
+- **setOptimisticTarget()**: Immediately pivot character toward newly clicked destination without server round-trip
+- **_sendMoveRequest/pending-move queue**: Last click in rapid burst always reaches server even within 67ms rate-limit window
+
+### Minimap Rendering Improvements
+
+#### Canvas 2D Terrain Background (Replaced Second WebGPU Renderer)
+- Removed second WebGPURenderer that caused constant shader recompilation
+- Removed THREE.TSL normal-attribute warnings and GPUDevice.createBindGroup errors
+- Height-sampled ImageData using TerrainSystem.getHeightAt() with height-to-color mapping
+- Terrain cache regenerates only when player moves >20 world units or zoom changes
+
+#### Async Chunked Terrain Generation
+- **generateTerrainChunked()**: Module-level async function builds 50×50 terrain OffscreenCanvas
+- Yields to browser via setTimeout(0) every 10 rows (5 yield points per full generation)
+- Each chunk (500 getHeightAt calls) runs as separate macrotask
+- Zero RAF blocking - browser rendering pipeline presents frames between chunks
+- **terrainGenVersionRef**: Monotonically-incrementing token cancels in-flight generation
+- Only generation whose version still matches on completion writes to terrainOffscreenRef
+
+#### Rotation via Canvas Transform
+- Terrain only regenerates when PLAYER MOVES or ZOOM changes (not on rotation)
+- Rotation handled by single canvas rotation transform (translate→rotate(+deltaYaw)→translate-back)
+- **TERRAIN_OVERSHOOT** (√2 × 1.1 ≈ 1.555×) ensures canvas corners stay filled at any rotation angle
+- **terrainCacheUpRef** stores cam.up.x/z when terrain cache is generated
+- All worldToPx calls use snapshot values (overlayCenterX/Z, overlayExtent, overlayUpX/Z)
+
+#### Road and Building Overlays
+- Draw road paths from RoadNetworkSystem.getRoads as tan/beige vector strokes
+- Draw building footprints from TownSystem.getTowns as rotated rectangles
+- Correctly account for both building.rotation and camera up vector
+- Cache road and building data lazily (never changes after world init)
+- Cache 2D canvas contexts in refs (mainCtxRef/overlayCtxRef)
+
+#### Performance Optimizations
+- Reduce terrain sampling from W×H pixels to 50×50 grid (16× faster)
+- Cache performance.now() once per frame
+- Reuse terrain cache center object instead of allocating {x,z} each time
+- Replace entity.serialize() with direct entity.data access in InterpolationEngine hot loop
+
+### Agent System Improvements
+
+#### Dynamic Combat Escalation
+- **Monster Escalation**: Agents progress from goblins → bandits → barbarians as combat level grows
+- **Combat Style Rotation**: Agents cycle attack → strength → defense (train lowest skill)
+- **Combat Food Threshold**: Increased from 5 → 10 for better survival
+
+#### Gear and Resource Progression
+- **Cooking Phase**: Agents cook raw food immediately instead of waiting for full inventory
+- **Gear Upgrade Phase**: Agents smith better equipment when they have materials + levels
+- **World Data Manifest Loading**: Monster tiers and gear tiers loaded from world-data
+
+#### Stability Fixes
+- **Critical Crash Fix**: Fixed `weapon.toLowerCase is not a function` crash in getEquippedWeaponTier that broke ALL agents every tick
+- **LLM Error Fallback**: Idle + retry when agent has active goal instead of derailing to explore
+- **Short-Circuit Dashboard Sync**: All agents show activity logs even when skipping LLM
+- **Quest Goal Detection**: Added quest goal status change detection for proper quest lifecycle transitions
+- **LLM Rate Limiting**: Exponential backoff for API calls (5s base, max 60s)
+- **Consecutive Failure Tracking**: Resets on successful tick
+
+### Duel System Stability
+
+#### Combat Timing Improvements
+- **Combat Retry Timer**: Aligned with tick system (3000ms = 5 ticks) for consistent timing
+- **Phase Timeout**: Reduced grace periods from 30s to 10s for faster failure detection
+- **Combat Stall Nudge**: Tracks last nudge timestamp instead of cycle ID to allow re-nudging when combat stalls again
+
+#### Resource Management
+- **Damage Event Cache**: Cleanup every tick (was every 2 ticks), cap lowered from 5000 to 1000, evict 75% when exceeded
+- **Activity Logger Queue**: Max size 1000 with 25% eviction to prevent memory pressure
+- **Session Timeout**: 30-minute max via MAX_SESSION_TICKS for zombie session cleanup
+- **SessionCloseReason**: Added "timeout" to type for proper session termination tracking
+
+### Streaming Pipeline Stability
+
+#### Health Check and Buffer Management
+- Fix health check vs data timeout mismatch (5s/15s instead of 10s/30s)
+- Lower buffer multiplier from 4x to 2x (reduces backpressure buildup)
+- Fix CDP session handler cleanup on recovery (recovery mode flag prevents double-handling)
+
+#### Browser Restart and Encoding
+- **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
+- **Stream Encoding Optimization**:
+  - Default: `film` tune with B-frames for better compression
+  - Set `STREAM_LOW_LATENCY=true` for `zerolatency` tune (faster playback start)
+  - Configurable GOP size via `STREAM_GOP_SIZE` (default: 60 frames)
+  - 2x bitrate buffer multiplier (reduced from 4x to prevent backpressure buildup)
+  - Audio buffering with `thread_queue_size=1024` and async resampling
+  - Health check timeout: 5s (data timeout: 15s) for faster failure detection
+  - Resolution tracking and mismatch detection with automatic viewport recovery
+
+### Test Stability Improvements
+
+#### Timeout and Precision Fixes
+- **GoldClob Fuzz Tests**: 120s timeout for randomized invariant tests (4 seeds × 140 operations)
+- **Precision Fixes**: Use larger amounts (10000n) to avoid gas cost precision issues
+- **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
+- **Anchor Test Configuration**: Use localnet instead of devnet for free SOL in `anchor test`
+
+#### E2E Journey Tests
+- **Complete Journey Tests**: Full login→loading→spawn→walk gameplay tests in `complete-journey.spec.ts`
+- **Screenshot Comparison**: Utilities to verify game is rendering correctly
+- **Loading Screen Detection**: `waitForLoadingScreenHidden` helper for reliable test synchronization
+- **Real Browser Testing**: Uses Playwright with actual WebGPU rendering (no mocks)
+
 ## Troubleshooting
 
 ### Build Issues
