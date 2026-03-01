@@ -171,6 +171,62 @@ export const CARDINAL_DIRECTIONS = [
 
 ---
 
+## Performance Improvements (February 2026)
+
+<CardGroup cols={2}>
+  <Card title="Immediate Move Processing" icon="zap">
+    Bypasses ActionQueue for instant response to player clicks (eliminates 0-600ms latency)
+  </Card>
+  <Card title="Pathfinding Rate Limit" icon="gauge">
+    Raised from 5/sec to 15/sec to match tile movement limiter
+  </Card>
+  <Card title="BFS Iterations" icon="expand">
+    Increased from 2000 to 8000 (~44 tile radius vs ~22 tile)
+  </Card>
+  <Card title="Path Continuation" icon="arrows-split-up-and-left">
+    Seamless long-distance movement with automatic re-pathfinding when BFS limit reached
+  </Card>
+</CardGroup>
+
+**Skating Fix**: Server-side pre-computation + client-side path appending eliminates stop-lurch at segment boundaries
+
+**Multi-Click Feel**: Optimistic target pivoting + pending move queue ensures last click always reaches server
+
+**Per-Frame Allocation Elimination**: Pre-allocated buffers and squared distance comparisons in hot paths
+
+### Path Continuation for Long-Distance Movement
+
+When a click exceeds the BFS iteration limit (~44 tiles), the system automatically continues pathfinding. New fields added to `TileMovementState`:
+
+```typescript
+// NEW fields added February 2026
+requestedDestination: TileCoord | null;  // Original click target
+lastPathPartial: boolean;                // True if last BFS hit iteration limit
+nextSegmentPrecomputed: boolean;         // True if next segment already sent
+```
+
+**How It Works**:
+
+<Steps>
+  <Step title="Initial Click">
+    Player clicks far destination (60 tiles away). BFS runs for 8000 iterations, finds partial path to tile 44. Sets `requestedDestination = (60, 60)` and `lastPathPartial = true`
+  </Step>
+  
+  <Step title="Path Continuation">
+    When player reaches end of partial path, system automatically re-pathfinds from tile 44 toward original destination (60, 60). Finds next segment (tiles 44-88 or until destination). Continues until destination reached or unreachable.
+  </Step>
+  
+  <Step title="Seamless Movement">
+    Client receives `isContinuation: true` flag and appends new path without resetting interpolator. No stop-lurch at segment boundaries.
+  </Step>
+</Steps>
+
+**Server-Side Pre-Computation**: Sends next segment 1 tick early to eliminate RTT/2 idle gap at segment boundaries.
+
+**Client-Side Path Appending**: Appends new path segments without resetting interpolator for continuous movement.
+
+---
+
 ## Pathfinding
 
 ### BFS Pathfinder (OSRS "Smartpathing")
