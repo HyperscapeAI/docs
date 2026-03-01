@@ -155,6 +155,13 @@ The streaming pipeline requires specific GPU setup:
    - More reliable and doesn't require additional packages
    - Prevents false negatives when `xdpyinfo` is not installed
 
+13. **Chrome Flag Consolidation**:
+   - Consolidate multiple `--enable-features` flags into single comma-separated flag
+   - Add `isSecureContext` check to understand WebGPU availability
+   - Add `hasGpuProperty` check to distinguish undefined vs falsy navigator.gpu
+   - Add Dawn swiftshader backend for SwiftShader mode
+   - Print navigator GPU-related properties for debugging
+
 See `scripts/deploy-vast.sh` for complete setup logic.
 
 ## Project Overview
