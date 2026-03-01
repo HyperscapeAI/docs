@@ -306,6 +306,87 @@ Upload assets to S3, R2, or similar:
 
 Hyperscape deploys to Vast.ai for GPU-accelerated streaming with automated CI/CD via GitHub Actions.
 
+### Automated Instance Provisioning (NEW)
+
+The `scripts/vast-provision.sh` script automatically finds and rents GPU instances with display driver support:
+
+<Steps>
+  <Step title="Install Vast.ai CLI">
+    ```bash
+    pip install vastai
+    vastai set api-key YOUR_API_KEY
+    ```
+  </Step>
+  
+  <Step title="Run Provisioner">
+    ```bash
+    ./scripts/vast-provision.sh
+    ```
+    
+    The script will:
+    - Search for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
+    - Filter by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr)
+    - Show top 5 available instances
+    - Automatically rent the best instance
+    - Wait for instance to be ready
+    - Output SSH connection details
+  </Step>
+  
+  <Step title="Update GitHub Secrets">
+    ```bash
+    gh secret set VAST_HOST --body '<ssh-host>'
+    gh secret set VAST_PORT --body '<ssh-port>'
+    ```
+  </Step>
+  
+  <Step title="Trigger Deployment">
+    ```bash
+    gh workflow run deploy-vast.yml
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  **CRITICAL**: Only rent instances with `gpu_display_active=true`. Compute-only GPUs cannot run WebGPU streaming.
+</Warning>
+
+**Configuration Options:**
+
+Edit `scripts/vast-provision.sh` to customize search criteria:
+
+```bash
+MIN_GPU_RAM=20          # GB - RTX 4090 has 24GB
+MIN_RELIABILITY=0.95    # 95% uptime
+MAX_PRICE_PER_HOUR=2.0  # USD per hour
+PREFERRED_GPUS="RTX_4090,RTX_3090,RTX_A6000,A100"
+DISK_SPACE=100          # GB minimum
+```
+
+**Output:**
+
+```bash
+═══════════════════════════════════════════════════════════════════
+Instance provisioned successfully!
+═══════════════════════════════════════════════════════════════════
+
+Instance Details:
+  Instance ID: 12345678
+  GPU: RTX 4090 (24 GB)
+  Display Driver: ENABLED ✓
+  SSH Host: ssh.vast.ai
+  SSH Port: 35022
+  Public IP: 1.2.3.4
+
+SSH Connection:
+  ssh -p 35022 root@ssh.vast.ai
+
+Update GitHub Secrets:
+  VAST_HOST=ssh.vast.ai
+  VAST_PORT=35022
+```
+
+### Automated Deployment
+
 ### Automated Deployment
 
 The `.github/workflows/deploy-vast.yml` workflow automatically deploys to Vast.ai on push to main:
