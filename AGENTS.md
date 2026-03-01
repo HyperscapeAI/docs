@@ -173,6 +173,11 @@ The streaming pipeline requires specific GPU setup:
    - Detect crash loops and dump error logs automatically
    - Helps debug streaming failures in production deployments
 
+15. **Stream-to-RTMP Readiness Probe**:
+   - Readiness probe text must match exactly between deployment script and rtmp-bridge
+   - Probe checks for "Stream-to-RTMP bridge is ready" message
+   - Ensures streaming bridge is fully initialized before marking deployment successful
+
 See `scripts/deploy-vast.sh` for complete setup logic.
 
 ## Project Overview
