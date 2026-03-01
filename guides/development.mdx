@@ -223,11 +223,75 @@ bun run cdn:down    # Stop CDN container
 ```bash
 npm test                              # Run all tests
 npm test --workspace=packages/server  # Test specific package
+npm test --workspace=packages/client  # Client E2E tests
 ```
 
 <Warning>
   Tests use real Hyperscape instances with Playwright—no mocks allowed. The server must not be running before tests.
 </Warning>
+
+### E2E Journey Tests (NEW - February 2026)
+
+Comprehensive end-to-end tests validate the complete player journey from login to gameplay:
+
+**Test File**: `packages/client/tests/e2e/complete-journey.spec.ts`
+
+<Steps>
+  <Step title="Login Flow">
+    Full authentication and character selection
+  </Step>
+  <Step title="Loading Screen">
+    Uses `waitForLoadingScreenHidden` helper for reliable test synchronization
+  </Step>
+  <Step title="Spawn">
+    Character spawns in world with proper initialization
+  </Step>
+  <Step title="Walk">
+    Movement and pathfinding validation
+  </Step>
+  <Step title="Screenshot Comparison">
+    Utilities to verify game is rendering correctly
+  </Step>
+</Steps>
+
+**Key Features**:
+- **Real Browser Testing**: Uses Playwright with actual WebGPU rendering (no mocks)
+- **Screenshot Comparison**: Visual regression testing to verify rendering
+- **Loading Screen Detection**: Reliable synchronization helpers
+- **Full Gameplay Flow**: Tests complete user journey, not isolated features
+
+**Test Utilities**:
+
+```typescript
+// From packages/client/tests/e2e/utils/visualTesting.ts
+
+// Wait for loading screen to disappear
+await waitForLoadingScreenHidden(page);
+
+// Take screenshot for comparison
+await page.screenshot({ path: 'test-output/gameplay.png' });
+
+// Verify game is rendering (not black screen)
+const isRendering = await verifyGameRendering(page);
+expect(isRendering).toBe(true);
+```
+
+**Running Journey Tests**:
+
+```bash
+cd packages/client
+npm test -- complete-journey.spec.ts
+```
+
+### Test Stability Improvements
+
+Recent commits improved test reliability:
+
+- **GoldClob Fuzz Tests**: 120s timeout for randomized invariant tests (4 seeds × 140 operations)
+- **Precision Fixes**: Use larger amounts (10000n) to avoid gas cost precision issues
+- **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
+- **Anchor Test Configuration**: Use localnet instead of devnet for free SOL in `anchor test`
+- **CI Build Order**: Build impostors/procgen before shared (dependency fix)
 
 ## Linting
 
