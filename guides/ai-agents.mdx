@@ -274,6 +274,60 @@ await service.closeBank();
 - `bankWithdraw(itemId, quantity)` - Withdraw items
 - `closeBank()` - End bank session
 
+## Critical Stability Fixes (Feb 28 2026)
+
+### Critical Crash Fix
+
+<Warning>
+  **CRITICAL**: Fixed `weapon.toLowerCase is not a function` crash in `getEquippedWeaponTier` that broke **ALL agents every tick**
+</Warning>
+
+**Root Cause**: Weapon could be an object instead of string
+
+**Fix**: Added type guard and proper string extraction
+
+```typescript
+// Before (crashed)
+const weaponTier = weapon.toLowerCase();
+
+// After (safe)
+const weaponString = typeof weapon === 'string' ? weapon : weapon?.itemId || '';
+const weaponTier = weaponString.toLowerCase();
+```
+
+**Impact**: Agents can now run without crashing every tick
+
+### LLM Error Fallback
+
+**Old Behavior**: Agents derailed to explore on LLM errors
+
+**New Behavior**: Idle + retry when agent has active goal
+
+```typescript
+// On LLM error
+if (currentGoal) {
+  return idleAction;  // Keep goal, retry next tick
+} else {
+  return exploreAction;  // No goal, explore
+}
+```
+
+**Impact**: Agents maintain goal focus through temporary LLM failures
+
+### Quest Goal Detection
+
+Added quest goal status change detection for proper quest lifecycle transitions:
+
+```typescript
+// Detect when quest objectives are completed
+if (questStatus === 'in_progress' && allObjectivesComplete) {
+  // Trigger quest completion
+  return completeQuestAction;
+}
+```
+
+**Impact**: Agents now properly detect when quest objectives are completed
+
 ## Agent Progression System (Feb 28 2026)
 
 ### Dynamic Combat Escalation
