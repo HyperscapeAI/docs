@@ -72,6 +72,9 @@ The streaming pipeline requires specific GPU setup:
 
 4. **Deployment Validation**:
    - Script verifies NVIDIA GPU is accessible via `nvidia-smi`
+   - **Early Display Driver Check**: Checks nvidia_drm kernel module and DRM device nodes (/dev/dri/)
+   - **GPU Display Mode Query**: Queries GPU display_mode via nvidia-smi to verify display driver support
+   - **Guidance on Failure**: Provides clear guidance to rent instances with `gpu_display_active=true` on Vast.ai
    - Checks Vulkan ICD availability at `/usr/share/vulkan/icd.d/nvidia_icd.json`
    - Logs actual ICD content and VK_LOADER_DEBUG output for diagnostics
    - Ensures display server (Xorg/Xvfb) is running and accessible
