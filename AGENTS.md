@@ -162,6 +162,12 @@ The streaming pipeline requires specific GPU setup:
    - Add Dawn swiftshader backend for SwiftShader mode
    - Print navigator GPU-related properties for debugging
 
+14. **PM2 Log Capture**:
+   - Wait 60s for streaming bridge to initialize after PM2 start
+   - Capture PM2 logs to diagnose streaming issues
+   - Detect crash loops and dump error logs automatically
+   - Helps debug streaming failures in production deployments
+
 See `scripts/deploy-vast.sh` for complete setup logic.
 
 ## Project Overview
