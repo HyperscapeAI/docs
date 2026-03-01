@@ -22,6 +22,8 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 - Edge 113+
 - Safari 18+ (macOS 15+)
 - Firefox (behind flag, not recommended)
+- Check: [webgpureport.org](https://webgpureport.org)
+- Note: Safari 17 support was removed - Safari 18+ (macOS 15+) is now required
 
 ### Server/Streaming Requirements
 For Vast.ai and other GPU servers running the streaming pipeline:
@@ -183,7 +185,7 @@ packages/
 4. **shared** - Depends on physx-js-webidl, impostor, procgen
 5. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
 
 > **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
 >
@@ -210,7 +212,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -276,7 +278,7 @@ Visual testing uses colored cube proxies:
 
 ### Production Code Only
 
-- No TODOs or \"will fill this out later\" - implement completely
+- No TODOs or "will fill this out later" - implement completely
 - No hardcoded data - use JSON files and general systems
 - No shortcuts or workarounds - fix root causes
 - Build toward the general case (many items, players, mobs)
@@ -468,6 +470,8 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Cooking Phase**: Agents cook raw food immediately
 - **Gear Upgrade Phase**: Agents smith better equipment
 - **Combat Food Threshold**: Increased from 5 → 10
+- **Critical Crash Fix**: Fixed `weapon.toLowerCase is not a function` crash in getEquippedWeaponTier
+- **Quest Goal Detection**: Added quest goal status change detection
 
 #### Resource Management
 - **Activity Logger Queue**: Max size 1000 with 25% eviction
