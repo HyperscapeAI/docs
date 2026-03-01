@@ -127,6 +127,10 @@ The streaming pipeline requires specific GPU setup:
    - Provides debugging info when WebGPU fails on remote GPU servers
    - 30s adapter timeout and 60s renderer init timeout prevent indefinite hangs
    - 6-stage WebGPU testing during deployment (headless-vulkan, headless-egl, xvfb-vulkan, ozone-headless, swiftshader, playwright-xvfb)
+   - **Verbose Chrome GPU Logging**: `--enable-logging=stderr --v=1` with `--vmodule` for GPU/Dawn/Vulkan debug output
+   - **In-Process GPU Test**: `--in-process-gpu` flag for clearer GPU error messages during diagnostics
+   - **XAUTHORITY Setup**: X11 authentication configured for container environments
+   - **Chrome Crash Dumps**: Crash dump directory checked for debugging GPU failures
 
 10. **Vast.ai CLI Provisioner**:
    - Automated provisioner script: `./scripts/vast-provision.sh`
@@ -138,6 +142,7 @@ The streaming pipeline requires specific GPU setup:
    - Ensures only instances with NVIDIA display driver support are rented
    - **Requirements**: Vast.ai CLI (`pip install vastai`), API key configured (`vastai set api-key`)
    - **Usage**: `./scripts/vast-provision.sh`
+   - **Disk Space**: 120GB minimum for builds and assets
 
 11. **Display Environment Reuse**:
    - `duel-stack.mjs` checks if DISPLAY is already set before spawning new Xvfb
@@ -168,7 +173,7 @@ Hyperscape is a RuneScape-style MMORPG built on Three.js WebGPURenderer with TSL
 
 - Runtime: Bun v1.1.38+
 - Rendering: WebGPU ONLY (Three.js WebGPURenderer + TSL)
-- Engine: Three.js 0.180.0, PhysX (WASM)
+- Engine: Three.js 0.182.0, PhysX (WASM)
 - UI: React 19.2.0
 - Server: Fastify, WebSockets
 - Database: PostgreSQL (production), Docker (local)
