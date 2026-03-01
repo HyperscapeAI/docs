@@ -435,6 +435,95 @@ class MySystem {
 }
 ```
 
+## Client Performance Optimizations
+
+### GPU Memory Management
+Recent fixes eliminate GPU memory leaks in client rendering systems:
+
+- **XPDropSystem**: Object pool for CanvasTexture/SpriteMaterial reuse instead of per-drop allocation
+  - Warn to console when sprite pool is exhausted for POOL_SIZE tuning visibility
+  - Proper cleanup of XP_DROP_RECEIVED listener in `destroy()` method
+- **DuelCountdownSplatSystem**: Pre-render count textures once; pool sprite/material pairs
+- **HealthBars**: Add `destroy()` to clear hideTimeout handles and dispose InstancedMesh/texture/geometry
+  - Sweep stale health bar handles when entities are removed (reverse iteration for swap-with-last safety)
+- **ProjectileRenderer**: Track pending setTimeout handles in a Set; cancel all on `destroy()`
+  - Static `_instanceCount` reference counter ensures shared CircleGeometry is only disposed when last renderer instance tears down
+  - Use `lengthSq()` for hit check + single sqrt for both normalization and fade (saves one sqrt per projectile/frame)
+- **ThreeResourceManager**: Add `teardown()` to stop dev monitor interval and reset WeakSet on hot-reload
+  - Called in GameClient useEffect cleanup after `world.destroy()`
+
+### Client State Management
+- **PlayerTokenManager**: Named `beforeUnloadHandler` property enables proper `removeEventListener` on `dispose()`
+  - Call `dispose()` in index.tsx cleanup so beforeunload listener is actually removed
+  - Debounce `saveSession()` localStorage write to 500ms (was synchronous on every user interaction)
+  - Flush pending debounced write before marking session inactive in `endSession()`
+  - Cancel debounce timer in `dispose()` to prevent post-teardown write
+  - Cache `generateMachineId()` result in `_cachedMachineId` (browser fingerprint is session-stable)
+- **EmbeddedGameClient**: Guard async state updates with cancelled flag to prevent setState on unmounted component
+- **World Initialization**: Two-flag handshake prevents `world.destroy()` from racing `world.init()` mid-await
+  - `initComplete`: set to true after init() resolves (even on failure, to allow cleanup of partial resources)
+  - `needsCleanup`: set to true if cleanup fires before init() finishes
+  - Cleanup callback defers destruction to init() when it arrives late; init() defers to cleanup() when pre-empted
+
+### Movement System Improvements
+- **Immediate Move Processing**: Bypass ActionQueue for move requests (player input event, not game-state mutation)
+  - Walking still advances on 600ms tick schedule via `onTick()`
+  - Eliminates 0-600ms latency between click and `tileMovementStart` broadcast
+- **Pathfinding Rate Limit**: Raised from 5/sec to 15/sec (aligned with tile movement limiter)
+- **BFS Iteration Limit**: Raised from 2000 to 8000 iterations (~22-tile → ~44-tile reliable radius)
+- **Path Continuation**: Seamless long-distance movement beyond BFS radius
+  - `requestedDestination` and `lastPathPartial` fields in TileMovementState
+  - When partial BFS path ends, `onTick` calls `_continuePathToDestination()` to re-pathfind from new tile
+  - `tileMovementEnd` packet suppressed while segments continue for uninterrupted client animation
+  - Death-state and duel-state guards prevent movement packets to dead/frozen players mid-continuation
+  - Clear `requestedDestination` + `lastPathPartial` on respawn/teleport to prevent cancelled destination re-pathfinding
+- **Long-Distance Skating Fix**: Server-side pre-computation + client-side path appending
+  - `nextSegmentPrecomputed` flag in TileMovementState
+  - Look-ahead block sends next segment 1 tick early via `_precomputeAndSendNextSegment`
+  - `isContinuation` flag in `tileMovementStart` packet triggers path-append fast-path in TileInterpolator
+  - No interpolator reset, no catch-up spike - continuous walking across segment boundaries
+  - Max catch-up multiplier reduced from 4x to 2x for smoother sync
+- **Multi-Click Improvements**:
+  - `setOptimisticTarget()` immediately pivots character toward newly clicked destination (no server round-trip)
+  - Pending-move queue ensures last click in rapid burst always reaches server within 67ms rate-limit window
+
+### Movement Performance
+Per-frame allocation elimination in TileInterpolator hot paths:
+- Use pre-allocated `_destWorldPos` instead of `tileToWorld()` which allocates `{x,y,z}` each frame per entity
+- Replace sqrt in backward-tile-skip with squared distance comparison (TILE_SKIP_THRESHOLD_SQ)
+- Defer sqrt in arrival check - compute distSq first, only sqrt when entity is actually arriving
+- Reuse distSq for normalize via `divideScalar(sqrt(distSq))` instead of second sqrt inside `.normalize()`
+- Replace `path.map()` with push loop on movement start to avoid intermediate array allocation
+
+### Minimap Rendering Optimizations
+- **Async Terrain Generation**: Terrain sampling runs entirely outside RAF callback via `generateTerrainChunked()`
+  - 50×50 grid sampling (TERRAIN_SAMPLE_SIZE = 50) instead of per-pixel (16× reduction from 40,000 to 2,500 calls)
+  - Yields to browser via `setTimeout(0)` every 10 rows (5 yield points per full generation)
+  - Zero RAF blocking - no frame drops during terrain regeneration
+  - `terrainGenVersionRef` monotonically-incrementing token cancels in-flight generation on camera state change
+- **Canvas Rotation Transform**: Decouple terrain regeneration from camera rotation
+  - Terrain only regenerates when player moves or zoom changes (not on rotation)
+  - Single canvas rotation transform (`translate→rotate(+deltaYaw)→translate-back`) applied every terrain frame (~15fps)
+  - `TERRAIN_OVERSHOOT` (√2 × 1.1 ≈ 1.555×) ensures canvas corners stay filled at any rotation angle
+  - `terrainIsGeneratingRef` mutex prevents overlapping async generations
+- **Canvas 2D Terrain Background**: Replace second WebGPURenderer with Canvas 2D
+  - Eliminates constant shader recompilation from switching WebGPU contexts
+  - Fixes THREE.TSL normal-attribute warnings and GPUDevice.createBindGroup errors
+  - Height-sampled ImageData using `TerrainSystem.getHeightAt()` with height-to-color mapping
+  - Terrain cache regenerates only when player moves >20 world units or zoom changes
+- **Road/Building Overlays**: Restore vector overlays with performance optimizations
+  - Draw road paths as tan/beige vector strokes with outline pass for depth
+  - Draw building footprints as rotated rectangles accounting for building.rotation and camera up vector
+  - Cache road and building data lazily (never changes after world init)
+  - Cache 2D canvas contexts in refs (mainCtxRef/overlayCtxRef) to avoid getContext DOM queries
+  - Cache `performance.now()` once per frame, replacing per-pip `Date.now()` calls
+  - Replace `entity.serialize()` in InterpolationEngine hot loop with direct `entity.data` access
+- **Layer Synchronization**: All layers (terrain, roads, buildings, pips) projected from same camera snapshot
+  - `terrainCacheUpRef` stores cam.up.x/z when terrain cache is generated
+  - Camera rotation added to cache invalidation trigger
+  - `_cachedProjectionViewMatrix` updated every frame for smooth 60fps pip movement
+  - Rotation threshold raised from 0.01 to 0.087 (~5°) to avoid per-frame terrain regeneration
+
 ## Stability Improvements
 
 ### Combat System
