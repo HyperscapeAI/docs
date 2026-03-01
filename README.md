@@ -210,7 +210,7 @@ bun run assets:sync    # Pull latest assets from repo (local dev only)
 Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.privy.io).
 
 **Optional configuration** - see `.env.example` files for all options:
-- `packages/server/.env.example` - Database, ports, LiveKit voice chat
+- `packages/server/.env.example` - Database, ports, LiveKit voice chat, streaming
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
@@ -238,18 +238,22 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 - Path continuation for seamless long-distance movement
 - Skating fix with server-side pre-computation
 - Multi-click feel with optimistic target pivoting
+- Per-frame allocation elimination with pre-allocated buffers
 
 **Minimap Rendering**:
 - Async terrain generation (50×50 grid) runs off RAF callback
 - Zero RAF blocking - terrain generation in background macrotasks
 - Canvas rotation transform decouples regeneration from camera rotation
 - Reduced terrain sampling from 40,000 pixels to 2,500 (16× reduction)
+- Layer synchronization - all layers use same camera snapshot
+- Cached contexts to avoid getContext() DOM queries
 
 **GPU Resource Hygiene**:
 - Object pools for XPDropSystem and DuelCountdownSplatSystem
 - Proper destroy() methods for HealthBars and ProjectileRenderer
 - Machine ID caching and activity debouncing
 - Stale health bar sweep for despawned entities
+- World initialization race condition fix with two-flag handshake
 
 ### Stability Improvements
 
@@ -266,13 +270,16 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 - Cooking phase for immediate food preparation
 - Gear upgrade phase for smithing better equipment
 - Combat food threshold increased from 5 → 10
+- Critical crash fix: `weapon.toLowerCase is not a function` in getEquippedWeaponTier
+- Quest goal status change detection for proper quest lifecycle
 
 **Memory Leak Fixes**:
 - 20+ critical memory leaks fixed across codebase
-- ModelCache geometry disposal
-- EventBridge listener cleanup
-- Proper destroy() methods for all systems
-- Session timeout (30-minute max)
+- ModelCache geometry disposal (CRITICAL)
+- EventBridge listener cleanup (HIGH)
+- Proper destroy() methods for all systems and managers
+- Session timeout (30-minute max via MAX_SESSION_TICKS)
+- Activity logger queue with max size 1000 and 25% eviction
 
 ### Testing
 
@@ -284,9 +291,46 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 
 **Test Stability**:
 - GoldClob fuzz tests with 120s timeout
-- Precision fixes for gas cost calculations
-- Dynamic import timeout for service tests
-- Anchor test configuration using localnet
+- Precision fixes for gas cost calculations (use 10000n amounts)
+- Dynamic import timeout for service tests (60s)
+- Anchor test configuration using localnet instead of devnet
+
+### WebGPU & Streaming
+
+**Browser Support**:
+- Safari 18+ (macOS 15+) now required (Safari 17 support removed)
+- WebGPU initialization with 30s adapter timeout and 60s renderer timeout
+- Preflight testing on localhost server (secure context)
+- Adapter info compatibility fallback for older Chromium
+
+**Vast.ai Deployment**:
+- GPU display driver requirement (`gpu_display_active=true`)
+- Early display driver check with nvidia_drm kernel module verification
+- 6-stage WebGPU testing during deployment
+- Verbose Chrome GPU logging for diagnostics
+- PM2 log capture with 60s initialization wait
+- Display environment reuse to prevent Vulkan ICD configuration loss
+
+**Streaming Optimizations**:
+- Production client build support (fixes 180s browser timeout)
+- Stream encoding with 2x bitrate buffer multiplier (reduced from 4x)
+- Health check timeout: 5s (data timeout: 15s)
+- Browser restart every 45 minutes to prevent WebGPU OOM crashes
+- Resolution tracking and mismatch detection with automatic viewport recovery
+
+### Gold Betting Demo
+
+**Mobile Responsive UI**:
+- Resizable panels for desktop with useResizePanel hook
+- Mobile detection with useIsMobile hook
+- 16:9 aspect-ratio video, bottom-sheet sidebar
+- Touch-friendly tab targets, dvh units
+- Real data integration via live SSE feed from game server
+
+**Console Noise Reduction**:
+- Recharts warning fix (raised min-height to 120px)
+- EventSource auto-reconnect prevention
+- Exponential backoff for useDuelContext (3s → 6s → 60s cap)
 
 ## Deployment (Railway)
 
