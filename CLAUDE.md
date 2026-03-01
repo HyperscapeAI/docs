@@ -73,7 +73,7 @@ The streaming pipeline requires specific GPU setup:
    - Configurable via `STREAM_AUDIO_ENABLED` and `PULSE_AUDIO_DEVICE`
    - User-mode PulseAudio with XDG_RUNTIME_DIR at `/tmp/pulse-runtime`
 
-3. **RTMP Multi-Streaming**:
+4. **RTMP Multi-Streaming**:
    - Simultaneous streaming to Twitch, Kick, X/Twitter (YouTube disabled)
    - FFmpeg tee muxer for single-encode multi-output
    - Stream keys configured via environment variables (never hardcoded)
