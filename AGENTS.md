@@ -84,6 +84,7 @@ The streaming pipeline requires specific GPU setup:
    - Fails deployment if WebGPU cannot be initialized (no soft fallbacks)
    - Persists GPU/display settings to `.env` for PM2 restarts
    - Exports working GPU mode for ecosystem.config.cjs
+   - **XDG_RUNTIME_DIR**: Required for Vulkan/EGL initialization (set to `/tmp/runtime-root`)
 
 5. **Production Client Build**:
    - When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
@@ -118,6 +119,15 @@ The streaming pipeline requires specific GPU setup:
    - Provides debugging info when WebGPU fails on remote GPU servers
    - 30s adapter timeout and 60s renderer init timeout prevent indefinite hangs
    - 6-stage WebGPU testing during deployment (headless-vulkan, headless-egl, xvfb-vulkan, ozone-headless, swiftshader, playwright-xvfb)
+
+9. **Vast.ai CLI Provisioner**:
+   - Automated provisioner script: `./scripts/vast-provision.sh`
+   - Searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
+   - Filters by reliability, GPU RAM, price
+   - Automatically rents best available instance
+   - Waits for instance to be ready
+   - Outputs SSH connection details and GitHub secret commands
+   - Ensures only instances with NVIDIA display driver support are rented
 
 See `scripts/deploy-vast.sh` for complete setup logic.
 
@@ -233,6 +243,46 @@ Hyperscape uses instanced rendering for resource entities (rocks, ores, herbs, t
 - Fixes silent geometry corruption and RangeError crashes on cached model restore
 - Cache version bumped to 4 to invalidate corrupt entries
 - Affects all GLB models loaded via ModelCache (resources, NPCs, items)
+
+### Client Performance Optimizations
+
+#### Movement System
+- **Immediate Move Processing**: Bypasses ActionQueue for instant response to player clicks (eliminates 0-600ms latency)
+- **Pathfinding Rate Limit**: Raised from 5/sec to 15/sec to match tile movement limiter
+- **BFS Iterations**: Increased from 2000 to 8000 (~44 tile radius vs ~22 tile)
+- **Path Continuation**: Seamless long-distance movement with automatic re-pathfinding when BFS limit reached
+- **Skating Fix**: Server-side pre-computation + client-side path appending eliminates stop-lurch at segment boundaries
+- **Multi-Click Feel**: Optimistic target pivoting + pending move queue ensures last click always reaches server
+- **Per-Frame Allocation Elimination**: Pre-allocated buffers and squared distance comparisons in hot paths
+
+#### Minimap Rendering
+- **Async Terrain Generation**: Chunked sampling (50×50 grid) runs off RAF callback via setTimeout(0) yields
+- **Zero RAF Blocking**: Terrain generation happens in background macrotasks, not during frame rendering
+- **Canvas Rotation Transform**: Decouples terrain regeneration from camera rotation (only regenerates on player move/zoom)
+- **Terrain Overshoot**: √2 × 1.1 sampling ensures corners stay filled at any rotation angle
+- **Layer Synchronization**: All layers (terrain, roads, buildings, pips) use same camera snapshot
+- **Cached Contexts**: Canvas 2D contexts cached in refs to avoid getContext() DOM queries
+- **Performance**: Reduced terrain sampling from up to 40,000 pixels to 2,500 (16× reduction)
+
+#### GPU Resource Hygiene
+- **XPDropSystem**: Object pool for CanvasTexture/SpriteMaterial reuse, warn on pool exhaustion
+- **DuelCountdownSplatSystem**: Pre-render count textures once, pool sprite/material pairs
+- **HealthBars**: Add destroy() to clear hideTimeout handles and dispose InstancedMesh/texture/geometry
+- **ProjectileRenderer**: Track pending setTimeout handles in Set, cancel all on destroy(), reference-counted geometry disposal
+- **PlayerTokenManager**: Named beforeUnloadHandler property enables proper removeEventListener on dispose()
+- **EmbeddedGameClient**: Guard async state updates with cancelled flag to prevent setState on unmounted component
+- **ThreeResourceManager**: Add teardown() to stop dev monitor interval and reset WeakSet on hot-reload
+- **Stale Health Bar Sweep**: Reverse iteration to remove bars for despawned entities
+
+#### World Initialization Race Condition
+- **Two-Flag Handshake**: initComplete + needsCleanup flags prevent world.destroy() from racing world.init()
+- **Deferred Cleanup**: Cleanup callback waits for init() to complete if it arrives during async initialization
+- **Resource Safety**: Ensures destroy() runs exactly once and only after world is fully constructed
+
+#### Client Memory Optimizations
+- **Machine ID Caching**: Browser fingerprint cached in _cachedMachineId (avoids canvas allocation on every token operation)
+- **Activity Debouncing**: 500ms debounce on saveSession() localStorage writes (was synchronous on every interaction)
+- **XP Drop Listener**: Store bound handler so destroy() can call world.off() (eliminates leak that survived world teardown)
 
 ## Memory Management
 
@@ -375,5 +425,21 @@ class MySystem {
   }
 }
 ```
+
+## Gold Betting Demo
+
+### Mobile Responsive UI
+- **Resizable Panels**: Desktop layout with useResizePanel hook + ResizeHandle component
+- **Mobile Detection**: useIsMobile hook gates JS inline styles so CSS media queries control layout
+- **Mobile Layout**: 16:9 aspect-ratio video, bottom-sheet sidebar, touch-friendly tab targets, dvh units
+- **Mobile Header**: Stacked HYPERSCAPE/MARKET logo, phase strip above video, SOL + EVM wallet buttons
+- **Tab Reordering**: Trades tab moved first for better mobile UX
+- **Real Data Integration**: Live SSE feed from game server (devnet mode) replaces mock data
+- **Simulation Mode**: Available via `bun run dev:stream-ui` (dev mode uses real endpoints only)
+
+### Console Noise Reduction
+- **Recharts Warning Fix**: Raised .hm-chart-container min-height to 120px (eliminates width/height=0 warnings)
+- **EventSource Auto-Reconnect**: Close EventSource on onerror to stop browser's built-in reconnect loop
+- **Exponential Backoff**: useDuelContext switched from fixed setInterval to setTimeout with backoff (3s → 6s → 60s cap)
 
 See CLAUDE.md for complete documentation.
