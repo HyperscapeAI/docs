@@ -346,6 +346,35 @@ bun run build
 - **Resolution Tracking**: Automatic viewport recovery on mismatch
 - **Improved Diagnostics**: GPU info extraction, preflight testing, timeout detection
 
+#### Client Performance
+- **GPU Memory Management**: Fixed memory leaks in XPDropSystem, DuelCountdownSplatSystem, HealthBars, ProjectileRenderer
+  - Object pooling for CanvasTexture/SpriteMaterial reuse
+  - Proper cleanup of setTimeout handles and event listeners
+  - Stale health bar sweep when entities are removed
+- **Movement Optimizations**: Eliminated per-frame allocations in TileInterpolator
+  - Pre-allocated position vectors, squared distance comparisons
+  - Single sqrt for both normalization and distance checks
+  - Push loops instead of array.map() to avoid intermediate allocations
+- **Minimap Rendering**: 16× faster terrain generation with async chunked sampling
+  - 50×50 grid sampling instead of per-pixel (40,000 → 2,500 calls)
+  - Async generation with setTimeout(0) yields - zero RAF blocking
+  - Canvas rotation transform for instant rotation (no regeneration)
+  - Canvas 2D terrain background (eliminates WebGPU context switching)
+  - Cached road/building data and canvas contexts
+- **State Management**: Debounced localStorage writes (500ms), cached machine ID generation
+  - World init/destroy race condition fix with two-flag handshake
+
+#### Movement System
+- **Immediate Move Processing**: Bypass ActionQueue for 0-latency move requests
+- **Pathfinding**: 15/sec rate limit (up from 5/sec), 8000 BFS iterations (up from 2000)
+- **Path Continuation**: Seamless long-distance movement beyond ~44-tile BFS radius
+  - Automatic re-pathfinding from new tile toward original destination
+  - Death/duel state guards, respawn/teleport destination clearing
+- **Skating Fix**: Server-side pre-computation + client-side path appending
+  - Next segment sent 1 tick early, path-append fast-path in TileInterpolator
+  - Max catch-up multiplier reduced from 4x to 2x
+- **Multi-Click**: Optimistic target pivoting, pending-move queue for rapid clicks
+
 #### Rendering Optimizations
 - **Instanced Rendering**: Optimized resource rendering with depleted model support
   - Separate pools for normal and depleted states (tree → stump)
