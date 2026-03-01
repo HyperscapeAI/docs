@@ -367,8 +367,32 @@ The graphics system uses Three.js with WebGPU for high-performance rendering:
 <Warning>
 **WebGPU Required**: All rendering uses TSL (Three Shading Language) which only works with WebGPU. There is no WebGL fallback. Requires Chrome 113+, Edge 113+, or Safari 18+ (macOS 15+). Check compatibility at [webgpureport.org](https://webgpureport.org).
 
-**Breaking Change (Feb 2026)**: WebGL fallback was completely removed in commit 47782ed. All shaders use TSL which only compiles to WebGPU.
+**Breaking Change (Feb 2026)**: WebGL fallback was completely removed. All shaders use TSL which only compiles to WebGPU. Users on browsers without WebGPU will see an error screen with upgrade instructions.
 </Warning>
+
+**WebGPU Initialization Timeouts:**
+
+The renderer includes timeout protection to detect GPU driver issues:
+
+```typescript
+// 30s timeout on adapter request
+const adapter = await Promise.race([
+  navigator.gpu.requestAdapter(),
+  new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('WebGPU adapter request timed out')), 30000)
+  )
+]);
+
+// 60s timeout on renderer initialization
+await Promise.race([
+  renderer.init(),
+  new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('WebGPU renderer initialization timed out')), 60000)
+  )
+]);
+```
+
+These timeouts help diagnose misconfigured GPU servers where WebGPU initialization hangs indefinitely.
 
 ```typescript
 // systems/client/ClientGraphics.ts
