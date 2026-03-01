@@ -312,14 +312,15 @@ bun run build
 ### Stability & Performance (Feb 2026)
 
 #### Memory Management
-- **Critical Memory Leak Fixes**: Fixed 13+ memory leaks across the codebase
-  - ModelCache: GPU memory disposal on clear/remove
-  - EventBridge: 50+ world event listeners now properly cleaned up
-  - AgentManager, AutonomousBehaviorManager: Event handler cleanup
-  - ColliderComponent, MobEntity, Socket, ClientLiveKit: Proper resource cleanup
-  - AggroSystem: Bounded maps with player disconnect cleanup
-  - StarterChestEntity: LRU pruning for lootedByCharacters Set
+- **Critical Memory Leak Fixes**: Fixed 20+ memory leaks across the codebase
+  - **Client**: ModelCache GPU memory disposal, EventBridge listener cleanup, ClientLiveKit voices Map
+  - **Server**: GameTickProcessor, TradingSystem, RTMPBridge, ActionQueue, ScriptQueue
+  - **Agent System**: AgentManager, AutonomousBehaviorManager event handler cleanup
+  - **Entity System**: ColliderComponent, MobEntity, Socket proper resource cleanup
+  - **Game Systems**: AggroSystem bounded maps, StarterChestEntity LRU pruning
+  - **Shutdown Process**: Rate limiters and idempotency service cleanup
 - **Resource Bounds**: Activity logger queue (max 1000), damage event cache (max 1000), session timeout (30 min)
+- **E2E Journey Tests**: Complete login→loading→spawn→walk tests with screenshot comparison and loading screen detection
 
 #### Combat System
 - **Timing Improvements**: Combat retry timer aligned with tick system (3000ms = 5 ticks)
