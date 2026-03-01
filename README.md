@@ -239,10 +239,11 @@ For GPU-accelerated streaming with WebGPU support, use the automated Vast.ai pro
 
 **What it does:**
 - Searches for GPU instances with `gpu_display_active=true` (REQUIRED for WebGPU)
-- Filters by reliability (95%+), GPU RAM (20GB+), and price (<$2/hr)
+- Filters by reliability (≥95%), GPU RAM (≥20GB), and price (≤$2/hr)
 - Automatically rents the best available instance
 - Waits for instance to be ready
 - Outputs SSH connection details and GitHub secret commands
+- Ensures only instances with NVIDIA display driver support are rented
 
 **Requirements:**
 - Install Vast.ai CLI: `pip install vastai`
@@ -252,6 +253,15 @@ For GPU-accelerated streaming with WebGPU support, use the automated Vast.ai pro
 **After provisioning:**
 1. Update GitHub secrets with the provided commands
 2. Trigger deployment: `gh workflow run deploy-vast.yml`
+
+**Deployment Features:**
+- 6-stage WebGPU testing (headless-vulkan, headless-egl, xvfb-vulkan, ozone-headless, swiftshader, playwright-xvfb)
+- Early display driver checks (nvidia_drm kernel module, DRM device nodes)
+- GPU display mode validation via nvidia-smi
+- Vulkan ICD detection and diagnostics
+- Automatic fallback between GPU rendering modes
+- Production client build for faster page loads (eliminates Vite JIT compilation timeout)
+- Browser restart every 45 minutes to prevent WebGPU OOM crashes
 
 See `scripts/deploy-vast.sh` for the full deployment pipeline and WebGPU validation process.
 
