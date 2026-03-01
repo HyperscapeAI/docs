@@ -40,8 +40,9 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 - Timeouts help diagnose misconfigured GPU servers where WebGPU initialization hangs
 
 ### Server/Streaming (Vast.ai)
-- NVIDIA GPU with Vulkan support is REQUIRED
-- Must run headful with Xorg or Xvfb (NOT headless Chrome)
+- **NVIDIA GPU with Display Driver REQUIRED**: Must have `gpu_display_active=true` on Vast.ai
+- **Display Driver vs Compute**: WebGPU requires GPU display driver support, not just compute access
+- Must run non-headless with Xorg or Xvfb (WebGPU requires window context)
 - Chrome uses ANGLE/Vulkan for WebGPU
 - **GPU Sandbox Bypass**: `--disable-gpu-sandbox` and `--disable-setuid-sandbox` required for container GPU access
 - If WebGPU cannot initialize, deployment MUST FAIL
