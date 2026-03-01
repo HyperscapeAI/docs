@@ -1810,6 +1810,204 @@ bun run build
 - File: `.github/workflows/build-app.yml`
 - Commit: 15250d2 (Feb 25, 2026)
 
+## Memory Leaks
+
+### Identifying Memory Leaks
+
+**Symptoms**:
+- Server memory usage grows over time
+- Client becomes sluggish after extended play
+- GPU memory warnings in console
+- Browser tab crashes after hours of gameplay
+
+**Diagnosis**:
+
+```bash
+# Server memory monitoring
+node --expose-gc packages/server/src/index.ts
+# Watch RSS memory in htop or Activity Monitor
+
+# Client memory profiling
+# Chrome DevTools → Memory → Take heap snapshot
+# Compare snapshots over time to find growing objects
+```
+
+### Common Memory Leak Patterns (Fixed in Feb 2026)
+
+<AccordionGroup>
+  <Accordion title="Event Listeners Not Removed">
+    **Pattern**: `world.on()` or `addEventListener()` without cleanup
+    
+    **Fix**: Store handler reference and remove on destroy
+    
+    ```typescript
+    class MySystem {
+      private removeListener?: () => void;
+      
+      init() {
+        this.removeListener = world.on('event', this.handler);
+      }
+      
+      destroy() {
+        this.removeListener?.();
+      }
+    }
+    ```
+    
+    **Files Fixed**: EventBridge, GameTickProcessor, TradingSystem, AgentManager, AutonomousBehaviorManager, ColliderComponent, MobEntity, Socket, ClientLiveKit
+  </Accordion>
+
+  <Accordion title="Intervals Not Cleared">
+    **Pattern**: `setInterval()` or `setTimeout()` without cleanup
+    
+    **Fix**: Store interval ID and clear on destroy
+    
+    ```typescript
+    class MySystem {
+      private interval?: NodeJS.Timeout;
+      
+      init() {
+        this.interval = setInterval(this.tick, 1000);
+      }
+      
+      destroy() {
+        if (this.interval) clearInterval(this.interval);
+      }
+    }
+    ```
+    
+    **Files Fixed**: Logger, PlayerTokenManager, HealthBars, ProjectileRenderer, ThreeResourceManager
+  </Accordion>
+
+  <Accordion title="GPU Resources Not Disposed">
+    **Pattern**: Three.js geometries, textures, materials not disposed
+    
+    **Fix**: Call `.dispose()` on all GPU resources
+    
+    ```typescript
+    class MyRenderer {
+      private geometry?: THREE.BufferGeometry;
+      private material?: THREE.Material;
+      
+      destroy() {
+        this.geometry?.dispose();
+        this.material?.dispose();
+      }
+    }
+    ```
+    
+    **Files Fixed**: ModelCache, XPDropSystem, DuelCountdownSplatSystem, HealthBars, ProjectileRenderer
+  </Accordion>
+
+  <Accordion title="Unbounded Collections">
+    **Pattern**: Maps/Sets growing without bounds
+    
+    **Fix**: Implement size limits with LRU eviction
+    
+    ```typescript
+    class MyCache {
+      private cache = new Map<string, Data>();
+      private readonly MAX_SIZE = 10000;
+      
+      add(key: string, data: Data) {
+        if (this.cache.size >= this.MAX_SIZE) {
+          // Evict oldest 25%
+          const toRemove = Math.floor(this.MAX_SIZE * 0.25);
+          const keys = Array.from(this.cache.keys());
+          for (let i = 0; i < toRemove; i++) {
+            this.cache.delete(keys[i]);
+          }
+        }
+        this.cache.set(key, data);
+      }
+    }
+    ```
+    
+    **Files Fixed**: AggroSystem, StarterChestEntity, ActivityLoggerSystem
+  </Accordion>
+
+  <Accordion title="Async State Updates After Unmount">
+    **Pattern**: React setState after component unmounted
+    
+    **Fix**: Use cancelled flag to guard async updates
+    
+    ```typescript
+    function MyComponent() {
+      const [state, setState] = useState();
+      const cancelledRef = useRef(false);
+      
+      useEffect(() => {
+        async function load() {
+          const data = await fetchData();
+          if (!cancelledRef.current) {
+            setState(data);
+          }
+        }
+        load();
+        
+        return () => {
+          cancelledRef.current = true;
+        };
+      }, []);
+    }
+    ```
+    
+    **Files Fixed**: EmbeddedGameClient
+  </Accordion>
+
+  <Accordion title="World Init/Destroy Race Condition">
+    **Pattern**: Cleanup runs before async init completes
+    
+    **Fix**: Two-flag handshake (initComplete + needsCleanup)
+    
+    ```typescript
+    class World {
+      private initComplete = false;
+      private needsCleanup = false;
+      
+      async init() {
+        try {
+          await this.loadResources();
+          this.initComplete = true;
+          
+          if (this.needsCleanup) {
+            this.destroy();
+          }
+        } catch (err) {
+          this.initComplete = true; // Still set to allow cleanup
+          throw err;
+        }
+      }
+      
+      destroy() {
+        if (!this.initComplete) {
+          this.needsCleanup = true;
+          return;
+        }
+        // Actual cleanup
+      }
+    }
+    ```
+    
+    **Files Fixed**: GameClient world initialization
+  </Accordion>
+</AccordionGroup>
+
+### Memory Leak Prevention Checklist
+
+When creating new systems:
+
+- [ ] Track all event listeners and remove them in `destroy()`
+- [ ] Clear all intervals and timeouts in `destroy()`
+- [ ] Dispose all Three.js resources (geometries, textures, materials)
+- [ ] Implement size limits on Maps/Sets that grow with player count
+- [ ] Guard async state updates with cancelled flags in React components
+- [ ] Follow SystemBase cleanup pattern
+- [ ] Test for leaks during hot reload
+- [ ] Monitor memory usage in long-running sessions
+
+**See Also**: [Memory Management Best Practices](/changelog-feb-2026#memory-management-best-practices) in February 2026 changelog
+
 ## Getting Help
 
 1. Check [GitHub Issues](https://github.com/HyperscapeAI/hyperscape/issues)
