@@ -39,7 +39,8 @@ This is a hard requirement. DO NOT:
 - **Chrome Flags**: Remove Vulkan from feature flags on macOS (Metal is the backend)
 
 ### Server/Streaming (Vast.ai)
-- NVIDIA GPU with Vulkan support is REQUIRED
+- **NVIDIA GPU with Display Driver REQUIRED**: Must have `gpu_display_active=true` on Vast.ai
+- **Display Driver vs Compute**: WebGPU requires GPU display driver support, not just compute access
 - Must run non-headless with Xorg or Xvfb (WebGPU requires window context)
 - Chrome uses ANGLE/Vulkan for WebGPU
 - **GPU Sandbox Bypass**: `--disable-gpu-sandbox` and `--disable-setuid-sandbox` required for container GPU access
@@ -48,7 +49,14 @@ This is a hard requirement. DO NOT:
 #### Vast.ai Deployment Architecture
 The streaming pipeline requires specific GPU setup:
 
-1. **GPU Rendering Modes** (tried in order):
+1. **GPU Display Driver Requirement** (CRITICAL):
+   - **gpu_display_active=true**: REQUIRED when renting Vast.ai instances
+   - WebGPU needs GPU display driver, not just compute access
+   - Instances without display driver will fail WebGPU initialization
+   - Early deployment check verifies nvidia_drm kernel module and /dev/dri/ device nodes
+   - Deployment fails with clear guidance if display driver is missing
+
+2. **GPU Rendering Modes** (tried in order):
    - **Xorg with NVIDIA**: Best performance, requires DRI/DRM device access
    - **Xvfb with NVIDIA Vulkan**: Virtual framebuffer + GPU rendering via ANGLE/Vulkan (non-headless Chrome)
    - **Headless Vulkan**: Chrome `--headless=new` with `--use-vulkan` and `--use-angle=vulkan`
@@ -58,19 +66,19 @@ The streaming pipeline requires specific GPU setup:
    - Deployment detects Xorg swrast software rendering and switches to alternative modes
    - Xvfb mode uses **non-headless Chrome** connecting to virtual display (WebGPU requires window context)
 
-2. **Audio Capture**:
+3. **Audio Capture**:
    - PulseAudio with `chrome_audio` virtual sink
    - FFmpeg captures from PulseAudio monitor (`chrome_audio.monitor`)
    - Configurable via `STREAM_AUDIO_ENABLED` and `PULSE_AUDIO_DEVICE`
    - User-mode PulseAudio with XDG_RUNTIME_DIR at `/tmp/pulse-runtime`
 
-3. **RTMP Multi-Streaming**:
+4. **RTMP Multi-Streaming**:
    - Simultaneous streaming to Twitch, Kick, X/Twitter (YouTube disabled)
    - FFmpeg tee muxer for single-encode multi-output
    - Stream keys configured via environment variables (never hardcoded)
    - All secrets read from `.env` file or GitHub Secrets
 
-4. **Deployment Validation**:
+5. **Deployment Validation**:
    - Script verifies NVIDIA GPU is accessible via `nvidia-smi`
    - **Early Display Driver Check**: Checks nvidia_drm kernel module and DRM device nodes (/dev/dri/)
    - **GPU Display Mode Query**: Queries GPU display_mode via nvidia-smi to verify display driver support
@@ -86,13 +94,13 @@ The streaming pipeline requires specific GPU setup:
    - Exports working GPU mode for ecosystem.config.cjs
    - **XDG_RUNTIME_DIR**: Required for Vulkan/EGL initialization (set to `/tmp/runtime-root`)
 
-5. **Production Client Build**:
+6. **Production Client Build**:
    - When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
    - Serves pre-built client via `vite preview` instead of dev server
    - Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
    - Significantly faster page loads for streaming (no on-demand module compilation)
 
-6. **Stream Capture Modes**:
+7. **Stream Capture Modes**:
    - **CDP (default)**: Chrome DevTools Protocol screencast - fastest, most reliable
    - **WebCodecs**: Native VideoEncoder API (experimental)
    - **MediaRecorder**: Legacy fallback mode
@@ -103,7 +111,7 @@ The streaming pipeline requires specific GPU setup:
    - **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
    - **Page Navigation Timeout**: Increased to 180s for Vite dev mode (production build recommended)
 
-7. **Stream Encoding Optimization**:
+8. **Stream Encoding Optimization**:
    - Default: `film` tune with B-frames for better compression
    - Set `STREAM_LOW_LATENCY=true` for `zerolatency` tune (faster playback start)
    - Configurable GOP size via `STREAM_GOP_SIZE` (default: 60 frames)
@@ -112,7 +120,7 @@ The streaming pipeline requires specific GPU setup:
    - Health check timeout: 5s (data timeout: 15s) for faster failure detection
    - Resolution tracking and mismatch detection with automatic viewport recovery
 
-8. **WebGPU Diagnostics**:
+9. **WebGPU Diagnostics**:
    - `captureGpuDiagnostics()` extracts chrome://gpu info at startup
    - `testWebGpuInit()` preflight test detects WebGPU hangs early
    - Runs on blank page before loading heavy game content
@@ -120,7 +128,7 @@ The streaming pipeline requires specific GPU setup:
    - 30s adapter timeout and 60s renderer init timeout prevent indefinite hangs
    - 6-stage WebGPU testing during deployment (headless-vulkan, headless-egl, xvfb-vulkan, ozone-headless, swiftshader, playwright-xvfb)
 
-9. **Vast.ai CLI Provisioner**:
+10. **Vast.ai CLI Provisioner**:
    - Automated provisioner script: `./scripts/vast-provision.sh`
    - Searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
    - Filters by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr)
@@ -131,13 +139,13 @@ The streaming pipeline requires specific GPU setup:
    - **Requirements**: Vast.ai CLI (`pip install vastai`), API key configured (`vastai set api-key`)
    - **Usage**: `./scripts/vast-provision.sh`
 
-10. **Display Environment Reuse**:
+11. **Display Environment Reuse**:
    - `duel-stack.mjs` checks if DISPLAY is already set before spawning new Xvfb
    - Reuses existing display from `deploy-vast.sh` with proper Vulkan/VK_ICD config
    - Prevents spawning new Xvfb (:100) that lacks Vulkan ICD configuration
    - Ensures WebGPU works with properly configured display from deployment script
 
-11. **X Server Detection**:
+12. **X Server Detection**:
    - Uses socket check (`/tmp/.X11-unix/X99`) instead of `xdpyinfo` for X server detection
    - More reliable and doesn't require additional packages
    - Prevents false negatives when `xdpyinfo` is not installed
@@ -172,6 +180,22 @@ bun install          # Install dependencies
 bun run build        # Build all packages
 bun run dev          # Development mode
 npm test             # Run tests
+```
+
+### Vast.ai Commands
+
+```bash
+# Search for WebGPU-capable instances
+VAST_API_KEY=xxx bun run vast:search
+
+# Provision new instance automatically
+VAST_API_KEY=xxx bun run vast:provision
+
+# Check current instance status
+VAST_API_KEY=xxx bun run vast:status
+
+# Destroy current instance
+VAST_API_KEY=xxx bun run vast:destroy
 ```
 
 ## File Structure
