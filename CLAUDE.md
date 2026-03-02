@@ -469,7 +469,7 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 
 ### Client Performance
 
-#### Movement System
+#### Movement System (PR #950)
 - **Immediate Move Processing**: Bypasses ActionQueue for instant response (eliminates 0-600ms latency)
 - **Pathfinding Rate Limit**: Raised from 5/sec to 15/sec to match tile movement limiter
 - **BFS Iterations**: Increased from 2000 to 8000 (~44 tile radius vs ~22 tile)
