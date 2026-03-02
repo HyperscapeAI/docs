@@ -244,6 +244,9 @@ VAST_API_KEY=xxx bun run vast:destroy
 
 # Run vast-keeper monitoring service
 VAST_API_KEY=xxx bun run vast:keeper
+
+# Check streaming health (server health, RTMP bridge, PM2 processes, logs)
+bun run duel:status
 ```
 
 **Vast.ai Provisioner** (`./scripts/vast-provision.sh`):
