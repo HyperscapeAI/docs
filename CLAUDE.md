@@ -507,20 +507,28 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - Rotation threshold raised from 0.01 to 0.087 (~5°) to prevent regeneration on every tiny angular change
 - `terrainIsGeneratingRef` mutex prevents overlapping async generations
 
-#### GPU Resource Hygiene
-- **XPDropSystem**: Object pool for CanvasTexture/SpriteMaterial reuse
+#### GPU Resource Hygiene (PR #950)
+- **XPDropSystem**: Object pool for CanvasTexture/SpriteMaterial reuse, warn on pool exhaustion
 - **DuelCountdownSplatSystem**: Pre-render count textures once, pool sprite/material pairs
-- **HealthBars**: Add destroy() to clear hideTimeout handles and dispose resources
-- **ProjectileRenderer**: Track pending setTimeout handles, reference-counted geometry disposal
-- **PlayerTokenManager**: Named beforeUnloadHandler for proper removeEventListener
-- **EmbeddedGameClient**: Guard async state updates with cancelled flag
-- **ThreeResourceManager**: Add teardown() to stop dev monitor interval
+- **HealthBars**: Add destroy() to clear hideTimeout handles and dispose InstancedMesh/texture/geometry
+- **ProjectileRenderer**: Track pending setTimeout handles in Set, cancel all on destroy(), reference-counted geometry disposal
+- **PlayerTokenManager**: Named beforeUnloadHandler property enables proper removeEventListener on dispose()
+- **EmbeddedGameClient**: Guard async state updates with cancelled flag to prevent setState on unmounted component
+- **ThreeResourceManager**: Add teardown() to stop dev monitor interval and reset WeakSet on hot-reload
+- **GameClient**: Call ThreeResourceManager.teardown() in useEffect cleanup after world.destroy()
 - **Stale Health Bar Sweep**: Reverse iteration to remove bars for despawned entities
 
-#### Memory Optimizations
-- **Machine ID Caching**: Browser fingerprint cached (avoids canvas allocation)
-- **Activity Debouncing**: 500ms debounce on saveSession() localStorage writes
-- **XP Drop Listener**: Store bound handler for proper cleanup
+#### World Initialization Race Condition (PR #950)
+- **Two-Flag Handshake**: `initComplete` + `needsCleanup` flags prevent world.destroy() from racing world.init()
+- **Deferred Cleanup**: Cleanup callback waits for init() to complete if it arrives during async initialization
+- **Resource Safety**: Ensures destroy() runs exactly once and only after world is fully constructed
+- **Partial Init Cleanup**: `initComplete = true` even on init() failure to allow cleanup of partial resources
+
+#### Client Memory Optimizations (PR #950)
+- **Machine ID Caching**: Browser fingerprint cached in `_cachedMachineId` (avoids canvas allocation on every token operation)
+- **Activity Debouncing**: 500ms debounce on saveSession() localStorage writes (was synchronous on every interaction)
+- **XP Drop Listener**: Store bound handler so destroy() can call world.off() (eliminates leak that survived world teardown)
+- **PlayerTokenManager Disposal**: Call dispose() in index.tsx cleanup so beforeunload listener is actually removed
 
 ### Server Performance
 
