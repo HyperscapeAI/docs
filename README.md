@@ -255,57 +255,72 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 
 ## Recent Improvements
 
-### Performance Optimizations
+### Performance Optimizations (PR #950, PR #hackathon)
+
+**Object Pooling for Zero-Allocation Event Emission**:
+- Comprehensive object pooling eliminates GC pressure in high-frequency event loops
+- `CombatEventPools`: Pre-configured pools for all combat events (damageDealt, projectileLaunched, etc.)
+- `PositionPool`: Global pool for `{x, y, z}` position objects
+- Memory stays flat during 60s stress test with agents in combat
+- Verified zero-allocation event emission in CombatSystem and CombatTickProcessor
 
 **Movement System**:
-- Immediate move processing (eliminates 0-600ms latency)
-- Pathfinding rate limit raised from 5/sec to 15/sec
-- BFS iterations increased from 2000 to 8000 (~44 tile radius)
-- Path continuation for seamless long-distance movement
-- Skating fix with server-side pre-computation
-- Multi-click feel with optimistic target pivoting
-- Per-frame allocation elimination with pre-allocated buffers
+- Immediate move processing (eliminates 0-600ms latency by bypassing ActionQueue)
+- Pathfinding rate limit raised from 5/sec to 15/sec to match tile movement limiter
+- BFS iterations increased from 2000 to 8000 (~44 tile radius vs ~22 tile)
+- Path continuation for seamless long-distance movement with automatic re-pathfinding
+- Skating fix with server-side pre-computation + client-side path appending
+- Multi-click feel with optimistic target pivoting + pending move queue
+- Per-frame allocation elimination with pre-allocated buffers and squared distance comparisons
 
 **Minimap Rendering**:
-- Async terrain generation (50×50 grid) runs off RAF callback
-- Zero RAF blocking - terrain generation in background macrotasks
+- Async terrain generation (50×50 grid) runs off RAF callback via setTimeout(0) yields
+- Zero RAF blocking - terrain generation happens in background macrotasks
 - Canvas rotation transform decouples regeneration from camera rotation
-- Reduced terrain sampling from 40,000 pixels to 2,500 (16× reduction)
-- Layer synchronization - all layers use same camera snapshot
+- Reduced terrain sampling from up to 40,000 pixels to 2,500 (16× reduction)
+- Layer synchronization - all layers (terrain, roads, buildings, pips) use same camera snapshot
 - Cached contexts to avoid getContext() DOM queries
+- Rotation threshold raised from 0.01 to 0.087 (~5°) to prevent regeneration on every tiny angular change
 
 **GPU Resource Hygiene**:
 - Object pools for XPDropSystem and DuelCountdownSplatSystem
 - Proper destroy() methods for HealthBars and ProjectileRenderer
-- Machine ID caching and activity debouncing
-- Stale health bar sweep for despawned entities
-- World initialization race condition fix with two-flag handshake
+- Machine ID caching and activity debouncing (500ms)
+- Stale health bar sweep for despawned entities (reverse iteration)
+- World initialization race condition fix with two-flag handshake (initComplete + needsCleanup)
+- ThreeResourceManager teardown() to stop dev monitor interval
 
 ### Stability Improvements
 
 **Combat System**:
+- Zero-allocation event emission with object pooling (CombatEventPools)
 - Combat retry timer aligned with tick system (3000ms = 5 ticks)
-- Phase timeout reduced from 30s to 10s
-- Combat stall nudge tracks last nudge timestamp
-- Damage event cache cleanup every tick, cap lowered to 1000
+- Phase timeout reduced from 30s to 10s for faster failure detection
+- Combat stall nudge tracks last nudge timestamp for re-nudging
+- Damage event cache cleanup every tick, cap lowered to 1000, evict 75%
+- TerrainSystem player position tracking fixed for proper tile unloading
+- PendingGatherManager reduced logging, added early-out for repeated gathers
+- ResourceSystem added `isPlayerGatheringResource()` for early-out checks
 
 **Agent System**:
 - LLM rate limiting with exponential backoff (5s base, max 60s)
-- Dynamic combat escalation (goblins → bandits → barbarians)
-- Combat style rotation (attack → strength → defense)
+- Dynamic combat escalation (goblins → bandits → barbarians as combat level grows)
+- Combat style rotation (attack → strength → defense, train lowest skill)
 - Cooking phase for immediate food preparation
 - Gear upgrade phase for smithing better equipment
-- Combat food threshold increased from 5 → 10
+- Combat food threshold increased from 5 → 10 for better survival
 - Critical crash fix: `weapon.toLowerCase is not a function` in getEquippedWeaponTier
-- Quest goal status change detection for proper quest lifecycle
+- Quest goal status change detection for proper quest lifecycle transitions
 
-**Memory Leak Fixes**:
+**Memory Leak Fixes** (PR #950):
 - 20+ critical memory leaks fixed across codebase
-- ModelCache geometry disposal (CRITICAL)
-- EventBridge listener cleanup (HIGH)
+- ModelCache geometry disposal (CRITICAL) - prevents GPU memory accumulation
+- EventBridge listener cleanup (HIGH) - 50+ world event listeners now properly removed
+- GameTickProcessor, TradingSystem event handler cleanup (HIGH)
 - Proper destroy() methods for all systems and managers
 - Session timeout (30-minute max via MAX_SESSION_TICKS)
 - Activity logger queue with max size 1000 and 25% eviction
+- PostgreSQL connection pool: POOL_MAX=3, POOL_MIN=0, restart_delay=10s to prevent connection exhaustion
 
 ### Testing
 
