@@ -185,6 +185,16 @@ The streaming pipeline requires specific GPU setup:
    - **exp_backoff_restart_delay=2s** for more gradual backoff on repeated failures
    - Prevents PostgreSQL error 53300 (too many connections) during crash loop scenarios
 
+17. **Model Agent Spawning**:
+   - Set `SPAWN_MODEL_AGENTS=true` to enable automatic agent creation when database is empty
+   - Allows duels to run even with an empty database
+   - Useful for fresh deployments and testing
+
+18. **Streaming Status Check**:
+   - Script: `bun run duel:status` or `bash scripts/check-streaming-status.sh`
+   - Quick diagnostic for verifying streaming health on Vast.ai
+   - Checks: server health, streaming API status, duel context, RTMP bridge, PM2 processes, recent logs
+
 See `scripts/deploy-vast.sh` for complete setup logic.
 
 ## Project Overview
