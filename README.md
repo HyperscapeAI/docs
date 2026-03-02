@@ -105,14 +105,17 @@ packages/
 ├── client/              # Web client (Vite, React)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
-├── procgen/             # Procedural generation
-├── impostor/            # Impostor system for LOD
+├── procgen/             # Procedural generation (terrain, trees, buildings)
+├── impostors/           # Impostor system for LOD rendering
 ├── asset-forge/         # AI asset generation tools
-├── vast-keeper/         # Vast.ai instance management
+├── vast-keeper/         # Vast.ai instance management and monitoring
+├── gold-betting-demo/   # Gold betting demo with mobile-responsive UI
+├── evm-contracts/       # EVM smart contracts (GoldClob, AgentPerps)
+├── contracts/           # MUD smart contracts
 └── docs-site/           # Documentation (Docusaurus)
 ```
 
-Build order: `physx-js-webidl` → `impostor` → `procgen` → `shared` → everything else (handled automatically by Turbo)
+Build order: `physx-js-webidl` → `impostors` → `procgen` → `shared` → everything else (handled automatically by Turbo)
 
 ## Commands
 
