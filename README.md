@@ -321,7 +321,7 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 - Critical crash fix: `weapon.toLowerCase is not a function` in getEquippedWeaponTier
 - Quest goal status change detection for proper quest lifecycle transitions
 
-**Memory Leak Fixes** (PR #950):
+**Memory Leak Fixes** (PR #950, PR #951):
 - 20+ critical memory leaks fixed across codebase
 - ModelCache geometry disposal (CRITICAL) - prevents GPU memory accumulation
 - EventBridge listener cleanup (HIGH) - 50+ world event listeners now properly removed
@@ -329,7 +329,12 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 - Proper destroy() methods for all systems and managers
 - Session timeout (30-minute max via MAX_SESSION_TICKS)
 - Activity logger queue with max size 1000 and 25% eviction
-- PostgreSQL connection pool: POOL_MAX=3, POOL_MIN=0, restart_delay=10s to prevent connection exhaustion
+- PostgreSQL connection pool configuration (PR #951):
+  - `POSTGRES_POOL_MAX=3` (down from 6) to prevent connection exhaustion during crash loops
+  - `POSTGRES_POOL_MIN=0` to not hold idle connections during crashes
+  - `restart_delay=10s` (up from 5s) to allow connections to fully close before PM2 restart
+  - `exp_backoff_restart_delay=2s` for more gradual backoff on repeated failures
+  - Prevents PostgreSQL error 53300 (too many connections) during crash loop scenarios
 
 ### Testing (PR #950)
 
