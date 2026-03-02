@@ -554,6 +554,39 @@ Recent commits addressed critical memory leaks across the codebase. All cleanup 
 - **ScriptQueue** (MEDIUM): Add destroy() methods to both queue classes
 - **Shutdown Process** (HIGH): Call destroyAllRateLimiters() and destroyIdempotencyService()
 
+### Object Pooling for Zero-Allocation Event Emission
+
+Hyperscape implements comprehensive object pooling to eliminate GC pressure in high-frequency event loops.
+
+**Event Payload Pools** (`packages/shared/src/utils/pools/`):
+- **EventPayloadPool.ts**: Factory for creating type-safe event payload pools
+- **PositionPool.ts**: Pool for `{x, y, z}` position objects
+- **CombatEventPools.ts**: Pre-configured pools for all combat events
+
+**Usage Pattern**:
+```typescript
+// Acquire from pool
+const payload = CombatEventPools.damageDealt.acquire();
+payload.attackerId = attacker.id;
+payload.damage = 15;
+this.emitTypedEvent(EventType.COMBAT_DAMAGE_DEALT, payload);
+
+// MUST release in listener
+world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
+  // Process...
+  CombatEventPools.damageDealt.release(payload);
+});
+```
+
+**CRITICAL**: Event listeners MUST call `release()` after processing. Failure to release causes pool exhaustion and memory leaks.
+
+**Performance Impact**:
+- Eliminates per-tick object allocations in combat hot paths
+- Memory stays flat during 60s stress test with agents in combat
+- Verified zero-allocation event emission in CombatSystem and CombatTickProcessor
+
+See [AGENTS.md](AGENTS.md) for complete object pooling documentation.
+
 ### Memory Management Best Practices
 
 When creating new systems or managers:
@@ -563,6 +596,7 @@ When creating new systems or managers:
 3. **Follow SystemBase Pattern**: Use the same cleanup patterns as SystemBase
 4. **Clean Up on Hot Reload**: Ensure resources are released during development
 5. **Test for Leaks**: Monitor memory usage during long-running sessions
+6. **Use Object Pools**: For high-frequency allocations (events, positions, quaternions)
 
 Example cleanup pattern:
 ```typescript
