@@ -358,6 +358,122 @@ Hyperscape uses instanced rendering for resource entities (rocks, ores, herbs, t
 
 ## Memory Management
 
+### Object Pooling for Zero-Allocation Event Emission
+
+Hyperscape implements comprehensive object pooling to eliminate GC pressure in high-frequency event loops. The combat system alone fires events every 600ms tick per combatant, which would cause significant memory churn without pooling.
+
+#### Event Payload Pools
+
+**Location**: `packages/shared/src/utils/pools/`
+
+**Core Infrastructure**:
+- **EventPayloadPool.ts**: Factory for creating type-safe event payload pools
+- **PositionPool.ts**: Pool for `{x, y, z}` position objects
+- **CombatEventPools.ts**: Pre-configured pools for all combat events
+
+**Usage Pattern**:
+```typescript
+// In event emitter (CombatSystem, etc.)
+const payload = CombatEventPools.damageDealt.acquire();
+payload.attackerId = attacker.id;
+payload.targetId = target.id;
+payload.damage = 15;
+this.emitTypedEvent(EventType.COMBAT_DAMAGE_DEALT, payload);
+
+// In event listener - MUST call release()
+world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
+  // Process damage...
+  CombatEventPools.damageDealt.release(payload);
+});
+```
+
+**CRITICAL**: Event listeners MUST call `release()` after processing. Failure to release causes pool exhaustion and memory leaks.
+
+**Available Pools**:
+- `CombatEventPools.damageDealt` - COMBAT_DAMAGE_DEALT events
+- `CombatEventPools.projectileLaunched` - COMBAT_PROJECTILE_LAUNCHED events
+- `CombatEventPools.faceTarget` - COMBAT_FACE_TARGET events
+- `CombatEventPools.clearFaceTarget` - COMBAT_CLEAR_FACE_TARGET events
+- `CombatEventPools.attackFailed` - COMBAT_ATTACK_FAILED events
+- `CombatEventPools.followTarget` - COMBAT_FOLLOW_TARGET events
+- `CombatEventPools.combatStarted` - COMBAT_STARTED events
+- `CombatEventPools.combatEnded` - COMBAT_ENDED events
+- `CombatEventPools.projectileHit` - COMBAT_PROJECTILE_HIT events
+- `CombatEventPools.combatKill` - COMBAT_KILL events
+
+**Pool Configuration**:
+- Initial size: 16-64 objects (varies by event frequency)
+- Growth size: 8-32 objects (automatic when exhausted)
+- Leak detection: Warns when payloads not released at end of tick
+- Statistics: Track acquire/release counts, peak usage, leak warnings
+
+**Monitoring**:
+```typescript
+// Get statistics for all combat pools
+const stats = CombatEventPools.getAllStats();
+
+// Check for leaked payloads (call at end of tick)
+const leakCount = CombatEventPools.checkAllLeaks();
+
+// Reset all pools (use with caution)
+CombatEventPools.resetAll();
+```
+
+**Performance Impact**:
+- Eliminates per-tick object allocations in combat hot paths
+- Memory stays flat during 60s stress test with agents in combat
+- Verified zero-allocation event emission in CombatSystem and CombatTickProcessor
+
+#### Position Pool
+
+**Location**: `packages/shared/src/utils/pools/PositionPool.ts`
+
+**Usage**:
+```typescript
+import { positionPool } from '@hyperscape/shared/utils/pools';
+
+// Acquire position
+const pos = positionPool.acquire(10, 0, 20);
+// ... use pos ...
+positionPool.release(pos);
+
+// Or with automatic release
+positionPool.withPosition(10, 0, 20, (pos) => {
+  // pos is automatically released after this callback
+});
+```
+
+**Features**:
+- O(1) acquire/release operations
+- Zero allocations after warmup
+- Automatic pool growth when exhausted
+- Helper methods: `set()`, `copy()`, `distanceSquared()`
+- Statistics tracking: `getStats()`
+
+#### Creating New Pools
+
+When adding new high-frequency events, create a pool:
+
+```typescript
+import { createEventPayloadPool } from './EventPayloadPool';
+
+interface MyEventPayload extends PooledPayload {
+  entityId: string;
+  value: number;
+}
+
+const myEventPool = createEventPayloadPool<MyEventPayload>({
+  name: 'MyEvent',
+  factory: () => ({ entityId: '', value: 0 }),
+  reset: (p) => { p.entityId = ''; p.value = 0; },
+  initialSize: 32,
+  growthSize: 16,
+});
+
+// Register for monitoring
+eventPayloadPoolRegistry.register(myEventPool);
+```
+
 ### Critical Memory Leak Fixes
 
 Recent commits addressed critical memory leaks across the codebase. All cleanup follows the established patterns in SystemBase for proper resource cleanup.
