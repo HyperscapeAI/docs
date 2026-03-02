@@ -322,19 +322,23 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 - Activity logger queue with max size 1000 and 25% eviction
 - PostgreSQL connection pool: POOL_MAX=3, POOL_MIN=0, restart_delay=10s to prevent connection exhaustion
 
-### Testing
+### Testing (PR #950)
 
 **E2E Journey Tests**:
-- Complete journey tests (login→loading→spawn→walk)
-- Screenshot comparison utilities
-- Loading screen detection helpers
-- Real browser testing with Playwright and WebGPU
+- Complete journey tests (login→loading→spawn→walk) in `complete-journey.spec.ts`
+- Screenshot comparison utilities to verify game is rendering correctly
+- Loading screen detection helpers (`waitForLoadingScreenHidden`)
+- Real browser testing with Playwright and actual WebGPU rendering (no mocks)
 
 **Test Stability**:
-- GoldClob fuzz tests with 120s timeout
+- GoldClob fuzz tests with 120s timeout (4 seeds × 140 operations)
 - Precision fixes for gas cost calculations (use 10000n amounts)
-- Dynamic import timeout for service tests (60s)
-- Anchor test configuration using localnet instead of devnet
+- Dynamic import timeout for service tests (60s for EmbeddedHyperscapeService)
+- Anchor test configuration using localnet instead of devnet for free SOL
+- SlidingWindowRateLimiter test updated to expect 15/sec for pathfind (was 5/sec)
+- TradingSystem test guards world.off calls for test environments
+- ScriptQueue test uses `handlers.clear()` not `this.handler = null`
+- Mob tile movement test adds missing TileMovementState properties
 
 ### WebGPU & Streaming
 
