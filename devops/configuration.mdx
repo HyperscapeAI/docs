@@ -331,7 +331,7 @@ The production duel stack uses PM2 for process management with automatic restart
 ### PM2 Configuration
 
 ```javascript
-// From ecosystem.config.cjs
+// From ecosystem.config.cjs (updated Mar 2 2026)
 module.exports = {
   apps: [{
     name: "hyperscape-duel",
@@ -339,11 +339,12 @@ module.exports = {
     interpreter: "bun",
     args: "--skip-betting --skip-bots",
     
-    // Restart policy
+    // Restart policy (commit 0c8dbe0, Mar 2 2026)
     autorestart: true,
     max_restarts: 999999,
     min_uptime: "10s",
-    restart_delay: 5000,
+    restart_delay: 10000,     // 10s (up from 5s) - allow connections to close
+    exp_backoff_restart_delay: 2000,  // 2s exponential backoff
     max_memory_restart: "4G",
     
     // Logging
@@ -355,6 +356,10 @@ module.exports = {
       USE_LOCAL_POSTGRES: "false",
       DATABASE_URL: process.env.DATABASE_URL || "postgresql://...",
       PUBLIC_CDN_URL: "https://assets.hyperscape.club",
+      
+      // PostgreSQL Connection Pool (commit 0c8dbe0)
+      POSTGRES_POOL_MAX: "3",   // Down from 6 to prevent connection exhaustion
+      POSTGRES_POOL_MIN: "0",   // Down from 2 to not hold idle connections
       
       // Streaming configuration
       STREAM_CAPTURE_MODE: "cdp",
