@@ -473,10 +473,19 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Immediate Move Processing**: Bypasses ActionQueue for instant response (eliminates 0-600ms latency)
 - **Pathfinding Rate Limit**: Raised from 5/sec to 15/sec to match tile movement limiter
 - **BFS Iterations**: Increased from 2000 to 8000 (~44 tile radius vs ~22 tile)
-- **Path Continuation**: Seamless long-distance movement with automatic re-pathfinding
-- **Skating Fix**: Server-side pre-computation + client-side path appending eliminates stop-lurch
-- **Multi-Click Feel**: Optimistic target pivoting + pending move queue
-- **Per-Frame Allocation Elimination**: Pre-allocated buffers and squared distance comparisons
+- **Path Continuation**: Seamless long-distance movement with automatic re-pathfinding when BFS limit reached
+- **Skating Fix**: Server-side pre-computation + client-side path appending eliminates stop-lurch at segment boundaries
+- **Multi-Click Feel**: Optimistic target pivoting + pending move queue ensures last click always reaches server
+- **Per-Frame Allocation Elimination**: Pre-allocated buffers and squared distance comparisons in hot paths
+
+**Technical Details**:
+- `TileMovementState` adds `requestedDestination`, `lastPathPartial`, `nextSegmentPrecomputed` fields
+- `_continuePathToDestination()` re-pathfinds from new tile toward original click target
+- `tileMovementStart` packet adds `isContinuation` flag for client-side path appending
+- `TileInterpolator.setOptimisticTarget()` immediately pivots character toward new destination
+- `_sendMoveRequest()` with pending-move queue ensures last click reaches server within rate limit
+- Death-state and duel-state guards prevent movement packets to dead/frozen players mid-continuation
+- `syncPlayerPosition` clears `requestedDestination` + `lastPathPartial` on respawn/teleport
 
 #### Minimap Rendering
 - **Async Terrain Generation**: Chunked sampling (50×50 grid) runs off RAF callback
