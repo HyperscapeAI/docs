@@ -310,6 +310,18 @@ STREAMING_ANNOUNCEMENT_MS=30000                 # Announcement phase duration (d
 STREAMING_FIGHTING_MS=150000                    # Fighting phase duration (default: 150s)
 STREAMING_END_WARNING_MS=10000                  # End warning duration (default: 10s)
 STREAMING_RESOLUTION_MS=5000                    # Resolution phase duration (default: 5s)
+
+# PostgreSQL Connection Pool (commit 0c8dbe0, Mar 2 2026)
+# Reduced pool size to prevent connection exhaustion during crash loops
+POSTGRES_POOL_MAX=3                             # Max connections (down from 6)
+POSTGRES_POOL_MIN=0                             # Min idle connections (down from 2)
+                                                # Prevents PostgreSQL error 53300 (too many connections)
+                                                # Neon serverless has strict limits; lower pool = faster recovery
+
+# Model Agent Spawning (commit fe6b535, Mar 2 2026)
+SPAWN_MODEL_AGENTS=true                         # Auto-create agents when database is empty
+                                                # Allows duels to run even with empty database
+                                                # Useful for fresh deployments and testing
 ```
 
 ## PM2 Production Deployment
