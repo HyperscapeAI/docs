@@ -370,19 +370,27 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 - Model agent spawning (`SPAWN_MODEL_AGENTS=true`) for empty database
 - Streaming status check script (`bun run duel:status`) for quick diagnostics
 
-### Gold Betting Demo
+### Gold Betting Demo (PR #944)
 
 **Mobile Responsive UI**:
-- Resizable panels for desktop with useResizePanel hook
-- Mobile detection with useIsMobile hook
-- 16:9 aspect-ratio video, bottom-sheet sidebar
-- Touch-friendly tab targets, dvh units
-- Real data integration via live SSE feed from game server
+- Resizable panels for desktop with `useResizePanel` hook + `ResizeHandle` component
+- Mobile detection with `useIsMobile` hook gates JS inline styles so CSS media queries control layout
+- 16:9 aspect-ratio video, bottom-sheet sidebar, touch-friendly tab targets, dvh units
+- Mobile header: stacked HYPERSCAPE/MARKET logo, phase strip above video, SOL + EVM wallet buttons
+- Tab reordering: Trades tab moved first for better mobile UX
+- Real data integration via live SSE feed from game server (devnet mode replaces mock data)
+- Simulation mode available via `bun run dev:stream-ui` (dev mode uses real endpoints only)
 
 **Console Noise Reduction**:
-- Recharts warning fix (raised min-height to 120px)
-- EventSource auto-reconnect prevention
-- Exponential backoff for useDuelContext (3s → 6s → 60s cap)
+- Recharts warning fix: raised `.hm-chart-container` min-height to 120px (eliminates width/height=0 warnings)
+- EventSource auto-reconnect prevention: close EventSource on onerror to stop browser's built-in reconnect loop
+- Exponential backoff: `useDuelContext` switched from fixed setInterval to setTimeout with backoff (3s → 6s → 60s cap)
+
+**Architecture Changes**:
+- `AppRoot.tsx` routes `MODE=stream-ui` to `StreamUIApp`, all other modes to `App`
+- `App.tsx` fully purged of `isStreamUIMode` checks and `useMockStreamingEngine` import
+- `bun run dev` (devnet) now connects only to real SSE/duel-context endpoints
+- Simulation/mock data remains available via `bun run dev:stream-ui`
 
 ## Deployment (Railway)
 
