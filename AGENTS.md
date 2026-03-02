@@ -231,7 +231,22 @@ VAST_API_KEY=xxx bun run vast:status
 
 # Destroy current instance
 VAST_API_KEY=xxx bun run vast:destroy
+
+# Run vast-keeper monitoring service
+VAST_API_KEY=xxx bun run vast:keeper
 ```
+
+**Vast.ai Provisioner** (`./scripts/vast-provision.sh`):
+- Automatically searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
+- Filters by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr), disk space (≥120GB)
+- Rents best available instance
+- Waits for instance to be ready
+- Outputs SSH connection details and GitHub secret commands
+- Saves configuration to `/tmp/vast-instance-config.env`
+
+**Requirements**:
+- Vast.ai CLI: `pip install vastai`
+- API key configured: `vastai set api-key YOUR_API_KEY`
 
 ## File Structure
 
