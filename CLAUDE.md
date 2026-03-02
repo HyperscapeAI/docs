@@ -654,13 +654,14 @@ class MySystem {
 
 ## Testing
 
-### E2E Journey Tests
+### E2E Journey Tests (PR #950)
 
 Complete journey tests verify full gameplay flow:
 - **complete-journey.spec.ts**: Full login→loading→spawn→walk gameplay tests
 - **Screenshot Comparison**: Utilities to verify game is rendering correctly
-- **Loading Screen Detection**: `waitForLoadingScreenHidden` helper for synchronization
+- **Loading Screen Detection**: `waitForLoadingScreenHidden` helper for reliable test synchronization
 - **Real Browser Testing**: Uses Playwright with actual WebGPU rendering (no mocks)
+- **Visual Testing**: Screenshot comparison to verify game is rendering correctly
 
 ### Test Stability
 
@@ -669,6 +670,10 @@ Complete journey tests verify full gameplay flow:
 - **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
 - **Anchor Test Configuration**: Use localnet instead of devnet for free SOL in `anchor test`
 - **Quest Actions Tests**: Updated to match current implementation (acceptQuestAction requires not_started quest state)
+- **SlidingWindowRateLimiter Test**: Updated to expect 15/sec for pathfind (was 5/sec)
+- **TradingSystem Test**: Guard world.off calls for test environments where mock world doesn't have off() method
+- **ScriptQueue Test**: Use `handlers.clear()` not `this.handler = null` in PlayerScriptQueue.destroy()
+- **Mob Tile Movement Test**: Add missing TileMovementState properties (requestedDestination, lastPathPartial, nextSegmentPrecomputed)
 
 ## Troubleshooting
 
