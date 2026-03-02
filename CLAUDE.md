@@ -438,7 +438,7 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime.
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
 - **Database**: PostgreSQL (production via Neon), Docker (local)
-- **Testing**: Playwright, Vitest
+- **Testing**: Playwright, Vitest 4.x (upgraded from 2.x for Vite 6 compatibility)
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
 
