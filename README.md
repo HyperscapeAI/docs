@@ -345,23 +345,27 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 **Browser Support**:
 - Safari 18+ (macOS 15+) now required (Safari 17 support removed)
 - WebGPU initialization with 30s adapter timeout and 60s renderer timeout
-- Preflight testing on localhost server (secure context)
-- Adapter info compatibility fallback for older Chromium
+- Preflight testing on localhost server (secure context, not about:blank)
+- Adapter info compatibility fallback for older Chromium (requestAdapterInfo() not available)
 
 **Vast.ai Deployment**:
-- GPU display driver requirement (`gpu_display_active=true`)
-- Early display driver check with nvidia_drm kernel module verification
-- 6-stage WebGPU testing during deployment
-- Verbose Chrome GPU logging for diagnostics
-- PM2 log capture with 60s initialization wait
+- GPU display driver requirement (`gpu_display_active=true`) - CRITICAL for WebGPU
+- Automated provisioner script (`./scripts/vast-provision.sh`) with reliability/price filtering
+- Early display driver check with nvidia_drm kernel module and /dev/dri/ device node verification
+- 6-stage WebGPU testing during deployment (headless-vulkan, headless-egl, xvfb-vulkan, ozone-headless, swiftshader, playwright-xvfb)
+- Verbose Chrome GPU logging for diagnostics (`--enable-logging=stderr --v=1`)
+- PM2 log capture with 60s initialization wait and crash loop detection
 - Display environment reuse to prevent Vulkan ICD configuration loss
+- X server detection via socket check (`/tmp/.X11-unix/X99`) instead of xdpyinfo
 
 **Streaming Optimizations**:
-- Production client build support (fixes 180s browser timeout)
-- Stream encoding with 2x bitrate buffer multiplier (reduced from 4x)
-- Health check timeout: 5s (data timeout: 15s)
+- Production client build support (fixes 180s browser timeout caused by Vite JIT compilation)
+- Stream encoding with 2x bitrate buffer multiplier (reduced from 4x to prevent backpressure)
+- Health check timeout: 5s (data timeout: 15s) for faster failure detection
 - Browser restart every 45 minutes to prevent WebGPU OOM crashes
 - Resolution tracking and mismatch detection with automatic viewport recovery
+- Model agent spawning (`SPAWN_MODEL_AGENTS=true`) for empty database
+- Streaming status check script (`bun run duel:status`) for quick diagnostics
 
 ### Gold Betting Demo
 
