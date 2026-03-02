@@ -184,7 +184,9 @@ VAST_API_KEY=xxx bun run vast:keeper
 
 ```bash
 # Check streaming status on Vast.ai
-bun run duel:status
+bun run duel:status       # Quick diagnostic for streaming health
+                          # Checks: server health, streaming API, duel context,
+                          # RTMP bridge, PM2 processes, recent logs
 
 # Start duel stack locally
 bun run duel              # Basic duel stack
