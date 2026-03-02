@@ -26,7 +26,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 ## Quick Start
 
 **Prerequisites:**
-- [Bun](https://bun.sh) (v1.3.10+, updated from v1.1.38)
+- [Bun](https://bun.sh) (v1.3.10+) - **Updated from v1.1.38**
 - [Git LFS](https://git-lfs.com) - `brew install git-lfs` (macOS) or `apt install git-lfs` (Linux)
 - Docker - [Docker Desktop](https://docker.com/products/docker-desktop) for macOS/Windows, or `apt install docker.io` on Linux
 - [Privy](https://privy.io) account (required for authentication)
@@ -105,17 +105,12 @@ packages/
 ├── client/              # Web client (Vite, React)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
-├── procgen/             # Procedural generation (terrain, trees, buildings)
-├── impostors/           # Impostor system for LOD rendering
+├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation tools
-├── vast-keeper/         # Vast.ai instance management and monitoring
-├── gold-betting-demo/   # Gold betting demo with mobile-responsive UI
-├── evm-contracts/       # EVM smart contracts (GoldClob, AgentPerps)
-├── contracts/           # MUD smart contracts
 └── docs-site/           # Documentation (Docusaurus)
 ```
 
-Build order: `physx-js-webidl` → `impostors` → `procgen` → `shared` → everything else (handled automatically by Turbo)
+Build order: `physx-js-webidl` → `shared` → everything else (handled automatically by Turbo)
 
 ## Commands
 
@@ -147,9 +142,7 @@ bun run docs:dev      # Documentation site (port 3402)
 bun run dev:all       # Everything: game + AI + AssetForge
 ```
 
-### Vast.ai Commands
-
-For GPU server deployment and streaming:
+### Vast.ai Commands (NEW)
 
 ```bash
 # Search for WebGPU-capable instances
@@ -174,34 +167,38 @@ VAST_API_KEY=xxx bun run vast:keeper
 - Rents best available instance
 - Waits for instance to be ready
 - Outputs SSH connection details and GitHub secret commands
-- Saves configuration to `/tmp/vast-instance-config.env`
 
 **Requirements**:
 - Vast.ai CLI: `pip install vastai`
 - API key configured: `vastai set api-key YOUR_API_KEY`
 
-### Streaming Commands
+### Duel/Streaming Commands (NEW)
 
 ```bash
-# Check streaming status on Vast.ai
-bun run duel:status       # Quick diagnostic for streaming health
-                          # Checks: server health, streaming API, duel context,
-                          # RTMP bridge, PM2 processes, recent logs
+# Development duel mode
+bun run dev:duel
 
-# Start duel stack locally
-bun run duel              # Basic duel stack
-bun run duel:full         # With market maker
+# Production duel stack
+bun run duel:prod
+bun run duel:prod:stop
+bun run duel:prod:restart
+bun run duel:prod:logs
+bun run duel:prod:status
 
-# Production duel stack (PM2)
-bun run duel:prod         # Start with PM2
-bun run duel:prod:stop    # Stop PM2 processes
-bun run duel:prod:restart # Restart PM2 processes
-bun run duel:prod:logs    # View PM2 logs
-bun run duel:prod:status  # Check PM2 status
-
-# Verify duel stack configuration
+# Verify duel stack
 bun run duel:verify
+
+# Check streaming status (NEW)
+bun run duel:status
 ```
+
+The `duel:status` command provides quick diagnostics:
+- Server health check
+- Streaming API status
+- Duel context (fighting phase)
+- RTMP bridge status and bytes streamed
+- PM2 process status
+- Recent logs
 
 ### Docker services
 
@@ -241,10 +238,32 @@ bun run assets:sync    # Pull latest assets from repo (local dev only)
 Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.privy.io).
 
 **Optional configuration** - see `.env.example` files for all options:
-- `packages/server/.env.example` - Database, ports, LiveKit voice chat, streaming
+- `packages/server/.env.example` - Database, ports, LiveKit voice chat
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
+
+### New Environment Variables
+
+Recent updates added several new configuration options (see `packages/server/.env.example` for full details):
+
+**Model Agent Spawning**:
+```bash
+SPAWN_MODEL_AGENTS=true  # Enable automatic agent creation when DB is empty
+```
+
+**Streaming Configuration**:
+```bash
+STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable  # Explicit Chrome path
+STREAM_LOW_LATENCY=true                                    # Use zerolatency tune
+STREAM_GOP_SIZE=60                                         # GOP size in frames
+```
+
+**PostgreSQL Connection Pool** (optimized for crash loop scenarios):
+```bash
+POSTGRES_POOL_MAX=3      # Max connections (reduced from 6)
+POSTGRES_POOL_MIN=0      # Min idle connections
+```
 
 ### Default Ports
 
@@ -257,151 +276,7 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 3401 | AssetForge API | `bun run dev:forge` |
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
-
-## Recent Improvements
-
-### Performance Optimizations (PR #950, PR #hackathon)
-
-**Object Pooling for Zero-Allocation Event Emission**:
-- Comprehensive object pooling eliminates GC pressure in high-frequency event loops
-- `CombatEventPools`: Pre-configured pools for all combat events (damageDealt, projectileLaunched, etc.)
-- `PositionPool`: Global pool for `{x, y, z}` position objects
-- Memory stays flat during 60s stress test with agents in combat
-- Verified zero-allocation event emission in CombatSystem and CombatTickProcessor
-
-**Movement System**:
-- Immediate move processing (eliminates 0-600ms latency by bypassing ActionQueue)
-- Pathfinding rate limit raised from 5/sec to 15/sec to match tile movement limiter
-- BFS iterations increased from 2000 to 8000 (~44 tile radius vs ~22 tile)
-- Path continuation for seamless long-distance movement with automatic re-pathfinding
-- Skating fix with server-side pre-computation + client-side path appending
-- Multi-click feel with optimistic target pivoting + pending move queue
-- Per-frame allocation elimination with pre-allocated buffers and squared distance comparisons
-
-**Minimap Rendering**:
-- Async terrain generation (50×50 grid) runs off RAF callback via setTimeout(0) yields
-- Zero RAF blocking - terrain generation happens in background macrotasks
-- Canvas rotation transform decouples regeneration from camera rotation
-- Reduced terrain sampling from up to 40,000 pixels to 2,500 (16× reduction)
-- Layer synchronization - all layers (terrain, roads, buildings, pips) use same camera snapshot
-- Cached contexts to avoid getContext() DOM queries
-- Rotation threshold raised from 0.01 to 0.087 (~5°) to prevent regeneration on every tiny angular change
-
-**GPU Resource Hygiene**:
-- Object pools for XPDropSystem and DuelCountdownSplatSystem
-- Proper destroy() methods for HealthBars and ProjectileRenderer
-- Machine ID caching and activity debouncing (500ms)
-- Stale health bar sweep for despawned entities (reverse iteration)
-- World initialization race condition fix with two-flag handshake (initComplete + needsCleanup)
-- ThreeResourceManager teardown() to stop dev monitor interval
-
-### Stability Improvements
-
-**Combat System**:
-- Zero-allocation event emission with object pooling (CombatEventPools) - eliminates GC pressure in high-frequency event loops
-- `CombatEventPools`: Pre-configured pools for all combat events (damageDealt, projectileLaunched, faceTarget, etc.)
-- `PositionPool`: Global pool for `{x, y, z}` position objects with O(1) acquire/release
-- Memory stays flat during 60s stress test with agents in combat
-- Verified zero-allocation event emission in CombatSystem and CombatTickProcessor
-- Combat retry timer aligned with tick system (3000ms = 5 ticks)
-- Phase timeout reduced from 30s to 10s for faster failure detection
-- Combat stall nudge tracks last nudge timestamp for re-nudging
-- Damage event cache cleanup every tick, cap lowered to 1000, evict 75%
-- TerrainSystem player position tracking fixed for proper tile unloading
-- PendingGatherManager reduced logging, added early-out for repeated gathers
-- ResourceSystem added `isPlayerGatheringResource()` for early-out checks
-
-**Agent System**:
-- LLM rate limiting with exponential backoff (5s base, max 60s)
-- Dynamic combat escalation (goblins → bandits → barbarians as combat level grows)
-- Combat style rotation (attack → strength → defense, train lowest skill)
-- Cooking phase for immediate food preparation
-- Gear upgrade phase for smithing better equipment
-- Combat food threshold increased from 5 → 10 for better survival
-- Critical crash fix: `weapon.toLowerCase is not a function` in getEquippedWeaponTier
-- Quest goal status change detection for proper quest lifecycle transitions
-
-**Memory Leak Fixes** (PR #950, PR #951):
-- 20+ critical memory leaks fixed across codebase
-- ModelCache geometry disposal (CRITICAL) - prevents GPU memory accumulation
-- EventBridge listener cleanup (HIGH) - 50+ world event listeners now properly removed
-- GameTickProcessor, TradingSystem event handler cleanup (HIGH)
-- Proper destroy() methods for all systems and managers
-- Session timeout (30-minute max via MAX_SESSION_TICKS)
-- Activity logger queue with max size 1000 and 25% eviction
-- PostgreSQL connection pool configuration (PR #951):
-  - `POSTGRES_POOL_MAX=3` (down from 6) to prevent connection exhaustion during crash loops
-  - `POSTGRES_POOL_MIN=0` to not hold idle connections during crashes
-  - `restart_delay=10s` (up from 5s) to allow connections to fully close before PM2 restart
-  - `exp_backoff_restart_delay=2s` for more gradual backoff on repeated failures
-  - Prevents PostgreSQL error 53300 (too many connections) during crash loop scenarios
-
-### Testing (PR #950)
-
-**E2E Journey Tests**:
-- Complete journey tests (login→loading→spawn→walk) in `complete-journey.spec.ts`
-- Screenshot comparison utilities to verify game is rendering correctly
-- Loading screen detection helpers (`waitForLoadingScreenHidden`)
-- Real browser testing with Playwright and actual WebGPU rendering (no mocks)
-
-**Test Stability**:
-- GoldClob fuzz tests with 120s timeout (4 seeds × 140 operations)
-- Precision fixes for gas cost calculations (use 10000n amounts)
-- Dynamic import timeout for service tests (60s for EmbeddedHyperscapeService)
-- Anchor test configuration using localnet instead of devnet for free SOL
-- SlidingWindowRateLimiter test updated to expect 15/sec for pathfind (was 5/sec)
-- TradingSystem test guards world.off calls for test environments
-- ScriptQueue test uses `handlers.clear()` not `this.handler = null`
-- Mob tile movement test adds missing TileMovementState properties
-
-### WebGPU & Streaming
-
-**Browser Support**:
-- Safari 18+ (macOS 15+) now required (Safari 17 support removed)
-- WebGPU initialization with 30s adapter timeout and 60s renderer timeout
-- Preflight testing on localhost server (secure context, not about:blank)
-- Adapter info compatibility fallback for older Chromium (requestAdapterInfo() not available)
-
-**Vast.ai Deployment**:
-- GPU display driver requirement (`gpu_display_active=true`) - CRITICAL for WebGPU
-- Automated provisioner script (`./scripts/vast-provision.sh`) with reliability/price filtering
-- Early display driver check with nvidia_drm kernel module and /dev/dri/ device node verification
-- 6-stage WebGPU testing during deployment (headless-vulkan, headless-egl, xvfb-vulkan, ozone-headless, swiftshader, playwright-xvfb)
-- Verbose Chrome GPU logging for diagnostics (`--enable-logging=stderr --v=1`)
-- PM2 log capture with 60s initialization wait and crash loop detection
-- Display environment reuse to prevent Vulkan ICD configuration loss
-- X server detection via socket check (`/tmp/.X11-unix/X99`) instead of xdpyinfo
-
-**Streaming Optimizations**:
-- Production client build support (fixes 180s browser timeout caused by Vite JIT compilation)
-- Stream encoding with 2x bitrate buffer multiplier (reduced from 4x to prevent backpressure)
-- Health check timeout: 5s (data timeout: 15s) for faster failure detection
-- Browser restart every 45 minutes to prevent WebGPU OOM crashes
-- Resolution tracking and mismatch detection with automatic viewport recovery
-- Model agent spawning (`SPAWN_MODEL_AGENTS=true`) for empty database
-- Streaming status check script (`bun run duel:status`) for quick diagnostics
-
-### Gold Betting Demo (PR #944)
-
-**Mobile Responsive UI**:
-- Resizable panels for desktop with `useResizePanel` hook + `ResizeHandle` component
-- Mobile detection with `useIsMobile` hook gates JS inline styles so CSS media queries control layout
-- 16:9 aspect-ratio video, bottom-sheet sidebar, touch-friendly tab targets, dvh units
-- Mobile header: stacked HYPERSCAPE/MARKET logo, phase strip above video, SOL + EVM wallet buttons
-- Tab reordering: Trades tab moved first for better mobile UX
-- Real data integration via live SSE feed from game server (devnet mode replaces mock data)
-- Simulation mode available via `bun run dev:stream-ui` (dev mode uses real endpoints only)
-
-**Console Noise Reduction**:
-- Recharts warning fix: raised `.hm-chart-container` min-height to 120px (eliminates width/height=0 warnings)
-- EventSource auto-reconnect prevention: close EventSource on onerror to stop browser's built-in reconnect loop
-- Exponential backoff: `useDuelContext` switched from fixed setInterval to setTimeout with backoff (3s → 6s → 60s cap)
-
-**Architecture Changes**:
-- `AppRoot.tsx` routes `MODE=stream-ui` to `StreamUIApp`, all other modes to `App`
-- `App.tsx` fully purged of `isStreamUIMode` checks and `useMockStreamingEngine` import
-- `bun run dev` (devnet) now connects only to real SSE/duel-context endpoints
-- Simulation/mock data remains available via `bun run dev:stream-ui`
+| 8765 | RTMP Bridge | `bun run duel` |
 
 ## Deployment (Railway)
 
@@ -429,6 +304,44 @@ git push origin v1.0.0
 ```
 
 That tag triggers cross-platform native packaging and publishes installers to a GitHub Release.
+
+## Performance & Memory Management
+
+### Object Pooling System (NEW)
+
+Hyperscape implements comprehensive object pooling to eliminate GC pressure in high-frequency event loops:
+
+**Event Payload Pools** (`packages/shared/src/utils/pools/`):
+- `EventPayloadPool.ts` - Factory for creating type-safe event payload pools
+- `CombatEventPools.ts` - Pre-configured pools for all combat events
+- `PositionPool.ts` - Pool for `{x, y, z}` position objects
+
+**Performance Impact**:
+- Eliminates per-tick object allocations in combat hot paths
+- Memory stays flat during 60s stress test with agents in combat
+- Verified zero-allocation event emission in CombatSystem
+
+See [AGENTS.md](AGENTS.md) for complete memory management documentation and usage patterns.
+
+### Client Performance Optimizations (NEW)
+
+**Movement System**:
+- Immediate move processing (bypasses ActionQueue for 0-latency response)
+- Pathfinding rate limit raised from 5/sec to 15/sec
+- BFS iterations increased from 2000 to 8000 (~44 tile radius)
+- Path continuation for seamless long-distance movement
+- Server-side pre-computation eliminates skating at segment boundaries
+
+**Minimap Rendering**:
+- Async terrain generation (50×50 grid) runs off RAF callback
+- Zero RAF blocking - terrain generation in background macrotasks
+- Canvas rotation transform decouples terrain regen from camera rotation
+- Reduced terrain sampling from 40,000 pixels to 2,500 (16× reduction)
+
+**GPU Resource Hygiene**:
+- Object pools for XPDropSystem, DuelCountdownSplatSystem
+- Proper cleanup in HealthBars, ProjectileRenderer, PlayerTokenManager
+- Two-flag handshake prevents world.destroy() racing world.init()
 
 ## Troubleshooting
 
@@ -466,6 +379,7 @@ bun run dev
 lsof -ti:5555 | xargs kill -9   # Server
 lsof -ti:3333 | xargs kill -9   # Client
 lsof -ti:8080 | xargs kill -9   # CDN
+lsof -ti:8765 | xargs kill -9   # RTMP Bridge
 ```
 
 **Build errors:**
@@ -476,6 +390,30 @@ bun install
 bun run build
 ```
 
+**Memory leaks during development:**
+If you see memory growth:
+1. Check that all event listeners are properly cleaned up in `destroy()` methods
+2. Verify object pools are being released (call `CombatEventPools.checkAllLeaks()`)
+3. Use Chrome DevTools Memory Profiler to identify leaking objects
+4. See [AGENTS.md](AGENTS.md) Memory Management section for cleanup patterns
+
+**Streaming/Vast.ai issues:**
+```bash
+# Check streaming health
+bun run duel:status
+
+# View PM2 logs
+bun run duel:prod:logs
+
+# Restart streaming
+bun run duel:prod:restart
+```
+
+Common issues:
+- **WebGPU not initializing**: Ensure instance has `gpu_display_active=true`
+- **Browser timeout**: Use production client build (`DUEL_USE_PRODUCTION_CLIENT=true`)
+- **Connection pool exhaustion**: Check `POSTGRES_POOL_MAX` setting
+
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
@@ -484,7 +422,7 @@ bun run build
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
 
-See [AGENTS.md](AGENTS.md) for AI coding assistant instructions and WebGPU streaming architecture.
+See [AGENTS.md](AGENTS.md) for AI coding assistant guidelines, including comprehensive memory management and object pooling documentation.
 
 ## License
 
