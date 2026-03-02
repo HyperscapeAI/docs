@@ -109,12 +109,37 @@ VAST_API_KEY=xxx bun run vast:destroy
 VAST_API_KEY=xxx bun run vast:keeper
 ```
 
-The Vast.ai provisioner automatically:
-- Searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
+**Vast.ai Provisioner** (`./scripts/vast-provision.sh`):
+- Automatically searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
 - Filters by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr), disk space (≥120GB)
 - Rents best available instance
 - Waits for instance to be ready
 - Outputs SSH connection details and GitHub secret commands
+- Saves configuration to `/tmp/vast-instance-config.env`
+
+**Requirements**:
+- Vast.ai CLI: `pip install vastai`
+- API key configured: `vastai set api-key YOUR_API_KEY`
+
+### Streaming Commands
+```bash
+# Check streaming status on Vast.ai
+bun run duel:status
+
+# Start duel stack locally
+bun run duel              # Basic duel stack
+bun run duel:full         # With market maker
+
+# Production duel stack (PM2)
+bun run duel:prod         # Start with PM2
+bun run duel:prod:stop    # Stop PM2 processes
+bun run duel:prod:restart # Restart PM2 processes
+bun run duel:prod:logs    # View PM2 logs
+bun run duel:prod:status  # Check PM2 status
+
+# Verify duel stack configuration
+bun run duel:verify
+```
 
 ### Mobile Development
 ```bash
