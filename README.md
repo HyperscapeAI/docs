@@ -26,7 +26,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 ## Quick Start
 
 **Prerequisites:**
-- [Bun](https://bun.sh) (v1.1.38+)
+- [Bun](https://bun.sh) (v1.3.10+, updated from v1.1.38)
 - [Git LFS](https://git-lfs.com) - `brew install git-lfs` (macOS) or `apt install git-lfs` (Linux)
 - Docker - [Docker Desktop](https://docker.com/products/docker-desktop) for macOS/Windows, or `apt install docker.io` on Linux
 - [Privy](https://privy.io) account (required for authentication)
