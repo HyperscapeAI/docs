@@ -487,14 +487,25 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - Death-state and duel-state guards prevent movement packets to dead/frozen players mid-continuation
 - `syncPlayerPosition` clears `requestedDestination` + `lastPathPartial` on respawn/teleport
 
-#### Minimap Rendering
-- **Async Terrain Generation**: Chunked sampling (50×50 grid) runs off RAF callback
-- **Zero RAF Blocking**: Terrain generation happens in background macrotasks
-- **Canvas Rotation Transform**: Decouples terrain regeneration from camera rotation
-- **Terrain Overshoot**: √2 × 1.1 sampling ensures corners stay filled at any rotation
-- **Layer Synchronization**: All layers use same camera snapshot
-- **Cached Contexts**: Canvas 2D contexts cached to avoid getContext() DOM queries
-- **Performance**: Reduced terrain sampling from 40,000 pixels to 2,500 (16× reduction)
+#### Minimap Rendering (PR #950)
+- **Async Terrain Generation**: Chunked sampling (50×50 grid) runs off RAF callback via setTimeout(0) yields
+- **Zero RAF Blocking**: Terrain generation happens in background macrotasks, not during frame rendering
+- **Canvas Rotation Transform**: Decouples terrain regeneration from camera rotation (only regenerates on player move/zoom)
+- **Terrain Overshoot**: √2 × 1.1 sampling ensures corners stay filled at any rotation angle
+- **Layer Synchronization**: All layers (terrain, roads, buildings, pips) use same camera snapshot
+- **Cached Contexts**: Canvas 2D contexts cached in refs to avoid getContext() DOM queries
+- **Performance**: Reduced terrain sampling from up to 40,000 pixels to 2,500 (16× reduction)
+
+**Technical Details**:
+- `generateTerrainChunked()` async function yields every 10 rows (5 yield points per generation)
+- `terrainGenVersionRef` monotonically-incrementing token cancels in-flight generation on camera change
+- RAF callbacks only call `drawImage()` (sub-ms GPU blit), no terrain sampling
+- Rotation handled by canvas transform: `ctx.rotate(+deltaYaw)` around canvas center
+- `TERRAIN_OVERSHOOT` (√2 × 1.1 ≈ 1.555×) ensures canvas corners stay filled at any rotation
+- `terrainCacheUpRef` stores camera up vector when terrain cache is generated
+- All `worldToPx` calls for roads/buildings use snapshot values instead of live camera state
+- Rotation threshold raised from 0.01 to 0.087 (~5°) to prevent regeneration on every tiny angular change
+- `terrainIsGeneratingRef` mutex prevents overlapping async generations
 
 #### GPU Resource Hygiene
 - **XPDropSystem**: Object pool for CanvasTexture/SpriteMaterial reuse
