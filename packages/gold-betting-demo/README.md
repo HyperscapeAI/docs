@@ -8,9 +8,6 @@ Standalone demo package for a binary YES/NO betting market settled from a separa
 - `anchor/programs/gold_binary_market`: on-chain GOLD-only binary market, fee routing, market-maker seed logic, and winner claims.
 - `anchor/tests/gold-betting-demo.ts`: local end-to-end tests using mock GOLD token accounts and local validator.
 - `app`: standalone Vite app for wallet connect, market creation, bet placement, Jupiter conversion (SOL/USDC -> GOLD), settlement, and claiming.
-  - **Mobile Responsive UI**: Full mobile overhaul with resizable panels (desktop), bottom-sheet sidebar (mobile), touch-friendly targets
-  - **Real Data Integration**: Live SSE feed from game server (devnet mode) replaces mock data
-  - **Simulation Mode**: Available via `bun run dev:stream-ui` for testing with mock data
 - `keeper`: CLI automation scripts for market-maker seeding and oracle resolution, using Helius RPC.
   - includes a market bot that keeps rounds running, resolves finished rounds, and seeds liquidity.
 
@@ -30,40 +27,6 @@ Standalone demo package for a binary YES/NO betting market settled from a separa
 - Fight oracle program id: `EW9GwxawnPEHA4eFgqd2oq9t55gSG4ReNqPRyG6Ui6PF`
 - Market program id: `23YJWaC8AhEufH8eYdPMAouyWEgJ5MQWyvz3z8akTtR6`
 - Mainnet GOLD mint: `DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump`
-
-## Mobile Responsive UI
-
-The app features a complete mobile-responsive overhaul:
-
-### Desktop Layout
-- **Resizable Panels**: useResizePanel hook + ResizeHandle component for adjustable sidebar width
-- **Drag-to-Resize**: Smooth panel resizing with visual feedback
-- **Persistent Layout**: Panel sizes saved to localStorage
-
-### Mobile Layout
-- **16:9 Aspect Ratio Video**: Optimized for mobile viewing
-- **Bottom-Sheet Sidebar**: Slides up from bottom with touch-friendly tab targets
-- **dvh Units**: Dynamic viewport height units for proper mobile browser chrome handling
-- **Stacked Header**: HYPERSCAPE/MARKET logo stacked vertically, phase strip above video
-- **Dual Wallet Buttons**: Both SOL and EVM wallet buttons visible on mobile
-- **Tab Reordering**: Trades tab moved first for better mobile UX
-
-### Responsive Behavior
-- **useIsMobile Hook**: Detects mobile viewport and gates JS inline styles
-- **CSS Media Queries**: Control layout breakpoints without JS interference
-- **Touch Targets**: Minimum 44px touch targets for accessibility
-- **Optimized Charts**: Recharts min-height raised to 120px to eliminate width/height=0 warnings
-
-### Console Noise Reduction
-- **Recharts Warning Fix**: Raised .hm-chart-container min-height to 120px (eliminates ResponsiveContainer width/height=0 warning spam on mobile)
-- **EventSource Auto-Reconnect**: Close EventSource on onerror to stop browser's built-in auto-reconnect loop from flooding console with ERR_CONNECTION_REFUSED when game server is unreachable
-- **Exponential Backoff**: useDuelContext switched from fixed setInterval to setTimeout with exponential backoff (3s → 6s → … → 60s cap) so repeated connection failures produce far fewer console errors
-
-### Mode Routing
-- **AppRoot.tsx**: Routes `MODE=stream-ui` to StreamUIApp, all other modes to App
-- **App.tsx**: Fully purged of isStreamUIMode checks and useMockStreamingEngine import
-- **Dev Mode**: `bun run dev` (devnet) now connects only to real SSE/duel-context endpoints
-- **Simulation Mode**: `bun run dev:stream-ui` provides mock data for testing without game server
 
 ## Local E2E tests (Anchor + mock GOLD)
 
@@ -155,6 +118,11 @@ bun run dev
 - seeds local mock GOLD + active market state
 - starts Vite on `http://127.0.0.1:4179`
 
+**Stream UI Mode** (simulation with mock data):
+```bash
+bun run dev:stream-ui
+```
+
 Raw app-only local mode (without validator bootstrap):
 
 ```bash
@@ -173,12 +141,6 @@ For testnet mode:
 bun run dev:testnet
 ```
 
-For stream-ui simulation mode (mock data):
-
-```bash
-bun run dev:stream-ui
-```
-
 Build:
 
 ```bash
@@ -186,6 +148,45 @@ bun run build
 bun run build:testnet
 bun run build:mainnet
 ```
+
+## Mobile Responsive UI (PR #944)
+
+The app features a fully responsive mobile-first design:
+
+**Desktop Layout**:
+- Resizable panels with `useResizePanel` hook + `ResizeHandle` component
+- Drag-to-resize between video and sidebar
+- Persistent panel sizes
+
+**Mobile Layout**:
+- 16:9 aspect-ratio video player
+- Bottom-sheet sidebar with touch-friendly tab targets
+- Stacked HYPERSCAPE/MARKET logo
+- Phase strip above video
+- Both SOL and EVM wallet buttons
+- Tab reordering: Trades tab moved first for better UX
+- Uses `dvh` units for proper mobile viewport handling
+
+**Responsive Behavior**:
+- `useIsMobile` hook gates JS inline styles so CSS media queries control layout
+- Breakpoint: 768px (tablet and below)
+- Automatic layout switching without page reload
+
+**Data Integration**:
+- Live SSE feed from game server in devnet mode
+- Real-time duel context updates
+- Simulation mode available via `bun run dev:stream-ui`
+- Dev mode (`bun run dev`) uses real endpoints only
+
+**Architecture Changes**:
+- `AppRoot.tsx` routes `MODE=stream-ui` to `StreamUIApp`, all other modes to `App`
+- `App.tsx` fully purged of `isStreamUIMode` checks and `useMockStreamingEngine` import
+- Simulation/mock data remains available via `bun run dev:stream-ui`
+
+**Console Noise Reduction**:
+- Recharts warning fix: raised `.hm-chart-container` min-height to 120px (eliminates width/height=0 warnings)
+- EventSource auto-reconnect prevention: close EventSource on onerror to stop browser's built-in reconnect loop
+- Exponential backoff: `useDuelContext` switched from fixed setInterval to setTimeout with backoff (3s → 6s → 60s cap)
 
 ## Keeper scripts
 
