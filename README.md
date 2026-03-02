@@ -298,7 +298,11 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 ### Stability Improvements
 
 **Combat System**:
-- Zero-allocation event emission with object pooling (CombatEventPools)
+- Zero-allocation event emission with object pooling (CombatEventPools) - eliminates GC pressure in high-frequency event loops
+- `CombatEventPools`: Pre-configured pools for all combat events (damageDealt, projectileLaunched, faceTarget, etc.)
+- `PositionPool`: Global pool for `{x, y, z}` position objects with O(1) acquire/release
+- Memory stays flat during 60s stress test with agents in combat
+- Verified zero-allocation event emission in CombatSystem and CombatTickProcessor
 - Combat retry timer aligned with tick system (3000ms = 5 ticks)
 - Phase timeout reduced from 30s to 10s for faster failure detection
 - Combat stall nudge tracks last nudge timestamp for re-nudging
