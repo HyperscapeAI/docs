@@ -1,6 +1,6 @@
 # Hyperscape Server
 
-Production-ready game server for Hyperscape 3D multiplayer worlds with PostgreSQL backend and GPU-accelerated streaming.
+Production-ready game server for Hyperscape 3D multiplayer worlds with PostgreSQL backend.
 
 ## ✅ Status: FULLY OPERATIONAL
 
@@ -10,22 +10,21 @@ The server has been successfully migrated to PostgreSQL and is production-ready 
 - Character creation and multi-character support
 - Complete persistence layer (inventory, equipment, skills, position)
 - Real-time multiplayer via WebSocket
-- Multi-platform RTMP streaming (Twitch, Kick, X/Twitter)
-- WebGPU-accelerated rendering with automatic recovery
 - 15 registered game actions
+
+See `FIXES-COMPLETE.md` for detailed migration changelog.
 
 ## Features
 
 - **PostgreSQL Database** - Full persistence with automatic migrations
 - **WebSocket Support** - Real-time multiplayer via Fastify WebSockets
-- **GPU Streaming** - Multi-platform RTMP streaming with WebGPU rendering
-- **Stream Capture Modes** - CDP (default), WebCodecs (experimental), MediaRecorder (legacy)
-- **Automatic Recovery** - Viewport restoration, probe timeouts, soft/hard recovery
 - **Docker Integration** - Automatic local PostgreSQL via Docker (optional)
 - **Asset Serving** - Efficient static asset delivery
 - **Character System** - Multi-character support per account
 - **Authentication** - Optional Privy authentication with Farcaster support
 - **LiveKit Voice** - Optional voice chat integration
+- **Object Pooling** - Zero-allocation event emission for combat and movement
+- **Memory Management** - Comprehensive leak fixes and resource cleanup
 
 ## Quick Start
 
@@ -33,7 +32,6 @@ The server has been successfully migrated to PostgreSQL and is production-ready 
 
 - **Bun** (recommended) or Node.js 22+
 - **Docker Desktop** (for local PostgreSQL) OR external PostgreSQL instance
-- **For GPU Streaming**: NVIDIA GPU with Vulkan support, Xorg/Xvfb, PulseAudio, FFmpeg
 
 ### Installation
 
@@ -46,7 +44,7 @@ bun install
 
 Copy the example environment file:
 ```bash
-cp .env.example .env
+cp env.example .env
 ```
 
 **Option 1: Local PostgreSQL (Docker)**
@@ -71,20 +69,12 @@ This automatically starts:
 - CDN Server (nginx on port 8080) - via Docker
 - Game Server (Fastify on port 5555)
 - Client (Vite on port 3333)
+- 3D Asset Forge API (port 3001) & UI (port 3003)
 
 **Production Build:**
 ```bash
 bun run build
 bun run start
-```
-
-**GPU Streaming:**
-```bash
-# Start RTMP streaming to configured platforms
-bun run stream:rtmp
-
-# Or use PM2 for production
-pm2 start ecosystem.config.cjs
 ```
 
 ### CDN Server
@@ -149,226 +139,39 @@ cat backup.sql | docker exec -i hyperscape-postgres psql -U hyperscape hyperscap
 
 ### Migrations
 
-Migrations are defined in `src/database/migrations/` and run automatically on server start using Drizzle ORM.
+Migrations are defined in `src/db.ts` and run automatically on server start. The migration system tracks version in the `config` table.
 
-## GPU Streaming
-
-### Architecture
-
-Hyperscape streams live gameplay to multiple platforms using GPU-accelerated rendering:
-
-**Capture Pipeline:**
-```
-Chrome (WebGPU) → CDP Screencast → FFmpeg (H.264) → RTMP Tee Muxer → Twitch/Kick/X
-```
-
-**Capture Modes:**
-1. **CDP (default)** - Chrome DevTools Protocol screencast
-   - Fastest and most reliable
-   - Direct JPEG frame piping to FFmpeg
-   - ~2-3x faster than MediaRecorder
-   - Automatic viewport recovery on resolution mismatch
-
-2. **WebCodecs (experimental)** - Native VideoEncoder API
-   - Uses browser's hardware encoder
-   - FFmpeg stream copy (no re-encoding)
-   - Falls back to CDP if initialization fails
-
-3. **MediaRecorder (legacy)** - WebRTC MediaRecorder API
-   - Fallback mode for compatibility
-   - Higher CPU usage due to double encoding
-
-**Audio Capture:**
-- PulseAudio virtual sink (`chrome_audio`)
-- FFmpeg captures from monitor (`chrome_audio.monitor`)
-- Async resampling with buffering
-
-**Multi-Platform Streaming:**
-- FFmpeg tee muxer for single-encode multi-output
-- Simultaneous streaming to Twitch, Kick, X/Twitter
-- YouTube explicitly disabled
-- Stream keys from environment variables (never hardcoded)
-
-### Configuration
-
-**Stream Capture:**
-```env
-# Capture mode
-STREAM_CAPTURE_MODE=cdp                    # cdp, webcodecs, mediarecorder
-
-# Resolution (must be even numbers)
-STREAM_CAPTURE_WIDTH=1280
-STREAM_CAPTURE_HEIGHT=720
-
-# Frame rate
-STREAM_FPS=30
-
-# JPEG quality for CDP mode (1-100)
-STREAM_CDP_QUALITY=80
-```
-
-**Stream Encoding:**
-```env
-# Encoding optimization
-STREAM_LOW_LATENCY=false                   # false = film tune, true = zerolatency
-STREAM_GOP_SIZE=60                         # Keyframe interval (frames)
-
-# Audio
-STREAM_AUDIO_ENABLED=true
-PULSE_AUDIO_DEVICE=chrome_audio.monitor
-```
-
-**Stream Destinations:**
-```env
-# Twitch
-TWITCH_STREAM_KEY=live_...
-
-# Kick (RTMPS)
-KICK_STREAM_KEY=...
-KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
-
-# X/Twitter
-X_STREAM_KEY=...
-X_RTMP_URL=rtmp://sg.pscp.tv:80/x
-
-# YouTube (disabled)
-YOUTUBE_STREAM_KEY=""
-```
-
-**Recovery Settings:**
-```env
-# Timeout for recovery operations (ms)
-STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000
-
-# Max failures before fallback to MediaRecorder
-STREAM_CAPTURE_RECOVERY_MAX_FAILURES=6
-```
-
-**GPU Configuration** (auto-configured by `scripts/deploy-vast.sh`):
-```env
-# Display server
-DISPLAY=:99                                # :0 for Xorg, :99 for Xvfb
-GPU_RENDERING_MODE=xorg                    # xorg, xvfb-vulkan, ozone-headless
-DUEL_CAPTURE_USE_XVFB=false               # true for Xvfb, false for Xorg
-
-# Vulkan
-VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
-
-# Browser
-STREAM_CAPTURE_CHANNEL=chrome-dev          # Playwright channel
-STREAM_CAPTURE_HEADLESS=false              # Always false - WebGPU requires display
-
-# PulseAudio
-XDG_RUNTIME_DIR=/tmp/pulse-runtime
-PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
-```
-
-**Production Client:**
-```env
-# Use pre-built client for faster page loads (fixes 180s timeout)
-DUEL_USE_PRODUCTION_CLIENT=true
-```
-
-### Deployment (Vast.ai)
-
-GPU streaming requires specific hardware and configuration:
-
-**Requirements:**
-- NVIDIA GPU with Vulkan support
-- Xorg or Xvfb display server (headless NOT supported)
-- PulseAudio for audio capture
-- FFmpeg for H.264 encoding
-- Chrome Dev channel with WebGPU enabled
-
-**Deployment Script:**
-```bash
-# Automatic deployment via GitHub Actions
-# See .github/workflows/deploy-vast.yml
-
-# Manual deployment
-ssh root@<vast-instance-ip>
-cd /root/hyperscape
-./scripts/deploy-vast.sh
-```
-
-**Validation Steps:**
-1. Verify NVIDIA GPU: `nvidia-smi`
-2. Check Vulkan ICD: `cat /usr/share/vulkan/icd.d/nvidia_icd.json`
-3. Test display server: `xdpyinfo -display $DISPLAY`
-4. Verify PulseAudio: `pactl list short sinks`
-5. Run WebGPU preflight test (automatic in deploy script)
-6. Extract GPU diagnostics from chrome://gpu (automatic)
-
-**Troubleshooting:**
-```bash
-# Check PM2 logs
-pm2 logs hyperscape-duel --lines 200
-
-# Check RTMP status
-cat /root/hyperscape/packages/server/public/live/rtmp-status.json
-
-# Check WebGPU diagnostics
-pm2 logs hyperscape-duel --lines 500 | grep -A 20 "GPU Diagnostics"
-
-# Common issues:
-# - Black frames: WebGPU failed to initialize
-# - Browser hangs: WebGPU initialization timeout (capture proceeds after 5 timeouts)
-# - Timeout on page load: Use DUEL_USE_PRODUCTION_CLIENT=true
-# - Resolution mismatch: Auto-recovery enabled, check viewport logs
-```
-
-See `scripts/deploy-vast.sh` for complete deployment logic.
-
-### Stream Health Monitoring
-
-**Automatic Recovery:**
-- **Soft recovery**: Restart CDP screencast without killing browser (~2-3s, no gap)
-- **Hard recovery**: Full browser teardown and restart (~10-15s, visible gap)
-- **Fallback**: Switch to MediaRecorder mode after max CDP failures
-
-**Resolution Tracking:**
-- Detects viewport size mismatches
-- Automatic viewport restoration after 10 consecutive mismatched frames
-- Logs resolution changes for debugging
-
-**Probe Timeouts:**
-- 5s timeout on page evaluate calls
-- Proceeds with capture after 5 consecutive timeouts
-- Prevents hanging when browser is unresponsive
-
-**WebGPU Diagnostics:**
-- Preflight test on blank page before loading game
-- Extracts chrome://gpu info at startup
-- 30s adapter timeout, 60s renderer init timeout
-- Helps diagnose GPU driver and display configuration issues
+**Current migrations:**
+1. Users table
+2. VRM/avatar column migration
+3. Settings config migration
+4. Entities scale field update
+5. Entities table creation
+6. Privy authentication columns
+7. RPG tables (players, items, inventory, equipment)
+8. World chunks and sessions
+9. Characters table (for multi-character support)
 
 ## Architecture
 
 ### Core Systems
 
-**ServerNetwork** (`src/systems/ServerNetwork/`)
+**ServerNetwork** (`src/ServerNetwork.ts`)
 - WebSocket connection handling
 - Player spawning and lifecycle
 - Character selection flow
 - Message routing and broadcasting
 
-**DatabaseSystem** (`src/systems/DatabaseSystem/`)
+**DatabaseSystem** (`src/DatabaseSystem.ts`)
 - PostgreSQL connection management
 - Character CRUD operations
 - Player data persistence
 - Inventory and equipment management
 
-**StreamingDuelScheduler** (`src/systems/StreamingDuelScheduler/`)
-- Automated duel matchmaking for streams
-- Camera director for cinematic views
-- RTMP capture and broadcast
-- Cycle state machine for duel phases
-
-**Streaming System** (`src/streaming/`)
-- `stream-capture.ts` - Main capture orchestrator
-- `browser-capture.ts` - Chrome CDP integration
-- `browser-capture-webcodecs.ts` - WebCodecs encoder
-- `rtmp-bridge.ts` - FFmpeg RTMP encoder with tee muxer
+**Database Layer** (`src/db.ts`)
+- Connection pooling (pg)
+- Migration runner
+- Query builder for shared code
 
 ### Character System
 
@@ -405,12 +208,6 @@ Login → Character List → Select/Create Character → Enter World → Spawn a
 - `GET /api/actions/available` - Get actions available to player
 - `POST /api/actions/:name` - Execute specific action
 
-### Streaming
-
-- `GET /api/streaming/status` - Stream health and uptime
-- `GET /api/streaming/state` - Current duel state
-- `GET /api/streaming/state/events` - SSE stream of state updates
-
 ### Utility
 
 - `GET /env.js` - Public environment variables for client
@@ -419,60 +216,98 @@ Login → Character List → Select/Create Character → Enter World → Spawn a
 
 ## Environment Variables
 
-See `.env.example` for complete list. Key variables:
-
 ### Required
 
 ```env
 PORT=5555                    # Server port
 WORLD=world                   # World directory path
-DATABASE_URL=postgresql://... # PostgreSQL connection (production)
 ```
 
-### Streaming (Optional)
+### Database
 
 ```env
-# Capture mode
-STREAM_CAPTURE_MODE=cdp                    # cdp, webcodecs, mediarecorder
-STREAM_CAPTURE_WIDTH=1280                  # Stream width
-STREAM_CAPTURE_HEIGHT=720                  # Stream height
-STREAM_FPS=30                              # Target FPS
-STREAM_CDP_QUALITY=80                      # JPEG quality (1-100)
+# Option 1: Docker PostgreSQL
+USE_LOCAL_POSTGRES=true
+POSTGRES_CONTAINER=hyperscape-postgres
+POSTGRES_USER=hyperscape
+POSTGRES_PASSWORD=hyperscape_dev_password
+POSTGRES_DB=hyperscape
+POSTGRES_PORT=5488
 
-# Encoding
-STREAM_LOW_LATENCY=false                   # false = film, true = zerolatency
-STREAM_GOP_SIZE=60                         # Keyframe interval
+# Option 2: External PostgreSQL
+DATABASE_URL=postgresql://user:pass@host:5488/dbname
 
-# Audio
-STREAM_AUDIO_ENABLED=true
-PULSE_AUDIO_DEVICE=chrome_audio.monitor
+# Connection pool configuration (production)
+POSTGRES_POOL_MAX=3          # Max connections (prevents exhaustion during crash loops)
+POSTGRES_POOL_MIN=0          # Min connections (doesn't hold idle connections)
+```
 
-# Destinations
-TWITCH_STREAM_KEY=live_...
+### Assets
+
+```env
+PUBLIC_CDN_URL=http://localhost:8080    # CDN URL for static assets
+PUBLIC_WS_URL=ws://localhost:5555/ws # WebSocket URL
+```
+
+### Authentication (Optional)
+
+```env
+PUBLIC_PRIVY_APP_ID=your-app-id
+PRIVY_APP_SECRET=your-app-secret
+ADMIN_CODE=your-admin-code          # For /admin command
+```
+
+### Farcaster Frame v2 (Optional)
+
+```env
+PUBLIC_ENABLE_FARCASTER=true
+PUBLIC_APP_URL=https://your-domain.com
+```
+
+### LiveKit Voice (Optional)
+
+```env
+LIVEKIT_API_KEY=your-key
+LIVEKIT_API_SECRET=your-secret
+PUBLIC_LIVEKIT_URL=wss://your-livekit-server
+```
+
+### Streaming (Vast.ai Deployment)
+
+```env
+# Stream capture configuration
+STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable  # Explicit Chrome path
+STREAM_CAPTURE_MODE=cdp                                     # cdp | webcodecs | mediarecorder
+STREAM_LOW_LATENCY=false                                    # true = zerolatency tune
+STREAM_GOP_SIZE=60                                          # GOP size in frames
+STREAM_AUDIO_ENABLED=true                                   # Enable audio capture
+PULSE_AUDIO_DEVICE=chrome_audio.monitor                     # PulseAudio device
+
+# Production client build (recommended for streaming)
+NODE_ENV=production                                         # Use production build
+DUEL_USE_PRODUCTION_CLIENT=true                             # Serve via vite preview
+
+# Model agent spawning (for empty database)
+SPAWN_MODEL_AGENTS=true                                     # Auto-create agents when DB is empty
+
+# RTMP streaming keys (never hardcode)
+TWITCH_STREAM_KEY=...
 KICK_STREAM_KEY=...
-X_STREAM_KEY=...
-YOUTUBE_STREAM_KEY=""                      # Disabled
-
-# Recovery
-STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000
-STREAM_CAPTURE_RECOVERY_MAX_FAILURES=6
+TWITTER_STREAM_KEY=...
 ```
 
-### GPU Configuration (Vast.ai)
-
-Auto-configured by `scripts/deploy-vast.sh`:
+### Monitoring & Alerting (Optional)
 
 ```env
-DISPLAY=:99                                # X display
-GPU_RENDERING_MODE=xorg                    # Rendering mode
-DUEL_CAPTURE_USE_XVFB=false               # Xvfb vs Xorg
-VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
-STREAM_CAPTURE_CHANNEL=chrome-dev
-STREAM_CAPTURE_HEADLESS=false              # Always false
-DUEL_USE_PRODUCTION_CLIENT=true           # Pre-built client
-XDG_RUNTIME_DIR=/tmp/pulse-runtime
-PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
+ALERT_WEBHOOK_URL=https://hooks.slack.com/services/...
 ```
+
+Monitoring endpoints:
+- `GET /health` - basic uptime/timestamp (use for uptime checks)
+- `GET /status` - connected users + commit hash
+
+Configure your monitoring service (Railway health checks, UptimeRobot, Pingdom, etc.)
+to poll `/health` and trigger alerts on non-200 responses or elevated latency.
 
 ## Deployment
 
@@ -485,40 +320,6 @@ docker build -t hyperscape-server .
 docker run -p 5555:5555 \
   -e DATABASE_URL=postgresql://... \
   hyperscape-server
-```
-
-### Vast.ai (GPU Streaming)
-
-Deploy to Vast.ai for GPU-accelerated streaming:
-
-```bash
-# Automatic via GitHub Actions
-# See .github/workflows/deploy-vast.yml
-
-# Manual deployment
-ssh root@<vast-instance-ip>
-cd /root/hyperscape
-./scripts/deploy-vast.sh
-```
-
-**Validation:**
-1. NVIDIA GPU accessible: `nvidia-smi`
-2. Vulkan ICD available: `cat /usr/share/vulkan/icd.d/nvidia_icd.json`
-3. Display server running: `xdpyinfo -display $DISPLAY`
-4. PulseAudio running: `pactl list short sinks`
-5. WebGPU preflight test passes (automatic)
-6. GPU diagnostics extracted (automatic)
-
-**Monitoring:**
-```bash
-# PM2 logs
-pm2 logs hyperscape-duel --lines 200
-
-# RTMP status
-cat /root/hyperscape/packages/server/public/live/rtmp-status.json
-
-# WebGPU diagnostics
-pm2 logs hyperscape-duel --lines 500 | grep -A 20 "GPU Diagnostics"
 ```
 
 ### Traditional Hosting
@@ -536,6 +337,40 @@ bun run build
 pm2 start dist/index.js --name hyperscape-server
 ```
 
+### Vast.ai GPU Streaming
+
+For WebGPU streaming deployment on Vast.ai:
+
+**Requirements**:
+- NVIDIA GPU with display driver support (`gpu_display_active=true`)
+- Vast.ai CLI: `pip install vastai`
+- API key configured: `vastai set api-key YOUR_API_KEY`
+
+**Provision Instance**:
+```bash
+./scripts/vast-provision.sh
+```
+
+This automatically:
+- Searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
+- Filters by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr), disk space (≥120GB)
+- Rents best available instance
+- Waits for instance to be ready
+- Outputs SSH connection details and GitHub secret commands
+
+**Deploy to Instance**:
+```bash
+# Trigger GitHub Actions workflow
+gh workflow run deploy-vast.yml
+```
+
+**Check Streaming Status**:
+```bash
+bun run duel:status
+```
+
+See [AGENTS.md](../../AGENTS.md) for complete Vast.ai deployment architecture.
+
 ### Environment-Specific
 
 **Staging:**
@@ -548,204 +383,88 @@ NODE_ENV=staging bun run start
 NODE_ENV=production bun run start
 ```
 
-## Troubleshooting
+### Rollback
 
-### PostgreSQL Connection Failed
+Rollback uses the same deployment workflows with an explicit ref:
 
-**Error:** `ECONNREFUSED` or connection timeout
+1. Railway API (server): run the **Deploy to Railway** workflow and set
+   `deploy_ref` to the previous commit SHA or tag.
+2. Cloudflare R2 assets: run **Deploy Assets to Cloudflare R2** with
+   `deploy_ref` pointing at the same commit to keep assets in sync.
 
-**Solutions:**
-1. Check if Docker is running: `docker ps`
-2. Start PostgreSQL: `docker-compose up postgres`
-3. Check connection string in .env
-4. Verify firewall allows port 5488
+## Performance Optimizations
 
-### Database Migration Errors
+### Object Pooling for Zero-Allocation Event Emission
 
-**Error:** Column already exists
+The server implements comprehensive object pooling to eliminate GC pressure in high-frequency event loops.
 
-**Solution:** This is usually safe to ignore. The migrations use `IF NOT EXISTS` and `ON CONFLICT` to handle re-runs.
+**Combat Event Pools** (`packages/shared/src/utils/pools/`):
+- **EventPayloadPool.ts**: Factory for creating type-safe event payload pools
+- **PositionPool.ts**: Pool for `{x, y, z}` position objects
+- **CombatEventPools.ts**: Pre-configured pools for all combat events
 
-**Error:** Foreign key constraint violation
+**Performance Impact**:
+- Eliminates per-tick object allocations in combat hot paths
+- Memory stays flat during 60s stress test with agents in combat
+- Verified zero-allocation event emission in CombatSystem and CombatTickProcessor
 
-**Solution:** 
-```sql
--- Connect to database
-docker exec -it hyperscape-postgres psql -U hyperscape hyperscape
+**Available Pools**:
+- `CombatEventPools.damageDealt`, `projectileLaunched`, `faceTarget`, `clearFaceTarget`
+- `CombatEventPools.attackFailed`, `followTarget`, `combatStarted`, `combatEnded`
+- `CombatEventPools.projectileHit`, `combatKill`
+- `positionPool` - Global position pool for `{x, y, z}` objects
 
--- Drop all tables and re-run migrations
-DROP SCHEMA public CASCADE;
-CREATE SCHEMA public;
-\q
-```
-Then restart the server.
+**Usage Pattern**:
+```typescript
+// Acquire from pool
+const payload = CombatEventPools.damageDealt.acquire();
+payload.attackerId = attacker.id;
+payload.damage = 15;
+this.emitTypedEvent(EventType.COMBAT_DAMAGE_DEALT, payload);
 
-### Streaming Issues
-
-**Black frames or no video:**
-1. Check GPU access: `nvidia-smi`
-2. Verify Vulkan: `vulkaninfo --summary`
-3. Check display: `xdpyinfo -display $DISPLAY`
-4. Review WebGPU diagnostics in logs
-
-**Browser hangs on page load:**
-- Use production client build: `DUEL_USE_PRODUCTION_CLIENT=true`
-- Check WebGPU preflight test logs
-- Capture proceeds after 5 consecutive probe timeouts
-
-**Resolution mismatch:**
-- Auto-recovery enabled after 10 consecutive mismatched frames
-- Check viewport restoration logs
-- Verify `STREAM_CAPTURE_WIDTH` and `STREAM_CAPTURE_HEIGHT`
-
-**No audio:**
-1. Check PulseAudio: `pulseaudio --check`
-2. Verify sink: `pactl list short sinks | grep chrome_audio`
-3. Check `PULSE_AUDIO_DEVICE` and `PULSE_SERVER` env vars
-
-**Stream keeps restarting:**
-- Increase stability thresholds:
-  ```env
-  STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=45000
-  STREAM_CAPTURE_RECOVERY_MAX_FAILURES=8
-  ```
-- Check FFmpeg logs for encoding errors
-- Verify RTMP destination is reachable
-
-**CDP stalls (no traffic):**
-- Soft recovery attempts after 4 intervals without traffic
-- Hard recovery after soft recovery fails
-- Falls back to MediaRecorder after max failures
-- Check logs for recovery attempts
-
-### Docker Issues
-
-**Error:** Docker daemon not running
-
-**Solution:**
-1. Install Docker Desktop: https://www.docker.com/products/docker-desktop
-2. Start Docker Desktop
-3. Restart server
-
-**Alternative:** Use external PostgreSQL instead:
-```env
-DATABASE_URL=postgresql://user:pass@host:5488/dbname
-USE_LOCAL_POSTGRES=false
+// MUST release in listener
+world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
+  // Process...
+  CombatEventPools.damageDealt.release(payload);
+});
 ```
 
-## Development
+**CRITICAL**: Event listeners MUST call `release()` after processing. Failure to release causes pool exhaustion and memory leaks.
 
-### Code Structure
+### Memory Management
 
-```
-src/
-├── index.ts                      # Main server entry point
-├── systems/
-│   ├── ServerNetwork/            # Network layer & player lifecycle
-│   ├── DatabaseSystem/           # Database operations
-│   ├── StreamingDuelScheduler/   # Automated duel streaming
-│   └── DuelSystem/               # Duel mechanics
-├── streaming/                    # RTMP streaming system
-│   ├── stream-capture.ts         # Main capture orchestrator
-│   ├── browser-capture.ts        # CDP screencast integration
-│   ├── browser-capture-webcodecs.ts # WebCodecs encoder
-│   └── rtmp-bridge.ts            # FFmpeg RTMP encoder
-├── database/                     # Database layer
-│   ├── client.ts                 # Connection pooling
-│   ├── schema.ts                 # Drizzle schema
-│   └── migrations/               # SQL migrations
-└── scripts/
-    └── stream-to-rtmp.ts         # Standalone streaming script
-```
+**Recent Fixes** (20+ critical memory leaks addressed):
+- **ModelCache** (CRITICAL): Geometry disposal on clear() and remove()
+- **EventBridge** (HIGH): Cleanup 50+ world event listeners
+- **GameTickProcessor** (HIGH): Store bound event handlers, cleanup in destroy()
+- **TradingSystem** (HIGH): Store bound handlers for player lifecycle events
+- **AgentManager** (HIGH): Store and cleanup COMBAT_DAMAGE_DEALT listener
+- **AutonomousBehaviorManager** (HIGH): Store and cleanup event handlers
+- **RTMPBridge** (HIGH): Call removeAllListeners() before closing WebSocket servers
+- **ActionQueue** (MEDIUM): Add destroy() method to clear playerQueues
+- **ScriptQueue** (MEDIUM): Add destroy() methods to both queue classes
+- **Shutdown Process** (HIGH): Call destroyAllRateLimiters() and destroyIdempotencyService()
 
-### Running Tests
+**Best Practices**:
+1. Track all resources (intervals, listeners, handlers)
+2. Implement cleanup methods (destroy(), shutdown(), stop())
+3. Follow SystemBase pattern for resource cleanup
+4. Use object pools for high-frequency allocations
 
-```bash
-bun test
-```
-
-### Linting
-
-```bash
-bun run lint
-```
-
-### Building
-
-```bash
-bun run build
-```
-
-Output: `dist/index.js` (bundled server)
-
-## Performance
+See [AGENTS.md](../../AGENTS.md) for complete memory management documentation.
 
 ### Database Connection Pool
 
+**Production Configuration** (optimized for crash loop resilience):
+- **Max connections**: 3 (down from 6) - prevents connection exhaustion during crash loops
+- **Min connections**: 0 - doesn't hold idle connections during crashes
+- **Idle timeout**: 30s
+- **Connection timeout**: 5s
+- **PM2 restart delay**: 10s (up from 5s) - allows connections to fully close before restart
+- **PM2 exp backoff**: 2s - more gradual backoff on repeated failures
+
+This configuration prevents PostgreSQL error 53300 (too many connections) during crash loop scenarios.
+
+**Development Configuration**:
 - Max connections: 20
-- Idle timeout: 30s
-- Connection timeout: 5s
-
-Adjust in `src/database/client.ts` if needed.
-
-### Asset Caching
-
-Assets are served with aggressive caching:
-```
-Cache-Control: public, max-age=31536000, immutable
-```
-
-For development, disable browser cache or use incognito mode.
-
-### Streaming Performance
-
-- **Soft recovery**: ~2-3 seconds (no visible gap)
-- **Hard recovery**: ~10-15 seconds (visible gap)
-- **CPU usage**: ~15-25% during active streaming
-- **Memory**: ~500 MB baseline + ~50 MB per stream
-- **GPU usage**: ~30-50% (WebGPU rendering + H.264 encoding)
-
-## Security
-
-### Authentication
-
-Optional Privy authentication provides:
-- Wallet-based login
-- Farcaster Frame v2 support
-- Account-to-character linking
-
-### Admin Access
-
-Admin commands require:
-1. `ADMIN_CODE` set in environment
-2. `/admin <code>` command in chat
-
-### Database
-
-- Use strong PostgreSQL passwords in production
-- Restrict database access to server IP
-- Enable SSL for remote PostgreSQL connections
-
-### Streaming Secrets
-
-- **NEVER hardcode stream keys** - use environment variables
-- Set via GitHub Secrets for CI/CD
-- Store in `.env` file for local development (gitignored)
-- All secrets removed from `ecosystem.config.cjs` (commit 47167b6)
-
-### Rate Limiting
-
-Not implemented yet. Consider adding:
-- Connection rate limiting (websocket)
-- API endpoint rate limiting
-- Upload size limits (currently 50MB)
-
-## Support
-
-- **Documentation:** See [CLAUDE.md](../../CLAUDE.md) for development guide
-- **Streaming Guide:** See [AGENTS.md](../../AGENTS.md) for GPU streaming architecture
-- **Issues:** Report bugs in the main Hyperscape repository
-
-## License
-
-GPL-3.0-only - See LICENSE file
+- Adjust in `src/db.ts` and `src/DatabaseSystem.ts` if needed
