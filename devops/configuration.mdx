@@ -118,11 +118,12 @@ STREAM_CAPTURE_WIDTH=1280                    # Capture resolution width (must be
 STREAM_CAPTURE_HEIGHT=720                    # Capture resolution height (must be even)
 STREAM_GOP_SIZE=60                           # GOP size in frames (default: 60)
 
-# Stream Health Monitoring (Feb 28 2026)
+# Stream Health Monitoring (Feb 28 2026, updated Mar 2 2026)
 STREAM_CAPTURE_RECOVERY_TIMEOUT_MS=30000     # Recovery timeout (default: 30s)
 STREAM_CAPTURE_RECOVERY_MAX_FAILURES=4       # Max failures before fallback (default: 4)
 STREAM_BROWSER_RESTART_INTERVAL_MS=2700000   # Browser restart interval (default: 45 min)
-STREAM_PAGE_NAVIGATION_TIMEOUT_MS=180000     # Page navigation timeout (default: 180s)
+STREAM_PAGE_NAVIGATION_TIMEOUT_MS=120000     # Page navigation timeout (default: 120s, up from 60s)
+                                             # WebGPU shader compilation can take >60s on first load
 
 # See packages/server/.env.example for full RTMP configuration
 # See /devops/gpu-rendering for GPU setup guide
