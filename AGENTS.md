@@ -295,6 +295,7 @@ packages/
 - **Short-Circuit Dashboard Sync**: All agents show activity logs even when skipping LLM
 - **Critical Crash Fix**: Fixed `weapon.toLowerCase is not a function` crash in getEquippedWeaponTier that broke ALL agents every tick
 - **Quest Goal Detection**: Added quest goal status change detection for proper quest lifecycle transitions
+- **Banking Goal Type**: Added 'banking' to CurrentGoal interface for agent banking behavior
 
 ### Resource Management
 - **Activity Logger Queue**: Max size 1000 with 25% eviction to prevent memory pressure
