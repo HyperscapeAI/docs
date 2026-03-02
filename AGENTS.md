@@ -111,7 +111,7 @@ The streaming pipeline requires specific GPU setup:
    - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
    - **Chrome Executable**: Set `STREAM_CAPTURE_EXECUTABLE` to explicit Chrome path (e.g., `/usr/bin/google-chrome-unstable`) for reliable WebGPU
    - **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
-   - **Page Navigation Timeout**: Increased to 180s for Vite dev mode (production build recommended)
+   - **Page Navigation Timeout**: Increased to 120s (up from 60s) for WebGPU shader compilation on first load
 
 8. **Stream Encoding Optimization**:
    - Default: `film` tune with B-frames for better compression
@@ -184,6 +184,7 @@ The streaming pipeline requires specific GPU setup:
    - **restart_delay=10s** (up from 5s) to allow connections to fully close before PM2 restart
    - **exp_backoff_restart_delay=2s** for more gradual backoff on repeated failures
    - Prevents PostgreSQL error 53300 (too many connections) during crash loop scenarios
+   - **POSTGRES_POOL_MAX=1** for duel deployments to minimize connection usage
 
 17. **Model Agent Spawning**:
    - Set `SPAWN_MODEL_AGENTS=true` to enable automatic agent creation when database is empty
@@ -217,6 +218,7 @@ Hyperscape is a RuneScape-style MMORPG built on Three.js WebGPURenderer with TSL
 - UI: React 19.2.0
 - Server: Fastify, WebSockets
 - Database: PostgreSQL (production), Docker (local)
+- Testing: Vitest 4.x (upgraded from 2.x for Vite 6 compatibility)
 
 ## Common Commands
 
@@ -307,6 +309,7 @@ packages/
 - **Precision Fixes**: Use larger amounts (10000n) to avoid gas cost precision issues
 - **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
 - **Anchor Test Configuration**: Use localnet instead of devnet for free SOL in `anchor test`
+- **Vitest 4.x Upgrade**: Upgraded from 2.1.0 to 4.0.6 for Vite 6 compatibility (fixes __vite_ssr_exportName__ errors)
 
 ### E2E Journey Tests
 - **Complete Journey Tests**: Full login→loading→spawn→walk gameplay tests in `complete-journey.spec.ts`
