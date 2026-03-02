@@ -416,10 +416,33 @@ PULSE_AUDIO_DEVICE=chrome_audio.monitor                     # PulseAudio device
 NODE_ENV=production                                         # Use production build
 DUEL_USE_PRODUCTION_CLIENT=true                             # Serve via vite preview
 
+# Model agent spawning (for empty database)
+SPAWN_MODEL_AGENTS=true                                     # Auto-create agents when DB is empty
+
 # RTMP streaming keys (never hardcode)
 TWITCH_STREAM_KEY=...
 KICK_STREAM_KEY=...
 TWITTER_STREAM_KEY=...
+```
+
+**Streaming Commands**:
+```bash
+# Check streaming status on Vast.ai
+bun run duel:status
+
+# Start duel stack locally
+bun run duel              # Basic duel stack
+bun run duel:full         # With market maker
+
+# Production duel stack (PM2)
+bun run duel:prod         # Start with PM2
+bun run duel:prod:stop    # Stop PM2 processes
+bun run duel:prod:restart # Restart PM2 processes
+bun run duel:prod:logs    # View PM2 logs
+bun run duel:prod:status  # Check PM2 status
+
+# Verify duel stack configuration
+bun run duel:verify
 ```
 
 ## Package Manager
