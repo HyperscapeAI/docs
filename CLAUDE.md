@@ -174,7 +174,7 @@ packages/
 2. **shared** - Depends on physx-js-webidl
 3. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
 
 > **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
 >
@@ -201,7 +201,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -267,7 +267,7 @@ Visual testing uses colored cube proxies:
 
 ### Production Code Only
 
-- No TODOs or \"will fill this out later\" - implement completely
+- No TODOs or "will fill this out later" - implement completely
 - No hardcoded data - use JSON files and general systems
 - No shortcuts or workarounds - fix root causes
 - Build toward the general case (many items, players, mobs)
@@ -343,7 +343,7 @@ All services have unique default ports to avoid conflicts:
 **Package-specific `.env` files**: Each package has its own `.env.example` with deployment documentation:
 
 | Package | File | Purpose |
-|---------|------|------------|
+|---------|------|---------|
 | Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
@@ -571,16 +571,16 @@ All cleanup follows the established patterns in SystemBase for proper resource c
 
 ### Railway Database Detection
 
-**Railway Proxy Detection** (commit a5a201c):
-- Detects Railway proxy (.rlwy.net) and direct (.railway.app) as serverless
-- Add Railway proxy detection to isSupavisorPooler for pgbouncer support
-- Disables prepared statements when using Railway proxy
+**Railway Proxy Detection**:
+- Detects Railway via `RAILWAY_ENVIRONMENT` env var (most reliable)
+- Also detects Railway proxy (.rlwy.net), direct (.railway.app), and internal (.railway.internal) hostnames
+- Disables prepared statements when using Railway proxy (not supported by pgbouncer)
 - Uses lower connection pool limits (max: 6) for pooler connections
 - Fixes "too many clients already" errors on Railway deployments
 
 ### Vast.ai Provisioner
 
-**Automated Instance Provisioning** (commit 81c4218):
+**Automated Instance Provisioning**:
 - Script: `./scripts/vast-provision.sh`
 - Searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
 - Filters by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr), disk space (≥120GB)
@@ -600,7 +600,7 @@ VAST_API_KEY=xxx bun run vast:provision
 
 ### Streaming Improvements
 
-**WebGPU Initialization** (multiple commits):
+**WebGPU Initialization**:
 - **Adapter Request Timeout**: 30s timeout on `navigator.gpu.requestAdapter()` to prevent indefinite hangs
 - **Renderer Init Timeout**: 60s timeout on `renderer.init()` to detect GPU driver issues
 - **Preflight Testing**: `testWebGpuInit()` runs on localhost server (secure context) before loading game content
@@ -618,12 +618,12 @@ VAST_API_KEY=xxx bun run vast:provision
 - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
 - **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
 
-**Streaming Status Check** (commit 61c14bc):
+**Streaming Status Check**:
 - Script: `bun run duel:status` or `bash scripts/check-streaming-status.sh`
 - Quick diagnostic for verifying streaming health on Vast.ai
 - Checks: server health, streaming API status, duel context, RTMP bridge, PM2 processes, recent logs
 
-**Placeholder Frame Mode** (commit 83056565):
+**Placeholder Frame Mode**:
 - Set `STREAM_PLACEHOLDER_ENABLED=true` to enable placeholder frames during idle periods
 - Detects when no frames received for 5 seconds
 - Switches to minimal JPEG frames at configured FPS to keep stream alive
@@ -631,7 +631,7 @@ VAST_API_KEY=xxx bun run vast:provision
 - Prevents Twitch/YouTube 30-minute disconnect during content gaps
 - Uses minimal 16x16 JPEG (~300 bytes) scaled by FFmpeg to output size
 
-**Graceful Restart for Duel Arena** (commit c76ca516):
+**Graceful Restart for Duel Arena**:
 - **POST /admin/graceful-restart**: Request server restart after current duel ends
 - **GET /admin/restart-status**: Check if restart is pending
 - **StreamingDuelScheduler.requestGracefulRestart()**: Programmatic API
@@ -640,6 +640,18 @@ VAST_API_KEY=xxx bun run vast:provision
   - If duel in progress: wait until RESOLUTION phase completes
   - PM2 automatically restarts the server with new code
 - Enables zero-downtime deployments for the duel arena stream
+
+**Model Agent Spawning**:
+- Set `SPAWN_MODEL_AGENTS=true` to enable automatic agent creation when database is empty
+- Allows duels to run even with an empty database
+- Useful for fresh deployments and testing
+
+**PostgreSQL Connection Pool Tuning**:
+- **POSTGRES_POOL_MAX=3** (down from 6) to prevent connection exhaustion during crash loops
+- **POSTGRES_POOL_MIN=0** to not hold idle connections during crashes
+- **restart_delay=10s** (up from 5s) in PM2 config to allow connections to fully close
+- **exp_backoff_restart_delay=2s** for more gradual backoff on repeated failures
+- Prevents PostgreSQL error 53300 (too many connections) during crash loop scenarios
 
 ## Troubleshooting
 
@@ -716,10 +728,22 @@ bun run dev
 - Use pre-built client via `vite preview` instead of dev server
 - Significantly faster page loads (no on-demand module compilation)
 
+**Vitest 4.x compatibility**:
+If you see `__vite_ssr_exportName__` errors after upgrading Vite:
+```bash
+bun add -D vitest@^4.0.6 @vitest/coverage-v8@^4.0.6
+```
+
+Vitest 2.x is incompatible with Vite 6.x. Vitest 4.x is required.
+
 ## Additional Resources
 
-- [README.md](README.md) - Full project documentation
-- [AGENTS.md](AGENTS.md) - AI coding assistant instructions
+- [CLAUDE.md](CLAUDE.md) - Detailed development guidelines and architecture
+- [AGENTS.md](AGENTS.md) - AI coding assistant instructions and WebGPU streaming architecture
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
+
+## License
+
+MIT
