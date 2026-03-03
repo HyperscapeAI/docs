@@ -20,14 +20,13 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 ### Browser Requirements
 - Chrome 113+ (recommended)
 - Edge 113+
-- Safari 18+ (macOS 15+) - **Note**: Safari 17 support was removed
+- Safari 18+ (macOS 15+) - Safari 17 support removed
 - Firefox (behind flag, not recommended)
 
 ### Server/Streaming Requirements
 For Vast.ai and other GPU servers running the streaming pipeline:
-- **NVIDIA GPU with Display Driver REQUIRED** - Must have `gpu_display_active=true` on Vast.ai
-- **Display Driver vs Compute**: WebGPU requires GPU display driver support, not just compute access
-- **Must run non-headless** with Xorg or Xvfb (WebGPU requires window context)
+- **NVIDIA GPU with Vulkan support is REQUIRED**
+- **Must run headful** with Xorg or Xvfb (NOT headless Chrome)
 - Chrome uses ANGLE/Vulkan backend to access WebGPU
 - If GPU cannot initialize WebGPU, deployment MUST FAIL (no soft fallbacks)
 
@@ -106,26 +105,7 @@ VAST_API_KEY=xxx bun run vast:destroy
 # Run vast-keeper monitoring service
 VAST_API_KEY=xxx bun run vast:keeper
 
-# Check streaming health (server health, RTMP bridge, PM2 processes, logs)
-bun run duel:status
-```
-
-### Duel/Streaming Commands
-```bash
-# Development duel mode
-bun run dev:duel
-
-# Production duel stack
-bun run duel:prod
-bun run duel:prod:stop
-bun run duel:prod:restart
-bun run duel:prod:logs
-bun run duel:prod:status
-
-# Verify duel stack
-bun run duel:verify
-
-# Check streaming status
+# Check streaming health
 bun run duel:status
 ```
 
@@ -329,24 +309,6 @@ world.on('inventory:add', (event: InventoryAddEvent) => {
 });
 ```
 
-**Object Pooling (NEW):**
-```typescript
-import { CombatEventPools } from '@hyperscape/shared/utils/pools';
-
-// Acquire pooled payload
-const payload = CombatEventPools.damageDealt.acquire();
-payload.attackerId = attacker.id;
-payload.targetId = target.id;
-payload.damage = 15;
-this.emitTypedEvent(EventType.COMBAT_DAMAGE_DEALT, payload);
-
-// CRITICAL: Release after processing
-world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
-  // Process damage...
-  CombatEventPools.damageDealt.release(payload);
-});
-```
-
 ### Development Server
 
 The dev server provides:
@@ -360,7 +322,6 @@ The dev server provides:
 bun run dev        # Core game (client + server + shared)
 bun run dev:forge  # AssetForge (standalone)
 bun run docs:dev   # Documentation site (standalone)
-bun run dev:duel   # Development duel mode
 ```
 
 ### Port Allocation
@@ -374,7 +335,6 @@ All services have unique default ports to avoid conflicts:
 | 3401 | AssetForge API | `ASSET_FORGE_API_PORT` | `bun run dev:forge` |
 | 3402 | Docusaurus | (hardcoded) | `bun run docs:dev` |
 | 5555 | Game Server | `PORT` | `bun run dev` |
-| 8765 | RTMP Bridge | `RTMP_BRIDGE_PORT` | `bun run duel` |
 
 ### Environment Variables
 
@@ -383,7 +343,7 @@ All services have unique default ports to avoid conflicts:
 **Package-specific `.env` files**: Each package has its own `.env.example` with deployment documentation:
 
 | Package | File | Purpose |
-|---------|------|---------|
+|---------|------|------------|
 | Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
@@ -402,19 +362,23 @@ PUBLIC_API_URL=https://...       # Point to your server
 PUBLIC_WS_URL=wss://...          # Point to your server WebSocket
 ```
 
-**New environment variables** (see `packages/server/.env.example` for full list):
+**New Environment Variables**:
 ```bash
-# Model agent spawning
-SPAWN_MODEL_AGENTS=true          # Enable automatic agent creation when DB is empty
-
-# Streaming configuration
+# Streaming/Duel Configuration
+SPAWN_MODEL_AGENTS=true          # Auto-create agents when database is empty
 STREAM_CAPTURE_EXECUTABLE=...    # Explicit Chrome path for WebGPU
 STREAM_LOW_LATENCY=true          # Use zerolatency tune for faster playback
-STREAM_GOP_SIZE=60               # GOP size in frames
+STREAM_GOP_SIZE=60               # GOP size in frames (default: 60)
+STREAM_AUDIO_ENABLED=true        # Enable audio capture
+PULSE_AUDIO_DEVICE=...           # PulseAudio device name
 
-# PostgreSQL connection pool
-POSTGRES_POOL_MAX=3              # Max connections (reduced from 6)
-POSTGRES_POOL_MIN=0              # Min idle connections
+# Database Configuration (Railway/Serverless)
+POSTGRES_POOL_MAX=3              # Max connections (3 for crash loops, 1 for duels)
+POSTGRES_POOL_MIN=0              # Min connections (0 to not hold idle)
+
+# Production Client Build
+NODE_ENV=production              # Use production client build
+DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
 ```
 
 **Split deployment** (client and server on different hosts):
@@ -428,7 +392,6 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime.
 - Install: `bun install` (NOT `npm install`)
 - Run scripts: `bun run <script>` or `bun <file>`
 - Some commands use `npm` prefix for Turbo workspace filtering
-- **Version requirement updated**: v1.1.38 → v1.3.10
 
 ## Tech Stack
 
@@ -437,59 +400,227 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime.
 - **Engine**: Three.js 0.182.0, PhysX (WASM)
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
-- **Database**: PostgreSQL (production via Neon), Docker (local)
+- **Database**: PostgreSQL (production via Railway/Neon), Docker (local)
 - **Testing**: Playwright, Vitest 4.x (upgraded from 2.x for Vite 6 compatibility)
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
 
-## Performance & Memory Management
+## Recent Improvements
 
-### Object Pooling System (NEW)
+### Stability Improvements
 
+#### Combat System
+- **Combat Retry Timer**: Aligned with tick system (3000ms = 5 ticks) for consistent timing
+- **Phase Timeout**: Reduced grace periods from 30s to 10s for faster failure detection
+- **Combat Stall Nudge**: Tracks last nudge timestamp instead of cycle ID to allow re-nudging when combat stalls again
+- **Damage Event Cache**: Cleanup every tick (was every 2 ticks), cap lowered from 5000 to 1000, evict 75% when exceeded
+
+#### Agent System
+- **LLM Rate Limiting**: Exponential backoff for API calls (5s base, max 60s)
+- **Consecutive Failure Tracking**: Resets on successful tick
+- **Memory Leak Fixes**: Proper cleanup of COMBAT_DAMAGE_DEALT listeners in AgentManager and event handlers in AutonomousBehaviorManager
+- **Dynamic Combat Escalation**: Agents progress from goblins → bandits → barbarians as combat level grows
+- **Combat Style Rotation**: Agents cycle attack → strength → defense (train lowest skill)
+- **Cooking Phase**: Agents cook raw food immediately instead of waiting for full inventory
+- **Gear Upgrade Phase**: Agents smith better equipment when they have materials + levels
+- **Combat Food Threshold**: Increased from 5 → 10 for better survival
+- **World Data Manifest Loading**: Monster tiers and gear tiers loaded from world-data
+- **LLM Error Fallback**: Idle + retry when agent has active goal instead of derailing to explore
+- **Short-Circuit Dashboard Sync**: All agents show activity logs even when skipping LLM
+- **Critical Crash Fix**: Fixed `weapon.toLowerCase is not a function` crash in getEquippedWeaponTier that broke ALL agents every tick
+- **Quest Goal Detection**: Added quest goal status change detection for proper quest lifecycle transitions
+- **Banking Goal Type**: Added 'banking' to CurrentGoal interface for agent banking behavior
+
+#### Resource Management
+- **Activity Logger Queue**: Max size 1000 with 25% eviction to prevent memory pressure
+- **Session Timeout**: 30-minute max via MAX_SESSION_TICKS for zombie session cleanup
+- **SessionCloseReason**: Added "timeout" to type for proper session termination tracking
+
+#### Test Stability
+- **GoldClob Fuzz Tests**: 120s timeout for randomized invariant tests (4 seeds × 140 operations)
+- **Precision Fixes**: Use larger amounts (10000n) to avoid gas cost precision issues
+- **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
+- **Anchor Test Configuration**: Use localnet instead of devnet for free SOL in `anchor test`
+- **Vitest 4.x Upgrade**: Upgraded from 2.1.0 to 4.0.6 for Vite 6 compatibility (fixes __vite_ssr_exportName__ errors)
+
+#### E2E Journey Tests
+- **Complete Journey Tests**: Full login→loading→spawn→walk gameplay tests in `complete-journey.spec.ts`
+- **Screenshot Comparison**: Utilities to verify game is rendering correctly
+- **Loading Screen Detection**: `waitForLoadingScreenHidden` helper for reliable test synchronization
+- **Real Browser Testing**: Uses Playwright with actual WebGPU rendering (no mocks)
+
+### Performance Optimizations
+
+#### Object Pooling for Zero-Allocation Event Emission
 Hyperscape implements comprehensive object pooling to eliminate GC pressure in high-frequency event loops:
 
 **Event Payload Pools** (`packages/shared/src/utils/pools/`):
-- `EventPayloadPool.ts` - Factory for creating type-safe event payload pools
-- `CombatEventPools.ts` - Pre-configured pools for all combat events
-- `PositionPool.ts` - Pool for `{x, y, z}` position objects
+- **EventPayloadPool.ts**: Factory for creating type-safe event payload pools
+- **PositionPool.ts**: Pool for `{x, y, z}` position objects
+- **CombatEventPools.ts**: Pre-configured pools for all combat events
 
-**Usage**:
+**Usage Pattern**:
 ```typescript
-// Acquire from pool
+// In event emitter (CombatSystem, etc.)
 const payload = CombatEventPools.damageDealt.acquire();
 payload.attackerId = attacker.id;
+payload.targetId = target.id;
 payload.damage = 15;
+this.emitTypedEvent(EventType.COMBAT_DAMAGE_DEALT, payload);
 
-// MUST release after processing
-CombatEventPools.damageDealt.release(payload);
+// In event listener - MUST call release()
+world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
+  // Process damage...
+  CombatEventPools.damageDealt.release(payload);
+});
 ```
 
-**Performance Impact**:
-- Eliminates per-tick object allocations in combat hot paths
-- Memory stays flat during 60s stress test with agents in combat
-- Verified zero-allocation event emission in CombatSystem
+**Available Pools**: damageDealt, projectileLaunched, faceTarget, clearFaceTarget, attackFailed, followTarget, combatStarted, combatEnded, projectileHit, combatKill
 
-See [AGENTS.md](AGENTS.md) for complete memory management documentation.
+**Performance Impact**: Eliminates per-tick object allocations in combat hot paths. Memory stays flat during 60s stress test with agents in combat.
 
-### Client Performance Optimizations
+#### Instanced Rendering
+Hyperscape uses instanced rendering for resource entities (rocks, ores, herbs, trees):
+- **GLBResourceInstancer**: Pools instances by model path, separate InstancedMesh per LOD level
+- **GLBTreeInstancer**: Specialized instancer for tree resources with dissolve materials
+- **InstancedModelVisualStrategy**: Thin wrapper with invisible collision proxies for raycasting
+- Reduces draw calls from O(n) per resource to O(1) per unique model per LOD level
+- Distance-based LOD switching with hysteresis to prevent flickering
+- Falls back to StandardModelVisualStrategy if instancing fails
+
+**Depleted Models**:
+- Resources can specify `depletedModelPath` and `depletedModelScale` in config
+- Instancer maintains separate pools for normal and depleted states (e.g., tree → stump)
+- Automatic transition on resource depletion without individual model loading
+- Collision proxy persists across state transitions
+- Highlight mesh support for hover/selection on instanced entities
+
+#### Model Cache Integrity
+- **Index Buffer Type Preservation**: Model cache now preserves original index buffer type (Uint16Array vs Uint32Array)
+- Fixes silent geometry corruption and RangeError crashes on cached model restore
+- Cache version bumped to 4 to invalidate corrupt entries
+- Affects all GLB models loaded via ModelCache (resources, NPCs, items)
+
+#### Client Performance Optimizations
 
 **Movement System**:
-- Immediate move processing (bypasses ActionQueue for 0-latency response)
-- Pathfinding rate limit raised from 5/sec to 15/sec
-- BFS iterations increased from 2000 to 8000 (~44 tile radius)
-- Path continuation for seamless long-distance movement
-- Server-side pre-computation eliminates skating at segment boundaries
+- **Immediate Move Processing**: Bypasses ActionQueue for instant response to player clicks (eliminates 0-600ms latency)
+- **Pathfinding Rate Limit**: Raised from 5/sec to 15/sec to match tile movement limiter
+- **BFS Iterations**: Increased from 2000 to 8000 (~44 tile radius vs ~22 tile)
+- **Path Continuation**: Seamless long-distance movement with automatic re-pathfinding when BFS limit reached
+- **Skating Fix**: Server-side pre-computation + client-side path appending eliminates stop-lurch at segment boundaries
+- **Multi-Click Feel**: Optimistic target pivoting + pending move queue ensures last click always reaches server
+- **Per-Frame Allocation Elimination**: Pre-allocated buffers and squared distance comparisons in hot paths
 
 **Minimap Rendering**:
-- Async terrain generation (50×50 grid) runs off RAF callback
-- Zero RAF blocking - terrain generation in background macrotasks
-- Canvas rotation transform decouples terrain regen from camera rotation
-- Reduced terrain sampling from 40,000 pixels to 2,500 (16× reduction)
+- **Async Terrain Generation**: Chunked sampling (50×50 grid) runs off RAF callback via setTimeout(0) yields
+- **Zero RAF Blocking**: Terrain generation happens in background macrotasks, not during frame rendering
+- **Canvas Rotation Transform**: Decouples terrain regeneration from camera rotation (only regenerates on player move/zoom)
+- **Terrain Overshoot**: √2 × 1.1 sampling ensures corners stay filled at any rotation angle
+- **Layer Synchronization**: All layers (terrain, roads, buildings, pips) use same camera snapshot
+- **Cached Contexts**: Canvas 2D contexts cached in refs to avoid getContext() DOM queries
+- **Performance**: Reduced terrain sampling from up to 40,000 pixels to 2,500 (16× reduction)
 
 **GPU Resource Hygiene**:
-- Object pools for XPDropSystem, DuelCountdownSplatSystem
-- Proper cleanup in HealthBars, ProjectileRenderer, PlayerTokenManager
-- Two-flag handshake prevents world.destroy() racing world.init()
+- **XPDropSystem**: Object pool for CanvasTexture/SpriteMaterial reuse, warn on pool exhaustion
+- **DuelCountdownSplatSystem**: Pre-render count textures once, pool sprite/material pairs
+- **HealthBars**: Add destroy() to clear hideTimeout handles and dispose InstancedMesh/texture/geometry
+- **ProjectileRenderer**: Track pending setTimeout handles in Set, cancel all on destroy(), reference-counted geometry disposal
+- **PlayerTokenManager**: Named beforeUnloadHandler property enables proper removeEventListener on dispose()
+- **EmbeddedGameClient**: Guard async state updates with cancelled flag to prevent setState on unmounted component
+- **ThreeResourceManager**: Add teardown() to stop dev monitor interval and reset WeakSet on hot-reload
+- **Stale Health Bar Sweep**: Reverse iteration to remove bars for despawned entities
+
+**World Initialization Race Condition**:
+- **Two-Flag Handshake**: initComplete + needsCleanup flags prevent world.destroy() from racing world.init()
+- **Deferred Cleanup**: Cleanup callback waits for init() to complete if it arrives during async initialization
+- **Resource Safety**: Ensures destroy() runs exactly once and only after world is fully constructed
+
+**Client Memory Optimizations**:
+- **Machine ID Caching**: Browser fingerprint cached in _cachedMachineId (avoids canvas allocation on every token operation)
+- **Activity Debouncing**: 500ms debounce on saveSession() localStorage writes (was synchronous on every interaction)
+- **XP Drop Listener**: Store bound handler so destroy() can call world.off() (eliminates leak that survived world teardown)
+
+### Memory Leak Fixes
+
+Recent commits addressed critical memory leaks across the codebase:
+
+- **ModelCache**: GPU memory leaks when cache is cleared (geometry disposal added)
+- **EventBridge**: 50+ world event listeners never removed (destroy() method added)
+- **Logger**: Cleanup interval not stored (destroy() method added)
+- **PlayerTokenManager**: Heartbeat interval continues after logout (stopHeartbeat() added)
+- **Connection Handler**: Error handler not cleaned up during auth cleanup
+- **DuelBot**: World event handlers not cleaned up on disconnect
+- **AgentManager**: COMBAT_DAMAGE_DEALT listener never removed
+- **AutonomousBehaviorManager**: Event handlers not cleaned up during agent lifecycle
+- **ColliderComponent**: Collision event handlers never unsubscribed
+- **MobEntity**: PLAYER_SET_DEAD listener never removed
+- **Socket**: WebSocket event handlers not cleaned up
+- **ClientLiveKit**: Voices Map and room listeners not cleaned up
+- **AggroSystem**: playerSkills, combatLevelCache, and aggro maps growing unboundedly
+- **StarterChestEntity**: lootedByCharacters Set growing unboundedly (10k limit with LRU pruning added)
+- **GameTickProcessor**: Event handlers not cleaned up on destroy
+- **TradingSystem**: PLAYER_LEFT/LOGOUT/DIED event handlers never removed
+- **RTMPBridge**: WebSocket server listeners not cleaned up on close
+- **ActionQueue**: playerQueues Map never cleared (destroy() method added)
+- **ScriptQueue**: PlayerScriptQueue and NPCScriptQueue not cleaned up (destroy() methods added)
+- **Shutdown Process**: Rate limiters and idempotency service not destroyed on shutdown
+
+All cleanup follows the established patterns in SystemBase for proper resource cleanup.
+
+### Railway Database Detection
+
+**Railway Proxy Detection** (commit a5a201c):
+- Detects Railway proxy (.rlwy.net) and direct (.railway.app) as serverless
+- Add Railway proxy detection to isSupavisorPooler for pgbouncer support
+- Disables prepared statements when using Railway proxy
+- Uses lower connection pool limits (max: 6) for pooler connections
+- Fixes "too many clients already" errors on Railway deployments
+
+### Vast.ai Provisioner
+
+**Automated Instance Provisioning** (commit 81c4218):
+- Script: `./scripts/vast-provision.sh`
+- Searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
+- Filters by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr), disk space (≥120GB)
+- Automatically rents best available instance
+- Waits for instance to be ready
+- Outputs SSH connection details and GitHub secret commands
+- Saves configuration to `/tmp/vast-instance-config.env`
+
+**Requirements**:
+- Vast.ai CLI: `pip install vastai`
+- API key configured: `vastai set api-key YOUR_API_KEY`
+
+**Usage**:
+```bash
+VAST_API_KEY=xxx bun run vast:provision
+```
+
+### Streaming Improvements
+
+**WebGPU Initialization** (multiple commits):
+- **Adapter Request Timeout**: 30s timeout on `navigator.gpu.requestAdapter()` to prevent indefinite hangs
+- **Renderer Init Timeout**: 60s timeout on `renderer.init()` to detect GPU driver issues
+- **Preflight Testing**: `testWebGpuInit()` runs on localhost server (secure context) before loading game content
+- **Secure Context Fix**: Changed from about:blank to localhost:3333 for proper navigator.gpu exposure
+- **GPU Diagnostics**: `captureGpuDiagnostics()` extracts chrome://gpu info for debugging
+- **Adapter Info Compatibility**: Falls back to direct adapter properties when `requestAdapterInfo()` unavailable (older Chromium)
+- **Page Navigation Timeout**: Increased to 120s (up from 60s) for WebGPU shader compilation on first load
+
+**Stream Capture Improvements**:
+- **CDP (default)**: Chrome DevTools Protocol screencast - fastest, most reliable
+- **WebCodecs**: Native VideoEncoder API (experimental)
+- **MediaRecorder**: Legacy fallback mode
+- Automatic recovery with viewport restoration on resolution mismatch
+- 5s timeout on probe evaluate calls to prevent hanging
+- Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
+- **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
+
+**Streaming Status Check** (commit 61c14bc):
+- Script: `bun run duel:status` or `bash scripts/check-streaming-status.sh`
+- Quick diagnostic for verifying streaming health on Vast.ai
+- Checks: server health, streaming API status, duel context, RTMP bridge, PM2 processes, recent logs
 
 ## Troubleshooting
 
@@ -517,7 +648,6 @@ cd packages/physx-js-webidl
 # Kill processes on common Hyperscape ports
 lsof -ti:3333 | xargs kill -9  # Game Client
 lsof -ti:5555 | xargs kill -9  # Game Server
-lsof -ti:8765 | xargs kill -9  # RTMP Bridge
 ```
 
 See [Port Allocation](#port-allocation) section for full port list.
@@ -529,36 +659,48 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Tests spawn their own Hyperscape instances
 - Visual tests require WebGPU support (headful browser with GPU access)
 
-### Memory Leaks
+### Database Issues
 
-If you see memory growth during development:
-1. Check that all event listeners are properly cleaned up in `destroy()` methods
-2. Verify object pools are being released (call `CombatEventPools.checkAllLeaks()`)
-3. Use Chrome DevTools Memory Profiler to identify leaking objects
-4. See [AGENTS.md](AGENTS.md) Memory Management section for cleanup patterns
+**Railway "too many clients already" errors**:
+- Set `POSTGRES_POOL_MAX=3` (or lower) in `.env`
+- Set `POSTGRES_POOL_MIN=0` to not hold idle connections
+- Increase `restart_delay=10s` in PM2 config to allow connections to close
 
-### Streaming/Vast.ai Issues
-
+**Local database schema errors after pulling updates**:
 ```bash
-# Check streaming health
-bun run duel:status
+# Stop and remove postgres container
+docker stop hyperscape-postgres 2>/dev/null; docker rm hyperscape-postgres 2>/dev/null
 
-# View PM2 logs
-bun run duel:prod:logs
+# Remove postgres volumes
+docker volume rm hyperscape-postgres-data 2>/dev/null; docker volume rm server_postgres-data 2>/dev/null
 
-# Restart streaming
-bun run duel:prod:restart
+# Remove any remaining hyperscape volumes
+docker volume ls | grep -i hyperscape | awk '{print $2}' | xargs -r docker volume rm
+
+# Verify volumes are gone
+docker volume ls | grep -i hyperscape
+
+# Restart with fresh database
+bun run dev
 ```
 
-Common issues:
-- **WebGPU not initializing**: Ensure instance has `gpu_display_active=true`
-- **Browser timeout**: Use production client build (`DUEL_USE_PRODUCTION_CLIENT=true`)
-- **Connection pool exhaustion**: Check `POSTGRES_POOL_MAX` setting
+### Streaming Issues
+
+**WebGPU not initializing on Vast.ai**:
+- Ensure instance has `gpu_display_active=true` (use `bun run vast:provision`)
+- Check deployment logs for GPU display driver detection
+- Run `bun run duel:status` to check streaming health
+- Verify NVIDIA display driver: `nvidia-smi` should show display mode
+
+**Browser timeout during page load**:
+- Set `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
+- Use pre-built client via `vite preview` instead of dev server
+- Significantly faster page loads (no on-demand module compilation)
 
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
-- [AGENTS.md](AGENTS.md) - AI coding assistant guidelines (includes memory management)
+- [AGENTS.md](AGENTS.md) - AI coding assistant instructions
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
