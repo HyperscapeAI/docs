@@ -343,7 +343,7 @@ All services have unique default ports to avoid conflicts:
 **Package-specific `.env` files**: Each package has its own `.env.example` with deployment documentation:
 
 | Package | File | Purpose |
-|---------|------|---------|
+|---------|------|------------|
 | Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
@@ -376,6 +376,7 @@ STREAM_PLACEHOLDER_ENABLED=true  # Send placeholder frames during idle periods (
 # Database Configuration (Railway/Serverless)
 POSTGRES_POOL_MAX=3              # Max connections (3 for crash loops, 1 for duels)
 POSTGRES_POOL_MIN=0              # Min connections (0 to not hold idle)
+RAILWAY_ENVIRONMENT=...          # Auto-detected by Railway (most reliable detection method)
 
 # Production Client Build
 NODE_ENV=production              # Use production client build
@@ -571,10 +572,11 @@ All cleanup follows the established patterns in SystemBase for proper resource c
 
 ### Railway Database Detection
 
-**Railway Proxy Detection**:
+**Railway Proxy Detection** (commit a5a201c, d8c26d2):
 - Detects Railway via `RAILWAY_ENVIRONMENT` env var (most reliable)
 - Also detects Railway proxy (.rlwy.net), direct (.railway.app), and internal (.railway.internal) hostnames
-- Disables prepared statements when using Railway proxy (not supported by pgbouncer)
+- Add Railway proxy detection to isSupavisorPooler for pgbouncer support
+- Disables prepared statements when using Railway proxy
 - Uses lower connection pool limits (max: 6) for pooler connections
 - Fixes "too many clients already" errors on Railway deployments
 
@@ -600,7 +602,7 @@ VAST_API_KEY=xxx bun run vast:provision
 
 ### Streaming Improvements
 
-**WebGPU Initialization**:
+**WebGPU Initialization** (commit b3e096db):
 - **Adapter Request Timeout**: 30s timeout on `navigator.gpu.requestAdapter()` to prevent indefinite hangs
 - **Renderer Init Timeout**: 60s timeout on `renderer.init()` to detect GPU driver issues
 - **Preflight Testing**: `testWebGpuInit()` runs on localhost server (secure context) before loading game content
@@ -623,7 +625,7 @@ VAST_API_KEY=xxx bun run vast:provision
 - Quick diagnostic for verifying streaming health on Vast.ai
 - Checks: server health, streaming API status, duel context, RTMP bridge, PM2 processes, recent logs
 
-**Placeholder Frame Mode**:
+**Placeholder Frame Mode** (commit 83056565):
 - Set `STREAM_PLACEHOLDER_ENABLED=true` to enable placeholder frames during idle periods
 - Detects when no frames received for 5 seconds
 - Switches to minimal JPEG frames at configured FPS to keep stream alive
@@ -631,7 +633,7 @@ VAST_API_KEY=xxx bun run vast:provision
 - Prevents Twitch/YouTube 30-minute disconnect during content gaps
 - Uses minimal 16x16 JPEG (~300 bytes) scaled by FFmpeg to output size
 
-**Graceful Restart for Duel Arena**:
+**Graceful Restart for Duel Arena** (commit c76ca516):
 - **POST /admin/graceful-restart**: Request server restart after current duel ends
 - **GET /admin/restart-status**: Check if restart is pending
 - **StreamingDuelScheduler.requestGracefulRestart()**: Programmatic API
@@ -641,17 +643,10 @@ VAST_API_KEY=xxx bun run vast:provision
   - PM2 automatically restarts the server with new code
 - Enables zero-downtime deployments for the duel arena stream
 
-**Model Agent Spawning**:
-- Set `SPAWN_MODEL_AGENTS=true` to enable automatic agent creation when database is empty
-- Allows duels to run even with an empty database
-- Useful for fresh deployments and testing
-
-**PostgreSQL Connection Pool Tuning**:
-- **POSTGRES_POOL_MAX=3** (down from 6) to prevent connection exhaustion during crash loops
-- **POSTGRES_POOL_MIN=0** to not hold idle connections during crashes
-- **restart_delay=10s** (up from 5s) in PM2 config to allow connections to fully close
-- **exp_backoff_restart_delay=2s** for more gradual backoff on repeated failures
-- Prevents PostgreSQL error 53300 (too many connections) during crash loop scenarios
+**Deployment Process Improvements** (commit 58d88f4c, dbd4332d):
+- **Process Teardown Before Migration**: Tears down existing processes and closes DB connections before running migrations to prevent "too many clients" errors
+- **Branch Fix**: Deploy from main branch instead of hackathon branch
+- **GitHub Actions Fixes**: Fixed upload-artifact version (v7 → v4), build order (shared before impostors/procgen), heredoc variable expansion
 
 ## Troubleshooting
 
@@ -696,6 +691,7 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Set `POSTGRES_POOL_MAX=3` (or lower) in `.env`
 - Set `POSTGRES_POOL_MIN=0` to not hold idle connections
 - Increase `restart_delay=10s` in PM2 config to allow connections to close
+- Railway is auto-detected via `RAILWAY_ENVIRONMENT` env var
 
 **Local database schema errors after pulling updates**:
 ```bash
@@ -728,22 +724,20 @@ bun run dev
 - Use pre-built client via `vite preview` instead of dev server
 - Significantly faster page loads (no on-demand module compilation)
 
-**Vitest 4.x compatibility**:
-If you see `__vite_ssr_exportName__` errors after upgrading Vite:
-```bash
-bun add -D vitest@^4.0.6 @vitest/coverage-v8@^4.0.6
-```
+**Stream disconnects after 30 minutes**:
+- Enable placeholder frame mode: `STREAM_PLACEHOLDER_ENABLED=true`
+- Sends minimal frames during idle periods to keep stream alive
+- Automatically exits when live frames resume
 
-Vitest 2.x is incompatible with Vite 6.x. Vitest 4.x is required.
+**Zero-downtime deployments**:
+- Use graceful restart API: `POST /admin/graceful-restart`
+- Server waits for current duel to complete before restarting
+- PM2 automatically restarts with new code
 
 ## Additional Resources
 
-- [CLAUDE.md](CLAUDE.md) - Detailed development guidelines and architecture
-- [AGENTS.md](AGENTS.md) - AI coding assistant instructions and WebGPU streaming architecture
+- [README.md](README.md) - Full project documentation
+- [AGENTS.md](AGENTS.md) - AI coding assistant instructions
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
-
-## License
-
-MIT
