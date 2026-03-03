@@ -277,10 +277,12 @@ POSTGRES_POOL_MAX=6              # Lower limit for pooler connections
 POSTGRES_POOL_MIN=0              # Don't hold idle connections
 ```
 
-Railway proxy detection is automatic - the system detects `.rlwy.net` and `.railway.app` domains and:
+Railway proxy detection is automatic - the system detects `.rlwy.net`, `.railway.app`, and `.railway.internal` domains and:
 - Disables prepared statements (not supported by pgbouncer)
 - Uses lower connection pool limits
 - Prevents "too many clients already" errors
+
+Detection also works via `RAILWAY_ENVIRONMENT` environment variable for reliable identification.
 
 ### Vast.ai (GPU Streaming)
 
@@ -424,6 +426,21 @@ If you see `__vite_ssr_exportName__` errors, ensure you're using Vitest 4.x (not
 bun add -D vitest@^4.0.6 @vitest/coverage-v8@^4.0.6
 ```
 
+Vitest 2.x is incompatible with Vite 6.x. The upgrade to Vitest 4.x was required for compatibility.
+
+**Streaming Issues:**
+
+*WebGPU not initializing on Vast.ai:*
+- Ensure instance has `gpu_display_active=true` (use `bun run vast:provision`)
+- Check deployment logs for GPU display driver detection
+- Run `bun run duel:status` to check streaming health
+- Verify NVIDIA display driver: `nvidia-smi` should show display mode
+
+*Browser timeout during page load:*
+- Set `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
+- Use pre-built client via `vite preview` instead of dev server
+- Significantly faster page loads (no on-demand module compilation)
+
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
@@ -453,7 +470,28 @@ Fixed critical memory leaks in 20+ systems including:
 - ModelCache, EventBridge, Logger, PlayerTokenManager
 - AgentManager, AutonomousBehaviorManager, GameTickProcessor
 - TradingSystem, RTMPBridge, ActionQueue, ScriptQueue
-- And many more - see CLAUDE.md for complete list
+- And many more - see AGENTS.md for complete list
+
+### New Features
+
+**Graceful Restart API** (Zero-Downtime Deployments):
+- `POST /admin/graceful-restart` - Request restart after current duel ends
+- `GET /admin/restart-status` - Check if restart is pending
+- Waits for duel RESOLUTION phase before restarting
+- PM2 automatically restarts with new code
+
+**Placeholder Frame Mode** (Stream Keep-Alive):
+- Set `STREAM_PLACEHOLDER_ENABLED=true` to prevent 30-minute disconnects
+- Sends minimal JPEG frames during idle periods
+- Automatically exits when live frames resume
+
+**Streaming Status Check**:
+- `bun run duel:status` - Quick diagnostic for streaming health
+- Checks server, RTMP bridge, PM2 processes, and logs
+
+**Model Agent Spawning**:
+- Set `SPAWN_MODEL_AGENTS=true` to auto-create agents when database is empty
+- Useful for fresh deployments and testing
 
 ### Railway Database Detection
 
@@ -461,6 +499,7 @@ Automatic detection of Railway proxy connections with:
 - Disabled prepared statements (not supported by pgbouncer)
 - Lower connection pool limits (max: 6)
 - Fixes "too many clients already" errors
+- Detection via `RAILWAY_ENVIRONMENT` env var or hostname patterns
 
 ### Vast.ai Provisioner
 
