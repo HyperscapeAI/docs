@@ -322,6 +322,26 @@ This checks:
 - PM2 process status
 - Recent logs
 
+**Graceful Restart (Zero-Downtime Deployments):**
+
+Request a server restart after the current duel ends:
+
+```bash
+# Via API (requires ADMIN_CODE)
+curl -X POST http://your-server/admin/graceful-restart \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+
+# Check restart status
+curl http://your-server/admin/restart-status \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+```
+
+When graceful restart is requested:
+- If no duel active: restarts immediately
+- If duel in progress: waits until RESOLUTION phase completes
+- PM2 automatically restarts with new code
+- No interruption to active duels or streams
+
 ## Native App Distribution
 
 - Desktop and mobile build artifacts are published from tagged releases (`v*`) via `.github/workflows/build-app.yml`.
