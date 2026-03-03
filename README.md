@@ -227,6 +227,7 @@ STREAM_LOW_LATENCY=true          # Use zerolatency tune for faster playback
 STREAM_GOP_SIZE=60               # GOP size in frames (default: 60)
 STREAM_AUDIO_ENABLED=true        # Enable audio capture
 PULSE_AUDIO_DEVICE=...           # PulseAudio device name
+STREAM_PLACEHOLDER_ENABLED=true  # Send placeholder frames during idle periods (prevents 30min disconnect)
 ```
 
 **Database Configuration (Railway/Serverless):**
