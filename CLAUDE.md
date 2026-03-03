@@ -623,6 +623,24 @@ VAST_API_KEY=xxx bun run vast:provision
 - Quick diagnostic for verifying streaming health on Vast.ai
 - Checks: server health, streaming API status, duel context, RTMP bridge, PM2 processes, recent logs
 
+**Placeholder Frame Mode** (commit 83056565):
+- Set `STREAM_PLACEHOLDER_ENABLED=true` to enable placeholder frames during idle periods
+- Detects when no frames received for 5 seconds
+- Switches to minimal JPEG frames at configured FPS to keep stream alive
+- Automatically exits placeholder mode when live frames resume
+- Prevents Twitch/YouTube 30-minute disconnect during content gaps
+- Uses minimal 16x16 JPEG (~300 bytes) scaled by FFmpeg to output size
+
+**Graceful Restart for Duel Arena** (commit c76ca516):
+- **POST /admin/graceful-restart**: Request server restart after current duel ends
+- **GET /admin/restart-status**: Check if restart is pending
+- **StreamingDuelScheduler.requestGracefulRestart()**: Programmatic API
+- When graceful restart is requested:
+  - If no duel active: restart immediately via SIGTERM
+  - If duel in progress: wait until RESOLUTION phase completes
+  - PM2 automatically restarts the server with new code
+- Enables zero-downtime deployments for the duel arena stream
+
 ## Troubleshooting
 
 ### Build Issues
