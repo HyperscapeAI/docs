@@ -26,7 +26,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 ## Quick Start
 
 **Prerequisites:**
-- [Bun](https://bun.sh) (v1.3.10+) - **Updated from v1.1.38**
+- [Bun](https://bun.sh) (v1.3.10+) - updated from v1.1.38
 - [Git LFS](https://git-lfs.com) - `brew install git-lfs` (macOS) or `apt install git-lfs` (Linux)
 - Docker - [Docker Desktop](https://docker.com/products/docker-desktop) for macOS/Windows, or `apt install docker.io` on Linux
 - [Privy](https://privy.io) account (required for authentication)
@@ -105,7 +105,6 @@ packages/
 ├── client/              # Web client (Vite, React)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
-├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation tools
 └── docs-site/           # Documentation (Docusaurus)
 ```
@@ -159,6 +158,9 @@ VAST_API_KEY=xxx bun run vast:destroy
 
 # Run vast-keeper monitoring service
 VAST_API_KEY=xxx bun run vast:keeper
+
+# Check streaming health (server health, RTMP bridge, PM2 processes, logs)
+bun run duel:status
 ```
 
 **Vast.ai Provisioner** (`./scripts/vast-provision.sh`):
@@ -171,34 +173,6 @@ VAST_API_KEY=xxx bun run vast:keeper
 **Requirements**:
 - Vast.ai CLI: `pip install vastai`
 - API key configured: `vastai set api-key YOUR_API_KEY`
-
-### Duel/Streaming Commands (NEW)
-
-```bash
-# Development duel mode
-bun run dev:duel
-
-# Production duel stack
-bun run duel:prod
-bun run duel:prod:stop
-bun run duel:prod:restart
-bun run duel:prod:logs
-bun run duel:prod:status
-
-# Verify duel stack
-bun run duel:verify
-
-# Check streaming status (NEW)
-bun run duel:status
-```
-
-The `duel:status` command provides quick diagnostics:
-- Server health check
-- Streaming API status
-- Duel context (fighting phase)
-- RTMP bridge status and bytes streamed
-- PM2 process status
-- Recent logs
 
 ### Docker services
 
@@ -245,24 +219,26 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 
 ### New Environment Variables
 
-Recent updates added several new configuration options (see `packages/server/.env.example` for full details):
-
-**Model Agent Spawning**:
+**Streaming/Duel Configuration:**
 ```bash
-SPAWN_MODEL_AGENTS=true  # Enable automatic agent creation when DB is empty
+SPAWN_MODEL_AGENTS=true          # Auto-create agents when database is empty
+STREAM_CAPTURE_EXECUTABLE=...    # Explicit Chrome path for WebGPU
+STREAM_LOW_LATENCY=true          # Use zerolatency tune for faster playback
+STREAM_GOP_SIZE=60               # GOP size in frames (default: 60)
+STREAM_AUDIO_ENABLED=true        # Enable audio capture
+PULSE_AUDIO_DEVICE=...           # PulseAudio device name
 ```
 
-**Streaming Configuration**:
+**Database Configuration (Railway/Serverless):**
 ```bash
-STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable  # Explicit Chrome path
-STREAM_LOW_LATENCY=true                                    # Use zerolatency tune
-STREAM_GOP_SIZE=60                                         # GOP size in frames
+POSTGRES_POOL_MAX=3              # Max connections (3 for crash loops, 1 for duels)
+POSTGRES_POOL_MIN=0              # Min connections (0 to not hold idle)
 ```
 
-**PostgreSQL Connection Pool** (optimized for crash loop scenarios):
+**Production Client Build:**
 ```bash
-POSTGRES_POOL_MAX=3      # Max connections (reduced from 6)
-POSTGRES_POOL_MIN=0      # Min idle connections
+NODE_ENV=production              # Use production client build
+DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
 ```
 
 ### Default Ports
@@ -276,9 +252,10 @@ POSTGRES_POOL_MIN=0      # Min idle connections
 | 3401 | AssetForge API | `bun run dev:forge` |
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
-| 8765 | RTMP Bridge | `bun run duel` |
 
-## Deployment (Railway)
+## Deployment
+
+### Railway
 
 Railway deployment is set up for separate development and production targets:
 
@@ -288,6 +265,61 @@ Railway deployment is set up for separate development and production targets:
 For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps for `hyperscape.gg`), see:
 
 - `docs/railway-dev-prod.md`
+
+**Railway Database Configuration:**
+
+Railway uses connection pooling (pgbouncer) which requires special configuration:
+
+```bash
+# In packages/server/.env for Railway deployments
+POSTGRES_POOL_MAX=6              # Lower limit for pooler connections
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
+```
+
+Railway proxy detection is automatic - the system detects `.rlwy.net` and `.railway.app` domains and:
+- Disables prepared statements (not supported by pgbouncer)
+- Uses lower connection pool limits
+- Prevents "too many clients already" errors
+
+### Vast.ai (GPU Streaming)
+
+**Automated Provisioning:**
+
+Use the Vast.ai provisioner to automatically rent WebGPU-capable instances:
+
+```bash
+VAST_API_KEY=xxx bun run vast:provision
+```
+
+This will:
+1. Search for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
+2. Filter by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr)
+3. Rent the best available instance
+4. Wait for instance to be ready
+5. Output SSH connection details and GitHub secret commands
+
+**Manual Deployment:**
+
+See `scripts/deploy-vast.sh` for the complete deployment script. Key requirements:
+
+- NVIDIA GPU with display driver support (`gpu_display_active=true`)
+- 120GB disk space minimum
+- WebGPU initialization must succeed or deployment fails
+
+**Monitoring:**
+
+Check streaming health with:
+```bash
+bun run duel:status
+```
+
+This checks:
+- Server health endpoint
+- Streaming API status
+- Duel context (fighting phase)
+- RTMP bridge status and bytes streamed
+- PM2 process status
+- Recent logs
 
 ## Native App Distribution
 
@@ -304,44 +336,6 @@ git push origin v1.0.0
 ```
 
 That tag triggers cross-platform native packaging and publishes installers to a GitHub Release.
-
-## Performance & Memory Management
-
-### Object Pooling System (NEW)
-
-Hyperscape implements comprehensive object pooling to eliminate GC pressure in high-frequency event loops:
-
-**Event Payload Pools** (`packages/shared/src/utils/pools/`):
-- `EventPayloadPool.ts` - Factory for creating type-safe event payload pools
-- `CombatEventPools.ts` - Pre-configured pools for all combat events
-- `PositionPool.ts` - Pool for `{x, y, z}` position objects
-
-**Performance Impact**:
-- Eliminates per-tick object allocations in combat hot paths
-- Memory stays flat during 60s stress test with agents in combat
-- Verified zero-allocation event emission in CombatSystem
-
-See [AGENTS.md](AGENTS.md) for complete memory management documentation and usage patterns.
-
-### Client Performance Optimizations (NEW)
-
-**Movement System**:
-- Immediate move processing (bypasses ActionQueue for 0-latency response)
-- Pathfinding rate limit raised from 5/sec to 15/sec
-- BFS iterations increased from 2000 to 8000 (~44 tile radius)
-- Path continuation for seamless long-distance movement
-- Server-side pre-computation eliminates skating at segment boundaries
-
-**Minimap Rendering**:
-- Async terrain generation (50×50 grid) runs off RAF callback
-- Zero RAF blocking - terrain generation in background macrotasks
-- Canvas rotation transform decouples terrain regen from camera rotation
-- Reduced terrain sampling from 40,000 pixels to 2,500 (16× reduction)
-
-**GPU Resource Hygiene**:
-- Object pools for XPDropSystem, DuelCountdownSplatSystem
-- Proper cleanup in HealthBars, ProjectileRenderer, PlayerTokenManager
-- Two-flag handshake prevents world.destroy() racing world.init()
 
 ## Troubleshooting
 
@@ -374,12 +368,25 @@ docker volume ls | grep -i hyperscape
 bun run dev
 ```
 
+**Railway "too many clients already" errors:**
+Set lower connection pool limits in `packages/server/.env`:
+```bash
+POSTGRES_POOL_MAX=3              # Down from default 6
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
+```
+
+Also increase PM2 restart delay to allow connections to close:
+```javascript
+// In ecosystem.config.cjs
+restart_delay: 10000,            // 10s instead of 5s
+exp_backoff_restart_delay: 2000, // 2s for gradual backoff
+```
+
 **Port conflicts:**
 ```bash
 lsof -ti:5555 | xargs kill -9   # Server
 lsof -ti:3333 | xargs kill -9   # Client
 lsof -ti:8080 | xargs kill -9   # CDN
-lsof -ti:8765 | xargs kill -9   # RTMP Bridge
 ```
 
 **Build errors:**
@@ -390,39 +397,63 @@ bun install
 bun run build
 ```
 
-**Memory leaks during development:**
-If you see memory growth:
-1. Check that all event listeners are properly cleaned up in `destroy()` methods
-2. Verify object pools are being released (call `CombatEventPools.checkAllLeaks()`)
-3. Use Chrome DevTools Memory Profiler to identify leaking objects
-4. See [AGENTS.md](AGENTS.md) Memory Management section for cleanup patterns
-
-**Streaming/Vast.ai issues:**
+**Vitest 4.x upgrade issues:**
+If you see `__vite_ssr_exportName__` errors, ensure you're using Vitest 4.x (not 2.x):
 ```bash
-# Check streaming health
-bun run duel:status
-
-# View PM2 logs
-bun run duel:prod:logs
-
-# Restart streaming
-bun run duel:prod:restart
+bun add -D vitest@^4.0.6 @vitest/coverage-v8@^4.0.6
 ```
-
-Common issues:
-- **WebGPU not initializing**: Ensure instance has `gpu_display_active=true`
-- **Browser timeout**: Use production client build (`DUEL_USE_PRODUCTION_CLIENT=true`)
-- **Connection pool exhaustion**: Check `POSTGRES_POOL_MAX` setting
 
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
 
+## Recent Improvements
+
+### Stability Improvements (March 2026)
+
+- **Combat System**: Aligned retry timer with tick system, reduced phase timeouts, improved stall detection
+- **Agent System**: LLM rate limiting with exponential backoff, memory leak fixes, dynamic combat escalation, banking goal type added
+- **Resource Management**: Activity logger queue limits, session timeouts, proper cleanup
+- **Test Stability**: Vitest 4.x upgrade for Vite 6 compatibility, increased timeouts for fuzz tests
+- **E2E Journey Tests**: Complete login→loading→spawn→walk gameplay tests with screenshot comparison
+
+### Performance Optimizations
+
+- **Object Pooling**: Zero-allocation event emission for combat events (eliminates GC pressure)
+- **Instanced Rendering**: O(1) draw calls per unique model per LOD level for resources
+- **Model Cache Integrity**: Index buffer type preservation fixes geometry corruption
+- **Movement System**: Immediate move processing, increased pathfinding rate limit, path continuation
+- **Minimap Rendering**: Async terrain generation, zero RAF blocking, 16× reduction in sampling
+- **GPU Resource Hygiene**: Object pools for textures/materials, proper cleanup on destroy
+
+### Memory Leak Fixes
+
+Fixed critical memory leaks in 20+ systems including:
+- ModelCache, EventBridge, Logger, PlayerTokenManager
+- AgentManager, AutonomousBehaviorManager, GameTickProcessor
+- TradingSystem, RTMPBridge, ActionQueue, ScriptQueue
+- And many more - see CLAUDE.md for complete list
+
+### Railway Database Detection
+
+Automatic detection of Railway proxy connections with:
+- Disabled prepared statements (not supported by pgbouncer)
+- Lower connection pool limits (max: 6)
+- Fixes "too many clients already" errors
+
+### Vast.ai Provisioner
+
+Automated instance provisioning with WebGPU support:
+- Searches for `gpu_display_active=true` instances
+- Filters by reliability, GPU RAM, price, disk space
+- Automatic rental and setup
+- SSH connection details and GitHub secrets output
+
 ## More Info
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
 
-See [AGENTS.md](AGENTS.md) for AI coding assistant guidelines, including comprehensive memory management and object pooling documentation.
+See [AGENTS.md](AGENTS.md) for AI coding assistant instructions and WebGPU streaming architecture.
 
 ## License
 
