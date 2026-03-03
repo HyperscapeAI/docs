@@ -95,6 +95,7 @@ The streaming pipeline requires specific GPU setup:
    - Persists GPU/display settings to `.env` for PM2 restarts
    - Exports working GPU mode for ecosystem.config.cjs
    - **XDG_RUNTIME_DIR**: Required for Vulkan/EGL initialization (set to `/tmp/runtime-root`)
+   - **Process Teardown Before Migration**: Tears down existing processes and closes DB connections before running migrations to prevent "too many clients" errors
 
 6. **Production Client Build**:
    - When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
@@ -211,6 +212,8 @@ The streaming pipeline requires specific GPU setup:
    - Automatically exits placeholder mode when live frames resume
    - Prevents Twitch/YouTube 30-minute disconnect during content gaps
    - Uses minimal 16x16 JPEG (~300 bytes) scaled by FFmpeg to output size
+   - Environment variables:
+     - `STREAM_PLACEHOLDER_ENABLED=true` - Enable placeholder mode (default: false)
 
 21. **Graceful Restart for Duel Arena**:
    - **POST /admin/graceful-restart**: Request server restart after current duel ends
