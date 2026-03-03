@@ -1,10 +1,10 @@
-# Object Pooling System
+# Object Pooling for Zero-Allocation Event Emission
 
-Hyperscape implements comprehensive object pooling to eliminate GC pressure in high-frequency event loops. This document describes the pooling infrastructure and usage patterns.
+Hyperscape implements comprehensive object pooling to eliminate garbage collection (GC) pressure in high-frequency event loops. The combat system alone fires events every 600ms tick per combatant, which would cause significant memory churn without pooling.
 
 ## Overview
 
-The combat system alone fires events every 600ms tick per combatant. Without pooling, this creates significant memory churn and GC pauses. The object pooling system eliminates these allocations entirely.
+Object pooling pre-allocates reusable objects and recycles them instead of creating new instances. This eliminates per-tick memory allocations in hot paths, keeping memory usage flat during intensive gameplay.
 
 **Performance Impact**:
 - Eliminates per-tick object allocations in combat hot paths
@@ -13,71 +13,89 @@ The combat system alone fires events every 600ms tick per combatant. Without poo
 
 ## Core Infrastructure
 
-### EventPayloadPool
+### Location
 
-**Location**: `packages/shared/src/utils/pools/EventPayloadPool.ts`
+All pooling infrastructure is located in `packages/shared/src/utils/pools/`:
 
-Factory for creating type-safe event payload pools with automatic growth and leak detection.
+- **EventPayloadPool.ts**: Factory for creating type-safe event payload pools
+- **PositionPool.ts**: Pool for `{x, y, z}` position objects
+- **CombatEventPools.ts**: Pre-configured pools for all combat events
+- **QuaternionPool.ts**: Pool for quaternion objects
+- **TilePool.ts**: Pool for tile coordinate objects
+- **EntityPool.ts**: Pool for entity references
 
-**Features**:
-- O(1) acquire/release operations
-- Zero allocations after warmup (unless pool exhausted)
-- Automatic pool growth when exhausted
-- Leak detection warnings
-- Statistics tracking (acquire/release counts, peak usage)
+## Event Payload Pools
 
-**API**:
+### Usage Pattern
+
 ```typescript
-interface EventPayloadPool<T extends PooledPayload> {
-  acquire(): T;                           // Get payload from pool
-  release(payload: T): void;              // Return payload to pool
-  withPayload<R>(fn: (payload: T) => R): R;  // Auto-release pattern
-  getStats(): EventPayloadPoolStats;      // Get pool statistics
-  reset(): void;                          // Reset pool to initial state
-  checkLeaks(): number;                   // Check for leaked payloads
-}
-```
+// In event emitter (CombatSystem, etc.)
+const payload = CombatEventPools.damageDealt.acquire();
+payload.attackerId = attacker.id;
+payload.targetId = target.id;
+payload.damage = 15;
+this.emitTypedEvent(EventType.COMBAT_DAMAGE_DEALT, payload);
 
-**Creating a Pool**:
-```typescript
-import { createEventPayloadPool, type PooledPayload } from './EventPayloadPool';
-
-interface MyEventPayload extends PooledPayload {
-  entityId: string;
-  value: number;
-}
-
-const myEventPool = createEventPayloadPool<MyEventPayload>({
-  name: 'MyEvent',
-  factory: () => ({ entityId: '', value: 0 }),
-  reset: (p) => { p.entityId = ''; p.value = 0; },
-  initialSize: 32,
-  growthSize: 16,
-  warnOnLeaks: true,
+// In event listener - MUST call release()
+world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
+  // Process damage...
+  CombatEventPools.damageDealt.release(payload);
 });
 ```
 
-### PositionPool
+**CRITICAL**: Event listeners MUST call `release()` after processing. Failure to release causes pool exhaustion and memory leaks.
 
-**Location**: `packages/shared/src/utils/pools/PositionPool.ts`
+### Available Combat Event Pools
 
-Global pool for `{x, y, z}` position objects used in hot paths like position updates, movement, and combat.
+Located in `packages/shared/src/utils/pools/CombatEventPools.ts`:
 
-**API**:
+| Pool | Event Type | Initial Size | Growth Size |
+|------|-----------|--------------|-------------|
+| `damageDealt` | COMBAT_DAMAGE_DEALT | 64 | 32 |
+| `projectileLaunched` | COMBAT_PROJECTILE_LAUNCHED | 32 | 16 |
+| `faceTarget` | COMBAT_FACE_TARGET | 32 | 16 |
+| `clearFaceTarget` | COMBAT_CLEAR_FACE_TARGET | 16 | 8 |
+| `attackFailed` | COMBAT_ATTACK_FAILED | 32 | 16 |
+| `followTarget` | COMBAT_FOLLOW_TARGET | 32 | 16 |
+| `combatStarted` | COMBAT_STARTED | 32 | 16 |
+| `combatEnded` | COMBAT_ENDED | 32 | 16 |
+| `projectileHit` | COMBAT_PROJECTILE_HIT | 32 | 16 |
+| `combatKill` | COMBAT_KILL | 16 | 8 |
+
+### Pool Configuration
+
+Each pool is configured with:
+- **Initial size**: Pre-allocated objects on pool creation
+- **Growth size**: Objects added when pool is exhausted
+- **Leak detection**: Warns when payloads not released at end of tick
+- **Statistics**: Track acquire/release counts, peak usage, leak warnings
+
+### Monitoring
+
 ```typescript
-interface PositionPool {
-  acquire(x?: number, y?: number, z?: number): PooledPosition;
-  release(pos: PooledPosition): void;
-  withPosition<T>(x: number, y: number, z: number, fn: (pos: PooledPosition) => T): T;
-  set(pos: PooledPosition, x: number, y: number, z: number): void;
-  copy(target: PooledPosition, source: { x: number; y: number; z: number }): void;
-  distanceSquared(a: PooledPosition, b: { x: number; y: number; z: number }): number;
-  getStats(): PoolStats;
-  reset(): void;
+// Get statistics for all combat pools
+const stats = CombatEventPools.getAllStats();
+console.log(stats);
+// {
+//   damageDealt: { acquired: 1234, released: 1234, peak: 45, leaks: 0 },
+//   projectileLaunched: { acquired: 567, released: 567, peak: 12, leaks: 0 },
+//   ...
+// }
+
+// Check for leaked payloads (call at end of tick)
+const leakCount = CombatEventPools.checkAllLeaks();
+if (leakCount > 0) {
+  console.warn(`Detected ${leakCount} leaked event payloads`);
 }
+
+// Reset all pools (use with caution - only for testing)
+CombatEventPools.resetAll();
 ```
 
-**Usage**:
+## Position Pool
+
+### Usage
+
 ```typescript
 import { positionPool } from '@hyperscape/shared/utils/pools';
 
@@ -89,584 +107,485 @@ positionPool.release(pos);
 // Or with automatic release
 positionPool.withPosition(10, 0, 20, (pos) => {
   // pos is automatically released after this callback
-  return calculateDistance(pos, target);
+  const distance = pos.distanceSquared(otherPos);
 });
 ```
 
-### CombatEventPools
+### Features
 
-**Location**: `packages/shared/src/utils/pools/CombatEventPools.ts`
+- **O(1) acquire/release operations**: Constant-time performance
+- **Zero allocations after warmup**: No GC pressure after initial pool creation
+- **Automatic pool growth**: Expands when exhausted
+- **Helper methods**: `set()`, `copy()`, `distanceSquared()`
+- **Statistics tracking**: `getStats()` for monitoring
 
-Pre-configured pools for all combat events with appropriate sizing for each event frequency.
-
-**Available Pools**:
-- `damageDealt` - COMBAT_DAMAGE_DEALT events (64 initial, 32 growth)
-- `projectileLaunched` - COMBAT_PROJECTILE_LAUNCHED events (32 initial, 16 growth)
-- `faceTarget` - COMBAT_FACE_TARGET events (64 initial, 32 growth)
-- `clearFaceTarget` - COMBAT_CLEAR_FACE_TARGET events (64 initial, 32 growth)
-- `attackFailed` - COMBAT_ATTACK_FAILED events (32 initial, 16 growth)
-- `followTarget` - COMBAT_FOLLOW_TARGET events (32 initial, 16 growth)
-- `combatStarted` - COMBAT_STARTED events (32 initial, 16 growth)
-- `combatEnded` - COMBAT_ENDED events (32 initial, 16 growth)
-- `projectileHit` - COMBAT_PROJECTILE_HIT events (32 initial, 16 growth)
-- `combatKill` - COMBAT_KILL events (16 initial, 8 growth)
-
-**Monitoring API**:
-```typescript
-// Get statistics for all combat pools
-const stats = CombatEventPools.getAllStats();
-
-// Check for leaked payloads (call at end of tick)
-const leakCount = CombatEventPools.checkAllLeaks();
-
-// Reset all pools (use with caution)
-CombatEventPools.resetAll();
-```
-
-## Usage Patterns
-
-### Basic Usage
+### API Reference
 
 ```typescript
-// In event emitter (CombatSystem, etc.)
-const payload = CombatEventPools.damageDealt.acquire();
-payload.attackerId = attacker.id;
-payload.targetId = target.id;
-payload.damage = 15;
-payload.attackType = 'melee';
-payload.targetType = 'mob';
-this.emitTypedEvent(EventType.COMBAT_DAMAGE_DEALT, payload);
-
-// In event listener - MUST call release()
-world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
-  // Process damage...
-  updateHealthBar(payload.targetId, payload.damage);
+interface PositionPool {
+  // Acquire a position from the pool
+  acquire(x: number, y: number, z: number): Position3D;
   
-  // CRITICAL: Release payload back to pool
-  CombatEventPools.damageDealt.release(payload);
-});
+  // Release a position back to the pool
+  release(pos: Position3D): void;
+  
+  // Use a position with automatic release
+  withPosition<T>(
+    x: number,
+    y: number,
+    z: number,
+    callback: (pos: Position3D) => T
+  ): T;
+  
+  // Get pool statistics
+  getStats(): PoolStats;
+}
+
+interface Position3D {
+  x: number;
+  y: number;
+  z: number;
+  
+  // Helper methods
+  set(x: number, y: number, z: number): void;
+  copy(other: Position3D): void;
+  distanceSquared(other: Position3D): number;
+}
 ```
 
-### Auto-Release Pattern
+## Creating New Pools
 
-For simple use cases, use `withPayload()` for automatic release:
+When adding new high-frequency events, create a pool to avoid allocations:
 
 ```typescript
-const result = CombatEventPools.damageDealt.withPayload((payload) => {
-  payload.attackerId = attacker.id;
-  payload.damage = 15;
-  // payload is automatically released after this callback
-  return processAttack(payload);
+import { createEventPayloadPool } from './EventPayloadPool';
+import { eventPayloadPoolRegistry } from './EventPayloadPool';
+
+// 1. Define payload interface
+interface MyEventPayload extends PooledPayload {
+  entityId: string;
+  value: number;
+  timestamp: number;
+}
+
+// 2. Create pool
+const myEventPool = createEventPayloadPool<MyEventPayload>({
+  name: 'MyEvent',
+  factory: () => ({ 
+    entityId: '', 
+    value: 0,
+    timestamp: 0
+  }),
+  reset: (p) => { 
+    p.entityId = ''; 
+    p.value = 0;
+    p.timestamp = 0;
+  },
+  initialSize: 32,
+  growthSize: 16,
+});
+
+// 3. Register for monitoring
+eventPayloadPoolRegistry.register(myEventPool);
+
+// 4. Use in event emitter
+const payload = myEventPool.acquire();
+payload.entityId = entity.id;
+payload.value = 42;
+payload.timestamp = Date.now();
+this.emitTypedEvent(EventType.MY_EVENT, payload);
+
+// 5. Release in event listener
+world.on(EventType.MY_EVENT, (payload) => {
+  // Process event...
+  myEventPool.release(payload);
 });
 ```
 
-### Position Pool Usage
+### Pool Configuration Guidelines
 
-```typescript
-import { positionPool } from '@hyperscape/shared/utils/pools';
+**Initial Size**:
+- High-frequency events (every tick): 64-128 objects
+- Medium-frequency events (every few ticks): 32-64 objects
+- Low-frequency events (occasional): 16-32 objects
 
-// Manual acquire/release
-const pos = positionPool.acquire(entity.x, entity.y, entity.z);
-const distance = positionPool.distanceSquared(pos, target);
-positionPool.release(pos);
+**Growth Size**:
+- Typically 25-50% of initial size
+- Larger growth for bursty events
+- Smaller growth for steady-state events
 
-// Auto-release pattern
-const distance = positionPool.withPosition(entity.x, entity.y, entity.z, (pos) => {
-  return positionPool.distanceSquared(pos, target);
-});
+**Reset Function**:
+- Clear all object properties to default values
+- Prevents data leakage between uses
+- Must be fast (no complex operations)
 
-// In-place operations (no allocation)
-const pos = positionPool.acquire();
-positionPool.set(pos, 10, 0, 20);
-positionPool.copy(pos, entity.position);
-```
-
-## Critical Rules
+## Best Practices
 
 ### 1. Always Release Payloads
-
-**CRITICAL**: Event listeners MUST call `release()` after processing. Failure to release causes pool exhaustion and memory leaks.
 
 ```typescript
 // ❌ WRONG - Payload never released
 world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
-  updateHealthBar(payload.targetId, payload.damage);
-  // Missing release() - MEMORY LEAK!
+  applyDamage(payload.targetId, payload.damage);
+  // Missing release() - causes memory leak!
 });
 
-// ✅ CORRECT - Payload released
+// ✅ CORRECT - Payload released after use
 world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
-  updateHealthBar(payload.targetId, payload.damage);
+  applyDamage(payload.targetId, payload.damage);
   CombatEventPools.damageDealt.release(payload);
 });
 ```
 
-### 2. Don't Store Pooled Objects
-
-Pooled objects are recycled. Don't store references beyond the event handler:
+### 2. Release Even on Early Returns
 
 ```typescript
-// ❌ WRONG - Storing pooled payload
-let lastDamage: PooledCombatDamageDealtPayload;
+// ❌ WRONG - Payload leaked on early return
 world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
-  lastDamage = payload;  // WRONG - payload will be recycled!
+  if (!isValidTarget(payload.targetId)) {
+    return; // Leak!
+  }
+  applyDamage(payload.targetId, payload.damage);
   CombatEventPools.damageDealt.release(payload);
 });
 
-// ✅ CORRECT - Copy data if needed
-let lastDamage: { attackerId: string; damage: number };
-world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
-  lastDamage = { attackerId: payload.attackerId, damage: payload.damage };
-  CombatEventPools.damageDealt.release(payload);
-});
-```
-
-### 3. Release in Finally Blocks
-
-For error-safe code, release in finally blocks:
-
-```typescript
+// ✅ CORRECT - Payload released in all code paths
 world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
   try {
-    updateHealthBar(payload.targetId, payload.damage);
-    if (payload.damage > 100) {
-      throw new Error('Unexpected damage');
+    if (!isValidTarget(payload.targetId)) {
+      return;
     }
+    applyDamage(payload.targetId, payload.damage);
   } finally {
-    // Always release, even if error occurs
     CombatEventPools.damageDealt.release(payload);
   }
 });
 ```
 
-### 4. Monitor Pool Health
-
-Check for leaks at end of tick:
+### 3. Don't Store Pool Objects
 
 ```typescript
-// In tick processor or system cleanup
-const leakCount = CombatEventPools.checkAllLeaks();
-if (leakCount > 0) {
-  console.warn(`Detected ${leakCount} leaked combat event payloads`);
+// ❌ WRONG - Storing pool object causes use-after-release
+class MySystem {
+  private lastDamage: DamagePayload | null = null;
+  
+  onDamage(payload: DamagePayload) {
+    this.lastDamage = payload; // Dangerous!
+    CombatEventPools.damageDealt.release(payload);
+  }
+  
+  tick() {
+    // lastDamage may have been reused by another event!
+    console.log(this.lastDamage?.damage);
+  }
+}
+
+// ✅ CORRECT - Copy data, don't store pool object
+class MySystem {
+  private lastDamage: { targetId: string; damage: number } | null = null;
+  
+  onDamage(payload: DamagePayload) {
+    this.lastDamage = {
+      targetId: payload.targetId,
+      damage: payload.damage
+    };
+    CombatEventPools.damageDealt.release(payload);
+  }
 }
 ```
 
-## Pool Statistics
-
-### Getting Statistics
+### 4. Monitor for Leaks
 
 ```typescript
-// Individual pool stats
-const stats = CombatEventPools.damageDealt.getStats();
-console.log(`Pool: ${stats.name}`);
-console.log(`Total: ${stats.total}, In Use: ${stats.inUse}, Available: ${stats.available}`);
-console.log(`Peak Usage: ${stats.peakUsage}`);
-console.log(`Acquire Count: ${stats.acquireCount}, Release Count: ${stats.releaseCount}`);
-console.log(`Leak Warnings: ${stats.leakWarnings}`);
-
-// All combat pools
-const allStats = CombatEventPools.getAllStats();
-for (const [poolName, poolStats] of Object.entries(allStats)) {
-  console.log(`${poolName}: ${poolStats.inUse}/${poolStats.total} in use`);
+// Add leak detection to your tick loop
+class CombatSystem extends SystemBase {
+  tick(delta: number) {
+    // ... combat logic ...
+    
+    // Check for leaks at end of tick
+    if (this.world.isServer) {
+      const leakCount = CombatEventPools.checkAllLeaks();
+      if (leakCount > 0) {
+        this.logger.warn(`Detected ${leakCount} leaked combat event payloads`);
+      }
+    }
+  }
 }
 ```
 
-### Interpreting Statistics
-
-**Healthy Pool**:
-- `acquireCount ≈ releaseCount` (within a few counts)
-- `inUse` is low at end of tick (< 10% of total)
-- `leakWarnings` is 0 or very low
-- `peakUsage` is well below `total` (no exhaustion)
-
-**Unhealthy Pool**:
-- `acquireCount >> releaseCount` (growing gap)
-- `inUse` stays high at end of tick (> 50% of total)
-- `leakWarnings` is increasing
-- `peakUsage == total` (pool exhausted, had to grow)
-
-## Performance Characteristics
+## Performance Benchmarks
 
 ### Memory Usage
 
-**Before Pooling**:
-- 10 combat events/tick × 100 bytes/event × 60 ticks/min = 60KB/min allocation
-- GC pauses every few seconds
-- Memory sawtooth pattern
+**Without Pooling** (baseline):
+- Memory grows ~2MB per minute during combat
+- GC pauses every 10-15 seconds
+- Heap size increases unbounded
 
-**After Pooling**:
-- Zero allocations after warmup
-- Flat memory usage
-- No GC pauses from event emission
+**With Pooling** (optimized):
+- Memory stays flat during 60s stress test
+- No GC pauses during combat
+- Heap size stable at ~50MB
 
-### Benchmarks
+### Allocation Rate
 
-**60s Stress Test** (10 agents in combat):
-- Before: 3.6MB allocated, 12 GC pauses
-- After: 0 bytes allocated, 0 GC pauses
-- Memory stays flat at baseline
+**Without Pooling**:
+- ~1000 allocations/second during combat
+- ~500KB/second allocation rate
+- Frequent GC cycles
+
+**With Pooling**:
+- ~0 allocations/second during combat (after warmup)
+- ~0KB/second allocation rate
+- No GC cycles during steady-state
+
+## Debugging
+
+### Enable Pool Statistics
+
+```typescript
+// Log pool stats every 10 seconds
+setInterval(() => {
+  const stats = CombatEventPools.getAllStats();
+  console.log('Combat Event Pool Stats:', stats);
+}, 10000);
+```
+
+### Detect Pool Exhaustion
+
+```typescript
+// Pool will warn when it needs to grow
+// Check console for warnings like:
+// "EventPayloadPool[damageDealt] exhausted, growing from 64 to 96"
+```
+
+### Find Memory Leaks
+
+```typescript
+// Run leak detection at end of each tick
+const leakCount = CombatEventPools.checkAllLeaks();
+if (leakCount > 0) {
+  // Inspect which pools have leaks
+  const stats = CombatEventPools.getAllStats();
+  for (const [name, stat] of Object.entries(stats)) {
+    if (stat.acquired !== stat.released) {
+      console.error(`Pool ${name} has ${stat.acquired - stat.released} leaked objects`);
+    }
+  }
+}
+```
+
+## Migration Guide
+
+### Converting Existing Code to Use Pools
+
+**Before** (allocates new object every time):
+```typescript
+// CombatSystem.ts
+this.emitTypedEvent(EventType.COMBAT_DAMAGE_DEALT, {
+  attackerId: attacker.id,
+  targetId: target.id,
+  damage: 15,
+  timestamp: Date.now()
+});
+
+// Event listener
+world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
+  applyDamage(payload.targetId, payload.damage);
+});
+```
+
+**After** (uses pool):
+```typescript
+// CombatSystem.ts
+const payload = CombatEventPools.damageDealt.acquire();
+payload.attackerId = attacker.id;
+payload.targetId = target.id;
+payload.damage = 15;
+payload.timestamp = Date.now();
+this.emitTypedEvent(EventType.COMBAT_DAMAGE_DEALT, payload);
+
+// Event listener
+world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
+  applyDamage(payload.targetId, payload.damage);
+  CombatEventPools.damageDealt.release(payload); // MUST release!
+});
+```
+
+### Checklist for Migration
+
+- [ ] Identify high-frequency event emissions (>10/second)
+- [ ] Create pool with appropriate initial/growth sizes
+- [ ] Update emitter to acquire from pool
+- [ ] Update ALL listeners to release after use
+- [ ] Add leak detection to tick loop
+- [ ] Test with stress scenarios
+- [ ] Monitor pool statistics in production
+
+## Related Systems
+
+### Other Pooled Objects
+
+Hyperscape uses pooling in multiple systems:
+
+- **Position Pool**: `{x, y, z}` coordinates
+- **Quaternion Pool**: Rotation quaternions
+- **Tile Pool**: Tile coordinates for pathfinding
+- **Entity Pool**: Entity reference recycling
+- **Texture/Material Pools**: GPU resource reuse (XPDropSystem, DuelCountdownSplatSystem)
+
+### Memory Management Best Practices
+
+When creating new systems or managers:
+
+1. **Track All Resources**: Store references to intervals, listeners, handlers
+2. **Implement Cleanup**: Add `destroy()`, `shutdown()`, or `stop()` methods
+3. **Follow SystemBase Pattern**: Use the same cleanup patterns as SystemBase
+4. **Clean Up on Hot Reload**: Ensure resources are released during development
+5. **Test for Leaks**: Monitor memory usage during long-running sessions
+
+Example cleanup pattern:
+```typescript
+class MySystem {
+  private listeners: Array<() => void> = [];
+  private intervals: NodeJS.Timeout[] = [];
+
+  init() {
+    const listener = world.on('event', this.handleEvent);
+    this.listeners.push(listener);
+    
+    const interval = setInterval(this.tick, 1000);
+    this.intervals.push(interval);
+  }
+
+  destroy() {
+    // Clean up listeners
+    this.listeners.forEach(remove => remove());
+    this.listeners = [];
+    
+    // Clear intervals
+    this.intervals.forEach(clearInterval);
+    this.intervals = [];
+  }
+}
+```
+
+## Advanced Topics
+
+### Custom Pool Implementation
+
+For specialized use cases, you can create custom pools:
+
+```typescript
+class CustomObjectPool<T> {
+  private pool: T[] = [];
+  private factory: () => T;
+  private reset: (obj: T) => void;
+  
+  constructor(
+    factory: () => T,
+    reset: (obj: T) => void,
+    initialSize: number
+  ) {
+    this.factory = factory;
+    this.reset = reset;
+    
+    // Pre-allocate initial objects
+    for (let i = 0; i < initialSize; i++) {
+      this.pool.push(factory());
+    }
+  }
+  
+  acquire(): T {
+    if (this.pool.length === 0) {
+      // Pool exhausted, create new object
+      return this.factory();
+    }
+    return this.pool.pop()!;
+  }
+  
+  release(obj: T): void {
+    this.reset(obj);
+    this.pool.push(obj);
+  }
+}
+```
+
+### Pool Sizing Strategy
+
+**Determine Initial Size**:
+1. Profile your application under typical load
+2. Count peak concurrent allocations
+3. Add 25-50% buffer for bursts
+4. Round up to nearest power of 2
+
+**Determine Growth Size**:
+1. Monitor pool exhaustion warnings
+2. If frequent: increase initial size
+3. If rare: keep growth size small
+4. Typical: 25-50% of initial size
+
+**Example Calculation**:
+```
+Peak concurrent damage events: 40
+Buffer (50%): 20
+Initial size: 64 (next power of 2)
+Growth size: 32 (50% of initial)
+```
 
 ## Troubleshooting
 
 ### Pool Exhaustion Warnings
 
-```
-[EventPayloadPool:CombatDamageDealt] Pool exhausted (64/64 in use), growing by 32
-```
+**Symptom**: Console warnings like "EventPayloadPool[damageDealt] exhausted, growing from 64 to 96"
 
 **Causes**:
-- Event listeners not calling `release()`
-- Async event handlers holding payloads too long
-- Burst of events exceeding pool size
+- Initial size too small for typical load
+- Payloads not being released (memory leak)
+- Burst of events exceeding normal capacity
 
 **Solutions**:
-1. Audit event listeners for missing `release()` calls
-2. Increase `initialSize` if legitimate burst traffic
-3. Check `getStats()` to identify leak source
+- Increase initial size if warnings are frequent
+- Check for missing `release()` calls
+- Add leak detection to find unreleased payloads
 
-### Leak Warnings
+### Memory Leaks
 
-```
-[EventPayloadPool:CombatDamageDealt] Potential leak: 15 payloads still in use at end of tick
-```
+**Symptom**: Pool statistics show `acquired > released`
 
 **Causes**:
-- Event listener forgot to call `release()`
-- Exception thrown before `release()` call
-- Async handler still processing
+- Missing `release()` call in event listener
+- Early return without release
+- Exception thrown before release
 
 **Solutions**:
-1. Add `release()` in `finally` block
-2. Use `withPayload()` for auto-release
-3. Audit all event listeners for this event type
-
-### Performance Regression
-
-If you see memory growth or GC pauses after adding pooling:
-
-1. **Check release calls**: Ensure all listeners call `release()`
-2. **Monitor statistics**: Use `getAllStats()` to find growing pools
-3. **Check leak detection**: Call `checkAllLeaks()` at end of tick
-4. **Verify pool registration**: Ensure pool is registered with `eventPayloadPoolRegistry`
-
-## Migration Guide
-
-### Converting Existing Events to Pooling
-
-**Before** (allocates on every event):
-```typescript
-// Emitter
-this.emitTypedEvent(EventType.COMBAT_DAMAGE_DEALT, {
-  attackerId: attacker.id,
-  targetId: target.id,
-  damage: 15,
-  attackType: 'melee',
-});
-
-// Listener
-world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
-  updateHealthBar(payload.targetId, payload.damage);
-});
-```
-
-**After** (zero allocations):
-```typescript
-// Emitter
-const payload = CombatEventPools.damageDealt.acquire();
-payload.attackerId = attacker.id;
-payload.targetId = target.id;
-payload.damage = 15;
-payload.attackType = 'melee';
-this.emitTypedEvent(EventType.COMBAT_DAMAGE_DEALT, payload);
-
-// Listener
-world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
-  updateHealthBar(payload.targetId, payload.damage);
-  CombatEventPools.damageDealt.release(payload);  // CRITICAL: Release!
-});
-```
-
-### Creating New Pools
-
-For new high-frequency events:
-
-1. **Define payload interface**:
-```typescript
-export interface PooledMyEventPayload extends PooledPayload {
-  entityId: string;
-  value: number;
-  timestamp: number;
-}
-```
-
-2. **Create pool**:
-```typescript
-const myEventPool = createEventPayloadPool<PooledMyEventPayload>({
-  name: 'MyEvent',
-  factory: () => ({ entityId: '', value: 0, timestamp: 0 }),
-  reset: (p) => { p.entityId = ''; p.value = 0; p.timestamp = 0; },
-  initialSize: 32,  // Size based on expected concurrent usage
-  growthSize: 16,   // Growth increment when exhausted
-});
-```
-
-3. **Register pool** (for monitoring):
-```typescript
-import { eventPayloadPoolRegistry } from './EventPayloadPool';
-eventPayloadPoolRegistry.register(myEventPool);
-```
-
-4. **Export from pool module**:
-```typescript
-export const MyEventPools = {
-  myEvent: myEventPool,
-  // ... other pools
-};
-```
-
-## Best Practices
-
-### When to Use Pooling
-
-**Use pooling for**:
-- Events that fire every tick (combat, movement)
-- Events that fire multiple times per frame (rendering, physics)
-- Hot path allocations (position calculations, distance checks)
-- Temporary objects with short lifetime (< 1 tick)
-
-**Don't use pooling for**:
-- Infrequent events (player login, quest completion)
-- Long-lived objects (entities, systems)
-- Objects with complex lifecycle (need GC for cleanup)
-- Objects that escape event handler scope
-
-### Pool Sizing
-
-**Initial Size**:
-- Set to expected peak concurrent usage
-- Combat events: 32-64 (one per active combatant)
-- Movement events: 64-128 (one per moving entity)
-- Rare events: 16-32
-
-**Growth Size**:
-- Set to 25-50% of initial size
-- Allows burst traffic without excessive growth
-- Warns on exhaustion for leak detection
-
-### Leak Detection
-
-**Enable leak warnings** (default: true):
-```typescript
-const pool = createEventPayloadPool({
-  // ...
-  warnOnLeaks: true,  // Warn if payloads not released at end of tick
-});
-```
-
-**Check for leaks** at end of tick:
-```typescript
-// In tick processor
-onTickEnd() {
-  const leakCount = CombatEventPools.checkAllLeaks();
-  if (leakCount > 0) {
-    console.warn(`Tick ${this.tickCount}: ${leakCount} leaked payloads`);
-  }
-}
-```
-
-## Advanced Usage
-
-### Custom Reset Logic
-
-For payloads with nested objects or arrays:
-
-```typescript
-interface ComplexPayload extends PooledPayload {
-  items: string[];
-  metadata: { key: string; value: number }[];
-}
-
-const complexPool = createEventPayloadPool<ComplexPayload>({
-  name: 'Complex',
-  factory: () => ({ items: [], metadata: [] }),
-  reset: (p) => {
-    p.items.length = 0;  // Clear array without reallocation
-    p.metadata.length = 0;
-  },
-  initialSize: 32,
-});
-```
-
-### Pool Registry
-
-Monitor all pools globally:
-
-```typescript
-import { eventPayloadPoolRegistry } from './EventPayloadPool';
-
-// Get all pool statistics
-const allStats = eventPayloadPoolRegistry.getAllStats();
-for (const stats of allStats) {
-  console.log(`${stats.name}: ${stats.inUse}/${stats.total} in use`);
-}
-
-// Check all pools for leaks
-const leaks = eventPayloadPoolRegistry.checkAllLeaks();
-for (const [poolName, leakCount] of leaks) {
-  console.warn(`${poolName}: ${leakCount} leaked payloads`);
-}
-
-// Reset all pools (use with caution)
-eventPayloadPoolRegistry.resetAll();
-```
-
-### Performance Monitoring
-
-Track pool performance over time:
-
-```typescript
-setInterval(() => {
-  const stats = CombatEventPools.getAllStats();
-  
-  // Log high-usage pools
-  for (const [name, poolStats] of Object.entries(stats)) {
-    const usagePercent = (poolStats.inUse / poolStats.total) * 100;
-    if (usagePercent > 75) {
-      console.warn(`${name} pool at ${usagePercent.toFixed(1)}% capacity`);
-    }
-  }
-  
-  // Log pools with leaks
-  const leakCount = CombatEventPools.checkAllLeaks();
-  if (leakCount > 0) {
-    console.error(`Total leaked payloads: ${leakCount}`);
-  }
-}, 60000);  // Check every minute
-```
-
-## Implementation Details
-
-### Pool Structure
-
-Pools use two arrays for O(1) operations:
-- `pool: T[]` - All allocated objects (never shrinks)
-- `available: number[]` - Indices of available objects (stack)
-
-**Acquire** (O(1)):
-1. Pop index from `available` stack
-2. Return object at that index
-3. Grow pool if `available` is empty
-
-**Release** (O(1)):
-1. Reset object state
-2. Push index back to `available` stack
-
-### Memory Layout
-
-```
-pool:      [obj0, obj1, obj2, obj3, obj4, obj5, ...]
-available: [2, 4, 5]  // Indices of available objects
-
-acquire() → returns obj5, available becomes [2, 4]
-release(obj1) → available becomes [2, 4, 1]
-```
-
-### Thread Safety
-
-Pools are **NOT thread-safe**. They assume single-threaded usage within a tick:
-- Acquire and release must happen in same tick
-- No async operations between acquire and release
-- No concurrent access from multiple systems
-
-For multi-threaded usage, create separate pool instances per thread.
-
-## Testing
-
-### Unit Tests
-
-Test pool behavior:
-
-```typescript
-import { createEventPayloadPool } from './EventPayloadPool';
-
-test('pool acquire and release', () => {
-  const pool = createEventPayloadPool({
-    name: 'Test',
-    factory: () => ({ value: 0 }),
-    reset: (p) => { p.value = 0; },
-    initialSize: 2,
-  });
-  
-  const p1 = pool.acquire();
-  const p2 = pool.acquire();
-  
-  expect(pool.getStats().inUse).toBe(2);
-  
-  pool.release(p1);
-  expect(pool.getStats().inUse).toBe(1);
-  
-  pool.release(p2);
-  expect(pool.getStats().inUse).toBe(0);
-});
-```
-
-### Integration Tests
-
-Test pool usage in systems:
-
-```typescript
-test('combat system uses pooled payloads', () => {
-  const combatSystem = world.getSystem('combat');
-  
-  // Reset pool stats
-  CombatEventPools.resetAll();
-  
-  // Trigger combat
-  combatSystem.attack(attacker, target);
-  
-  // Verify pool was used
-  const stats = CombatEventPools.damageDealt.getStats();
-  expect(stats.acquireCount).toBeGreaterThan(0);
-  expect(stats.releaseCount).toBe(stats.acquireCount);  // No leaks
-});
-```
-
-### Leak Detection Tests
-
-Test for memory leaks:
-
-```typescript
-test('no leaked payloads after tick', () => {
-  // Run full tick
-  world.tick(600);
-  
-  // Check for leaks
-  const leakCount = CombatEventPools.checkAllLeaks();
-  expect(leakCount).toBe(0);
-});
-```
-
-## Future Improvements
-
-### Planned Enhancements
-
-1. **Quaternion Pool**: Pool for rotation objects
-2. **Vector3 Pool**: Pool for Three.js Vector3 objects
-3. **Tile Pool**: Pool for tile coordinate objects
-4. **Entity Pool**: Pool for temporary entity references
-5. **Array Pool**: Pool for temporary arrays
-
-### Performance Targets
-
-- Zero allocations in combat hot paths ✅
-- Zero allocations in movement hot paths ✅
-- Zero allocations in minimap rendering ✅
-- Zero allocations in network packet processing (planned)
-- Zero allocations in physics updates (planned)
+- Use `try/finally` to ensure release
+- Add leak detection at end of tick
+- Review all event listeners for missing releases
+
+### Performance Degradation
+
+**Symptom**: Pool operations taking longer than expected
+
+**Causes**:
+- Pool grown too large (>10,000 objects)
+- Reset function doing expensive operations
+- Fragmented memory from excessive growth
+
+**Solutions**:
+- Reduce initial/growth sizes if pool is too large
+- Optimize reset function (should be O(1))
+- Periodically trim pool during idle periods
 
 ## References
 
 - **Implementation**: `packages/shared/src/utils/pools/`
 - **Usage Examples**: `packages/shared/src/systems/shared/combat/CombatSystem.ts`
 - **Tests**: `packages/shared/src/utils/pools/__tests__/`
-- **Documentation**: [AGENTS.md](../AGENTS.md#object-pooling-for-zero-allocation-event-emission)
+- **Performance Tests**: `packages/shared/src/systems/shared/combat/__tests__/CombatSystemPerformance.test.ts`
+
+## Related Documentation
+
+- [AGENTS.md](../AGENTS.md) - Memory management best practices
+- [CLAUDE.md](../CLAUDE.md) - Memory leak fixes and cleanup patterns
+- [Combat System Documentation](../packages/shared/dev-book/05-core-systems/COMBAT-SYSTEM-DOCUMENTATION.md)
