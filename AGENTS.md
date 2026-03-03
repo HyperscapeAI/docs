@@ -196,6 +196,13 @@ The streaming pipeline requires specific GPU setup:
    - Quick diagnostic for verifying streaming health on Vast.ai
    - Checks: server health, streaming API status, duel context, RTMP bridge, PM2 processes, recent logs
 
+19. **Railway Database Detection**:
+   - Detects Railway proxy (.rlwy.net) and direct (.railway.app) as serverless
+   - Add Railway proxy detection to isSupavisorPooler for pgbouncer support
+   - Disables prepared statements when using Railway proxy
+   - Uses lower connection pool limits (max: 6) for pooler connections
+   - Fixes "too many clients already" errors on Railway deployments
+
 See `scripts/deploy-vast.sh` for complete setup logic.
 
 ## Project Overview
