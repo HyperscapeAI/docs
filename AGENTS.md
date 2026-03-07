@@ -703,7 +703,7 @@ class MySystem {
     
     // Clear intervals
     this.intervals.forEach(clearInterval);
-    this.intervals = [];
+    this.intervals = []
   }
 }
 ```
