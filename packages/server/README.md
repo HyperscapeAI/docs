@@ -24,7 +24,7 @@ See `FIXES-COMPLETE.md` for detailed migration changelog.
 - **Authentication** - Optional Privy authentication with Farcaster support
 - **LiveKit Voice** - Optional voice chat integration
 - **Graceful Restart** - Zero-downtime deployments for duel arena streaming
-- **Railway Detection** - Automatic connection pooling configuration for Railway deployments
+- **Streaming Health Monitoring** - Built-in diagnostics for production deployments
 
 ## Quick Start
 
@@ -44,7 +44,7 @@ bun install
 
 Copy the example environment file:
 ```bash
-cp env.example .env
+cp .env.example .env
 ```
 
 **Option 1: Local PostgreSQL (Docker)**
@@ -59,12 +59,26 @@ DATABASE_URL=postgresql://user:pass@host:5488/dbname
 USE_LOCAL_POSTGRES=false
 ```
 
-**Option 3: Railway (Auto-Detected)**
+**Railway Deployment:**
 ```env
-DATABASE_URL=postgresql://...railway.app/...
-# Railway proxy detection is automatic
-# Prepared statements are disabled automatically
-# Connection pool limits are lowered automatically (max: 6)
+# Railway auto-detects via RAILWAY_ENVIRONMENT
+POSTGRES_POOL_MAX=6              # Lower limit for pooler connections
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
+```
+
+**Streaming Duel Deployment:**
+```env
+# For crash loop resilience
+POSTGRES_POOL_MAX=3              # Prevent connection exhaustion
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
+restart_delay=10000              # 10s cooldown (in ecosystem.config.cjs)
+exp_backoff_restart_delay=2000   # 2s exponential backoff
+
+# For fresh deployments
+SPAWN_MODEL_AGENTS=true          # Auto-create agents when database is empty
+
+# For stream keep-alive
+STREAM_PLACEHOLDER_ENABLED=true  # Prevent 30-minute disconnects
 ```
 
 ### Running
@@ -128,24 +142,6 @@ The server uses PostgreSQL with automatic migrations. On first run:
 2. Migrations run automatically on startup
 3. Tables are created: users, characters, players, inventory, equipment, etc.
 
-### Railway Database Configuration
-
-Railway uses connection pooling (pgbouncer) which requires special configuration. The server automatically detects Railway deployments via:
-
-- `RAILWAY_ENVIRONMENT` environment variable (most reliable)
-- Hostname patterns: `.rlwy.net`, `.railway.app`, `.railway.internal`
-
-When Railway is detected, the server automatically:
-- Disables prepared statements (not supported by pgbouncer)
-- Uses lower connection pool limits (max: 6)
-- Prevents "too many clients already" errors
-
-**Recommended Railway Configuration:**
-```env
-POSTGRES_POOL_MAX=6              # Lower limit for pooler connections
-POSTGRES_POOL_MIN=0              # Don't hold idle connections
-```
-
 ### Manual Database Operations
 
 **Connect to local PostgreSQL:**
@@ -178,9 +174,23 @@ Migrations are defined in `src/db.ts` and run automatically on server start. The
 8. World chunks and sessions
 9. Characters table (for multi-character support)
 
-**Migration Process Improvements:**
+### Railway Database Configuration
 
-The deployment process now tears down existing processes and closes database connections **before** running migrations to prevent "too many clients already" errors. This is especially important for Neon and other serverless PostgreSQL providers.
+Railway uses pgbouncer connection pooling which requires special configuration:
+
+**Automatic Detection:**
+- Detects Railway via `RAILWAY_ENVIRONMENT` env var (most reliable)
+- Also detects `.rlwy.net`, `.railway.app`, and `.railway.internal` hostnames
+- Automatically disables prepared statements (not supported by pgbouncer)
+- Uses lower connection pool limits (max: 6)
+
+**Manual Configuration:**
+```env
+POSTGRES_POOL_MAX=6              # Lower limit for pooler connections
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
+```
+
+This prevents "too many clients already" errors on Railway deployments.
 
 ## Architecture
 
@@ -202,7 +212,6 @@ The deployment process now tears down existing processes and closes database con
 - Connection pooling (pg)
 - Migration runner
 - Query builder for shared code
-- Railway proxy detection and configuration
 
 ### Character System
 
@@ -226,28 +235,14 @@ Login → Character List → Select/Create Character → Enter World → Spawn a
 
 ### Admin Endpoints (NEW)
 
-- `POST /admin/graceful-restart` - Request server restart after current duel ends (requires `x-admin-code` header)
-- `GET /admin/restart-status` - Check if graceful restart is pending (requires `x-admin-code` header)
+- `POST /admin/graceful-restart` - Request server restart after current duel ends (requires ADMIN_CODE)
+- `GET /admin/restart-status` - Check if restart is pending (requires ADMIN_CODE)
 
 **Graceful Restart:**
-
-The graceful restart feature enables zero-downtime deployments for the duel arena stream:
-
-```bash
-# Request restart (waits for current duel to complete)
-curl -X POST http://your-server/admin/graceful-restart \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
-
-# Check restart status
-curl http://your-server/admin/restart-status \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
-```
-
-When graceful restart is requested:
+- Enables zero-downtime deployments for duel arena streaming
 - If no duel active: restarts immediately via SIGTERM
 - If duel in progress: waits until RESOLUTION phase completes
 - PM2 automatically restarts the server with new code
-- No interruption to active duels or streams
 
 ### Assets
 
@@ -293,16 +288,20 @@ POSTGRES_PORT=5488
 # Option 2: External PostgreSQL
 DATABASE_URL=postgresql://user:pass@host:5488/dbname
 
-# Connection pool configuration (for production/streaming deployments)
-POSTGRES_POOL_MAX=3              # Maximum connections (down from 6, use 1 for duel deployments)
-POSTGRES_POOL_MIN=0              # Minimum idle connections (don't hold during crashes)
+# Railway Deployment (auto-detected)
+POSTGRES_POOL_MAX=6              # Lower limit for pooler connections
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
+
+# Streaming Duel Deployment (crash loop resilience)
+POSTGRES_POOL_MAX=3              # Prevent connection exhaustion
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
 ```
 
 ### Assets
 
 ```env
 PUBLIC_CDN_URL=http://localhost:8080    # CDN URL for static assets
-PUBLIC_WS_URL=ws://localhost:5555/ws # WebSocket URL
+PUBLIC_WS_URL=ws://localhost:5555/ws    # WebSocket URL
 ```
 
 ### Authentication (Optional)
@@ -310,7 +309,28 @@ PUBLIC_WS_URL=ws://localhost:5555/ws # WebSocket URL
 ```env
 PUBLIC_PRIVY_APP_ID=your-app-id
 PRIVY_APP_SECRET=your-app-secret
-ADMIN_CODE=your-admin-code          # For /admin command and graceful restart
+ADMIN_CODE=your-admin-code          # For /admin command
+```
+
+### Streaming Configuration (NEW)
+
+```env
+# Model Agent Spawning
+SPAWN_MODEL_AGENTS=true          # Auto-create agents when database is empty
+
+# Stream Capture
+STREAM_CAPTURE_EXECUTABLE=...    # Explicit Chrome path for WebGPU
+STREAM_LOW_LATENCY=true          # Use zerolatency tune for faster playback
+STREAM_GOP_SIZE=60               # GOP size in frames (default: 60)
+STREAM_AUDIO_ENABLED=true        # Enable audio capture
+PULSE_AUDIO_DEVICE=...           # PulseAudio device name
+
+# Stream Keep-Alive
+STREAM_PLACEHOLDER_ENABLED=true  # Send placeholder frames during idle periods (prevents 30min disconnect)
+
+# Production Client Build
+NODE_ENV=production              # Use production client build
+DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
 ```
 
 ### Farcaster Frame v2 (Optional)
@@ -328,34 +348,6 @@ LIVEKIT_API_SECRET=your-secret
 PUBLIC_LIVEKIT_URL=wss://your-livekit-server
 ```
 
-### Streaming Configuration (Optional)
-
-```env
-# Auto-spawn model agents when database is empty
-SPAWN_MODEL_AGENTS=false
-
-# Use production client build (vite preview) instead of dev server
-DUEL_USE_PRODUCTION_CLIENT=false
-
-# Placeholder frames during idle periods (prevents 30-min disconnect)
-STREAM_PLACEHOLDER_ENABLED=false
-
-# Stream encoding settings
-STREAM_LOW_LATENCY=false          # Use zerolatency tune (faster playback start)
-STREAM_GOP_SIZE=60                # GOP size in frames (default: 60)
-
-# Stream capture settings
-STREAM_AUDIO_ENABLED=true         # Enable audio capture
-PULSE_AUDIO_DEVICE=chrome_audio.monitor  # PulseAudio device to capture
-STREAM_CAPTURE_EXECUTABLE=...     # Explicit Chrome path for WebGPU
-
-# Browser restart interval (minutes) to prevent WebGPU OOM
-STREAM_BROWSER_RESTART_INTERVAL=45
-
-# Page navigation timeout (seconds) for Vite dev mode
-STREAM_PAGE_NAVIGATION_TIMEOUT=120
-```
-
 ### Monitoring & Alerting (Optional)
 
 ```env
@@ -365,9 +357,23 @@ ALERT_WEBHOOK_URL=https://hooks.slack.com/services/...
 Monitoring endpoints:
 - `GET /health` - basic uptime/timestamp (use for uptime checks)
 - `GET /status` - connected users + commit hash
+- `GET /admin/restart-status` - check if graceful restart is pending
 
 Configure your monitoring service (Railway health checks, UptimeRobot, Pingdom, etc.)
 to poll `/health` and trigger alerts on non-200 responses or elevated latency.
+
+**Streaming Health Check (NEW):**
+```bash
+bun run duel:status
+```
+
+Quick diagnostic for verifying streaming health on Vast.ai:
+- Server health check
+- Streaming API status
+- Duel context (fighting phase)
+- RTMP bridge status and bytes streamed
+- PM2 process status
+- Recent logs
 
 ## Deployment
 
@@ -418,6 +424,34 @@ Rollback uses the same deployment workflows with an explicit ref:
 2. Cloudflare R2 assets: run **Deploy Assets to Cloudflare R2** with
    `deploy_ref` pointing at the same commit to keep assets in sync.
 
+### Graceful Restart (Zero-Downtime Deployments)
+
+Request a server restart after the current duel ends:
+
+```bash
+# Via API (requires ADMIN_CODE)
+curl -X POST http://your-server/admin/graceful-restart \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+
+# Check restart status
+curl http://your-server/admin/restart-status \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+```
+
+When graceful restart is requested:
+- If no duel active: restarts immediately via SIGTERM
+- If duel in progress: waits until RESOLUTION phase completes
+- PM2 automatically restarts the server with new code
+- No interruption to active duels or streams
+
+**Programmatic API:**
+```typescript
+import { StreamingDuelScheduler } from './systems/StreamingDuelScheduler';
+
+// Request graceful restart
+scheduler.requestGracefulRestart();
+```
+
 ## Troubleshooting
 
 ### PostgreSQL Connection Failed
@@ -434,19 +468,20 @@ Rollback uses the same deployment workflows with an explicit ref:
 
 **Error:** PostgreSQL error 53300 (too many connections)
 
-**Solutions:**
-1. Set lower connection pool limits:
-   ```env
-   POSTGRES_POOL_MAX=3
-   POSTGRES_POOL_MIN=0
-   ```
-2. Increase PM2 restart delay:
-   ```javascript
-   // In ecosystem.config.cjs
-   restart_delay: 10000,            // 10s instead of 5s
-   exp_backoff_restart_delay: 2000, // 2s for gradual backoff
-   ```
-3. Ensure Railway detection is working (check logs for "Railway proxy detected")
+**Solution:**
+Set lower connection pool limits in `.env`:
+```env
+POSTGRES_POOL_MAX=3              # Down from default 6
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
+```
+
+Also increase PM2 restart delay in `ecosystem.config.cjs`:
+```javascript
+restart_delay: 10000,            // 10s instead of 5s
+exp_backoff_restart_delay: 2000, // 2s for gradual backoff
+```
+
+Railway is auto-detected via `RAILWAY_ENVIRONMENT` env var or hostname patterns (`.rlwy.net`, `.railway.app`, `.railway.internal`).
 
 ### Database Migration Errors
 
@@ -467,20 +502,6 @@ CREATE SCHEMA public;
 \q
 ```
 Then restart the server.
-
-**Error:** "too many clients already" during migration
-
-**Solution:** The deployment script now tears down existing processes before running migrations. If running manually:
-```bash
-# Stop all PM2 processes first
-pm2 stop all
-
-# Run migrations
-bunx drizzle-kit push
-
-# Restart processes
-pm2 start ecosystem.config.cjs
-```
 
 ### Character Creation Fails
 
@@ -508,6 +529,24 @@ DATABASE_URL=postgresql://user:pass@host:5488/dbname
 USE_LOCAL_POSTGRES=false
 ```
 
+### Streaming Issues
+
+**WebGPU not initializing on Vast.ai:**
+- Ensure instance has `gpu_display_active=true` (use `bun run vast:provision`)
+- Check deployment logs for GPU display driver detection
+- Run `bun run duel:status` to check streaming health
+- Verify NVIDIA display driver: `nvidia-smi` should show display mode
+
+**Browser timeout during page load:**
+- Set `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
+- Use pre-built client via `vite preview` instead of dev server
+- Significantly faster page loads (no on-demand module compilation)
+
+**Stream disconnects after 30 minutes:**
+- Enable placeholder frame mode: `STREAM_PLACEHOLDER_ENABLED=true`
+- Sends minimal frames during idle periods to keep stream alive
+- Automatically exits when live frames resume
+
 ## Development
 
 ### Code Structure
@@ -522,15 +561,7 @@ src/
 ├── Storage.ts            # File storage
 ├── utils.ts              # Utilities (JWT, hashing)
 ├── privy-auth.ts        # Privy authentication
-├── polyfills.ts         # Node.js polyfills
-└── systems/
-    └── StreamingDuelScheduler/  # Duel arena streaming system
-        ├── index.ts             # Main scheduler facade
-        └── managers/
-            ├── MatchmakingManager.ts  # Agent registration & pairing
-            ├── CameraDirector.ts      # Camera targeting
-            ├── DuelOrchestrator.ts    # Combat execution
-            └── CycleStateMachine.ts   # Phase transitions
+└── polyfills.ts         # Node.js polyfills
 ```
 
 ### Running Tests
@@ -562,14 +593,16 @@ Output: `dist/index.js` (bundled server)
 - Idle timeout: 30s
 - Connection timeout: 5s
 
-**Railway/Serverless Configuration:**
-- Max connections: 6 (auto-detected)
-- Prepared statements: disabled (auto-detected)
-- Idle timeout: 30s
-
-**Streaming/Duel Configuration:**
-- Max connections: 1-3 (to minimize connection usage)
+**Railway Configuration (auto-detected):**
+- Max connections: 6 (pgbouncer pooler limit)
 - Min connections: 0 (don't hold idle)
+- Prepared statements: disabled (not supported by pgbouncer)
+
+**Streaming Duel Configuration:**
+- Max connections: 3 (prevent exhaustion during crash loops)
+- Min connections: 0 (don't hold idle)
+- Restart delay: 10s (allow connections to close)
+- Exponential backoff: 2s (gradual backoff on repeated failures)
 
 Adjust in `src/db.ts` and `src/DatabaseSystem.ts` if needed.
 
@@ -595,11 +628,11 @@ Optional Privy authentication provides:
 
 Admin commands require:
 1. `ADMIN_CODE` set in environment
-2. `/admin <code>` command in chat OR `x-admin-code` header for API endpoints
+2. `/admin <code>` command in chat
 
 **Admin API Endpoints:**
-- `POST /admin/graceful-restart` - Request zero-downtime restart
-- `GET /admin/restart-status` - Check restart status
+- `POST /admin/graceful-restart` - Request graceful restart (requires ADMIN_CODE header)
+- `GET /admin/restart-status` - Check restart status (requires ADMIN_CODE header)
 
 ### Database
 
@@ -614,69 +647,37 @@ Not implemented yet. Consider adding:
 - API endpoint rate limiting
 - Upload size limits (currently 50MB)
 
-## New Features (March 2026)
+## Monitoring
 
-### Graceful Restart API
+### Health Endpoints
 
-Zero-downtime deployments for the duel arena stream:
+- `GET /health` - Basic uptime/timestamp (use for uptime checks)
+- `GET /status` - Connected users + commit hash
+- `GET /admin/restart-status` - Check if graceful restart is pending
 
-```typescript
-// Programmatic API
-import { getStreamingDuelScheduler } from './systems/StreamingDuelScheduler';
-
-const scheduler = getStreamingDuelScheduler();
-scheduler?.requestGracefulRestart();
-```
+### Streaming Health Check (NEW)
 
 ```bash
-# HTTP API
-curl -X POST http://your-server/admin/graceful-restart \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
+bun run duel:status
 ```
 
-When graceful restart is requested:
-- If no duel active: restarts immediately via SIGTERM
-- If duel in progress: waits until RESOLUTION phase completes
-- PM2 automatically restarts the server with new code
+Quick diagnostic for verifying streaming health on Vast.ai:
+- Server health check
+- Streaming API status
+- Duel context (fighting phase)
+- RTMP bridge status and bytes streamed
+- PM2 process status
+- Recent logs
 
-### Placeholder Frame Mode
+### Alerting
 
-Prevents Twitch/YouTube 30-minute disconnect during idle periods:
-
+Configure webhook for critical alerts:
 ```env
-STREAM_PLACEHOLDER_ENABLED=true
+ALERT_WEBHOOK_URL=https://hooks.slack.com/services/...
 ```
 
-When enabled:
-- Detects when no frames received for 5 seconds
-- Switches to minimal JPEG frames at configured FPS
-- Automatically exits placeholder mode when live frames resume
-- Uses minimal 16x16 JPEG (~300 bytes) scaled by FFmpeg to output size
-
-### Model Agent Spawning
-
-Auto-create agents when database is empty:
-
-```env
-SPAWN_MODEL_AGENTS=true
-```
-
-Useful for:
-- Fresh deployments
-- Testing duel arena without manual agent creation
-- Ensuring duels can run even with empty database
-
-### Railway Database Detection
-
-Automatic detection and configuration for Railway deployments:
-
-- Detects via `RAILWAY_ENVIRONMENT` env var (most reliable)
-- Also detects hostname patterns: `.rlwy.net`, `.railway.app`, `.railway.internal`
-- Automatically disables prepared statements (not supported by pgbouncer)
-- Automatically uses lower connection pool limits (max: 6)
-- Fixes "too many clients already" errors
-
-No manual configuration required - detection is automatic.
+Configure your monitoring service (Railway health checks, UptimeRobot, Pingdom, etc.)
+to poll `/health` and trigger alerts on non-200 responses or elevated latency.
 
 ## Support
 
