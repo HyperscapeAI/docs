@@ -195,7 +195,7 @@ publishing/
 2. **shared** - Depends on physx-js-webidl
 3. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
 
 > **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
 >
@@ -222,7 +222,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -288,7 +288,7 @@ Visual testing uses colored cube proxies:
 
 ### Production Code Only
 
-- No TODOs or \"will fill this out later\" - implement completely
+- No TODOs or "will fill this out later" - implement completely
 - No hardcoded data - use JSON files and general systems
 - No shortcuts or workarounds - fix root causes
 - Build toward the general case (many items, players, mobs)
@@ -364,7 +364,7 @@ All services have unique default ports to avoid conflicts:
 **Package-specific `.env` files**: Each package has its own `.env.example` with deployment documentation:
 
 | Package | File | Purpose |
-|---------|------|------------|
+|---------|------|---------|
 | Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
@@ -457,7 +457,7 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime (updated
 #### Resource Management
 - **Activity Logger Queue**: Max size 1000 with 25% eviction to prevent memory pressure
 - **Session Timeout**: 30-minute max via MAX_SESSION_TICKS for zombie session cleanup
-- **SessionCloseReason**: Added \"timeout\" to type for proper session termination tracking
+- **SessionCloseReason**: Added "timeout" to type for proper session termination tracking
 
 #### Test Stability
 - **GoldClob Fuzz Tests**: 120s timeout for randomized invariant tests (4 seeds × 140 operations)
@@ -657,7 +657,7 @@ All cleanup follows the established patterns in SystemBase for proper resource c
 - Add Railway proxy detection to isSupavisorPooler for pgbouncer support
 - Disables prepared statements when using Railway proxy
 - Uses lower connection pool limits (max: 6) for pooler connections
-- Fixes \"too many clients already\" errors on Railway deployments
+- Fixes "too many clients already" errors on Railway deployments
 
 ### Vast.ai Provisioner
 
@@ -699,7 +699,7 @@ VAST_API_KEY=xxx bun run vast:provision
 - Proceeds with capture after 5 consecutive probe timeouts (browser unresponsive)
 - **Browser Restart**: Automatic browser restart every 45 minutes to prevent WebGPU OOM crashes
 
-**Streaming Status Check**:
+**Streaming Status Check** (commit 61c14bc8):
 - Script: `bun run duel:status` or `bash scripts/check-streaming-status.sh`
 - Quick diagnostic for verifying streaming health on Vast.ai
 - Checks: server health, streaming API status, duel context, RTMP bridge, PM2 processes, recent logs
@@ -723,7 +723,7 @@ VAST_API_KEY=xxx bun run vast:provision
 - Enables zero-downtime deployments for the duel arena stream
 
 **Deployment Process Improvements** (commit 58d88f4c, 087033fa, dbd4332d):
-- **Process Teardown Before Migration**: Tears down existing processes and closes DB connections before running migrations to prevent \"too many clients\" errors
+- **Process Teardown Before Migration**: Tears down existing processes and closes DB connections before running migrations to prevent "too many clients" errors
 - **Targeted Process Killing**: Use specific process names instead of blanket `pkill -f bun` to avoid killing deploy script itself
 - **Graceful PM2 Shutdown**: Stop PM2 with delays between commands
 - **Branch Fix**: Deploy from main branch instead of hackathon branch
@@ -780,7 +780,7 @@ See [Port Allocation](#port-allocation) section for full port list.
 
 ### Database Issues
 
-**Railway \"too many clients already\" errors**:
+**Railway "too many clients already" errors**:
 - Set `POSTGRES_POOL_MAX=3` (or lower) in `.env`
 - Set `POSTGRES_POOL_MIN=0` to not hold idle connections
 - Increase `restart_delay=10s` in PM2 config to allow connections to close
