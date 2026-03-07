@@ -472,6 +472,8 @@ Vitest 2.x is incompatible with Vite 6.x. The upgrade to Vitest 4.x was required
 
 - **Combat System**: Aligned retry timer with tick system, reduced phase timeouts, improved stall detection
 - **Agent System**: LLM rate limiting with exponential backoff, memory leak fixes, dynamic combat escalation, banking goal type added
+- **Agent Memory Management**: InMemoryDatabaseAdapter migration (eliminated 38-76GB PGLite WASM bloat), memory caps (50 memories per agent), adapter data structure caps (logs: 20, cache: 100 with LRU), periodic GC every 60s
+- **Agent Database Optimization**: Concurrent bank query throttling (max 5), staggered refresh intervals, sequential agent spawning for SQL migrations, DB pool sizing (serverless: 10→20 max, 30s→60s timeout)
 - **Resource Management**: Activity logger queue limits, session timeouts, proper cleanup
 - **Test Stability**: Vitest 4.x upgrade for Vite 6 compatibility, increased timeouts for fuzz tests, Anchor test skip in CI
 - **E2E Journey Tests**: Complete login→loading→spawn→walk gameplay tests with screenshot comparison
