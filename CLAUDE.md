@@ -741,7 +741,7 @@ VAST_API_KEY=xxx bun run vast:provision
 - Enables zero-downtime deployments for the duel arena stream
 
 **Deployment Process Improvements** (commits 46324033, 7fd94ffe, d4df6a4c, b71796b3, 54eef352, 58d88f4c, 087033fa):
-- **Process Teardown Before Migration**: Tears down existing processes and closes DB connections before running migrations to prevent \"too many clients\" errors
+- **Process Teardown Before Migration**: Tears down existing processes and closes DB connections before running migrations to prevent "too many clients" errors
 - **Targeted Process Killing**: Use specific process names instead of blanket `pkill -f bun` to avoid killing deploy script itself
 - **Graceful PM2 Shutdown**: Stop PM2 with delays between commands
 - **Runtime Secrets Loading**: GitHub Actions writes secrets to `/tmp/hyperscape-secrets.env`, deploy script sources it before PM2 start
@@ -752,24 +752,23 @@ VAST_API_KEY=xxx bun run vast:provision
 - **Program Validation**: Validates prediction market program via simulated `init_oracle_round` transaction before starting keeper
 - **Keeper Program Checks**: Validates fight oracle and gold clob market programs before starting keeper bot
 
-**Deployment Process Improvements** (commit 58d88f4c, 087033fa, dbd4332d):
-- **Process Teardown Before Migration**: Tears down existing processes and closes DB connections before running migrations to prevent "too many clients" errors
-- **Targeted Process Killing**: Use specific process names instead of blanket `pkill -f bun` to avoid killing deploy script itself
-- **Graceful PM2 Shutdown**: Stop PM2 with delays between commands
-- **Branch Fix**: Deploy from main branch instead of hackathon branch
-- **GitHub Actions Fixes**: Fixed upload-artifact version (v7 → v4), build order (shared before impostors/procgen), heredoc variable expansion
-
-**PostgreSQL Connection Pool** (commit 0c8dbe0f, 454d0ad2):
+**PostgreSQL Connection Pool** (commits 56f9067e, 4930979c):
 - **POSTGRES_POOL_MAX=3** (down from 6) to prevent connection exhaustion during crash loops
 - **POSTGRES_POOL_MIN=0** to not hold idle connections during crashes
 - **restart_delay=10s** (up from 5s) to allow connections to fully close before PM2 restart
 - **exp_backoff_restart_delay=2s** for more gradual backoff on repeated failures
 - Prevents PostgreSQL error 53300 (too many connections) during crash loop scenarios
+- **POSTGRES_POOL_MAX=1** for duel deployments to minimize connection usage
 
 **Model Agent Spawning** (commit fe6b5354):
 - Set `SPAWN_MODEL_AGENTS=true` to enable automatic agent creation when database is empty
 - Allows duels to run even with an empty database
 - Useful for fresh deployments and testing
+
+**GitHub Actions Fixes** (commit f892d0b2):
+- Fixed upload-artifact version (v7 → v4) across all workflows
+- Fixed build order in ci.yml (shared must build before impostors/procgen)
+- Fixed heredoc variable expansion in deploy-vast.yml (removed quotes)
 
 ## Troubleshooting
 
