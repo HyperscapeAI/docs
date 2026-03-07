@@ -174,7 +174,17 @@ packages/
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
 ├── procgen/             # Procedural generation
+├── gold-betting-demo/   # Solana/EVM betting demo app
+│   ├── app/             # React betting UI (Cloudflare Pages)
+│   ├── anchor/          # Solana programs (Anchor framework)
+│   └── keeper/          # Automated keeper bot (Railway)
+├── evm-contracts/       # EVM smart contracts (Hardhat/Foundry)
+├── sim-engine/          # Cross-chain risk simulation engine
 └── docs-site/           # Docusaurus documentation site
+
+publishing/
+└── branding/            # Official logo files (SVG, EPS, PDF, PNG, JPG)
+                         # Binary files tracked via Git LFS
 ```
 
 ### Build Dependency Graph
