@@ -110,6 +110,13 @@ packages/
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── asset-forge/         # AI asset generation tools
+├── procgen/             # Procedural generation
+├── gold-betting-demo/   # Solana/EVM betting demo app
+│   ├── app/             # React betting UI (Cloudflare Pages)
+│   ├── anchor/          # Solana programs (Anchor framework)
+│   └── keeper/          # Automated keeper bot (Railway)
+├── evm-contracts/       # EVM smart contracts (Hardhat/Foundry)
+├── sim-engine/          # Cross-chain risk simulation engine
 └── docs-site/           # Documentation (Docusaurus)
 
 publishing/
@@ -149,40 +156,7 @@ bun run docs:dev      # Documentation site (port 3402)
 bun run dev:all       # Everything: game + AI + AssetForge
 ```
 
-### Vast.ai Commands (NEW)
-
-```bash
-# Search for WebGPU-capable instances
-VAST_API_KEY=xxx bun run vast:search
-
-# Provision new instance automatically
-VAST_API_KEY=xxx bun run vast:provision
-
-# Check current instance status
-VAST_API_KEY=xxx bun run vast:status
-
-# Destroy current instance
-VAST_API_KEY=xxx bun run vast:destroy
-
-# Run vast-keeper monitoring service
-VAST_API_KEY=xxx bun run vast:keeper
-
-# Check streaming health (server health, RTMP bridge, PM2 processes, logs)
-bun run duel:status
-```
-
-**Vast.ai Provisioner** (`./scripts/vast-provision.sh`):
-- Automatically searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
-- Filters by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr), disk space (≥120GB)
-- Rents best available instance
-- Waits for instance to be ready
-- Outputs SSH connection details and GitHub secret commands
-
-**Requirements**:
-- Vast.ai CLI: `pip install vastai`
-- API key configured: `vastai set api-key YOUR_API_KEY`
-
-### Vast.ai Commands (NEW)
+### Vast.ai Commands
 
 ```bash
 # Search for WebGPU-capable instances
@@ -275,31 +249,7 @@ STREAM_PLACEHOLDER_ENABLED=true  # Send placeholder frames during idle periods (
 ```bash
 POSTGRES_POOL_MAX=3              # Max connections (3 for crash loops, 1 for duels)
 POSTGRES_POOL_MIN=0              # Min connections (0 to not hold idle)
-```
-
-**Production Client Build:**
-```bash
-NODE_ENV=production              # Use production client build
-DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
-```
-
-### New Environment Variables
-
-**Streaming/Duel Configuration:**
-```bash
-SPAWN_MODEL_AGENTS=true          # Auto-create agents when database is empty
-STREAM_CAPTURE_EXECUTABLE=...    # Explicit Chrome path for WebGPU
-STREAM_LOW_LATENCY=true          # Use zerolatency tune for faster playback
-STREAM_GOP_SIZE=60               # GOP size in frames (default: 60)
-STREAM_AUDIO_ENABLED=true        # Enable audio capture
-PULSE_AUDIO_DEVICE=...           # PulseAudio device name
-STREAM_PLACEHOLDER_ENABLED=true  # Send placeholder frames during idle periods (prevents 30min disconnect)
-```
-
-**Database Configuration (Railway/Serverless):**
-```bash
-POSTGRES_POOL_MAX=3              # Max connections (3 for crash loops, 1 for duels)
-POSTGRES_POOL_MIN=0              # Min connections (0 to not hold idle)
+RAILWAY_ENVIRONMENT=...          # Auto-detected by Railway (most reliable detection method)
 ```
 
 **Production Client Build:**
@@ -507,6 +457,11 @@ Vitest 2.x is incompatible with Vite 6.x. The upgrade to Vitest 4.x was required
 - Use pre-built client via `vite preview` instead of dev server
 - Significantly faster page loads (no on-demand module compilation)
 
+*Stream disconnects after 30 minutes:*
+- Enable placeholder frame mode: `STREAM_PLACEHOLDER_ENABLED=true`
+- Sends minimal frames during idle periods to keep stream alive
+- Automatically exits when live frames resume
+
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
@@ -518,7 +473,7 @@ Vitest 2.x is incompatible with Vite 6.x. The upgrade to Vitest 4.x was required
 - **Combat System**: Aligned retry timer with tick system, reduced phase timeouts, improved stall detection
 - **Agent System**: LLM rate limiting with exponential backoff, memory leak fixes, dynamic combat escalation, banking goal type added
 - **Resource Management**: Activity logger queue limits, session timeouts, proper cleanup
-- **Test Stability**: Vitest 4.x upgrade for Vite 6 compatibility, increased timeouts for fuzz tests
+- **Test Stability**: Vitest 4.x upgrade for Vite 6 compatibility, increased timeouts for fuzz tests, Anchor test skip in CI
 - **E2E Journey Tests**: Complete login→loading→spawn→walk gameplay tests with screenshot comparison
 
 ### Performance Optimizations
@@ -574,6 +529,19 @@ Automated instance provisioning with WebGPU support:
 - Filters by reliability, GPU RAM, price, disk space
 - Automatic rental and setup
 - SSH connection details and GitHub secrets output
+
+### Deployment Process Improvements
+
+**Process Management**:
+- Targeted process killing (avoids killing deploy script itself)
+- Graceful PM2 shutdown with delays between commands
+- Process teardown before database migrations
+- Prevents "too many clients" errors during migrations
+
+**GitHub Actions Fixes**:
+- Fixed upload-artifact version (v7 → v4)
+- Fixed build order (shared must build before impostors/procgen)
+- Fixed heredoc variable expansion in deploy-vast.yml
 
 ## Branding Assets
 
