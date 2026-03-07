@@ -182,6 +182,39 @@ bun run duel:status
 - Vast.ai CLI: `pip install vastai`
 - API key configured: `vastai set api-key YOUR_API_KEY`
 
+### Vast.ai Commands (NEW)
+
+```bash
+# Search for WebGPU-capable instances
+VAST_API_KEY=xxx bun run vast:search
+
+# Provision new instance automatically
+VAST_API_KEY=xxx bun run vast:provision
+
+# Check current instance status
+VAST_API_KEY=xxx bun run vast:status
+
+# Destroy current instance
+VAST_API_KEY=xxx bun run vast:destroy
+
+# Run vast-keeper monitoring service
+VAST_API_KEY=xxx bun run vast:keeper
+
+# Check streaming health (server health, RTMP bridge, PM2 processes, logs)
+bun run duel:status
+```
+
+**Vast.ai Provisioner** (`./scripts/vast-provision.sh`):
+- Automatically searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
+- Filters by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr), disk space (≥120GB)
+- Rents best available instance
+- Waits for instance to be ready
+- Outputs SSH connection details and GitHub secret commands
+
+**Requirements**:
+- Vast.ai CLI: `pip install vastai`
+- API key configured: `vastai set api-key YOUR_API_KEY`
+
 ### Docker services
 
 ```bash
