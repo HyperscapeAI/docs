@@ -408,13 +408,13 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime (updated
 
 ## Tech Stack
 
-- **Runtime**: Bun v1.3.10+ (updated from v1.1.38)
+- **Runtime**: Bun v1.3.10+ (updated from v1.1.38 in commit bc3b1bc)
 - **Rendering**: WebGPU ONLY (Three.js WebGPURenderer + TSL shaders) - NO WebGL
 - **Engine**: Three.js 0.182.0, PhysX (WASM)
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
 - **Database**: PostgreSQL (production via Railway/Neon), Docker (local)
-- **Testing**: Playwright, Vitest 4.x (upgraded from 2.x for Vite 6 compatibility)
+- **Testing**: Playwright, Vitest 4.x (upgraded from 2.x in commit a916e4ee for Vite 6 compatibility)
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
 
