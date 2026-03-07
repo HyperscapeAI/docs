@@ -400,7 +400,7 @@ DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
 
 ## Package Manager
 
-This project uses **Bun** (v1.3.10+) as the package manager and runtime.
+This project uses **Bun** (v1.3.10+) as the package manager and runtime (updated from v1.1.38).
 
 - Install: `bun install` (NOT `npm install`)
 - Run scripts: `bun run <script>` or `bun <file>`
