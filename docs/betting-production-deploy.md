@@ -61,16 +61,31 @@ Detection also works via `RAILWAY_ENVIRONMENT` environment variable for reliable
 
 - `DUEL_USE_PRODUCTION_CLIENT=true` - Force production client for streaming (significantly faster page loads)
 
-Contracts / chain wiring (set to your target networks):
+**Solana Runtime Configuration:**
+
+Duel-specific Solana configuration (takes precedence over general SOLANA_* vars):
+
+- `DUEL_SOLANA_RPC_URL=https://api.devnet.solana.com` - Solana RPC endpoint
+- `DUEL_SOLANA_WS_URL=wss://api.devnet.solana.com` - Solana WebSocket endpoint
+- `DUEL_SOLANA_ARENA_MARKET_PROGRAM_ID=9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU` - Fight oracle program ID (default)
+- `DUEL_SOLANA_GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump` - Gold token mint (default)
+- `DUEL_SOLANA_ARENA_AUTHORITY_SECRET=...` - Solana keypair for arena operations (file path or base58)
+- `DUEL_SOLANA_ARENA_REPORTER_SECRET=...` - Solana keypair for reporting results
+- `DUEL_SOLANA_ARENA_KEEPER_SECRET=...` - Solana keypair for keeper bot automation
+
+Fallback to general Solana configuration if DUEL_* vars not set:
 
 - `SOLANA_RPC_URL`
 - `SOLANA_WS_URL`
 - `SOLANA_ARENA_MARKET_PROGRAM_ID`
 - `SOLANA_GOLD_MINT`
+- `SOLANA_ARENA_AUTHORITY_SECRET` (if on-chain writes/resolve are enabled)
+
+EVM chain wiring (set to your target networks):
+
 - `BSC_RPC_URL`
 - `BSC_CHAIN_ID=56` (or your target testnet id)
 - `BSC_GOLD_CLOB_ADDRESS`
-- `SOLANA_ARENA_AUTHORITY_SECRET` (if on-chain writes/resolve are enabled)
 - `BIRDEYE_API_KEY` (optional)
 - `HELIUS_API_KEY` (recommended for mainnet Solana RPC)
 
