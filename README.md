@@ -538,6 +538,12 @@ Automated instance provisioning with WebGPU support:
 - Process teardown before database migrations
 - Prevents "too many clients" errors during migrations
 
+**Secrets Management**:
+- GitHub Actions writes secrets to `/tmp/hyperscape-secrets.env`
+- Deploy script sources secrets before PM2 start
+- All secrets passed into PM2 runtime via `--update-env` flag
+- Deterministic migrations run in sorted order
+
 **GitHub Actions Fixes**:
 - Fixed upload-artifact version (v7 → v4)
 - Fixed build order (shared must build before impostors/procgen)
@@ -552,6 +558,7 @@ Official Hyperscape logo files are available in `publishing/branding/`:
 - `hyperscape_logo_black` - Full wordmark, solid black (print/light backgrounds)
 - `hyperscape_logo_white` - Full wordmark, solid white (dark backgrounds)
 - `hyperscape_logo_icon_color` - "HS" icon with gold gradient (favicons, app icons)
+- `hyperscape_logo_icon_black` - "HS" icon, solid black
 
 **Formats:**
 - **SVG** (source of truth): Web, UI, scalable usage
