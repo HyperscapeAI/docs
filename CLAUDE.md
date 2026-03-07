@@ -402,6 +402,24 @@ RAILWAY_ENVIRONMENT=...          # Auto-detected by Railway (most reliable detec
 # Production Client Build
 NODE_ENV=production              # Use production client build
 DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
+
+# Solana Duel Arena Configuration
+DUEL_SOLANA_RPC_URL=...                      # Solana RPC endpoint (default: devnet)
+DUEL_SOLANA_WS_URL=...                       # Solana WebSocket endpoint
+DUEL_SOLANA_ARENA_MARKET_PROGRAM_ID=...      # Fight oracle program ID (default: 9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU)
+DUEL_SOLANA_GOLD_MINT=...                    # Gold token mint (default: DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump)
+DUEL_SOLANA_ARENA_AUTHORITY_SECRET=...       # Solana keypair for arena operations (file path or base58)
+DUEL_SOLANA_ARENA_REPORTER_SECRET=...        # Solana keypair for reporting results
+DUEL_SOLANA_ARENA_KEEPER_SECRET=...          # Solana keypair for keeper bot automation
+
+# Deployment Secrets (GitHub Actions → /tmp/hyperscape-secrets.env)
+DATABASE_URL=...                 # PostgreSQL connection string
+JWT_SECRET=...                   # Server authentication secret
+ARENA_EXTERNAL_BET_WRITE_KEY=... # Arena betting API key
+TWITCH_STREAM_KEY=...            # Twitch RTMP stream key
+X_STREAM_KEY=...                 # X/Twitter RTMP stream key
+KICK_STREAM_KEY=...              # Kick RTMP stream key
+SOLANA_DEPLOYER_PRIVATE_KEY=...  # Solana deployer keypair
 ```
 
 **Split deployment** (client and server on different hosts):
