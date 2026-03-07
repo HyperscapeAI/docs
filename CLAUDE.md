@@ -436,15 +436,16 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime (updated
 
 ## Tech Stack
 
-- **Runtime**: Bun v1.3.10+ (updated from v1.1.38 in commit bc3b1bc)
+- **Runtime**: Bun v1.3.10+ (updated from v1.1.38 in commit bc3b1bc, March 2026)
 - **Rendering**: WebGPU ONLY (Three.js WebGPURenderer + TSL shaders) - NO WebGL
-- **Engine**: Three.js 0.182.0, PhysX (WASM)
+- **Engine**: Three.js 0.183.1 (updated from 0.182.0), PhysX (WASM)
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
 - **Database**: PostgreSQL (production via Railway/Neon), Docker (local)
-- **Testing**: Playwright, Vitest 4.x (upgraded from 2.x in commit a916e4ee for Vite 6 compatibility)
+- **Testing**: Playwright 1.58.2 (updated from 1.54.2), Vitest 4.x (upgraded from 2.x in commit a916e4ee for Vite 6 compatibility)
 - **Build**: Turbo, esbuild, Vite
-- **Mobile**: Capacitor
+- **Mobile**: Capacitor 8.1.0 (updated from 7.5.0)
+- **AI**: ElizaOS 2.0.0-alpha.26 (updated from 2.0.0-alpha.11)
 
 ## Recent Improvements
 
