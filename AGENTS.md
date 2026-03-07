@@ -233,8 +233,39 @@ The streaming pipeline requires specific GPU setup:
    - **Targeted Process Killing**: Use specific process names instead of blanket `pkill -f bun`
    - **Graceful PM2 Shutdown**: Stop PM2 with delays between commands
    - **Process Teardown Before Migration**: Kill processes and wait 30s for DB connections to close before running migrations
+   - **Runtime Secrets Loading**: Loads secrets from `/tmp/hyperscape-secrets.env` at deploy time (populated by GitHub Actions)
+   - **PM2 Environment Passthrough**: All deploy-time secrets passed into PM2 runtime via `--update-env` flag
+   - **Deterministic Migrations**: Migrations run in sorted order to ensure consistency across deployments
+   - **Solana Runtime Defaults**: PM2 config includes default Solana program IDs and gold mint for duel arena
    - Prevents deploy script from killing itself
    - Prevents "too many clients" errors during database migrations
+
+23. **Solana Duel Arena Configuration**:
+   - **Default Program ID**: `9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU` (fight oracle)
+   - **Default Gold Mint**: `DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump`
+   - **Auto-Discovery**: `duel-stack.mjs` auto-discovers Solana authority from multiple candidate sources
+   - **Program Validation**: Validates prediction market program via simulated `init_oracle_round` transaction
+   - **Keeper Program Checks**: Validates fight oracle and gold clob market programs before starting keeper bot
+   - **Environment Variables**:
+     - `DUEL_SOLANA_ARENA_MARKET_PROGRAM_ID` - Override default program ID
+     - `DUEL_SOLANA_GOLD_MINT` - Override default gold mint
+     - `DUEL_SOLANA_ARENA_AUTHORITY_SECRET` - Solana keypair for arena operations
+     - `DUEL_SOLANA_RPC_URL` - Solana RPC endpoint (default: devnet)
+     - `DUEL_SOLANA_WS_URL` - Solana WebSocket endpoint
+
+24. **GitHub Actions Secrets Management**:
+   - **Secrets File**: GitHub Actions writes secrets to `/tmp/hyperscape-secrets.env` before deploy
+   - **Deploy Script Loading**: `deploy-vast.sh` sources secrets file at startup
+   - **PM2 Passthrough**: Secrets loaded into environment before `pm2 start --update-env`
+   - **Required Secrets**:
+     - `DATABASE_URL` - PostgreSQL connection string
+     - `JWT_SECRET` - Server authentication secret
+     - `ARENA_EXTERNAL_BET_WRITE_KEY` - Arena betting API key
+     - `TWITCH_STREAM_KEY` - Twitch RTMP stream key
+     - `X_STREAM_KEY` - X/Twitter RTMP stream key
+     - `KICK_STREAM_KEY` - Kick RTMP stream key
+     - `SOLANA_DEPLOYER_PRIVATE_KEY` - Solana deployer keypair
+   - **Security**: Secrets never committed to git, only passed via GitHub Actions
 
 See `scripts/deploy-vast.sh` for complete setup logic.
 
