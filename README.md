@@ -32,6 +32,10 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - [Privy](https://privy.io) account (required for authentication)
 
 ```bash
+# Install Git LFS first (if not already installed)
+git lfs install
+
+# Clone repository (Git LFS will automatically download binary assets)
 git clone https://github.com/HyperscapeAI/hyperscape.git
 cd hyperscape
 bun install
