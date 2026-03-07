@@ -370,6 +370,14 @@ packages/
 - **Critical Crash Fix**: Fixed `weapon.toLowerCase is not a function` crash in getEquippedWeaponTier that broke ALL agents every tick
 - **Quest Goal Detection**: Added quest goal status change detection for proper quest lifecycle transitions
 - **Banking Goal Type**: Added 'banking' to CurrentGoal interface for agent banking behavior
+- **InMemoryDatabaseAdapter Migration**: Replaced PGLite WASM (38-76GB bloat) with ElizaOS's InMemoryDatabaseAdapter (zero WASM overhead)
+- **Memory Caps**: Agent memories capped at 50 per agent via ring buffer (evict oldest on overflow)
+- **Adapter Data Structure Caps**: Logs capped at 20 entries, cache at 100 entries with LRU eviction
+- **Periodic GC**: Bun.gc(false) every 20 ticks (~60s) to reclaim short-lived allocations
+- **Concurrent Bank Query Throttling**: Max 5 concurrent bank queries to prevent DB pool exhaustion
+- **Staggered Refresh Intervals**: Random offset on 30s refresh intervals to prevent agent synchronization
+- **Sequential Agent Spawning**: First agent spawns sequentially for SQL migrations, then batch spawn remaining agents
+- **DB Pool Sizing**: Serverless pool increased from 10→20 max, 30s→60s timeout for many-agent scenarios
 
 ### Resource Management
 - **Activity Logger Queue**: Max size 1000 with 25% eviction to prevent memory pressure
