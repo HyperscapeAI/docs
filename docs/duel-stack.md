@@ -37,21 +37,6 @@ bun run duel --skip-stream
 bun run duel --verify
 ```
 
-## Production Client Build
-
-For faster page loads and to avoid browser timeout issues:
-
-- Set `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
-- Serves pre-built client via `vite preview` instead of dev server
-- Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
-- Significantly faster page loads for streaming (no on-demand module compilation)
-
-When using production client mode, build the client first:
-
-```bash
-cd packages/client && bun run build
-```
-
 ## Streaming Outputs
 
 Configure the following env vars (root `.env` or `packages/server/.env`):
@@ -89,77 +74,80 @@ When `STREAMING_PUBLIC_DELAY_MS > 0`, live `mode=streaming` WebSocket viewers ar
 
 `stream-to-rtmp` automatically appends `streamToken` to capture URLs when `STREAMING_VIEWER_ACCESS_TOKEN` is set.
 
-## Production Client Build
+## New Streaming Configuration (March 2026)
 
-For faster page loads and to fix browser timeout issues (>180s), enable production client build mode:
+### Model Agent Spawning
+
+Auto-create agents when database is empty (useful for fresh deployments):
 
 ```bash
-# In packages/server/.env or root .env
-NODE_ENV=production
-DUEL_USE_PRODUCTION_CLIENT=true
+SPAWN_MODEL_AGENTS=true
 ```
 
-**Benefits**:
+### Stream Keep-Alive (Placeholder Frame Mode)
+
+Prevent 30-minute disconnects during idle periods:
+
+```bash
+STREAM_PLACEHOLDER_ENABLED=true
+```
+
+When enabled:
+- Detects when no frames received for 5 seconds
+- Switches to minimal JPEG frames at configured FPS
+- Automatically exits when live frames resume
+- Uses minimal 16x16 JPEG (~300 bytes) scaled by FFmpeg to output size
+
+### Production Client Build
+
+Use pre-built client for significantly faster page loads:
+
+```bash
+NODE_ENV=production              # Use production client build
+DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
+```
+
+Benefits:
 - Serves pre-built client via `vite preview` instead of dev server
-- Page loads in <10s instead of >180s
-- No on-demand module compilation
-- Fixes browser navigation timeout errors
+- Fixes browser timeout issues (180s limit) caused by Vite's JIT compilation
+- Significantly faster page loads (no on-demand module compilation)
 
-## Stream Capture Configuration
+### Stream Capture Configuration
 
-### Chrome Executable
+Advanced stream capture settings:
+
 ```bash
-# Explicit Chrome path for reliable WebGPU
+# Explicit Chrome executable path for reliable WebGPU support
 STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable
-```
 
-### Capture Modes
-- **CDP (default)**: Chrome DevTools Protocol screencast - fastest, most reliable
-- **WebCodecs**: Native VideoEncoder API (experimental)
-- **MediaRecorder**: Legacy fallback mode
-
-### Timeouts & Recovery
-```bash
-# Probe timeout: 5s on evaluate calls
-# Probe retry: Proceeds after 5 consecutive timeouts
-# Viewport recovery: Automatic on resolution mismatch
-# Browser restart: Every 45 minutes (prevents WebGPU OOM)
-```
-
-### Encoding Settings
-```bash
-# Low-latency mode (zerolatency tune)
+# Use zerolatency tune for faster playback start (default: film tune with B-frames)
 STREAM_LOW_LATENCY=true
 
-# GOP size (default: 60 frames)
+# GOP size in frames (default: 60)
 STREAM_GOP_SIZE=60
 
-# Buffer multiplier: 2x (reduced from 4x)
-# Health check: 5s (data timeout: 15s)
-```
-
-## Audio Capture
-
-```bash
-# Enable audio capture
+# Enable audio capture from browser
 STREAM_AUDIO_ENABLED=true
 
-# PulseAudio device
+# PulseAudio device name for audio capture
 PULSE_AUDIO_DEVICE=chrome_audio.monitor
-
-# User-mode PulseAudio runtime
-XDG_RUNTIME_DIR=/tmp/pulse-runtime
 ```
 
-## WebGPU Requirements
+### Database Configuration
 
-**CRITICAL**: Streaming requires WebGPU support. The browser must have:
-- Chrome 113+ (recommended: google-chrome-unstable)
-- NVIDIA GPU with Vulkan support
-- Display server (Xorg or Xvfb) or Ozone headless mode
-- GPU sandbox bypass flags for containers
+For crash loop resilience:
 
-See [streaming-configuration.md](streaming-configuration.md) for complete WebGPU setup.
+```bash
+POSTGRES_POOL_MAX=3              # Prevent connection exhaustion
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
+```
+
+Also update PM2 configuration in `ecosystem.config.cjs`:
+
+```javascript
+restart_delay: 10000,            // 10s instead of 5s (allow connections to close)
+exp_backoff_restart_delay: 2000, // 2s for gradual backoff
+```
 
 ## Spectator + Betting URLs
 
@@ -177,6 +165,36 @@ See [streaming-configuration.md](streaming-configuration.md) for complete WebGPU
 
 These endpoints power the betting app live duel telemetry section (inventory, wins/losses, level, HP, and internal monologues).
 
+## Admin APIs (NEW)
+
+### Graceful Restart (Zero-Downtime Deployments)
+
+Request server restart after current duel ends:
+
+```bash
+# Request graceful restart (requires ADMIN_CODE)
+curl -X POST http://localhost:5555/admin/graceful-restart \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+
+# Check restart status
+curl http://localhost:5555/admin/restart-status \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+```
+
+When graceful restart is requested:
+- If no duel active: restarts immediately via SIGTERM
+- If duel in progress: waits until RESOLUTION phase completes
+- PM2 automatically restarts the server with new code
+- No interruption to active duels or streams
+
+**Programmatic API:**
+```typescript
+import { StreamingDuelScheduler } from './systems/StreamingDuelScheduler';
+
+// Request graceful restart
+scheduler.requestGracefulRestart();
+```
+
 ## Verification
 
 Run the full startup verifier against a running stack:
@@ -189,35 +207,112 @@ bun run duel:verify --require-destinations=twitch,youtube
 This validates server/client/betting uptime, active duel combat, RTMP bridge status evidence, and telemetry endpoints.
 RTMP bridge status is best-effort by default, and can be made strict with `--require-destinations`.
 
+## Streaming Health Check (NEW)
+
+Quick diagnostic for verifying streaming health:
+
+```bash
+bun run duel:status
+```
+
+This checks:
+- Server health endpoint
+- Streaming API status
+- Duel context (fighting phase)
+- RTMP bridge status and bytes streamed
+- PM2 process status
+- Recent logs
+
+Useful for debugging streaming issues on Vast.ai or other production deployments.
+
 ## Troubleshooting
 
-### Browser Timeout (>180s)
-**Solution**: Enable production client build mode (see above)
+### WebGPU Not Initializing
 
-### WebGPU Not Available
-**Solution**: Check GPU diagnostics:
+**Symptoms:**
+- Browser timeout during page load
+- Stream capture fails to start
+- GPU diagnostics show WebGPU unavailable
+
+**Solutions:**
+
+1. **Use Vast.ai Provisioner** (ensures WebGPU support):
+   ```bash
+   VAST_API_KEY=xxx bun run vast:provision
+   ```
+   
+   This automatically searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU).
+
+2. **Check GPU Display Driver**:
+   ```bash
+   nvidia-smi  # Should show display mode, not just compute
+   ```
+
+3. **Verify WebGPU Initialization**:
+   - Check deployment logs for GPU display driver detection
+   - Run `bun run duel:status` to check streaming health
+   - Ensure instance has NVIDIA display driver support
+
+4. **Use Production Client Build**:
+   ```bash
+   NODE_ENV=production
+   DUEL_USE_PRODUCTION_CLIENT=true
+   ```
+   
+   Significantly faster page loads (no on-demand module compilation).
+
+### Stream Disconnects
+
+**30-minute disconnect during idle periods:**
+
+Enable placeholder frame mode:
 ```bash
-nvidia-smi  # Verify GPU
-google-chrome-unstable --version  # Verify Chrome
-echo $DISPLAY  # Verify display server
+STREAM_PLACEHOLDER_ENABLED=true
 ```
 
-### Stream Not Starting
-**Solution**: Check RTMP bridge logs:
+**Frequent disconnects during active duels:**
+
+Check RTMP bridge status:
 ```bash
-pm2 logs rtmp-bridge
+bun run duel:status
 ```
 
-### Audio Not Captured
-**Solution**: Verify PulseAudio:
+Verify stream keys are correctly configured in `.env`.
+
+### Database Connection Issues
+
+**"too many clients already" errors:**
+
+Set lower connection pool limits:
 ```bash
-pactl info  # Check PulseAudio is running
-pactl list sinks | grep chrome_audio  # Verify virtual sink
+POSTGRES_POOL_MAX=3              # For streaming deployments
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
 ```
 
-## See Also
+Update PM2 restart delays:
+```javascript
+// In ecosystem.config.cjs
+restart_delay: 10000,            // 10s instead of 5s
+exp_backoff_restart_delay: 2000, // 2s for gradual backoff
+```
 
-- [streaming-configuration.md](streaming-configuration.md) - Complete streaming configuration guide
-- [vast-ai-deployment.md](vast-ai-deployment.md) - Vast.ai GPU deployment guide
-- `scripts/stream-to-rtmp.ts` - Stream capture implementation
-- `ecosystem.config.cjs` - PM2 process configuration
+**Railway-specific issues:**
+
+Railway is auto-detected via `RAILWAY_ENVIRONMENT` env var. The system automatically:
+- Disables prepared statements (not supported by pgbouncer)
+- Uses lower connection pool limits (max: 6)
+- Prevents connection exhaustion
+
+### Deployment Issues
+
+**Deploy script kills itself:**
+
+Fixed in commit 087033fa - now uses targeted process killing instead of blanket `pkill -f bun`.
+
+**"too many clients" during migrations:**
+
+Fixed in commit 58d88f4c - process teardown happens before database migrations.
+
+**Branch mismatch:**
+
+Fixed in commit dbd4332d - deploys from main branch instead of hackathon branch.
