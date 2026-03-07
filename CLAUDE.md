@@ -443,6 +443,7 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime.
 - **Precision Fixes**: Use larger amounts (10000n) to avoid gas cost precision issues
 - **Dynamic Import Timeout**: 60s timeout for EmbeddedHyperscapeService beforeEach hooks
 - **Anchor Test Configuration**: Use localnet instead of devnet for free SOL in `anchor test`
+- **Anchor Test Skip**: Automatically skip Anchor localnet tests in CI when Solana CLI is not installed (prevents false failures)
 - **Vitest 4.x Upgrade**: Upgraded from 2.1.0 to 4.0.6 for Vite 6 compatibility (fixes __vite_ssr_exportName__ errors)
 
 #### E2E Journey Tests
