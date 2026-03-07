@@ -236,8 +236,10 @@ The streaming pipeline requires specific GPU setup:
    - **Process Teardown Before Migration**: Kill processes and wait 30s for DB connections to close before running migrations
    - **Runtime Secrets Loading**: Loads secrets from `/tmp/hyperscape-secrets.env` at deploy time (populated by GitHub Actions)
    - **PM2 Environment Passthrough**: All deploy-time secrets passed into PM2 runtime via `--update-env` flag
-   - **Deterministic Migrations**: Migrations run in sorted order to ensure consistency across deployments
+   - **Deterministic Migrations**: Migrations run in sorted order (`bunx drizzle-kit migrate`) to ensure consistency across deployments
    - **Solana Runtime Defaults**: PM2 config includes default Solana program IDs and gold mint for duel arena
+   - **Production Environment Passthrough**: GitHub Actions writes secrets to `/tmp/hyperscape-secrets.env`, deploy script sources before PM2 start
+   - **Secrets Persistence**: Secrets written to `/tmp` before git reset, restored after to survive code updates
    - Prevents deploy script from killing itself
    - Prevents "too many clients" errors during database migrations
 
