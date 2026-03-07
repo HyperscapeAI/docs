@@ -422,6 +422,50 @@ This is useful for:
 2. **SSH Deploy** - Connects to Vast.ai instance, pulls latest code, builds, and restarts
 3. **Exit Maintenance Mode** - Resumes duel cycles after health check passes
 
+### Graceful Restart API (Zero-Downtime Deployments)
+
+The server provides a graceful restart API for zero-downtime deployments during active duels:
+
+**Request Graceful Restart:**
+```bash
+POST /admin/graceful-restart
+Headers:
+  x-admin-code: <ADMIN_CODE>
+
+Response:
+  {
+    "success": true,
+    "message": "Graceful restart requested",
+    "duelActive": true,
+    "willRestartAfterDuel": true
+  }
+```
+
+**Check Restart Status:**
+```bash
+GET /admin/restart-status
+Headers:
+  x-admin-code: <ADMIN_CODE>
+
+Response:
+  {
+    "restartPending": true,
+    "duelActive": true,
+    "currentPhase": "FIGHTING"
+  }
+```
+
+**Behavior:**
+- If no duel active: restarts immediately via SIGTERM
+- If duel in progress: waits until RESOLUTION phase completes
+- PM2 automatically restarts the server with new code
+- No interruption to active duels or streams
+
+**Use Cases:**
+- Deploy hotfixes during active streaming
+- Update server code without stopping duels
+- Restart after configuration changes
+
 ### Maintenance Mode API
 
 The server provides a maintenance mode API for graceful deployments:
