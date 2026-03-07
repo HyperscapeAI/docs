@@ -517,6 +517,28 @@ Automated instance provisioning with WebGPU support:
 - Automatic rental and setup
 - SSH connection details and GitHub secrets output
 
+## Branding Assets
+
+Official Hyperscape logo files are available in `publishing/branding/`:
+
+**Logo Variants:**
+- `hyperscape_logo_color` - Full wordmark with gold gradient (primary logo)
+- `hyperscape_logo_black` - Full wordmark, solid black (print/light backgrounds)
+- `hyperscape_logo_white` - Full wordmark, solid white (dark backgrounds)
+- `hyperscape_logo_icon_color` - "HS" icon with gold gradient (favicons, app icons)
+
+**Formats:**
+- **SVG** (source of truth): Web, UI, scalable usage
+- **EPS** (Git LFS): Print production
+- **PDF** (Git LFS): Print-ready distribution
+- **PNG** (Git LFS): Raster with transparency
+- **JPG** (Git LFS): Raster without transparency
+- **AI** (Git LFS): Adobe Illustrator source templates
+
+**Git LFS**: Binary branding files (~28MB) are tracked via Git LFS to avoid repo bloat. Run `git lfs install` before cloning.
+
+See `publishing/branding/README.md` for complete usage guidelines and naming conventions.
+
 ## More Info
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
