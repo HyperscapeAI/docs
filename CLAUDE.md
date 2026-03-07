@@ -806,6 +806,22 @@ bun run dev
 - Server waits for current duel to complete before restarting
 - PM2 automatically restarts with new code
 
+**Object pooling memory leaks**:
+If you see pool exhaustion warnings, ensure all event listeners call `release()` after processing:
+```typescript
+// ❌ WRONG - causes memory leak
+world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
+  // Process damage...
+  // Missing release() call!
+});
+
+// ✅ CORRECT - releases payload back to pool
+world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
+  // Process damage...
+  CombatEventPools.damageDealt.release(payload);
+});
+```
+
 ### Vitest 4.x Upgrade
 
 **Breaking Changes** (commit a916e4ee):
