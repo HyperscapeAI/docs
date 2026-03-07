@@ -1,859 +1,775 @@
 # Deployment Best Practices
 
-This guide covers best practices for deploying Hyperscape to production, including maintenance mode coordination, health checks, and zero-downtime deployments.
+This guide consolidates best practices for deploying Hyperscape to production, based on lessons learned from recent stability improvements and production deployments.
 
 ## Table of Contents
 
-1. [Maintenance Mode](#maintenance-mode)
-2. [Deployment Workflow](#deployment-workflow)
-3. [Health Checks](#health-checks)
-4. [Rollback Procedures](#rollback-procedures)
-5. [Security Checklist](#security-checklist)
-6. [Monitoring](#monitoring)
+1. [Database Configuration](#database-configuration)
+2. [Streaming Pipeline](#streaming-pipeline)
+3. [Zero-Downtime Deployments](#zero-downtime-deployments)
+4. [Memory Management](#memory-management)
+5. [Monitoring & Health Checks](#monitoring--health-checks)
+6. [Troubleshooting](#troubleshooting)
 
-## Maintenance Mode
+## Database Configuration
 
-Maintenance mode provides graceful deployment coordination for the streaming duel system, preventing data loss and market inconsistency during deployments.
+### Railway Deployments
 
-### When to Use Maintenance Mode
+Railway uses connection pooling (pgbouncer) which requires special configuration. The server **automatically detects Railway** and applies the correct settings.
 
-**Required for:**
-- Code deployments that restart the server
-- Database schema migrations
-- Configuration changes affecting duel system
-- Infrastructure maintenance (server moves, scaling)
+**Detection methods** (in order of reliability):
+1. `RAILWAY_ENVIRONMENT` environment variable (most reliable)
+2. Hostname patterns: `.rlwy.net`, `.railway.app`, `.railway.internal`
 
-**Not required for:**
-- Static asset updates (CDN only)
-- Client-only deployments (Cloudflare Pages)
-- Documentation updates
+**Automatic adjustments when Railway is detected:**
+- Disables prepared statements (not supported by pgbouncer)
+- Uses lower connection pool limits (max: 6 instead of 20)
+- Prevents "too many clients already" errors
 
-### Maintenance Mode API
-
-**Authentication**: All endpoints require `ADMIN_CODE` header:
-```bash
--H "x-admin-code: your-admin-code"
-```
-
-#### Enter Maintenance Mode
+**Recommended Railway environment variables:**
 
 ```bash
-POST /admin/maintenance/enter
-Content-Type: application/json
+# Standard deployment
+POSTGRES_POOL_MAX=6              # Lower limit for pooler connections
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
 
-{
-  "reason": "deployment",
-  "timeoutMs": 300000
-}
+# Crash loop scenarios (server restarting frequently)
+POSTGRES_POOL_MAX=3              # Even lower to prevent exhaustion
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
 ```
 
-**Parameters:**
-- `reason` (string): Reason for maintenance (logged for audit)
-- `timeoutMs` (number): Maximum wait time for markets to resolve (default: 300000 = 5 minutes)
+**PM2 configuration for Railway:**
 
-**Behavior:**
-1. Pauses new duel cycles (current cycle completes)
-2. Locks betting markets (no new bets accepted)
-3. Waits for current market to resolve
-4. Returns when safe to deploy or timeout reached
+```javascript
+// ecosystem.config.cjs
+module.exports = {
+  apps: [{
+    name: 'hyperscape-server',
+    script: './dist/index.js',
+    restart_delay: 10000,            // 10s instead of 5s
+    exp_backoff_restart_delay: 2000, // 2s for gradual backoff
+    max_restarts: 10,
+  }]
+};
+```
+
+### Neon/Supabase Deployments
+
+Serverless databases require different configuration:
+
+```bash
+# Neon/Supabase recommended settings
+POSTGRES_POOL_MAX=10             # Moderate limit for serverless
+POSTGRES_POOL_MIN=1              # Keep 1 connection warm
+```
+
+**Automatic detection:**
+- Neon: `neon.tech` in connection string
+- Supabase: `supabase.co` in connection string
+- Pooler: `pooler` or `-pooler.` in connection string
+
+### General Database Best Practices
+
+1. **Always set explicit pool limits** - Don't rely on defaults
+2. **Use `POSTGRES_POOL_MIN=0` for crash-prone deployments** - Prevents holding connections during restarts
+3. **Increase restart delays** - Give connections time to close before PM2 restarts
+4. **Monitor connection pool stats** - Use `/admin/pools/stats` endpoint
+5. **Test with low limits first** - Start with `POSTGRES_POOL_MAX=3` and increase if needed
+
+### Process Teardown Before Migrations
+
+The deployment script now tears down existing processes **before** running database migrations:
+
+```bash
+# In scripts/deploy-vast.sh
+
+# Stop PM2 gracefully
+bunx pm2 stop all
+sleep 2
+bunx pm2 delete all
+sleep 2
+bunx pm2 kill
+sleep 2
+
+# Kill specific server processes (not all bun processes)
+pkill -f "hyperscape-duel" || true
+pkill -f "stream-to-rtmp" || true
+
+# Wait for database connections to close
+sleep 30
+
+# NOW run migrations
+bunx drizzle-kit push --force
+```
+
+**Why this matters:**
+- Prevents "too many clients already" errors during migrations
+- Ensures clean database state before schema changes
+- Avoids race conditions between old processes and new schema
+
+## Streaming Pipeline
+
+### Placeholder Frame Mode
+
+**Problem:** Twitch/YouTube disconnect streams after ~30 minutes of idle content.
+
+**Solution:** Enable placeholder frame mode to keep streams alive during idle periods.
+
+```bash
+# In packages/server/.env or root .env
+STREAM_PLACEHOLDER_ENABLED=true
+```
+
+**How it works:**
+- Detects when no frames received for 5 seconds
+- Switches to placeholder mode, sending minimal JPEG frames at configured FPS
+- Automatically exits placeholder mode when live frames resume
+- Uses minimal 16x16 JPEG (~300 bytes) scaled by FFmpeg to output size
+- Zero CPU overhead - just pipes pre-generated JPEG buffer
+
+**Use cases:**
+- Duel arena between fights (ANNOUNCEMENT/RESOLUTION phases)
+- Server maintenance or restarts
+- Browser capture failures or reconnections
+- Any content gap >5 seconds
+
+### Stream Encoding Optimization
+
+**Default configuration** (balanced quality and latency):
+
+```bash
+# Uses 'film' tune with B-frames for better compression
+# GOP size: 60 frames (2 seconds at 30fps)
+# Buffer: 2x bitrate (prevents backpressure buildup)
+STREAM_GOP_SIZE=60
+```
+
+**Low-latency configuration** (faster playback start, lower quality):
+
+```bash
+# Uses 'zerolatency' tune, no B-frames
+# Faster playback start, but larger file size
+STREAM_LOW_LATENCY=true
+STREAM_GOP_SIZE=30               # Smaller GOP for faster seeking
+```
+
+**Audio configuration:**
+
+```bash
+# Enable audio capture from PulseAudio
+STREAM_AUDIO_ENABLED=true
+PULSE_AUDIO_DEVICE=chrome_audio.monitor
+
+# Disable audio (silent stream)
+STREAM_AUDIO_ENABLED=false
+```
+
+### Production Client Build
+
+**Problem:** Browser timeout during page load (>180s) caused by Vite's JIT compilation.
+
+**Solution:** Use production client build for streaming deployments.
+
+```bash
+# In packages/server/.env
+NODE_ENV=production              # Use production client build
+DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
+```
+
+**Benefits:**
+- Significantly faster page loads (no on-demand module compilation)
+- Fixes browser timeout issues
+- Reduces server CPU usage
+- More stable for long-running streams
+
+### WebGPU Initialization
+
+**Page navigation timeout** increased to 120s (up from 60s) for WebGPU shader compilation on first load.
+
+```bash
+# Automatically applied - no configuration needed
+# Allows time for WebGPU shader compilation
+```
+
+**Browser restart** every 45 minutes to prevent WebGPU OOM crashes:
+
+```bash
+# Automatically applied - no configuration needed
+# Prevents memory leaks in Chrome's WebGPU implementation
+```
+
+## Zero-Downtime Deployments
+
+### Graceful Restart API
+
+Request a server restart after the current duel ends:
+
+```bash
+# Request graceful restart
+curl -X POST http://your-server/admin/graceful-restart \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+
+# Check restart status
+curl http://your-server/admin/restart-status \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+```
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "Maintenance mode activated",
-  "safeToDeploy": true,
-  "currentPhase": "IDLE",
-  "marketStatus": "resolved",
-  "pendingMarkets": 0
-}
-```
-
-#### Check Status
-
-```bash
-GET /admin/maintenance/status
-```
-
-**Response:**
-```json
-{
-  "active": true,
-  "enteredAt": 1709000000000,
-  "reason": "deployment",
-  "safeToDeploy": true,
-  "currentPhase": "IDLE",
-  "marketStatus": "resolved",
-  "pendingMarkets": 0
-}
-```
-
-**Safe to Deploy When:**
-- `safeToDeploy: true`
-- `currentPhase: "IDLE"` (no active duel)
-- `marketStatus: "resolved"` (all markets settled)
-- `pendingMarkets: 0`
-
-#### Exit Maintenance Mode
-
-```bash
-POST /admin/maintenance/exit
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Maintenance mode deactivated"
+  "message": "Graceful restart scheduled after current duel (phase: FIGHTING)",
+  "pendingRestart": true,
+  "currentPhase": "FIGHTING"
 }
 ```
 
 **Behavior:**
-- Resumes duel cycle scheduling
-- Unlocks betting markets
-- Normal operations resume
+- **IDLE/ANNOUNCEMENT phase**: Restarts immediately via SIGTERM
+- **FIGHTING/RESOLUTION phase**: Waits until RESOLUTION phase completes
+- **PM2 auto-restart**: PM2 automatically restarts the server with new code
 
-### Helper Scripts
+### Deployment Workflow
 
-**Pre-Deployment:**
+**Recommended workflow for production deployments:**
+
+1. **Push new code** to your deployment platform (Railway, Vast.ai, etc.)
+2. **Wait for build** to complete
+3. **Request graceful restart** via API
+4. **Monitor restart status** until complete
+5. **Verify health** with `/health` and `/status` endpoints
+
+**Example script:**
+
 ```bash
-# Enter maintenance mode and wait for safe state
-./scripts/pre-deploy-maintenance.sh
+#!/bin/bash
+# deploy-production.sh
 
-# Required environment variables:
-# - VAST_SERVER_URL (e.g., https://hyperscape.gg)
-# - ADMIN_CODE
-```
+# 1. Push to Railway
+git push railway main
 
-**Post-Deployment:**
-```bash
-# Exit maintenance mode and resume operations
-./scripts/post-deploy-resume.sh
+# 2. Wait for build (Railway webhook or manual check)
+echo "Waiting for Railway build..."
+sleep 60
 
-# Required environment variables:
-# - VAST_SERVER_URL
-# - ADMIN_CODE
-```
+# 3. Request graceful restart
+echo "Requesting graceful restart..."
+curl -X POST https://api.yourdomain.com/admin/graceful-restart \
+  -H "x-admin-code: $ADMIN_CODE"
 
-### CI/CD Integration
-
-The Vast.ai deployment workflow (`.github/workflows/deploy-vast.yml`) automatically coordinates maintenance mode:
-
-```yaml
-- name: Enter maintenance mode
-  run: ./scripts/pre-deploy-maintenance.sh
+# 4. Monitor restart status
+echo "Monitoring restart status..."
+while true; do
+  STATUS=$(curl -s https://api.yourdomain.com/admin/restart-status \
+    -H "x-admin-code: $ADMIN_CODE")
   
-- name: Deploy to Vast.ai
-  run: ./scripts/deploy-vast.sh
+  if echo "$STATUS" | grep -q '"pendingRestart":false'; then
+    echo "Restart complete!"
+    break
+  fi
   
-- name: Exit maintenance mode
-  run: ./scripts/post-deploy-resume.sh
+  echo "Waiting for restart..."
+  sleep 5
+done
+
+# 5. Verify health
+echo "Verifying health..."
+curl https://api.yourdomain.com/health
+curl https://api.yourdomain.com/status
 ```
 
-**Workflow Steps:**
-1. Enter maintenance mode (pauses new duels)
-2. Wait for active markets to resolve (up to 5 minutes)
-3. Deploy latest code via SSH
-4. Verify deployment health
-5. Exit maintenance mode (resumes operations)
+### Programmatic API
 
-**Timeout Handling:**
-- If markets don't resolve within timeout, deployment proceeds anyway
-- Manual intervention may be required to resolve stuck markets
-- Check `/admin/maintenance/status` after deployment
+For automated deployment pipelines:
 
-## Deployment Workflow
+```typescript
+import { getStreamingDuelScheduler } from './systems/StreamingDuelScheduler';
 
-### Railway (Production Server)
-
-**Automatic Deployment:**
-- Push to `main` → deploys to `prod` environment
-- Push to `develop` → deploys to `dev` environment
-
-**Manual Deployment:**
-1. Go to GitHub Actions → Deploy to Railway
-2. Select environment: `prod` or `dev`
-3. Click "Run workflow"
-
-**Environment Variables** (set in Railway dashboard):
-- `JWT_SECRET` - **Required** (throws error if not set)
-- `ADMIN_CODE` - **Required** for security
-- `DATABASE_URL` - PostgreSQL connection string
-- `PRIVY_APP_ID` - Privy app ID
-- `PRIVY_APP_SECRET` - Privy app secret
-- `PUBLIC_CDN_URL` - Asset CDN URL (e.g., https://assets.hyperscape.club)
-
-**Post-Deployment:**
-1. Check `/health` endpoint: `https://hyperscape.gg/health`
-2. Verify WebSocket: `wss://hyperscape.gg/ws`
-3. Monitor logs for errors
-4. Test character creation and login
-
-### Cloudflare Pages (Frontend)
-
-**Automatic Deployment:**
-- Push to `main` → deploys to production
-- Pull requests → preview deployments
-
-**Manual Deployment:**
-```bash
-cd packages/client
-bun run build
-bunx wrangler deploy
+async function deployWithGracefulRestart() {
+  const scheduler = getStreamingDuelScheduler();
+  
+  if (!scheduler) {
+    // No scheduler, restart immediately
+    process.kill(process.pid, 'SIGTERM');
+    return;
+  }
+  
+  // Request graceful restart
+  const scheduled = scheduler.requestGracefulRestart();
+  
+  if (!scheduled) {
+    console.log('Restart already pending');
+    return;
+  }
+  
+  // Monitor restart status
+  while (scheduler.isPendingRestart()) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  
+  console.log('Restart complete');
+}
 ```
 
-**Environment Variables** (set in Cloudflare dashboard):
-- `PUBLIC_PRIVY_APP_ID` - Must match server's `PRIVY_APP_ID`
-- `PUBLIC_API_URL` - Backend API URL (e.g., https://hyperscape.gg)
-- `PUBLIC_WS_URL` - WebSocket URL (e.g., wss://hyperscape.gg/ws)
-- `PUBLIC_CDN_URL` - Asset CDN URL (e.g., https://assets.hyperscape.club)
+## Memory Management
 
-**Post-Deployment:**
-1. Test asset loading (check Network tab for 404s)
-2. Verify WebSocket connection
-3. Test authentication flow
-4. Check for CORS errors in Console
+### Connection Pool Sizing
 
-### Vast.ai (Streaming Duels)
+**General guidelines:**
 
-**Automatic Deployment:**
-- Triggered on successful main branch builds
-- Includes maintenance mode coordination
-- Automatic health checks and recovery
+| Deployment Type | POSTGRES_POOL_MAX | POSTGRES_POOL_MIN | Rationale |
+|----------------|-------------------|-------------------|-----------|
+| Railway (stable) | 6 | 0 | Pgbouncer pooler limits |
+| Railway (crash loop) | 3 | 0 | Prevent exhaustion during restarts |
+| Neon/Supabase | 10 | 1 | Serverless connection limits |
+| Dedicated PostgreSQL | 20 | 2 | Standard connection pool |
+| Duel streaming | 1 | 0 | Minimal connections for streaming |
 
-**Manual Deployment:**
-```bash
-# SSH into Vast.ai instance
-ssh -p $VAST_PORT root@$VAST_HOST
+**Signs you need to reduce pool size:**
+- "too many clients already" errors
+- Connection timeouts during restarts
+- Database connection exhaustion
 
-# Pull latest code
-cd /root/hyperscape
-git fetch origin
-git checkout main
-git pull origin main
+**Signs you can increase pool size:**
+- Slow query response times
+- Connection pool exhaustion warnings
+- High concurrent user load
 
-# Install dependencies
-bun install --frozen-lockfile
+### PM2 Restart Configuration
 
-# Build
-bun run build
+**Prevent connection exhaustion during crash loops:**
 
-# Restart services
-pm2 restart ecosystem.config.cjs
+```javascript
+// ecosystem.config.cjs
+module.exports = {
+  apps: [{
+    name: 'hyperscape-server',
+    script: './dist/index.js',
+    
+    // Restart delays
+    restart_delay: 10000,            // 10s (up from 5s)
+    exp_backoff_restart_delay: 2000, // 2s for gradual backoff
+    
+    // Restart limits
+    max_restarts: 10,                // Prevent infinite restart loops
+    min_uptime: 5000,                // Must run 5s to count as successful
+    
+    // Memory limits
+    max_memory_restart: '2G',        // Restart if memory exceeds 2GB
+  }]
+};
 ```
 
-**Post-Deployment:**
-1. Check PM2 status: `pm2 status`
-2. Verify stream health: `curl http://localhost:5555/health`
-3. Check RTMP output: `ffplay rtmp://your-rtmp-server/live/stream`
-4. Monitor logs: `pm2 logs`
+**Why these settings matter:**
+- `restart_delay: 10000` - Gives database connections time to close before restart
+- `exp_backoff_restart_delay: 2000` - Gradual backoff prevents rapid restart loops
+- `max_restarts: 10` - Prevents infinite loops, forces manual intervention
+- `max_memory_restart: '2G'` - Automatic restart on memory leaks
 
-## Health Checks
+### Object Pooling
 
-### Server Health Endpoint
+**Use object pools for high-frequency events** to eliminate GC pressure:
+
+```typescript
+// ❌ WRONG - allocates on every event
+world.emit('damage', { attackerId, targetId, damage });
+
+// ✅ CORRECT - uses pool
+const payload = CombatEventPools.damageDealt.acquire();
+payload.attackerId = attackerId;
+payload.targetId = targetId;
+payload.damage = damage;
+world.emitTypedEvent(EventType.COMBAT_DAMAGE_DEALT, payload);
+
+// In listener - MUST release
+world.on(EventType.COMBAT_DAMAGE_DEALT, (payload) => {
+  try {
+    // Process...
+  } finally {
+    CombatEventPools.damageDealt.release(payload);
+  }
+});
+```
+
+See [object-pooling-api.md](object-pooling-api.md) for complete API reference.
+
+## Monitoring & Health Checks
+
+### Essential Endpoints
+
+Configure your monitoring service to poll these endpoints:
+
+| Endpoint | Purpose | Frequency | Alert On |
+|----------|---------|-----------|----------|
+| `GET /health` | Basic uptime | 30s | Non-200 response |
+| `GET /status` | Detailed status | 60s | Player count anomalies |
+| `GET /api/streaming/state` | Streaming health | 60s | Missing duel context |
+| `GET /admin/pools/stats` | Connection pool | 300s | Pool exhaustion |
+
+### Streaming Health Check
+
+Quick diagnostic for streaming deployments:
 
 ```bash
-GET /health
+bun run duel:status
+```
+
+**Checks:**
+- Server health endpoint (`/health`)
+- Streaming API status (`/api/streaming/state`)
+- Duel context (fighting phase, contestants)
+- RTMP bridge status and bytes streamed
+- PM2 process status
+- Recent logs (last 50 lines)
+
+**Example output:**
+```
+[✓] Server health: OK
+[✓] Streaming API: OK (phase: FIGHTING)
+[✓] RTMP bridge: 3 destinations, 45.2 MB streamed
+[✓] PM2 processes: 2 running
+[✓] Recent logs: No errors in last 50 lines
+```
+
+### Database Connection Pool Monitoring
+
+Monitor connection pool health to prevent exhaustion:
+
+```bash
+curl http://your-server/admin/pools/stats \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
 ```
 
 **Response:**
 ```json
 {
-  "status": "healthy",
-  "uptime": 3600000,
-  "version": "1.0.0",
-  "commit": "abc123def456",
-  "database": "connected",
-  "websocket": "active",
-  "maintenance": false,
-  "streaming": {
-    "active": true,
-    "phase": "FIGHTING",
-    "uptime": 1800000
+  "bfs": {
+    "poolSize": 100,
+    "inUse": 12,
+    "available": 88,
+    "utilization": 12
+  },
+  "tile": {
+    "poolSize": 200,
+    "inUse": 45,
+    "available": 155
+  },
+  "quaternion": {
+    "poolSize": 50,
+    "inUse": 8,
+    "available": 42
   }
 }
 ```
 
-**Health Indicators:**
-- `status: "healthy"` - All systems operational
-- `database: "connected"` - PostgreSQL connection active
-- `websocket: "active"` - WebSocket server running
-- `maintenance: false` - Not in maintenance mode
-- `streaming.active: true` - Streaming duel system running
+**Healthy metrics:**
+- `inUse < poolSize` (not exhausted)
+- `available > 0` (objects available)
+- `utilization < 80%` (not near capacity)
 
-### Vast.ai Health Checks
+**Warning signs:**
+- `inUse === poolSize` (pool exhausted)
+- `utilization > 90%` (near capacity)
+- Frequent auto-growth warnings in logs
 
-The Vast.ai keeper (`packages/vast-keeper`) automatically monitors instance health:
+### RTMP Bridge Health
 
-**Health Check Criteria:**
-- HTTP `/health` endpoint responds with 200
-- Response time < 5 seconds
-- Database connection active
-- WebSocket server running
+Monitor RTMP streaming health:
 
-**Failure Handling:**
-1. Detect unhealthy instance (3 consecutive failures)
-2. Destroy failed instance
-3. Provision new instance
-4. Deploy latest code
-5. Resume operations
-
-**Configuration** (`.env`):
 ```bash
-# Health check interval (seconds)
-HEALTH_CHECK_INTERVAL=60
-
-# Failure threshold before reprovisioning
-HEALTH_CHECK_FAILURE_THRESHOLD=3
-
-# Health check timeout (milliseconds)
-HEALTH_CHECK_TIMEOUT=5000
+curl http://your-server/api/streaming/state
 ```
 
-### Manual Health Checks
-
-**Server:**
-```bash
-# Check server health
-curl https://hyperscape.gg/health
-
-# Check WebSocket
-wscat -c wss://hyperscape.gg/ws
-
-# Check database
-psql $DATABASE_URL -c "SELECT 1"
+**Healthy response:**
+```json
+{
+  "type": "STREAMING_STATE_UPDATE",
+  "cycle": {
+    "phase": "FIGHTING",
+    "agent1": { "name": "Agent1", "hp": 85, "maxHp": 100 },
+    "agent2": { "name": "Agent2", "hp": 72, "maxHp": 100 }
+  },
+  "cameraTarget": "agent1-id"
+}
 ```
 
-**Streaming:**
-```bash
-# Check RTMP output
-ffplay rtmp://your-rtmp-server/live/stream
-
-# Check FFmpeg process
-ps aux | grep ffmpeg
-
-# Check browser capture
-curl http://localhost:5555/api/streaming/state
-```
-
-## Rollback Procedures
-
-### Railway Rollback
-
-**Via Dashboard:**
-1. Go to Railway dashboard → Deployments
-2. Find last known good deployment
-3. Click "Redeploy"
-
-**Via CLI:**
-```bash
-# List recent deployments
-railway deployments
-
-# Rollback to specific deployment
-railway rollback <deployment-id>
-```
-
-### Cloudflare Pages Rollback
-
-**Via Dashboard:**
-1. Go to Cloudflare dashboard → Pages → hyperscape
-2. Click "Deployments" tab
-3. Find last known good deployment
-4. Click "Rollback to this deployment"
-
-**Via Git:**
-```bash
-# Revert to previous commit
-git revert HEAD
-git push origin main
-
-# Or force push to previous commit (use with caution)
-git reset --hard <commit-hash>
-git push --force origin main
-```
-
-### Vast.ai Rollback
-
-**Via SSH:**
-```bash
-# SSH into instance
-ssh -p $VAST_PORT root@$VAST_HOST
-
-# Checkout previous commit
-cd /root/hyperscape
-git log --oneline -10  # Find last known good commit
-git checkout <commit-hash>
-
-# Rebuild and restart
-bun install --frozen-lockfile
-bun run build
-pm2 restart ecosystem.config.cjs
-```
-
-**Via Keeper:**
-```bash
-# Destroy current instance and provision new one
-# Keeper will deploy latest main branch
-# Manually checkout previous commit after provisioning
-```
-
-## Security Checklist
-
-### Pre-Deployment
-
-- [ ] `JWT_SECRET` set and secure (32+ characters)
-- [ ] `ADMIN_CODE` set and not committed to git
-- [ ] `PRIVY_APP_SECRET` set and not exposed to client
-- [ ] Database credentials rotated (if compromised)
-- [ ] API tokens reviewed and scoped appropriately
-- [ ] Environment variables match between client and server
-- [ ] CORS configuration includes only known domains
-- [ ] Rate limiting enabled (`DISABLE_RATE_LIMIT=false`)
-
-### Post-Deployment
-
-- [ ] `/health` endpoint returns 200
-- [ ] Authentication flow works (Privy login)
-- [ ] Admin commands require `ADMIN_CODE`
-- [ ] CSRF protection active for same-origin requests
-- [ ] CORS errors not present in browser console
-- [ ] WebSocket connections establish successfully
-- [ ] Database migrations applied successfully
-- [ ] No sensitive data in client-side logs
-
-### Production Environment Variables
-
-**Required:**
-```bash
-NODE_ENV=production
-JWT_SECRET=<32+ character random string>
-ADMIN_CODE=<secure admin code>
-DATABASE_URL=postgresql://...
-PRIVY_APP_ID=<privy app id>
-PRIVY_APP_SECRET=<privy app secret>
-```
-
-**Recommended:**
-```bash
-ALERT_WEBHOOK_URL=<slack/discord webhook>
-COMMIT_HASH=<git commit hash>
-DISABLE_RATE_LIMIT=false
-LOAD_TEST_MODE=false
-```
-
-**Generate Secrets:**
-```bash
-# JWT_SECRET
-openssl rand -base64 32
-
-# ADMIN_CODE
-openssl rand -base64 16
-```
-
-## Monitoring
-
-### Key Metrics
-
-**Server:**
-- Response time (p50, p95, p99)
-- Error rate (4xx, 5xx)
-- WebSocket connections (active, total)
-- Database query time
-- Memory usage
-- CPU usage
-
-**Streaming:**
-- RTMP uptime
-- FFmpeg restarts
-- CDP stall events
-- Frame rate (target: 30 FPS)
-- Bitrate (target: 2500 kbps)
-
-**Duel System:**
-- Duel cycle duration
-- Market resolution time
-- Bet placement rate
-- Payout success rate
-
-### Logging
-
-**Server Logs:**
-```bash
-# Railway
-railway logs
-
-# Vast.ai
-ssh -p $VAST_PORT root@$VAST_HOST
-pm2 logs
-
-# Local
-tail -f packages/server/logs/server.log
-```
-
-**Streaming Logs:**
-```bash
-# FFmpeg output
-pm2 logs ffmpeg
-
-# Browser capture
-pm2 logs capture
-
-# RTMP bridge
-pm2 logs rtmp-bridge
-```
-
-### Alerts
-
-**Critical Alerts** (configure `ALERT_WEBHOOK_URL`):
-- Server crash or restart
-- Database connection lost
-- WebSocket server down
-- Streaming pipeline failure
-- Maintenance mode timeout
-
-**Warning Alerts:**
-- High error rate (> 5%)
-- Slow response time (> 1s p95)
-- Memory usage > 80%
-- FFmpeg restart (> 3 in 10 minutes)
-
-## Common Deployment Issues
-
-### JWT_SECRET Not Set
-
-**Symptom**: Server throws error on startup in production/staging.
-
-**Cause**: `JWT_SECRET` is required as of February 2026 (security hardening).
-
-**Solution**:
-```bash
-# Generate secure secret
-openssl rand -base64 32
-
-# Set in Railway/Vast.ai environment
-JWT_SECRET=<generated-secret>
-```
-
-### CORS Errors After Deployment
-
-**Symptom**: Assets fail to load with CORS errors in browser console.
-
-**Cause**: R2 bucket CORS not configured or domains missing.
-
-**Solution**:
-1. Run `scripts/configure-r2-cors.sh` (see `docs/r2-cors-configuration.md`)
-2. Verify all domains in `AllowedOrigins` list
-3. Wait 1-2 minutes for propagation
-4. Hard reload browser (Cmd+Shift+R / Ctrl+Shift+R)
-
-### Maintenance Mode Timeout
-
-**Symptom**: Deployment proceeds but markets still active.
-
-**Cause**: Markets didn't resolve within timeout (default 5 minutes).
-
-**Solution**:
-1. Check market status: `GET /admin/maintenance/status`
-2. Manually resolve stuck markets (if safe)
-3. Exit maintenance mode: `POST /admin/maintenance/exit`
-4. Monitor for data inconsistencies
-
-### Database Migration Failures
-
-**Symptom**: Server fails to start after deployment with schema errors.
-
-**Cause**: Migration failed or partially applied.
-
-**Solution**:
-```bash
-# Check migration status
-cd packages/server
-bunx drizzle-kit status
-
-# Manually apply migrations
-bunx drizzle-kit migrate
-
-# If corrupted, rollback and reapply
-bunx drizzle-kit drop
-bunx drizzle-kit push
-```
-
-### WebSocket Connection Failures
-
-**Symptom**: Clients can't connect to WebSocket after deployment.
-
-**Cause**: WebSocket URL misconfigured or server not listening.
-
-**Solution**:
-1. Verify `PUBLIC_WS_URL` in client `.env` matches server domain
-2. Check server logs for WebSocket initialization errors
-3. Test WebSocket manually: `wscat -c wss://hyperscape.gg/ws`
-4. Verify Railway/Cloudflare WebSocket support enabled
-
-## Zero-Downtime Deployment
-
-### Strategy
-
-1. **Blue-Green Deployment** (Railway):
-   - Deploy to new instance
-   - Health check new instance
-   - Switch traffic to new instance
-   - Keep old instance for rollback
-
-2. **Maintenance Mode Coordination** (Vast.ai):
-   - Enter maintenance mode
-   - Wait for safe state
-   - Deploy new code
-   - Exit maintenance mode
-
-### Implementation
-
-**Railway** (automatic):
-- Railway handles blue-green deployment automatically
-- Old instance kept for 30 seconds after new instance healthy
-- Traffic switches when new instance passes health checks
-
-**Vast.ai** (manual coordination):
-```bash
-# 1. Enter maintenance mode
-curl -X POST https://hyperscape.gg/admin/maintenance/enter \
-  -H "x-admin-code: $ADMIN_CODE" \
-  -H "Content-Type: application/json" \
-  -d '{"reason": "deployment", "timeoutMs": 300000}'
-
-# 2. Wait for safe state
-while true; do
-  STATUS=$(curl -s https://hyperscape.gg/admin/maintenance/status \
-    -H "x-admin-code: $ADMIN_CODE")
-  SAFE=$(echo $STATUS | jq -r '.safeToDeploy')
-  if [ "$SAFE" = "true" ]; then
-    echo "Safe to deploy"
-    break
-  fi
-  echo "Waiting for safe state..."
-  sleep 10
-done
-
-# 3. Deploy
-./scripts/deploy-vast.sh
-
-# 4. Health check
-curl https://hyperscape.gg/health
-
-# 5. Exit maintenance mode
-curl -X POST https://hyperscape.gg/admin/maintenance/exit \
-  -H "x-admin-code: $ADMIN_CODE"
-```
-
-## Database Migrations
-
-### Safe Migration Workflow
-
-1. **Backup Database:**
-   ```bash
-   # Railway
-   railway run pg_dump > backup.sql
-   
-   # Manual
-   pg_dump $DATABASE_URL > backup.sql
-   ```
-
-2. **Test Migration Locally:**
-   ```bash
-   # Create test database
-   createdb hyperscape_test
-   
-   # Restore backup
-   psql hyperscape_test < backup.sql
-   
-   # Test migration
-   DATABASE_URL=postgresql://localhost/hyperscape_test \
-     bunx drizzle-kit migrate
-   ```
-
-3. **Apply to Production:**
-   ```bash
-   # Enter maintenance mode
-   ./scripts/pre-deploy-maintenance.sh
-   
-   # Apply migration
-   cd packages/server
-   bunx drizzle-kit migrate
-   
-   # Verify schema
-   bunx drizzle-kit status
-   
-   # Exit maintenance mode
-   ./scripts/post-deploy-resume.sh
-   ```
-
-4. **Rollback if Needed:**
-   ```bash
-   # Restore from backup
-   psql $DATABASE_URL < backup.sql
-   
-   # Redeploy previous code version
-   railway rollback <deployment-id>
-   ```
-
-### Migration Best Practices
-
-- **Always backup** before migrations
-- **Test locally** with production data copy
-- **Use transactions** for multi-step migrations
-- **Avoid breaking changes** (add columns as nullable, deprecate instead of drop)
-- **Monitor performance** after migrations (check query plans)
-
-## Streaming Deployment
-
-### RTMP Configuration
-
-**Environment Variables** (set in Vast.ai/Railway):
-```bash
-# Twitch
-TWITCH_STREAM_KEY=live_123456789_abcdefghij
-TWITCH_RTMP_URL=rtmp://live.twitch.tv/app
-
-# Kick
-KICK_STREAM_KEY=your-kick-stream-key
-KICK_RTMP_URL=rtmp://ingest.kick.com/live
-
-# X/Twitter
-X_STREAM_KEY=your-x-stream-key
-X_RTMP_URL=rtmp://x-media-studio/your-path
-```
-
-**Verify Streaming:**
-```bash
-# Check FFmpeg process
-pm2 logs ffmpeg
-
-# Test RTMP output
-ffplay rtmp://live.twitch.tv/app/your-stream-key
-
-# Check stream health
-curl http://localhost:5555/api/streaming/state
-```
-
-### Streaming Stability
-
-**Tuning Parameters** (`.env`):
-```bash
-# CDP stall threshold (intervals before restart)
-CDP_STALL_THRESHOLD=6                    # Default: 4 (120s total)
-
-# FFmpeg restart attempts before giving up
-FFMPEG_MAX_RESTART_ATTEMPTS=10           # Default: 8
-
-# Capture recovery failures before full restart
-CAPTURE_RECOVERY_MAX_FAILURES=5          # Default: 4
-
-# Canonical platform for delay defaults
-STREAMING_CANONICAL_PLATFORM=twitch      # Options: youtube | twitch | hls
-
-# Public data delay (milliseconds)
-STREAMING_PUBLIC_DELAY_MS=0              # Default: 0ms (instant broadcast)
-```
-
-**February 2026 Improvements:**
-- **Soft CDP Recovery**: Restarts screencast without browser/FFmpeg teardown (no stream gap)
-- **Increased Thresholds**: CDP stall (2→4 intervals), FFmpeg restarts (5→8), recovery failures (2→4)
-- **Best-Effort WebGPU**: Tries `maxTextureArrayLayers: 2048`, retries with defaults if GPU rejects
+**Warning signs:**
+- `phase: "IDLE"` for extended periods (no duels running)
+- Missing `cameraTarget` (camera system failure)
+- Stale `phaseStartTime` (phase stuck)
 
 ## Troubleshooting
 
-### Deployment Hangs
+### Database Connection Exhaustion
 
-**Symptom**: Deployment stuck in "Building" or "Starting" state.
+**Symptoms:**
+- "too many clients already" errors
+- Connection timeouts
+- Slow query response times
 
-**Cause**: Build timeout, dependency installation failure, or startup error.
+**Solutions:**
 
-**Solution**:
-1. Check Railway/GitHub Actions logs for errors
-2. Verify `bun install --frozen-lockfile` succeeds locally
-3. Check for npm 403 errors (retry logic should handle)
-4. Increase build timeout in Railway settings (if needed)
+1. **Reduce connection pool size:**
+   ```bash
+   POSTGRES_POOL_MAX=3
+   POSTGRES_POOL_MIN=0
+   ```
 
-### Database Connection Errors
+2. **Increase restart delay:**
+   ```javascript
+   restart_delay: 10000,
+   exp_backoff_restart_delay: 2000,
+   ```
 
-**Symptom**: Server starts but can't connect to database.
+3. **Check for connection leaks:**
+   - Monitor pool stats over time
+   - Look for increasing `inUse` count
+   - Check for unclosed database clients
 
-**Cause**: `DATABASE_URL` misconfigured or database not accessible.
+4. **Verify Railway detection:**
+   - Check logs for "Supavisor pooler detected" message
+   - Ensure prepared statements are disabled
+   - Verify pool max is 6 or lower
 
-**Solution**:
-1. Verify `DATABASE_URL` format: `postgresql://user:password@host:port/database`
-2. Check database is running and accessible
-3. Test connection manually: `psql $DATABASE_URL -c "SELECT 1"`
-4. Verify firewall rules allow connections from server IP
+### Stream Disconnects After 30 Minutes
 
-### Asset 404 Errors
+**Symptoms:**
+- Twitch/YouTube disconnects stream after ~30 minutes
+- "Stream appears idle" messages
+- Viewer count drops to zero
 
-**Symptom**: Models, textures, or audio fail to load with 404 errors.
+**Solution:**
 
-**Cause**: CDN URL misconfigured or assets not uploaded.
+Enable placeholder frame mode:
 
-**Solution**:
-1. Verify `PUBLIC_CDN_URL` in both client and server `.env`
-2. Check R2 bucket contains assets: `aws s3 ls s3://hyperscape-assets/`
-3. Upload missing assets: `bun run assets:sync` (see README)
-4. Verify CORS configuration (see `docs/r2-cors-configuration.md`)
+```bash
+STREAM_PLACEHOLDER_ENABLED=true
+```
 
-## Related Documentation
+**Verification:**
+- Check logs for "Entering placeholder mode" message
+- Monitor RTMP bridge stats for `inPlaceholderMode: true`
+- Verify stream stays connected during idle periods
 
-- **R2 CORS**: `docs/r2-cors-configuration.md`
-- **Railway Setup**: `docs/railway-dev-prod.md`
-- **Native Releases**: `docs/native-release.md`
-- **Duel Stack**: `docs/duel-stack.md`
-- **Environment Variables**: `packages/server/.env.example`, `packages/client/.env.example`
+### Deployment Interrupts Active Duel
+
+**Symptoms:**
+- Deploying new code kills active duels mid-fight
+- Viewers see abrupt stream interruption
+- Betting markets resolve incorrectly
+
+**Solution:**
+
+Use graceful restart API:
+
+```bash
+curl -X POST http://your-server/admin/graceful-restart \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+```
+
+**Verification:**
+- Check response for `"pendingRestart": true`
+- Monitor `/admin/restart-status` until restart completes
+- Verify duel completes before restart
+
+### WebGPU Not Initializing
+
+**Symptoms:**
+- Browser timeout during page load
+- Black screen or loading spinner
+- "WebGPU not available" errors
+
+**Solutions:**
+
+1. **Ensure GPU display driver** (Vast.ai):
+   ```bash
+   # Use provisioner to rent correct instance
+   bun run vast:provision
+   
+   # Verify display driver
+   nvidia-smi  # Should show display mode
+   ```
+
+2. **Use production client build:**
+   ```bash
+   NODE_ENV=production
+   DUEL_USE_PRODUCTION_CLIENT=true
+   ```
+
+3. **Check WebGPU diagnostics:**
+   - Deployment logs show WebGPU pre-check results
+   - Look for "WebGPU adapter acquired" message
+   - Check chrome://gpu in browser
+
+4. **Verify Chrome executable:**
+   ```bash
+   # Set explicit Chrome path
+   STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable
+   ```
+
+### Memory Leaks
+
+**Symptoms:**
+- Increasing memory usage over time
+- Frequent GC pauses
+- Server crashes with OOM errors
+
+**Diagnosis:**
+
+1. **Check object pool statistics:**
+   ```bash
+   curl http://your-server/admin/pools/stats \
+     -H "x-admin-code: YOUR_ADMIN_CODE"
+   ```
+
+2. **Look for leak warnings in logs:**
+   ```
+   [EventPayloadPool:CombatDamageDealt] Potential leak: 15 payloads still in use
+   ```
+
+3. **Monitor memory over time:**
+   ```bash
+   # Check PM2 memory usage
+   pm2 monit
+   
+   # Or use admin endpoint
+   curl http://your-server/admin/memory/report \
+     -H "x-admin-code: YOUR_ADMIN_CODE"
+   ```
+
+**Solutions:**
+
+1. **Fix event listener leaks:**
+   - Ensure all listeners call `release()` on pooled payloads
+   - Use try/finally blocks for error safety
+   - Check for missing cleanup in error paths
+
+2. **Enable automatic restart on memory threshold:**
+   ```javascript
+   max_memory_restart: '2G',
+   ```
+
+3. **Reduce pool sizes if over-allocated:**
+   - Check peak usage in pool stats
+   - Reduce initial size if peak << total
 
 ## Deployment Checklist
 
 ### Pre-Deployment
 
-- [ ] Code reviewed and tested locally
-- [ ] All tests passing (`bun test`)
-- [ ] Database backup created
-- [ ] Migration tested on copy of production data
-- [ ] Environment variables verified
-- [ ] Security checklist completed
-- [ ] Rollback plan documented
-
-### During Deployment
-
-- [ ] Maintenance mode entered (if applicable)
-- [ ] Safe state confirmed (`safeToDeploy: true`)
-- [ ] Deployment triggered
-- [ ] Health checks passing
-- [ ] Logs monitored for errors
+- [ ] Set `NODE_ENV=production`
+- [ ] Configure database connection pool limits
+- [ ] Set `ADMIN_CODE` for admin endpoints
+- [ ] Configure RTMP stream keys (if streaming)
+- [ ] Enable placeholder frame mode (if streaming)
+- [ ] Set production client build flags (if streaming)
+- [ ] Configure PM2 restart delays
+- [ ] Test graceful restart API locally
 
 ### Post-Deployment
 
-- [ ] `/health` endpoint returns 200
-- [ ] WebSocket connections working
-- [ ] Authentication flow tested
-- [ ] Asset loading verified
-- [ ] Database queries performing well
-- [ ] Streaming active (if applicable)
-- [ ] Maintenance mode exited
-- [ ] Monitoring alerts configured
-- [ ] Team notified of deployment
+- [ ] Verify `/health` endpoint returns 200
+- [ ] Check `/status` for correct player count
+- [ ] Test graceful restart API
+- [ ] Monitor connection pool stats
+- [ ] Verify RTMP bridge status (if streaming)
+- [ ] Check for memory leaks over 24 hours
+- [ ] Configure monitoring alerts
+- [ ] Test zero-downtime deployment workflow
 
-## Emergency Contacts
+### Streaming-Specific
 
-**Critical Issues:**
-1. Check #hyperscape-alerts Slack channel
-2. Page on-call engineer via PagerDuty
-3. Rollback immediately if user-facing
+- [ ] Verify WebGPU initialization in deployment logs
+- [ ] Test placeholder frame mode activation
+- [ ] Monitor stream uptime (should not disconnect)
+- [ ] Verify production client build is active
+- [ ] Check browser restart is working (every 45 min)
+- [ ] Test graceful restart during active duel
+- [ ] Monitor RTMP destination health
 
-**Non-Critical Issues:**
-1. Create GitHub issue with logs
-2. Post in #hyperscape-dev Slack channel
-3. Schedule fix for next deployment
+## Environment Variable Reference
 
-## Commit References
+### Required for Production
 
-- **Maintenance Mode**: `30b52bd` (February 26, 2026)
-- **CORS Configuration**: `143914d` (February 26, 2026)
-- **Streaming Stability**: `14a1e1b` (February 25, 2026)
-- **JWT Security**: `3bc59db` (February 26, 2026)
+```bash
+NODE_ENV=production
+PORT=5555
+DATABASE_URL=postgresql://...
+JWT_SECRET=...                   # 32+ random bytes
+ADMIN_CODE=...                   # For admin endpoints
+PUBLIC_API_URL=https://...
+PUBLIC_WS_URL=wss://...
+PUBLIC_CDN_URL=https://...
+```
+
+### Recommended for Railway
+
+```bash
+POSTGRES_POOL_MAX=6              # Or 3 for crash loops
+POSTGRES_POOL_MIN=0
+# Railway auto-detects via RAILWAY_ENVIRONMENT
+```
+
+### Recommended for Streaming
+
+```bash
+STREAM_PLACEHOLDER_ENABLED=true
+NODE_ENV=production
+DUEL_USE_PRODUCTION_CLIENT=true
+SPAWN_MODEL_AGENTS=true          # Auto-create agents
+STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable
+```
+
+### Optional Optimizations
+
+```bash
+STREAM_LOW_LATENCY=true          # Faster playback start
+STREAM_GOP_SIZE=30               # Smaller GOP for low latency
+STREAM_AUDIO_ENABLED=true        # Enable audio capture
+POSTGRES_POOL_MAX=1              # Minimal connections for streaming
+```
+
+## Security Best Practices
+
+1. **Never commit secrets** - Use environment variables
+2. **Rotate secrets before production** - If ever committed/shared
+3. **Use strong ADMIN_CODE** - 32+ random characters
+4. **Enable rate limiting** - Don't set `DISABLE_RATE_LIMIT=true`
+5. **Use HTTPS/WSS** - Never HTTP/WS in production
+6. **Restrict admin endpoints** - Use Cloudflare WAF rules
+7. **Monitor failed auth attempts** - Check logs for brute force
+8. **Use origin secrets** - Prevent direct Railway access
+
+## Performance Tuning
+
+### Database Query Optimization
+
+1. **Use connection pooling** - Don't create new connections per query
+2. **Disable prepared statements on Railway** - Automatic with Railway detection
+3. **Use indexes** - Add indexes for frequently queried columns
+4. **Batch operations** - Combine multiple queries when possible
+5. **Monitor slow queries** - Use PostgreSQL slow query log
+
+### Streaming Performance
+
+1. **Use production client build** - Eliminates JIT compilation overhead
+2. **Enable placeholder mode** - Prevents stream disconnects
+3. **Use hardware acceleration** - Set `FFMPEG_HWACCEL=nvidia` on GPU servers
+4. **Monitor dropped frames** - Check RTMP bridge stats
+5. **Optimize GOP size** - Balance quality and latency
+
+### Memory Optimization
+
+1. **Use object pools** - Eliminate allocations in hot paths
+2. **Monitor pool statistics** - Check for leaks and exhaustion
+3. **Set memory restart threshold** - `max_memory_restart: '2G'`
+4. **Clean up event listeners** - Remove listeners on destroy
+5. **Avoid memory leaks** - Follow cleanup patterns in SystemBase
+
+## Related Documentation
+
+- [duel-stack.md](duel-stack.md) - Duel stack configuration
+- [betting-production-deploy.md](betting-production-deploy.md) - Production deployment guide
+- [object-pooling-api.md](object-pooling-api.md) - Object pooling API reference
+- [AGENTS.md](../AGENTS.md) - AI coding assistant instructions
+- [CLAUDE.md](../CLAUDE.md) - Development guide
