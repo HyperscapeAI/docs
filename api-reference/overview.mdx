@@ -79,6 +79,57 @@ curl https://api.hyperscape.lol/health
   List all world areas
 </ParamField>
 
+### Admin Endpoints
+
+<Warning>
+  Admin endpoints require the `x-admin-code` header with a valid admin code. These are for server management only.
+</Warning>
+
+<ParamField path="POST /admin/graceful-restart" type="endpoint">
+  Request server restart after current duel ends (zero-downtime deployment)
+</ParamField>
+
+```bash
+curl -X POST https://api.hyperscape.lol/admin/graceful-restart \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+```
+
+<Accordion title="Response">
+```json
+{
+  "success": true,
+  "message": "Graceful restart requested",
+  "duelActive": true,
+  "willRestartAfterDuel": true
+}
+```
+</Accordion>
+
+<ParamField path="GET /admin/restart-status" type="endpoint">
+  Check if graceful restart is pending
+</ParamField>
+
+```bash
+curl https://api.hyperscape.lol/admin/restart-status \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+```
+
+<Accordion title="Response">
+```json
+{
+  "restartPending": true,
+  "duelActive": true,
+  "currentPhase": "FIGHTING"
+}
+```
+</Accordion>
+
+**Graceful Restart Behavior**:
+- If no duel active: restarts immediately via SIGTERM
+- If duel in progress: waits until RESOLUTION phase completes
+- PM2 automatically restarts the server with new code
+- Enables zero-downtime deployments for the duel arena stream
+
 ## WebSocket Events
 
 Connect to the game server via WebSocket for real-time updates:
