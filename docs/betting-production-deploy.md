@@ -32,6 +32,35 @@ Set these Railway variables at minimum:
 - `STREAMING_VIEWER_ACCESS_TOKEN=...` (long random value)
 - `ARENA_EXTERNAL_BET_WRITE_KEY=...` (long random value, server-to-server only)
 
+**New Streaming Configuration:**
+
+- `STREAM_PLACEHOLDER_ENABLED=true` - Send placeholder frames during idle periods (prevents 30-minute disconnect)
+- `SPAWN_MODEL_AGENTS=true` - Auto-create agents when database is empty (useful for fresh deployments)
+- `STREAM_CAPTURE_EXECUTABLE=...` - Explicit Chrome path for WebGPU (e.g., `/usr/bin/google-chrome-unstable`)
+- `STREAM_LOW_LATENCY=true` - Use zerolatency tune for faster playback start
+- `STREAM_GOP_SIZE=60` - GOP size in frames (default: 60)
+- `STREAM_AUDIO_ENABLED=true` - Enable audio capture
+- `PULSE_AUDIO_DEVICE=...` - PulseAudio device name
+
+**Database Configuration (Railway):**
+
+Railway uses connection pooling (pgbouncer) which requires special configuration:
+
+- `POSTGRES_POOL_MAX=6` - Lower limit for pooler connections (or 3 for crash loop protection)
+- `POSTGRES_POOL_MIN=0` - Don't hold idle connections
+- `RAILWAY_ENVIRONMENT=production` - Auto-detected by Railway (enables Railway-specific optimizations)
+
+Railway proxy detection is automatic - the system detects `.rlwy.net`, `.railway.app`, and `.railway.internal` domains and:
+- Disables prepared statements (not supported by pgbouncer)
+- Uses lower connection pool limits
+- Prevents "too many clients already" errors
+
+Detection also works via `RAILWAY_ENVIRONMENT` environment variable for reliable identification.
+
+**Production Client Build:**
+
+- `DUEL_USE_PRODUCTION_CLIENT=true` - Force production client for streaming (significantly faster page loads)
+
 Contracts / chain wiring (set to your target networks):
 
 - `SOLANA_RPC_URL`
@@ -59,46 +88,6 @@ If set, every non-health request must include header:
 - `x-hyperscape-origin-secret: <same value>`
 
 Use a Cloudflare Transform Rule to inject this header on traffic forwarded to Railway.
-
-### Railway Database Configuration
-
-Railway uses connection pooling (pgbouncer) which requires special configuration. The server **automatically detects Railway** via:
-
-1. `RAILWAY_ENVIRONMENT` environment variable (most reliable)
-2. Hostname patterns: `.rlwy.net` (proxy), `.railway.app` (direct), `.railway.internal` (internal)
-
-When Railway is detected, the server automatically:
-- **Disables prepared statements** (not supported by pgbouncer)
-- **Uses lower connection pool limits** (max: 6 instead of 20)
-- **Prevents "too many clients already" errors**
-
-**Recommended Railway database settings:**
-
-```bash
-# In Railway environment variables
-POSTGRES_POOL_MAX=6              # Lower limit for pooler connections
-POSTGRES_POOL_MIN=0              # Don't hold idle connections
-```
-
-**For crash loop scenarios** (server restarting frequently):
-
-```bash
-POSTGRES_POOL_MAX=3              # Even lower to prevent exhaustion
-POSTGRES_POOL_MIN=0              # Don't hold idle connections
-```
-
-Also increase PM2 restart delay to allow connections to close:
-
-```javascript
-// In ecosystem.config.cjs
-restart_delay: 10000,            // 10s instead of 5s
-exp_backoff_restart_delay: 2000, // 2s for gradual backoff
-```
-
-**Note:** Railway detection is automatic - you don't need to set any special flags. The system will log:
-```
-[DB] Supavisor pooler detected — disabling prepared statements
-```
 
 ## 2) Put Railway behind Cloudflare
 
@@ -147,111 +136,92 @@ Health:
 - `https://bet.yourdomain.com`
 - `https://api.yourdomain.com/api/streaming/state`
 
+**Streaming Status Check:**
+
+```bash
+# Check streaming health (requires SSH access to server)
+bun run duel:status
+```
+
+This checks:
+- Server health endpoint
+- Streaming API status
+- Duel context (fighting phase)
+- RTMP bridge status and bytes streamed
+- PM2 process status
+- Recent logs
+
+**Graceful Restart:**
+
+```bash
+# Request restart after current duel ends
+curl -X POST https://api.yourdomain.com/admin/graceful-restart \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+
+# Check restart status
+curl https://api.yourdomain.com/admin/restart-status \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+```
+
 End-to-end checks from repo root:
 
 ```bash
 bun run duel:verify --server-url=https://api.yourdomain.com --betting-url=https://bet.yourdomain.com --require-destinations=youtube
 ```
 
-## 5) Zero-Downtime Deployments
-
-Use the graceful restart API to deploy new code without interrupting active duels:
-
-```bash
-# Request graceful restart
-curl -X POST https://api.yourdomain.com/admin/graceful-restart \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
-
-# Monitor restart status
-curl https://api.yourdomain.com/admin/restart-status \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
-```
-
-The server will:
-1. Complete the current duel (if any)
-2. Send SIGTERM to itself
-3. PM2 automatically restarts with new code
-4. Resume duel scheduling with updated code
-
-**Deployment workflow:**
-1. Push new code to Railway
-2. Railway builds and deploys new container
-3. Request graceful restart via API
-4. Server completes current duel and restarts
-5. New code is live with zero duel interruption
-
-## 6) Security notes
+## 5) Security notes
 
 - Do not expose `ARENA_EXTERNAL_BET_WRITE_KEY` in public frontend env vars.
 - Rotate all secrets before production if they were ever committed/shared.
 - Keep `TRUST_PROXY=true` (default behavior in production after this patch).
 - Keep `DISABLE_RATE_LIMIT` unset in production.
-- Use `ADMIN_CODE` to protect admin endpoints from unauthorized access.
-- Railway proxy detection is automatic - no manual configuration needed.
 
-## 7) Monitoring & Alerting
+## Railway-Specific Configuration
 
-### Health Checks
+**Connection Pool Limits:**
 
-Configure your monitoring service (Railway health checks, UptimeRobot, Pingdom, etc.) to poll:
-
-- `GET /health` - Basic uptime check (200 OK = healthy)
-- `GET /status` - Detailed status with player count and commit hash
-
-### Streaming Health
-
-Monitor streaming pipeline health:
+Railway uses pgbouncer for connection pooling. Set lower limits to prevent "too many clients" errors:
 
 ```bash
-# Quick diagnostic
-curl https://api.yourdomain.com/api/streaming/state
-
-# Detailed RTMP bridge status
-curl https://api.yourdomain.com/admin/pools/stats \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
+POSTGRES_POOL_MAX=6              # Lower limit for pooler connections
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
 ```
 
-### Database Connection Pool
-
-Monitor connection pool utilization to prevent exhaustion:
+For crash loop protection, reduce further:
 
 ```bash
-curl https://api.yourdomain.com/admin/pools/stats \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
+POSTGRES_POOL_MAX=3              # Prevents connection exhaustion during crash loops
+restart_delay=10000              # 10s in ecosystem.config.cjs (allows connections to close)
+exp_backoff_restart_delay=2000   # 2s for gradual backoff
 ```
 
-**Healthy pool metrics:**
-- `inUse < max` (not at capacity)
-- `available > 0` (connections available)
-- No "too many clients" errors in logs
+**Automatic Detection:**
 
-**Warning signs:**
-- `inUse === max` (pool exhausted)
-- Frequent connection errors in logs
-- Slow query response times
+Railway is automatically detected via:
+- `RAILWAY_ENVIRONMENT` environment variable (most reliable)
+- Hostname patterns: `.rlwy.net`, `.railway.app`, `.railway.internal`
 
-**Action:** Reduce `POSTGRES_POOL_MAX` if you see connection exhaustion.
+When detected, the system:
+- Disables prepared statements (not supported by pgbouncer)
+- Uses lower connection pool limits
+- Prevents "too many clients already" errors
 
-### Crash Loop Detection
+No manual configuration required - detection is automatic.
 
-If the server is crash-looping:
+## Deployment Process Improvements
 
-1. Check PM2 logs: `pm2 logs hyperscape-duel`
-2. Reduce connection pool: `POSTGRES_POOL_MAX=1`
-3. Increase restart delay: `restart_delay: 10000` in ecosystem.config.cjs
-4. Check for memory leaks: Monitor heap usage over time
+**Process Management:**
 
-### Placeholder Mode Monitoring
+Recent improvements to prevent deployment issues:
 
-Check if placeholder mode is active (indicates no live frames):
+- **Targeted Process Killing**: Uses specific process names instead of `pkill -f bun` (avoids killing deploy script)
+- **Graceful PM2 Shutdown**: Stops PM2 with delays between commands
+- **Process Teardown Before Migration**: Kills processes and waits 30s for DB connections to close before running migrations
+- Prevents "too many clients" errors during database migrations
 
-```bash
-# Check RTMP bridge stats
-curl https://api.yourdomain.com/admin/pools/stats \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
-```
+**GitHub Actions:**
 
-Look for `inPlaceholderMode: true` in the response. If placeholder mode is active for extended periods, investigate:
-- Browser capture issues
-- WebGPU initialization failures
-- Network connectivity problems
+Fixed in recent commits:
+- upload-artifact version (v7 → v4)
+- Build order (shared must build before impostors/procgen)
+- Heredoc variable expansion in deploy-vast.yml
