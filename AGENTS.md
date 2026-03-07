@@ -530,7 +530,7 @@ positionPool.withPosition(10, 0, 20, (pos) => {
 When adding new high-frequency events, create a pool:
 
 ```typescript
-import { createEventPayloadPool } from './EventPayloadPool';
+import { createEventPayloadPool, eventPayloadPoolRegistry, type PooledPayload } from './EventPayloadPool';
 
 interface MyEventPayload extends PooledPayload {
   entityId: string;
@@ -543,11 +543,27 @@ const myEventPool = createEventPayloadPool<MyEventPayload>({
   reset: (p) => { p.entityId = ''; p.value = 0; },
   initialSize: 32,
   growthSize: 16,
+  warnOnLeaks: true, // Enable leak detection (default: true)
 });
 
 // Register for monitoring
 eventPayloadPoolRegistry.register(myEventPool);
 ```
+
+**Pool Configuration Options**:
+- `name`: Pool name for debugging and monitoring
+- `factory`: Function to create new payload objects (without `_poolIndex`)
+- `reset`: Function to reset payload to initial state
+- `initialSize`: Initial pool size (default: 64)
+- `growthSize`: Number of objects to add when exhausted (default: 32)
+- `warnOnLeaks`: Enable leak detection warnings (default: true)
+
+**Best Practices**:
+- Set `initialSize` based on expected concurrent usage (e.g., max concurrent combatants)
+- Set `growthSize` to ~50% of `initialSize` for balanced growth
+- Always register pools with `eventPayloadPoolRegistry` for monitoring
+- Use descriptive names for easier debugging
+- Call `checkLeaks()` at the end of each game tick to detect unreleased payloads
 
 ### Critical Memory Leak Fixes
 
