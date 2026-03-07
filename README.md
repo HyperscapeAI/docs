@@ -516,6 +516,14 @@ Fixed critical memory leaks in 20+ systems including:
 - Set `SPAWN_MODEL_AGENTS=true` to auto-create agents when database is empty
 - Useful for fresh deployments and testing
 
+**Duel System Improvements**:
+- **Expanded Model Roster**: 19 AI models (GPT-4.1, o4 Mini, o3 Mini, Claude Opus 4, Sonnet 4, Llama 3.3 70B)
+- **Activity-Aware Idle Camera**: Weighted agent selection based on activity type (combat > skilling > moving > idle)
+- **Skill-Based Weapon Selection**: Agents pick strongest combat style based on actual skill levels
+- **Strategic Combat AI**: LLM-generated fight plans, phase-aware healing, movement strategies, dynamic style/prayer switching
+- **On-Deck Duel Notification**: Agents get ~5+ min to prepare (bank items, withdraw food) instead of 4s countdown
+- **Duel Pipeline Audit**: 18 fixes including prayer IDs, combat AI, broadcast improvements, simultaneous death handling
+
 ### Railway Database Detection
 
 Automatic detection of Railway proxy connections with:
