@@ -740,6 +740,18 @@ VAST_API_KEY=xxx bun run vast:provision
   - PM2 automatically restarts the server with new code
 - Enables zero-downtime deployments for the duel arena stream
 
+**Deployment Process Improvements** (commits 46324033, 7fd94ffe, d4df6a4c, b71796b3, 54eef352, 58d88f4c, 087033fa):
+- **Process Teardown Before Migration**: Tears down existing processes and closes DB connections before running migrations to prevent \"too many clients\" errors
+- **Targeted Process Killing**: Use specific process names instead of blanket `pkill -f bun` to avoid killing deploy script itself
+- **Graceful PM2 Shutdown**: Stop PM2 with delays between commands
+- **Runtime Secrets Loading**: GitHub Actions writes secrets to `/tmp/hyperscape-secrets.env`, deploy script sources it before PM2 start
+- **PM2 Environment Passthrough**: All deploy-time secrets passed into PM2 runtime via `--update-env` flag
+- **Deterministic Migrations**: Migrations run in sorted order (`bunx drizzle-kit migrate`) to ensure consistency across deployments
+- **Solana Runtime Defaults**: PM2 config includes default Solana program IDs and gold mint for duel arena
+- **Auto-Discovery**: `duel-stack.mjs` auto-discovers Solana authority from multiple candidate sources (env vars, ~/.config/solana/*.json)
+- **Program Validation**: Validates prediction market program via simulated `init_oracle_round` transaction before starting keeper
+- **Keeper Program Checks**: Validates fight oracle and gold clob market programs before starting keeper bot
+
 **Deployment Process Improvements** (commit 58d88f4c, 087033fa, dbd4332d):
 - **Process Teardown Before Migration**: Tears down existing processes and closes DB connections before running migrations to prevent "too many clients" errors
 - **Targeted Process Killing**: Use specific process names instead of blanket `pkill -f bun` to avoid killing deploy script itself
