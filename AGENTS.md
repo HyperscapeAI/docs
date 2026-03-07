@@ -219,11 +219,13 @@ The streaming pipeline requires specific GPU setup:
    - **POST /admin/graceful-restart**: Request server restart after current duel ends
    - **GET /admin/restart-status**: Check if restart is pending
    - **StreamingDuelScheduler.requestGracefulRestart()**: Programmatic API
+   - **StreamingDuelScheduler.isPendingRestart()**: Check if restart is pending
    - When graceful restart is requested:
-     - If no duel active: restart immediately via SIGTERM
-     - If duel in progress: wait until RESOLUTION phase completes
+     - If no duel active (IDLE/ANNOUNCEMENT): restart immediately via SIGTERM
+     - If duel in progress (FIGHTING/RESOLUTION): wait until RESOLUTION phase completes
      - PM2 automatically restarts the server with new code
    - Enables zero-downtime deployments for the duel arena stream
+   - Returns `{ success: true, pendingRestart: boolean, currentPhase: string }` from API endpoints
 
 22. **Deployment Process Improvements**:
    - **Targeted Process Killing**: Use specific process names instead of blanket `pkill -f bun`
