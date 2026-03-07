@@ -96,6 +96,8 @@ The streaming pipeline requires specific GPU setup:
    - Exports working GPU mode for ecosystem.config.cjs
    - **XDG_RUNTIME_DIR**: Required for Vulkan/EGL initialization (set to `/tmp/runtime-root`)
    - **Process Teardown Before Migration**: Tears down existing processes and closes DB connections before running migrations to prevent "too many clients" errors
+   - **Runtime Secrets Loading**: Loads secrets from `/tmp/hyperscape-secrets.env` at deploy time (populated by GitHub Actions)
+   - **PM2 Environment Passthrough**: All deploy-time secrets passed into PM2 runtime via `--update-env` flag
 
 6. **Production Client Build**:
    - When `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
