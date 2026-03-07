@@ -174,7 +174,7 @@ packages/
 2. **shared** - Depends on physx-js-webidl
 3. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
 
 > **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
 >
@@ -201,7 +201,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -267,7 +267,7 @@ Visual testing uses colored cube proxies:
 
 ### Production Code Only
 
-- No TODOs or "will fill this out later" - implement completely
+- No TODOs or \"will fill this out later\" - implement completely
 - No hardcoded data - use JSON files and general systems
 - No shortcuts or workarounds - fix root causes
 - Build toward the general case (many items, players, mobs)
@@ -436,7 +436,7 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime.
 #### Resource Management
 - **Activity Logger Queue**: Max size 1000 with 25% eviction to prevent memory pressure
 - **Session Timeout**: 30-minute max via MAX_SESSION_TICKS for zombie session cleanup
-- **SessionCloseReason**: Added "timeout" to type for proper session termination tracking
+- **SessionCloseReason**: Added \"timeout\" to type for proper session termination tracking
 
 #### Test Stability
 - **GoldClob Fuzz Tests**: 120s timeout for randomized invariant tests (4 seeds × 140 operations)
@@ -578,7 +578,7 @@ All cleanup follows the established patterns in SystemBase for proper resource c
 - Add Railway proxy detection to isSupavisorPooler for pgbouncer support
 - Disables prepared statements when using Railway proxy
 - Uses lower connection pool limits (max: 6) for pooler connections
-- Fixes "too many clients already" errors on Railway deployments
+- Fixes \"too many clients already\" errors on Railway deployments
 
 ### Vast.ai Provisioner
 
@@ -643,10 +643,24 @@ VAST_API_KEY=xxx bun run vast:provision
   - PM2 automatically restarts the server with new code
 - Enables zero-downtime deployments for the duel arena stream
 
-**Deployment Process Improvements** (commit 58d88f4c, dbd4332d):
-- **Process Teardown Before Migration**: Tears down existing processes and closes DB connections before running migrations to prevent "too many clients" errors
+**Deployment Process Improvements** (commit 58d88f4c, 087033fa, dbd4332d):
+- **Process Teardown Before Migration**: Tears down existing processes and closes DB connections before running migrations to prevent \"too many clients\" errors
+- **Targeted Process Killing**: Use specific process names instead of blanket `pkill -f bun` to avoid killing deploy script itself
+- **Graceful PM2 Shutdown**: Stop PM2 with delays between commands
 - **Branch Fix**: Deploy from main branch instead of hackathon branch
 - **GitHub Actions Fixes**: Fixed upload-artifact version (v7 → v4), build order (shared before impostors/procgen), heredoc variable expansion
+
+**PostgreSQL Connection Pool** (commit 0c8dbe0f, 454d0ad2):
+- **POSTGRES_POOL_MAX=3** (down from 6) to prevent connection exhaustion during crash loops
+- **POSTGRES_POOL_MIN=0** to not hold idle connections during crashes
+- **restart_delay=10s** (up from 5s) to allow connections to fully close before PM2 restart
+- **exp_backoff_restart_delay=2s** for more gradual backoff on repeated failures
+- Prevents PostgreSQL error 53300 (too many connections) during crash loop scenarios
+
+**Model Agent Spawning** (commit fe6b5354):
+- Set `SPAWN_MODEL_AGENTS=true` to enable automatic agent creation when database is empty
+- Allows duels to run even with an empty database
+- Useful for fresh deployments and testing
 
 ## Troubleshooting
 
@@ -687,7 +701,7 @@ See [Port Allocation](#port-allocation) section for full port list.
 
 ### Database Issues
 
-**Railway "too many clients already" errors**:
+**Railway \"too many clients already\" errors**:
 - Set `POSTGRES_POOL_MAX=3` (or lower) in `.env`
 - Set `POSTGRES_POOL_MIN=0` to not hold idle connections
 - Increase `restart_delay=10s` in PM2 config to allow connections to close
@@ -733,6 +747,19 @@ bun run dev
 - Use graceful restart API: `POST /admin/graceful-restart`
 - Server waits for current duel to complete before restarting
 - PM2 automatically restarts with new code
+
+### Vitest 4.x Upgrade
+
+**Breaking Changes** (commit a916e4ee):
+- Vitest 2.x is incompatible with Vite 6.x
+- Upgraded vitest and @vitest/coverage-v8 from 2.1.0 to 4.0.6
+- Fixes `__vite_ssr_exportName__` errors during test runs
+- All packages using Vitest must use 4.x for Vite 6 compatibility
+
+**Migration Notes**:
+- Update `vitest` and `@vitest/coverage-v8` to `^4.0.6` in package.json
+- No API changes required - tests continue to work as-is
+- Vite 6 requires Vitest 4.x for SSR module handling
 
 ## Additional Resources
 
