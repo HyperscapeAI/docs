@@ -323,6 +323,20 @@ POSTGRES_POOL_MIN=0                             # Min idle connections (down fro
 SPAWN_MODEL_AGENTS=true                         # Auto-create agents when database is empty
                                                 # Allows duels to run even with empty database
                                                 # Useful for fresh deployments and testing
+
+# Placeholder Frame Mode (commit 83056565, Mar 3 2026)
+STREAM_PLACEHOLDER_ENABLED=true                 # Send placeholder frames during idle periods
+                                                # Detects when no frames received for 5 seconds
+                                                # Switches to minimal JPEG frames at configured FPS
+                                                # Automatically exits when live frames resume
+                                                # Prevents Twitch/YouTube 30-minute disconnect during content gaps
+                                                # Uses minimal 16x16 JPEG (~300 bytes) scaled by FFmpeg
+
+# Railway Database Detection (commits a5a201c, d8c26d2f, Mar 3 2026)
+RAILWAY_ENVIRONMENT=production                  # Auto-set by Railway (most reliable detection)
+                                                # Also detects .rlwy.net, .railway.app, .railway.internal
+                                                # When detected: disables prepared statements, uses lower pool limits
+                                                # Fixes \"too many clients already\" errors on Railway deployments
 ```
 
 ## PM2 Production Deployment
