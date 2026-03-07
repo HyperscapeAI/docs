@@ -32,48 +32,6 @@ Set these Railway variables at minimum:
 - `STREAMING_VIEWER_ACCESS_TOKEN=...` (long random value)
 - `ARENA_EXTERNAL_BET_WRITE_KEY=...` (long random value, server-to-server only)
 
-**Railway Database Configuration (NEW):**
-
-Railway uses pgbouncer connection pooling which requires special configuration:
-
-```bash
-# Railway auto-detects via RAILWAY_ENVIRONMENT env var
-POSTGRES_POOL_MAX=6              # Lower limit for pooler connections
-POSTGRES_POOL_MIN=0              # Don't hold idle connections
-```
-
-Railway proxy detection is automatic - the system detects `.rlwy.net`, `.railway.app`, and `.railway.internal` domains and:
-- Disables prepared statements (not supported by pgbouncer)
-- Uses lower connection pool limits
-- Prevents "too many clients already" errors
-
-**Streaming Duel Configuration (NEW):**
-
-For crash loop resilience and optimal streaming performance:
-
-```bash
-# Connection Pool (for streaming deployments with crash loop risk)
-POSTGRES_POOL_MAX=3              # Prevent connection exhaustion
-POSTGRES_POOL_MIN=0              # Don't hold idle connections
-
-# Model Agent Spawning
-SPAWN_MODEL_AGENTS=true          # Auto-create agents when database is empty
-
-# Stream Keep-Alive
-STREAM_PLACEHOLDER_ENABLED=true  # Prevent 30-minute disconnects
-
-# Production Client Build
-NODE_ENV=production              # Use production client build
-DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
-```
-
-Also update PM2 configuration in `ecosystem.config.cjs`:
-
-```javascript
-restart_delay: 10000,            // 10s instead of 5s (allow connections to close)
-exp_backoff_restart_delay: 2000, // 2s for gradual backoff
-```
-
 Contracts / chain wiring (set to your target networks):
 
 - `SOLANA_RPC_URL`
@@ -101,6 +59,46 @@ If set, every non-health request must include header:
 - `x-hyperscape-origin-secret: <same value>`
 
 Use a Cloudflare Transform Rule to inject this header on traffic forwarded to Railway.
+
+### Railway Database Configuration
+
+Railway uses connection pooling (pgbouncer) which requires special configuration. The server **automatically detects Railway** via:
+
+1. `RAILWAY_ENVIRONMENT` environment variable (most reliable)
+2. Hostname patterns: `.rlwy.net` (proxy), `.railway.app` (direct), `.railway.internal` (internal)
+
+When Railway is detected, the server automatically:
+- **Disables prepared statements** (not supported by pgbouncer)
+- **Uses lower connection pool limits** (max: 6 instead of 20)
+- **Prevents "too many clients already" errors**
+
+**Recommended Railway database settings:**
+
+```bash
+# In Railway environment variables
+POSTGRES_POOL_MAX=6              # Lower limit for pooler connections
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
+```
+
+**For crash loop scenarios** (server restarting frequently):
+
+```bash
+POSTGRES_POOL_MAX=3              # Even lower to prevent exhaustion
+POSTGRES_POOL_MIN=0              # Don't hold idle connections
+```
+
+Also increase PM2 restart delay to allow connections to close:
+
+```javascript
+// In ecosystem.config.cjs
+restart_delay: 10000,            // 10s instead of 5s
+exp_backoff_restart_delay: 2000, // 2s for gradual backoff
+```
+
+**Note:** Railway detection is automatic - you don't need to set any special flags. The system will log:
+```
+[DB] Supavisor pooler detected — disabling prepared statements
+```
 
 ## 2) Put Railway behind Cloudflare
 
@@ -155,39 +153,32 @@ End-to-end checks from repo root:
 bun run duel:verify --server-url=https://api.yourdomain.com --betting-url=https://bet.yourdomain.com --require-destinations=youtube
 ```
 
-**Streaming Health Check (NEW):**
-
-```bash
-bun run duel:status
-```
-
-Quick diagnostic for verifying streaming health:
-- Server health check
-- Streaming API status
-- Duel context (fighting phase)
-- RTMP bridge status and bytes streamed
-- PM2 process status
-- Recent logs
-
-## 5) Zero-Downtime Deployments (NEW)
+## 5) Zero-Downtime Deployments
 
 Use the graceful restart API to deploy new code without interrupting active duels:
 
 ```bash
-# Request graceful restart (requires ADMIN_CODE)
+# Request graceful restart
 curl -X POST https://api.yourdomain.com/admin/graceful-restart \
   -H "x-admin-code: YOUR_ADMIN_CODE"
 
-# Check restart status
+# Monitor restart status
 curl https://api.yourdomain.com/admin/restart-status \
   -H "x-admin-code: YOUR_ADMIN_CODE"
 ```
 
-When graceful restart is requested:
-- If no duel active: restarts immediately via SIGTERM
-- If duel in progress: waits until RESOLUTION phase completes
-- PM2 automatically restarts the server with new code
-- No interruption to active duels or streams
+The server will:
+1. Complete the current duel (if any)
+2. Send SIGTERM to itself
+3. PM2 automatically restarts with new code
+4. Resume duel scheduling with updated code
+
+**Deployment workflow:**
+1. Push new code to Railway
+2. Railway builds and deploys new container
+3. Request graceful restart via API
+4. Server completes current duel and restarts
+5. New code is live with zero duel interruption
 
 ## 6) Security notes
 
@@ -195,67 +186,72 @@ When graceful restart is requested:
 - Rotate all secrets before production if they were ever committed/shared.
 - Keep `TRUST_PROXY=true` (default behavior in production after this patch).
 - Keep `DISABLE_RATE_LIMIT` unset in production.
+- Use `ADMIN_CODE` to protect admin endpoints from unauthorized access.
+- Railway proxy detection is automatic - no manual configuration needed.
 
-## 7) Monitoring & Troubleshooting
+## 7) Monitoring & Alerting
 
-### Railway "too many clients already" Errors
+### Health Checks
 
-If you encounter PostgreSQL error 53300 (too many connections):
+Configure your monitoring service (Railway health checks, UptimeRobot, Pingdom, etc.) to poll:
 
-**Solution:**
-Set lower connection pool limits in Railway environment variables:
-```bash
-POSTGRES_POOL_MAX=6              # Lower limit for pooler connections (Railway auto-detected)
-POSTGRES_POOL_MIN=0              # Don't hold idle connections
-```
+- `GET /health` - Basic uptime check (200 OK = healthy)
+- `GET /status` - Detailed status with player count and commit hash
 
-For streaming duel deployments with crash loop risk:
-```bash
-POSTGRES_POOL_MAX=3              # Prevent connection exhaustion
-POSTGRES_POOL_MIN=0              # Don't hold idle connections
-```
+### Streaming Health
 
-Also update PM2 configuration in `ecosystem.config.cjs`:
-```javascript
-restart_delay: 10000,            // 10s instead of 5s (allow connections to close)
-exp_backoff_restart_delay: 2000, // 2s for gradual backoff
-```
-
-Railway is auto-detected via `RAILWAY_ENVIRONMENT` env var or hostname patterns (`.rlwy.net`, `.railway.app`, `.railway.internal`).
-
-### Stream Disconnects After 30 Minutes
-
-Enable placeholder frame mode to prevent Twitch/YouTube disconnects during idle periods:
+Monitor streaming pipeline health:
 
 ```bash
-STREAM_PLACEHOLDER_ENABLED=true
+# Quick diagnostic
+curl https://api.yourdomain.com/api/streaming/state
+
+# Detailed RTMP bridge status
+curl https://api.yourdomain.com/admin/pools/stats \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
 ```
 
-This sends minimal JPEG frames when no live frames are received for 5 seconds, keeping the stream alive during content gaps.
+### Database Connection Pool
 
-### Browser Timeout During Page Load
-
-Use pre-built client for significantly faster page loads:
+Monitor connection pool utilization to prevent exhaustion:
 
 ```bash
-NODE_ENV=production              # Use production client build
-DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
+curl https://api.yourdomain.com/admin/pools/stats \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
 ```
 
-This serves pre-built client via `vite preview` instead of dev server, eliminating on-demand module compilation that can cause browser timeouts (180s limit).
+**Healthy pool metrics:**
+- `inUse < max` (not at capacity)
+- `available > 0` (connections available)
+- No "too many clients" errors in logs
 
-### Streaming Health Monitoring
+**Warning signs:**
+- `inUse === max` (pool exhausted)
+- Frequent connection errors in logs
+- Slow query response times
 
-Use the streaming status check script to verify all components:
+**Action:** Reduce `POSTGRES_POOL_MAX` if you see connection exhaustion.
+
+### Crash Loop Detection
+
+If the server is crash-looping:
+
+1. Check PM2 logs: `pm2 logs hyperscape-duel`
+2. Reduce connection pool: `POSTGRES_POOL_MAX=1`
+3. Increase restart delay: `restart_delay: 10000` in ecosystem.config.cjs
+4. Check for memory leaks: Monitor heap usage over time
+
+### Placeholder Mode Monitoring
+
+Check if placeholder mode is active (indicates no live frames):
 
 ```bash
-bun run duel:status
+# Check RTMP bridge stats
+curl https://api.yourdomain.com/admin/pools/stats \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
 ```
 
-This checks:
-- Server health endpoint
-- Streaming API status
-- Duel context (fighting phase)
-- RTMP bridge status and bytes streamed
-- PM2 process status
-- Recent logs
+Look for `inPlaceholderMode: true` in the response. If placeholder mode is active for extended periods, investigate:
+- Browser capture issues
+- WebGPU initialization failures
+- Network connectivity problems
