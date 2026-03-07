@@ -752,6 +752,161 @@ class MySystem {
 }
 ```
 
+## Duel System Improvements (March 2026)
+
+### Expanded Model Roster
+
+**19 AI Models** (commit f6a8ba3): Added GPT-4.1, GPT-4.1 Mini, GPT-4.1 Nano, o4 Mini, o3 Mini (OpenAI), Claude Opus 4, Claude Sonnet 4 (Anthropic), and Llama 3.3 70B (Groq).
+
+**Updated Claude Model IDs**: Opus 4.6 and Sonnet 4.6 (latest versions).
+
+**MAX_MODEL_AGENTS**: Bumped default from 10 to 25 to accommodate expanded roster.
+
+**Missing Anthropic Plugin** (commit 0a3b0af): Added missing `@elizaos/plugin-anthropic` dependency so Claude agents spawn correctly.
+
+### Activity-Aware Idle Camera
+
+**Problem**: Idle camera randomly selected agents, often showing inactive/idle agents instead of interesting gameplay.
+
+**Solution** (commit 0a3b0af): Rewrote CameraDirector idle phase with weighted agent selection based on activity type.
+
+**Activity Weights**:
+- Combat: Highest priority (most interesting)
+- Skilling: Medium priority (gathering, cooking, etc.)
+- Moving: Low priority (traveling)
+- Idle: Lowest priority (standing still)
+- On-deck duel boost: Extra weight for agents selected for next duel
+
+**Impact**: Camera now focuses on active gameplay instead of idle agents.
+
+### Skill-Based Weapon Selection
+
+**Problem**: Agents were assigned random combat roles regardless of their actual skill levels.
+
+**Solution** (commit b71f512): Replace random combat role assignment with skill-based selection.
+
+**Three-Source Weapon Scoring**:
+1. **Equipped gear**: Check what agent is currently wearing
+2. **Inventory**: Check what weapons agent is carrying
+3. **Item manifest**: Check what weapons agent qualifies for based on levels
+
+**Weapon Tier Scoring**:
+- Bronze: Tier 1
+- Iron: Tier 2
+- Steel: Tier 3
+- Mithril: Tier 4
+- Adamant: Tier 5
+- Rune: Tier 6
+
+**Role Selection**:
+- Pick strongest combat style (melee/ranged/mage) based on actual skill levels
+- Equip best weapon agent qualifies for from equipped gear, inventory, or manifest
+- Fallback to lower-tier weapons if agent doesn't meet level requirements
+
+**Impact**: Agents now use weapons appropriate for their skill levels instead of random assignments.
+
+### Strategic Duel Combat AI
+
+**Problem**: Agents used basic attack loops without strategy, healing, or movement.
+
+**Solution** (commit b71f512): Overhaul duel combat tick in AutonomousBehaviorManager with full strategic combat loop.
+
+**Features**:
+- **LLM-Generated Fight Plans**: Agents create combat strategies using their character personality
+- **Phase-Aware Healing**: Desperate/trading/finishing/opening phases with different healing thresholds
+- **Movement Strategies**: Chase/kite/circle/hold based on combat situation
+- **Dynamic Style and Prayer Switching**: Adapt combat style and prayers based on HP and phase
+- **Cooldown-Tracked Trash Talk**: Personality-driven LLM taunts with cooldown system
+- **Streaming-Duel Awareness**: Avoids cancelling server-managed combat loops
+
+**Combat Phases**:
+- **Opening** (100-75% HP): Buff with prayers, establish position
+- **Trading** (75-40% HP): Aggressive combat, style switching
+- **Finishing** (40-25% HP): Focus on damage output
+- **Desperate** (<25% HP): Emergency healing, defensive prayers
+
+**Movement AI**:
+- **Chase**: Pursue fleeing opponent (melee vs ranged)
+- **Kite**: Maintain distance (ranged vs melee)
+- **Circle**: Strafe around opponent (balanced matchup)
+- **Hold**: Stand ground (mage with autocast)
+
+**Impact**: Agents now fight strategically instead of mindlessly attacking.
+
+### Duel Event Broadcasting
+
+**New Events** (commit b71f512):
+- `duel:start` - Fired when duel begins
+- `duel:end` - Fired when duel ends
+
+**Combat Spell/Rune Data Exports**: Exported from shared package for mage spell selection.
+
+### On-Deck Duel Notification
+
+**Problem**: Agents only had ~4s countdown to prepare for duels, not enough time to bank items and withdraw food.
+
+**Solution** (commit 656fdb7): Notify agents when they're selected as the next duel pair so they get the full fight duration (~5+ min) to prepare.
+
+**Preparation State Machine**:
+1. Agent receives `duelOnDeck` packet
+2. Agent banks items
+3. Agent withdraws food
+4. Agent moves to arena lobby
+5. Countdown starts when both agents ready
+
+**New Packets**:
+- `duelOnDeck` - Notifies agent they're selected for next duel
+- `duelCountdownStart` - Countdown begins
+- `duelCountdownTick` - Countdown tick update
+- `duelOpponentDisconnected` - Opponent disconnected during duel
+- `duelOpponentReconnected` - Opponent reconnected
+
+**Impact**: Agents have sufficient time to prepare for duels instead of rushing.
+
+### Duel Pipeline Audit Fixes
+
+**18 Audit Findings Fixed** (commit 4c16ea3):
+
+**Prayer ID Fixes**:
+- Fixed nonexistent prayer IDs (ultimate_strength/steel_skin → superhuman_strength/rock_skin/hawk_eye/mystic_lore)
+- Affected DuelCombatAI, ABM, and tests
+
+**Combat AI Improvements**:
+- Prayer reconciliation from entity state
+- Movement AI with role-based kiting/chasing
+- Context-aware healing
+- Finishing phase aggression
+- Desperate mode for all roles
+- Faster style switching (mod 2 + immediate on phase change)
+- Faster LLM replan (4s)
+- Weapon-aware style selection (accurate for mid-HP)
+- Buff phase prayer activation
+
+**Broadcast Improvements**:
+- 200ms fight broadcast during FIGHTING phase for smoother spectator updates
+
+**Simultaneous Death Handling**:
+- Via damage comparison (higher damage wins)
+
+**Announcement Early-Exit**:
+- After MIN_ANNOUNCEMENT_DURATION when both agents ready
+
+**Combat Stall Nudges**:
+- Escalating damage nudges (increasing damage, alternating targets)
+
+**Autocast Spell Validation**:
+- After staff fallback to ensure element match
+
+**Draw Outcome**:
+- Equal HP + damage = draw (not coin flip)
+
+**Streaming Duel History**:
+- New `streaming_duel_history` table
+- Async persistence in MatchmakingManager
+- `updateDrawStats()` for draw outcomes without affecting win/loss/streak
+
+**Impact**: Duel system is now production-ready with proper edge case handling.
+
 ## Agent Memory Management (March 2026)
 
 ### InMemoryDatabaseAdapter Migration
