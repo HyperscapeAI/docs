@@ -750,6 +750,101 @@ class MySystem {
 }
 ```
 
+## Agent Memory Management (March 2026)
+
+### InMemoryDatabaseAdapter Migration
+
+**Problem**: Each of 19 agents was allocating ~2-4GB for a PGLite WASM instance they never used (all memory features disabled), causing 38-76GB total memory bloat.
+
+**Solution** (commit 429bfbf): Swap to ElizaOS's built-in InMemoryDatabaseAdapter — zero WASM overhead, all 19 agents still run.
+
+**Changes**:
+- ModelAgentSpawner: pass InMemoryDatabaseAdapter to AgentRuntime, remove SQL plugin loading, PGLite retry/reset logic
+- ElizaDuelBot: same treatment — InMemoryDatabaseAdapter, no SQL plugin
+- agentHelpers: remove PGLITE_DATA_DIR from character secrets
+- Add Bun.gc(true) hint after agent stop for faster memory reclaim
+
+**Impact**: Reduced agent memory footprint from 38-76GB to <5GB for 19 agents.
+
+### Memory Accumulation Caps
+
+**Problem**: InMemoryDatabaseAdapter stores every createMemory() call forever in Maps. With 19 agents creating memories on every combat/resource event, this causes unbounded heap growth (~15GB+ within minutes).
+
+**Solution** (commit c2661430): Cap each agent to 50 memories via ring buffer (evict oldest on overflow).
+
+**Why 50 memories**:
+- Agents only read last 5+20 memories for LLM context
+- 50 provides sufficient history without unbounded growth
+- Ring buffer automatically evicts oldest when limit exceeded
+
+**Additional Caps** (commit 5ae4be9):
+- **Adapter logs**: Cap at 20 entries (was unbounded) — stores full LLM prompts+responses per useModel() call
+- **Adapter cache**: Cap at 100 entries with LRU eviction (was unbounded)
+- **Adapter deleteMemory()**: Override to also clean memoriesByRoom (not just memoriesById)
+- **Periodic adapter flush**: Every 60s for entities/rooms/worlds/tasks
+- **State cache flush**: When over 100 entries per agent runtime
+- **Encounter cache**: Cap at 50 entries per agent with LRU eviction
+- **Previous mob health map**: Prune at 100 entries to prevent growth
+
+**Periodic Garbage Collection** (commit c2661430):
+- Add periodic Bun.gc(false) every 20 ticks (~60s) per agent
+- Reclaims short-lived allocations from composeState/useModel calls
+- Non-blocking GC (false flag) to avoid frame drops
+
+**Diagnostic Health Logging** (commit 5ae4be9):
+- Add adapter verification after initialize() to detect plugin overrides
+- Log adapter state monitoring for debugging memory issues
+
+### Database Connection Pool Optimization
+
+**Problem**: 19 agents all requesting bank state simultaneously exhausts the DB pool ("timeout exceeded when trying to connect"), blocking agent initialization.
+
+**Solution** (commit a312abe): Throttle concurrent bank queries and stagger agent refresh intervals.
+
+**Concurrency Limiter**:
+- Add concurrency limiter (max 5) to handleRequestBankState handler
+- Bank queries queue instead of all hitting the pool at once
+- Prevents DB pool exhaustion during agent initialization
+
+**Staggered Refresh Intervals**:
+- Add random offset to agent refresh intervals
+- Prevents agents from synchronizing their 30s periodic bank/quest state refreshes
+- Distributes DB load over time instead of spikes
+
+**DB Pool Sizing** (commit afc15c3):
+- Increase serverless PG pool max from 10 to 20
+- Increase connection timeout from 30s to 60s
+- Prevents pool exhaustion with many agents
+- Standard pool: 20→30 for duel prep concurrency
+
+### Sequential Agent Spawning
+
+**Problem**: Spawning all agents in parallel causes concurrent ALTER TABLE races on Neon serverless PostgreSQL during SQL plugin migrations.
+
+**Solution** (commit afc15c3): Spawn first agent sequentially so SQL plugin migrations complete before batching the rest.
+
+**Implementation**:
+```typescript
+// Spawn first agent sequentially (migrations complete)
+await spawnAgent(agents[0]);
+
+// Batch spawn remaining agents in parallel
+await Promise.all(agents.slice(1).map(spawnAgent));
+```
+
+**Impact**: Prevents concurrent migration conflicts on serverless PostgreSQL.
+
+### Auto-Spawn Configuration
+
+**Auto-spawn model agents when STREAMING_DUEL_ENABLED=true** (commit afc15c3):
+- Simplifies duel stack setup (no manual agent spawning)
+- Works even in dev mode when streaming duels are enabled
+- Ensures agents are always available for duels
+
+**Admin Dashboard Auth Simplification** (commit afc15c3):
+- Single fetch attempt on mount instead of 120s polling loop with abort controllers
+- Reduces complexity and improves reliability
+
 ## Gold Betting Demo
 
 ### Mobile Responsive UI
