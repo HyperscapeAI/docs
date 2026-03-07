@@ -428,9 +428,6 @@ bun add -D vitest@^4.0.6 @vitest/coverage-v8@^4.0.6
 
 Vitest 2.x is incompatible with Vite 6.x. The upgrade to Vitest 4.x was required for compatibility.
 
-**Anchor test failures in CI:**
-Anchor localnet tests automatically skip when Solana CLI is not installed. This prevents false failures in CI environments without Solana toolchain. Tests will show as skipped rather than failed.
-
 **Streaming Issues:**
 
 *WebGPU not initializing on Vast.ai:*
