@@ -37,9 +37,40 @@ bun run duel --skip-stream
 bun run duel --verify
 ```
 
-## Streaming Outputs
+## Solana Runtime Configuration
 
-Configure the following env vars (root `.env` or `packages/server/.env`):
+The duel stack auto-discovers Solana configuration from multiple sources:
+
+**Default Values:**
+- Program ID: `9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU` (fight oracle)
+- Gold Mint: `DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump`
+- RPC URL: `https://api.devnet.solana.com`
+- WS URL: `wss://api.devnet.solana.com`
+
+**Auto-Discovery:**
+
+The `duel-stack.mjs` orchestrator automatically discovers Solana authority from multiple candidate sources:
+1. `DUEL_SOLANA_ARENA_AUTHORITY_SECRET` environment variable
+2. `SOLANA_ARENA_AUTHORITY_SECRET` environment variable
+3. `~/.config/solana/hyperscape/deployer-mainnet-20260211.json`
+4. `~/.config/solana/mainnet-deployer.json`
+5. `~/.config/solana/hyperscape-keys/deployer.json`
+6. `~/.config/solana/id.json`
+
+**Program Validation:**
+
+Before starting the keeper bot, the orchestrator validates the prediction market program by simulating an `init_oracle_round` transaction. This ensures the program is deployed and accessible.
+
+**Environment Variables:**
+
+```bash\n# Duel-specific Solana configuration (takes precedence over SOLANA_* vars)\nDUEL_SOLANA_RPC_URL=https://api.devnet.solana.com\nDUEL_SOLANA_WS_URL=wss://api.devnet.solana.com\nDUEL_SOLANA_ARENA_MARKET_PROGRAM_ID=9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU\nDUEL_SOLANA_GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump\nDUEL_SOLANA_ARENA_AUTHORITY_SECRET=~/.config/solana/id.json\nDUEL_SOLANA_ARENA_REPORTER_SECRET=~/.config/solana/id.json\nDUEL_SOLANA_ARENA_KEEPER_SECRET=~/.config/solana/id.json\n\n# Fallback to general Solana configuration if DUEL_* vars not set\nSOLANA_RPC_URL=https://api.devnet.solana.com\nSOLANA_WS_URL=wss://api.devnet.solana.com\nSOLANA_ARENA_MARKET_PROGRAM_ID=9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU\nSOLANA_GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump\nSOLANA_ARENA_AUTHORITY_SECRET=\nSOLANA_ARENA_REPORTER_SECRET=\nSOLANA_ARENA_KEEPER_SECRET=\n```
+
+**Keeper Program Checks:**
+
+The keeper bot validates required programs before starting:
+- Fight oracle: `6tpRysBFd1yXRipYEYwAw9jxEoVHk15kVXfkDGFLMqcD`
+- Gold clob market: `ARVJNJp49VZnkB8QBYZAAFJmufvtVSPhnuuenwwSLwpi`
+- Gold perps market (optional): `HbXhqEFevpkfYdZCN6YmJGRmQmj9vsBun2ZHjeeaLRik`\n\nIf programs are not deployed, keeper bot is skipped with a warning.\n\n## Streaming Outputs\n\nConfigure the following env vars (root `.env` or `packages/server/.env`):
 
 - `RTMP_MULTIPLEXER_URL` (+ optional `RTMP_MULTIPLEXER_STREAM_KEY`, `RTMP_MULTIPLEXER_NAME`)
 - `TWITCH_STREAM_KEY` (or `TWITCH_RTMP_STREAM_KEY`)
