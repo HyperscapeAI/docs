@@ -225,6 +225,13 @@ The streaming pipeline requires specific GPU setup:
      - PM2 automatically restarts the server with new code
    - Enables zero-downtime deployments for the duel arena stream
 
+22. **Deployment Process Improvements**:
+   - **Targeted Process Killing**: Use specific process names instead of blanket `pkill -f bun`
+   - **Graceful PM2 Shutdown**: Stop PM2 with delays between commands
+   - **Process Teardown Before Migration**: Kill processes and wait 30s for DB connections to close before running migrations
+   - Prevents deploy script from killing itself
+   - Prevents "too many clients" errors during database migrations
+
 See `scripts/deploy-vast.sh` for complete setup logic.
 
 ## Project Overview
