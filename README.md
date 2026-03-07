@@ -111,6 +111,10 @@ packages/
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── asset-forge/         # AI asset generation tools
 └── docs-site/           # Documentation (Docusaurus)
+
+publishing/
+└── branding/            # Official logo files (SVG, EPS, PDF, PNG, JPG)
+                         # Binary files tracked via Git LFS
 ```
 
 Build order: `physx-js-webidl` → `shared` → everything else (handled automatically by Turbo)
