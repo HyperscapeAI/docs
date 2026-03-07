@@ -283,6 +283,31 @@ NODE_ENV=production              # Use production client build
 DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
 ```
 
+### New Environment Variables
+
+**Streaming/Duel Configuration:**
+```bash
+SPAWN_MODEL_AGENTS=true          # Auto-create agents when database is empty
+STREAM_CAPTURE_EXECUTABLE=...    # Explicit Chrome path for WebGPU
+STREAM_LOW_LATENCY=true          # Use zerolatency tune for faster playback
+STREAM_GOP_SIZE=60               # GOP size in frames (default: 60)
+STREAM_AUDIO_ENABLED=true        # Enable audio capture
+PULSE_AUDIO_DEVICE=...           # PulseAudio device name
+STREAM_PLACEHOLDER_ENABLED=true  # Send placeholder frames during idle periods (prevents 30min disconnect)
+```
+
+**Database Configuration (Railway/Serverless):**
+```bash
+POSTGRES_POOL_MAX=3              # Max connections (3 for crash loops, 1 for duels)
+POSTGRES_POOL_MIN=0              # Min connections (0 to not hold idle)
+```
+
+**Production Client Build:**
+```bash
+NODE_ENV=production              # Use production client build
+DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
+```
+
 ### Default Ports
 
 | Port | Service | Started By |
