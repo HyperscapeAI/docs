@@ -32,7 +32,117 @@ This manifest is used by:
 
 The EVM deploy script automatically updates the central `contracts.json` manifest after successful deployment.
 
-## 1) Deploy the betting keeper to Railway
+## 0) Preflight Checks
+
+Before deploying to any network, run preflight validation to ensure all deployment metadata is consistent:
+
+```bash
+# From repo root
+cd packages/gold-betting-demo
+
+# Validate testnet deployment readiness
+bun run deploy:preflight:testnet
+
+# Validate mainnet deployment readiness
+bun run deploy:preflight:mainnet
+```
+
+**What preflight checks validate:**
+
+- Solana program keypairs match deployment manifest addresses
+- Anchor IDL files match deployment manifest addresses
+- App and keeper IDL files are in sync with Anchor build output
+- EVM deployment environment variables are configured
+- EVM RPC URLs are available (either configured or using Hardhat fallbacks)
+- Contract addresses are present in deployment manifest
+
+**Preflight failures** indicate mismatched deployment metadata and should be resolved before deploying to production networks.
+
+## 1) Deploy Solana Programs
+
+Deploy all three Solana betting programs using the checked-in program keypairs:
+
+```bash
+# From packages/gold-betting-demo/anchor
+bun run deploy:testnet      # Deploy to Solana testnet
+bun run deploy:mainnet      # Deploy to Solana mainnet-beta
+```
+
+**Programs deployed:**
+- `fight_oracle` - Match lifecycle and winner posting
+- `gold_clob_market` - GOLD CLOB market for binary prediction trading
+- `gold_perps_market` - Perpetual futures market for agent skill ratings
+
+**Requirements:**
+- Solana CLI installed (`solana --version`)
+- Deployer wallet with sufficient SOL (~4+ SOL for all three programs)
+- Wallet path: `$ANCHOR_WALLET`, `~/.config/solana/hyperscape-keys/deployer.json`, or `~/.config/solana/id.json`
+
+**Deployment process:**
+1. Builds Anchor workspace (unless `SKIP_BUILD=1`)
+2. Verifies program keypairs and binaries exist
+3. Deploys each program using `solana program deploy`
+4. Verifies deployment with `solana program show`
+
+**Skip build** (if already built):
+```bash
+SKIP_BUILD=1 bun run deploy:mainnet
+```
+
+## 2) Deploy EVM Contracts
+
+Deploy GoldClob contracts to EVM networks:
+
+```bash
+# From packages/evm-contracts
+
+# Testnet deployments
+bun run deploy:bsc-testnet
+bun run deploy:base-sepolia
+
+# Mainnet deployments (requires explicit treasury/market maker addresses)
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:bsc
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:base
+```
+
+**Environment variables required:**
+
+- `PRIVATE_KEY` - Deployer private key (required)
+- `TREASURY_ADDRESS` - Treasury address for fee collection (required for mainnet)
+- `MARKET_MAKER_ADDRESS` - Market maker address for fee collection (required for mainnet)
+- `GOLD_TOKEN_ADDRESS` - GOLD token address (optional, recorded in deployment receipt)
+- `BSC_RPC_URL` / `BASE_RPC_URL` - RPC endpoints (optional, uses Hardhat fallbacks if not set)
+
+**Mainnet safety:**
+- Mainnet deployments (BSC, Base) require explicit `TREASURY_ADDRESS` and `MARKET_MAKER_ADDRESS`
+- Deployment fails if these are not set (prevents accidental use of deployer address)
+
+**Deployment process:**
+1. Validates treasury and market maker addresses
+2. Deploys GoldClob contract
+3. Writes deployment receipt to `packages/evm-contracts/deployments/<network>.json`
+4. Updates central manifest at `packages/gold-betting-demo/deployments/contracts.json`
+
+**Skip manifest update** (for testing):
+```bash
+SKIP_BETTING_MANIFEST_UPDATE=true bun run deploy:bsc-testnet
+```
+
+**Typed Contract Helpers:**
+
+The EVM contracts package now includes typed deployment helpers in `typed-contracts.ts`:
+
+```typescript
+import { deployGoldClob, deploySkillOracle, deployMockErc20 } from '../typed-contracts';
+
+// Type-safe contract deployment
+const clob = await deployGoldClob(treasury, marketMaker, signer);
+const oracle = await deploySkillOracle(initialBasePrice, signer);
+```
+
+These helpers provide full TypeScript type safety for contract interactions in tests and scripts.
+
+## 3) Deploy the betting keeper to Railway
 
 From repo root, deploy the keeper service path:
 
