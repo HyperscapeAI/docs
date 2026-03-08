@@ -32,10 +32,6 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - [Privy](https://privy.io) account (required for authentication)
 
 ```bash
-# Install Git LFS first (if not already installed)
-git lfs install
-
-# Clone repository (Git LFS will automatically download binary assets)
 git clone https://github.com/HyperscapeAI/hyperscape.git
 cd hyperscape
 bun install
@@ -110,7 +106,7 @@ packages/
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── asset-forge/         # AI asset generation tools
-├── procgen/             # Procedural generation
+├── procgen/             # Procedural generation (terrain, vegetation, buildings)
 ├── gold-betting-demo/   # Solana/EVM betting demo app
 │   ├── app/             # React betting UI (Cloudflare Pages)
 │   ├── anchor/          # Solana programs (Anchor framework)
@@ -156,6 +152,35 @@ bun run docs:dev      # Documentation site (port 3402)
 bun run dev:all       # Everything: game + AI + AssetForge
 ```
 
+### Docker services
+
+```bash
+bun run cdn:up        # Start CDN container (needed for bun start)
+bun run cdn:down      # Stop CDN container
+```
+
+### Database (Drizzle)
+
+Run from `packages/server/`:
+
+```bash
+bunx drizzle-kit push      # Push schema changes to database
+bunx drizzle-kit generate  # Generate migration files
+bunx drizzle-kit migrate   # Run pending migrations (deterministic, sorted order)
+```
+
+### Assets
+
+Game assets (3D models, textures, audio) source: [HyperscapeAI/assets](https://github.com/HyperscapeAI/assets)
+
+**Local Development**: Assets are auto-downloaded during `bun install` (~200MB via Git LFS).
+
+```bash
+bun run assets:sync    # Pull latest assets from repo (local dev only)
+```
+
+**Production/CI**: Manifests are committed to the repo at `packages/server/world/assets/manifests/`.
+
 ### Vast.ai Commands
 
 ```bash
@@ -184,39 +209,11 @@ bun run duel:status
 - Rents best available instance
 - Waits for instance to be ready
 - Outputs SSH connection details and GitHub secret commands
+- Saves configuration to `/tmp/vast-instance-config.env`
 
 **Requirements**:
 - Vast.ai CLI: `pip install vastai`
 - API key configured: `vastai set api-key YOUR_API_KEY`
-
-### Docker services
-
-```bash
-bun run cdn:up        # Start CDN container (needed for bun start)
-bun run cdn:down      # Stop CDN container
-```
-
-### Database (Drizzle)
-
-Run from `packages/server/`:
-
-```bash
-bunx drizzle-kit push      # Push schema changes to database
-bunx drizzle-kit generate  # Generate migration files
-bunx drizzle-kit migrate   # Run pending migrations
-```
-
-### Assets
-
-Game assets (3D models, textures, audio) source: [HyperscapeAI/assets](https://github.com/HyperscapeAI/assets)
-
-**Local Development**: Assets are auto-downloaded during `bun install` (~200MB via Git LFS).
-
-```bash
-bun run assets:sync    # Pull latest assets from repo (local dev only)
-```
-
-**Production/CI**: Manifests are committed to the repo at `packages/server/world/assets/manifests/`.
 
 ## Configuration
 
@@ -232,32 +229,6 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
 
-### New Environment Variables
-
-**Streaming/Duel Configuration:**
-```bash
-SPAWN_MODEL_AGENTS=true          # Auto-create agents when database is empty
-STREAM_CAPTURE_EXECUTABLE=...    # Explicit Chrome path for WebGPU
-STREAM_LOW_LATENCY=true          # Use zerolatency tune for faster playback
-STREAM_GOP_SIZE=60               # GOP size in frames (default: 60)
-STREAM_AUDIO_ENABLED=true        # Enable audio capture
-PULSE_AUDIO_DEVICE=...           # PulseAudio device name
-STREAM_PLACEHOLDER_ENABLED=true  # Send placeholder frames during idle periods (prevents 30min disconnect)
-```
-
-**Database Configuration (Railway/Serverless):**
-```bash
-POSTGRES_POOL_MAX=3              # Max connections (3 for crash loops, 1 for duels)
-POSTGRES_POOL_MIN=0              # Min connections (0 to not hold idle)
-RAILWAY_ENVIRONMENT=...          # Auto-detected by Railway (most reliable detection method)
-```
-
-**Production Client Build:**
-```bash
-NODE_ENV=production              # Use production client build
-DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
-```
-
 ### Default Ports
 
 | Port | Service | Started By |
@@ -270,9 +241,7 @@ DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
 
-## Deployment
-
-### Railway
+## Deployment (Railway)
 
 Railway deployment is set up for separate development and production targets:
 
@@ -282,83 +251,6 @@ Railway deployment is set up for separate development and production targets:
 For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps for `hyperscape.gg`), see:
 
 - `docs/railway-dev-prod.md`
-
-**Railway Database Configuration:**
-
-Railway uses connection pooling (pgbouncer) which requires special configuration:
-
-```bash
-# In packages/server/.env for Railway deployments
-POSTGRES_POOL_MAX=6              # Lower limit for pooler connections
-POSTGRES_POOL_MIN=0              # Don't hold idle connections
-```
-
-Railway proxy detection is automatic - the system detects `.rlwy.net`, `.railway.app`, and `.railway.internal` domains and:
-- Disables prepared statements (not supported by pgbouncer)
-- Uses lower connection pool limits
-- Prevents "too many clients already" errors
-
-Detection also works via `RAILWAY_ENVIRONMENT` environment variable for reliable identification.
-
-### Vast.ai (GPU Streaming)
-
-**Automated Provisioning:**
-
-Use the Vast.ai provisioner to automatically rent WebGPU-capable instances:
-
-```bash
-VAST_API_KEY=xxx bun run vast:provision
-```
-
-This will:
-1. Search for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
-2. Filter by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr)
-3. Rent the best available instance
-4. Wait for instance to be ready
-5. Output SSH connection details and GitHub secret commands
-
-**Manual Deployment:**
-
-See `scripts/deploy-vast.sh` for the complete deployment script. Key requirements:
-
-- NVIDIA GPU with display driver support (`gpu_display_active=true`)
-- 120GB disk space minimum
-- WebGPU initialization must succeed or deployment fails
-
-**Monitoring:**
-
-Check streaming health with:
-```bash
-bun run duel:status
-```
-
-This checks:
-- Server health endpoint
-- Streaming API status
-- Duel context (fighting phase)
-- RTMP bridge status and bytes streamed
-- PM2 process status
-- Recent logs
-
-**Graceful Restart (Zero-Downtime Deployments):**
-
-Request a server restart after the current duel ends:
-
-```bash
-# Via API (requires ADMIN_CODE)
-curl -X POST http://your-server/admin/graceful-restart \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
-
-# Check restart status
-curl http://your-server/admin/restart-status \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
-```
-
-When graceful restart is requested:
-- If no duel active: restarts immediately
-- If duel in progress: waits until RESOLUTION phase completes
-- PM2 automatically restarts with new code
-- No interruption to active duels or streams
 
 ## Native App Distribution
 
@@ -375,6 +267,115 @@ git push origin v1.0.0
 ```
 
 That tag triggers cross-platform native packaging and publishes installers to a GitHub Release.
+
+## Recent Improvements (March 2026)
+
+### Agent Memory Management
+
+**InMemoryDatabaseAdapter Migration** (commit 429bfbf):
+- Replaced PGLite WASM with ElizaOS's InMemoryDatabaseAdapter
+- Reduced agent memory footprint from 38-76GB to <5GB for 19 agents
+- Zero WASM overhead while maintaining full agent functionality
+
+**Memory Accumulation Caps** (commits c2661430, 5ae4be9):
+- Cap each agent to 50 memories via ring buffer (evict oldest on overflow)
+- Adapter logs capped at 20 entries (stores full LLM prompts+responses)
+- Adapter cache capped at 100 entries with LRU eviction
+- Periodic adapter flush every 60s for entities/rooms/worlds/tasks
+- Periodic Bun.gc(false) every 20 ticks (~60s) to reclaim short-lived allocations
+
+**Database Connection Pool Optimization** (commit a312abe):
+- Concurrency limiter (max 5) for bank queries to prevent DB pool exhaustion
+- Staggered refresh intervals with random offset to prevent agent synchronization
+- Serverless PG pool increased from 10→20 max, 30s→60s timeout
+
+**Sequential Agent Spawning** (commit afc15c3):
+- First agent spawns sequentially for SQL migrations
+- Remaining agents batch spawn in parallel
+- Prevents concurrent ALTER TABLE races on Neon serverless PostgreSQL
+
+### Duel System Enhancements
+
+**Expanded Model Roster** (commit f6a8ba3):
+- 19 AI models: GPT-4.1, GPT-4.1 Mini, GPT-4.1 Nano, o4 Mini, o3 Mini (OpenAI), Claude Opus 4.6, Claude Sonnet 4.6, Claude Haiku 4.5 (Anthropic), Llama 3.3 70B, Llama 4 Scout, Llama 4 Maverick, Kimi K2, Qwen 3 30B (Groq)
+- MAX_MODEL_AGENTS bumped from 10 to 25
+
+**Activity-Aware Idle Camera** (commit 0a3b0af):
+- Weighted agent selection based on activity type (combat > skilling > moving > idle)
+- On-deck duel boost for agents selected for next duel
+- Camera now focuses on active gameplay instead of idle agents
+
+**Skill-Based Weapon Selection** (commit b71f512):
+- Three-source weapon scoring (equipped gear, inventory, item manifest)
+- Pick strongest combat style based on actual skill levels
+- Agents use weapons appropriate for their skill levels
+
+**Strategic Duel Combat AI** (commit b71f512):
+- LLM-generated fight plans with character personality
+- Phase-aware healing (desperate/trading/finishing/opening)
+- Movement strategies (chase/kite/circle/hold)
+- Dynamic style and prayer switching
+- Cooldown-tracked trash talk with personality-driven LLM taunts
+
+**On-Deck Duel Notification** (commit 656fdb7):
+- Agents get full fight duration (~5+ min) to prepare instead of ~4s countdown
+- Preparation state machine: bank items → withdraw food → move to lobby
+- New packets: duelOnDeck, duelCountdownStart, duelCountdownTick, duelOpponentDisconnected, duelOpponentReconnected
+
+**Duel Pipeline Audit** (commit 4c16ea3):
+- Fixed 18 audit findings including prayer IDs, combat AI, broadcast timing
+- Simultaneous death handling via damage comparison
+- Escalating combat stall nudges
+- New `streaming_duel_history` table for draw outcomes
+
+### Deployment & Infrastructure
+
+**Graceful Restart** (commit c76ca516):
+- POST /admin/graceful-restart - Request restart after current duel ends
+- GET /admin/restart-status - Check if restart is pending
+- Zero-downtime deployments for duel arena stream
+
+**Deployment Process** (commits 087033fa, 58d88f4c, 46324033, b71796b3, 54eef352):
+- Process teardown before migration to prevent "too many clients" errors
+- Targeted process killing (avoid killing deploy script itself)
+- Runtime secrets loading from `/tmp/hyperscape-secrets.env`
+- PM2 environment passthrough via `--update-env` flag
+- Deterministic migrations (sorted order)
+- Solana runtime defaults in PM2 config
+
+**Railway Database Support** (commits d8c26d2, a5a201c):
+- Auto-detection via `RAILWAY_ENVIRONMENT` env var
+- Railway proxy detection for pgbouncer support
+- Disables prepared statements when using Railway proxy
+- Lower connection pool limits (max: 6) for pooler connections
+
+**Placeholder Frame Mode** (commit 83056565):
+- Set `STREAM_PLACEHOLDER_ENABLED=true` to enable placeholder frames during idle periods
+- Prevents Twitch/YouTube 30-minute disconnect during content gaps
+- Minimal 16x16 JPEG (~300 bytes) scaled by FFmpeg
+
+### Testing & CI
+
+**Vitest 4.x Upgrade** (commit a916e4ee):
+- Upgraded from 2.1.0 to 4.0.6 for Vite 6 compatibility
+- Fixes `__vite_ssr_exportName__` errors during test runs
+
+**Anchor Test Skip** (commit 8b7d126):
+- Automatically skip Anchor localnet tests in CI when Solana CLI is not installed
+- Prevents false failures in CI environments
+
+**GitHub Actions Fixes** (commit f892d0b2):
+- Fixed upload-artifact version (v7 → v4) across all workflows
+- Fixed build order in ci.yml (shared must build before impostors/procgen)
+- Fixed heredoc variable expansion in deploy-vast.yml
+
+### Branding Assets
+
+**Git LFS for Binary Files** (commit f334c57):
+- Binary branding files (.ai, .eps, .pdf, .png, .jpg) tracked via Git LFS
+- Prevents repo bloat (~28 MB of design assets)
+- SVG files remain in Git (text format)
+- See `publishing/branding/README.md` for usage guidelines
 
 ## Troubleshooting
 
@@ -408,18 +409,10 @@ bun run dev
 ```
 
 **Railway "too many clients already" errors:**
-Set lower connection pool limits in `packages/server/.env`:
-```bash
-POSTGRES_POOL_MAX=3              # Down from default 6
-POSTGRES_POOL_MIN=0              # Don't hold idle connections
-```
-
-Also increase PM2 restart delay to allow connections to close:
-```javascript
-// In ecosystem.config.cjs
-restart_delay: 10000,            // 10s instead of 5s
-exp_backoff_restart_delay: 2000, // 2s for gradual backoff
-```
+- Set `POSTGRES_POOL_MAX=3` (or lower) in `.env`
+- Set `POSTGRES_POOL_MIN=0` to not hold idle connections
+- Increase `restart_delay=10s` in PM2 config to allow connections to close
+- Railway is auto-detected via `RAILWAY_ENVIRONMENT` env var
 
 **Port conflicts:**
 ```bash
@@ -436,157 +429,19 @@ bun install
 bun run build
 ```
 
-**Vitest 4.x upgrade issues:**
-If you see `__vite_ssr_exportName__` errors, ensure you're using Vitest 4.x (not 2.x):
-```bash
-bun add -D vitest@^4.0.6 @vitest/coverage-v8@^4.0.6
-```
-
-Vitest 2.x is incompatible with Vite 6.x. The upgrade to Vitest 4.x was required for compatibility.
-
-**Streaming Issues:**
-
-*WebGPU not initializing on Vast.ai:*
-- Ensure instance has `gpu_display_active=true` (use `bun run vast:provision`)
-- Check deployment logs for GPU display driver detection
-- Run `bun run duel:status` to check streaming health
-- Verify NVIDIA display driver: `nvidia-smi` should show display mode
-
-*Browser timeout during page load:*
-- Set `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
-- Use pre-built client via `vite preview` instead of dev server
-- Significantly faster page loads (no on-demand module compilation)
-
-*Stream disconnects after 30 minutes:*
-- Enable placeholder frame mode: `STREAM_PLACEHOLDER_ENABLED=true`
-- Sends minimal frames during idle periods to keep stream alive
-- Automatically exits when live frames resume
+**Vitest errors after upgrading to Vite 6:**
+- Upgrade vitest to 4.x: `bun add -D vitest@^4.0.6 @vitest/coverage-v8@^4.0.6`
+- Vitest 2.x is incompatible with Vite 6.x (causes `__vite_ssr_exportName__` errors)
 
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
 
-## Recent Improvements
-
-### Stability Improvements (March 2026)
-
-- **Combat System**: Aligned retry timer with tick system, reduced phase timeouts, improved stall detection
-- **Agent System**: LLM rate limiting with exponential backoff, memory leak fixes, dynamic combat escalation, banking goal type added
-- **Agent Memory Management**: InMemoryDatabaseAdapter migration (eliminated 38-76GB PGLite WASM bloat), memory caps (50 memories per agent), adapter data structure caps (logs: 20, cache: 100 with LRU), periodic GC every 60s
-- **Agent Database Optimization**: Concurrent bank query throttling (max 5), staggered refresh intervals, sequential agent spawning for SQL migrations, DB pool sizing (serverless: 10→20 max, 30s→60s timeout)
-- **Resource Management**: Activity logger queue limits, session timeouts, proper cleanup
-- **Test Stability**: Vitest 4.x upgrade for Vite 6 compatibility, increased timeouts for fuzz tests, Anchor test skip in CI
-- **E2E Journey Tests**: Complete login→loading→spawn→walk gameplay tests with screenshot comparison
-
-### Performance Optimizations
-
-- **Object Pooling**: Zero-allocation event emission for combat events (eliminates GC pressure)
-- **Instanced Rendering**: O(1) draw calls per unique model per LOD level for resources
-- **Model Cache Integrity**: Index buffer type preservation fixes geometry corruption
-- **Movement System**: Immediate move processing, increased pathfinding rate limit, path continuation
-- **Minimap Rendering**: Async terrain generation, zero RAF blocking, 16× reduction in sampling
-- **GPU Resource Hygiene**: Object pools for textures/materials, proper cleanup on destroy
-
-### Memory Leak Fixes
-
-Fixed critical memory leaks in 20+ systems including:
-- ModelCache, EventBridge, Logger, PlayerTokenManager
-- AgentManager, AutonomousBehaviorManager, GameTickProcessor
-- TradingSystem, RTMPBridge, ActionQueue, ScriptQueue
-- And many more - see AGENTS.md for complete list
-
-### New Features
-
-**Graceful Restart API** (Zero-Downtime Deployments):
-- `POST /admin/graceful-restart` - Request restart after current duel ends
-- `GET /admin/restart-status` - Check if restart is pending
-- Waits for duel RESOLUTION phase before restarting
-- PM2 automatically restarts with new code
-
-**Placeholder Frame Mode** (Stream Keep-Alive):
-- Set `STREAM_PLACEHOLDER_ENABLED=true` to prevent 30-minute disconnects
-- Sends minimal JPEG frames during idle periods
-- Automatically exits when live frames resume
-
-**Streaming Status Check**:
-- `bun run duel:status` - Quick diagnostic for streaming health
-- Checks server, RTMP bridge, PM2 processes, and logs
-
-**Model Agent Spawning**:
-- Set `SPAWN_MODEL_AGENTS=true` to auto-create agents when database is empty
-- Useful for fresh deployments and testing
-
-**Duel System Improvements**:
-- **Expanded Model Roster**: 19 AI models (GPT-4.1, o4 Mini, o3 Mini, Claude Opus 4, Sonnet 4, Llama 3.3 70B)
-- **Activity-Aware Idle Camera**: Weighted agent selection based on activity type (combat > skilling > moving > idle)
-- **Skill-Based Weapon Selection**: Agents pick strongest combat style based on actual skill levels
-- **Strategic Combat AI**: LLM-generated fight plans, phase-aware healing, movement strategies, dynamic style/prayer switching
-- **On-Deck Duel Notification**: Agents get ~5+ min to prepare (bank items, withdraw food) instead of 4s countdown
-- **Duel Pipeline Audit**: 18 fixes including prayer IDs, combat AI, broadcast improvements, simultaneous death handling
-
-### Railway Database Detection
-
-Automatic detection of Railway proxy connections with:
-- Disabled prepared statements (not supported by pgbouncer)
-- Lower connection pool limits (max: 6)
-- Fixes "too many clients already" errors
-- Detection via `RAILWAY_ENVIRONMENT` env var or hostname patterns
-
-### Vast.ai Provisioner
-
-Automated instance provisioning with WebGPU support:
-- Searches for `gpu_display_active=true` instances
-- Filters by reliability, GPU RAM, price, disk space
-- Automatic rental and setup
-- SSH connection details and GitHub secrets output
-
-### Deployment Process Improvements
-
-**Process Management**:
-- Targeted process killing (avoids killing deploy script itself)
-- Graceful PM2 shutdown with delays between commands
-- Process teardown before database migrations
-- Prevents "too many clients" errors during migrations
-
-**Secrets Management**:
-- GitHub Actions writes secrets to `/tmp/hyperscape-secrets.env`
-- Deploy script sources secrets before PM2 start
-- All secrets passed into PM2 runtime via `--update-env` flag
-- Deterministic migrations run in sorted order
-
-**GitHub Actions Fixes**:
-- Fixed upload-artifact version (v7 → v4)
-- Fixed build order (shared must build before impostors/procgen)
-- Fixed heredoc variable expansion in deploy-vast.yml
-
-## Branding Assets
-
-Official Hyperscape logo files are available in `publishing/branding/`:
-
-**Logo Variants:**
-- `hyperscape_logo_color` - Full wordmark with gold gradient (primary logo)
-- `hyperscape_logo_black` - Full wordmark, solid black (print/light backgrounds)
-- `hyperscape_logo_white` - Full wordmark, solid white (dark backgrounds)
-- `hyperscape_logo_icon_color` - "HS" icon with gold gradient (favicons, app icons)
-- `hyperscape_logo_icon_black` - "HS" icon, solid black
-
-**Formats:**
-- **SVG** (source of truth): Web, UI, scalable usage
-- **EPS** (Git LFS): Print production
-- **PDF** (Git LFS): Print-ready distribution
-- **PNG** (Git LFS): Raster with transparency
-- **JPG** (Git LFS): Raster without transparency
-- **AI** (Git LFS): Adobe Illustrator source templates
-
-**Git LFS**: Binary branding files (~28MB) are tracked via Git LFS to avoid repo bloat. Run `git lfs install` before cloning.
-
-See `publishing/branding/README.md` for complete usage guidelines and naming conventions.
-
 ## More Info
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
 
-See [AGENTS.md](AGENTS.md) for AI coding assistant instructions and WebGPU streaming architecture.
+See [AGENTS.md](AGENTS.md) for AI coding assistant instructions and agent memory management details.
 
 ## License
 
