@@ -72,6 +72,10 @@ cp packages/plugin-hyperscape/.env.example packages/plugin-hyperscape/.env
 # Asset generation tools (only if using bun run dev:forge)
 cp packages/asset-forge/.env.example packages/asset-forge/.env
 # Edit and set OPENAI_API_KEY, MESHY_API_KEY
+
+# Betting stack (only if using bun run duel)
+cp packages/gold-betting-demo/.env.example packages/gold-betting-demo/.env
+# Edit and set Solana/EVM RPC URLs and contract addresses
 ```
 
 ### Run the Game
@@ -93,6 +97,8 @@ cp packages/asset-forge/.env.example packages/asset-forge/.env
    bun run dev          # Game only (client + server)
    # OR
    bun run dev:ai       # Game + AI agents (ElizaOS)
+   # OR
+   bun run duel         # Full duel stack (game + agents + betting + streaming)
    ```
 
 5. Open **http://localhost:3333** in your browser.
@@ -111,6 +117,7 @@ packages/
 ├── evm-contracts/       # EVM betting contracts (Hardhat + Foundry)
 ├── contracts/           # MUD onchain game state (experimental)
 ├── sim-engine/          # Cross-chain betting risk simulation
+├── market-maker-bot/    # Automated market making for betting markets
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation tools
@@ -128,6 +135,7 @@ Build order: `physx-js-webidl` → `shared` → everything else (handled automat
 | `bun start` | Start production server |
 | `bun test` | Run test suite |
 | `bun run lint` | Lint codebase |
+| `bun run duel` | Full duel stack (game + agents + betting + streaming) |
 
 ### What `bun run dev` starts
 
@@ -187,10 +195,11 @@ bun run assets:sync    # Pull latest assets from repo (local dev only)
 Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.privy.io).
 
 **Optional configuration** - see `.env.example` files for all options:
-- `packages/server/.env.example` - Database, ports, LiveKit voice chat
+- `packages/server/.env.example` - Database, ports, LiveKit voice chat, streaming
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
+- `packages/gold-betting-demo/.env.example` - Solana/EVM RPC URLs, contract addresses
 
 ### Default Ports
 
@@ -203,8 +212,12 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 3401 | AssetForge API | `bun run dev:forge` |
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
+| 4179 | Betting App | `bun run duel` |
+| 8081 | Betting Keeper | `bun run duel` |
 
-## Deployment (Railway)
+## Deployment
+
+### Railway (Game Server)
 
 Railway deployment is set up for separate development and production targets:
 
@@ -214,6 +227,24 @@ Railway deployment is set up for separate development and production targets:
 For setup details (GitHub vars/secrets, Railway environment IDs, and DNS steps for `hyperscape.gg`), see:
 
 - `docs/railway-dev-prod.md`
+
+### Vast.ai (Streaming Duel Arena)
+
+For GPU-accelerated streaming duel arena deployment on Vast.ai, see:
+
+- `.github/workflows/deploy-vast.yml` - Automated deployment workflow
+- `ecosystem.config.cjs` - PM2 process configuration
+- `scripts/deploy-vast.sh` - Deployment script
+
+### Betting Stack (Cloudflare + Railway)
+
+For production betting stack deployment:
+
+- Frontend: Cloudflare Pages (`packages/gold-betting-demo/app`)
+- Keeper API: Railway (`packages/gold-betting-demo/keeper`)
+- Contracts: Solana mainnet-beta, BSC, Base
+
+See `docs/betting-production-deploy.md` for complete deployment guide.
 
 ## Native App Distribution
 
