@@ -427,6 +427,20 @@ bun install
 bun run build
 ```
 
+**Bundle Size Warnings:**
+
+The client and asset-forge packages have increased `chunkSizeWarningLimit` to suppress warnings for intentionally large WebGPU/PhysX bundles:
+
+- `packages/client/vite.config.ts`: 8000 KB (WebGPU/PhysX bundles)
+- `packages/asset-forge/vite.config.ts`: 9000 KB (Asset tooling with WebGPU)
+
+These limits are intentional until deeper code splitting is implemented. The large bundles are due to:
+- Three.js WebGPU renderer and TSL shader system
+- PhysX WASM bindings
+- Asset processing tools (GLB decimation, impostor baking, etc.)
+
+**Tech Debt**: Track deeper code splitting as future optimization to reduce initial bundle size.
+
 ### PhysX Build Fails
 
 PhysX is pre-built and committed. If it needs rebuilding:
