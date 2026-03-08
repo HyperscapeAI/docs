@@ -257,7 +257,7 @@ End-to-end checks from repo root:
 bun run duel:verify --server-url=https://your-stream-source.example --betting-url=https://bet.yourdomain.com --require-destinations=youtube
 ```
 
-## 6) Security notes
+## 8) Security notes
 
 - Do not expose `ARENA_EXTERNAL_BET_WRITE_KEY` in public frontend env vars.
 - Do not ship provider-keyed RPC URLs in public frontend env vars. Keep them on Railway and let the keeper proxy them.
