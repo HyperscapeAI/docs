@@ -244,7 +244,31 @@ For production betting stack deployment:
 - Keeper API: Railway (`packages/gold-betting-demo/keeper`)
 - Contracts: Solana mainnet-beta, BSC, Base
 
-See `docs/betting-production-deploy.md` for complete deployment guide.
+**Deployment guides:**
+- `docs/betting-production-deploy.md` - Complete betting stack deployment (Cloudflare + Railway)
+- `docs/evm-contracts-deployment.md` - EVM contract deployment (BSC, Base)
+
+**Quick deployment:**
+
+```bash
+# Preflight validation
+cd packages/gold-betting-demo
+bun run deploy:preflight:mainnet
+
+# Deploy Solana programs
+cd anchor
+bun run deploy:mainnet
+
+# Deploy EVM contracts
+cd ../evm-contracts
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:bsc
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:base
+```
+
+**Deployment metadata:**
+- All contract addresses managed in `packages/gold-betting-demo/deployments/contracts.json`
+- EVM deployment receipts in `packages/evm-contracts/deployments/<network>.json`
+- Automatic manifest updates after successful deployment
 
 ## Native App Distribution
 
