@@ -546,11 +546,43 @@ const exporter = new GLTFExporter();
 **VFX Preview Dead Code Removal** (PR #989):
 
 Removed unused variables and code paths in `packages/asset-forge/src/components/VFX/VFXPreview.tsx`:
-- Unused `opacity` calculations in glow particles
+- Unused `opacity` calculations in glow particles (pillar, wisp, spark, base, riseSpread)
 - Unused `primaryColor`, `whiteGlow`, `ringMat` variables
 - Unused `effect` prop in `TeleportScene` component
+- Added `isCombatHud()` type guard for proper type narrowing
 
 **Impact**: Reduces bundle size and improves code maintainability.
+
+**WeaponHandleDetector Cross-Runtime Compatibility** (PR #989):
+
+Added cross-runtime file writing utility to support both Bun and Node.js:
+
+```typescript
+async function writeArrayBufferToFile(
+  outputPath: string,
+  data: ArrayBuffer,
+): Promise<void> {
+  const globalObj = globalThis as Record<string, unknown>;
+  if (
+    globalObj.Bun &&
+    typeof (globalObj.Bun as { write: unknown }).write === "function"
+  ) {
+    const bunRuntime = globalObj.Bun as {
+      write: (path: string, data: ArrayBuffer) => Promise<void>;
+    };
+    await bunRuntime.write(outputPath, data);
+    return;
+  }
+
+  const fsModuleId = "node:fs/promises";
+  const { writeFile } = (await import(
+    /* @vite-ignore */ fsModuleId
+  )) as typeof import("node:fs/promises");
+  await writeFile(outputPath, new Uint8Array(data));
+}
+```
+
+**Impact**: Asset-forge tools work correctly in both Bun and Node.js environments.
 
 ### Anchor Vendor Dependencies
 
