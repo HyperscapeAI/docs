@@ -458,6 +458,30 @@ STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
 
 **Impact**: Prevents repo bloat (~28 MB of design assets) while maintaining version control.
 
+## Network Synchronization (March 2026)
+
+### Network Sync and Interpolation Fixes
+
+**Problem** (commit ef9e68c): Network interpolation regressions caused jittery remote entity movement and position conflicts.
+
+**Fixes**:
+- **TileInterpolator Control Flag**: Added `tileInterpolatorControlled` flag to entity data to prevent InterpolationEngine from overriding tile-based movement
+- **Dead Entity Skip**: InterpolationEngine now skips entities in `aiState: "dead"` to prevent death animation sliding
+- **Proper Quaternion Interpolation**: Use slerp instead of component-wise lerp for smooth rotation interpolation
+- **Snapshot Buffer Management**: Fixed circular buffer index calculations for proper chronological ordering
+
+**Impact**: Smooth remote entity movement without position conflicts between tile-based and interpolated movement.
+
+### Plugin World Map Exports
+
+**Fix** (commit ea0aef6): Restored missing world map exports from plugin-hyperscape.
+
+**Exports Restored**:
+- `mapProvider` - World map data provider for agent navigation
+- Map-related types and utilities
+
+**Impact**: Agents can now access world map data for navigation and spatial awareness.
+
 ## Runtime Logging (March 2026)
 
 ### Reduced Logging Noise
