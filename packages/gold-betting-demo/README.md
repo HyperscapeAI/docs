@@ -237,6 +237,56 @@ export function positionPda(
 
 **Impact**: Tests correctly handle u64 market IDs and validate fee accounting.
 
+**CLOB test improvements** (commit 43911165):
+
+New comprehensive fee routing test validates full lifecycle:
+
+```typescript
+// Test flow:
+// 1. Initialize config with treasury and market maker addresses
+// 2. Create oracle match
+// 3. Initialize CLOB match state
+// 4. Place maker order (NO side)
+// 5. Place taker order (YES side) - matches maker order
+// 6. Verify trade fees routed to treasury and market maker
+// 7. Resolve match (YES wins)
+// 8. Claim winnings
+// 9. Verify claim fees routed to market maker
+
+// Fee validation
+assert.strictEqual(treasuryAfterTrades - treasuryBefore, 10_000);
+assert.strictEqual(marketMakerAfterTrades - marketMakerBefore, 10_000);
+assert.strictEqual(marketMakerAfterClaim - marketMakerAfterTrades, 20_000);
+```
+
+**New test helpers:**
+
+```typescript
+// Derive user balance PDA
+function deriveUserBalancePda(
+  programId: PublicKey,
+  matchState: PublicKey,
+  user: PublicKey,
+): PublicKey
+
+// Derive order PDA
+function deriveOrderPda(
+  programId: PublicKey,
+  matchState: PublicKey,
+  user: PublicKey,
+  orderId: anchor.BN,
+): PublicKey
+
+// Airdrop helper
+async function airdrop(
+  connection: anchor.web3.Connection,
+  pubkey: PublicKey,
+  sol = 2,
+)
+```
+
+**Impact**: Comprehensive validation of fee routing through full CLOB lifecycle.
+
 ## UI E2E Tests
 
 ### Local (Headless Wallet + Mock GOLD)
