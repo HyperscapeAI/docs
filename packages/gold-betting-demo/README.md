@@ -100,11 +100,26 @@ bun run service
 - `STREAM_STATE_SOURCE_URL` - Upstream duel server URL
 - `STREAM_STATE_SOURCE_BEARER_TOKEN` - Auth token for upstream
 - `ARENA_EXTERNAL_BET_WRITE_KEY` - Server-to-server auth
+- `STREAM_PUBLISH_KEY` - Streaming state push endpoint auth
 - `SOLANA_CLUSTER=mainnet-beta` - Solana cluster
 - `SOLANA_RPC_URL` - Solana RPC endpoint (keep provider keys here, not in frontend)
-- `BSC_RPC_URL` / `BASE_RPC_URL` - EVM RPC endpoints
+- `BSC_RPC_URL` / `BASE_RPC_URL` - EVM RPC endpoints (keep provider keys server-side)
 - `KEEPER_DB_PATH=./keeper.sqlite` - Database path (ephemeral on Railway without volume)
 - `ENABLE_KEEPER_BOT=true` - Enable autonomous market making
+- `ENABLE_PERPS_ORACLE=false` - Enable perps oracle updates (requires deployed program)
+- `ENABLE_PERPS_LIQUIDATOR=false` - Enable perps liquidations
+
+**RPC Proxying:**
+
+The keeper proxies Solana and EVM JSON-RPC for the public app:
+- `/api/proxy/solana/rpc` - Solana RPC proxy
+- `/api/proxy/evm/rpc?chain=bsc` - EVM RPC proxy (BSC)
+- `/api/proxy/evm/rpc?chain=base` - EVM RPC proxy (Base)
+
+**Benefits:**
+- Keeps provider API keys server-side (not exposed in frontend builds)
+- Prevents accidental credential leaks in public builds
+- Centralized rate limiting and monitoring
 
 **Deployment**: See `docs/betting-production-deploy.md` for Railway + Cloudflare Pages deployment guide.
 
