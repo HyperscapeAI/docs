@@ -6,11 +6,11 @@ ElizaOS plugin for Hyperscape - Connects AI agents to 3D multiplayer RPG worlds 
 
 This plugin enables ElizaOS AI agents to play Hyperscape as real players with full access to game mechanics:
 
-- **Real-time state awareness** via providers (health, inventory, nearby entities, skills, equipment)
+- **Real-time state awareness** via providers (health, inventory, nearby entities, skills, equipment, world map)
 - **Full action repertoire**: movement, combat, gathering, inventory management, social interactions
 - **Event-driven memory storage** for learning from gameplay experiences
 - **Automatic reconnection** and robust error handling
-- **Movement completion tracking** for multi-step actions
+- **Memory-optimized**: InMemoryDatabaseAdapter with caps (50 memories per agent, 20 adapter logs, 100 cache entries)
 
 ## Architecture
 
@@ -24,14 +24,15 @@ This plugin enables ElizaOS AI agents to play Hyperscape as real players with fu
 4. **skillsProvider**: Skill levels and XP progression
 5. **equipmentProvider**: Currently equipped items
 6. **availableActionsProvider**: Context-aware available actions
+7. **mapProvider**: World map data for navigation and spatial awareness
 
 ### Actions (Executable Game Commands)
 - **Movement**: MOVE_TO, FOLLOW_ENTITY, STOP_MOVEMENT
 - **Combat**: ATTACK_ENTITY, CHANGE_COMBAT_STYLE
 - **Skills**: CHOP_TREE, CATCH_FISH, LIGHT_FIRE, COOK_FOOD
-- **Inventory**: EQUIP_ITEM, USE_ITEM, DROP_ITEM, PICKUP_ITEM
+- **Inventory**: EQUIP_ITEM, USE_ITEM, DROP_ITEM
 - **Social**: CHAT_MESSAGE
-- **Banking**: BANK_DEPOSIT, BANK_WITHDRAW, BANK_DEPOSIT_ALL
+- **Banking**: BANK_DEPOSIT, BANK_WITHDRAW
 
 ### Event Handlers
 Automatically store significant game events as memories:
@@ -39,6 +40,25 @@ Automatically store significant game events as memories:
 - Resource gathering and respawns
 - Skill level-ups and XP gains
 - Player interactions
+
+### Memory Management
+
+**InMemoryDatabaseAdapter** (no PGLite):
+- Zero WASM overhead (eliminates 2-4GB per agent)
+- Ring buffer memory cap (50 memories per agent)
+- Adapter log cap (20 entries for LLM prompts+responses)
+- Cache cap (100 entries with LRU eviction)
+- Periodic flush (every 60s for entities/rooms/worlds/tasks)
+- Periodic GC (every 60s to reclaim short-lived allocations)
+
+**Why 50 memories**:
+- Agents only read last 5+20 memories for LLM context
+- 50 provides sufficient history without unbounded growth
+- Ring buffer automatically evicts oldest when limit exceeded
+
+**Expected Memory Usage**:
+- Single agent: <300MB (down from 2-4GB with PGLite)
+- 19 agents: <5GB total (down from 38-76GB)
 
 ## Installation
 
@@ -57,11 +77,6 @@ HYPERSCAPE_SERVER_URL=ws://localhost:5555/ws
 
 # Automatically reconnect on disconnect (default: true)
 HYPERSCAPE_AUTO_RECONNECT=true
-
-# Authentication (optional - can use wallet-based auth)
-HYPERSCAPE_AUTH_TOKEN=your-jwt-token
-HYPERSCAPE_CHARACTER_ID=your-character-id
-HYPERSCAPE_PRIVY_USER_ID=your-privy-user-id
 ```
 
 ### Character File
@@ -74,11 +89,7 @@ Add the plugin to your ElizaOS character configuration:
   "plugins": ["@hyperscape/plugin-hyperscape"],
   "settings": {
     "HYPERSCAPE_SERVER_URL": "ws://localhost:5555/ws",
-    "HYPERSCAPE_AUTO_RECONNECT": "true",
-    "secrets": {
-      "HYPERSCAPE_CHARACTER_ID": "your-character-id",
-      "HYPERSCAPE_AUTH_TOKEN": "your-jwt-token"
-    }
+    "HYPERSCAPE_AUTO_RECONNECT": "true"
   }
 }
 ```
@@ -90,7 +101,7 @@ Once configured, the agent will:
 1. **Connect** to Hyperscape server on startup
 2. **Receive context** from providers every decision cycle
 3. **Execute actions** based on LLM decisions
-4. **Store memories** of important game events
+4. **Store memories** of important game events (capped at 50 per agent)
 5. **Learn** from past experiences via semantic memory search
 
 ### Example Agent Behavior
@@ -101,6 +112,7 @@ Once configured, the agent will:
 // - "Nearby: Oak Tree at [12, 5, 18]"
 // - "Inventory: Bronze Axe, 15 free slots"
 // - "Available: CHOP_TREE, MOVE_TO, CHAT"
+// - "World Map: Lumbridge (safe zone), Wilderness (PvP zone)"
 
 // Agent decides and executes action:
 await runtime.processActions({
@@ -117,51 +129,9 @@ await runtime.processActions({
 // → Semantic search returns location [12, 5, 18]
 ```
 
-## Movement API
-
-### `waitForMovementComplete(timeoutMs?: number): Promise<void>`
-
-Wait for the current movement to complete. Critical for multi-step actions.
-
-**Parameters**:
-- `timeoutMs` (optional): Maximum time to wait in milliseconds (default: 15000)
-
-**Example - Banking**:
-```typescript
-// Walk to bank
-await service.executeMove({ target: bankPosition, runMode: false });
-
-// Wait for movement to complete
-await service.waitForMovementComplete();
-
-// Now we're at the bank, safe to deposit
-await service.bankDepositAll();
-```
-
-**Example - Resource Gathering**:
-```typescript
-// Walk to tree
-await service.executeMove({ target: treePosition });
-await service.waitForMovementComplete();
-
-// Now we're in range, start chopping
-await service.executeGatherResource({ resourceEntityId: treeId });
-```
-
-### `isMoving: boolean`
-
-Read-only property indicating if the character is currently moving.
-
-```typescript
-if (service.isMoving) {
-  console.log('Character is moving, waiting...');
-  await service.waitForMovementComplete();
-}
-```
-
 ## Memory System Integration
 
-The plugin stores these event types as memories:
+The plugin stores these event types as memories (capped at 50 per agent):
 
 - **Combat Memories**: Opponents, outcomes, damage dealt/taken
 - **Resource Memories**: Locations, types, XP gained
@@ -172,6 +142,8 @@ Memories are tagged for semantic search:
 - Tags: `['hyperscape', 'combat', 'victory']`
 - Tags: `['hyperscape', 'resource', 'woodcutting', 'gathered']`
 - Tags: `['hyperscape', 'skill', 'levelup', 'fishing']`
+
+**Memory Eviction**: When memory count exceeds 50, oldest memories are automatically evicted (ring buffer).
 
 ## Development
 
@@ -200,14 +172,15 @@ src/
 │   ├── nearbyEntities.ts
 │   ├── availableActions.ts
 │   ├── skills.ts
-│   └── equipment.ts
+│   ├── equipment.ts
+│   └── mapProvider.ts    # World map data for navigation
 ├── actions/
 │   ├── movement.ts       # MOVE_TO, FOLLOW, STOP
 │   ├── combat.ts         # ATTACK, COMBAT_STYLE
 │   ├── skills.ts         # CHOP, FISH, COOK, LIGHT_FIRE
-│   ├── inventory.ts      # EQUIP, USE_ITEM, DROP, PICKUP
+│   ├── inventory.ts      # EQUIP, USE_ITEM, DROP
 │   ├── social.ts         # CHAT
-│   └── banking.ts        # DEPOSIT, WITHDRAW, DEPOSIT_ALL
+│   └── banking.ts        # DEPOSIT, WITHDRAW
 └── events/
     └── handlers.ts       # Event → Memory mappings
 ```
@@ -216,38 +189,11 @@ src/
 
 1. **Event-Driven**: Game events flow into agent context automatically
 2. **Stateless Actions**: Actions use Service for state, no internal state
-3. **Rich Context**: Providers give agent full game awareness
-4. **Memory-Based Learning**: Agents learn from experiences via Memory system
+3. **Rich Context**: Providers give agent full game awareness (including world map)
+4. **Memory-Based Learning**: Agents learn from experiences via Memory system (capped at 50)
 5. **Type-Safe**: Full TypeScript types from both ElizaOS and Hyperscape
 6. **Modular**: Clean separation - Service → Providers → Actions
-7. **Movement Awaiting**: Actions can wait for movement completion before proceeding
-
-## Action Lock System
-
-The plugin includes an action lock system to prevent LLM interference during multi-step actions:
-
-```typescript
-// Set a locked goal to prevent autonomous behavior
-behaviorManager.setGoal({
-  type: 'banking',
-  description: 'Banking items',
-  locked: true,
-  lockedBy: 'banking_action',
-});
-
-// Execute multi-step action
-await service.executeMove({ target: bankPosition });
-await service.waitForMovementComplete();
-await service.bankDepositAll();
-
-// Clear lock to resume autonomous behavior
-behaviorManager.clearGoal();
-```
-
-**Features**:
-- Skip LLM ticks during movement
-- Fast-tick mode (2s) after movement/goal changes
-- Short-circuit LLM for obvious decisions (repeat resource, banking)
+7. **Memory-Efficient**: InMemoryDatabaseAdapter with automatic eviction and periodic cleanup
 
 ## Differences from Old Plugin
 
@@ -256,18 +202,61 @@ The previous `@elizaos/plugin-hyperscape` was broken. This new implementation:
 ✅ Follows ElizaOS plugin architecture standards
 ✅ Properly implements Service, Provider, Action, Event patterns
 ✅ Uses WebSocket for real-time communication
-✅ Stores events as memories for learning
-✅ Provides complete game context via providers
+✅ Stores events as memories for learning (with 50-memory cap)
+✅ Provides complete game context via providers (including world map)
 ✅ Handles reconnection and errors gracefully
 ✅ Fully typed with TypeScript
-✅ Movement completion tracking for multi-step actions
-✅ Action lock system to prevent LLM interference
+✅ Memory-optimized with InMemoryDatabaseAdapter (no PGLite WASM overhead)
+✅ Automatic memory eviction and periodic cleanup
 
-## See Also
+## Performance Characteristics
 
-- [docs/agent-movement-api.md](../../docs/agent-movement-api.md) - Movement API documentation
-- [docs/agent-stability-improvements.md](../../docs/agent-stability-improvements.md) - Agent stability fixes
-- [packages/plugin-hyperscape/src/services/HyperscapeService.ts](src/services/HyperscapeService.ts) - Service implementation
+**Memory Usage** (per agent):
+- With InMemoryDatabaseAdapter: <300MB
+- With PGLite (old): 2-4GB
+
+**Memory Caps**:
+- Memories: 50 (ring buffer eviction)
+- Adapter logs: 20 (LLM prompts+responses)
+- Cache entries: 100 (LRU eviction)
+- Encounter cache: 50 per agent
+- Previous mob health: 100 entries
+
+**Periodic Cleanup**:
+- Non-blocking GC every 60s
+- Adapter flush every 60s
+- State cache flush when over 100 entries
+
+## Troubleshooting
+
+### Agent Memory Issues
+
+**Symptom**: Agent consuming >500MB memory
+
+**Solutions**:
+1. Verify InMemoryDatabaseAdapter is being used (not PGLite)
+2. Check memory caps are in place (50 memories per agent)
+3. Monitor periodic GC is running (every 60s)
+4. Check adapter logs are capped at 20 entries
+
+### Connection Issues
+
+**Symptom**: Agent fails to connect to Hyperscape server
+
+**Solutions**:
+1. Verify `HYPERSCAPE_SERVER_URL` is correct
+2. Check server is running and accessible
+3. Verify WebSocket endpoint is `/ws`
+4. Check firewall allows WebSocket connections
+
+### World Map Not Available
+
+**Symptom**: Agent cannot access world map data
+
+**Solutions**:
+1. Verify `mapProvider` is exported from plugin
+2. Check world map data is loaded on server
+3. Refresh known locations when map data changes
 
 ## License
 
