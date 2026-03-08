@@ -404,6 +404,43 @@ Automated frontend deployment:
 - Prevents accidental exposure of Helius, Alchemy, Infura, QuickNode, or dRPC keys
 - Enforces RPC proxying through keeper API
 
+## Perps Market Lifecycle
+
+**Market States:**
+
+- **ACTIVE**: Normal trading with live oracle updates
+  - New positions allowed
+  - Position increases/decreases allowed
+  - Requires fresh oracle updates
+  - Funding rate drifts based on market skew
+
+- **CLOSE_ONLY**: Model deprecated, reduce-only mode
+  - New positions blocked
+  - Position increases blocked
+  - Position reductions and closes allowed
+  - Settlement price frozen (no oracle updates required)
+  - Funding rate frozen
+
+- **ARCHIVED**: Market fully wound down
+  - All trading blocked
+  - Requires zero open interest and zero open positions
+  - Can be reactivated to ACTIVE if model returns
+
+**Fee Management:**
+
+- Trade fees split between treasury and market maker (configurable BPS)
+- Claim fees route to market maker
+- Market maker can recycle fees into isolated insurance reserves via `recycle_market_maker_fees`
+- Treasury and market maker can withdraw fee balances via `withdraw_fee_balance`
+- Fee balances reserved from free liquidity calculations
+
+**Slippage Protection:**
+
+The `modify_position` instruction accepts an `acceptable_price` parameter:
+- Longs: execution price must be ≤ acceptable price
+- Shorts: execution price must be ≥ acceptable price
+- Set to 0 to disable slippage check
+
 ## Notes
 
 - App auto-discovers and displays current market + last resolved result with continuous refresh
@@ -413,3 +450,5 @@ Automated frontend deployment:
 - App localnet mode uses direct GOLD (no SOL/USDC conversion)
 - Jupiter conversion path wired for mainnet
 - Anchor build uses vendored `zmij` patch in `anchor/vendor/zmij` for toolchain compatibility
+- Market ID type changed from `u32` to `u64` (breaking change for PDA derivation)
+- Account sizes increased for new fee tracking fields (requires fresh deployment)
