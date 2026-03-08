@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with AI agents powered by ElizaOS.
+Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world.
 
 ## CRITICAL: WebGPU Required (NO WebGL)
 
@@ -20,13 +20,16 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 ### Browser Requirements
 - Chrome 113+ (recommended)
 - Edge 113+
-- Safari 18+ (macOS 15+) - Safari 17 support removed
+- Safari 18+ (macOS 15+)
 - Firefox (behind flag, not recommended)
+- Check: [webgpureport.org](https://webgpureport.org)
+- Note: Safari 17 support was removed - Safari 18+ (macOS 15+) is now required
 
 ### Server/Streaming Requirements
 For Vast.ai and other GPU servers running the streaming pipeline:
-- **NVIDIA GPU with Vulkan support is REQUIRED**
-- **Must run headful** with Xorg or Xvfb (NOT headless Chrome)
+- **NVIDIA GPU with Display Driver REQUIRED**: Must have `gpu_display_active=true` on Vast.ai
+- **Display Driver vs Compute**: WebGPU requires GPU display driver support, not just compute access
+- **Must run non-headless** with Xorg or Xvfb (WebGPU requires window context)
 - Chrome uses ANGLE/Vulkan backend to access WebGPU
 - If GPU cannot initialize WebGPU, deployment MUST FAIL (no soft fallbacks)
 
@@ -74,7 +77,6 @@ bun run build:server    # Game server
 bun run dev:shared      # Shared package with watch mode
 bun run dev:client      # Client with Vite HMR
 bun run dev:server      # Server with auto-restart
-bun run dev:ai          # Game + ElizaOS agents (adds port 4001)
 ```
 
 ### Testing
@@ -87,50 +89,6 @@ npm test --workspace=packages/server
 
 # Tests MUST use real Hyperscape instances - NO MOCKS ALLOWED
 # Visual testing with screenshots and Three.js scene introspection
-```
-
-### Vast.ai Commands
-```bash
-# Search for WebGPU-capable instances
-VAST_API_KEY=xxx bun run vast:search
-
-# Provision new instance automatically
-VAST_API_KEY=xxx bun run vast:provision
-
-# Check current instance status
-VAST_API_KEY=xxx bun run vast:status
-
-# Destroy current instance
-VAST_API_KEY=xxx bun run vast:destroy
-
-# Run vast-keeper monitoring service
-VAST_API_KEY=xxx bun run vast:keeper
-
-# Check streaming health (server health, RTMP bridge, PM2 processes, logs)
-bun run duel:status
-```
-
-**Vast.ai Provisioner** (`./scripts/vast-provision.sh`):
-- Automatically searches for instances with `gpu_display_active=true` (REQUIRED for WebGPU)
-- Filters by reliability (≥95%), GPU RAM (≥20GB), price (≤$2/hr), disk space (≥120GB)
-- Rents best available instance
-- Waits for instance to be ready
-- Outputs SSH connection details and GitHub secret commands
-
-**Requirements**:
-- Vast.ai CLI: `pip install vastai`
-- API key configured: `vastai set api-key YOUR_API_KEY`
-
-### Duel Stack Commands
-```bash
-# Start full duel arena stack (game + agents + streaming + betting)
-bun run duel
-
-# Verify duel stack is running correctly
-bun run duel:verify
-
-# Check streaming health
-bun run duel:status
 ```
 
 ### Mobile Development
@@ -179,7 +137,6 @@ packages/
 ├── server/              # Game server (Fastify + WebSockets)
 │   ├── World management
 │   ├── PostgreSQL persistence
-│   ├── ElizaOS agent integration
 │   └── LiveKit voice chat integration
 ├── client/              # Web client (Vite + React)
 │   ├── 3D rendering
@@ -187,19 +144,9 @@ packages/
 │   └── UI/HUD
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
-├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
 ├── procgen/             # Procedural generation
-├── gold-betting-demo/   # Solana/EVM betting demo app
-│   ├── app/             # React betting UI (Cloudflare Pages)
-│   ├── anchor/          # Solana programs (Anchor framework)
-│   └── keeper/          # Automated keeper bot (Railway)
-├── evm-contracts/       # EVM smart contracts (Hardhat/Foundry)
-├── sim-engine/          # Cross-chain risk simulation engine
+├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
 └── docs-site/           # Docusaurus documentation site
-
-publishing/
-└── branding/            # Official logo files (SVG, EPS, PDF, PNG, JPG)
-                         # Binary files tracked via Git LFS
 ```
 
 ### Build Dependency Graph
@@ -356,10 +303,8 @@ The dev server provides:
 **Commands:**
 ```bash
 bun run dev        # Core game (client + server + shared)
-bun run dev:ai     # Game + ElizaOS agents
 bun run dev:forge  # AssetForge (standalone)
 bun run docs:dev   # Documentation site (standalone)
-bun run duel       # Full duel arena stack
 ```
 
 ### Port Allocation
@@ -372,10 +317,8 @@ All services have unique default ports to avoid conflicts:
 | 3400 | AssetForge UI | `ASSET_FORGE_PORT` | `bun run dev:forge` |
 | 3401 | AssetForge API | `ASSET_FORGE_API_PORT` | `bun run dev:forge` |
 | 3402 | Docusaurus | (hardcoded) | `bun run docs:dev` |
-| 4001 | ElizaOS API | `ELIZAOS_API_URL` | `bun run dev:ai` |
+| 4001 | ElizaOS API | (hardcoded) | `bun run dev:ai` |
 | 5555 | Game Server | `PORT` | `bun run dev` |
-| 8080 | Asset CDN | (Docker) | `bun run cdn:up` |
-| 8765 | RTMP Bridge | `RTMP_BRIDGE_PORT` | `bun run duel` |
 
 ### Environment Variables
 
@@ -385,7 +328,6 @@ All services have unique default ports to avoid conflicts:
 
 | Package | File | Purpose |
 |---------|------|---------|
-| Root | `.env.example` | Streaming keys and deployment secrets |
 | Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
@@ -404,52 +346,13 @@ PUBLIC_API_URL=https://...       # Point to your server
 PUBLIC_WS_URL=wss://...          # Point to your server WebSocket
 ```
 
-**New Environment Variables** (March 2026):
-```bash
-# Streaming/Duel Configuration
-SPAWN_MODEL_AGENTS=true          # Auto-create agents when database is empty
-STREAM_CAPTURE_EXECUTABLE=...    # Explicit Chrome path for WebGPU
-STREAM_LOW_LATENCY=true          # Use zerolatency tune for faster playback
-STREAM_GOP_SIZE=60               # GOP size in frames (default: 60)
-STREAM_AUDIO_ENABLED=true        # Enable audio capture
-PULSE_AUDIO_DEVICE=...           # PulseAudio device name
-STREAM_PLACEHOLDER_ENABLED=true  # Send placeholder frames during idle periods (prevents 30min disconnect)
-
-# Database Configuration (Railway/Serverless)
-POSTGRES_POOL_MAX=3              # Max connections (3 for crash loops, 1 for duels)
-POSTGRES_POOL_MIN=0              # Min connections (0 to not hold idle)
-RAILWAY_ENVIRONMENT=...          # Auto-detected by Railway (most reliable detection method)
-
-# Production Client Build
-NODE_ENV=production              # Use production client build
-DUEL_USE_PRODUCTION_CLIENT=true  # Force production client for streaming
-
-# Solana Duel Arena Configuration
-DUEL_SOLANA_RPC_URL=...                      # Solana RPC endpoint (default: devnet)
-DUEL_SOLANA_WS_URL=...                       # Solana WebSocket endpoint
-DUEL_SOLANA_ARENA_MARKET_PROGRAM_ID=...      # Fight oracle program ID (default: 9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU)
-DUEL_SOLANA_GOLD_MINT=...                    # Gold token mint (default: DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump)
-DUEL_SOLANA_ARENA_AUTHORITY_SECRET=...       # Solana keypair for arena operations (file path or base58)
-DUEL_SOLANA_ARENA_REPORTER_SECRET=...        # Solana keypair for reporting results
-DUEL_SOLANA_ARENA_KEEPER_SECRET=...          # Solana keypair for keeper bot automation
-
-# Deployment Secrets (GitHub Actions → /tmp/hyperscape-secrets.env)
-DATABASE_URL=...                 # PostgreSQL connection string
-JWT_SECRET=...                   # Server authentication secret
-ARENA_EXTERNAL_BET_WRITE_KEY=... # Arena betting API key
-TWITCH_STREAM_KEY=...            # Twitch RTMP stream key
-X_STREAM_KEY=...                 # X/Twitter RTMP stream key
-KICK_STREAM_KEY=...              # Kick RTMP stream key
-SOLANA_DEPLOYER_PRIVATE_KEY=...  # Solana deployer keypair
-```
-
 **Split deployment** (client and server on different hosts):
 - `PUBLIC_PRIVY_APP_ID` (client) must equal `PRIVY_APP_ID` (server)
 - `PUBLIC_WS_URL` and `PUBLIC_API_URL` must point to your server
 
 ## Package Manager
 
-This project uses **Bun** (v1.3.10+) as the package manager and runtime (updated from v1.1.38).
+This project uses **Bun** (v1.3.10+) as the package manager and runtime.
 
 - Install: `bun install` (NOT `npm install`)
 - Run scripts: `bun run <script>` or `bun <file>`
@@ -457,145 +360,15 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime (updated
 
 ## Tech Stack
 
-- **Runtime**: Bun v1.3.10+ (updated from v1.1.38 in commit bc3b1bc, March 2026)
+- **Runtime**: Bun v1.3.10+ (updated from v1.1.38)
 - **Rendering**: WebGPU ONLY (Three.js WebGPURenderer + TSL shaders) - NO WebGL
-- **Engine**: Three.js 0.183.1 (updated from 0.182.0), PhysX (WASM)
+- **Engine**: Three.js 0.182.0, PhysX (WASM)
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
-- **Database**: PostgreSQL (production via Railway/Neon), Docker (local)
-- **Testing**: Playwright 1.58.2 (updated from 1.54.2), Vitest 4.x (upgraded from 2.x in commit a916e4ee for Vite 6 compatibility)
+- **Database**: PostgreSQL (production via Neon), Docker (local)
+- **Testing**: Playwright, Vitest 4.x (upgraded from 2.x for Vite 6 compatibility)
 - **Build**: Turbo, esbuild, Vite
-- **Mobile**: Capacitor 8.1.0 (updated from 7.5.0)
-- **AI**: ElizaOS 2.0.0-alpha.26 (updated from 2.0.0-alpha.11)
-
-## Recent Improvements (March 2026)
-
-### Agent Memory Management
-
-See [AGENTS.md](AGENTS.md) for comprehensive documentation on:
-- InMemoryDatabaseAdapter migration (38-76GB → <5GB memory reduction)
-- Memory accumulation caps (50 memories per agent, adapter data structure limits)
-- Database connection pool optimization (concurrency limiting, staggered refresh)
-- Sequential agent spawning (prevents migration conflicts)
-- Auto-spawn configuration (STREAMING_DUEL_ENABLED=true)
-
-### Duel System Enhancements
-
-See [AGENTS.md](AGENTS.md) for comprehensive documentation on:
-- 19 AI model roster expansion (GPT-4.1, Claude Opus 4, Llama 3.3 70B, etc.)
-- Activity-aware idle camera (weighted agent selection)
-- Skill-based weapon selection (three-source scoring)
-- Strategic duel combat AI (LLM fight plans, phase-aware healing, movement strategies)
-- On-deck duel notification (5+ min preparation time)
-- Duel pipeline audit fixes (18 findings resolved)
-
-### Server Features
-
-#### Graceful Restart API
-
-**Feature** (commit c76ca516): Zero-downtime deployments for the duel arena stream.
-
-**Endpoints**:
-- `POST /admin/graceful-restart` - Request restart after current duel
-- `GET /admin/restart-status` - Check if restart is pending
-- `StreamingDuelScheduler.requestGracefulRestart()` - Programmatic API
-
-**Behavior**:
-- If no duel active: restart immediately via SIGTERM
-- If duel in progress: wait until RESOLUTION phase completes
-- PM2 automatically restarts the server with new code
-
-**Use Case**: Deploy code updates without interrupting live duels.
-
-#### Streaming Placeholder Mode
-
-**Feature** (commit 83056565): Prevents stream disconnects during idle periods.
-
-**Configuration**:
-```bash
-STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
-```
-
-**Behavior**:
-- Detects when no frames are received for 5 seconds
-- Switches to placeholder mode, sending minimal JPEG frames at configured FPS
-- Automatically exits placeholder mode when live frames resume
-- Keeps Twitch/YouTube streams alive during content gaps
-- Prevents 30-minute disconnect that occurs when streams appear "idle"
-
-**Technical Details**:
-- Uses minimal 16x16 JPEG (~300 bytes) scaled by FFmpeg to output size
-- Maintains configured FPS to satisfy platform requirements
-- Zero impact on live stream quality when frames are flowing
-
-### Railway Database Detection
-
-**Improvements** (commits d8c26d2, a5a201c):
-
-**Detection Methods** (in priority order):
-1. `RAILWAY_ENVIRONMENT` env var (most reliable, auto-set by Railway)
-2. `.railway.internal` hostname (internal connections)
-3. `.rlwy.net` hostname (Railway proxy)
-4. `.railway.app` hostname (direct connections)
-
-**Automatic Optimizations**:
-- Disables prepared statements when using Railway proxy
-- Uses lower connection pool limits (max: 6) for pooler connections
-- Detects pgbouncer/Supavisor poolers for compatibility mode
-
-**Impact**: Fixes "too many clients already" errors on Railway deployments.
-
-### Deployment Process Improvements
-
-**Vast.ai Deployment** (commits e065ef3, fad8885, 087033fa, 58d88f4c, 46324033):
-- **Production Environment Passthrough**: GitHub Actions writes secrets to `/tmp/hyperscape-secrets.env`
-- **SSH-Local Health Checks**: Health checks run via SSH instead of HTTP for reliability
-- **Targeted Process Killing**: Use specific process names instead of blanket `pkill -f bun`
-- **Graceful PM2 Shutdown**: Stop PM2 with delays between commands
-- **Process Teardown Before Migration**: Prevents "too many clients" errors during deployment
-- **Deterministic Migrations**: Migrations run in sorted order for consistency
-
-**Solana Configuration** (commits 7fd94ffe, d4df6a4c, b71796b3, 54eef352):
-- **Runtime Defaults**: PM2 config includes default Solana program IDs and gold mint
-- **Environment Passthrough**: All deploy-time secrets passed into PM2 runtime
-- **Auto-Discovery**: Solana authority auto-discovered from multiple candidate sources
-
-### Testing & CI Improvements
-
-**Vitest 4.x Upgrade** (commit a916e4e):
-- Vitest 2.x is incompatible with Vite 6.x
-- Upgraded vitest and @vitest/coverage-v8 from 2.1.0 to 4.0.6
-- Fixes `__vite_ssr_exportName__` errors during test runs
-- All packages using Vitest must use 4.x for Vite 6 compatibility
-
-**CI Stabilization** (commits 23323ac, 2ae03b4, 83a3452, 4b47012):
-- Fixed client test runner resolution
-- Stabilized duel agent tests and client CI builds
-- Stabilized vegetation concurrency test
-- Fixed asset forge CI module resolution
-
-**Anchor Test Configuration** (commit 8b7d126):
-- Skip anchor localnet tests in CI when Solana CLI is not installed
-- Prevents false failures in environments without Solana toolchain
-- Tests run normally in local development with Solana CLI
-
-### Branding Assets
-
-**Git LFS Integration** (commit f334c57):
-- Binary branding files (.ai, .eps, .pdf, .png, .jpg) now tracked via Git LFS
-- Prevents repo bloat (~28 MB of design assets)
-- Location: `publishing/branding/` directory
-- Documentation: `publishing/branding/README.md` documents logo variants and usage guidelines
-
-### Betting Stack Synchronization
-
-**Updates** (commits ba5617c, b36c054, d8e4d39, 6330821, a4a275b, 792159b, ca439b3):
-- Synced betting stack updates from production
-- Hardened betting localnet flows and cleared anchor audit
-- Cleaned stale app wiring after betting hardening
-- Removed legacy binary market app state
-- Restored stable app shell for production build
-- Finalized betting production sync artifacts
+- **Mobile**: Capacitor
 
 ## Troubleshooting
 
@@ -624,7 +397,6 @@ cd packages/physx-js-webidl
 lsof -ti:3333 | xargs kill -9  # Game Client
 lsof -ti:5555 | xargs kill -9  # Game Server
 lsof -ti:4001 | xargs kill -9  # ElizaOS API
-lsof -ti:8765 | xargs kill -9  # RTMP Bridge
 ```
 
 See [Port Allocation](#port-allocation) section for full port list.
@@ -636,96 +408,93 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Tests spawn their own Hyperscape instances
 - Visual tests require WebGPU support (headful browser with GPU access)
 
-### Database Issues
+### Vitest Compatibility Issues
 
-**Railway "too many clients already" errors**:
-- Set `POSTGRES_POOL_MAX=3` (or lower) in `.env`
-- Set `POSTGRES_POOL_MIN=0` to not hold idle connections
-- Increase `restart_delay=10s` in PM2 config to allow connections to close
-- Railway is auto-detected via `RAILWAY_ENVIRONMENT` env var
+**Problem**: `__vite_ssr_exportName__` errors during test runs
 
-**Local database schema errors after pulling updates**:
+**Solution**: Vitest 2.x is incompatible with Vite 6.x. Upgrade to Vitest 4.x:
 ```bash
-# Stop and remove postgres container
-docker stop hyperscape-postgres 2>/dev/null; docker rm hyperscape-postgres 2>/dev/null
+# Update package.json
+\"vitest\": \"^4.0.6\",
+\"@vitest/coverage-v8\": \"^4.0.6\"
 
-# Remove postgres volumes
-docker volume rm hyperscape-postgres-data 2>/dev/null; docker volume rm server_postgres-data 2>/dev/null
-
-# Remove any remaining hyperscape volumes
-docker volume ls | grep -i hyperscape | awk '{print $2}' | xargs -r docker volume rm
-
-# Verify volumes are gone
-docker volume ls | grep -i hyperscape
-
-# Restart with fresh database
-bun run dev
+# Reinstall
+bun install
 ```
 
-### Streaming Issues
+No API changes required - tests continue to work as-is.
 
-**WebGPU not initializing on Vast.ai**:
-- Ensure instance has `gpu_display_active=true` (use `bun run vast:provision`)
-- Check deployment logs for GPU display driver detection
-- Run `bun run duel:status` to check streaming health
-- Verify NVIDIA display driver: `nvidia-smi` should show display mode
+### Database Connection Pool Exhaustion
 
-**Browser timeout during page load**:
-- Set `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
-- Use pre-built client via `vite preview` instead of dev server
-- Significantly faster page loads (no on-demand module compilation)
+**Problem**: \"timeout exceeded when trying to connect\" or \"too many clients already\" errors
 
-**Stream disconnects after 30 minutes**:
-- Enable placeholder frame mode: `STREAM_PLACEHOLDER_ENABLED=true`
-- Sends minimal frames during idle periods to keep stream alive
-- Automatically exits when live frames resume
+**Solutions**:
 
-**Zero-downtime deployments**:
-- Use graceful restart API: `POST /admin/graceful-restart`
-- Server waits for current duel to complete before restarting
-- PM2 automatically restarts with new code
+1. **Railway Deployments**: Detection is automatic via `RAILWAY_ENVIRONMENT` env var. If issues persist, verify Railway proxy detection is working.
 
-### Agent Issues
+2. **Agent Memory Issues**: If running many AI agents (19+):
+   - Agents use concurrency limiting (max 5 concurrent bank queries)
+   - Staggered refresh intervals prevent synchronized DB spikes
+   - DB pool sizes: serverless (20), standard (30)
 
-**Agent memory leaks**:
-- Agents now use InMemoryDatabaseAdapter (zero WASM overhead)
-- Memory capped at 50 memories per agent with ring buffer eviction
-- Adapter logs capped at 20 entries, cache at 100 entries
-- Periodic GC every 60s per agent
-- See [AGENTS.md](AGENTS.md) for full memory management documentation
+3. **Deployment Process**: Ensure process teardown before migrations:
+   ```bash
+   # Stop PM2 gracefully
+   pm2 stop all
+   pm2 delete all
+   
+   # Then run migrations
+   bunx drizzle-kit push
+   ```
 
-**Database connection pool exhaustion**:
-- Bank queries now throttled (max 5 concurrent)
-- Agent refresh intervals staggered with random offset
-- Increase `POSTGRES_POOL_MAX` if needed (default: 20 for serverless, 30 for standard)
+### Agent Memory Management
 
-**Agent spawning failures**:
-- First agent spawns sequentially to complete migrations
-- Remaining agents spawn in parallel
-- Prevents concurrent ALTER TABLE races on serverless PostgreSQL
+**Problem**: High memory usage with multiple AI agents (38-76GB for 19 agents)
 
-**Missing Anthropic agents**:
-- Ensure `@elizaos/plugin-anthropic` is installed
-- Check `MAX_MODEL_AGENTS` is set to 25 (default increased from 10)
+**Solution**: Agents now use InMemoryDatabaseAdapter instead of PGLite WASM:
+- Memory footprint reduced to <5GB for 19 agents
+- Ring buffer limits: 50 memories per agent
+- Adapter log caps: 20 entries
+- Cache caps: 100 entries with LRU eviction
+- Periodic GC every 60s (non-blocking)
 
-### Vitest 4.x Upgrade
+**Diagnostic Logging**: Check adapter state monitoring in logs for memory issues.
 
-**Breaking Changes** (commit a916e4e):
-- Vitest 2.x is incompatible with Vite 6.x
-- Upgraded vitest and @vitest/coverage-v8 from 2.1.0 to 4.0.6
-- Fixes `__vite_ssr_exportName__` errors during test runs
-- All packages using Vitest must use 4.x for Vite 6 compatibility
+### Streaming Duel Deployments
 
-**Migration Notes**:
-- Update `vitest` and `@vitest/coverage-v8` to `^4.0.6` in package.json
-- No API changes required - tests continue to work as-is
-- Vite 6 requires Vitest 4.x for SSR module handling
+**Graceful Restart**: Deploy code updates without interrupting live duels:
+```bash
+# Request restart after current duel
+curl -X POST http://localhost:5555/admin/graceful-restart
+
+# Check restart status
+curl http://localhost:5555/admin/restart-status
+```
+
+**Placeholder Mode**: Prevent stream disconnects during idle periods:
+```bash
+# Enable in .env
+STREAM_PLACEHOLDER_ENABLED=true
+```
+
+Automatically sends minimal JPEG frames when no content for 5 seconds.
+
+### CI Test Failures
+
+**Anchor Localnet Tests**: Skip in CI when Solana CLI not installed:
+```bash
+# Tests automatically skip if solana command not found
+# Run normally in local development with Solana CLI
+```
+
+**Client Test Runner**: Ensure proper module resolution in CI environment.
+
+**Vegetation Concurrency**: Tests are stabilized for parallel execution.
 
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
-- [AGENTS.md](AGENTS.md) - AI agent system documentation (memory management, duel improvements)
+- [AGENTS.md](AGENTS.md) - AI coding assistant instructions and comprehensive feature documentation
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
-- [docs/duel-stack.md](docs/duel-stack.md) - Duel arena stack documentation
 - Game Design Document: See `.cursor/rules/gdd.mdc`
