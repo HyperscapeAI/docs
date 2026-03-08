@@ -223,6 +223,44 @@ data-testid="duels-bottom-panel-topTraders"
 
 **Impact**: Enables robust Playwright tests without brittle CSS selectors.
 
+**Perps Market UI Improvements** (commits 43911165, 8322b3f, 1043f0a):
+
+The Models Market View now displays market status and enforces lifecycle constraints:
+
+```typescript
+// Market status display
+{selectedEntry.status === "ACTIVE"
+  ? selectedOracleFresh
+    ? `Rank #${selectedEntry.rank}`
+    : "Oracle Stale"
+  : selectedEntry.status === "CLOSE_ONLY"
+    ? "Close Only"
+    : "Archived"}
+
+// Trading constraints
+const selectedCanOpen = Boolean(selectedMarketActive && selectedOracleFresh);
+const selectedCanClose = Boolean(
+  selectedPosition &&
+  ((selectedMarketActive && selectedOracleFresh) || selectedMarketCloseOnly),
+);
+```
+
+**Status column in market table:**
+- ACTIVE - Normal trading
+- CLOSE ONLY - Reduce-only mode
+- ARCHIVED - Market wound down
+
+**Trading button states:**
+- Open position: Disabled if market not ACTIVE or oracle stale
+- Close position: Enabled if market ACTIVE (with fresh oracle) or CLOSE_ONLY
+
+**Slippage protection:**
+- Longs: `acceptable_price = quoted_price * 1.02` (2% slippage tolerance)
+- Shorts: `acceptable_price = quoted_price * 0.98` (2% slippage tolerance)
+- Passed to `modify_position` instruction
+
+**Impact**: Users can safely close positions in deprecated markets without requiring live oracle updates.
+
 ### Public Clusters (Testnet/Mainnet)
 
 ```bash
