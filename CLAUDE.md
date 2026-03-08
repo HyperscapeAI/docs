@@ -470,6 +470,47 @@ If seeing "timeout exceeded when trying to connect" errors:
 - Enable concurrency limiting for bank queries (max 5)
 - Stagger agent refresh intervals to distribute load
 
+### EVM Contract Deployment Issues
+
+**Deployment fails with "Invalid TREASURY_ADDRESS":**
+- Ensure `TREASURY_ADDRESS` is set for mainnet deployments
+- Verify address is a valid Ethereum address (checksummed)
+
+**Deployment fails with "insufficient funds":**
+- Check deployer wallet balance
+- Ensure wallet has enough native tokens for gas (BNB for BSC, ETH for Base)
+
+**RPC connection errors:**
+- Verify RPC URL is correct and accessible
+- Check RPC provider rate limits
+- Try using Hardhat fallback RPC (remove custom RPC_URL env var)
+
+**Manifest update fails:**
+- Verify `packages/gold-betting-demo/deployments/contracts.json` exists
+- Check file permissions (must be writable)
+- Ensure network key exists in manifest (bsc, bscTestnet, base, baseSepolia)
+
+**Type errors in tests:**
+- Ensure `typed-contracts.ts` is up to date with contract ABIs
+- Regenerate types if contract interfaces changed
+
+### Betting Stack Deployment Issues
+
+**Preflight validation fails:**
+- Check that Solana program keypairs match deployment manifest
+- Verify Anchor IDL files are in sync with build output
+- Ensure EVM environment variables are configured
+- Run `bun run deploy:preflight:testnet` or `bun run deploy:preflight:mainnet` for detailed error messages
+
+**Keeper returns fallback duel data:**
+- Verify `STREAM_STATE_SOURCE_URL` is set and the upstream duel server is responding
+- Test upstream endpoint: `curl https://your-stream-source.example/api/streaming/state`
+
+**Points/referrals not persisting:**
+- Keeper uses ephemeral SQLite by default on Railway
+- For persistence: attach Railway persistent volume and set `KEEPER_DB_PATH=/mnt/data/keeper.sqlite`
+- Or migrate to external database (PostgreSQL, MySQL, etc.)
+
 ## Betting Stack Architecture
 
 ### Deployment Metadata System
