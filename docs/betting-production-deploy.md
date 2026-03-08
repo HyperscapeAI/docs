@@ -299,6 +299,57 @@ Automated frontend deployment:
 3. Deploy to Cloudflare Pages
 4. Verify `build-info.json` is accessible
 
+## Perps Market Lifecycle Management
+
+**Market States** (commits 43911165, 8322b3f, 1043f0a):
+
+The perpetual futures markets support three lifecycle states:
+
+- **ACTIVE**: Normal trading with live oracle updates
+  - New positions allowed
+  - Position increases/decreases allowed
+  - Requires fresh oracle updates (within `max_oracle_staleness_seconds`)
+  - Funding rate drifts based on market skew
+
+- **CLOSE_ONLY**: Model deprecated, reduce-only mode
+  - New positions blocked
+  - Position increases blocked
+  - Position reductions and closes allowed
+  - Settlement price frozen (no oracle updates required)
+  - Funding rate frozen
+
+- **ARCHIVED**: Market fully wound down
+  - All trading blocked
+  - Requires zero open interest and zero open positions
+  - Can be reactivated to ACTIVE if model returns
+
+**State Transitions:**
+
+```bash
+# Deprecate a model (freeze settlement price)
+set_market_status(market_id, CLOSE_ONLY, settlement_spot_index)
+
+# Archive a fully-closed market
+set_market_status(market_id, ARCHIVED, 0)
+
+# Reactivate an archived market
+set_market_status(market_id, ACTIVE, 0)
+```
+
+**Fee Management:**
+
+- **Trade fees**: Split between treasury and market maker (configurable BPS)
+- **Claim fees**: Route to market maker
+- **Fee recycling**: Market maker can recycle fees into isolated insurance reserves
+- **Fee withdrawal**: Treasury and market maker can withdraw their fee balances
+
+**Slippage Protection:**
+
+The `modify_position` instruction now accepts an `acceptable_price` parameter:
+- Longs: execution price must be ≤ acceptable price
+- Shorts: execution price must be ≥ acceptable price
+- Set to 0 to disable slippage check
+
 ## Security Hardening
 
 **Build-Time Secret Detection** (commit 43911165):
@@ -327,6 +378,10 @@ CI scans for leaked secrets in:
 - Environment files (`.env`, `.env.example`, `.env.mainnet`, etc.)
 - Production build output (`dist/`)
 - Fails build if secrets detected
+
+**Credential Rotation Required**:
+
+If API keys were previously committed to git history, they must be rotated out-of-band even after removal from tracked files. Git history preserves all previous commits.
 
 ## Deployment Process Improvements
 
