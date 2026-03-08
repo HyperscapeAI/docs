@@ -467,9 +467,9 @@ STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
 - Contracts: Deployed to Solana mainnet-beta and BSC/Base
 - See `docs/betting-production-deploy.md` for full deployment guide
 
-**CI/CD Workflows** (commits 43911165, 46cd28e):
+**CI/CD Workflows** (commits 43911165, 46cd28e, 66a7b23):
 - **betting-ci.yml**: Type checking, linting, unit tests, keeper smoke test, env sanitization, production build verification
-- **deploy-betting-keeper.yml**: Tests → smoke test → Railway deploy → endpoint verification
+- **deploy-betting-keeper.yml**: Tests → smoke test → Railway deploy → endpoint verification (removed Railway status probe for reliability)
 - **deploy-betting-pages.yml**: Build → dist hygiene → Cloudflare Pages deploy → build-info.json verification
 
 **Security Hardening**:
