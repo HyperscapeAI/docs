@@ -470,12 +470,91 @@ If seeing "timeout exceeded when trying to connect" errors:
 - Enable concurrency limiting for bank queries (max 5)
 - Stagger agent refresh intervals to distribute load
 
+## Betting Stack Architecture
+
+### Deployment Metadata System
+
+**Centralized Contract Management** (PR #989):
+
+All contract addresses and program IDs are managed in a single source of truth:
+- `packages/gold-betting-demo/deployments/contracts.json` - Shared deployment manifest
+- `packages/gold-betting-demo/deployments/index.ts` - Typed configuration with runtime validation
+
+**Benefits:**
+- Single source of truth for all contract addresses
+- Type-safe access to deployment metadata
+- Automatic validation of manifest structure
+- Shared across frontend, keeper, and deployment scripts
+
+**EVM Deployment Receipts:**
+
+Each EVM deployment writes a detailed receipt to `packages/evm-contracts/deployments/<network>.json`:
+
+```json
+{
+  "network": "bsc",
+  "chainId": 56,
+  "deployer": "0x...",
+  "goldClobAddress": "0x...",
+  "treasuryAddress": "0x...",
+  "marketMakerAddress": "0x...",
+  "goldTokenAddress": "0x...",
+  "deploymentTxHash": "0x...",
+  "deployedAt": "2026-03-08T12:00:00.000Z"
+}
+```
+
+The deploy script automatically updates the central `contracts.json` manifest after successful deployment.
+
+### Typed Contract Helpers
+
+**Type-Safe Contract Deployment** (PR #989):
+
+The `packages/evm-contracts/typed-contracts.ts` module provides fully typed deployment helpers:
+
+```typescript
+import { deployGoldClob, deploySkillOracle } from '../typed-contracts';
+
+// Type-safe deployment with IntelliSense
+const clob = await deployGoldClob(treasuryAddress, marketMakerAddress, signer);
+const oracle = await deploySkillOracle(initialBasePrice, signer);
+
+// Typed contract interfaces
+const match: GoldClobMatch = await clob.matches(matchId);
+const position: GoldClobPosition = await clob.positions(matchId, trader);
+```
+
+**Benefits:**
+- Compile-time type checking for all contract interactions
+- IntelliSense support in tests and scripts
+- Prevents common errors (wrong parameter types, missing overrides)
+- Consistent deployment patterns across test suites
+
+### Preflight Validation
+
+Before deploying to any network, run preflight checks:
+
+```bash
+cd packages/gold-betting-demo
+bun run deploy:preflight:testnet    # Validate testnet deployment
+bun run deploy:preflight:mainnet    # Validate mainnet deployment
+```
+
+**Validation checks:**
+- ✅ Solana program keypairs match deployment manifest
+- ✅ Anchor IDL files match deployment manifest
+- ✅ App and keeper IDL files are in sync
+- ✅ EVM deployment environment variables are configured
+- ✅ EVM RPC URLs are available (configured or fallback)
+- ✅ Contract addresses are present in deployment manifest
+
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
 - [AGENTS.md](AGENTS.md) - AI coding assistant instructions and feature documentation
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
-- [docs/betting-production-deploy.md](docs/betting-production-deploy.md) - Betting stack deployment guide
+- [docs/betting-production-deploy.md](docs/betting-production-deploy.md) - Betting stack deployment guide (Cloudflare + Railway)
+- [docs/evm-contracts-deployment.md](docs/evm-contracts-deployment.md) - EVM contract deployment guide (BSC, Base)
 - [docs/duel-stack.md](docs/duel-stack.md) - Duel stack documentation
 - Game Design Document: See `.cursor/rules/gdd.mdc`
