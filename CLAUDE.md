@@ -596,22 +596,51 @@ The deploy script automatically updates the central `contracts.json` manifest af
 The `packages/evm-contracts/typed-contracts.ts` module provides fully typed deployment helpers:
 
 ```typescript
-import { deployGoldClob, deploySkillOracle } from '../typed-contracts';
+import { 
+  deployGoldClob, 
+  deploySkillOracle, 
+  deployMockErc20,
+  deployAgentPerpEngine,
+  deployAgentPerpEngineNative 
+} from '../typed-contracts';
 
 // Type-safe deployment with IntelliSense
 const clob = await deployGoldClob(treasuryAddress, marketMakerAddress, signer);
 const oracle = await deploySkillOracle(initialBasePrice, signer);
+const mockToken = await deployMockErc20("USDC", "USDC", signer);
+const perpEngine = await deployAgentPerpEngine(oracleAddress, marginTokenAddress, skewScale, signer);
 
 // Typed contract interfaces
 const match: GoldClobMatch = await clob.matches(matchId);
 const position: GoldClobPosition = await clob.positions(matchId, trader);
+const order: GoldClobOrder = await clob.orders(orderId);
 ```
+
+**Available contract interfaces:**
+- `GoldClobContract` - CLOB market with typed methods
+- `SkillOracleContract` - Oracle with typed skill updates
+- `MockERC20Contract` - Test token with typed mint/approve
+- `AgentPerpEngineContract` - Perps engine with typed position management
+- `AgentPerpEngineNativeContract` - Native token perps engine
 
 **Benefits:**
 - Compile-time type checking for all contract interactions
 - IntelliSense support in tests and scripts
 - Prevents common errors (wrong parameter types, missing overrides)
 - Consistent deployment patterns across test suites
+
+**Usage in tests:**
+
+All EVM contract tests now use typed helpers instead of raw `ethers.getContractFactory()`:
+
+```typescript
+// Before
+const GoldClob = await ethers.getContractFactory("GoldClob");
+const clob = await GoldClob.deploy(treasury.address, marketMaker.address);
+
+// After
+const clob = await deployGoldClob(treasury.address, marketMaker.address);
+```
 
 ### Preflight Validation
 
