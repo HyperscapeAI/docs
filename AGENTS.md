@@ -569,6 +569,31 @@ Removed unused variables and code paths in `packages/asset-forge/src/components/
 
 **Impact**: Resolves Anchor build warnings and ensures compatibility with Solana SDK v2.x.
 
+### Anchor Build Improvements
+
+**Feature** (PR #989): Reduced Anchor build logging noise.
+
+**Changes**:
+- Set `RUST_LOG=cargo_build_sbf=error` during Anchor builds
+- Suppresses verbose cargo-build-sbf output
+- Preserves existing `RUST_LOG` configuration if set
+
+**Script**: `packages/gold-betting-demo/anchor/scripts/build-workspace.sh`
+
+**Impact**: Cleaner build output with better signal-to-noise ratio for debugging build failures.
+
+### Anchor Test Timeout Increases
+
+**Feature** (PR #989): Increased test timeouts for more reliable CI runs.
+
+**Changes**:
+- RPC wait timeout: 90s → 180s
+- Program deployment wait timeout: 90s → 180s
+
+**Script**: `packages/gold-betting-demo/anchor/scripts/run-localnet-tests.sh`
+
+**Impact**: Prevents false test failures in CI environments with slower disk I/O or network latency.
+
 ### Solana Program Deployment Scripts
 
 **Feature** (PR #989): Automated Solana program deployment with wallet auto-discovery.
