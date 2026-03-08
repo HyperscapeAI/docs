@@ -1,0 +1,271 @@
+---
+title: "EVM Contracts Deployment"
+description: "Deploy GoldClob and perps contracts to BSC and Base"
+icon: "ethereum"
+---
+
+## Overview
+
+The EVM contracts package provides betting infrastructure for BSC and Base networks:
+
+- **GoldClob** - Central Limit Order Book for duel outcome betting
+- **AgentPerpEngine** - Perpetual futures for agent skill ratings (ERC20 margin)
+- **AgentPerpEngineNative** - Perpetual futures with native token margin
+- **SkillOracle** - Oracle for agent skill updates
+- **MockERC20** - Test token for local development
+
+## Deployment Metadata System
+
+All contract addresses are managed in a centralized deployment manifest:
+
+- `packages/gold-betting-demo/deployments/contracts.json` - Single source of truth
+- `packages/gold-betting-demo/deployments/index.ts` - Typed configuration with runtime validation
+
+**Benefits:**
+- Eliminates hardcoded addresses scattered across codebase
+- Type-safe access to deployment metadata
+- Automatic validation of manifest structure
+- Shared across frontend, keeper, deployment scripts, and tests
+
+## Preflight Validation
+
+Before deploying to any network, run preflight checks:
+
+```bash
+cd packages/gold-betting-demo
+bun run deploy:preflight:testnet    # Validate testnet deployment
+bun run deploy:preflight:mainnet    # Validate mainnet deployment
+```
+
+**Validation checks:**
+- ✅ Solana program keypairs match deployment manifest
+- ✅ Anchor IDL files match deployment manifest
+- ✅ App and keeper IDL files are in sync
+- ✅ EVM deployment environment variables are configured
+- ✅ EVM RPC URLs are available (configured or using Hardhat fallbacks)
+- ✅ Contract addresses are present in deployment manifest
+
+**Warnings vs Failures:**
+- **Warnings**: Missing RPC URLs (will use fallbacks), pending contract addresses
+- **Failures**: Mismatched program IDs, missing required env vars, invalid addresses
+
+## Deploy to Testnet
+
+Deploy GoldClob contracts to testnet networks:
+
+```bash
+cd packages/evm-contracts
+
+# BSC Testnet
+bun run deploy:bsc-testnet
+
+# Base Sepolia
+bun run deploy:base-sepolia
+```
+
+**Environment variables:**
+- `PRIVATE_KEY` - Deployer private key (required)
+- `BSC_RPC_URL` - BSC RPC endpoint (optional, uses Hardhat fallback if not set)
+- `BASE_RPC_URL` - Base RPC endpoint (optional, uses Hardhat fallback if not set)
+- `GOLD_TOKEN_ADDRESS` - GOLD token address (optional, recorded in deployment receipt)
+
+**Deployment process:**
+1. Validates treasury and market maker addresses (uses deployer address for testnet)
+2. Deploys GoldClob contract
+3. Writes deployment receipt to `deployments/<network>.json`
+4. Updates central manifest at `../gold-betting-demo/deployments/contracts.json`
+
+## Deploy to Mainnet
+
+Deploy GoldClob contracts to mainnet networks:
+
+```bash
+cd packages/evm-contracts
+
+# BSC Mainnet
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:bsc
+
+# Base Mainnet
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:base
+```
+
+**Environment variables required:**
+- `PRIVATE_KEY` - Deployer private key (required)
+- `TREASURY_ADDRESS` - Treasury address for fee collection (required for mainnet)
+- `MARKET_MAKER_ADDRESS` - Market maker address for fee collection (required for mainnet)
+- `GOLD_TOKEN_ADDRESS` - GOLD token address (optional, recorded in deployment receipt)
+- `BSC_RPC_URL` / `BASE_RPC_URL` - RPC endpoints (optional, uses Hardhat fallbacks if not set)
+
+**Mainnet safety:**
+- Mainnet deployments require explicit `TREASURY_ADDRESS` and `MARKET_MAKER_ADDRESS`
+- Deployment fails if these are not set (prevents accidental use of deployer address)
+- Validates all addresses before deployment
+
+**Skip manifest update** (for testing):
+```bash
+SKIP_BETTING_MANIFEST_UPDATE=true bun run deploy:bsc-testnet
+```
+
+## Deployment Receipts
+
+Each deployment writes a detailed receipt to `packages/evm-contracts/deployments/<network>.json`:
+
+```json
+{
+  "network": "bsc",
+  "chainId": 56,
+  "deployer": "0x...",
+  "goldClobAddress": "0x...",
+  "treasuryAddress": "0x...",
+  "marketMakerAddress": "0x...",
+  "goldTokenAddress": "0x...",
+  "deploymentTxHash": "0x...",
+  "deployedAt": "2026-03-08T12:00:00.000Z"
+}
+```
+
+The deploy script automatically updates the central `contracts.json` manifest after successful deployment.
+
+## Typed Contract Helpers
+
+The `typed-contracts.ts` module provides type-safe contract deployment and interaction:
+
+```typescript
+import { 
+  deployGoldClob, 
+  deploySkillOracle, 
+  deployMockErc20,
+  deployAgentPerpEngine,
+  deployAgentPerpEngineNative 
+} from '../typed-contracts';
+
+// Type-safe deployment with IntelliSense
+const clob = await deployGoldClob(treasuryAddress, marketMakerAddress, signer);
+const oracle = await deploySkillOracle(initialBasePrice, signer);
+const mockToken = await deployMockErc20("USDC", "USDC", signer);
+
+// Fully typed contract interfaces
+const match: GoldClobMatch = await clob.matches(matchId);
+const position: GoldClobPosition = await clob.positions(matchId, trader);
+const order: GoldClobOrder = await clob.orders(orderId);
+```
+
+**Available contract interfaces:**
+- `GoldClobContract` - CLOB market with typed methods
+- `SkillOracleContract` - Oracle with typed skill updates
+- `MockERC20Contract` - Test token with typed mint/approve
+- `AgentPerpEngineContract` - Perps engine with typed position management
+- `AgentPerpEngineNativeContract` - Native token perps engine
+
+**Benefits:**
+- Compile-time type checking for all contract interactions
+- IntelliSense support in tests and scripts
+- Prevents common errors (wrong parameter types, missing overrides)
+- Consistent deployment patterns across test suites
+
+## Local Testing
+
+Run the full EVM contract test suite:
+
+```bash
+cd packages/evm-contracts
+bun test
+```
+
+**Test coverage:**
+- GoldClob basic functionality
+- GoldClob exploit resistance (post-fix validation)
+- GoldClob fuzz testing (randomized invariants)
+- GoldClob round 2 security fixes
+- AgentPerpEngine security regressions
+- AgentPerpEngineNative security regressions
+
+**All tests now use typed contract helpers:**
+
+```typescript
+// Before
+const GoldClob = await ethers.getContractFactory("GoldClob");
+const clob = await GoldClob.deploy(treasury.address, marketMaker.address);
+
+// After
+const clob = await deployGoldClob(treasury.address, marketMaker.address);
+```
+
+## Local Simulation
+
+Run local EVM simulation with PnL reporting:
+
+```bash
+cd packages/evm-contracts
+bun run simulate:localnet
+```
+
+**Simulation scenarios:**
+- Whale round trip (large position open/close)
+- Funding rate drift
+- Isolated insurance containment
+- Positive equity liquidation
+- Local insurance shortfall
+- Fee recycling into isolated insurance
+- Model deprecation lifecycle
+
+**Output**: `simulations/gold-clob-localnet-report.json`
+
+## Fee Structure
+
+**GoldClob fees:**
+- `tradeTreasuryFeeBps` - Fee to treasury on every trade (default: 100 BPS = 1%)
+- `tradeMarketMakerFeeBps` - Fee to market maker on every trade (default: 100 BPS = 1%)
+- `winningsMarketMakerFeeBps` - Fee to market maker on claim (default: 200 BPS = 2%)
+
+**Fee routing:**
+- Trade fees: Split between treasury and market maker
+- Claim fees: Route to market maker
+- Market maker fees can be recycled into liquidity
+
+**Configuration:**
+
+```typescript
+// During deployment
+const clob = await deployGoldClob(
+  treasuryAddress,
+  marketMakerAddress,
+  signer
+);
+
+// Fee rates are hardcoded in contract constructor:
+// tradeTreasuryFeeBps = 100
+// tradeMarketMakerFeeBps = 100
+// winningsMarketMakerFeeBps = 200
+```
+
+## Troubleshooting
+
+**Deployment fails with "Invalid TREASURY_ADDRESS":**
+- Ensure `TREASURY_ADDRESS` is set for mainnet deployments
+- Verify address is a valid Ethereum address (checksummed)
+
+**Deployment fails with "insufficient funds":**
+- Check deployer wallet balance
+- Ensure wallet has enough native tokens for gas (BNB for BSC, ETH for Base)
+
+**RPC connection errors:**
+- Verify RPC URL is correct and accessible
+- Check RPC provider rate limits
+- Try using Hardhat fallback RPC (remove custom RPC_URL env var)
+
+**Manifest update fails:**
+- Verify `packages/gold-betting-demo/deployments/contracts.json` exists
+- Check file permissions (must be writable)
+- Ensure network key exists in manifest (bsc, bscTestnet, base, baseSepolia)
+
+**Type errors in tests:**
+- Ensure `typed-contracts.ts` is up to date with contract ABIs
+- Regenerate types if contract interfaces changed
+- Check that all tests import from `typed-contracts.ts`
+
+## Related Documentation
+
+- [Betting Production Deploy](/docs/betting-production-deploy) - Full deployment guide
+- [Gold Betting Demo](/packages/gold-betting-demo) - Betting stack overview
+- [Configuration](/devops/configuration) - Environment variables
