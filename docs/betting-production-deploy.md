@@ -196,7 +196,7 @@ If you run the Vast.ai stack, verify it before pointing the keeper at it:
 ./scripts/check-streaming-status.sh http://127.0.0.1:5555
 ```
 
-## 3) Put the betting API behind Cloudflare
+## 5) Put the betting API behind Cloudflare
 
 1. Create `api.yourdomain.com` in Cloudflare DNS and point it to the keeper Railway target.
 2. Enable Cloudflare proxy (orange cloud) for `api.yourdomain.com`.
