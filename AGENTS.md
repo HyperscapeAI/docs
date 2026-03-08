@@ -665,9 +665,22 @@ background-image:
 **Location**: `packages/gold-betting-demo/anchor/vendor/anchor-lang-0.31.1/`
 
 **Changes**:
-- Updated `Cargo.toml` to include new dependencies
+- Updated `Cargo.toml` to include new dependencies:
+  ```toml
+  [dependencies.solana-loader-v3-interface]
+  version = "5.0.0"
+  features = ["bincode"]
+
+  [dependencies.solana-sdk-ids]
+  version = "2.2.1"
+  ```
 - Fixed `system_program::ID` references to use `crate::system_program::ID`
-- Added explicit lifetime annotations to `AccountLoader` methods
+- Added explicit lifetime annotations to `AccountLoader` methods:
+  ```rust
+  pub fn load(&self) -> Result<Ref<'_, T>>
+  pub fn load_mut(&self) -> Result<RefMut<'_, T>>
+  pub fn load_init(&self) -> Result<RefMut<'_, T>>
+  ```
 
 **Impact**: Resolves Anchor build warnings and ensures compatibility with Solana SDK v2.x.
 
