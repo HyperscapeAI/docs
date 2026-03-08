@@ -66,9 +66,10 @@ npm test             # Run tests
 
 ```
 packages/
-├── shared/          # Core engine (ECS, Three.js, networking)
+├── shared/          # Core engine (ECS, Three.js, PhysX, networking)
 ├── server/          # Game server (Fastify)
 ├── client/          # Web client (Vite + React)
+├── plugin-hyperscape/ # ElizaOS AI agent plugin
 ├── physx-js-webidl/ # PhysX WASM bindings
 ├── procgen/         # Procedural generation
 └── asset-forge/     # AI asset generation + VFX catalog
@@ -323,5 +324,138 @@ await Promise.all(agents.slice(1).map(spawnAgent));
 - `updateDrawStats()` for draw outcomes without affecting win/loss/streak
 
 **Impact**: Duel system is now production-ready with proper edge case handling.
+
+## Server Features (March 2026)
+
+### Graceful Restart API
+
+**Feature** (commit c76ca516): Zero-downtime deployments for the duel arena stream.
+
+**Endpoints**:
+- `POST /admin/graceful-restart` - Request restart after current duel
+- `GET /admin/restart-status` - Check if restart is pending
+- `StreamingDuelScheduler.requestGracefulRestart()` - Programmatic API
+
+**Behavior**:
+- If no duel active: restart immediately via SIGTERM
+- If duel in progress: wait until RESOLUTION phase completes
+- PM2 automatically restarts the server with new code
+
+**Use Case**: Deploy code updates without interrupting live duels.
+
+### Streaming Placeholder Mode
+
+**Feature** (commit 83056565): Prevents stream disconnects during idle periods.
+
+**Configuration**:
+```bash
+STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
+```
+
+**Behavior**:
+- Detects when no frames are received for 5 seconds
+- Switches to placeholder mode, sending minimal JPEG frames at configured FPS
+- Automatically exits placeholder mode when live frames resume
+- Keeps Twitch/YouTube streams alive during content gaps
+- Prevents 30-minute disconnect that occurs when streams appear "idle"
+
+**Technical Details**:
+- Uses minimal 16x16 JPEG (~300 bytes) scaled by FFmpeg to output size
+- Maintains configured FPS to satisfy platform requirements
+- Zero impact on live stream quality when frames are flowing
+
+### Railway Database Detection
+
+**Improvements** (commits d8c26d2, a5a201c):
+
+**Detection Methods** (in priority order):
+1. `RAILWAY_ENVIRONMENT` env var (most reliable, auto-set by Railway)
+2. `.railway.internal` hostname (internal connections)
+3. `.rlwy.net` hostname (Railway proxy)
+4. `.railway.app` hostname (direct connections)
+
+**Automatic Optimizations**:
+- Disables prepared statements when using Railway proxy
+- Uses lower connection pool limits (max: 6) for pooler connections
+- Detects pgbouncer/Supavisor poolers for compatibility mode
+
+**Impact**: Fixes "too many clients already" errors on Railway deployments.
+
+## Testing & CI Improvements (March 2026)
+
+### Vitest 4.x Upgrade
+
+**Breaking Change** (commit a916e4e): Vitest 2.x is incompatible with Vite 6.x.
+
+**Changes**:
+- Upgraded vitest and @vitest/coverage-v8 from 2.1.0 to 4.0.6
+- Fixes `__vite_ssr_exportName__` errors during test runs
+- All packages using Vitest must use 4.x for Vite 6 compatibility
+
+**Migration**:
+- Update `vitest` and `@vitest/coverage-v8` to `^4.0.6` in package.json
+- No API changes required - tests continue to work as-is
+
+### CI Stabilization
+
+**Test Fixes** (commits 23323ac, 2ae03b4, 83a3452, 4b47012):
+- Fixed client test runner resolution
+- Stabilized duel agent tests and client CI builds
+- Stabilized vegetation concurrency test
+- Fixed asset forge CI module resolution
+
+**Anchor Test Configuration** (commit 8b7d126):
+- Skip anchor localnet tests in CI when Solana CLI is not installed
+- Prevents false failures in environments without Solana toolchain
+- Tests run normally in local development with Solana CLI
+
+## Deployment Improvements (March 2026)
+
+### Vast.ai Deployment Enhancements
+
+**Process Management** (commits e065ef3, fad8885, 087033fa, 58d88f4c):
+- **Production Environment Passthrough**: GitHub Actions writes secrets to `/tmp/hyperscape-secrets.env`
+- **SSH-Local Health Checks**: Health checks run via SSH instead of HTTP for reliability
+- **Targeted Process Killing**: Use specific process names instead of blanket `pkill -f bun`
+- **Graceful PM2 Shutdown**: Stop PM2 with delays between commands
+- **Process Teardown Before Migration**: Prevents "too many clients" errors during deployment
+
+**Migration Improvements** (commit 46324033):
+- **Deterministic Migrations**: Migrations run in sorted order for consistency
+- **Sequential First Agent**: Prevents concurrent ALTER TABLE races on serverless PostgreSQL
+
+**Solana Configuration** (commits 7fd94ffe, d4df6a4c, b71796b3, 54eef352):
+- **Runtime Defaults**: PM2 config includes default Solana program IDs and gold mint
+- **Environment Passthrough**: All deploy-time secrets passed into PM2 runtime
+- **Auto-Discovery**: Solana authority auto-discovered from multiple candidate sources
+
+### Betting Stack Synchronization
+
+**Updates** (commits ba5617c, b36c054, d8e4d39, 6330821, a4a275b, 792159b, ca439b3):
+- Synced betting stack updates from production
+- Hardened betting localnet flows and cleared anchor audit
+- Cleaned stale app wiring after betting hardening
+- Removed legacy binary market app state
+- Restored stable app shell for production build
+- Finalized betting production sync artifacts
+
+## Branding Assets (March 2026)
+
+### Git LFS Integration
+
+**Feature** (commit f334c57): Binary branding files now tracked via Git LFS.
+
+**Files Tracked**:
+- `.ai` (Adobe Illustrator)
+- `.eps` (Encapsulated PostScript)
+- `.pdf` (Portable Document Format)
+- `.png` (PNG images)
+- `.jpg` (JPEG images)
+
+**Location**: `publishing/branding/` directory
+
+**Documentation**: `publishing/branding/README.md` documents logo variants and usage guidelines.
+
+**Impact**: Prevents repo bloat (~28 MB of design assets) while maintaining version control.
 
 See CLAUDE.md for complete documentation.
