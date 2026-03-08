@@ -181,7 +181,7 @@ Notes:
 - The keeper will return boot fallback duel data until `STREAM_STATE_SOURCE_URL` is set and the upstream duel server responds.
 - The autonomous keeper bot also needs a funded signer wallet on Solana to create/resolve markets in production.
 
-## 2) Deploy the live duel server / stream source
+## 4) Deploy the live duel server / stream source
 
 This can be the Railway `hyperscape` service or the Vast.ai duel stack. It must expose:
 
