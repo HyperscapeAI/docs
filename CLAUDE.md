@@ -501,10 +501,90 @@ Automatically sends minimal JPEG frames when no content for 5 seconds.
 
 **Vegetation Concurrency**: Tests are stabilized for parallel execution.
 
+## Betting Stack (March 2026)
+
+### Architecture
+
+The betting stack enables real-time wagering on AI agent duels across Solana and EVM chains.
+
+**Components**:
+- **Frontend** (`packages/gold-betting-demo/app`): React app with Solana/EVM wallet integration
+- **Keeper** (`packages/gold-betting-demo/keeper`): Backend API for bet recording, market making, oracle resolution
+- **Anchor Programs** (`packages/gold-betting-demo/anchor`): Solana smart contracts (fight oracle, CLOB, perps)
+- **EVM Contracts** (`packages/evm-contracts`): Hardhat/Foundry contracts for BSC/Base
+- **Sim Engine** (`packages/sim-engine`): Cross-chain risk simulation and attack fuzzing
+
+**Deployment**:
+- Frontend: Cloudflare Pages
+- Keeper: Railway with persistent storage
+- Contracts: Solana mainnet-beta, BSC, Base
+- See `docs/betting-production-deploy.md` for deployment guide
+
+### Local Development
+
+```bash
+# Start betting app (requires game server running)
+cd packages/gold-betting-demo/app
+bun install
+bun run dev  # Opens on port 5173
+
+# Start keeper (betting API)
+cd packages/gold-betting-demo/keeper
+bun install
+bun run dev
+
+# Run Anchor tests (requires Solana CLI)
+cd packages/gold-betting-demo/anchor
+anchor test
+
+# Run EVM tests
+cd packages/evm-contracts
+bun run test
+```
+
+### Environment Variables
+
+**Betting App** (`packages/gold-betting-demo/app/.env`):
+```bash
+VITE_GAME_API_URL=http://localhost:5555
+VITE_SOLANA_CLUSTER=localnet
+VITE_USE_GAME_RPC_PROXY=true
+```
+
+**Keeper** (`packages/gold-betting-demo/keeper/.env`):
+```bash
+STREAM_STATE_SOURCE_URL=http://localhost:5555/api/streaming/state
+SOLANA_CLUSTER=localnet
+SOLANA_RPC_URL=http://localhost:8899
+```
+
+**Game Server** (betting-related vars in `packages/server/.env`):
+```bash
+STREAMING_DUEL_ENABLED=true
+SOLANA_ARENA_AUTHORITY_SECRET=...
+SOLANA_ARENA_MARKET_PROGRAM_ID=...
+SOLANA_GOLD_MINT=...
+```
+
+### Security Hardening
+
+**Audit Status** (commit d8e4d39):
+- All Anchor programs passed security audit
+- Fuzz testing for exploit resistance
+- Noble ed25519 import alignment for Solana compatibility
+
+**CI/CD** (commits 43911165, bb8ec82, abefb25, 624f47f, 6ba6fa0):
+- Betting workflow definitions repaired
+- Betting workspaces installed in CI
+- Noble ed25519 imports aligned
+- Betting polyfill shims stabilized in CI
+
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
 - [AGENTS.md](AGENTS.md) - AI coding assistant instructions and comprehensive feature documentation
+- [docs/betting-production-deploy.md](docs/betting-production-deploy.md) - Betting stack deployment guide
+- [docs/duel-stack.md](docs/duel-stack.md) - Streaming duel system documentation
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
