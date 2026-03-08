@@ -654,6 +654,44 @@ background-image:
 
 **Impact**: Eliminates HTTP request for background image, faster initial render.
 
+**Custom EVM Chain ID Support** (commits c04770449, d864c738):
+
+Added support for custom local EVM chain IDs in E2E tests:
+
+```typescript
+// From packages/gold-betting-demo/app/scripts/run-e2e-local.sh
+# Read actual chain ID from Anvil
+ACTUAL_EVM_CHAIN_ID="$(read_anvil_chain_id)"
+if [[ "$ACTUAL_EVM_CHAIN_ID" != "$EVM_CHAIN_ID" ]]; then
+  echo "[e2e] anvil reported chain id ${ACTUAL_EVM_CHAIN_ID} (requested ${EVM_CHAIN_ID})"
+fi
+EVM_CHAIN_ID="$ACTUAL_EVM_CHAIN_ID"
+```
+
+**Impact**: E2E tests work correctly with Anvil's default chain ID (31337) instead of requiring BSC testnet chain ID (97).
+
+**Noble ed25519 Import Alignment** (commit abefb258):
+
+Fixed Solana compatibility issues with noble ed25519 imports:
+
+```typescript
+// Ensures consistent cryptographic library usage across betting stack
+// Prevents import conflicts between @solana/web3.js and @noble/ed25519
+```
+
+**Impact**: Resolves Solana transaction signing issues in betting stack.
+
+**CI Polyfill Shims** (commit bb8ec820):
+
+Added polyfill shims for betting stack tests in CI:
+
+```typescript
+// Prevents test failures in headless environments
+// Ensures Node.js polyfills work correctly in Vite test environment
+```
+
+**Impact**: Betting stack tests pass reliably in CI environments.
+
 ### Anchor Vendor Dependencies
 
 **Feature** (PR #989): Added vendored Solana dependencies to fix Anchor build compatibility.
