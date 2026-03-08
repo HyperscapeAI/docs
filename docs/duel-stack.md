@@ -63,14 +63,38 @@ Before starting the keeper bot, the orchestrator validates the prediction market
 
 **Environment Variables:**
 
-```bash\n# Duel-specific Solana configuration (takes precedence over SOLANA_* vars)\nDUEL_SOLANA_RPC_URL=https://api.devnet.solana.com\nDUEL_SOLANA_WS_URL=wss://api.devnet.solana.com\nDUEL_SOLANA_ARENA_MARKET_PROGRAM_ID=9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU\nDUEL_SOLANA_GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump\nDUEL_SOLANA_ARENA_AUTHORITY_SECRET=~/.config/solana/id.json\nDUEL_SOLANA_ARENA_REPORTER_SECRET=~/.config/solana/id.json\nDUEL_SOLANA_ARENA_KEEPER_SECRET=~/.config/solana/id.json\n\n# Fallback to general Solana configuration if DUEL_* vars not set\nSOLANA_RPC_URL=https://api.devnet.solana.com\nSOLANA_WS_URL=wss://api.devnet.solana.com\nSOLANA_ARENA_MARKET_PROGRAM_ID=9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU\nSOLANA_GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump\nSOLANA_ARENA_AUTHORITY_SECRET=\nSOLANA_ARENA_REPORTER_SECRET=\nSOLANA_ARENA_KEEPER_SECRET=\n```
+```bash
+# Duel-specific Solana configuration (takes precedence over SOLANA_* vars)
+DUEL_SOLANA_RPC_URL=https://api.devnet.solana.com
+DUEL_SOLANA_WS_URL=wss://api.devnet.solana.com
+DUEL_SOLANA_ARENA_MARKET_PROGRAM_ID=9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU
+DUEL_SOLANA_GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump
+DUEL_SOLANA_ARENA_AUTHORITY_SECRET=~/.config/solana/id.json
+DUEL_SOLANA_ARENA_REPORTER_SECRET=~/.config/solana/id.json
+DUEL_SOLANA_ARENA_KEEPER_SECRET=~/.config/solana/id.json
+
+# Fallback to general Solana configuration if DUEL_* vars not set
+SOLANA_RPC_URL=https://api.devnet.solana.com
+SOLANA_WS_URL=wss://api.devnet.solana.com
+SOLANA_ARENA_MARKET_PROGRAM_ID=9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU
+SOLANA_GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump
+SOLANA_ARENA_AUTHORITY_SECRET=
+SOLANA_ARENA_REPORTER_SECRET=
+SOLANA_ARENA_KEEPER_SECRET=
+```
 
 **Keeper Program Checks:**
 
 The keeper bot validates required programs before starting:
 - Fight oracle: `6tpRysBFd1yXRipYEYwAw9jxEoVHk15kVXfkDGFLMqcD`
 - Gold clob market: `ARVJNJp49VZnkB8QBYZAAFJmufvtVSPhnuuenwwSLwpi`
-- Gold perps market (optional): `HbXhqEFevpkfYdZCN6YmJGRmQmj9vsBun2ZHjeeaLRik`\n\nIf programs are not deployed, keeper bot is skipped with a warning.\n\n## Streaming Outputs\n\nConfigure the following env vars (root `.env` or `packages/server/.env`):
+- Gold perps market (optional): `HbXhqEFevpkfYdZCN6YmJGRmQmj9vsBun2ZHjeeaLRik`
+
+If programs are not deployed, keeper bot is skipped with a warning.
+
+## Streaming Outputs
+
+Configure the following env vars (root `.env` or `packages/server/.env`):
 
 - `RTMP_MULTIPLEXER_URL` (+ optional `RTMP_MULTIPLEXER_STREAM_KEY`, `RTMP_MULTIPLEXER_NAME`)
 - `TWITCH_STREAM_KEY` (or `TWITCH_RTMP_STREAM_KEY`)
@@ -83,7 +107,7 @@ The keeper bot validates required programs before starting:
 - `RTMP_DESTINATIONS_JSON` for additional/custom fanout destinations
 - `STREAMING_VIEWER_ACCESS_TOKEN` optional gate for live WebSocket stream/spectator viewers
 
-**New Streaming Features:**
+**New Streaming Features (March 2026):**
 
 - `STREAM_PLACEHOLDER_ENABLED=true` - Send placeholder frames during idle periods (prevents 30-minute disconnect)
 - `SPAWN_MODEL_AGENTS=true` - Auto-create agents when database is empty (useful for fresh deployments)
@@ -131,9 +155,35 @@ When `STREAMING_PUBLIC_DELAY_MS > 0`, live `mode=streaming` WebSocket viewers ar
 
 These endpoints power the betting app live duel telemetry section (inventory, wins/losses, level, HP, and internal monologues).
 
+## Admin APIs (zero-downtime deployments)
+
+**Graceful Restart** (NEW - commit c76ca516):
+
+Request a server restart after the current duel ends:
+
+```bash
+# Request graceful restart (requires ADMIN_CODE)
+curl -X POST http://localhost:5555/admin/graceful-restart \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+
+# Check restart status
+curl http://localhost:5555/admin/restart-status \
+  -H "x-admin-code: YOUR_ADMIN_CODE"
+```
+
+**Behavior:**
+- If no duel active (IDLE/ANNOUNCEMENT): restart immediately via SIGTERM
+- If duel in progress (FIGHTING/RESOLUTION): wait until RESOLUTION phase completes
+- PM2 automatically restarts the server with new code
+- No interruption to active duels or streams
+
+**Returns:** `{ success: true, pendingRestart: boolean, currentPhase: string }`
+
+**Use Case:** Deploy code updates without interrupting live duels.
+
 ## Monitoring & Diagnostics
 
-**Streaming Status Check** (NEW):
+**Streaming Status Check:**
 
 ```bash
 bun run duel:status
@@ -146,28 +196,6 @@ Quick diagnostic for verifying streaming health on Vast.ai or Railway:
 - RTMP bridge status and bytes streamed
 - PM2 process status
 - Recent logs
-
-**Graceful Restart** (Zero-Downtime Deployments):
-
-Request a server restart after the current duel ends:
-
-```bash
-# Via API (requires ADMIN_CODE)
-curl -X POST http://localhost:5555/admin/graceful-restart \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
-
-# Check restart status
-curl http://localhost:5555/admin/restart-status \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
-```
-
-When graceful restart is requested:
-- If no duel active (IDLE/ANNOUNCEMENT): restart immediately via SIGTERM
-- If duel in progress (FIGHTING/RESOLUTION): wait until RESOLUTION phase completes
-- PM2 automatically restarts the server with new code
-- No interruption to active duels or streams
-
-Returns: `{ success: true, pendingRestart: boolean, currentPhase: string }`
 
 ## Verification
 
@@ -199,7 +227,7 @@ RTMP bridge status is best-effort by default, and can be made strict with `--req
 - Use pre-built client via `vite preview` instead of dev server
 - Significantly faster page loads (no on-demand module compilation)
 
-**Database "too many clients" errors:**
+**Database \"too many clients\" errors:**
 - Set `POSTGRES_POOL_MAX=3` (or 1 for duel deployments)
 - Set `POSTGRES_POOL_MIN=0` to not hold idle connections
 - Increase `restart_delay=10s` in PM2 config
@@ -209,3 +237,21 @@ RTMP bridge status is best-effort by default, and can be made strict with `--req
 - Fixed in recent commits - now uses targeted process killing
 - Avoids `pkill -f bun` which killed the deploy script
 - Uses specific process names for graceful shutdown
+
+**Agent memory issues:**
+- Agents now use InMemoryDatabaseAdapter (zero WASM overhead)
+- Memory capped at 50 memories per agent with ring buffer eviction
+- Adapter logs capped at 20 entries, cache at 100 entries
+- Periodic GC every 60s per agent
+- See [AGENTS.md](../AGENTS.md) for full memory management documentation
+
+**Agent spawning failures:**
+- First agent spawns sequentially to complete migrations
+- Remaining agents spawn in parallel
+- Prevents concurrent ALTER TABLE races on serverless PostgreSQL
+- Auto-spawn enabled when `STREAMING_DUEL_ENABLED=true`
+
+**Missing Anthropic agents:**
+- Ensure `@elizaos/plugin-anthropic` is installed
+- Check `MAX_MODEL_AGENTS` is set to 25 (default increased from 10)
+- 19 AI models now supported (GPT-4.1, Claude Opus 4.6, Llama 3.3 70B, etc.)
