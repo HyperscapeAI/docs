@@ -123,6 +123,41 @@ The keeper proxies Solana and EVM JSON-RPC for the public app:
 
 **Deployment**: See `docs/betting-production-deploy.md` for Railway + Cloudflare Pages deployment guide.
 
+**Keeper service improvements** (commits 43911165, 8322b3f, 1043f0a):
+
+**Points system:**
+- Points tracking with event history
+- Leaderboard with multiple scopes (wallet, identity, global)
+- Time windows (daily, weekly, monthly, all-time)
+- Staking multipliers based on GOLD balance and hold days
+- Tier system (BRONZE, SILVER, GOLD, DIAMOND)
+- Referral tracking with invite codes
+
+**Perps market management:**
+- Oracle updates for active markets
+- Market deprecation (ACTIVE → CLOSE_ONLY)
+- Market archiving (CLOSE_ONLY → ARCHIVED)
+- Market reactivation (ARCHIVED → ACTIVE)
+- Fee recycling (market maker fees → insurance)
+- Liquidation monitoring (disabled by default)
+
+**API endpoints:**
+- `/api/perps/markets` - List all perps markets with status
+- `/api/streaming/leaderboard/details` - Agent leaderboard with duel history
+- `/api/arena/points/:wallet` - Points balance and multiplier
+- `/api/arena/points/rank/:wallet` - Leaderboard rank
+- `/api/arena/points/history/:wallet` - Points event history
+- `/api/proxy/solana/rpc` - Solana RPC proxy
+- `/api/proxy/evm/rpc?chain=bsc` - EVM RPC proxy (BSC)
+- `/api/proxy/evm/rpc?chain=base` - EVM RPC proxy (Base)
+
+**Database schema:**
+- `points_by_wallet` - Aggregate points per wallet
+- `points_events` - Event history for windowed queries
+- `wallet_gold_state` - GOLD balance and hold days for multipliers
+- `referrals` - Invite code tracking
+- `perps_markets` - Perps market metadata and status
+
 ## Local E2E Tests (Anchor + Mock GOLD)
 
 From `packages/gold-betting-demo/anchor`:
