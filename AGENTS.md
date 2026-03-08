@@ -415,6 +415,179 @@ STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
 - Prevents false failures in environments without Solana toolchain
 - Tests run normally in local development with Solana CLI
 
+## EVM Contract Deployment Infrastructure (March 2026)
+
+### Centralized Deployment Metadata
+
+**Feature** (PR #989): Unified contract address management across Solana and EVM chains.
+
+**Deployment Manifest**:
+- `packages/gold-betting-demo/deployments/contracts.json` - Single source of truth for all contract addresses
+- `packages/gold-betting-demo/deployments/index.ts` - Typed configuration with runtime validation
+
+**Benefits**:
+- Eliminates hardcoded addresses scattered across codebase
+- Type-safe access to deployment metadata
+- Automatic validation of manifest structure
+- Shared across frontend, keeper, deployment scripts, and tests
+
+**EVM Deployment Receipts**:
+
+Each EVM deployment writes a detailed receipt to `packages/evm-contracts/deployments/<network>.json`:
+
+```json
+{
+  "network": "bsc",
+  "chainId": 56,
+  "deployer": "0x...",
+  "goldClobAddress": "0x...",
+  "treasuryAddress": "0x...",
+  "marketMakerAddress": "0x...",
+  "goldTokenAddress": "0x...",
+  "deploymentTxHash": "0x...",
+  "deployedAt": "2026-03-08T12:00:00.000Z"
+}
+```
+
+The deploy script automatically updates the central `contracts.json` manifest after successful deployment.
+
+### Typed Contract Helpers
+
+**Feature** (PR #989): Type-safe contract deployment and interaction helpers.
+
+**Module**: `packages/evm-contracts/typed-contracts.ts`
+
+**Deployment Functions**:
+```typescript
+import { deployGoldClob, deploySkillOracle, deployMockErc20 } from '../typed-contracts';
+
+// Type-safe deployment with IntelliSense
+const clob = await deployGoldClob(treasuryAddress, marketMakerAddress, signer);
+const oracle = await deploySkillOracle(initialBasePrice, signer);
+```
+
+**Contract Interfaces**:
+```typescript
+interface GoldClobContract {
+  createMatch(): Promise<ContractTransactionResponse>;
+  placeOrder(matchId, isBuy, price, amount, overrides?): Promise<ContractTransactionResponse>;
+  matches(matchId): Promise<GoldClobMatch>;
+  positions(matchId, trader): Promise<GoldClobPosition>;
+  // ... fully typed methods
+}
+
+type GoldClobMatch = {
+  status: bigint;
+  winner: bigint;
+  yesPool: bigint;
+  noPool: bigint;
+};
+```
+
+**Benefits**:
+- Compile-time type checking for all contract interactions
+- IntelliSense support in tests and scripts
+- Prevents common errors (wrong parameter types, missing overrides)
+- Consistent deployment patterns across test suites
+
+### Preflight Validation System
+
+**Feature** (PR #989): Pre-deployment validation to catch configuration errors before touching real chains.
+
+**Commands**:
+```bash
+cd packages/gold-betting-demo
+bun run deploy:preflight:testnet    # Validate testnet deployment
+bun run deploy:preflight:mainnet    # Validate mainnet deployment
+```
+
+**Validation Checks**:
+- ✅ Solana program keypairs match deployment manifest addresses
+- ✅ Anchor IDL files match deployment manifest addresses
+- ✅ App and keeper IDL files are in sync with Anchor build output
+- ✅ EVM deployment environment variables are configured
+- ✅ EVM RPC URLs are available (configured or using Hardhat fallbacks)
+- ✅ Contract addresses are present in deployment manifest
+
+**Warnings vs Failures**:
+- **Warnings**: Missing RPC URLs (will use fallbacks), pending contract addresses
+- **Failures**: Mismatched program IDs, missing required env vars, invalid addresses
+
+**Impact**: Prevents deployment failures and configuration drift by validating all metadata before deployment.
+
+### Solana Program Deployment Scripts
+
+**Feature** (PR #989): Automated Solana program deployment with wallet auto-discovery.
+
+**Script**: `packages/gold-betting-demo/anchor/scripts/deploy-programs.sh`
+
+**Commands**:
+```bash
+cd packages/gold-betting-demo/anchor
+bun run deploy:testnet      # Deploy to Solana testnet
+bun run deploy:mainnet      # Deploy to Solana mainnet-beta
+```
+
+**Programs Deployed**:
+- `fight_oracle` - Match lifecycle and winner posting
+- `gold_clob_market` - GOLD CLOB market for binary prediction trading
+- `gold_perps_market` - Perpetual futures market for agent skill ratings
+
+**Wallet Auto-Discovery** (in priority order):
+1. `$ANCHOR_WALLET` environment variable
+2. `~/.config/solana/hyperscape-keys/deployer.json`
+3. `~/.config/solana/id.json`
+
+**Deployment Process**:
+1. Builds Anchor workspace (unless `SKIP_BUILD=1`)
+2. Verifies program keypairs and binaries exist
+3. Deploys each program using `solana program deploy`
+4. Verifies deployment with `solana program show`
+
+**Skip Build**:
+```bash
+SKIP_BUILD=1 bun run deploy:mainnet
+```
+
+**Impact**: Streamlines Solana program deployment with automatic validation and consistent deployment process.
+
+### EVM Contract Deployment Automation
+
+**Feature** (PR #989): Automated EVM contract deployment with receipt generation and manifest updates.
+
+**Script**: `packages/evm-contracts/scripts/deploy.ts`
+
+**Commands**:
+```bash
+cd packages/evm-contracts
+
+# Testnet
+bun run deploy:bsc-testnet
+bun run deploy:base-sepolia
+
+# Mainnet (requires explicit addresses)
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:bsc
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:base
+```
+
+**Deployment Process**:
+1. Validates treasury and market maker addresses
+2. Deploys GoldClob contract
+3. Writes deployment receipt to `deployments/<network>.json`
+4. Updates central manifest at `../gold-betting-demo/deployments/contracts.json`
+
+**Mainnet Safety**:
+- Requires explicit `TREASURY_ADDRESS` and `MARKET_MAKER_ADDRESS` for mainnet
+- Validates all addresses before deployment
+- Fails if required addresses are missing (prevents accidental use of deployer address)
+
+**Skip Manifest Update** (for testing):
+```bash
+SKIP_BETTING_MANIFEST_UPDATE=true bun run deploy:bsc-testnet
+```
+
+**Impact**: Ensures consistent deployment process with automatic metadata management and safety checks.
+
 ## Deployment Improvements (March 2026)
 
 ### Vast.ai Deployment Enhancements
