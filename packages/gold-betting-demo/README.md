@@ -184,6 +184,59 @@ bun run audit:strict
 
 Note: `bun run audit` ignores `RUSTSEC-2025-0141` for `bincode` (unmaintained upstream dependency in Anchor/Solana stack).
 
+**Test helper improvements** (commits 43911165, 8322b3f):
+
+New test helpers for perps market testing:
+
+```typescript
+// Market ID encoding (u32 → u64)
+export function marketIdBn(marketId: number): anchor.BN {
+  return new anchor.BN(String(marketId));
+}
+
+// Trade fee calculation
+export function tradeFeeLamports(sizeDeltaLamports: number): number {
+  return Math.floor(
+    (Math.abs(sizeDeltaLamports) * TOTAL_TRADE_FEE_BPS) / 10_000,
+  );
+}
+
+// Market status constants
+export const PERPS_STATUS_ACTIVE = 0;
+export const PERPS_STATUS_CLOSE_ONLY = 1;
+export const PERPS_STATUS_ARCHIVED = 2;
+```
+
+**PDA derivation updates:**
+
+```typescript
+// Market PDA (8-byte market ID, was 4-byte)
+export function marketPda(programId: PublicKey, marketId: number): PublicKey {
+  const marketIdBytes = Buffer.alloc(8);
+  marketIdBytes.writeBigUInt64LE(BigInt(marketId), 0);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("market"), marketIdBytes],
+    programId,
+  )[0];
+}
+
+// Position PDA (8-byte market ID, was 4-byte)
+export function positionPda(
+  programId: PublicKey,
+  trader: PublicKey,
+  marketId: number,
+): PublicKey {
+  const marketIdBytes = Buffer.alloc(8);
+  marketIdBytes.writeBigUInt64LE(BigInt(marketId), 0);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("position"), trader.toBuffer(), marketIdBytes],
+    programId,
+  )[0];
+}
+```
+
+**Impact**: Tests correctly handle u64 market IDs and validate fee accounting.
+
 ## UI E2E Tests
 
 ### Local (Headless Wallet + Mock GOLD)
