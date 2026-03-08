@@ -578,6 +578,14 @@ Removed unused variables and code paths in `packages/asset-forge/src/components/
 - Suppresses verbose cargo-build-sbf output
 - Preserves existing `RUST_LOG` configuration if set
 
+**Implementation**:
+```bash
+# From packages/gold-betting-demo/anchor/scripts/build-workspace.sh
+BASE_RUST_LOG="${RUST_LOG:-}"
+ANCHOR_RUST_LOG="${BASE_RUST_LOG:+${BASE_RUST_LOG},}cargo_build_sbf=error"
+export RUST_LOG="${ANCHOR_RUST_LOG}"
+```
+
 **Script**: `packages/gold-betting-demo/anchor/scripts/build-workspace.sh`
 
 **Impact**: Cleaner build output with better signal-to-noise ratio for debugging build failures.
