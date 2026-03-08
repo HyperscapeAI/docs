@@ -542,6 +542,17 @@ If seeing "timeout exceeded when trying to connect" errors:
 - For persistence: attach Railway persistent volume and set `KEEPER_DB_PATH=/mnt/data/keeper.sqlite`
 - Or migrate to external database (PostgreSQL, MySQL, etc.)
 
+**Build fails with "Leaked secret detected":**
+- Remove provider-keyed RPC URLs from `VITE_*` environment variables
+- Use RPC proxying instead: set `VITE_USE_GAME_RPC_PROXY=true` and `VITE_USE_GAME_EVM_RPC_PROXY=true`
+- Keep provider URLs on Railway keeper (server-side only)
+- Build-time validation checks for Helius, Alchemy, Infura, QuickNode, and dRPC patterns
+
+**EVM contract tests fail with type errors:**
+- Ensure `typed-contracts.ts` is imported correctly
+- Use typed deployment helpers: `deployGoldClob()`, `deploySkillOracle()`, etc.
+- Check that contract ABIs haven't changed (regenerate types if needed)
+
 ## Betting Stack Architecture
 
 ### Deployment Metadata System
