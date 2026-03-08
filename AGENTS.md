@@ -584,6 +584,28 @@ async function writeArrayBufferToFile(
 
 **Impact**: Asset-forge tools work correctly in both Bun and Node.js environments.
 
+**Client Panel Registry Optimization** (PR #989):
+
+Un-lazified critical game panels for better initial load performance:
+
+```typescript
+// Before: Lazy-loaded panels
+const InventoryPanel = lazy(() => import("../../game/panels/InventoryPanel"));
+const StatsPanel = lazy(() => import("../../game/panels/StatsPanel"));
+const PrayerPanel = lazy(() => import("../../game/panels/PrayerPanel"));
+const SpellsPanel = lazy(() => import("../../game/panels/SpellsPanel"));
+
+// After: Static imports for critical panels
+import { InventoryPanel } from "../../game/panels/InventoryPanel";
+import { StatsPanel } from "../../game/panels/StatsPanel";
+import { PrayerPanel, PRAYER_PANEL_DIMENSIONS } from "../../game/panels/PrayerPanel";
+import { SpellsPanel, SPELLS_PANEL_DIMENSIONS } from "../../game/panels/SpellsPanel";
+```
+
+**Rationale**: These panels are always visible or frequently accessed during gameplay, so lazy loading adds unnecessary delay. Other panels (Equipment, Quest, Friends, etc.) remain lazy-loaded.
+
+**Impact**: Faster initial panel rendering, reduced layout shift during gameplay.
+
 ### Anchor Vendor Dependencies
 
 **Feature** (PR #989): Added vendored Solana dependencies to fix Anchor build compatibility.
