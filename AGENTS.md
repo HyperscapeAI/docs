@@ -606,6 +606,54 @@ import { SpellsPanel, SPELLS_PANEL_DIMENSIONS } from "../../game/panels/SpellsPa
 
 **Impact**: Faster initial panel rendering, reduced layout shift during gameplay.
 
+**Betting App Lazy Loading** (commit 43911165):
+
+Heavy betting surfaces are now lazy-loaded to reduce initial bundle size:
+
+```typescript
+// Lazy-loaded betting components
+const EvmBettingPanel = lazy(() => import("./components/EvmBettingPanel"));
+const SolanaClobPanel = lazy(() => import("./components/SolanaClobPanel"));
+const ModelsMarketView = lazy(() => import("./components/ModelsMarketView"));
+const PointsLeaderboard = lazy(() => import("./components/PointsLeaderboard"));
+const PointsHistory = lazy(() => import("./components/PointsHistory"));
+const ReferralPanel = lazy(() => import("./components/ReferralPanel"));
+const AgentStats = lazy(() => import("./components/AgentStats"));
+
+// Usage with Suspense and loading fallback
+<Suspense fallback={<PanelFallback label="Loading market" minHeight={360} />}>
+  <SolanaClobPanel agent1Name={agent1} agent2Name={agent2} />
+</Suspense>
+```
+
+**Tab switching optimization:**
+
+```typescript
+// Use startTransition for non-urgent UI updates
+onClick={() => startTransition(() => setSurfaceMode("MODELS"))}
+```
+
+**Impact**: 
+- Reduces initial bundle size by deferring heavy components
+- Improves time-to-interactive for betting app
+- Smoother tab transitions with React 19 concurrent features
+
+**Dashboard Background Styling** (PR #989):
+
+Updated dashboard background from image-based to gradient-based for faster loading:
+
+```css
+/* Before */
+background-image: url('/assets/background.jpg');
+
+/* After */
+background-image:
+  radial-gradient(circle at top, rgba(242, 208, 138, 0.14), transparent 36%),
+  linear-gradient(180deg, rgba(30, 20, 10, 0.72) 0%, rgba(11, 10, 21, 0.96) 100%);
+```
+
+**Impact**: Eliminates HTTP request for background image, faster initial render.
+
 ### Anchor Vendor Dependencies
 
 **Feature** (PR #989): Added vendored Solana dependencies to fix Anchor build compatibility.
