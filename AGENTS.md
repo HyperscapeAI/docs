@@ -458,4 +458,13 @@ STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
 
 **Impact**: Prevents repo bloat (~28 MB of design assets) while maintaining version control.
 
+## Runtime Logging (March 2026)
+
+### Reduced Logging Noise
+
+**Changes** (commit 4be5641):
+- Reduced excessive runtime logging for cleaner console output
+- Improved signal-to-noise ratio for debugging
+- Maintains critical error and warning logs
+
 See CLAUDE.md for complete documentation.
