@@ -1,219 +1,229 @@
-# GOLD Binary Fight Demo (Anchor + Vite + Helius)
+# GOLD Betting Stack (Solana + EVM)
 
-Standalone demo package for a binary YES/NO betting market settled from a separate fight oracle.
+Full-stack betting system for AI agent duels with dual-chain support (Solana + EVM).
 
 ## What this includes
 
-- `anchor/programs/fight_oracle`: on-chain match lifecycle and winner posting.
-- `anchor/programs/gold_binary_market`: on-chain GOLD-only binary market, fee routing, market-maker seed logic, and winner claims.
-- `anchor/tests/gold-betting-demo.ts`: local end-to-end tests using mock GOLD token accounts and local validator.
-- `app`: standalone Vite app for wallet connect, market creation, bet placement, Jupiter conversion (SOL/USDC -> GOLD), settlement, and claiming.
-- `keeper`: CLI automation scripts for market-maker seeding and oracle resolution, using Helius RPC.
-  - includes a market bot that keeps rounds running, resolves finished rounds, and seeds liquidity.
+- **`anchor/`**: Solana smart contracts (Anchor framework)
+  - `programs/fight_oracle`: On-chain match lifecycle and winner posting
+  - `programs/gold_clob_market`: CLOB (Central Limit Order Book) for duel outcome betting
+  - `programs/gold_perps_market`: Perpetual futures market for agent skill ratings
+- **`app/`**: React betting UI (Vite + Solana/EVM wallet integration)
+  - Dual-chain betting interface
+  - Points system with staking multipliers
+  - Referral tracking
+  - Leaderboards
+- **`keeper/`**: Backend API service (Fastify + SQLite/PostgreSQL)
+  - Bet recording and validation
+  - Market making automation
+  - Oracle resolution
+  - RPC proxying (keeps provider keys server-side)
+  - Points and referral management
+- **`../evm-contracts/`**: EVM smart contracts (Hardhat + Foundry)
+  - `GoldClob.sol`: CLOB market for BSC/Base
+  - `AgentPerpEngine.sol`: Perpetual futures for EVM chains
+- **`../sim-engine/`**: Cross-chain risk simulation and attack fuzzing
 
-## Core behavior
+## Core Behavior
 
-- Betting window is created on oracle match creation (`300s` by default in app / `.env.mainnet`).
-- Market maker can seed equal liquidity on both sides only if no user bets exist after 10 seconds.
-- Trading fees are collected on every bet and routed to configured fee wallet (default bot/market-maker wallet).
-- Bot can recycle those fee balances into market making by seeding new rounds from the same wallet.
-- Oracle and betting are separate programs.
-- Market resolves only from oracle result.
-- Payouts are in GOLD.
-- SOL/USDC conversion in app is done via Jupiter before placing bet.
+- **Betting Window**: Created on oracle match creation (300s default)
+- **Market Maker**: Seeds equal liquidity on both sides after 10s if no user bets exist
+- **Trading Fees**: Collected on every bet, routed to treasury and market maker
+- **Fee Recycling**: Market maker can recycle fees into new round liquidity
+- **Oracle Separation**: Oracle and betting are separate programs for trustless resolution
+- **Dual-Chain**: Unified GOLD token on Solana + EVM (BSC/Base)
+- **Payouts**: Settled in GOLD tokens
+- **Conversion**: SOL/USDC → GOLD via Jupiter (Solana) or DEX (EVM)
 
 ## Programs
 
-- Fight oracle program id: `EW9GwxawnPEHA4eFgqd2oq9t55gSG4ReNqPRyG6Ui6PF`
-- Market program id: `23YJWaC8AhEufH8eYdPMAouyWEgJ5MQWyvz3z8akTtR6`
-- Mainnet GOLD mint: `DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump`
+**Solana (Mainnet-Beta)**:
+- Fight oracle: `EW9GwxawnPEHA4eFgqd2oq9t55gSG4ReNqPRyG6Ui6PF`
+- CLOB market: `23YJWaC8AhEufH8eYdPMAouyWEgJ5MQWyvz3z8akTtR6`
+- Perps market: `HbXhqEFevpkfYdZCN6YmJGRmQmj9vsBun2ZHjeeaLRik`
+- GOLD mint: `DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump`
 
-## Local E2E tests (Anchor + mock GOLD)
+**EVM (BSC Testnet / Base Sepolia)**:
+- See `../evm-contracts/` for deployed contract addresses
 
-From `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/anchor`:
+## Quick Start
+
+### Local Development (Full Stack)
+
+From `packages/gold-betting-demo`:
 
 ```bash
 bun install
-anchor build
-anchor test --skip-build
+bun run dev
 ```
 
-Passing tests currently:
+This boots the complete local demo stack:
+- Builds Anchor programs
+- Starts `solana-test-validator` with oracle + market programs preloaded
+- Starts local Anvil for EVM testing
+- Seeds local mock GOLD + active market state
+- Starts Vite app on `http://127.0.0.1:4179`
+- Starts keeper API on `http://127.0.0.1:5555`
 
-- market-maker auto seed after 10 seconds when market is empty
-- oracle resolve + winner claim payout flow
+### Keeper Service (Production)
 
-## UI E2E tests (headless wallet + mock GOLD localnet)
+The keeper is a standalone Fastify service that provides:
+- Betting API endpoints for the frontend
+- Market making automation
+- Oracle resolution
+- RPC proxying (Solana + EVM)
+- Points and referral tracking
 
-From `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/app`:
+**Start keeper service**:
+```bash
+cd keeper
+bun install
+bun run service
+```
+
+**Environment variables** (see `keeper/.env.example`):
+- `PORT=8080` - Service port
+- `STREAM_STATE_SOURCE_URL` - Upstream duel server URL
+- `STREAM_STATE_SOURCE_BEARER_TOKEN` - Auth token for upstream
+- `ARENA_EXTERNAL_BET_WRITE_KEY` - Server-to-server auth
+- `SOLANA_CLUSTER=mainnet-beta` - Solana cluster
+- `SOLANA_RPC_URL` - Solana RPC endpoint (keep provider keys here, not in frontend)
+- `BSC_RPC_URL` / `BASE_RPC_URL` - EVM RPC endpoints
+- `KEEPER_DB_PATH=./keeper.sqlite` - Database path (ephemeral on Railway without volume)
+- `ENABLE_KEEPER_BOT=true` - Enable autonomous market making
+
+**Deployment**: See `docs/betting-production-deploy.md` for Railway + Cloudflare Pages deployment guide.
+
+## Local E2E Tests (Anchor + Mock GOLD)
+
+From `packages/gold-betting-demo/anchor`:
+
+```bash
+bun install
+bun run build
+bun run test
+```
+
+Tests use a manual `solana-test-validator` harness (not `anchor test`) for operational stability.
+
+**Passing tests**:
+- Market-maker auto seed after 10 seconds when market is empty
+- Oracle resolve + winner claim payout flow
+- Fee routing to treasury and market maker
+- Perps market lifecycle (ACTIVE → CLOSE_ONLY → ARCHIVED)
+- Slippage protection
+- Insurance fund management
+
+**Rust verification**:
+```bash
+bun run lint:rust
+bun run test:rust
+bun run audit
+bun run audit:strict
+```
+
+Note: `bun run audit` ignores `RUSTSEC-2025-0141` for `bincode` (unmaintained upstream dependency in Anchor/Solana stack).
+
+## UI E2E Tests
+
+### Local (Headless Wallet + Mock GOLD)
+
+From `packages/gold-betting-demo/app`:
 
 ```bash
 bun run test:e2e
 ```
 
-What this command does:
+This command:
+- Builds Anchor programs and EVM contracts
+- Starts local validator with demo programs preloaded
+- Starts local Anvil (chain id 31337) for EVM
+- Seeds deterministic mock GOLD mint + test wallet
+- Deploys local `MockERC20` + `GoldClob`, seeds open EVM match
+- Runs Playwright headless tests exercising Solana + EVM UI actions
+- Verifies transactions on-chain (Solana signatures + EVM receipts)
 
-- builds Anchor programs
-- compiles EVM contracts
-- starts a local validator with both demo programs preloaded
-- starts local Anvil (chain id 97) for EVM
-- seeds a deterministic mock GOLD mint + test wallet
-- deploys local `MockERC20` + `GoldClob`, seeds an open EVM match, and configures headless EVM wallet
-- creates one resolved historical market and one open current market
-- runs Playwright headless tests that exercise Solana + EVM UI actions and verify txs on-chain:
-  - Solana: refresh, seed-liquidity, place bet, resolve, claim, start new round
-  - EVM: refresh, place order, resolve match, claim, create match
-  - chain-level validation:
-    - Solana tx signatures are confirmed with success on local validator RPC
-    - EVM tx hashes are confirmed with successful receipts on local Anvil RPC
+**Test coverage**:
+- Solana: refresh, seed-liquidity, place bet, resolve, claim, start new round
+- EVM: refresh, place order, resolve match, claim, create match
+- Chain-level validation for both Solana and EVM transactions
 
-The app runs in `--mode e2e` with generated `/app/.env.e2e`.
-
-## UI E2E tests on public clusters (headless wallet)
-
-From `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/app`:
+### Public Clusters (Testnet/Mainnet)
 
 ```bash
 bun run test:e2e:testnet
 bun run test:e2e:mainnet
 ```
 
-What public E2E does:
+**Public E2E behavior**:
+- Loads keypair from `E2E_HEADLESS_KEYPAIR_PATH` (default: `~/.config/solana/id.json`) or `E2E_HEADLESS_WALLET_SECRET_KEY`
+- Verifies oracle + market programs are deployed and executable
+- Initializes oracle config (if needed)
+- Creates one resolved market (for "last result") and one open market (for bet flow)
+- Writes `/app/.env.e2e` for Vite headless wallet auto-connect
+- Runs Playwright against live app in headless mode
 
-- loads keypair from `E2E_HEADLESS_KEYPAIR_PATH` (defaults to `~/.config/solana/id.json`) or `E2E_HEADLESS_WALLET_SECRET_KEY`
-- verifies oracle + market programs are deployed and executable on selected cluster
-- initializes oracle config (if needed), then creates:
-  - one short resolved market (for "last result")
-  - one open current market (for bet flow)
-- writes `/app/.env.e2e` for Vite headless wallet auto-connect
-- runs Playwright against the live app in headless mode
+**Useful env vars**:
+- `E2E_CLUSTER`: `testnet` or `mainnet-beta`
+- `E2E_HEADLESS_KEYPAIR_PATH`: Wallet keypair path
+- `E2E_RPC_URL`: Override RPC endpoint
+- `E2E_TESTNET_GOLD_MINT`: Optional existing testnet GOLD-like mint
+- `E2E_DEPLOY_TESTNET_PROGRAMS=true`: One-time deploy before testnet E2E
 
-Useful public E2E env vars:
+**Balance notes**:
+- Mainnet E2E uses real GOLD mint `DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump`
+- If wallet has no GOLD, test uses SOL (swap-to-GOLD path)
+- Seed-liquidity requires pre-funded GOLD balance
+- Testnet deploy needs ~4 SOL for program deploys
 
-- `E2E_CLUSTER`: `testnet` or `mainnet-beta` (script sets this for you)
-- `E2E_HEADLESS_KEYPAIR_PATH`: wallet keypair path for headless test signing
-- `E2E_RPC_URL`: override RPC endpoint
-- `E2E_TESTNET_GOLD_MINT`: optional existing testnet GOLD-like mint; when omitted a mock Token-2022 mint is created automatically
-- `E2E_DEPLOY_TESTNET_PROGRAMS=true`: optional one-time deploy attempt before testnet E2E run
+## Run the Vite App
 
-Notes for balances:
-
-- Mainnet E2E uses real GOLD mint `DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump`.
-- If the wallet has no GOLD, test automatically places bet using `SOL` (swap-to-GOLD path), while seed-liquidity is expected to fail unless wallet already has GOLD.
-- For full mainnet button-success flow (including seed), pre-fund the headless wallet with GOLD.
-- Testnet deploy-on-demand needs enough SOL for both program deploys. The script now checks for approximately `>= 4 SOL` before deploy.
-
-## Run the Vite app
-
-From `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo`:
-
+### Local Mode (with validator)
 ```bash
 bun run dev
 ```
 
-`bun run dev` now boots a full local demo stack:
-
-- builds Anchor programs
-- starts `solana-test-validator` with oracle + market programs preloaded
-- seeds local mock GOLD + active market state
-- starts Vite on `http://127.0.0.1:4179`
-
-**Stream UI Mode** (simulation with mock data):
-```bash
-bun run dev:stream-ui
-```
-
-Raw app-only local mode (without validator bootstrap):
-
+### App-Only (no validator bootstrap)
 ```bash
 bun run dev:app-local
 ```
 
-For mainnet mode:
-
+### Mainnet Mode
 ```bash
 bun run dev:mainnet
 ```
 
-For testnet mode:
-
+### Testnet Mode
 ```bash
 bun run dev:testnet
 ```
 
-Build:
-
+### Build
 ```bash
-bun run build
-bun run build:testnet
-bun run build:mainnet
+bun run build              # Default (localnet)
+bun run build:testnet      # Testnet
+bun run build:mainnet      # Mainnet-beta
 ```
 
-## Mobile Responsive UI (PR #944)
+## Keeper Scripts
 
-The app features a fully responsive mobile-first design:
+From `packages/gold-betting-demo/keeper`:
 
-**Desktop Layout**:
-- Resizable panels with `useResizePanel` hook + `ResizeHandle` component
-- Drag-to-resize between video and sidebar
-- Persistent panel sizes
-
-**Mobile Layout**:
-- 16:9 aspect-ratio video player
-- Bottom-sheet sidebar with touch-friendly tab targets
-- Stacked HYPERSCAPE/MARKET logo
-- Phase strip above video
-- Both SOL and EVM wallet buttons
-- Tab reordering: Trades tab moved first for better UX
-- Uses `dvh` units for proper mobile viewport handling
-
-**Responsive Behavior**:
-- `useIsMobile` hook gates JS inline styles so CSS media queries control layout
-- Breakpoint: 768px (tablet and below)
-- Automatic layout switching without page reload
-
-**Data Integration**:
-- Live SSE feed from game server in devnet mode
-- Real-time duel context updates
-- Simulation mode available via `bun run dev:stream-ui`
-- Dev mode (`bun run dev`) uses real endpoints only
-
-**Architecture Changes**:
-- `AppRoot.tsx` routes `MODE=stream-ui` to `StreamUIApp`, all other modes to `App`
-- `App.tsx` fully purged of `isStreamUIMode` checks and `useMockStreamingEngine` import
-- Simulation/mock data remains available via `bun run dev:stream-ui`
-
-**Console Noise Reduction**:
-- Recharts warning fix: raised `.hm-chart-container` min-height to 120px (eliminates width/height=0 warnings)
-- EventSource auto-reconnect prevention: close EventSource on onerror to stop browser's built-in reconnect loop
-- Exponential backoff: `useDuelContext` switched from fixed setInterval to setTimeout with backoff (3s → 6s → 60s cap)
-
-## Keeper scripts
-
-From `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/keeper`:
-
-```bash
-bun install
-```
-
-Seed liquidity (after 10s if empty):
-
+### Seed Liquidity
 ```bash
 HELIUS_API_KEY=... \
 MARKET_MAKER_KEYPAIR=~/.config/solana/id.json \
 bun run seed -- --match-id 123456 --seed-gold 1
 ```
 
-Resolve from oracle:
-
+### Resolve from Oracle
 ```bash
 HELIUS_API_KEY=... \
 ORACLE_AUTHORITY_KEYPAIR=~/.config/solana/id.json \
 bun run resolve -- --match-id 123456
 ```
 
-Run autonomous market bot (creates markets, resolves, seeds):
-
+### Run Autonomous Market Bot
 ```bash
 HELIUS_API_KEY=... \
 ORACLE_AUTHORITY_KEYPAIR=~/.config/solana/id.json \
@@ -224,36 +234,61 @@ BOT_LOOP=true \
 bun run keeper:bot
 ```
 
-Using cluster-aware defaults from env files:
-
+### Cluster-Aware Bot Commands
 ```bash
 bun run keeper:bot:mainnet
 bun run keeper:bot:testnet
 bun run keeper:bot:once
 ```
 
-Bot behavior:
+**Bot behavior**:
+- Ensures oracle + market config are initialized
+- Creates new market when no bettable market exists
+- Posts oracle result after close and resolves open market
+- Auto-seeds empty markets after delay using market-maker wallet balance (including collected fees)
 
-- ensures oracle + market config are initialized
-- creates a new market whenever no bettable market exists
-- posts oracle result after close and resolves open market
-- auto-seeds empty markets after delay using market-maker wallet balance (including collected fees)
+## Environment Files
 
-## Mainnet environment
+**Prepared configurations**:
+- `.env.mainnet` - Mainnet-beta configuration
+- `.env.testnet` - Testnet configuration
+- `.env.example` - Template for local development
+- `app/.env.mainnet` - Frontend mainnet configuration
+- `app/.env.testnet` - Frontend testnet configuration
+- `app/.env.example` - Frontend template
+- `keeper/.env.example` - Keeper service template
 
-Prepared files:
+**Security Note**: Provider API keys (Helius, Birdeye) should be kept in Railway/secret managers, not committed to the repository. The tracked `.env.mainnet` file is a public template only.
 
-- `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/.env.mainnet`
-- `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/.env.testnet`
-- `/Users/shawwalters/eliza-workspace/hyperscape/packages/gold-betting-demo/app/.env.mainnet`
+## Production Deployment
 
-These include provided Helius and Birdeye keys and default GOLD mint settings.
-They now also include fee + bot defaults (`BET_FEE_BPS`, poll loop settings).
+See `docs/betting-production-deploy.md` for complete deployment guide covering:
+- Keeper deployment to Railway
+- Frontend deployment to Cloudflare Pages
+- Cloudflare WAF configuration
+- Environment variable setup
+- Security best practices
+
+**Architecture**:
+- Frontend: Cloudflare Pages (static hosting)
+- Keeper: Railway (backend API + market making)
+- Duel Server: Railway or Vast.ai (upstream stream source)
+- Contracts: Solana mainnet-beta, BSC, Base
+
+## CI/CD Workflows
+
+**betting-ci.yml**: Type checking, linting, unit tests, keeper smoke test, env sanitization, production build verification
+
+**deploy-betting-keeper.yml**: Tests → smoke test → Railway deploy → endpoint verification
+
+**deploy-betting-pages.yml**: Build → dist hygiene → Cloudflare Pages deploy → build-info.json verification
 
 ## Notes
 
-- App now auto-discovers and displays `current market` + `last resolved result` and continuously refreshes state.
-- App place-bet path auto-creates a market when none exists (requires oracle authority wallet); recommended production mode is running `keeper:bot`.
-- Market setup inputs are removed from the UI for the demo path (fixed mint, no manual PDA loading).
-- App localnet mode does not execute SOL/USDC conversion in UI; use direct GOLD in local mode. Jupiter conversion path is wired for mainnet.
-- Anchor build uses a vendored `zmij` patch in `anchor/vendor/zmij` to avoid a toolchain incompatibility during IDL build on this machine.
+- App auto-discovers and displays current market + last resolved result with continuous refresh
+- App place-bet path auto-creates market when none exists (requires oracle authority wallet)
+- Recommended production mode: run `keeper:bot` for autonomous market management
+- Market setup inputs removed from UI for streamlined demo path
+- App localnet mode uses direct GOLD (no SOL/USDC conversion)
+- Jupiter conversion path wired for mainnet
+- Anchor build uses vendored `zmij` patch in `anchor/vendor/zmij` for toolchain compatibility
