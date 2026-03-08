@@ -692,6 +692,87 @@ Added polyfill shims for betting stack tests in CI:
 
 **Impact**: Betting stack tests pass reliably in CI environments.
 
+## EVM Contract Testing Improvements (March 2026)
+
+### Typed Contract Migration
+
+**Feature** (PR #989): All EVM contract tests now use typed deployment helpers.
+
+**Before:**
+```typescript
+const GoldClob = await ethers.getContractFactory("GoldClob");
+const clob = await GoldClob.deploy(treasury.address, marketMaker.address);
+await clob.waitForDeployment();
+```
+
+**After:**
+```typescript
+import { deployGoldClob } from "../typed-contracts";
+
+const clob = await deployGoldClob(treasury.address, marketMaker.address);
+await clob.waitForDeployment();
+```
+
+**Files updated:**
+- `test/GoldClob.ts` - Basic functionality tests
+- `test/GoldClob.exploits.ts` - Exploit resistance tests
+- `test/GoldClob.fuzz.ts` - Randomized invariant tests
+- `test/GoldClob.round2.ts` - Round 2 security fixes
+- `test/AgentPerpEngine.ts` - Perps engine tests
+- `test/AgentPerpEngineNative.ts` - Native token perps tests
+
+**Benefits:**
+- Compile-time type checking for all contract interactions
+- IntelliSense support in test files
+- Prevents common errors (wrong parameter types, missing overrides)
+- Consistent deployment patterns across test suites
+
+### Fee Routing Test Coverage
+
+**New tests** (commits 43911165, 8322b3f):
+
+**GoldClob fee routing test:**
+```typescript
+it("routes trade fees to treasury and market maker, then routes claim fees to the market maker", async function () {
+  // Validates:
+  // 1. Trade fees split between treasury and market maker
+  // 2. Claim fees route to market maker
+  // 3. Fee balances accumulate correctly
+  
+  const treasuryAfterTrades = await ethers.provider.getBalance(treasury.address);
+  const marketMakerAfterTrades = await ethers.provider.getBalance(marketMaker.address);
+  
+  expect(treasuryAfterTrades - treasuryBefore).to.equal(
+    makerTreasuryFee + takerTreasuryFee,
+  );
+  expect(marketMakerAfterTrades - marketMakerBefore).to.equal(
+    makerMmFee + takerMmFee,
+  );
+  
+  // After claim
+  const claimFee = (amount * winningsMarketMakerFeeBps) / 10_000n;
+  expect(marketMakerAfterClaim - marketMakerAfterTrades).to.equal(claimFee);
+});
+```
+
+**Impact**: Comprehensive validation of fee routing through full CLOB lifecycle.
+
+### Gas Cost Calculation Fixes
+
+**Fix** (PR #989): Fixed gas cost calculations in tests to handle BigInt properly.
+
+**Before:**
+```typescript
+const gasCost = receipt!.gasUsed * receipt!.gasPrice;
+```
+
+**After:**
+```typescript
+const gasCost = BigInt(receipt!.gasUsed) * BigInt(receipt!.gasPrice);
+```
+
+**Impact**: Prevents type errors and ensures accurate gas cost calculations in tests.
+
 ### Anchor Vendor Dependencies
 
 **Feature** (PR #989): Added vendored Solana dependencies to fix Anchor build compatibility.
