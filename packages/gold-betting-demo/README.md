@@ -205,6 +205,57 @@ bun run test:e2e:mainnet
 - Seed-liquidity requires pre-funded GOLD balance
 - Testnet deploy needs ~4 SOL for program deploys
 
+## EVM Contract Development
+
+### Typed Contract Helpers
+
+The `../evm-contracts/typed-contracts.ts` module provides type-safe contract deployment and interaction helpers:
+
+```typescript
+import { deployGoldClob, deploySkillOracle, deployMockErc20 } from '../typed-contracts';
+
+// Type-safe deployment with IntelliSense
+const clob = await deployGoldClob(treasuryAddress, marketMakerAddress, signer);
+const oracle = await deploySkillOracle(initialBasePrice, signer);
+
+// Fully typed contract interfaces
+const match: GoldClobMatch = await clob.matches(matchId);
+const position: GoldClobPosition = await clob.positions(matchId, trader);
+```
+
+**Benefits:**
+- Compile-time type checking for all contract interactions
+- IntelliSense support in tests and scripts
+- Prevents common errors (wrong parameter types, missing overrides)
+- Consistent deployment patterns across test suites
+
+**Contract interfaces:**
+- `GoldClobContract` - CLOB market with typed methods
+- `SkillOracleContract` - Oracle with typed skill updates
+- `MockERC20Contract` - Test token with typed mint/approve
+- `AgentPerpEngineContract` - Perps engine with typed position management
+- `AgentPerpEngineNativeContract` - Native token perps engine
+
+### Local Simulation
+
+Run local EVM simulation with PnL reporting:
+
+```bash
+cd ../evm-contracts
+bun run simulate:localnet
+```
+
+**Simulation scenarios:**
+- Whale round trip (large position open/close)
+- Funding rate drift
+- Isolated insurance containment
+- Positive equity liquidation
+- Local insurance shortfall
+- Fee recycling into isolated insurance
+- Model deprecation lifecycle
+
+**Output**: `simulations/gold-clob-localnet-report.json`
+
 ## Run the Vite App
 
 ### Local Mode (with validator)
