@@ -469,10 +469,41 @@ bun run simulate:localnet
 - Isolated insurance containment
 - Positive equity liquidation
 - Local insurance shortfall
-- Fee recycling into isolated insurance
-- Model deprecation lifecycle
+- Fee recycling into isolated insurance (new)
+- Model deprecation lifecycle (new)
 
-**Output**: `simulations/gold-clob-localnet-report.json`
+**New scenarios** (commits 43911165, 8322b3f):
+
+**Fee Recycling Scenario:**
+```typescript
+// Validates:
+// - Trade fees split between treasury and market maker
+// - Market maker fees can be recycled into isolated insurance
+// - Fee balances are tracked separately from insurance fund
+
+// Metrics:
+// - trade_notional_sol: 5
+// - treasury_fee_sol: 0.0125 (25 BPS)
+// - market_maker_fee_sol: 0.0125 (25 BPS)
+// - recycled_market_insurance_sol: 1.0125
+```
+
+**Model Deprecation Scenario:**
+```typescript
+// Validates:
+// - CLOSE_ONLY mode blocks new exposure
+// - CLOSE_ONLY allows existing traders to exit
+// - Oracle doesn't need to stay live in CLOSE_ONLY
+// - ARCHIVED requires zero open interest
+
+// Metrics:
+// - new_exposure_allowed: false
+// - close_only_allows_exit: true
+// - oracle_must_stay_live: false
+// - archived_requires_zero_open_interest: true
+```
+
+**Output**: `anchor/simulations/gold-perps-risk-report.json`
 
 ## Run the Vite App
 
