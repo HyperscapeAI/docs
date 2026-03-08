@@ -773,6 +773,52 @@ const gasCost = BigInt(receipt!.gasUsed) * BigInt(receipt!.gasPrice);
 
 **Impact**: Prevents type errors and ensures accurate gas cost calculations in tests.
 
+## Client Improvements (March 2026)
+
+### Logger Import Optimization
+
+**Fix** (PR #989): Converted dynamic logger import to static import in client entry point.
+
+**Before:**
+```typescript
+import("./lib/logger").then(({ logger }) => {
+  logger.config("[Hyperscape] Configured from validated URL params:", {
+    ...config,
+    authToken: config.authToken ? "[REDACTED]" : "[PENDING]",
+  });
+});
+```
+
+**After:**
+```typescript
+import { logger } from "./lib/logger";
+
+logger.config("[Hyperscape] Configured from validated URL params:", {
+  ...config,
+  authToken: config.authToken ? "[REDACTED]" : "[PENDING]",
+});
+```
+
+**Impact**: Faster module loading, cleaner code, better tree-shaking.
+
+### Dashboard Background Optimization
+
+**Fix** (PR #989): Replaced image-based background with CSS gradients.
+
+**Before:**
+```css
+background-image: url('/assets/background.jpg');
+```
+
+**After:**
+```css
+background-image:
+  radial-gradient(circle at top, rgba(242, 208, 138, 0.14), transparent 36%),
+  linear-gradient(180deg, rgba(30, 20, 10, 0.72) 0%, rgba(11, 10, 21, 0.96) 100%);
+```
+
+**Impact**: Eliminates HTTP request for background image, faster initial render, smaller bundle size.
+
 ### Anchor Vendor Dependencies
 
 **Feature** (PR #989): Added vendored Solana dependencies to fix Anchor build compatibility.
