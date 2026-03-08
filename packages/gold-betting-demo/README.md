@@ -276,10 +276,45 @@ bun run keeper:bot:once
 - Posts oracle result after close and resolves open market
 - Auto-seeds empty markets after delay using market-maker wallet balance (including collected fees)
 
+## Security Hardening
+
+**Build-Time Secret Detection** (commit 43911165):
+
+The betting app build fails if provider-keyed RPC URLs are detected in `VITE_*` environment variables:
+
+- Helius (`helius-rpc.com`)
+- Alchemy (`alchemy.com`)
+- Infura (`infura.io`)
+- QuickNode (`quiknode.pro`)
+- dRPC (`drpc.org`)
+
+**Solution**: Use RPC proxying through the keeper API:
+
+```bash
+# ❌ Don't do this (build will fail)
+VITE_SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=...
+
+# ✅ Do this instead
+VITE_USE_GAME_RPC_PROXY=true
+# Keep provider URL on Railway keeper (server-side):
+SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=...
+```
+
+**CI Secret Scanning:**
+
+CI workflows scan for leaked secrets in:
+- Environment files (`.env`, `.env.example`, `.env.mainnet`, etc.)
+- Production build output (`dist/`)
+- Fails build if secrets detected
+
+**Credential Rotation:**
+
+If API keys were previously committed to git history, they must be rotated out-of-band even after removal from tracked files. Git history preserves all previous commits.
+
 ## Environment Files
 
 **Prepared configurations**:
-- `.env.mainnet` - Mainnet-beta configuration
+- `.env.mainnet` - Mainnet-beta configuration (public template only)
 - `.env.testnet` - Testnet configuration
 - `.env.example` - Template for local development
 - `app/.env.mainnet` - Frontend mainnet configuration
