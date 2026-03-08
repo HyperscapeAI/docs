@@ -819,6 +819,31 @@ background-image:
 
 **Impact**: Eliminates HTTP request for background image, faster initial render, smaller bundle size.
 
+## MUD Contracts (March 2026)
+
+### World Address Update
+
+**Change** (commits c04770449, 98a70cc7c):
+
+MUD world contract redeployed to local chain (31337):
+
+```json
+// packages/contracts/worlds.json
+{
+  "31337": {
+    "address": "0x6c14442F32ba360bbB175739E18900a5b1751fa0"  // Updated from 0xE774BDC7E0FC79A356C371B396eE0573D625CcB9
+  }
+}
+
+// packages/contracts/deploys/31337/latest.json
+{
+  "worldAddress": "0x6c14442F32ba360bbB175739E18900a5b1751fa0",
+  "blockNumber": 177  // Updated from 17
+}
+```
+
+**Impact**: MUD onchain game state experiments use updated world contract address.
+
 ### Anchor Vendor Dependencies
 
 **Feature** (PR #989): Added vendored Solana dependencies to fix Anchor build compatibility.
