@@ -738,22 +738,46 @@ SKIP_BETTING_MANIFEST_UPDATE=true bun run deploy:bsc-testnet
 - Manages autonomous market maker bot for liquidity seeding
 - Defaults to ephemeral SQLite (attach Railway volume or external DB for persistence)
 
-**Perps Market Lifecycle** (commit 43911165):
+**Perps Market Lifecycle** (commits 43911165, 8322b3f, 1043f0a):
 - **ACTIVE**: Normal trading with live oracle updates
 - **CLOSE_ONLY**: Model deprecated, only position reductions allowed, frozen settlement price
 - **ARCHIVED**: Zero open interest required, market fully wound down
 - Supports reactivation (ARCHIVED → ACTIVE) when model returns
 
-**Fee Structure** (commit 43911165):
-- Trade fees split between treasury and market maker
+**Market Status Transitions**:
+- `set_market_status` instruction controls lifecycle transitions
+- ACTIVE → CLOSE_ONLY: Freezes settlement price, disables new positions
+- CLOSE_ONLY → ARCHIVED: Requires zero open interest and zero open positions
+- ARCHIVED → ACTIVE: Reactivates market, resets settlement price and funding time
+
+**Slippage Protection** (commits 43911165, 8322b3f):
+- `modify_position` now accepts `acceptable_price` parameter
+- Longs: execution price must be ≤ acceptable price
+- Shorts: execution price must be ≥ acceptable price
+- Set to 0 to disable slippage check (backwards compatible)
+
+**Fee Structure** (commits 43911165, 8322b3f):
+- Trade fees split between treasury and market maker (configurable BPS)
 - Claim fees route to market maker
-- Market maker fees can be recycled into isolated insurance reserves
+- Market maker fees can be recycled into isolated insurance reserves via `recycle_market_maker_fees`
+- Treasury fees can be withdrawn via `withdraw_fee_balance`
 - Separate fee balance accounting prevents insurance fund contamination
+- Fee balances reserved from free liquidity calculations
+
+**Market ID Type Change** (commits 43911165, 8322b3f):
+- Market ID changed from `u32` to `u64` for larger ID space
+- PDA derivation uses 8-byte encoding (was 4-byte)
+- Breaking change for existing deployments - requires fresh program deployment
 
 **Workflow Reliability** (commits 66a7b23, a4e366c):
 - Removed Railway status probe from keeper deploy workflow (unreliable)
 - Persist Railway user token in keeper workflow for authentication
 - Endpoint verification via direct HTTP health checks
+
+**Streaming Configuration Defaults** (commits 2b42826, 4090123):
+- Aligned stream defaults with Twitch production requirements
+- Updated betting stream defaults for production deployment
+- Improved Vast stream bootstrap configuration
 
 ## Branding Assets (March 2026)
 
