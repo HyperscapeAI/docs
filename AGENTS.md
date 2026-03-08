@@ -454,7 +454,7 @@ STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
 - Market maker bot for liquidity seeding
 - Oracle system for trustless duel outcome reporting
 
-**Hardening** (commits d8e4d39, 8322b3f, 1043f0a):
+**Hardening** (commits d8e4d39, 8322b3f, 1043f0a, 43911165):
 - Security audit passed for all Anchor programs
 - Fuzz testing for exploit resistance
 - Deterministic migration ordering for serverless PostgreSQL
@@ -467,16 +467,41 @@ STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
 - Contracts: Deployed to Solana mainnet-beta and BSC/Base
 - See `docs/betting-production-deploy.md` for full deployment guide
 
-**CI/CD Workflows** (commits 43911165, 46cd28e, 66a7b23):
+**CI/CD Workflows** (commits 43911165, 46cd28e, 66a7b23, a4e366c):
 - **betting-ci.yml**: Type checking, linting, unit tests, keeper smoke test, env sanitization, production build verification
-- **deploy-betting-keeper.yml**: Tests → smoke test → Railway deploy → endpoint verification (removed Railway status probe for reliability)
+- **deploy-betting-keeper.yml**: Tests → smoke test → Railway deploy → endpoint verification
 - **deploy-betting-pages.yml**: Build → dist hygiene → Cloudflare Pages deploy → build-info.json verification
 
-**Security Hardening**:
+**Security Hardening** (commit 43911165):
 - Build-time secret leak detection (fails build if provider-keyed RPC URLs in public env vars)
 - RPC proxying through keeper (keeps provider keys server-side)
 - Removed committed API keys from tracked env files (keys must be rotated out-of-band)
 - CI scans for leaked secrets in both env files and production dist
+- Lazy-loading heavy betting surfaces to reduce initial bundle size
+
+**Keeper Architecture**:
+- Proxies Solana and EVM JSON-RPC for public app (keeps provider keys server-side)
+- Serves betting API endpoints for points, leaderboard, referrals, and perps markets
+- Polls upstream duel server for live stream state
+- Manages autonomous market maker bot for liquidity seeding
+- Defaults to ephemeral SQLite (attach Railway volume or external DB for persistence)
+
+**Perps Market Lifecycle** (commit 43911165):
+- **ACTIVE**: Normal trading with live oracle updates
+- **CLOSE_ONLY**: Model deprecated, only position reductions allowed, frozen settlement price
+- **ARCHIVED**: Zero open interest required, market fully wound down
+- Supports reactivation (ARCHIVED → ACTIVE) when model returns
+
+**Fee Structure** (commit 43911165):
+- Trade fees split between treasury and market maker
+- Claim fees route to market maker
+- Market maker fees can be recycled into isolated insurance reserves
+- Separate fee balance accounting prevents insurance fund contamination
+
+**Workflow Reliability** (commits 66a7b23, a4e366c):
+- Removed Railway status probe from keeper deploy workflow (unreliable)
+- Persist Railway user token in keeper workflow for authentication
+- Endpoint verification via direct HTTP health checks
 
 ## Branding Assets (March 2026)
 
