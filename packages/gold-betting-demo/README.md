@@ -38,13 +38,27 @@ Full-stack betting system for AI agent duels with dual-chain support (Solana + E
 ## Programs
 
 **Solana (Mainnet-Beta)**:
-- Fight oracle: `EW9GwxawnPEHA4eFgqd2oq9t55gSG4ReNqPRyG6Ui6PF`
-- CLOB market: `23YJWaC8AhEufH8eYdPMAouyWEgJ5MQWyvz3z8akTtR6`
+- Fight oracle: `6tpRysBFd1yXRipYEYwAw9jxEoVHk15kVXfkDGFLMqcD`
+- CLOB market: `ARVJNJp49VZnkB8QBYZAAFJmufvtVSPhnuuenwwSLwpi`
 - Perps market: `HbXhqEFevpkfYdZCN6YmJGRmQmj9vsBun2ZHjeeaLRik`
 - GOLD mint: `DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump`
 
 **EVM (BSC Testnet / Base Sepolia)**:
-- See `../evm-contracts/` for deployed contract addresses
+- See `../evm-contracts/deployments/` for deployed contract addresses
+- See `deployments/contracts.json` for centralized deployment metadata
+
+**Deployment Metadata**:
+
+All contract addresses and program IDs are managed in a single source of truth:
+- `deployments/contracts.json` - Shared deployment manifest
+- `deployments/index.ts` - Typed configuration with runtime validation
+
+This manifest is used by:
+- Frontend app defaults
+- Keeper API defaults
+- Local development scripts
+- EVM deploy receipt syncing
+- Preflight validation checks
 
 ## Quick Start
 
