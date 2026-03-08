@@ -276,12 +276,73 @@ bun run keeper:bot:once
 
 ## Production Deployment
 
+### Preflight Validation
+
+Before deploying to any network, run preflight checks to validate deployment metadata:
+
+```bash
+bun run deploy:preflight:testnet    # Validate testnet deployment
+bun run deploy:preflight:mainnet    # Validate mainnet deployment
+```
+
+**Validation checks:**
+- Solana program keypairs match deployment manifest
+- Anchor IDL files match deployment manifest
+- App and keeper IDL files are in sync with Anchor build output
+- EVM deployment environment variables are configured
+- EVM RPC URLs are available (configured or using Hardhat fallbacks)
+- Contract addresses are present in deployment manifest
+
+### Deploy Solana Programs
+
+Deploy all three Solana betting programs using the checked-in program keypairs:
+
+```bash
+cd anchor
+bun run deploy:testnet      # Deploy to Solana testnet
+bun run deploy:mainnet      # Deploy to Solana mainnet-beta
+```
+
+**Programs deployed:**
+- `fight_oracle` - Match lifecycle and winner posting
+- `gold_clob_market` - GOLD CLOB market for binary prediction trading
+- `gold_perps_market` - Perpetual futures market for agent skill ratings
+
+**Requirements:**
+- Solana CLI installed
+- Deployer wallet with ~4+ SOL for all three programs
+
+### Deploy EVM Contracts
+
+Deploy GoldClob contracts to EVM networks:
+
+```bash
+cd ../evm-contracts
+
+# Testnet
+bun run deploy:bsc-testnet
+bun run deploy:base-sepolia
+
+# Mainnet (requires explicit treasury/market maker addresses)
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:bsc
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:base
+```
+
+**Deployment process:**
+1. Validates treasury and market maker addresses
+2. Deploys GoldClob contract
+3. Writes deployment receipt to `deployments/<network>.json`
+4. Updates central manifest at `../gold-betting-demo/deployments/contracts.json`
+
+### Full Deployment Guide
+
 See `docs/betting-production-deploy.md` for complete deployment guide covering:
 - Keeper deployment to Railway
 - Frontend deployment to Cloudflare Pages
 - Cloudflare WAF configuration
 - Environment variable setup
 - Security best practices
+- Perps market lifecycle management
 
 **Architecture**:
 - Frontend: Cloudflare Pages (static hosting)
