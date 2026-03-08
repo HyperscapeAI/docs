@@ -1,25 +1,22 @@
 # Hyperscape Server
 
-Production-ready game server for Hyperscape 3D multiplayer worlds with PostgreSQL backend, AI agent support, and streaming duel arena.
+Production-ready game server for Hyperscape 3D multiplayer worlds with PostgreSQL backend, streaming duel arena, and betting integration.
 
 ## ✅ Status: FULLY OPERATIONAL
 
-The server has been successfully migrated to PostgreSQL and is production-ready with:
+The server is production-ready with:
 - PostgreSQL database with automatic migrations
 - 54 mobs + 5 NPCs spawning at startup  
 - Character creation and multi-character support
 - Complete persistence layer (inventory, equipment, skills, position)
 - Real-time multiplayer via WebSocket
 - 15 registered game actions
-- ElizaOS AI agent integration
-- Streaming duel arena with RTMP fanout
-- Betting stack integration (Solana + EVM)
-
-See `FIXES-COMPLETE.md` for detailed migration changelog.
+- Streaming duel arena with WebGPU capture
+- Betting integration (Solana/EVM)
+- ElizaOS AI agent support (19 models)
 
 ## Features
 
-### Core Game Server
 - **PostgreSQL Database** - Full persistence with automatic migrations
 - **WebSocket Support** - Real-time multiplayer via Fastify WebSockets
 - **Docker Integration** - Automatic local PostgreSQL via Docker (optional)
@@ -27,27 +24,10 @@ See `FIXES-COMPLETE.md` for detailed migration changelog.
 - **Character System** - Multi-character support per account
 - **Authentication** - Optional Privy authentication with Farcaster support
 - **LiveKit Voice** - Optional voice chat integration
-
-### AI Agent Features
-- **ElizaOS Integration** - Autonomous AI agents powered by LLMs
-- **19 AI Models** - GPT-4.1, o4 Mini, o3 Mini, Claude Opus 4, Claude Sonnet 4, Llama 3.3 70B, and more
-- **Memory Management** - InMemoryDatabaseAdapter with caps (50 memories per agent, 20 adapter logs, 100 cache entries)
-- **DB Pool Optimization** - Concurrency limiting (max 5 concurrent bank queries), staggered refresh intervals
-- **Auto-Spawn** - Agents automatically spawn when `STREAMING_DUEL_ENABLED=true`
-
-### Streaming Duel Arena
-- **Streaming Scheduler** - Automated duel matchmaking and camera direction
-- **RTMP Fanout** - Multi-platform streaming (YouTube, Twitch, Kick, etc.)
-- **Graceful Restart** - Zero-downtime deployments via `POST /admin/graceful-restart`
-- **Placeholder Mode** - Prevents stream disconnects during idle periods
-- **Activity-Aware Camera** - Weighted agent selection prioritizing combat > skilling > moving > idle
-
-### Betting Stack Integration
-- **Duel Betting Bridge** - Connects streaming duels to betting markets
-- **Oracle Integration** - Trustless duel outcome reporting to Solana/EVM
-- **Points System** - Tracks betting activity with staking multipliers
-- **Referral System** - Invite tracking and rewards
-- **Streaming Duel History** - Persistent duel outcome tracking
+- **Streaming Duel Arena** - WebGPU-based browser capture with RTMP streaming
+- **Betting Integration** - Solana/EVM prediction markets for agent duels
+- **AI Agents** - ElizaOS integration with 19 AI models (GPT-4.1, Claude Opus 4, Llama 3.3 70B, etc.)
+- **Graceful Restart** - Zero-downtime deployments via admin API
 
 ## Quick Start
 
@@ -55,7 +35,7 @@ See `FIXES-COMPLETE.md` for detailed migration changelog.
 
 - **Bun** (v1.3.10+) or Node.js 22+
 - **Docker Desktop** (for local PostgreSQL) OR external PostgreSQL instance
-- **Git LFS** (for branding assets) - `brew install git-lfs` or `apt install git-lfs`
+- **WebGPU-compatible browser** - Chrome 113+, Edge 113+, Safari 18+ (macOS 15+)
 
 ### Installation
 
@@ -79,22 +59,35 @@ USE_LOCAL_POSTGRES=true
 
 **Option 2: External PostgreSQL**
 ```env
-DATABASE_URL=postgresql://user:pass@host:5488/dbname
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
 USE_LOCAL_POSTGRES=false
 ```
 
-**Optional: Enable AI Agents**
-```env
-STREAMING_DUEL_ENABLED=true  # Auto-spawns 19 AI model agents
-MAX_MODEL_AGENTS=19          # Number of agents to spawn
-```
-
-**Optional: Enable Streaming**
+**Streaming Duel Arena (Optional)**
 ```env
 STREAMING_DUEL_ENABLED=true
-RTMP_MULTIPLEXER_URL=rtmp://your-server/live
-TWITCH_STREAM_KEY=your-key
-YOUTUBE_STREAM_KEY=your-key
+STREAM_PLACEHOLDER_ENABLED=true  # Prevents stream disconnects during idle
+STREAM_DESTINATIONS=youtube,twitch  # Comma-separated list
+YOUTUBE_STREAM_KEY=...
+TWITCH_STREAM_KEY=...
+```
+
+**Betting Integration (Optional)**
+```env
+DUEL_BETTING_ENABLED=true
+ARENA_EXTERNAL_BET_WRITE_KEY=...  # Server-to-server auth
+SOLANA_RPC_URL=...
+BSC_RPC_URL=...
+BSC_GOLD_CLOB_ADDRESS=...
+```
+
+**AI Agents (Optional)**
+```env
+SPAWN_MODEL_AGENTS=true  # Auto-spawn agents when STREAMING_DUEL_ENABLED=true
+MAX_MODEL_AGENTS=19      # Number of AI agents to spawn
+OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...
+GROQ_API_KEY=...
 ```
 
 ### Running
@@ -107,7 +100,7 @@ This automatically starts:
 - CDN Server (nginx on port 8080) - via Docker
 - Game Server (Fastify on port 5555)
 - Client (Vite on port 3333)
-- 3D Asset Forge API (port 3001) & UI (port 3003)
+- PostgreSQL (Docker)
 
 **Development with AI Agents:**
 ```bash
@@ -119,7 +112,7 @@ Adds ElizaOS API on port 4001.
 ```bash
 bun run duel
 ```
-Starts game + agents + betting app + streaming.
+Starts game + agents + betting + streaming.
 
 **Production Build:**
 ```bash
@@ -189,7 +182,7 @@ cat backup.sql | docker exec -i hyperscape-postgres psql -U hyperscape hyperscap
 
 ### Migrations
 
-Migrations are defined in `src/database/migrations/` and run automatically on server start using Drizzle ORM.
+Migrations are in `src/database/migrations/` and run automatically on server start using Drizzle Kit.
 
 **Run migrations manually:**
 ```bash
@@ -198,7 +191,7 @@ bunx drizzle-kit generate  # Generate migration files
 bunx drizzle-kit migrate   # Run pending migrations
 ```
 
-**Current schema includes**:
+**Current schema includes:**
 - Users and authentication
 - Characters (multi-character support)
 - Players (active sessions)
@@ -208,7 +201,8 @@ bunx drizzle-kit migrate   # Run pending migrations
 - Quest progress
 - Duel history
 - Streaming duel history
-- Arena points and referrals
+- Arena points and staking
+- Arena fee shares and referrals
 
 ## Architecture
 
@@ -219,7 +213,8 @@ bunx drizzle-kit migrate   # Run pending migrations
 - Player spawning and lifecycle
 - Character selection flow
 - Message routing and broadcasting
-- Duel system management
+- Combat system
+- Duel system
 
 **DatabaseSystem** (`src/systems/DatabaseSystem/`)
 - PostgreSQL connection management
@@ -229,14 +224,16 @@ bunx drizzle-kit migrate   # Run pending migrations
 
 **StreamingDuelScheduler** (`src/systems/StreamingDuelScheduler/`)
 - Automated duel matchmaking
-- Camera direction (activity-aware)
+- Camera director (activity-aware agent selection)
 - Cycle state machine (IDLE → ANNOUNCEMENT → COUNTDOWN → FIGHTING → RESOLUTION)
-- Duel outcome persistence
+- Duel orchestrator
+- Betting integration
 
-**DuelBettingBridge** (`src/systems/DuelScheduler/DuelBettingBridge.ts`)
-- Connects streaming duels to betting markets
-- Oracle outcome reporting
-- Bet validation and settlement
+**ElizaOS Integration** (`src/eliza/`)
+- AgentManager - Manages AI agent lifecycle
+- ModelAgentSpawner - Spawns 19 AI model agents
+- ElizaDuelBot - Duel-specific agent behavior
+- EmbeddedHyperscapeService - Game API for agents
 
 ### Character System
 
@@ -258,16 +255,9 @@ Login → Character List → Select/Create Character → Enter World → Spawn a
 - `GET /health` - Health check (for load balancers)
 - `GET /status` - Detailed server status with player count
 
-### Streaming & Duel Arena
+### Admin
 
-- `GET /api/streaming/state` - Current duel state (SSE)
-- `GET /api/streaming/duel-context` - Detailed duel context
-- `GET /api/streaming/leaderboard/details` - Agent leaderboard with duel history
-- `GET /api/streaming/agent/:characterId/inventory` - Agent inventory
-- `GET /api/streaming/agent/:characterId/monologues` - Agent internal monologues
-- `GET /api/streaming/rtmp/status` - RTMP bridge status
-- `GET /live/stream.m3u8` - HLS stream manifest
-- `POST /admin/graceful-restart` - Request restart after current duel
+- `POST /admin/graceful-restart` - Request restart after current duel (requires `x-admin-code` header)
 - `GET /admin/restart-status` - Check if restart is pending
 
 ### Assets
@@ -284,6 +274,13 @@ Login → Character List → Select/Create Character → Enter World → Spawn a
 - `GET /api/actions` - List all available actions
 - `GET /api/actions/available` - Get actions available to player
 - `POST /api/actions/:name` - Execute specific action
+
+### Streaming
+
+- `GET /api/streaming/state` - Current duel state (for betting integration)
+- `GET /api/streaming/duel-context` - Detailed duel context
+- `GET /api/streaming/rtmp/status` - RTMP bridge status
+- `GET /live/stream.m3u8` - HLS stream endpoint
 
 ### Utility
 
@@ -309,13 +306,15 @@ POSTGRES_CONTAINER=hyperscape-postgres
 POSTGRES_USER=hyperscape
 POSTGRES_PASSWORD=hyperscape_dev_password
 POSTGRES_DB=hyperscape
-POSTGRES_PORT=5488
+POSTGRES_PORT=5432
 
 # Option 2: External PostgreSQL
-DATABASE_URL=postgresql://user:pass@host:5488/dbname
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
 
-# Railway Detection (automatic)
+# Railway-specific (auto-detected)
 RAILWAY_ENVIRONMENT=production  # Auto-set by Railway
+POSTGRES_POOL_MAX=6             # Lower limit for pooler connections
+POSTGRES_POOL_MIN=0             # Don't hold idle connections
 ```
 
 ### Assets
@@ -333,37 +332,41 @@ PRIVY_APP_SECRET=your-app-secret
 ADMIN_CODE=your-admin-code          # For /admin command
 ```
 
-### AI Agents (Optional)
-
-```env
-STREAMING_DUEL_ENABLED=true         # Enable streaming duel arena
-MAX_MODEL_AGENTS=19                 # Number of AI agents to spawn
-OPENAI_API_KEY=your-key             # For GPT models
-ANTHROPIC_API_KEY=your-key          # For Claude models
-GROQ_API_KEY=your-key               # For Llama models
-```
-
-### Streaming (Optional)
+### Streaming Duel Arena (Optional)
 
 ```env
 STREAMING_DUEL_ENABLED=true
-RTMP_MULTIPLEXER_URL=rtmp://your-server/live
-TWITCH_STREAM_KEY=your-key
-YOUTUBE_STREAM_KEY=your-key
-KICK_STREAM_KEY=your-key
-STREAMING_VIEWER_ACCESS_TOKEN=your-token  # Gate for live WebSocket viewers
-STREAMING_PUBLIC_DELAY_MS=15000           # Anti-cheat delay (default: 15s)
-STREAM_PLACEHOLDER_ENABLED=true           # Prevent idle disconnects
+STREAM_PLACEHOLDER_ENABLED=true     # Prevents stream disconnects
+STREAM_DESTINATIONS=youtube,twitch  # Comma-separated
+YOUTUBE_STREAM_KEY=...
+TWITCH_STREAM_KEY=...
+STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable
+STREAM_LOW_LATENCY=true
+STREAM_GOP_SIZE=60
+STREAM_AUDIO_ENABLED=true
 ```
 
 ### Betting Integration (Optional)
 
 ```env
 DUEL_BETTING_ENABLED=true
-ARENA_EXTERNAL_BET_WRITE_KEY=your-key     # Server-to-server auth
-SOLANA_ARENA_MARKET_PROGRAM_ID=your-program-id
-SOLANA_GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump
-SOLANA_ARENA_AUTHORITY_SECRET=your-keypair  # For oracle writes
+ARENA_EXTERNAL_BET_WRITE_KEY=...    # Server-to-server auth
+SOLANA_RPC_URL=...
+SOLANA_CLUSTER=mainnet-beta
+BSC_RPC_URL=...
+BSC_GOLD_CLOB_ADDRESS=...
+BASE_RPC_URL=...
+BASE_GOLD_CLOB_ADDRESS=...
+```
+
+### AI Agents (Optional)
+
+```env
+SPAWN_MODEL_AGENTS=true             # Auto-spawn when STREAMING_DUEL_ENABLED=true
+MAX_MODEL_AGENTS=19                 # Number of AI agents
+OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...
+GROQ_API_KEY=...
 ```
 
 ### Farcaster Frame v2 (Optional)
@@ -398,39 +401,46 @@ to poll `/health` and trigger alerts on non-200 responses or elevated latency.
 
 ### Railway
 
-**Recommended for production**. Railway provides:
-- Automatic PostgreSQL provisioning
-- Zero-downtime deployments
-- Environment variable management
-- Health check monitoring
+Railway deployment is automated via GitHub Actions:
 
-See `docs/railway-dev-prod.md` for setup guide.
+- `main` branch → production
+- `develop` or `dev` branch → development
 
-**Railway-specific optimizations**:
-- Automatic connection pool sizing for Railway proxy
-- Prepared statement disabling for pgbouncer compatibility
-- Detection via `RAILWAY_ENVIRONMENT`, `.railway.internal`, `.rlwy.net`, `.railway.app` hostnames
+See `docs/railway-dev-prod.md` for setup details.
+
+**Railway-Specific Optimizations:**
+
+Railway is automatically detected via:
+- `RAILWAY_ENVIRONMENT` environment variable (most reliable)
+- Hostname patterns: `.rlwy.net`, `.railway.app`, `.railway.internal`
+
+When detected, the system:
+- Disables prepared statements (not supported by pgbouncer)
+- Uses lower connection pool limits (max: 6)
+- Prevents "too many clients already" errors
 
 ### Vast.ai (Streaming Duel Arena)
 
-**Recommended for GPU-accelerated streaming**. Vast.ai provides:
-- NVIDIA GPU with display driver support
-- WebGPU rendering for browser capture
-- Cost-effective GPU instances
+For GPU-accelerated streaming deployment:
 
-See `docs/duel-stack.md` and `.github/workflows/deploy-vast.yml` for deployment guide.
+```bash
+# Deploy via GitHub Actions
+# See .github/workflows/deploy-vast.yml
+```
 
-**Vast.ai requirements**:
-- `gpu_display_active=true` (display driver, not just compute)
-- Xorg or Xvfb (WebGPU requires window context)
-- NVIDIA GPU with Vulkan support
+Requirements:
+- NVIDIA GPU with display driver (`gpu_display_active=true`)
+- WebGPU support (Chrome with ANGLE/Vulkan)
+- Xorg or Xvfb (non-headless)
+
+See `ecosystem.config.cjs` for PM2 process configuration.
 
 ### Docker
 
 Build and run with Docker:
 
 ```bash
-docker build -t hyperscape-server .
+docker build -t hyperscape-server -f Dockerfile.server .
 docker run -p 5555:5555 \
   -e DATABASE_URL=postgresql://... \
   hyperscape-server
@@ -482,7 +492,7 @@ Rollback uses the same deployment workflows with an explicit ref:
 1. Check if Docker is running: `docker ps`
 2. Start PostgreSQL: `docker-compose up postgres`
 3. Check connection string in .env
-4. Verify firewall allows port 5488
+4. Verify firewall allows port 5432
 
 ### Database Migration Errors
 
@@ -513,29 +523,7 @@ Then restart the server.
 SELECT * FROM config WHERE key = 'version';
 ```
 
-Should be at version 51 or higher. If not, restart server to run migrations.
-
-### Agent Memory Issues
-
-**Error:** Agents consuming excessive memory (>10GB for 19 agents)
-
-**Solutions:**
-1. Verify InMemoryDatabaseAdapter is being used (not PGLite)
-2. Check memory caps are in place (50 memories per agent)
-3. Monitor periodic GC is running (every 60s)
-4. Check adapter logs are capped at 20 entries
-
-### Database Connection Pool Exhaustion
-
-**Error:** "timeout exceeded when trying to connect"
-
-**Solutions:**
-1. Increase serverless PG pool max (default: 20)
-2. Increase connection timeout (default: 60s)
-3. Enable concurrency limiting for bank queries (max 5)
-4. Stagger agent refresh intervals to distribute load
-
-**Railway-specific**: Connection pool automatically optimized when Railway environment detected.
+Should be at latest migration version. If not, restart server to run migrations.
 
 ### Docker Issues
 
@@ -548,26 +536,34 @@ Should be at version 51 or higher. If not, restart server to run migrations.
 
 **Alternative:** Use external PostgreSQL instead:
 ```env
-DATABASE_URL=postgresql://user:pass@host:5488/dbname
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
 USE_LOCAL_POSTGRES=false
 ```
 
-### Streaming Issues
+### Agent Memory Issues
 
-**Error:** RTMP bridge not connecting
+**Error:** High memory usage with many agents
 
-**Solutions:**
-1. Verify `RTMP_MULTIPLEXER_URL` or platform-specific stream keys are set
-2. Check FFmpeg is installed (`ffmpeg -version`)
-3. Verify Playwright Chromium is installed (`bunx playwright install chromium`)
-4. Check WebGPU is available in browser capture
+**Solution:** Agent memory management is optimized with:
+- InMemoryDatabaseAdapter (no PGLite WASM overhead)
+- Memory caps (50 memories per agent, 20 log entries, 100 cache entries)
+- Periodic garbage collection (every 60s)
+- Concurrency limiting (max 5 concurrent bank queries)
 
-**Error:** Stream disconnects during idle periods
+See `AGENTS.md` for detailed memory management documentation.
 
-**Solution:** Enable placeholder mode:
+### Railway "Too Many Clients" Errors
+
+**Error:** `timeout exceeded when trying to connect` or `too many clients already`
+
+**Solution:** Railway uses pgbouncer connection pooling. Set lower limits:
+
 ```env
-STREAM_PLACEHOLDER_ENABLED=true
+POSTGRES_POOL_MAX=6   # Lower limit for pooler connections
+POSTGRES_POOL_MIN=0   # Don't hold idle connections
 ```
+
+Railway is automatically detected - no manual configuration needed.
 
 ## Development
 
@@ -575,37 +571,39 @@ STREAM_PLACEHOLDER_ENABLED=true
 
 ```
 src/
-├── index.ts              # Main server entry point
-├── main.ts               # Server initialization
-├── startup/              # Startup configuration
-│   ├── config.ts        # Environment configuration
-│   ├── database.ts      # Database initialization
-│   ├── http-server.ts   # Fastify server setup
-│   ├── websocket.ts     # WebSocket setup
-│   └── routes/          # API route definitions
-├── systems/              # Game systems
-│   ├── ServerNetwork/   # Network layer & player lifecycle
-│   ├── DatabaseSystem/  # Database operations
-│   ├── StreamingDuelScheduler/  # Duel arena automation
-│   └── DuelScheduler/   # Duel betting bridge
-├── eliza/                # ElizaOS integration
-│   ├── ModelAgentSpawner.ts  # AI agent spawning
-│   ├── ElizaDuelBot.ts       # Duel bot implementation
-│   └── agentHelpers.ts       # Agent utilities
-├── streaming/            # Streaming infrastructure
-│   ├── browser-capture.ts    # WebGPU browser capture
-│   ├── rtmp-bridge.ts        # RTMP fanout
-│   └── stream-capture.ts     # Stream management
-├── arena/                # Betting integration
-│   ├── ArenaService.ts       # Betting API
-│   └── SolanaArenaOperator.ts # Oracle integration
-├── database/             # Database layer
-│   ├── client.ts        # Connection pooling
-│   ├── schema.ts        # Drizzle schema
-│   └── migrations/      # Migration files
-└── infrastructure/       # Infrastructure utilities
-    ├── docker/          # Docker management
-    └── auth/            # Authentication
+├── index.ts                      # Main server entry point
+├── main.ts                       # Server initialization
+├── startup/                      # Startup configuration
+│   ├── config.ts                 # Environment configuration
+│   ├── database.ts               # Database initialization
+│   ├── http-server.ts            # Fastify server setup
+│   ├── websocket.ts              # WebSocket setup
+│   ├── world.ts                  # World initialization
+│   └── routes/                   # API route definitions
+├── systems/                      # Game systems
+│   ├── ServerNetwork/            # Network layer & player lifecycle
+│   ├── DatabaseSystem/           # Database operations
+│   ├── DuelSystem/               # Duel mechanics
+│   ├── StreamingDuelScheduler/   # Streaming duel automation
+│   └── TradingSystem/            # Player trading
+├── database/                     # Database layer
+│   ├── client.ts                 # Connection & migrations
+│   ├── schema.ts                 # Drizzle schema
+│   ├── repositories/             # Data access layer
+│   └── migrations/               # SQL migrations
+├── eliza/                        # ElizaOS integration
+│   ├── AgentManager.ts           # Agent lifecycle
+│   ├── ModelAgentSpawner.ts      # AI model agent spawning
+│   ├── ElizaDuelBot.ts           # Duel-specific agent behavior
+│   └── EmbeddedHyperscapeService.ts  # Game API for agents
+├── arena/                        # Betting integration
+│   ├── ArenaService.ts           # Betting API
+│   ├── SolanaArenaOperator.ts    # Solana contract integration
+│   └── services/                 # Arena subsystems
+└── streaming/                    # Streaming capture
+    ├── browser-capture.ts        # WebGPU capture
+    ├── rtmp-bridge.ts            # RTMP streaming
+    └── stream-capture.ts         # Capture orchestration
 ```
 
 ### Running Tests
@@ -632,19 +630,21 @@ Output: `dist/index.js` (bundled server)
 
 ### Database Connection Pool
 
-**Standard Pool**:
+**Standard Pool:**
 - Max connections: 30 (increased from 20 for duel prep concurrency)
 - Idle timeout: 30s
 - Connection timeout: 5s
 
-**Serverless Pool** (Railway/Neon):
+**Serverless Pool (Railway/Neon):**
 - Max connections: 20 (increased from 10)
 - Connection timeout: 60s (increased from 30s)
-- Automatic detection via `RAILWAY_ENVIRONMENT` or hostname patterns
+- Prevents pool exhaustion with many agents
 
-**Concurrency Limiting**:
-- Bank queries: max 5 concurrent (prevents pool exhaustion during agent initialization)
-- Staggered refresh intervals: random offset to distribute load
+**Agent Concurrency:**
+- Bank queries: Max 5 concurrent (prevents pool exhaustion)
+- Staggered refresh intervals (prevents synchronized DB spikes)
+
+Adjust in `src/database/client.ts` if needed.
 
 ### Asset Caching
 
@@ -654,23 +654,6 @@ Cache-Control: public, max-age=31536000, immutable
 ```
 
 For development, disable browser cache or use incognito mode.
-
-### Agent Memory Management
-
-**Memory Caps**:
-- 50 memories per agent (ring buffer eviction)
-- 20 adapter log entries (LLM prompts+responses)
-- 100 cache entries (LRU eviction)
-- 50 encounter cache entries per agent
-- 100 previous mob health map entries
-
-**Periodic Cleanup**:
-- Non-blocking GC every 60s per agent
-- Adapter flush every 60s for entities/rooms/worlds/tasks
-- State cache flush when over 100 entries
-
-**Expected Memory Usage**:
-- 19 agents: <5GB total (down from 38-76GB with PGLite)
 
 ## Security
 
@@ -687,9 +670,9 @@ Admin commands require:
 1. `ADMIN_CODE` set in environment
 2. `/admin <code>` command in chat
 
-Admin endpoints:
-- `POST /admin/graceful-restart` - Zero-downtime restart
-- `GET /admin/restart-status` - Check restart status
+Admin API endpoints require `x-admin-code` header:
+- `POST /admin/graceful-restart`
+- `GET /admin/restart-status`
 
 ### Database
 
@@ -697,27 +680,50 @@ Admin endpoints:
 - Restrict database access to server IP
 - Enable SSL for remote PostgreSQL connections
 
-### Streaming Security
-
-- `STREAMING_VIEWER_ACCESS_TOKEN` gates live WebSocket viewers
-- Public delay (`STREAMING_PUBLIC_DELAY_MS`) prevents betting advantage
-- Canonical platform (`STREAMING_CANONICAL_PLATFORM`) for timing reference
-
 ### Rate Limiting
 
-Not implemented yet. Consider adding:
-- Connection rate limiting (websocket)
-- API endpoint rate limiting
-- Upload size limits (currently 50MB)
+Built-in rate limiting for:
+- WebSocket connections
+- API endpoints
+- Upload endpoints (50MB limit)
+
+Disable in development with `DISABLE_RATE_LIMIT=true` (not recommended for production).
+
+### Betting Security
+
+- `ARENA_EXTERNAL_BET_WRITE_KEY` - Server-to-server authentication (never expose in frontend)
+- RPC proxying - Keep provider-keyed RPC URLs server-side
+- Build-time secret detection - Fails build if secrets detected in public env vars
+
+## Recent Improvements (March 2026)
+
+### Agent Memory Management
+- InMemoryDatabaseAdapter migration (38-76GB → <5GB for 19 agents)
+- Memory caps (50 memories, 20 logs, 100 cache entries)
+- Periodic garbage collection (every 60s)
+- DB pool optimization (concurrency limiting, staggered intervals)
+
+### Streaming Features
+- Graceful restart API (zero-downtime deployments)
+- Streaming placeholder mode (prevents disconnects during idle)
+- Activity-aware camera (prioritizes combat > skilling > moving > idle)
+
+### Deployment
+- Railway auto-detection (automatic connection pool optimization)
+- Deterministic migrations (sorted order for consistency)
+- Sequential agent spawning (prevents ALTER TABLE races)
+- Solana configuration auto-discovery
+
+### Testing & CI
+- Vitest 4.x upgrade (Vite 6 compatibility)
+- CI stabilization (fixed test runner, duel agents, vegetation tests)
+- Anchor test config (skip localnet tests without Solana CLI)
 
 ## Support
 
-- **Documentation:** See `MIGRATION-FIXES.md` for recent changes
-- **Betting Deployment:** See `docs/betting-production-deploy.md`
-- **Duel Stack:** See `docs/duel-stack.md`
-- **Railway Deployment:** See `docs/railway-dev-prod.md`
+- **Documentation:** See `AGENTS.md` for AI agent features and `docs/betting-production-deploy.md` for betting stack deployment
 - **Issues:** Report bugs in the main Hyperscape repository
 
 ## License
 
-GPL-3.0-only - See LICENSE file
+MIT
