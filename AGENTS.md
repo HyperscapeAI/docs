@@ -500,13 +500,18 @@ STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
 
 ### Plugin World Map Exports
 
-**Fix** (commit ea0aef6): Restored missing world map exports from plugin-hyperscape.
+**Fix** (commits ea0aef6, 5599142, b18d561): Restored missing world map exports from plugin-hyperscape and fixed stale location updates.
 
 **Exports Restored**:
 - `mapProvider` - World map data provider for agent navigation
 - Map-related types and utilities
 
-**Impact**: Agents can now access world map data for navigation and spatial awareness.
+**Refresh Known Locations** (commit b18d561):
+- Added `tileInterpolatorControlled` flag to prevent InterpolationEngine conflicts
+- Refresh known world-map locations when map data changes
+- Regression test for stale location updates
+
+**Impact**: Agents can now access world map data for navigation and spatial awareness without stale location bugs.
 
 ## Runtime Logging (March 2026)
 
