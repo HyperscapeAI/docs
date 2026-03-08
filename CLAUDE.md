@@ -137,12 +137,20 @@ packages/
 ├── server/              # Game server (Fastify + WebSockets)
 │   ├── World management
 │   ├── PostgreSQL persistence
+│   ├── Streaming duel scheduler
 │   └── LiveKit voice chat integration
 ├── client/              # Web client (Vite + React)
 │   ├── 3D rendering
 │   ├── Player controls
 │   └── UI/HUD
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
+├── gold-betting-demo/   # Solana/EVM betting stack
+│   ├── app/            # React betting UI (Cloudflare Pages)
+│   ├── keeper/         # Betting API + oracle (Railway)
+│   └── anchor/         # Solana smart contracts (Anchor)
+├── evm-contracts/       # EVM betting contracts (Hardhat + Foundry)
+├── contracts/           # MUD onchain game state (experimental)
+├── sim-engine/          # Cross-chain betting risk simulation
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
