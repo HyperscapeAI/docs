@@ -176,6 +176,15 @@ This command:
 - Solana: refresh, seed-liquidity, place bet, resolve, claim, start new round
 - EVM: refresh, place order, resolve match, claim, create match
 - Chain-level validation for both Solana and EVM transactions
+- Keeper API integration (points, leaderboard, referrals, perps markets)
+- Tab navigation and UI state management
+- Wallet connection and authentication flows
+
+**E2E infrastructure improvements** (commit 43911165):
+- Keeper API seeding via `setup-api-local.ts` and `seed-api-local.ts`
+- Custom EVM chain ID support (works with Anvil's default 31337)
+- Keeper database initialization for local testing
+- Comprehensive tab and API endpoint testing
 
 ### Public Clusters (Testnet/Mainnet)
 
