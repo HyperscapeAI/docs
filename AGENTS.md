@@ -433,15 +433,37 @@ STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
 - **Environment Passthrough**: All deploy-time secrets passed into PM2 runtime
 - **Auto-Discovery**: Solana authority auto-discovered from multiple candidate sources
 
-### Betting Stack Synchronization
+### Betting Stack Integration
 
-**Updates** (commits ba5617c, b36c054, d8e4d39, 6330821, a4a275b, 792159b, ca439b3):
-- Synced betting stack updates from production
-- Hardened betting localnet flows and cleared anchor audit
-- Cleaned stale app wiring after betting hardening
-- Removed legacy binary market app state
-- Restored stable app shell for production build
-- Finalized betting production sync artifacts
+**Major Feature** (commits ba5617c through 43911165): Full Solana/EVM betting stack for streaming duels.
+
+**Architecture**:
+- **Frontend** (`packages/gold-betting-demo/app`): React betting UI with Solana/EVM wallet integration
+- **Keeper** (`packages/gold-betting-demo/keeper`): Backend API for bet recording, market making, and oracle resolution
+- **Anchor Programs** (`packages/gold-betting-demo/anchor`): Solana smart contracts for fight oracle, CLOB market, and perps market
+- **EVM Contracts** (`packages/evm-contracts`): Hardhat/Foundry contracts for BSC/Base GOLD CLOB and perps
+- **Sim Engine** (`packages/sim-engine`): Cross-chain risk simulation and attack fuzzing
+
+**Key Features**:
+- Dual-chain betting (Solana + EVM) with unified GOLD token
+- CLOB (Central Limit Order Book) market for duel outcomes
+- Perpetual futures market for agent skill ratings
+- Points system with staking multipliers and referral tracking
+- Market maker bot for liquidity seeding
+- Oracle system for trustless duel outcome reporting
+
+**Hardening** (commits d8e4d39, 8322b3f, 1043f0a):
+- Security audit passed for all Anchor programs
+- Fuzz testing for exploit resistance
+- Deterministic migration ordering for serverless PostgreSQL
+- Noble ed25519 import alignment for Solana compatibility
+- CI polyfill shims for betting stack tests
+
+**Deployment**:
+- Frontend: Cloudflare Pages
+- Keeper: Railway with persistent SQLite or external DB
+- Contracts: Deployed to Solana mainnet-beta and BSC/Base
+- See `docs/betting-production-deploy.md` for full deployment guide
 
 ## Branding Assets (March 2026)
 
