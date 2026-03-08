@@ -326,7 +326,9 @@ All services have unique default ports to avoid conflicts:
 | 3401 | AssetForge API | `ASSET_FORGE_API_PORT` | `bun run dev:forge` |
 | 3402 | Docusaurus | (hardcoded) | `bun run docs:dev` |
 | 4001 | ElizaOS API | (hardcoded) | `bun run dev:ai` |
+| 5173 | Betting App | `VITE_PORT` | `cd packages/gold-betting-demo/app && bun run dev` |
 | 5555 | Game Server | `PORT` | `bun run dev` |
+| 8080 | Asset CDN | (hardcoded) | `bun run cdn:up` |
 
 ### Environment Variables
 
