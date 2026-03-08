@@ -138,10 +138,41 @@ Tests use a manual `solana-test-validator` harness (not `anchor test`) for opera
 **Passing tests**:
 - Market-maker auto seed after 10 seconds when market is empty
 - Oracle resolve + winner claim payout flow
-- Fee routing to treasury and market maker
+- Fee routing to treasury and market maker (trade fees + claim fees)
 - Perps market lifecycle (ACTIVE → CLOSE_ONLY → ARCHIVED)
-- Slippage protection
+- Perps market reactivation (ARCHIVED → ACTIVE)
+- Slippage protection (acceptable_price parameter)
 - Insurance fund management
+- Fee recycling (market maker fees → isolated insurance)
+- Fee withdrawal (treasury and market maker fee balances)
+- Reduce-only logic (CLOSE_ONLY mode)
+
+**CLOB fee routing test** (commits 43911165, 8322b3f):
+
+New comprehensive test validates fee routing through full lifecycle:
+
+```typescript
+// Test validates:
+// 1. Trade fees split between treasury and market maker
+// 2. Claim fees route to market maker
+// 3. Fee balances accumulate correctly
+// 4. Fees are transferred to correct accounts
+```
+
+**Perps fee management tests** (commits 43911165, 8322b3f):
+
+New tests validate fee operations:
+
+```typescript
+// recycle_market_maker_fees test
+// - Verifies market maker fees can be recycled into insurance
+// - Validates fee balance accounting
+
+// withdraw_fee_balance test
+// - Verifies treasury can withdraw treasury fees
+// - Verifies market maker can withdraw market maker fees
+// - Validates recipient address matches configured authority
+```
 
 **Rust verification**:
 ```bash
