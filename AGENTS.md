@@ -552,6 +552,23 @@ Removed unused variables and code paths in `packages/asset-forge/src/components/
 
 **Impact**: Reduces bundle size and improves code maintainability.
 
+### Anchor Vendor Dependencies
+
+**Feature** (PR #989): Added vendored Solana dependencies to fix Anchor build compatibility.
+
+**Dependencies Added**:
+- `solana-loader-v3-interface` (v5.0.0) - Loader v3 interface with bincode support
+- `solana-sdk-ids` (v2.2.1) - SDK ID definitions
+
+**Location**: `packages/gold-betting-demo/anchor/vendor/anchor-lang-0.31.1/`
+
+**Changes**:
+- Updated `Cargo.toml` to include new dependencies
+- Fixed `system_program::ID` references to use `crate::system_program::ID`
+- Added explicit lifetime annotations to `AccountLoader` methods
+
+**Impact**: Resolves Anchor build warnings and ensures compatibility with Solana SDK v2.x.
+
 ### Solana Program Deployment Scripts
 
 **Feature** (PR #989): Automated Solana program deployment with wallet auto-discovery.
