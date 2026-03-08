@@ -642,6 +642,90 @@ const clob = await GoldClob.deploy(treasury.address, marketMaker.address);
 const clob = await deployGoldClob(treasury.address, marketMaker.address);
 ```
 
+### Perps Market Lifecycle
+
+**Market States** (commits 43911165, 8322b3f, 1043f0a):
+
+The perpetual futures markets support three lifecycle states for managing model deprecation:
+
+**ACTIVE** - Normal trading:
+- New positions allowed
+- Position increases/decreases allowed
+- Requires fresh oracle updates (within `max_oracle_staleness_seconds`)
+- Funding rate drifts based on market skew
+- Uses live `spot_index` for pricing
+
+**CLOSE_ONLY** - Model deprecated:
+- New positions blocked (`MarketCloseOnly` error)
+- Position increases blocked
+- Position reductions and closes allowed
+- Settlement price frozen at `settlement_spot_index`
+- No oracle updates required (uses frozen price)
+- Funding rate frozen
+
+**ARCHIVED** - Market fully wound down:
+- All trading blocked (`MarketArchived` error)
+- Requires zero `total_long_oi`, zero `total_short_oi`, and zero `open_positions`
+- Can be reactivated to ACTIVE if model returns
+
+**State Transition Instructions:**
+
+```rust
+// Deprecate a model (freeze settlement price)
+set_market_status(market_id, CLOSE_ONLY, settlement_spot_index)
+
+// Archive a fully-closed market
+set_market_status(market_id, ARCHIVED, 0)
+
+// Reactivate an archived market
+set_market_status(market_id, ACTIVE, 0)
+```
+
+**Fee Management:**
+
+Trade fees are split between treasury and market maker:
+
+```rust
+// Configure fee rates (BPS)
+initialize_config(
+  keeper_authority,
+  treasury_authority,
+  market_maker_authority,
+  // ... other params
+  trade_treasury_fee_bps: 25,      // 0.25% to treasury
+  trade_market_maker_fee_bps: 25,  // 0.25% to market maker
+)
+```
+
+**Fee operations:**
+- `recycle_market_maker_fees(market_id, amount)` - Recycle market maker fees into isolated insurance
+- `withdraw_fee_balance(market_id, fee_bucket, amount)` - Withdraw treasury or market maker fees
+- Fee balances are reserved from free liquidity calculations (prevents insurance fund contamination)
+
+**Slippage Protection:**
+
+The `modify_position` instruction now accepts an `acceptable_price` parameter:
+
+```rust
+modify_position(
+  market_id,
+  margin_delta,
+  size_delta,
+  acceptable_price,  // New parameter
+)
+```
+
+- Longs: execution price must be ≤ acceptable price
+- Shorts: execution price must be ≥ acceptable price
+- Set to 0 to disable slippage check (backwards compatible)
+
+**Breaking Changes:**
+
+- Market ID type changed from `u32` to `u64` (larger ID space)
+- PDA derivation uses 8-byte encoding (was 4-byte)
+- Account sizes increased for new fee tracking fields
+- Requires fresh program deployment (incompatible with existing markets)
+
 ### Preflight Validation
 
 Before deploying to any network, run preflight checks:
