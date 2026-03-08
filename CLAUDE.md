@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world.
+Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with autonomous AI agents powered by ElizaOS.
 
 ## CRITICAL: WebGPU Required (NO WebGL)
 
@@ -20,14 +20,12 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 ### Browser Requirements
 - Chrome 113+ (recommended)
 - Edge 113+
-- Safari 18+ (macOS 15+)
+- Safari 18+ (macOS 15+) - Safari 17 support was removed
 - Firefox (behind flag, not recommended)
-- Check: [webgpureport.org](https://webgpureport.org)
-- Note: Safari 17 support was removed - Safari 18+ (macOS 15+) is now required
 
 ### Server/Streaming Requirements
 For Vast.ai and other GPU servers running the streaming pipeline:
-- **NVIDIA GPU with Display Driver REQUIRED**: Must have `gpu_display_active=true` on Vast.ai
+- **NVIDIA GPU with Display Driver REQUIRED** - Must have `gpu_display_active=true` on Vast.ai
 - **Display Driver vs Compute**: WebGPU requires GPU display driver support, not just compute access
 - **Must run non-headless** with Xorg or Xvfb (WebGPU requires window context)
 - Chrome uses ANGLE/Vulkan backend to access WebGPU
@@ -53,6 +51,9 @@ bun run build
 # Development mode with hot reload
 bun run dev
 
+# Full duel stack (game + agents + betting + streaming)
+bun run duel
+
 # Start game server (production mode)
 bun start               # or: cd packages/server && bun run start
 
@@ -77,6 +78,8 @@ bun run build:server    # Game server
 bun run dev:shared      # Shared package with watch mode
 bun run dev:client      # Client with Vite HMR
 bun run dev:server      # Server with auto-restart
+bun run dev:ai          # Game + ElizaOS agents
+bun run dev:forge       # AssetForge tools
 ```
 
 ### Testing
@@ -137,20 +140,21 @@ packages/
 ├── server/              # Game server (Fastify + WebSockets)
 │   ├── World management
 │   ├── PostgreSQL persistence
-│   ├── Streaming duel scheduler
-│   └── LiveKit voice chat integration
+│   ├── LiveKit voice chat integration
+│   └── Streaming duel scheduler
 ├── client/              # Web client (Vite + React)
-│   ├── 3D rendering
+│   ├── 3D rendering (WebGPU only)
 │   ├── Player controls
 │   └── UI/HUD
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── gold-betting-demo/   # Solana/EVM betting stack
 │   ├── app/            # React betting UI (Cloudflare Pages)
-│   ├── keeper/         # Betting API + oracle (Railway)
-│   └── anchor/         # Solana smart contracts (Anchor)
+│   ├── keeper/         # Backend API (Railway)
+│   └── anchor/         # Solana smart contracts
 ├── evm-contracts/       # EVM betting contracts (Hardhat + Foundry)
 ├── contracts/           # MUD onchain game state (experimental)
 ├── sim-engine/          # Cross-chain betting risk simulation
+├── market-maker-bot/    # Automated market making
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
@@ -165,7 +169,7 @@ packages/
 2. **shared** - Depends on physx-js-webidl
 3. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
 
 > **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
 >
@@ -192,7 +196,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -258,7 +262,7 @@ Visual testing uses colored cube proxies:
 
 ### Production Code Only
 
-- No TODOs or \"will fill this out later\" - implement completely
+- No TODOs or "will fill this out later" - implement completely
 - No hardcoded data - use JSON files and general systems
 - No shortcuts or workarounds - fix root causes
 - Build toward the general case (many items, players, mobs)
@@ -311,8 +315,10 @@ The dev server provides:
 **Commands:**
 ```bash
 bun run dev        # Core game (client + server + shared)
+bun run dev:ai     # Game + ElizaOS agents
 bun run dev:forge  # AssetForge (standalone)
 bun run docs:dev   # Documentation site (standalone)
+bun run duel       # Full duel stack (game + agents + betting + streaming)
 ```
 
 ### Port Allocation
@@ -326,9 +332,8 @@ All services have unique default ports to avoid conflicts:
 | 3401 | AssetForge API | `ASSET_FORGE_API_PORT` | `bun run dev:forge` |
 | 3402 | Docusaurus | (hardcoded) | `bun run docs:dev` |
 | 4001 | ElizaOS API | (hardcoded) | `bun run dev:ai` |
-| 5173 | Betting App | `VITE_PORT` | `cd packages/gold-betting-demo/app && bun run dev` |
+| 4179 | Betting App | (configurable) | `bun run duel` |
 | 5555 | Game Server | `PORT` | `bun run dev` |
-| 8080 | Asset CDN | (hardcoded) | `bun run cdn:up` |
 
 ### Environment Variables
 
@@ -341,6 +346,9 @@ All services have unique default ports to avoid conflicts:
 | Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
+| Plugin | `packages/plugin-hyperscape/.env.example` | ElizaOS agent configuration |
+| Betting App | `packages/gold-betting-demo/app/.env.example` | Betting frontend configuration |
+| Keeper | `packages/gold-betting-demo/keeper/.env.example` | Betting backend API configuration |
 
 **Common variables**:
 ```bash
@@ -375,10 +383,12 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime.
 - **Engine**: Three.js 0.182.0, PhysX (WASM)
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
-- **Database**: PostgreSQL (production via Neon), Docker (local)
+- **Database**: PostgreSQL (production via Neon/Railway), Docker (local)
 - **Testing**: Playwright, Vitest 4.x (upgraded from 2.x for Vite 6 compatibility)
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
+- **AI Agents**: ElizaOS with InMemoryDatabaseAdapter (no PGLite)
+- **Blockchain**: Solana (Anchor), EVM (Hardhat + Foundry)
 
 ## Troubleshooting
 
@@ -407,6 +417,7 @@ cd packages/physx-js-webidl
 lsof -ti:3333 | xargs kill -9  # Game Client
 lsof -ti:5555 | xargs kill -9  # Game Server
 lsof -ti:4001 | xargs kill -9  # ElizaOS API
+lsof -ti:4179 | xargs kill -9  # Betting App
 ```
 
 See [Port Allocation](#port-allocation) section for full port list.
@@ -418,173 +429,28 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Tests spawn their own Hyperscape instances
 - Visual tests require WebGPU support (headful browser with GPU access)
 
-### Vitest Compatibility Issues
+### Agent Memory Issues
 
-**Problem**: `__vite_ssr_exportName__` errors during test runs
-
-**Solution**: Vitest 2.x is incompatible with Vite 6.x. Upgrade to Vitest 4.x:
-```bash
-# Update package.json
-\"vitest\": \"^4.0.6\",
-\"@vitest/coverage-v8\": \"^4.0.6\"
-
-# Reinstall
-bun install
-```
-
-No API changes required - tests continue to work as-is.
+If agents are consuming excessive memory:
+- Check that InMemoryDatabaseAdapter is being used (not PGLite)
+- Verify memory caps are in place (50 memories per agent, 20 adapter logs, 100 cache entries)
+- Monitor periodic GC is running (every 60s)
+- Check DB connection pool isn't exhausted (max 5 concurrent bank queries)
 
 ### Database Connection Pool Exhaustion
 
-**Problem**: \"timeout exceeded when trying to connect\" or \"too many clients already\" errors
-
-**Solutions**:
-
-1. **Railway Deployments**: Detection is automatic via `RAILWAY_ENVIRONMENT` env var. If issues persist, verify Railway proxy detection is working.
-
-2. **Agent Memory Issues**: If running many AI agents (19+):
-   - Agents use concurrency limiting (max 5 concurrent bank queries)
-   - Staggered refresh intervals prevent synchronized DB spikes
-   - DB pool sizes: serverless (20), standard (30)
-
-3. **Deployment Process**: Ensure process teardown before migrations:
-   ```bash
-   # Stop PM2 gracefully
-   pm2 stop all
-   pm2 delete all
-   
-   # Then run migrations
-   bunx drizzle-kit push
-   ```
-
-### Agent Memory Management
-
-**Problem**: High memory usage with multiple AI agents (38-76GB for 19 agents)
-
-**Solution**: Agents now use InMemoryDatabaseAdapter instead of PGLite WASM:
-- Memory footprint reduced to <5GB for 19 agents
-- Ring buffer limits: 50 memories per agent
-- Adapter log caps: 20 entries
-- Cache caps: 100 entries with LRU eviction
-- Periodic GC every 60s (non-blocking)
-
-**Diagnostic Logging**: Check adapter state monitoring in logs for memory issues.
-
-### Streaming Duel Deployments
-
-**Graceful Restart**: Deploy code updates without interrupting live duels:
-```bash
-# Request restart after current duel
-curl -X POST http://localhost:5555/admin/graceful-restart
-
-# Check restart status
-curl http://localhost:5555/admin/restart-status
-```
-
-**Placeholder Mode**: Prevent stream disconnects during idle periods:
-```bash
-# Enable in .env
-STREAM_PLACEHOLDER_ENABLED=true
-```
-
-Automatically sends minimal JPEG frames when no content for 5 seconds.
-
-### CI Test Failures
-
-**Anchor Localnet Tests**: Skip in CI when Solana CLI not installed:
-```bash
-# Tests automatically skip if solana command not found
-# Run normally in local development with Solana CLI
-```
-
-**Client Test Runner**: Ensure proper module resolution in CI environment.
-
-**Vegetation Concurrency**: Tests are stabilized for parallel execution.
-
-## Betting Stack (March 2026)
-
-### Architecture
-
-The betting stack enables real-time wagering on AI agent duels across Solana and EVM chains.
-
-**Components**:
-- **Frontend** (`packages/gold-betting-demo/app`): React app with Solana/EVM wallet integration
-- **Keeper** (`packages/gold-betting-demo/keeper`): Backend API for bet recording, market making, oracle resolution
-- **Anchor Programs** (`packages/gold-betting-demo/anchor`): Solana smart contracts (fight oracle, CLOB, perps)
-- **EVM Contracts** (`packages/evm-contracts`): Hardhat/Foundry contracts for BSC/Base
-- **Sim Engine** (`packages/sim-engine`): Cross-chain risk simulation and attack fuzzing
-
-**Deployment**:
-- Frontend: Cloudflare Pages
-- Keeper: Railway with persistent storage
-- Contracts: Solana mainnet-beta, BSC, Base
-- See `docs/betting-production-deploy.md` for deployment guide
-
-### Local Development
-
-```bash
-# Start betting app (requires game server running)
-cd packages/gold-betting-demo/app
-bun install
-bun run dev  # Opens on port 5173
-
-# Start keeper (betting API)
-cd packages/gold-betting-demo/keeper
-bun install
-bun run dev
-
-# Run Anchor tests (requires Solana CLI)
-cd packages/gold-betting-demo/anchor
-anchor test
-
-# Run EVM tests
-cd packages/evm-contracts
-bun run test
-```
-
-### Environment Variables
-
-**Betting App** (`packages/gold-betting-demo/app/.env`):
-```bash
-VITE_GAME_API_URL=http://localhost:5555
-VITE_SOLANA_CLUSTER=localnet
-VITE_USE_GAME_RPC_PROXY=true
-```
-
-**Keeper** (`packages/gold-betting-demo/keeper/.env`):
-```bash
-STREAM_STATE_SOURCE_URL=http://localhost:5555/api/streaming/state
-SOLANA_CLUSTER=localnet
-SOLANA_RPC_URL=http://localhost:8899
-```
-
-**Game Server** (betting-related vars in `packages/server/.env`):
-```bash
-STREAMING_DUEL_ENABLED=true
-SOLANA_ARENA_AUTHORITY_SECRET=...
-SOLANA_ARENA_MARKET_PROGRAM_ID=...
-SOLANA_GOLD_MINT=...
-```
-
-### Security Hardening
-
-**Audit Status** (commit d8e4d39):
-- All Anchor programs passed security audit
-- Fuzz testing for exploit resistance
-- Noble ed25519 import alignment for Solana compatibility
-
-**CI/CD** (commits 43911165, bb8ec82, abefb25, 624f47f, 6ba6fa0):
-- Betting workflow definitions repaired
-- Betting workspaces installed in CI
-- Noble ed25519 imports aligned
-- Betting polyfill shims stabilized in CI
+If seeing "timeout exceeded when trying to connect" errors:
+- Increase serverless PG pool max (default: 20)
+- Increase connection timeout (default: 60s)
+- Enable concurrency limiting for bank queries (max 5)
+- Stagger agent refresh intervals to distribute load
 
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
-- [AGENTS.md](AGENTS.md) - AI coding assistant instructions and comprehensive feature documentation
-- [docs/betting-production-deploy.md](docs/betting-production-deploy.md) - Betting stack deployment guide
-- [docs/duel-stack.md](docs/duel-stack.md) - Streaming duel system documentation
+- [AGENTS.md](AGENTS.md) - AI coding assistant instructions and feature documentation
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
+- [docs/betting-production-deploy.md](docs/betting-production-deploy.md) - Betting stack deployment guide
+- [docs/duel-stack.md](docs/duel-stack.md) - Duel stack documentation
 - Game Design Document: See `.cursor/rules/gdd.mdc`
