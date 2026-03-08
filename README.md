@@ -310,6 +310,11 @@ bun run build
 - **Git LFS Integration**: Binary branding files (.ai, .eps, .pdf, .png, .jpg) now tracked via Git LFS to prevent repo bloat (~28 MB)
 - **Documentation**: `publishing/branding/README.md` documents logo variants and usage guidelines
 
+### Network & Rendering
+- **Interpolation Engine Fixes**: Fixed position conflicts between tile-based and interpolated movement, proper quaternion slerp, dead entity skip
+- **Plugin Exports**: Restored world map exports for agent navigation and spatial awareness
+- **Logging Optimization**: Reduced runtime logging noise for cleaner console output
+
 ## More Info
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
