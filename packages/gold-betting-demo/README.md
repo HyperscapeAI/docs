@@ -186,6 +186,43 @@ This command:
 - Keeper database initialization for local testing
 - Comprehensive tab and API endpoint testing
 
+**Test data attributes** (commit 43911165):
+
+Added `data-testid` attributes throughout the betting app for reliable E2E testing:
+
+```typescript
+// Points display
+data-testid="points-display"
+data-testid="points-display-total"
+data-testid="points-display-rank"
+data-testid="points-display-gold"
+data-testid="points-display-tier"
+data-testid="points-display-boost"
+
+// Points drawer
+data-testid="points-drawer-overlay"
+data-testid="points-drawer"
+data-testid="points-drawer-close"
+data-testid="points-drawer-tab-leaderboard"
+data-testid="points-drawer-tab-history"
+data-testid="points-drawer-tab-referral"
+
+// Referral panel
+data-testid="referral-panel"
+data-testid="referral-panel-invite-code"
+data-testid="referral-panel-redeem-input"
+data-testid="referral-panel-redeem-button"
+data-testid="referral-panel-link-wallets"
+
+// Duels bottom tabs
+data-testid="duels-bottom-tab-trades"
+data-testid="duels-bottom-panel-trades"
+data-testid="duels-bottom-panel-orders"
+data-testid="duels-bottom-panel-topTraders"
+```
+
+**Impact**: Enables robust Playwright tests without brittle CSS selectors.
+
 ### Public Clusters (Testnet/Mainnet)
 
 ```bash
