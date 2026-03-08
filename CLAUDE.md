@@ -441,6 +441,23 @@ These limits are intentional until deeper code splitting is implemented. The lar
 
 **Tech Debt**: Track deeper code splitting as future optimization to reduce initial bundle size.
 
+**Lazy Loading Improvements** (commit 43911165):
+
+The betting app now lazy-loads heavy betting surfaces to reduce initial bundle size:
+
+```typescript
+// Lazy-loaded components
+const EvmBettingPanel = lazy(() => import("./components/EvmBettingPanel"));
+const SolanaClobPanel = lazy(() => import("./components/SolanaClobPanel"));
+const ModelsMarketView = lazy(() => import("./components/ModelsMarketView"));
+const PointsLeaderboard = lazy(() => import("./components/PointsLeaderboard"));
+const PointsHistory = lazy(() => import("./components/PointsHistory"));
+const ReferralPanel = lazy(() => import("./components/ReferralPanel"));
+const AgentStats = lazy(() => import("./components/AgentStats"));
+```
+
+**Impact**: Reduces initial bundle size by deferring heavy components until user navigates to them.
+
 ### PhysX Build Fails
 
 PhysX is pre-built and committed. If it needs rebuilding:
