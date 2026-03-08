@@ -603,6 +603,71 @@ bun run deploy:preflight:mainnet    # Validate mainnet deployment
 - ✅ EVM RPC URLs are available (configured or fallback)
 - ✅ Contract addresses are present in deployment manifest
 
+**Warnings vs Failures:**
+- **Warnings**: Missing RPC URLs (will use fallbacks), pending contract addresses
+- **Failures**: Mismatched program IDs, missing required env vars, invalid addresses
+
+### Solana Program Deployment
+
+Deploy all three Solana betting programs:
+
+```bash
+cd packages/gold-betting-demo/anchor
+bun run deploy:testnet      # Deploy to Solana testnet
+bun run deploy:mainnet      # Deploy to Solana mainnet-beta
+```
+
+**Programs deployed:**
+- `fight_oracle` - Match lifecycle and winner posting
+- `gold_clob_market` - GOLD CLOB market for binary prediction trading
+- `gold_perps_market` - Perpetual futures market for agent skill ratings
+
+**Wallet auto-discovery** (in priority order):
+1. `$ANCHOR_WALLET` environment variable
+2. `~/.config/solana/hyperscape-keys/deployer.json`
+3. `~/.config/solana/id.json`
+
+**Requirements:**
+- Solana CLI installed
+- Deployer wallet with ~4+ SOL for all three programs
+- Program keypairs in `target/deploy/`
+
+**Skip build** (if already built):
+```bash
+SKIP_BUILD=1 bun run deploy:mainnet
+```
+
+### EVM Contract Deployment
+
+Deploy GoldClob contracts to EVM networks:
+
+```bash
+cd packages/evm-contracts
+
+# Testnet
+bun run deploy:bsc-testnet
+bun run deploy:base-sepolia
+
+# Mainnet (requires explicit addresses)
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:bsc
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:base
+```
+
+**Deployment process:**
+1. Validates treasury and market maker addresses
+2. Deploys GoldClob contract
+3. Writes deployment receipt to `deployments/<network>.json`
+4. Updates central manifest at `../gold-betting-demo/deployments/contracts.json`
+
+**Mainnet safety:**
+- Requires explicit `TREASURY_ADDRESS` and `MARKET_MAKER_ADDRESS`
+- Fails if required addresses are missing (prevents accidental use of deployer address)
+
+**Skip manifest update** (for testing):
+```bash
+SKIP_BETTING_MANIFEST_UPDATE=true bun run deploy:bsc-testnet
+```
+
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
