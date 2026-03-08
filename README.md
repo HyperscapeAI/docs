@@ -310,7 +310,12 @@ bun run build
 ### Deployment
 - **Vast.ai Enhancements**: Production env passthrough, SSH-local health checks, targeted process killing, graceful PM2 shutdown, deterministic migrations
 - **Solana Configuration**: Runtime defaults for program IDs and gold mint, environment passthrough, auto-discovery
-- **Betting Stack Sync**: Hardened localnet flows, cleared anchor audit, cleaned stale app wiring
+- **Betting Stack Integration**: Full Solana/EVM betting system with CLOB markets, perps, points, and referrals
+  - Frontend: Cloudflare Pages deployment
+  - Keeper: Railway deployment with persistent storage
+  - Contracts: Solana mainnet-beta, BSC, Base
+  - Security: Passed Anchor audit, fuzz testing, exploit resistance
+  - See `docs/betting-production-deploy.md` for deployment guide
 
 ### Branding
 - **Git LFS Integration**: Binary branding files (.ai, .eps, .pdf, .png, .jpg) now tracked via Git LFS to prevent repo bloat (~28 MB)
