@@ -59,6 +59,7 @@ Hyperscape is a RuneScape-style MMORPG built on Three.js WebGPURenderer with TSL
 bun install          # Install dependencies
 bun run build        # Build all packages
 bun run dev          # Development mode
+bun run duel         # Full duel stack (game + agents + betting + streaming)
 npm test             # Run tests
 ```
 
@@ -76,7 +77,8 @@ packages/
 ├── gold-betting-demo/ # Solana/EVM betting stack (app + keeper + anchor programs)
 ├── evm-contracts/   # EVM betting contracts (Hardhat + Foundry)
 ├── contracts/       # MUD onchain game state (experimental)
-└── sim-engine/      # Cross-chain betting risk simulation
+├── sim-engine/      # Cross-chain betting risk simulation
+└── market-maker-bot/ # Automated market making for betting markets
 ```
 
 ## Agent Memory Management (March 2026)
@@ -464,6 +466,17 @@ STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
 - Keeper: Railway with persistent SQLite or external DB
 - Contracts: Deployed to Solana mainnet-beta and BSC/Base
 - See `docs/betting-production-deploy.md` for full deployment guide
+
+**CI/CD Workflows** (commits 43911165, 46cd28e):
+- **betting-ci.yml**: Type checking, linting, unit tests, keeper smoke test, env sanitization, production build verification
+- **deploy-betting-keeper.yml**: Tests → smoke test → Railway deploy → endpoint verification
+- **deploy-betting-pages.yml**: Build → dist hygiene → Cloudflare Pages deploy → build-info.json verification
+
+**Security Hardening**:
+- Build-time secret leak detection (fails build if provider-keyed RPC URLs in public env vars)
+- RPC proxying through keeper (keeps provider keys server-side)
+- Removed committed API keys from tracked env files (keys must be rotated out-of-band)
+- CI scans for leaked secrets in both env files and production dist
 
 ## Branding Assets (March 2026)
 
