@@ -239,7 +239,7 @@ Deployment metadata:
 
 - `build-info.json` is emitted into `dist/` on every build and should be served with `Cache-Control: no-store`.
 
-## 5) Verify production
+## 7) Verify production
 
 Health:
 
