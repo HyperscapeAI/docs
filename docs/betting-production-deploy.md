@@ -206,7 +206,7 @@ If you run the Vast.ai stack, verify it before pointing the keeper at it:
 - `/api/arena/points/*`
 4. Keep the direct Railway URL private if you introduce a public API domain.
 
-## 4) Deploy betting frontend to Cloudflare Pages
+## 6) Deploy betting frontend to Cloudflare Pages
 
 Project root:
 
