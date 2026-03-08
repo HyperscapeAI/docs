@@ -515,6 +515,43 @@ bun run deploy:preflight:mainnet    # Validate mainnet deployment
 
 **Impact**: Prevents deployment failures and configuration drift by validating all metadata before deployment.
 
+### Code Quality Improvements
+
+**GLTFExporter Static Imports** (PR #989):
+
+Converted dynamic `import()` calls to static imports across asset-forge package:
+
+**Before**:
+```typescript
+const { GLTFExporter } = await import("three/examples/jsm/exporters/GLTFExporter.js");
+const exporter = new GLTFExporter();
+```
+
+**After**:
+```typescript
+import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
+const exporter = new GLTFExporter();
+```
+
+**Files Updated**:
+- `packages/asset-forge/src/components/ArmorFitting/MeshFittingDebugger/hooks/useExportHandlers.ts`
+- `packages/asset-forge/src/services/fitting/ArmorFittingService.ts`
+- `packages/asset-forge/src/services/fitting/BoneDiagnostics.ts`
+
+**Benefits**:
+- Better tree-shaking (bundler can analyze static imports)
+- Cleaner code (no async import boilerplate)
+- Faster module loading (no dynamic import overhead)
+
+**VFX Preview Dead Code Removal** (PR #989):
+
+Removed unused variables and code paths in `packages/asset-forge/src/components/VFX/VFXPreview.tsx`:
+- Unused `opacity` calculations in glow particles
+- Unused `primaryColor`, `whiteGlow`, `ringMat` variables
+- Unused `effect` prop in `TeleportScene` component
+
+**Impact**: Reduces bundle size and improves code maintainability.
+
 ### Solana Program Deployment Scripts
 
 **Feature** (PR #989): Automated Solana program deployment with wallet auto-discovery.
