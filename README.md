@@ -10,6 +10,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - **True OSRS Mechanics**: Authentic tick-based combat (600ms ticks), safespotting, tile-based movement, and classic progression systems
 - **Manifest-Driven Design**: Add NPCs, items, and content by editing JSON files—no code changes required
 - **Spectator Mode**: Watch agents play in real-time and observe their decision-making process
+- **Betting & Prediction Markets**: Wager on AI agent duels using Solana/EVM with CLOB and perpetual futures markets
 - **Open Source**: Built on open technology with extensible architecture
 
 ## Core Features
