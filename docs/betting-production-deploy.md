@@ -8,6 +8,30 @@ This is the recommended production topology for the betting stack in this repo:
 - DDoS/WAF/edge cache: Cloudflare proxy in front of the betting API
 - Contracts/state: Solana + EVM (configured by env vars below, proxied server-side)
 
+## Deployment Metadata
+
+**Centralized Contract Addresses**: All contract addresses and program IDs are now managed in a single source of truth:
+
+- `packages/gold-betting-demo/deployments/contracts.json` - Shared deployment manifest
+- `packages/gold-betting-demo/deployments/index.ts` - Typed deployment configuration with runtime validation
+
+This manifest is used by:
+- Frontend app defaults
+- Keeper API defaults
+- Local development scripts
+- EVM deploy receipt syncing
+- Preflight validation checks
+
+**EVM Deployment Receipts**: Each EVM deployment writes a receipt to `packages/evm-contracts/deployments/<network>.json` containing:
+- Network name and chain ID
+- Deployer address
+- Contract addresses (GoldClob, GOLD token)
+- Treasury and market maker addresses
+- Deployment transaction hash
+- Deployment timestamp
+
+The EVM deploy script automatically updates the central `contracts.json` manifest after successful deployment.
+
 ## 1) Deploy the betting keeper to Railway
 
 From repo root, deploy the keeper service path:
