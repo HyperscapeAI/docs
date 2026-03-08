@@ -124,6 +124,31 @@ bun run docs:dev
 npm run docs:build
 ```
 
+### Betting Stack Deployment
+```bash
+# Preflight validation
+cd packages/gold-betting-demo
+bun run deploy:preflight:testnet    # Validate testnet readiness
+bun run deploy:preflight:mainnet    # Validate mainnet readiness
+
+# Deploy Solana programs
+cd anchor
+bun run deploy:testnet              # Deploy to Solana testnet
+bun run deploy:mainnet              # Deploy to Solana mainnet-beta
+
+# Deploy EVM contracts
+cd ../evm-contracts
+bun run deploy:bsc-testnet          # Deploy to BSC Testnet
+bun run deploy:base-sepolia         # Deploy to Base Sepolia
+# Mainnet (requires explicit treasury/market maker addresses)
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:bsc
+TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:base
+
+# Local testing
+bun test                            # Run all EVM contract tests
+bun run simulate:localnet           # Run local simulation with PnL report
+```
+
 ## Architecture Overview
 
 ### Monorepo Structure
