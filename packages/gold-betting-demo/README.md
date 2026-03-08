@@ -352,11 +352,57 @@ See `docs/betting-production-deploy.md` for complete deployment guide covering:
 
 ## CI/CD Workflows
 
-**betting-ci.yml**: Type checking, linting, unit tests, keeper smoke test, env sanitization, production build verification
+### Betting CI (`betting-ci.yml`)
 
-**deploy-betting-keeper.yml**: Tests → smoke test → Railway deploy → endpoint verification
+Runs on every push to betting stack packages:
 
-**deploy-betting-pages.yml**: Build → dist hygiene → Cloudflare Pages deploy → build-info.json verification
+**Validation steps:**
+- Type checking (TypeScript)
+- Linting (ESLint)
+- Unit tests (Vitest)
+- Keeper smoke test (verifies keeper boots and serves health endpoint)
+- Environment sanitization (checks for leaked secrets in env files)
+- Production build verification (ensures build succeeds with production config)
+- Dist hygiene checks (no source maps, no leaked API keys in build output)
+
+**Secret leak detection:**
+- Scans tracked env files for provider API keys (Helius, Birdeye)
+- Scans production dist for `api-key=` patterns
+- Fails build if secrets detected
+
+### Keeper Deployment (`deploy-betting-keeper.yml`)
+
+Automated deployment workflow:
+
+1. Run full test suite
+2. Keeper smoke test (verify service boots)
+3. Deploy to Railway via `railway up`
+4. Endpoint verification (health check on deployed service)
+
+**Endpoints verified:**
+- `/status` - Service health
+- `/api/streaming/duel-context` - Duel context API
+- `/api/streaming/leaderboard/details` - Leaderboard API
+- `/api/perps/markets` - Perps markets API
+
+**Recent improvements** (commits 46cd28e, 66a7b23, a4e366c):
+- Removed Railway status probe for improved reliability
+- Persist Railway user token for authentication
+- Simplified deployment flow with direct HTTP health checks
+
+### Pages Deployment (`deploy-betting-pages.yml`)
+
+Automated frontend deployment:
+
+1. Build production bundle (`--mode mainnet-beta`)
+2. Dist hygiene checks (verify no leaked secrets in build output)
+3. Deploy to Cloudflare Pages
+4. Verify `build-info.json` is accessible and matches commit SHA
+
+**Build-time secret detection:**
+- Fails build if `VITE_*RPC_URL` contains provider-keyed URLs
+- Prevents accidental exposure of Helius, Alchemy, Infura, QuickNode, or dRPC keys
+- Enforces RPC proxying through keeper API
 
 ## Notes
 
