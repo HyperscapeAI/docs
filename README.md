@@ -204,8 +204,6 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 3401 | AssetForge API | `bun run dev:forge` |
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
-| 4179 | Betting App | `bun run duel` |
-| 8081 | Betting Keeper | `bun run duel` |
 
 ## Deployment
 
