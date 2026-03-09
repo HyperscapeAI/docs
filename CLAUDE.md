@@ -144,20 +144,23 @@ packages/
 │   ├── World management
 │   ├── PostgreSQL persistence
 │   ├── LiveKit voice chat integration
-│   └── Streaming duel scheduler
+│   ├── Streaming duel scheduler
+│   └── Duel arena oracle publisher
 ├── client/              # Web client (Vite + React)
 │   ├── 3D rendering (WebGPU only)
 │   ├── Player controls
 │   └── UI/HUD
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── contracts/           # MUD onchain game state (experimental)
+├── duel-oracle-evm/     # EVM duel outcome oracle contracts
+├── duel-oracle-solana/  # Solana duel outcome oracle program
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation + VFX catalog
 └── docs-site/           # Docusaurus documentation site
 ```
 
-**Note**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
+**Note**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet). The duel arena oracle remains in Hyperscape for verifiable outcome publishing.
 
 ### Build Dependency Graph
 
