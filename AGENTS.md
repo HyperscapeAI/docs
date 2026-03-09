@@ -52,6 +52,7 @@ Hyperscape is a RuneScape-style MMORPG built on Three.js WebGPURenderer with TSL
 - Server: Fastify, WebSockets
 - Database: PostgreSQL (production), Docker (local)
 - Testing: Vitest 4.x (upgraded from 2.x for Vite 6 compatibility)
+- AI: ElizaOS `next` tag (latest features and bug fixes)
 
 ## Common Commands
 
