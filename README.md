@@ -380,9 +380,9 @@ bun run build
 - **Oracle Publisher**: Multi-chain oracle publisher with automatic retry and state persistence
 
 ### Testing & CI
-- **Vitest 4.x Upgrade**: Required for Vite 6 compatibility (fixes `__vite_ssr_exportName__` errors)
-- **CI Stabilization**: Fixed client test runner, duel agent tests, vegetation concurrency tests, asset forge module resolution
-- **Workflow Dependency Resolution**: Improved GitHub Actions dependency resolution for more reliable builds
+- **Vitest 4.x Upgrade**: Required for Vite 6 compatibility (fixes `__vite_ssr_exportName__` errors) (commit a916e4e)
+- **CI Stabilization**: Fixed client test runner, duel agent tests, vegetation concurrency tests, asset forge module resolution (commits 23323ac, 2ae03b4, 83a3452, 4b47012, dd991f4)
+- **Workflow Dependency Resolution**: Improved GitHub Actions dependency resolution for more reliable builds (commit 2d63ce1)
 
 ### Deployment
 - **Vast.ai Enhancements**: Production env passthrough, SSH-local health checks, targeted process killing, graceful PM2 shutdown, deterministic migrations
