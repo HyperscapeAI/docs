@@ -461,6 +461,31 @@ If seeing "timeout exceeded when trying to connect" errors:
 
 ## Recent Changes (March 2026)
 
+### ElizaCloud Integration (commit 4d1eb53)
+
+**Unified AI Provider**: All duel arena agents now use `@elizaos/plugin-elizacloud` for model access.
+
+**13 Frontier Models**:
+- American: GPT-5, Claude 4.6 (Sonnet/Opus), Gemini 3.1 Pro, Grok 4, Llama 4 Maverick, Magistral Medium
+- Chinese: DeepSeek V3.2, Qwen 3 Max, Minimax M2.5, GLM-5, Kimi K2.5, Seed 1.8
+
+**Configuration**:
+```bash
+# packages/server/.env
+ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
+```
+
+**Code Changes**:
+- `packages/server/src/eliza/ModelAgentSpawner.ts` - Updated MODEL_AGENTS array with ElizaCloud models
+- `packages/server/src/eliza/agentHelpers.ts` - Added elizacloud provider to DEFAULT_SMALL_MODELS and MODEL_SETTING_KEYS
+- `packages/server/src/eliza/index.ts` - Added elizacloud to modelProviders type union
+
+**Benefits**:
+- Single API key for all models (no need for OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY)
+- Access to 13 frontier models from 13 different providers
+- Simplified agent configuration and deployment
+- Consistent error handling and retry logic
+
 ### Streaming System (commit 71dcba8)
 
 **New Entry Points:**
