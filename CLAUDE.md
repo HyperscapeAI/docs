@@ -371,8 +371,6 @@ All services have unique default ports to avoid conflicts:
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
 | Plugin | `packages/plugin-hyperscape/.env.example` | ElizaOS agent configuration |
-| Betting App | `packages/gold-betting-demo/app/.env.example` | Betting frontend configuration |
-| Keeper | `packages/gold-betting-demo/keeper/.env.example` | Betting backend API configuration |
 
 **Common variables**:
 ```bash
