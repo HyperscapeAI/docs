@@ -787,7 +787,10 @@ const configSchema = z.object({
 ### Environment Variables
 
 ```bash
-# LLM Provider (at least one required)
+# ElizaCloud (recommended - unified access to 13 frontier models)
+ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
+
+# LLM Providers (legacy - still supported)
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
 OPENROUTER_API_KEY=your-openrouter-key
@@ -798,6 +801,38 @@ HYPERSCAPE_AUTO_RECONNECT=true
 HYPERSCAPE_AUTH_TOKEN=optional-privy-token
 HYPERSCAPE_PRIVY_USER_ID=optional-privy-user-id
 ```
+
+### ElizaCloud Integration (March 2026)
+
+**All duel arena AI agents now route through `@elizaos/plugin-elizacloud` for unified model access.**
+
+**13 Frontier Models Available:**
+
+**American Models:**
+- `openai/gpt-5` - GPT-5
+- `anthropic/claude-sonnet-4.6` - Claude Sonnet 4.6
+- `anthropic/claude-opus-4.6` - Claude Opus 4.6
+- `google/gemini-3.1-pro-preview` - Gemini 3.1 Pro
+- `xai/grok-4` - Grok 4
+- `meta/llama-4-maverick` - Llama 4 Maverick
+- `mistral/magistral-medium` - Magistral Medium
+
+**Chinese Models:**
+- `deepseek/deepseek-v3.2` - DeepSeek V3.2
+- `alibaba/qwen3-max` - Qwen 3 Max
+- `minimax/minimax-m2.5` - Minimax M2.5
+- `zai/glm-5` - GLM-5
+- `moonshotai/kimi-k2.5` - Kimi K2.5
+- `bytedance/seed-1.8` - Seed 1.8
+
+**Benefits:**
+- **Simplified Configuration**: One API key instead of multiple provider keys
+- **Model Diversity**: Access to 13 frontier models from 13 providers
+- **Consistent Routing**: Unified error handling and retry logic
+- **Reduced Dependencies**: Fewer provider-specific plugins to maintain
+
+**Migration:**
+Individual provider plugins (`@elizaos/plugin-openai`, `@elizaos/plugin-anthropic`, `@elizaos/plugin-groq`) are still installed for backward compatibility but are no longer used by duel arena agents.
 
 ## Agent Actions Reference
 
