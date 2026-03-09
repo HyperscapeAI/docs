@@ -94,7 +94,7 @@ cp packages/asset-forge/.env.example packages/asset-forge/.env
    # OR
    bun run dev:ai       # Game + AI agents (ElizaOS)
    # OR
-   bun run duel         # Full duel stack (game + agents + betting + streaming)
+   bun run duel         # Full duel stack (game + agents + streaming)
    ```
 
 5. Open **http://localhost:3333** in your browser.
