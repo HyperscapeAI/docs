@@ -6,23 +6,27 @@ icon: "boxes"
 
 ## Monorepo Structure
 
-Hyperscape is a **Turbo monorepo** with 8 packages:
+Hyperscape is a **Turbo monorepo** with core packages:
 
 ```
 hyperscape/
 ├── packages/
-│   ├── shared/              # @hyperscape/shared - Core 3D engine (ECS, Three.js, PhysX)
-│   ├── server/              # @hyperscape/server - Game server (Fastify, WebSockets)
+│   ├── shared/              # @hyperscape/shared - Core 3D engine (ECS, Three.js, PhysX, React UI)
+│   ├── server/              # @hyperscape/server - Game server (Fastify, WebSockets, PostgreSQL)
 │   ├── client/              # @hyperscape/client - Web client (Vite, React)
 │   ├── plugin-hyperscape/   # @hyperscape/plugin-hyperscape - ElizaOS AI agent plugin
 │   ├── physx-js-webidl/     # @hyperscape/physx-js-webidl - PhysX WASM bindings
-│   ├── asset-forge/         # 3d-asset-forge - AI asset generation (Elysia + React Three Fiber)
-│   ├── website/             # @hyperscape/website - Marketing website (Next.js 15)
-│   └── docs-site/           # Documentation (Docusaurus)
-├── assets/                  # Shared game assets
-├── world/                   # World configuration and manifests
-└── scripts/                 # Build and dev scripts
+│   ├── procgen/             # @hyperscape/procgen - Procedural generation (trees, terrain, buildings)
+│   ├── asset-forge/         # 3d-asset-forge - AI asset generation + VFX catalog
+│   ├── duel-oracle-evm/     # EVM duel outcome oracle contracts
+│   ├── duel-oracle-solana/  # Solana duel outcome oracle program
+│   ├── contracts/           # MUD onchain game state (experimental)
+│   └── website/             # @hyperscape/website - Marketing website (Next.js 15)
+├── scripts/                 # Build and deployment scripts
+└── docs/                    # Documentation markdown files
 ```
+
+**Note:** The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
 
 ## Build Dependency Graph
 
