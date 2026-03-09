@@ -343,7 +343,7 @@ bun run dev        # Core game (client + server + shared)
 bun run dev:ai     # Game + ElizaOS agents
 bun run dev:forge  # AssetForge (standalone)
 bun run docs:dev   # Documentation site (standalone)
-bun run duel       # Full duel stack (game + agents + betting + streaming)
+bun run duel       # Full duel stack (game + agents + streaming)
 ```
 
 ### Port Allocation
