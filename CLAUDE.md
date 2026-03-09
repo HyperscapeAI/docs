@@ -380,7 +380,6 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime.
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
 - **AI Agents**: ElizaOS with InMemoryDatabaseAdapter (no PGLite)
-- **Blockchain**: Solana (Anchor), EVM (Hardhat + Foundry)
 
 ## Troubleshooting
 
