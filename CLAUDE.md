@@ -387,7 +387,7 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime.
 - **Testing**: Playwright, Vitest 4.x (upgraded from 2.x for Vite 6 compatibility)
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
-- **AI Agents**: ElizaOS with InMemoryDatabaseAdapter (no PGLite)
+- **AI Agents**: ElizaOS `alpha` packages (^2.0.0-alpha.x) with InMemoryDatabaseAdapter (no PGLite)
 
 ## Troubleshooting
 
