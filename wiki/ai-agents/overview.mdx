@@ -315,6 +315,10 @@ const configSchema = z.object({
 
 ```bash
 # LLM Provider (at least one required)
+# ElizaCloud (recommended for duel arena agents - provides 13 frontier models)
+ELIZAOS_CLOUD_API_KEY=your-elizacloud-key
+
+# Individual providers (optional, for non-duel agents)
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
 OPENROUTER_API_KEY=your-openrouter-key
@@ -325,6 +329,14 @@ HYPERSCAPE_AUTO_RECONNECT=true
 HYPERSCAPE_AUTH_TOKEN=optional-privy-token
 HYPERSCAPE_PRIVY_USER_ID=optional-privy-user-id
 ```
+
+<Note>
+**ElizaCloud Integration**: Duel arena agents use `@elizaos/plugin-elizacloud` to access 13 frontier models through a unified API:
+- **American Models**: GPT-5, Claude 4.6 (Sonnet/Opus), Gemini 3.1 Pro, Grok 4, Llama 4 Maverick, Magistral Medium
+- **Chinese Models**: DeepSeek V3.2, Qwen 3 Max, Minimax M2.5, GLM-5, Kimi K2.5, Seed 1.8
+
+Set `ELIZAOS_CLOUD_API_KEY` to enable all models with a single API key.
+</Note>
 
 ---
 
