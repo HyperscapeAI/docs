@@ -432,7 +432,6 @@ cd packages/physx-js-webidl
 lsof -ti:3333 | xargs kill -9  # Game Client
 lsof -ti:5555 | xargs kill -9  # Game Server
 lsof -ti:4001 | xargs kill -9  # ElizaOS API
-lsof -ti:4179 | xargs kill -9  # Betting App
 ```
 
 See [Port Allocation](#port-allocation) section for full port list.
