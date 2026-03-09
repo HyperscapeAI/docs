@@ -96,6 +96,29 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Xvfb Virtual Display Fix (Commit 294a36c)
+
+**Change**: Fixed Xvfb startup order to ensure virtual display is available before PM2 starts streaming processes.
+
+**Fix**: `deploy-vast.sh` now starts Xvfb before PM2 and exports `DISPLAY=:99` to environment.
+
+**Impact**: Prevents "cannot open display" errors during RTMP streaming on headless servers.
+
+### Remote Database Auto-Detection (Commit dd51c7f)
+
+**Change**: `deploy-vast.sh` now auto-detects remote database mode from `DATABASE_URL` hostname.
+
+**Logic**:
+- If `DATABASE_URL` contains localhost/127.0.0.1/0.0.0.0/::1 → local mode
+- Otherwise → remote mode
+- Manual override via `DUEL_DATABASE_MODE=remote` environment variable
+
+**Fixes**:
+- Added `apt --fix-broken install` to resolve NVIDIA driver conflicts
+- Improved database connection cleanup during deployment
+
+**Impact**: Seamless database mode switching without manual configuration.
+
 ### Streaming Pipeline Fixes (Commits 41dc606, 71dcba8)
 
 **Change**: Fixed RTMP streaming pipeline to correctly enable Twitch and Kick destinations.
