@@ -4,126 +4,44 @@ This is the standalone duel arena oracle path inside Hyperscape. It is separate 
 
 ## Components
 
-- **EVM oracle package**: `packages/duel-oracle-evm`
-- **Solana oracle package**: `packages/duel-oracle-solana`
-- **Server publisher**: `packages/server/src/oracle/DuelArenaOraclePublisher.ts`
-- **Metadata API**: `GET /api/duel-arena/oracle/duels/:duelId`
-- **Database schema**: `arena_rounds` table in `packages/server/src/database/schema.ts`
+- EVM oracle package: `packages/duel-oracle-evm`
+- Solana oracle package: `packages/duel-oracle-solana`
+- Server publisher: `packages/server/src/oracle/DuelArenaOraclePublisher.ts`
+- Metadata API: `GET /api/duel-arena/oracle/duels/:duelId`
 
 The production event flow is:
 
-1. `streaming:announcement:start` → publish duel announcement/open state
-2. `streaming:fight:start` → publish locked/start state
-3. `streaming:resolution:start` → publish result
-4. `streaming:cycle:aborted` → publish cancellation
+1. `streaming:announcement:start` -> publish duel announcement/open state
+2. `streaming:fight:start` -> publish locked/start state
+3. `streaming:resolution:start` -> publish result
+4. `streaming:cycle:aborted` -> publish cancellation
 
-## Oracle Record Fields (March 2026)
+## Oracle Data Fields (March 2026)
 
-### Core Fields
+The oracle now publishes comprehensive duel outcome data:
 
-- `duelId` - Unique duel identifier (UUID)
-- `cycleId` - Streaming cycle identifier
-- `duelKeyHex` - Deterministic duel key (hex-encoded, used as on-chain identifier)
-- `status` - Current status: `BETTING_OPEN` | `LOCKED` | `RESOLVED` | `CANCELLED`
-- `metadataUri` - URL to duel metadata JSON (e.g., `https://api.hyperscape.gg/api/duel-arena/oracle/duels/<duelId>`)
+**Core Fields**:
+- `duelId` - Unique duel identifier (hashed)
+- `participantAId` - Participant A identifier (hashed)
+- `participantBId` - Participant B identifier (hashed)
+- `betOpenTs` - Betting window open timestamp (announcement start)
+- `betCloseTs` - Betting window close timestamp (fight start)
+- `fightStartTs` - Fight start timestamp
+- `winnerId` - Winner identifier (hashed)
+- `loserId` - Loser identifier (hashed)
 
-### Participant Fields
-
-- `participantA` - First participant object:
-  - `id` - Character ID
-  - `name` - Character name
-  - `hashHex` - SHA-256 hash of participant ID (for privacy)
-- `participantB` - Second participant object (same structure)
-
-### Timing Fields
-
-- `betOpenTime` - When betting window opens (Unix milliseconds)
-- `betCloseTime` - When betting window closes (Unix milliseconds)
-- `fightStartTime` - When fight actually starts (Unix milliseconds, null until fight begins)
-- `duelEndTime` - When duel ends (Unix milliseconds, null until resolved)
-
-### Outcome Fields (NEW - commit aecab58)
-
-- `winnerId` - Character ID of winner (null until resolved)
-- `loserId` - Character ID of loser (null until resolved)
-- `winnerSide` - Which side won: `A` | `B` | `null`
-- `winnerName` - Winner's character name (null until resolved)
-- `loserName` - Loser's character name (null until resolved)
+**New Fields (Commit aecab58)**:
+- `damageA` - Total damage dealt by participant A
+- `damageB` - Total damage dealt by participant B
 - `winReason` - Reason for victory (e.g., "knockout", "timeout", "forfeit", "draw")
-- **`damageA`** - **NEW**: Total damage dealt by participant A (integer, default: 0)
-- **`damageB`** - **NEW**: Total damage dealt by participant B (integer, default: 0)
+- `seed` - Cryptographic seed for replay verification
+- `replayHashHex` - Hash of replay data for integrity verification
+- `resultHashHex` - Combined hash of all duel outcome data
 
-### Verification Fields (NEW - commit aecab58)
+**Database Schema**:
+These fields are stored in the `arena_rounds` table and published to all configured oracle targets (EVM + Solana).
 
-- **`seed`** - **NEW**: Cryptographic seed for replay verification (bigint, null until resolved)
-- **`replayHashHex`** - **NEW**: Hash of replay data for integrity verification (hex string, null until resolved)
-- **`resultHashHex`** - **NEW**: Combined hash of all duel outcome data (hex string, null until resolved)
-
-The `resultHashHex` is computed from:
-```typescript
-{
-  duelId,
-  cycleId,
-  duelKeyHex,
-  winnerId,
-  loserId,
-  winReason,
-  seed,
-  replayHashHex,
-  duelEndTime
-}
-```
-
-### Chain State Fields
-
-- `chainState` - Object mapping chain keys to publish status:
-  - `target` - Chain identifier (e.g., "baseSepolia", "solanaDevnet")
-  - `kind` - "evm" or "solana"
-  - `label` - Human-readable chain name
-  - `lastAction` - Last action performed: "UPSERT" | "RESOLVE" | "CANCEL"
-  - `lastTxHash` - Transaction hash of last publish (null if failed)
-  - `lastError` - Error message if publish failed (null if successful)
-  - `updatedAt` - ISO timestamp of last update
-
-### Metadata Fields
-
-- `createdAt` - ISO timestamp when record was created
-- `updatedAt` - ISO timestamp when record was last modified
-
-## Database Schema
-
-The `arena_rounds` table stores oracle records in PostgreSQL:
-
-```sql
-CREATE TABLE arena_rounds (
-  id TEXT PRIMARY KEY,
-  phase TEXT NOT NULL,
-  agent_a_id TEXT NOT NULL REFERENCES characters(id) ON DELETE RESTRICT,
-  agent_b_id TEXT NOT NULL REFERENCES characters(id) ON DELETE RESTRICT,
-  preview_agent_a_id TEXT REFERENCES characters(id) ON DELETE SET NULL,
-  preview_agent_b_id TEXT REFERENCES characters(id) ON DELETE SET NULL,
-  duel_id TEXT,
-  scheduled_at BIGINT NOT NULL,
-  betting_opens_at BIGINT NOT NULL,
-  betting_closes_at BIGINT NOT NULL,
-  duel_starts_at BIGINT,
-  duel_ends_at BIGINT,
-  winner_id TEXT REFERENCES characters(id) ON DELETE SET NULL,
-  win_reason TEXT,
-  damage_a INTEGER NOT NULL DEFAULT 0,  -- NEW
-  damage_b INTEGER NOT NULL DEFAULT 0,  -- NEW
-  metadata_uri TEXT,
-  result_hash TEXT,
-  created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)::BIGINT,
-  updated_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)::BIGINT
-);
-```
-
-**New Columns** (commit aecab58):
-- `damage_a` - Total damage dealt by agent A
-- `damage_b` - Total damage dealt by agent B
-
-These fields are populated during duel resolution and published to all oracle targets.
+**Impact**: Provides comprehensive duel outcome data for betting market settlement, replay verification, and anti-cheat validation.
 
 ## Local Wallet Generation
 
@@ -136,11 +54,34 @@ bun --cwd packages/server run scripts/generate-duel-oracle-wallets.ts
 This writes:
 
 - `packages/server/.env`
-- `packages/duel-oracle-evm/.env` if you choose to keep EVM deploy env there
+- `packages/duel-oracle-evm/.env`
 - public summary: `.codex-artifacts/duel-arena-oracle-wallets/public-addresses.json`
-- Solana keypair files: `.codex-artifacts/duel-arena-oracle-wallets/*.json`
+- Solana keypair file: `.codex-artifacts/duel-arena-oracle-wallets/solana-shared.json`
 
-Use the generated public addresses for funding. Keep the `.env` files and `.codex-artifacts` directory private.
+The generator creates:
+
+- one shared EVM signer for Base, BSC, and AVAX
+- one shared Solana signer for devnet and mainnet-beta
+
+Use the generated public addresses for funding. The address string is the same across all EVM chains, but you still need to fund native gas separately on Base, BSC, and AVAX. Keep the `.env` files and `.codex-artifacts` directory private.
+
+## Local End-to-End Verification
+
+Run the full local duel, streaming, and oracle publish flow against Anvil and Solana localnet:
+
+```bash
+bun run duel:oracle:verify:local
+```
+
+This command:
+
+1. Starts or reuses local Anvil on `http://127.0.0.1:8545`
+2. Starts or reuses `solana-test-validator` on `http://127.0.0.1:8899`
+3. Deploys `DuelOutcomeOracle` to Anvil
+4. Builds and deploys `fight_oracle` to localnet
+5. Starts the local duel stack
+6. Verifies streaming combat
+7. Confirms the resolved duel record exists on both local chains
 
 ## Server Runtime Config
 
@@ -161,11 +102,20 @@ Profiles:
 - `mainnet`: Base, BSC, Avalanche C-Chain, Solana Mainnet
 - `all`: publish to every configured target
 
-The publisher only activates targets that have both a deploy key and a contract/program target configured.
+Shared signer env vars:
+
+```dotenv
+DUEL_ARENA_ORACLE_EVM_PRIVATE_KEY=0x...
+DUEL_ARENA_ORACLE_SOLANA_AUTHORITY_SECRET=base64:...
+DUEL_ARENA_ORACLE_SOLANA_REPORTER_SECRET=base64:...
+DUEL_ARENA_ORACLE_SOLANA_KEYPAIR_PATH=/absolute/path/to/solana-shared.json
+```
+
+Per-target private key env vars still work and override the shared signer when set. The publisher only activates targets that have both signer material and a contract/program target configured.
 
 ## EVM Deploy
 
-EVM deploy config lives in `packages/duel-oracle-evm/.env` if you keep a local deploy file there. The canonical contract source shipped to consumers is under `packages/duel-oracle-evm/contracts/DuelOutcomeOracle.sol`.
+EVM deploy config lives in `packages/duel-oracle-evm/.env`. The default pattern is one shared `PRIVATE_KEY` for Base, BSC, and AVAX, with optional per-network overrides. See `packages/duel-oracle-evm/.env.example`. The canonical contract source shipped to consumers is under `packages/duel-oracle-evm/contracts/DuelOutcomeOracle.sol`.
 
 Compile:
 
@@ -221,14 +171,15 @@ Deploy oracle-only:
 
 ```bash
 cd packages/duel-oracle-solana/anchor
-ANCHOR_WALLET=/absolute/path/to/solana-devnet.json bash scripts/deploy-fight-oracle.sh devnet
-ANCHOR_WALLET=/absolute/path/to/solana-mainnet.json bash scripts/deploy-fight-oracle.sh mainnet-beta
+ANCHOR_WALLET=/absolute/path/to/solana-shared.json bash scripts/deploy-fight-oracle.sh devnet
+ANCHOR_WALLET=/absolute/path/to/solana-shared.json bash scripts/deploy-fight-oracle.sh mainnet-beta
 ```
 
 Program IDs default to:
 
-- Devnet: `6tpRysBFd1yXRipYEYwAw9jxEoVHk15kVXfkDGFLMqcD`
-- Mainnet: `6tpRysBFd1yXRipYEYwAw9jxEoVHk15kVXfkDGFLMqcD`
+- Localnet: `6Tx7s2UG4maFWakRFVi4GeecXJYyBXQF8f2vJdQShSpV`
+- Devnet: `6Tx7s2UG4maFWakRFVi4GeecXJYyBXQF8f2vJdQShSpV`
+- Mainnet: `6Tx7s2UG4maFWakRFVi4GeecXJYyBXQF8f2vJdQShSpV`
 
 If you change program IDs, update:
 
@@ -242,18 +193,20 @@ The server publisher auto-initializes the on-chain oracle config when the author
 EVM ABI:
 
 - package export: `packages/duel-oracle-evm/src/generated/duelOutcomeOracleAbi.ts`
+- published public config manifest: `@hyperscapeai/duel-oracle-evm/config.json`
 
 Solana IDL:
 
 - canonical IDL JSON: `packages/duel-oracle-solana/anchor/target/idl/fight_oracle.json`
 - generated TS package export: `packages/duel-oracle-solana/src/generated/fightOracleIdl.ts`
+- published public config manifest: `@hyperscapeai/duel-oracle-solana/config.json`
 
 EVM `viem` example:
 
 ```ts
 import { createPublicClient, http } from "viem";
 import { baseSepolia } from "viem/chains";
-import { DUEL_OUTCOME_ORACLE_ABI } from "@hyperscapeai/duel-oracle-evm";
+import { DUEL_OUTCOME_ORACLE_ABI } from "../packages/duel-oracle-evm/dist/index.js";
 
 const client = createPublicClient({
   chain: baseSepolia,
@@ -261,127 +214,51 @@ const client = createPublicClient({
 });
 
 const duel = await client.readContract({
-  address: process.env.DUEL_ARENA_ORACLE_BASE_SEPOLIA_CONTRACT_ADDRESS as `0x${string}`,
+  address: process.env
+    .DUEL_ARENA_ORACLE_BASE_SEPOLIA_CONTRACT_ADDRESS as `0x${string}`,
   abi: DUEL_OUTCOME_ORACLE_ABI,
   functionName: "getDuel",
   args: ["0x..."],
 });
+
+// Access new fields (March 2026)
+console.log("Damage A:", duel.damageA);
+console.log("Damage B:", duel.damageB);
+console.log("Win Reason:", duel.winReason);
+console.log("Seed:", duel.seed);
+console.log("Replay Hash:", duel.replayHashHex);
+console.log("Result Hash:", duel.resultHashHex);
+```
+
+Published config manifest example:
+
+```ts
+import duelOracleConfig from "@hyperscapeai/duel-oracle-evm/config.json";
+import duelOracleSolanaConfig from "@hyperscapeai/duel-oracle-solana/config.json";
+
+const baseMainnetOracle = duelOracleConfig.deployments.base.address;
+const solanaMainnetProgram = duelOracleSolanaConfig.programIds.mainnet;
 ```
 
 Solana `web3.js` / Anchor example:
 
 ```ts
 import { PublicKey } from "@solana/web3.js";
-import { FIGHT_ORACLE_IDL } from "@hyperscapeai/duel-oracle-solana";
+import { FIGHT_ORACLE_IDL } from "../packages/duel-oracle-solana/dist/index.js";
 
 const programId = new PublicKey(FIGHT_ORACLE_IDL.address);
+
+// Fetch duel record
+const duelAccount = await program.account.duel.fetch(duelPda);
+
+// Access new fields (March 2026)
+console.log("Damage A:", duelAccount.damageA);
+console.log("Damage B:", duelAccount.damageB);
+console.log("Win Reason:", duelAccount.winReason);
+console.log("Seed:", duelAccount.seed);
+console.log("Replay Hash:", duelAccount.replayHash);
+console.log("Result Hash:", duelAccount.resultHash);
 ```
-
-## Oracle Metadata API
-
-The server exposes REST endpoints for duel metadata:
-
-**Get Recent Duels:**
-```bash
-curl http://localhost:5555/api/duel-arena/oracle/recent?limit=50
-```
-
-**Get Specific Duel:**
-```bash
-curl http://localhost:5555/api/duel-arena/oracle/duels/<duelId>
-```
-
-**Response Format:**
-```json
-{
-  "duelId": "uuid-here",
-  "cycleId": "cycle-uuid",
-  "duelKeyHex": "deadbeef...",
-  "status": "RESOLVED",
-  "metadataUri": "https://api.hyperscape.gg/api/duel-arena/oracle/duels/uuid-here",
-  "participantA": {
-    "id": "character-id-a",
-    "name": "Agent Alpha",
-    "hashHex": "sha256-hash-hex"
-  },
-  "participantB": {
-    "id": "character-id-b",
-    "name": "Agent Beta",
-    "hashHex": "sha256-hash-hex"
-  },
-  "betOpenTime": 1709942400000,
-  "betCloseTime": 1709942700000,
-  "fightStartTime": 1709942700000,
-  "duelEndTime": 1709943000000,
-  "winnerId": "character-id-a",
-  "loserId": "character-id-b",
-  "winnerSide": "A",
-  "winnerName": "Agent Alpha",
-  "loserName": "Agent Beta",
-  "winReason": "knockout",
-  "damageA": 1250,
-  "damageB": 875,
-  "seed": "12345678901234567890",
-  "replayHashHex": "abcdef1234567890...",
-  "resultHashHex": "fedcba0987654321...",
-  "chainState": {
-    "baseSepolia": {
-      "target": "baseSepolia",
-      "kind": "evm",
-      "label": "Base Sepolia",
-      "lastAction": "RESOLVE",
-      "lastTxHash": "0x123...",
-      "lastError": null,
-      "updatedAt": "2026-03-09T02:00:00.000Z"
-    },
-    "solanaDevnet": {
-      "target": "solanaDevnet",
-      "kind": "solana",
-      "label": "Solana Devnet",
-      "lastAction": "RESOLVE",
-      "lastTxHash": "5J7...",
-      "lastError": null,
-      "updatedAt": "2026-03-09T02:00:00.000Z"
-    }
-  },
-  "createdAt": "2026-03-09T01:00:00.000Z",
-  "updatedAt": "2026-03-09T02:00:00.000Z"
-}
-```
-
-### New Fields (commit aecab58)
-
-**Damage Tracking:**
-- `damageA` - Total damage dealt by participant A during the duel
-- `damageB` - Total damage dealt by participant B during the duel
-
-These fields are used for:
-- Tiebreaker logic (higher damage wins if both die simultaneously)
-- Betting market insights (damage differential)
-- Replay verification
-- Analytics and leaderboards
-
-**Verification Fields:**
-- `seed` - Cryptographic seed for deterministic replay verification
-- `replayHashHex` - Hash of complete replay data (combat log, actions, RNG state)
-- `resultHashHex` - SHA-256 hash of all outcome fields for integrity verification
-
-The `resultHashHex` is computed from:
-```typescript
-crypto.createHash("sha256").update(JSON.stringify({
-  duelId,
-  cycleId,
-  duelKeyHex,
-  winnerId,
-  loserId,
-  winReason,
-  seed,
-  replayHashHex,
-  duelEndTime
-})).digest("hex");
-```
-
-This hash is published on-chain and can be independently verified by anyone with access to the duel metadata.
 
 ## Naming Note
 
@@ -389,7 +266,7 @@ The current on-chain schema still uses `betOpenTs` and `betCloseTs`. In the duel
 
 ## Production Checklist
 
-1. Generate wallets and fund the correct public addresses for the target profile.
+1. Generate wallets and fund the shared EVM address on each destination EVM chain plus the shared Solana pubkey on the target cluster.
 2. Deploy EVM contracts and Solana program.
 3. Set the deployed contract/program addresses in `packages/server/.env`.
 4. Set `DUEL_ARENA_ORACLE_ENABLED=true` and choose the correct `DUEL_ARENA_ORACLE_PROFILE`.
@@ -398,63 +275,211 @@ The current on-chain schema still uses `betOpenTs` and `betCloseTs`. In the duel
    - `GET /api/duel-arena/oracle/recent`
    - `GET /api/duel-arena/oracle/duels/<duelId>`
    - chain receipts/sigs appear in the returned `chainState`
-   - `damageA` and `damageB` fields are populated in resolved duels
-   - `seed`, `replayHashHex`, and `resultHashHex` are present in resolved duels
+   - New fields (`damageA`, `damageB`, `winReason`, `seed`, `replayHashHex`, `resultHashHex`) are populated
+
+## Metadata API Response Format (March 2026)
+
+**GET /api/duel-arena/oracle/duels/:duelId**:
+
+```json
+{
+  "duelId": "0x...",
+  "participantAId": "0x...",
+  "participantBId": "0x...",
+  "betOpenTs": 1709876543,
+  "betCloseTs": 1709876603,
+  "fightStartTs": 1709876603,
+  "winnerId": "0x...",
+  "loserId": "0x...",
+  "damageA": 245,
+  "damageB": 189,
+  "winReason": "knockout",
+  "seed": "0x1234567890abcdef...",
+  "replayHashHex": "0xabcdef1234567890...",
+  "resultHashHex": "0x9876543210fedcba...",
+  "chainState": {
+    "baseSepolia": {
+      "txHash": "0x...",
+      "blockNumber": 12345678,
+      "status": "confirmed"
+    },
+    "solanaDevnet": {
+      "signature": "...",
+      "slot": 123456789,
+      "status": "confirmed"
+    }
+  }
+}
+```
+
+**Win Reason Values**:
+- `"knockout"` - One participant's HP reached 0
+- `"timeout"` - Fight duration exceeded maximum time limit
+- `"forfeit"` - One participant disconnected or forfeited
+- `"draw"` - Both participants died simultaneously or fight ended in a tie
 
 ## Integration with Betting Stack
 
-The betting stack ([HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)) consumes oracle data via:
+The betting stack (now in [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)) consumes oracle data via:
 
-1. **Metadata API**: Polls `/api/duel-arena/oracle/recent` for new duels
-2. **Blockchain Events**: Subscribes to oracle contract/program events for settlement
-3. **Damage Stats**: Uses `damageA` and `damageB` for market insights and tiebreaker logic
-4. **Verification**: Validates `resultHashHex` against metadata for integrity
+1. **REST API**: Polls `GET /api/duel-arena/oracle/recent` for new duel outcomes
+2. **Blockchain Events**: Subscribes to oracle contract events for settlement triggers
+3. **Metadata Verification**: Fetches full duel metadata from `GET /api/duel-arena/oracle/duels/:duelId`
 
-The oracle is intentionally decoupled from betting to allow:
-- Independent oracle deployment without betting infrastructure
-- Third-party betting markets to consume oracle data
-- Verifiable outcomes without relying on centralized betting APIs
+**Separation of Concerns**:
+- **Hyperscape Oracle**: Publishes verifiable duel outcomes to blockchain
+- **Hyperbet Betting**: Consumes oracle data for market settlement and payout calculation
+
+**Cross-Repository Integration**:
+- Oracle metadata API is public and versioned
+- Betting stack subscribes to blockchain events for real-time settlement
+- No direct code dependencies between repositories
+
+## Recent Changes (March 2026)
+
+### Damage Tracking (Commit aecab58)
+
+**New Fields**: `damageA` and `damageB` track total damage dealt by each participant.
+
+**Use Cases**:
+- Betting market settlement (verify fight was legitimate)
+- Replay verification (ensure damage totals match replay data)
+- Anti-cheat validation (detect impossible damage values)
+
+**Database Schema**:
+```sql
+ALTER TABLE arena_rounds ADD COLUMN damage_a INTEGER;
+ALTER TABLE arena_rounds ADD COLUMN damage_b INTEGER;
+```
+
+### Replay Verification (Commit aecab58)
+
+**New Fields**: `seed`, `replayHashHex`, `resultHashHex` enable deterministic replay verification.
+
+**Verification Flow**:
+1. Oracle publishes `seed` and `replayHashHex` to blockchain
+2. Betting markets can request replay data from metadata API
+3. Replay data is hashed and compared to `replayHashHex`
+4. Combined outcome data is hashed and compared to `resultHashHex`
+
+**Use Cases**:
+- Dispute resolution (verify fight outcome matches replay)
+- Anti-cheat validation (detect manipulated fight data)
+- Audit trail (cryptographic proof of fight integrity)
+
+### Win Reason Tracking (Commit aecab58)
+
+**New Field**: `winReason` provides detailed context for fight outcome.
+
+**Values**:
+- `"knockout"` - Normal combat victory (HP reached 0)
+- `"timeout"` - Fight exceeded maximum duration
+- `"forfeit"` - Participant disconnected or forfeited
+- `"draw"` - Simultaneous death or tie
+
+**Use Cases**:
+- Betting market rules (some markets may exclude timeouts/forfeits)
+- Fight statistics (track knockout rate vs timeout rate)
+- Anti-cheat validation (detect suspicious forfeit patterns)
+
+### Oracle Config Unit Tests (Commit 71dcba8)
+
+**New Tests**: `packages/server/tests/unit/oracle/config.test.ts`
+
+**Coverage**:
+- Oracle configuration validation
+- Target activation logic
+- Signer material detection
+- Profile resolution (testnet/mainnet/all)
+
+**Impact**: Ensures oracle configuration is validated before deployment.
 
 ## Troubleshooting
 
-**Oracle not publishing:**
-- Check `DUEL_ARENA_ORACLE_ENABLED=true` is set
-- Verify contract/program addresses are configured
-- Check signer secrets are valid (EVM private key, Solana keypairs)
-- Review server logs for oracle publish errors
-- Verify RPC URLs are accessible
+### Oracle Not Publishing
 
-**Missing damage stats:**
-- Ensure server is running commit aecab58 or later
-- Check `arena_rounds` table has `damage_a` and `damage_b` columns
-- Run database migrations: `bunx drizzle-kit push`
+**Check configuration**:
+```bash
+# Verify oracle is enabled
+echo $DUEL_ARENA_ORACLE_ENABLED
 
-**Chain state shows errors:**
-- Check RPC URL connectivity
-- Verify signer has sufficient gas/SOL for transactions
-- Review `lastError` field in `chainState` for specific error messages
-- Check contract/program is deployed at configured address
+# Check profile
+echo $DUEL_ARENA_ORACLE_PROFILE
 
-**Metadata API returns 404:**
-- Verify `DUEL_ARENA_ORACLE_METADATA_BASE_URL` is set correctly
-- Check duel ID is valid (exists in `arena_rounds` table)
-- Ensure server is running with oracle enabled
+# Verify signers are set
+echo $DUEL_ARENA_ORACLE_EVM_PRIVATE_KEY
+echo $DUEL_ARENA_ORACLE_SOLANA_AUTHORITY_SECRET
+```
 
-## Security Considerations
+**Check target activation**:
+```bash
+# Review server logs for oracle initialization
+tail -f logs/server.log | grep -i oracle
+```
 
-**Participant Privacy:**
-- Participant IDs are hashed (SHA-256) before publishing on-chain
-- Only hashes are stored in smart contracts/programs
-- Full participant details available via metadata API (requires duel ID)
+**Verify contract addresses**:
+```bash
+# Check EVM contract addresses are set
+echo $DUEL_ARENA_ORACLE_BASE_SEPOLIA_CONTRACT_ADDRESS
+echo $DUEL_ARENA_ORACLE_BSC_TESTNET_CONTRACT_ADDRESS
 
-**Replay Verification:**
-- `seed` allows deterministic replay of combat RNG
-- `replayHashHex` verifies replay data integrity
-- `resultHashHex` verifies all outcome fields match
-- Anyone can independently verify duel outcomes
+# Check Solana program IDs are set
+echo $DUEL_ARENA_ORACLE_SOLANA_DEVNET_PROGRAM_ID
+echo $DUEL_ARENA_ORACLE_SOLANA_MAINNET_PROGRAM_ID
+```
 
-**Signer Security:**
-- Keep EVM private keys and Solana keypairs secure
-- Use separate reporter keys (not deployer keys) for production
-- Rotate keys periodically
-- Monitor on-chain activity for unauthorized transactions
+### Missing Oracle Data
+
+If oracle records are missing `damageA`, `damageB`, or other new fields:
+- Verify server is running commit aecab58 or later
+- Check database schema includes new columns
+- Run migrations: `bunx drizzle-kit migrate` from `packages/server/`
+- Review `arena_rounds` table schema
+
+### Replay Verification Failures
+
+If replay hash verification fails:
+- Ensure `seed` is consistent between oracle record and replay data
+- Verify `replayHashHex` matches hash of replay data
+- Check `resultHashHex` matches combined hash of all outcome fields
+- Review server logs for hash calculation errors
+
+## API Reference
+
+### GET /api/duel-arena/oracle/recent
+
+Returns recent duel oracle records (last 100).
+
+**Response**:
+```json
+{
+  "duels": [
+    {
+      "duelId": "0x...",
+      "participantAId": "0x...",
+      "participantBId": "0x...",
+      "winnerId": "0x...",
+      "loserId": "0x...",
+      "damageA": 245,
+      "damageB": 189,
+      "winReason": "knockout",
+      "fightStartTs": 1709876603,
+      "chainState": { ... }
+    }
+  ]
+}
+```
+
+### GET /api/duel-arena/oracle/duels/:duelId
+
+Returns full duel metadata including replay verification data.
+
+**Response**: See "Metadata API Response Format" section above.
+
+**New Fields (March 2026)**:
+- `damageA` - Total damage dealt by participant A
+- `damageB` - Total damage dealt by participant B
+- `winReason` - Reason for victory
+- `seed` - Cryptographic seed
+- `replayHashHex` - Replay data hash
+- `resultHashHex` - Combined outcome hash
