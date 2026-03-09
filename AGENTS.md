@@ -239,6 +239,11 @@ DISPLAY=:99
 ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
 ```
 
+**Files Changed**:
+- `packages/server/src/eliza/agentHelpers.ts` - Added `elizacloud` provider to agent configuration
+- `packages/server/src/eliza/ModelAgentSpawner.ts` - Updated model agent spawning to use ElizaCloud
+- `packages/plugin-hyperscape/src/index.ts` - Added ElizaCloud plugin to type definitions
+
 **Impact**: 
 - Simplified configuration (one API key instead of multiple provider keys)
 - Access to 13 frontier models from 7 American and 6 Chinese providers
