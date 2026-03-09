@@ -560,9 +560,35 @@ Configure these in repository settings → Secrets → Actions:
 | `ADMIN_CODE` | Admin code for maintenance mode API |
 | `VAST_SERVER_URL` | Public server URL (e.g., https://hyperscape.gg) |
 
-### Deployment Script
+### Deployment Script Improvements (March 2026)
 
-The `scripts/deploy-vast.sh` script handles the full deployment with recent improvements (Feb 26-27 2026):
+The `scripts/deploy-vast.sh` script has been significantly enhanced with recent improvements:
+
+**Remote Database Auto-Detection (Commit dd51c7f):**
+- Auto-detects remote database mode from `DATABASE_URL` environment variable
+- Sets `USE_LOCAL_POSTGRES=false` when remote database detected
+- Prevents Docker PostgreSQL conflicts on Vast.ai instances
+
+**APT Fix-Broken (Commit dd51c7f):**
+- Added `apt --fix-broken install -y` before package installation
+- Resolves dependency conflicts on fresh Vast.ai instances
+- Prevents deployment failures from broken package states
+
+**Streaming Destination Auto-Detection (Commit 41dc606):**
+- `STREAM_ENABLED_DESTINATIONS` now uses `||` logic for fallback
+- Auto-detects enabled destinations from configured stream keys
+- Explicitly forwards stream keys through PM2 environment
+- Added `TWITCH_RTMP_STREAM_KEY` alias to secrets file
+
+**First-Time Setup Support (Commit 6302fa4):**
+- Auto-clones repository if it doesn't exist on fresh Vast.ai instances
+- Eliminates manual repository setup step
+
+**Bun Installation Check (Commit abfe0ce):**
+- Always checks and installs bun if missing
+- Ensures bun is available before running build commands
+
+The `scripts/deploy-vast.sh` script handles the full deployment with these improvements:
 
 **Key Steps:**
 1. Configure DNS resolution (some Vast containers use internal-only DNS)
