@@ -515,11 +515,12 @@ STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
 
 ### CI Stabilization
 
-**Test Fixes** (commits 23323ac, 2ae03b4, 83a3452, 4b47012):
-- Fixed client test runner resolution
+**Test Fixes** (commits 23323ac, 2ae03b4, 83a3452, 4b47012, dd991f4):
+- Fixed client test runner resolution (commit 4b47012)
 - Stabilized duel agent tests and client CI builds
 - Stabilized vegetation concurrency test
 - Fixed asset forge CI module resolution
+- Stabilized CI test workflows (commit dd991f4)
 
 ### Workflow Dependency Resolution
 
