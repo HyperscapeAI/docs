@@ -408,12 +408,7 @@ STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
 - Stabilized vegetation concurrency test
 - Fixed asset forge CI module resolution
 
-**Anchor Test Configuration** (commit 8b7d126):
-- Skip anchor localnet tests in CI when Solana CLI is not installed
-- Prevents false failures in environments without Solana toolchain
-- Tests run normally in local development with Solana CLI
-
-## EVM Contract Deployment Infrastructure (March 2026)
+## Code Quality Improvements (March 2026)
 
 ### Centralized Deployment Metadata
 
