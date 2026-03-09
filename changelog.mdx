@@ -23,6 +23,250 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Streaming Infrastructure & ElizaCloud Integration" description="March 2026" date="2026-03-09">
+
+### 🤖 ElizaCloud Plugin Integration (Commit 4d1eb53)
+
+**All duel arena AI agents now route through `@elizaos/plugin-elizacloud` for unified model access.**
+
+**New Dependency:**
+- `@elizaos/plugin-elizacloud`: `^1.8.0`
+
+**13 Frontier Models** (all via ElizaCloud):
+
+**American Models:**
+- `openai/gpt-5` - GPT-5
+- `anthropic/claude-sonnet-4.6` - Claude Sonnet 4.6
+- `anthropic/claude-opus-4.6` - Claude Opus 4.6
+- `google/gemini-3.1-pro-preview` - Gemini 3.1 Pro
+- `xai/grok-4` - Grok 4
+- `meta/llama-4-maverick` - Llama 4 Maverick
+- `mistral/magistral-medium` - Magistral Medium
+
+**Chinese Models:**
+- `deepseek/deepseek-v3.2` - DeepSeek V3.2
+- `alibaba/qwen3-max` - Qwen 3 Max
+- `minimax/minimax-m2.5` - Minimax M2.5
+- `zai/glm-5` - GLM-5
+- `moonshotai/kimi-k2.5` - Kimi K2.5
+- `bytedance/seed-1.8` - Seed 1.8
+
+**Configuration:**
+```bash
+# packages/server/.env
+ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
+```
+
+**Impact:**
+- Simplified configuration (one API key instead of multiple provider keys)
+- Access to 13 frontier models from 7 American and 6 Chinese providers
+- Consistent model routing and error handling
+- Reduced dependency complexity
+
+**Migration:** Individual provider plugins (`@elizaos/plugin-openai`, `@elizaos/plugin-anthropic`, `@elizaos/plugin-groq`) are still installed for backward compatibility but are no longer used by duel arena agents.
+
+### 🎥 Streaming Infrastructure Overhaul (Commit 71dcba8)
+
+**Major streaming architecture improvements with dedicated entry points and viewer access control.**
+
+**New Features:**
+- **Dedicated Stream Entry Points**: `stream.html` and `stream.tsx` for streaming capture
+  - Separate from main game client for optimized streaming performance
+  - Multi-page Vite configuration with stream-specific build
+  - Optimized for headless browser capture
+- **Stream Viewer Access Tokens**: Secure access control for live streaming viewers
+  - `STREAMING_VIEWER_ACCESS_TOKEN` environment variable
+  - Trusted viewers bypass public delay for real-time access
+  - Loopback viewers always allowed
+- **Stream Destinations Module**: Centralized RTMP destination management
+  - Auto-detection of enabled destinations based on stream keys
+  - Support for Twitch, Kick, YouTube, X/Twitter, and custom RTMP
+  - `STREAM_ENABLED_DESTINATIONS` with `||` logic for fallback
+- **Client Viewport Mode Detection**: `clientViewportMode` utility
+  - Detects stream vs spectator vs normal gameplay modes
+  - Enables mode-specific UI and rendering optimizations
+- **WebGPU Buffer Upload Fallback**: Handles `mappedAtCreation` failures
+  - Graceful fallback for buffer upload errors
+  - Improves WebGPU stability on various GPU drivers
+
+**Configuration:**
+```bash
+# Stream viewer access (optional)
+STREAMING_VIEWER_ACCESS_TOKEN=your-secret-token
+
+# Stream destinations (auto-detected from keys)
+STREAM_ENABLED_DESTINATIONS=twitch,kick,x
+
+# Explicit destination override
+TWITCH_RTMP_STREAM_KEY=live_123456789_abcdefghij
+KICK_STREAM_KEY=your-kick-key
+X_STREAM_KEY=your-x-key
+```
+
+**Files Changed:**
+- `packages/client/src/stream.html` (new)
+- `packages/client/src/stream.tsx` (new)
+- `packages/client/vite.config.ts` (multi-page config)
+- `packages/server/src/streaming/stream-destinations.ts` (new)
+- `packages/server/src/streaming/stream-viewer-access-token.ts` (new)
+- `packages/shared/src/runtime/clientViewportMode.ts` (new)
+
+### 🎲 Duel Oracle Improvements (Commit aecab58)
+
+**Enhanced duel outcome data for betting market settlement and replay verification.**
+
+**New Oracle Fields:**
+- `damageA` - Total damage dealt by participant A
+- `damageB` - Total damage dealt by participant B
+- `winReason` - Reason for victory (e.g., "knockout", "timeout", "forfeit")
+- `seed` - Cryptographic seed for replay verification
+- `replayHashHex` - Hash of replay data for integrity verification
+- `resultHashHex` - Combined hash of all duel outcome data
+
+**Database Schema:**
+These fields are stored in the `arena_rounds` table and published to all configured oracle targets (EVM + Solana).
+
+**Impact:** Provides comprehensive duel outcome data for betting market settlement and replay verification.
+
+### 📦 Betting Stack Split (Commit 428329d)
+
+**The betting stack has been split into a separate repository for independent development and deployment.**
+
+**New Repository:** [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
+
+**Moved Packages:**
+- `gold-betting-demo` - Betting frontend and keeper API
+- `evm-contracts` - EVM smart contracts (GoldClob, AgentPerpEngine, SkillOracle)
+- `sim-engine` - Cross-chain risk simulation and attack fuzzing
+- `market-maker-bot` - Automated liquidity seeding
+
+**Remaining in Hyperscape:**
+- `duel-oracle-evm` - EVM duel outcome oracle contracts (separate from betting)
+- `duel-oracle-solana` - Solana duel outcome oracle program (separate from betting)
+- Oracle publisher and metadata API in `packages/server/src/oracle/`
+
+**Rationale:**
+- **Independent Deployment**: Betting stack can be deployed and updated separately from game server
+- **Cleaner Separation**: Oracle (verifiable duel outcomes) vs Betting (financial markets)
+- **Reduced Complexity**: Smaller monorepo with focused scope
+- **Better CI/CD**: Separate workflows for game vs betting deployments
+
+**Migration Notes:**
+- Oracle functionality remains in Hyperscape for duel outcome verification
+- Betting markets consume oracle data from Hyperscape's metadata API
+- Cross-repository integration via REST APIs and blockchain events
+
+### 🔐 CSRF Cross-Origin Fix (PR #991)
+
+**Fixed account creation failing with "CSRF validation failed" (403) for cross-origin local clients.**
+
+**Problem:**
+- `UsernameSelectionScreen` used raw `fetch()` without Authorization header
+- Server's CSRF middleware skips validation for requests with `Authorization: Bearer ...`
+- Without token, fell through to cookie-based CSRF validation
+- SameSite=Strict cookies not sent cross-origin, causing validation to always fail
+
+**Solution:**
+- Include Privy auth token as `Authorization: Bearer` header on POST `/api/users/create`
+- Accept both `{ token }` and `{ csrfToken }` from CSRF token endpoint response
+- Add localhost and private-IP patterns to `KNOWN_CROSS_ORIGIN_PATTERNS`
+
+**Files Changed:**
+- `packages/client/src/screens/UsernameSelectionScreen.tsx`
+- `packages/client/src/lib/api-client.ts`
+- `packages/server/src/middleware/csrf.ts`
+
+### 🔧 Vast.ai Deployment Improvements (Commits dd51c7f, 41dc606)
+
+**Enhanced Vast.ai deployment with remote database mode and streaming fixes.**
+
+**Remote Database Auto-Detection:**
+- `deploy-vast.sh` now auto-detects remote database mode
+- Checks for `DATABASE_URL` in environment
+- Sets `USE_LOCAL_POSTGRES=false` when remote database detected
+- Prevents Docker PostgreSQL conflicts
+
+**APT Fix-Broken:**
+- Added `apt --fix-broken install -y` before package installation
+- Resolves dependency conflicts on fresh Vast.ai instances
+- Prevents deployment failures from broken package states
+
+**Streaming Destination Auto-Detection:**
+- `STREAM_ENABLED_DESTINATIONS` now uses `||` logic for fallback
+- Auto-detects enabled destinations from stream keys
+- Explicitly forwards stream keys through PM2 environment
+- Added `TWITCH_RTMP_STREAM_KEY` alias to secrets file
+
+**Files Changed:**
+- `scripts/deploy-vast.sh`
+- `ecosystem.config.cjs`
+- `.github/workflows/deploy-vast.yml`
+
+### 🔧 TypeScript Strict Mode Fixes (Commits 74b9852, 6cdbf2c, b542751)
+
+**Resolved TS18048 "possibly undefined" errors in API configuration.**
+
+**Problem:**
+- `import.meta.env` values typed as `string | undefined`
+- TypeScript couldn't narrow type through `||` fallback chain
+- Caused TS18048 errors in strict mode
+
+**Solution:**
+- Switch `||` to `??` (nullish coalescing) for import.meta.env values
+- Add explicit `string` type annotations to exported URL constants
+- TypeScript can now narrow type through fallback chain
+
+**Files Changed:**
+- `packages/client/src/lib/api-config.ts`
+- `packages/client/src/index.tsx`
+
+### 📦 ElizaOS Alpha Package Alignment (Commit 6d67ec1)
+
+**Aligned all ElizaOS packages to `alpha` tag for stable releases.**
+
+**Packages Updated:**
+- `@elizaos/core`: `^2.0.0-alpha.33`
+- `@elizaos/plugin-anthropic`: `^2.0.0-alpha.7`
+- `@elizaos/plugin-groq`: `^2.0.0-alpha.8`
+- `@elizaos/plugin-openai`: `^2.0.0-alpha.9`
+- `@elizaos/prompts`: `^2.0.0-alpha.33`
+
+**Impact:** Access to stable ElizaOS alpha releases with versioned packages. Ensures compatibility with latest LLM provider APIs while maintaining version control.
+
+### 🔧 NPM Override Conflicts Fixed (Commit 80d667a)
+
+**Resolved override conflicts to ensure consistent package resolution across the monorepo.**
+
+**Impact:** Eliminates dependency resolution errors during `bun install`.
+
+### 🔧 CI Stabilization (Commits dd991f4, 2d63ce1)
+
+**Stabilized CI test workflows and fixed workflow dependency resolution.**
+
+**Impact:** More reliable CI/CD pipeline with consistent builds.
+
+### ⚙️ Runtime Version Updates
+
+**Bun v1.3.10+:**
+- Updated from v1.1.38
+- Improved performance and stability
+- Better WebSocket handling
+
+**Vitest 4.x:**
+- Upgraded from 2.x for Vite 6 compatibility
+- Fixes `__vite_ssr_exportName__` errors during test runs
+- All packages using Vitest must use 4.x
+
+**Three.js 0.182.0:**
+- WebGPU renderer improvements
+- TSL shader enhancements
+
+**Safari 18+ Requirement:**
+- Safari 17 support removed
+- Safari 18+ (macOS 15+) now required for WebGPU
+
+</Update>
+
 <Update label="WebGPU Enforcement & Instanced Rendering" description="February 2026" date="2026-02-28">
 
 ### 🚨 BREAKING: WebGL Removed (commit 47782ed)
