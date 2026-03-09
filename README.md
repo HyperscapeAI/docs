@@ -351,6 +351,28 @@ bun run build
 
 ## Recent Updates (March 2026)
 
+### Streaming System (commit 71dcba8)
+- **Dedicated Stream Entry Points**: New `stream.html` and `stream.tsx` for optimized streaming capture
+- **Viewport Mode Detection**: `clientViewportMode` utility automatically detects stream/spectator/normal modes
+- **Multi-Page Vite Build**: Separate entry points for game and streaming with optimized bundles
+- **Stream Destinations Module**: Configurable RTMP destinations for Twitch, YouTube, and custom servers
+- **Viewer Access Tokens**: Secure token-based access control for stream viewers
+- **Offer Utils**: Vast.ai GPU instance filtering and sorting for optimal streaming performance
+
+### Oracle Enhancements (commit 71dcba8, aecab58)
+- **Damage Tracking**: New `damageA` and `damageB` fields track total damage dealt by each participant
+- **Verification Fields**: Added `seed`, `replayHashHex`, and `resultHashHex` for deterministic replay verification
+- **Win Reason**: Detailed win reason tracking (knockout, timeout, forfeit, draw)
+- **EVM Deploy Scripts**: Automated deployment scripts with receipt generation for Base, BSC, and Avalanche
+- **Solana Config**: Centralized program ID configuration in `config.json`
+- **Local Verification**: `verify-duel-oracle-local` script for testing oracle integration
+
+### WebGPU Improvements (commit 71dcba8)
+- **Buffer Upload Fallback**: Automatic fallback for `mappedAtCreation` failures in WebGPU buffer uploads
+- **Null Safety**: Fixed physics utils, collider, and rigidbody null pointer exceptions
+- **Particle Manager Fixes**: Resolved JSON parsing errors in particle systems
+- **Vegetation System**: Fixed JSON parsing in vegetation generation
+
 ### Architecture Changes
 - **Betting Stack Split**: The betting stack has been moved to a separate repository ([HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)) for independent development and deployment (commit 428329d)
 - **Duel Arena Oracle**: New oracle system publishes verifiable duel outcomes to Solana, Base, BSC, and Avalanche (commit aecab58)
