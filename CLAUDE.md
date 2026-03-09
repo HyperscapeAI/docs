@@ -153,9 +153,11 @@ packages/
 ├── contracts/           # MUD onchain game state (experimental)
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation
-├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
+├── asset-forge/         # AI asset generation + VFX catalog
 └── docs-site/           # Docusaurus documentation site
 ```
+
+**Note**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
 
 ### Build Dependency Graph
 
