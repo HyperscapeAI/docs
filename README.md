@@ -109,11 +109,7 @@ packages/
 ├── server/              # Game server (Fastify, WebSockets, database, streaming)
 ├── client/              # Web client (Vite, React)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
-├── gold-betting-demo/   # Solana/EVM betting stack (app + keeper + contracts)
-├── evm-contracts/       # EVM betting contracts (Hardhat + Foundry)
 ├── contracts/           # MUD onchain game state (experimental)
-├── sim-engine/          # Cross-chain betting risk simulation
-├── market-maker-bot/    # Automated market making for betting markets
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation tools
