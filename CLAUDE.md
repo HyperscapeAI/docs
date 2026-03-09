@@ -459,6 +459,93 @@ If seeing "timeout exceeded when trying to connect" errors:
 - Enable concurrency limiting for bank queries (max 5)
 - Stagger agent refresh intervals to distribute load
 
+## Recent Changes (March 2026)
+
+### Streaming System (commit 71dcba8)
+
+**New Entry Points:**
+- `packages/client/stream.html` - Dedicated streaming entry point
+- `packages/client/src/stream.tsx` - React streaming app
+- Multi-page Vite build configuration for separate game/stream bundles
+
+**New Utilities:**
+- `clientViewportMode()` - Detects stream/spectator/normal modes
+- `stream-destinations` - RTMP destination configuration
+- `stream-viewer-access-token` - Secure viewer authentication
+- `offer-utils` - Vast.ai GPU instance filtering/sorting
+
+**Configuration:**
+```bash
+# Enable streaming
+STREAMING_ENABLED=true
+STREAMING_RTMP_URL=rtmp://live.twitch.tv/app/your-key
+
+# Stream quality
+STREAMING_WIDTH=1920
+STREAMING_HEIGHT=1080
+STREAMING_FPS=30
+STREAMING_BITRATE=6000k
+```
+
+See [docs/streaming-system.md](docs/streaming-system.md) for complete documentation.
+
+### Oracle Improvements (commits 71dcba8, aecab58)
+
+**New Database Fields:**
+- `damage_a` - Total damage dealt by participant A
+- `damage_b` - Total damage dealt by participant B
+- `win_reason` - Detailed win reason (knockout, timeout, forfeit, draw)
+- `seed` - Cryptographic seed for replay verification
+- `replay_hash` - Hash of replay data
+- `result_hash` - Combined hash of all outcome data
+
+**New Scripts:**
+- `verify-duel-oracle-local` - Local oracle integration testing
+- EVM deploy scripts with receipt generation
+- Solana config.json with program IDs
+
+**Configuration:**
+```bash
+# Oracle toggle
+DUEL_ARENA_ORACLE_ENABLED=true
+DUEL_ARENA_ORACLE_PROFILE=testnet  # or mainnet
+
+# Metadata API
+DUEL_ARENA_ORACLE_METADATA_BASE_URL=https://api.hyperscape.gg/api/duel-arena/oracle
+```
+
+### WebGPU Fixes (commit 71dcba8)
+
+**Buffer Upload Fallback:**
+- Automatic fallback when `mappedAtCreation` fails
+- Improved error handling for GPU buffer allocation
+- Better compatibility across different GPU drivers
+
+**Null Safety:**
+- Fixed physics utils null pointer exceptions
+- Collider and rigidbody null checks
+- Particle manager JSON parsing fixes
+- Vegetation system error handling
+
+### Code Quality (PR #989)
+
+**Static Imports:**
+- GLTFExporter now uses static imports (better tree-shaking)
+- Logger import converted to static (faster module loading)
+
+**Dead Code Removal:**
+- VFX Preview: Removed unused opacity, primaryColor, whiteGlow, ringMat variables
+- Type guards: Added `isCombatHud()` for proper type narrowing
+
+**Cross-Runtime Compatibility:**
+- `writeArrayBufferToFile()` utility supports both Bun and Node.js
+- Proper runtime detection for file operations
+
+**Bundle Size:**
+- Client: `chunkSizeWarningLimit` increased to 8000KB
+- Asset-forge: `chunkSizeWarningLimit` increased to 9000KB
+- Intentional for WebGPU/PhysX bundles until deeper code splitting
+
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
@@ -466,6 +553,7 @@ If seeing "timeout exceeded when trying to connect" errors:
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - [docs/duel-stack.md](docs/duel-stack.md) - Duel stack documentation
+- [docs/streaming-system.md](docs/streaming-system.md) - Streaming system documentation
 - [docs/duel-arena-oracle-deploy.md](docs/duel-arena-oracle-deploy.md) - Oracle deployment guide
 - [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet) - Betting stack (separate repository)
 - Game Design Document: See `.cursor/rules/gdd.mdc`
