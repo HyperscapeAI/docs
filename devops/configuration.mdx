@@ -283,6 +283,11 @@ SPAWN_MODEL_AGENTS=false                        # Enable heavyweight model-agent
 MAX_MODEL_AGENTS=0                              # Maximum number of model agents to spawn (default: 0)
 MEMORY_RESTART_THRESHOLD_MB=12288               # Memory threshold for auto-restart in MB (default: 12288)
 
+# ElizaCloud Integration (March 2026)
+# Unified API for 13 frontier models (GPT-5, Claude 4.6, Gemini 3.1, Grok 4, etc.)
+# Replaces individual provider keys for duel arena agents
+ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key  # Single key for all models
+
 # Duel Stack Defaults (scripts/duel-stack.mjs)
 AUTO_START_AGENTS=true                          # Auto-load embedded agents (default: true for duel stack)
 AUTO_START_AGENTS_MAX=10                        # Max embedded agents to start (default: 10)
