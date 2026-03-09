@@ -355,7 +355,7 @@ bun run build
 - **Betting Stack Split**: The betting stack has been moved to a separate repository ([HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)) for independent development and deployment (commit 428329d)
 - **Duel Arena Oracle**: New oracle system publishes verifiable duel outcomes to Solana, Base, BSC, and Avalanche (commit aecab58)
 - **Oracle Metadata API**: REST endpoints for duel metadata and recent oracle records
-- **ElizaOS next-tag Upgrade**: All ElizaOS packages upgraded to `next` tag for latest features and bug fixes (commit 378058a)
+- **ElizaOS Alpha Alignment**: All ElizaOS packages aligned to `alpha` tag (^2.0.0-alpha.x) for stable versioned releases (commit 6d67ec1)
 
 ### Agent Memory Management
 - **PGLite Removal**: Completely removed PGLite WASM dependency and SQL plugin (commits 429bfbf, 788036d)
