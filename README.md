@@ -352,9 +352,10 @@ bun run build
 ## Recent Updates (March 2026)
 
 ### Architecture Changes
-- **Betting Stack Split**: The betting stack has been moved to a separate repository ([HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)) for independent development and deployment
-- **Duel Arena Oracle**: New oracle system publishes verifiable duel outcomes to Solana, Base, BSC, and Avalanche
+- **Betting Stack Split**: The betting stack has been moved to a separate repository ([HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)) for independent development and deployment (commit 428329d)
+- **Duel Arena Oracle**: New oracle system publishes verifiable duel outcomes to Solana, Base, BSC, and Avalanche (commit aecab58)
 - **Oracle Metadata API**: REST endpoints for duel metadata and recent oracle records
+- **ElizaOS next-tag Upgrade**: All ElizaOS packages upgraded to `next` tag for latest features and bug fixes (commit 378058a)
 
 ### Agent Memory Management
 - **InMemoryDatabaseAdapter Migration**: Reduced agent memory footprint from 38-76GB to <5GB for 19 agents by eliminating PGLite WASM overhead
