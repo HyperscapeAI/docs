@@ -387,12 +387,20 @@ If you're running the client on localhost against a deployed server, ensure:
 
 ## Recent Updates (March 2026)
 
+### Chrome Beta Streaming (March 9, 2026)
+- **Chrome Beta Channel**: Switched from Chrome Unstable to Chrome Beta for better stability
+- **ANGLE Backend**: Use default ANGLE backend instead of native Vulkan for WebGPU
+- **Xvfb Integration**: Virtual display started before PM2 with explicit DISPLAY=:99 forwarding
+- **DATABASE_URL Forwarding**: Explicit PM2 environment forwarding prevents server crashes
+- **Impact**: More reliable streaming with fewer crashes and rendering artifacts
+
 ### Streaming Pipeline Fixes (March 9, 2026)
 - **Auto-Detection**: Stream destinations now auto-detected from available keys (Twitch, Kick, YouTube)
-- **PM2 Integration**: Explicit stream key forwarding through PM2 environment
+- **PM2 Integration**: Explicit stream key, DISPLAY, and DATABASE_URL forwarding through PM2 environment
 - **Secret Aliases**: Support for both `TWITCH_STREAM_KEY` and `TWITCH_RTMP_STREAM_KEY` formats
 - **Dedicated Entry Points**: New `stream.html` and `stream.tsx` for optimized streaming capture
 - **Multi-Page Build**: Separate Vite bundles for game and streaming with reduced bundle size
+- **Viewport Mode Detection**: Automatic detection of stream/spectator/normal modes via `clientViewportMode` utility
 
 ### CSRF Cross-Origin Fix (March 9, 2026)
 - **Authorization Header**: Account creation now includes Privy auth token to bypass CSRF validation
