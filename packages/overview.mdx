@@ -6,7 +6,7 @@ icon: "layout-grid"
 
 ## Monorepo Structure
 
-Hyperscape is organized as a Turbo monorepo with 8 packages:
+Hyperscape is organized as a Turbo monorepo with core packages:
 
 ```
 packages/
@@ -15,10 +15,15 @@ packages/
 ├── client/              # Web client (@hyperscape/client)
 ├── plugin-hyperscape/   # ElizaOS AI plugin (@hyperscape/plugin-hyperscape)
 ├── physx-js-webidl/     # PhysX WASM bindings (@hyperscape/physx-js-webidl)
-├── asset-forge/         # AI asset generation (3d-asset-forge)
-├── website/             # Marketing website (@hyperscape/website)
-└── docs-site/           # Documentation (Docusaurus)
+├── procgen/             # Procedural generation (@hyperscape/procgen)
+├── asset-forge/         # AI asset generation + VFX catalog (3d-asset-forge)
+├── duel-oracle-evm/     # EVM duel outcome oracle contracts
+├── duel-oracle-solana/  # Solana duel outcome oracle program
+├── contracts/           # MUD onchain game state (experimental)
+└── website/             # Marketing website (@hyperscape/website)
 ```
+
+**Note:** The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
 
 ## Package Dependencies
 
