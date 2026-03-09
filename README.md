@@ -406,9 +406,12 @@ bun run build
 - **CI Stabilization**: Fixed client test runner, duel agent tests, vegetation concurrency tests, asset forge module resolution (commits 23323ac, 2ae03b4, 83a3452, 4b47012, dd991f4)
 - **Workflow Dependency Resolution**: Improved GitHub Actions dependency resolution for more reliable builds (commit 2d63ce1)
 
-### Deployment
+### Deployment (commit 71dcba8)
 - **Vast.ai Enhancements**: Production env passthrough, SSH-local health checks, targeted process killing, graceful PM2 shutdown, deterministic migrations
 - **Streaming Configuration**: Aligned stream defaults with Twitch production requirements, codified vast stream deployment parity
+- **Ecosystem Config**: Updated PM2 configuration for new deployment targets (stream, oracle, duel scheduler)
+- **Deploy Scripts**: Enhanced `deploy-vast.sh` and `vast-provision.sh` with streaming support
+- **Cloudflare Workflows**: Updated `deploy-cloudflare` and `deploy-pages` workflows for multi-page builds
 
 ### Code Quality (PR #989, commit 71dcba8)
 - **GLTFExporter Static Imports**: Converted dynamic imports to static imports in asset-forge for better tree-shaking
