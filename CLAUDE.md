@@ -6,6 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with autonomous AI agents powered by ElizaOS.
 
+## CRITICAL: Secrets and Private Keys
+
+**Never put private keys, seed phrases, API keys, tokens, RPC secrets, or wallet secrets into any tracked file.**
+
+- ALWAYS use local untracked `.env` files for real secrets during development
+- NEVER hardcode secrets in source, tests, docs, fixtures, scripts, config files, or GitHub workflow files
+- NEVER place real credentials in `.env.example`; placeholders only
+- Production and CI secrets must live in the platform secret manager, not in git
+- If a new secret is required, add only the variable name to docs or `.env.example` and load the real value from `.env`, `.env.local`, or deployment secrets
+
 ## CRITICAL: WebGPU Required (NO WebGL)
 
 **Hyperscape requires WebGPU. WebGL WILL NOT WORK.**
@@ -124,8 +134,6 @@ bun run docs:dev
 # Build production docs
 npm run docs:build
 ```
-
-
 
 ## Architecture Overview
 
@@ -341,11 +349,16 @@ All services have unique default ports to avoid conflicts:
 
 **Zero-config local development**: The defaults work out of the box. Just run `bun run dev`.
 
+**Secret handling is non-negotiable**:
+- Real private keys and API tokens must come from local untracked `.env` files
+- Tracked files may only contain placeholders and variable names
+- If you find a real credential in a tracked file, remove it and move it to `.env` or the deployment secret store immediately
+
 **Package-specific `.env` files**: Each package has its own `.env.example` with deployment documentation:
 
 | Package | File | Purpose |
 |---------|------|---------|
-| Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
+| Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker), streaming, oracle |
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
 | Plugin | `packages/plugin-hyperscape/.env.example` | ElizaOS agent configuration |
@@ -357,6 +370,21 @@ DATABASE_URL=postgresql://...    # Required for production
 JWT_SECRET=...                   # Required for production
 PRIVY_APP_ID=...                 # For Privy auth
 PRIVY_APP_SECRET=...             # For Privy auth
+
+# ElizaCloud AI (for duel arena agents)
+ELIZAOS_CLOUD_API_KEY=...        # Single key for 13 frontier models
+
+# Streaming (optional)
+TWITCH_STREAM_KEY=...            # or TWITCH_RTMP_STREAM_KEY
+KICK_STREAM_KEY=...
+YOUTUBE_STREAM_KEY=...           # or YOUTUBE_RTMP_STREAM_KEY
+STREAM_ENABLED_DESTINATIONS=...  # Auto-detected if not set
+
+# Oracle (optional)
+DUEL_ARENA_ORACLE_ENABLED=true
+DUEL_ARENA_ORACLE_PROFILE=testnet  # or mainnet
+DUEL_ARENA_ORACLE_EVM_PRIVATE_KEY=...
+DUEL_ARENA_ORACLE_SOLANA_AUTHORITY_SECRET=...
 
 # Client (packages/client/.env)
 PUBLIC_PRIVY_APP_ID=...          # Must match server's PRIVY_APP_ID
@@ -388,6 +416,7 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime.
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
 - **AI Agents**: ElizaOS `alpha` packages (^2.0.0-alpha.x) with InMemoryDatabaseAdapter (no PGLite)
+- **Streaming**: FFmpeg, Playwright Chromium, RTMP
 
 ## Troubleshooting
 
@@ -405,8 +434,8 @@ bun run build
 
 The client and asset-forge packages have increased `chunkSizeWarningLimit` to suppress warnings for intentionally large WebGPU/PhysX bundles:
 
-- `packages/client/vite.config.ts`: 8000 KB (WebGPU/PhysX bundles)
-- `packages/asset-forge/vite.config.ts`: 9000 KB (Asset tooling with WebGPU)
+- `packages/client/vite.config.ts`: 8000 KB (up from 2000 KB) - WebGPU/PhysX bundles
+- `packages/asset-forge/vite.config.ts`: 9000 KB (new) - Asset tooling with WebGPU
 
 These limits are intentional until deeper code splitting is implemented. The large bundles are due to:
 - Three.js WebGPU renderer and TSL shader system
@@ -414,8 +443,6 @@ These limits are intentional until deeper code splitting is implemented. The lar
 - Asset processing tools (GLB decimation, impostor baking, etc.)
 
 **Tech Debt**: Track deeper code splitting as future optimization to reduce initial bundle size.
-
-
 
 ### PhysX Build Fails
 
@@ -459,11 +486,73 @@ If seeing "timeout exceeded when trying to connect" errors:
 - Enable concurrency limiting for bank queries (max 5)
 - Stagger agent refresh intervals to distribute load
 
+### CSRF 403 Errors
+
+If account creation fails with "CSRF validation failed" (403) when running client on localhost against a deployed server:
+- Ensure `UsernameSelectionScreen` includes Privy auth token in Authorization header (fixed in commit 0b1a0bd)
+- Verify CSRF middleware allows localhost/private IP origins
+- Check that client's `api-client.ts` accepts both `{ token }` and `{ csrfToken }` response formats
+
+### Streaming Issues
+
+If RTMP streaming fails to start:
+- Verify stream keys are set: `TWITCH_STREAM_KEY`, `KICK_STREAM_KEY`, `YOUTUBE_STREAM_KEY`
+- Check `STREAM_ENABLED_DESTINATIONS` is set or auto-detected
+- Ensure FFmpeg is installed: `which ffmpeg` or set `FFMPEG_PATH`
+- Verify Playwright Chromium is installed: `bunx playwright install chromium`
+- Check GPU display driver is active (Vast.ai: `gpu_display_active=true`)
+- Review logs: `bunx pm2 logs hyperscape-duel`
+
 ## Recent Changes (March 2026)
 
-### ElizaCloud Integration (commit 4d1eb53)
+### Streaming Pipeline Fixes (March 9, 2026)
 
-**Unified AI Provider**: All duel arena agents now use `@elizaos/plugin-elizacloud` for model access.
+**Auto-Detection**: Stream destinations now auto-detected from available keys.
+
+**Changes**:
+- `deploy-vast.sh`: Auto-detects enabled destinations from `TWITCH_STREAM_KEY`, `KICK_STREAM_KEY`, etc.
+- `ecosystem.config.cjs`: Explicitly forwards stream keys through PM2 environment
+- `deploy-vast.yml`: Adds `TWITCH_RTMP_STREAM_KEY` alias for compatibility
+- `stream.html` / `stream.tsx`: Dedicated streaming entry points with optimized bundles
+- `clientViewportMode()`: Utility to detect stream/spectator/normal modes
+- Multi-page Vite build: Separate bundles for game and streaming
+
+**Environment Variables**:
+```bash
+# Auto-detected from available keys (no manual config needed)
+STREAM_ENABLED_DESTINATIONS=twitch,kick
+
+# Twitch (multiple formats supported)
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+TWITCH_RTMP_STREAM_KEY=live_123456789_abcdefghij
+
+# Kick
+KICK_STREAM_KEY=your-kick-stream-key
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
+
+# YouTube
+YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+YOUTUBE_RTMP_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+```
+
+**Impact**: Reliable multi-platform RTMP streaming with automatic destination detection.
+
+### CSRF Cross-Origin Fix (March 9, 2026)
+
+**Problem**: Account creation failed with 403 when client runs on localhost:3333 against deployed server.
+
+**Root Cause**: Missing Authorization header + CSRF token response shape mismatch.
+
+**Fixes**:
+- `UsernameSelectionScreen.tsx`: Include Privy auth token as `Authorization: Bearer` header
+- `api-client.ts`: Accept both `{ token }` and `{ csrfToken }` from CSRF endpoint
+- `csrf.ts`: Added localhost and private-IP patterns to `KNOWN_CROSS_ORIGIN_PATTERNS`
+
+**Impact**: Cross-origin local development works without CSRF errors.
+
+### ElizaCloud Integration (March 9, 2026)
+
+**Unified AI Provider**: All duel arena agents now use `@elizaos/plugin-elizacloud`.
 
 **13 Frontier Models**:
 - American: GPT-5, Claude 4.6 (Sonnet/Opus), Gemini 3.1 Pro, Grok 4, Llama 4 Maverick, Magistral Medium
@@ -486,35 +575,28 @@ ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
 - Simplified agent configuration and deployment
 - Consistent error handling and retry logic
 
-### Streaming System (commit 71dcba8)
+### Betting Stack Split (March 9, 2026)
 
-**New Entry Points:**
-- `packages/client/stream.html` - Dedicated streaming entry point
-- `packages/client/src/stream.tsx` - React streaming app
-- Multi-page Vite build configuration for separate game/stream bundles
+**Separate Repository**: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
 
-**New Utilities:**
-- `clientViewportMode()` - Detects stream/spectator/normal modes
-- `stream-destinations` - RTMP destination configuration
-- `stream-viewer-access-token` - Secure viewer authentication
-- `offer-utils` - Vast.ai GPU instance filtering/sorting
+**Moved Packages**:
+- `gold-betting-demo` - Betting frontend and keeper API
+- `evm-contracts` - EVM smart contracts (GoldClob, AgentPerpEngine, SkillOracle)
+- `sim-engine` - Cross-chain risk simulation
+- `market-maker-bot` - Automated liquidity seeding
 
-**Configuration:**
-```bash
-# Enable streaming
-STREAMING_ENABLED=true
-STREAMING_RTMP_URL=rtmp://live.twitch.tv/app/your-key
+**Remaining in Hyperscape**:
+- `duel-oracle-evm` - EVM duel outcome oracle contracts
+- `duel-oracle-solana` - Solana duel outcome oracle program
+- Oracle publisher and metadata API
 
-# Stream quality
-STREAMING_WIDTH=1920
-STREAMING_HEIGHT=1080
-STREAMING_FPS=30
-STREAMING_BITRATE=6000k
-```
+**Rationale**:
+- Independent deployment and versioning
+- Cleaner separation: Oracle (verifiable outcomes) vs Betting (financial markets)
+- Reduced monorepo complexity
+- Better CI/CD isolation
 
-See [docs/streaming-system.md](docs/streaming-system.md) for complete documentation.
-
-### Oracle Improvements (commits 71dcba8, aecab58)
+### Oracle Improvements (March 9, 2026)
 
 **New Database Fields:**
 - `damage_a` - Total damage dealt by participant A
@@ -529,7 +611,7 @@ See [docs/streaming-system.md](docs/streaming-system.md) for complete documentat
 - EVM deploy scripts with receipt generation
 - Solana config.json with program IDs
 
-**Configuration:**
+**Configuration**:
 ```bash
 # Oracle toggle
 DUEL_ARENA_ORACLE_ENABLED=true
@@ -537,9 +619,15 @@ DUEL_ARENA_ORACLE_PROFILE=testnet  # or mainnet
 
 # Metadata API
 DUEL_ARENA_ORACLE_METADATA_BASE_URL=https://api.hyperscape.gg/api/duel-arena/oracle
+
+# Signers
+DUEL_ARENA_ORACLE_EVM_PRIVATE_KEY=0x...
+DUEL_ARENA_ORACLE_SOLANA_AUTHORITY_SECRET=base64:...
 ```
 
-### WebGPU Fixes (commit 71dcba8)
+**Impact**: Comprehensive duel outcome data for betting market settlement and replay verification.
+
+### WebGPU Fixes (March 9, 2026)
 
 **Buffer Upload Fallback:**
 - Automatic fallback when `mappedAtCreation` fails
@@ -552,11 +640,12 @@ DUEL_ARENA_ORACLE_METADATA_BASE_URL=https://api.hyperscape.gg/api/duel-arena/ora
 - Particle manager JSON parsing fixes
 - Vegetation system error handling
 
-### Code Quality (PR #989)
+### Code Quality (March 8-9, 2026)
 
 **Static Imports:**
 - GLTFExporter now uses static imports (better tree-shaking)
 - Logger import converted to static (faster module loading)
+- Eliminates async import boilerplate
 
 **Dead Code Removal:**
 - VFX Preview: Removed unused opacity, primaryColor, whiteGlow, ringMat variables
@@ -566,10 +655,30 @@ DUEL_ARENA_ORACLE_METADATA_BASE_URL=https://api.hyperscape.gg/api/duel-arena/ora
 - `writeArrayBufferToFile()` utility supports both Bun and Node.js
 - Proper runtime detection for file operations
 
+**Panel Optimization:**
+- Un-lazified critical panels (Inventory, Stats, Prayer, Spells) for faster initial load
+- Other panels (Equipment, Quest, Friends) remain lazy-loaded
+
 **Bundle Size:**
-- Client: `chunkSizeWarningLimit` increased to 8000KB
-- Asset-forge: `chunkSizeWarningLimit` increased to 9000KB
+- Client: `chunkSizeWarningLimit` increased to 8000KB (up from 2000KB)
+- Asset-forge: `chunkSizeWarningLimit` increased to 9000KB (new)
 - Intentional for WebGPU/PhysX bundles until deeper code splitting
+
+**TypeScript Fixes:**
+- Resolved TS18048 errors using nullish coalescing (`??`) instead of logical OR (`||`)
+- Added explicit string types to `api-config.ts` URL exports
+
+### Testing & CI (March 9, 2026)
+
+**Vitest 4.x Upgrade**:
+- Required for Vite 6 compatibility
+- Fixes `__vite_ssr_exportName__` errors
+- No API changes - tests work as-is
+
+**CI Stabilization**:
+- Fixed workflow dependency resolution
+- Improved test reliability across packages
+- More reliable GitHub Actions builds
 
 ## Additional Resources
 
@@ -578,7 +687,6 @@ DUEL_ARENA_ORACLE_METADATA_BASE_URL=https://api.hyperscape.gg/api/duel-arena/ora
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - [docs/duel-stack.md](docs/duel-stack.md) - Duel stack documentation
-- [docs/streaming-system.md](docs/streaming-system.md) - Streaming system documentation
 - [docs/duel-arena-oracle-deploy.md](docs/duel-arena-oracle-deploy.md) - Oracle deployment guide
 - [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet) - Betting stack (separate repository)
 - Game Design Document: See `.cursor/rules/gdd.mdc`
