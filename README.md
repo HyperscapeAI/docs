@@ -191,7 +191,6 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
-- `packages/gold-betting-demo/.env.example` - Solana/EVM RPC URLs, contract addresses
 
 ### Default Ports
 
