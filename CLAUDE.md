@@ -51,7 +51,7 @@ bun run build
 # Development mode with hot reload
 bun run dev
 
-# Full duel stack (game + agents + betting + streaming)
+# Full duel stack (game + agents + streaming)
 bun run duel
 
 # Start game server (production mode)
