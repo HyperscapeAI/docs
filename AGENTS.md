@@ -174,21 +174,24 @@ See `docs/duel-arena-oracle-deploy.md` for complete deployment guide.
 
 ## ElizaOS Integration (March 2026)
 
-### ElizaOS next-tag Upgrade
+### ElizaOS Alpha Package Alignment
 
-**Change** (commit 378058a): Upgraded all ElizaOS packages to `next` tag for latest features and bug fixes.
+**Change** (commit 6d67ec1): Aligned all ElizaOS packages to `alpha` tag for stable releases.
 
 **Packages Updated**:
-- `@elizaos/core`: `next`
-- `@elizaos/plugin-anthropic`: `next`
-- `@elizaos/plugin-groq`: `next`
-- `@elizaos/plugin-openai`: `next`
-- `@elizaos/plugin-sql`: `next` (removed in commit 788036d)
-- `@elizaos/prompts`: `next`
+- `@elizaos/core`: `^2.0.0-alpha.33`
+- `@elizaos/plugin-anthropic`: `^2.0.0-alpha.7`
+- `@elizaos/plugin-groq`: `^2.0.0-alpha.8`
+- `@elizaos/plugin-openai`: `^2.0.0-alpha.9`
+- `@elizaos/prompts`: `^2.0.0-alpha.33`
 
-**Impact**: Access to latest ElizaOS features, performance improvements, and bug fixes. Ensures compatibility with latest LLM provider APIs.
+**Previous Changes**:
+- Commit 378058a: Upgraded to `next` tag for latest features
+- Commit 788036d: Removed `@elizaos/plugin-sql` dependency (replaced with InMemoryDatabaseAdapter)
 
-**Migration**: No code changes required - ElizaOS maintains backward compatibility across `next` tag updates.
+**Impact**: Access to stable ElizaOS alpha releases with versioned packages. Ensures compatibility with latest LLM provider APIs while maintaining version control.
+
+**Migration**: No code changes required - ElizaOS maintains backward compatibility across alpha releases.
 
 ## Agent Memory Management (March 2026)
 
