@@ -92,6 +92,19 @@ The keeper bot validates required programs before starting:
 
 If programs are not deployed, keeper bot is skipped with a warning.
 
+## Streaming Configuration (March 2026)
+
+### Aligned Stream Defaults
+
+**Changes** (commits 2b42826, 4090123, c6d31b2):**
+
+Stream defaults have been aligned with Twitch production requirements:
+- Codified vast stream deployment parity
+- Updated betting stream defaults for production
+- Improved Vast stream bootstrap configuration
+
+These changes ensure consistent streaming behavior across local development, Vast.ai deployments, and Railway deployments.
+
 ## Streaming Outputs
 
 Configure the following env vars (root `.env` or `packages/server/.env`):
