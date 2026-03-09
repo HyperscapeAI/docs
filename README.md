@@ -239,9 +239,10 @@ For GPU-accelerated streaming duel arena deployment on Vast.ai, see:
 
 **Requirements**:
 - NVIDIA GPU with display driver (`gpu_display_active=true`)
-- Chrome Dev channel with WebGPU support
-- Xorg or Xvfb for window context
+- Chrome Beta channel with WebGPU support (better stability than Dev/Canary)
+- Xorg or Xvfb for window context (DISPLAY=:99)
 - FFmpeg for RTMP streaming
+- Default ANGLE backend (NOT native Vulkan)
 
 **Streaming Destinations**:
 - Twitch (via `TWITCH_STREAM_KEY` or `TWITCH_RTMP_STREAM_KEY`)
