@@ -335,6 +335,8 @@ All services have unique default ports to avoid conflicts:
 | 4001 | ElizaOS API | (hardcoded) | `bun run dev:ai` |
 | 5555 | Game Server | `PORT` | `bun run dev` |
 
+**Note**: The betting app (port 4179) and keeper API have been moved to the [hyperbet repository](https://github.com/HyperscapeAI/hyperbet).
+
 ### Environment Variables
 
 **Zero-config local development**: The defaults work out of the box. Just run `bun run dev`.
