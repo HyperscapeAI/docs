@@ -172,14 +172,7 @@ packages/
 │   ├── Player controls
 │   └── UI/HUD
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
-├── gold-betting-demo/   # Solana/EVM betting stack
-│   ├── app/            # React betting UI (Cloudflare Pages)
-│   ├── keeper/         # Backend API (Railway)
-│   └── anchor/         # Solana smart contracts
-├── evm-contracts/       # EVM betting contracts (Hardhat + Foundry)
 ├── contracts/           # MUD onchain game state (experimental)
-├── sim-engine/          # Cross-chain betting risk simulation
-├── market-maker-bot/    # Automated market making
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
