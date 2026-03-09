@@ -74,12 +74,10 @@ packages/
 ├── physx-js-webidl/ # PhysX WASM bindings
 ├── procgen/         # Procedural generation
 ├── asset-forge/     # AI asset generation + VFX catalog
-├── gold-betting-demo/ # Solana/EVM betting stack (app + keeper + anchor programs)
-├── evm-contracts/   # EVM betting contracts (Hardhat + Foundry)
-├── contracts/       # MUD onchain game state (experimental)
-├── sim-engine/      # Cross-chain betting risk simulation
-└── market-maker-bot/ # Automated market making for betting markets
+└── contracts/       # MUD onchain game state (experimental)
 ```
+
+**Note**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
 
 ## Agent Memory Management (March 2026)
 
