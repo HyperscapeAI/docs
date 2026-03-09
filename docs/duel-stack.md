@@ -5,8 +5,8 @@
 1. Game server + client (streaming duel scheduler enabled)
 2. Duel matchmaker bots (`dev:duel:skip-dev`)
 3. RTMP bridge fanout to public platforms (YouTube/Twitch/etc.)
-4. Betting app (testnet mode)
-5. Keeper bot (testnet automation)
+
+**Note**: The betting stack (betting app, keeper bot, contracts) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet). To run the full stack with betting, clone both repositories and follow the hyperbet setup guide.
 
 ## Run
 
