@@ -135,14 +135,20 @@ ElizaOS plugin enabling AI agents to:
 **Key Dependencies:**
 
 ```typescript
-// From packages/plugin-hyperscape/package.json (as of Feb 2026)
-"@elizaos/core": "^2.0.0-alpha.26"  // Updated from 2.0.0-alpha.11 (Feb 25, 2026)
-"@elizaos/plugin-anthropic": "^1.5.12"
-"@elizaos/plugin-openai": "1.5.16"
-"@elizaos/plugin-openrouter": "^1.5.15"
-"@elizaos/plugin-sql": "^1.6.4"
+// From packages/plugin-hyperscape/package.json (as of March 2026)
+"@elizaos/core": "^2.0.0-alpha.33"              // Updated from 2.0.0-alpha.26
+"@elizaos/plugin-elizacloud": "^1.8.0"          // NEW: Unified model access
+"@elizaos/plugin-anthropic": "^2.0.0-alpha.7"   // Updated to alpha tag
+"@elizaos/plugin-openai": "^2.0.0-alpha.9"      // Updated to alpha tag
+"@elizaos/plugin-groq": "^2.0.0-alpha.8"        // Updated to alpha tag
+"@elizaos/prompts": "^2.0.0-alpha.33"           // Updated to alpha tag
 "@hyperscape/shared": "workspace:*"
 ```
+
+**ElizaCloud Integration (March 2026):**
+- All duel arena agents now route through `@elizaos/plugin-elizacloud`
+- Access to 13 frontier models via single API key
+- Individual provider plugins retained for backward compatibility
 
 ### asset-forge (`3d-asset-forge`)
 
