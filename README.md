@@ -410,13 +410,15 @@ bun run build
 - **Vast.ai Enhancements**: Production env passthrough, SSH-local health checks, targeted process killing, graceful PM2 shutdown, deterministic migrations
 - **Streaming Configuration**: Aligned stream defaults with Twitch production requirements, codified vast stream deployment parity
 
-### Code Quality
+### Code Quality (PR #989, commit 71dcba8)
 - **GLTFExporter Static Imports**: Converted dynamic imports to static imports in asset-forge for better tree-shaking
-- **VFX Preview Cleanup**: Removed unused variables and dead code paths
+- **VFX Preview Cleanup**: Removed unused variables and dead code paths (opacity, primaryColor, whiteGlow, ringMat)
 - **Client Panel Optimization**: Un-lazified critical game panels (Inventory, Stats, Prayer, Spells) for faster initial load
 - **Dashboard Background**: Replaced image-based background with CSS gradients (eliminates HTTP request)
 - **Logger Import**: Converted dynamic logger import to static import in client entry point
-- **Typed Contract Helpers**: Added type-safe deployment helpers for EVM contracts
+- **Typed Contract Helpers**: Added type-safe deployment helpers for EVM contracts with full TypeScript interfaces
+- **WeaponHandleDetector**: Cross-runtime file writing utility supports both Bun and Node.js
+- **Bundle Size Limits**: Increased `chunkSizeWarningLimit` to 8000KB (client) and 9000KB (asset-forge) for WebGPU/PhysX bundles
 
 ### Branding
 - **Git LFS Integration**: Binary branding files (.ai, .eps, .pdf, .png, .jpg) now tracked via Git LFS to prevent repo bloat (~28 MB)
