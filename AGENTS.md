@@ -98,6 +98,34 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Chrome Beta for Streaming (Commit 547714e)
+
+**Change**: Switched from Chrome Unstable to Chrome Beta for streaming capture.
+
+**Updates**:
+- `scripts/deploy-vast.sh`: Install `google-chrome-beta` instead of `google-chrome-unstable`
+- `ecosystem.config.cjs`: Set `STREAM_CAPTURE_CHANNEL=chrome-beta` and `STREAM_CAPTURE_ANGLE=default`
+
+**Rationale**: Chrome Beta provides better stability than Dev/Canary channels while maintaining WebGPU support.
+
+**Impact**: More reliable streaming capture with fewer crashes and rendering artifacts.
+
+### DATABASE_URL PM2 Forwarding Fix (Commit 5d415fc)
+
+**Problem**: Server crashed with FATAL error when `DATABASE_URL` was not explicitly forwarded through PM2 environment.
+
+**Fix**: `ecosystem.config.cjs` now explicitly forwards `DATABASE_URL` through PM2 environment variables.
+
+**Impact**: Prevents server crashes when using remote PostgreSQL databases with PM2 process management.
+
+### Xvfb DISPLAY Environment Fix (Commit 704b955)
+
+**Problem**: PM2 processes could not access Xvfb virtual display due to missing `DISPLAY` environment variable.
+
+**Fix**: `ecosystem.config.cjs` now explicitly sets `DISPLAY=:99` in PM2 environment.
+
+**Impact**: Ensures streaming processes can access the virtual display for WebGPU rendering.
+
 ### Xvfb Virtual Display Fix (Commit 294a36c)
 
 **Change**: Fixed Xvfb startup order to ensure virtual display is available before PM2 starts streaming processes.
