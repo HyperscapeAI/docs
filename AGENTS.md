@@ -95,6 +95,56 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Streaming Pipeline Fixes (Commits 41dc606, 71dcba8)
+
+**Change**: Fixed RTMP streaming pipeline to correctly enable Twitch and Kick destinations.
+
+**Fixes**:
+- **Auto-Detection**: `deploy-vast.sh` now auto-detects enabled destinations from available stream keys using `||` logic
+- **PM2 Environment**: `ecosystem.config.cjs` explicitly forwards stream keys through PM2 environment
+- **Secret Aliases**: `deploy-vast.yml` adds `TWITCH_RTMP_STREAM_KEY` alias to secrets file for compatibility
+- **Stream Entry Points**: Added dedicated `stream.html` and `stream.tsx` for optimized streaming capture
+- **Viewport Mode Detection**: `clientViewportMode` utility automatically detects stream/spectator/normal modes
+- **Multi-Page Build**: Vite now builds separate bundles for game and streaming entry points
+
+**Environment Variables**:
+```bash
+# Auto-detected from available keys
+STREAM_ENABLED_DESTINATIONS=twitch,kick
+
+# Twitch (multiple key formats supported)
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+TWITCH_RTMP_STREAM_KEY=live_123456789_abcdefghij
+
+# Kick
+KICK_STREAM_KEY=your-kick-stream-key
+KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
+```
+
+**Impact**: Reliable multi-platform RTMP streaming with automatic destination detection and proper secret forwarding.
+
+### CSRF Fix for Cross-Origin Clients (Commit 0b1a0bd, PR #991)
+
+**Problem**: Account creation failed with "CSRF validation failed" (403) when client runs on localhost:3333 against a deployed server proxied through cloud-api.
+
+**Root Cause**: 
+- `UsernameSelectionScreen` used raw `fetch()` without Authorization header
+- Server's CSRF middleware skips validation for requests with `Authorization: Bearer ...`
+- Without auth token, fell through to cookie-based CSRF validation which fails cross-origin (SameSite=Strict)
+- CSRF token response shape mismatch: server returns `{ token }` but client expected `{ csrfToken }`
+
+**Fixes**:
+- **Auth Header**: `UsernameSelectionScreen.tsx` now includes Privy auth token as `Authorization: Bearer` header on POST /api/users/create
+- **Token Parsing**: `api-client.ts` accepts both `{ token }` and `{ csrfToken }` from CSRF endpoint
+- **Origin Patterns**: Added localhost and private-IP patterns to `KNOWN_CROSS_ORIGIN_PATTERNS` in `csrf.ts`
+
+**Files Changed**:
+- `packages/client/src/screens/UsernameSelectionScreen.tsx`
+- `packages/client/src/lib/api-client.ts`
+- `packages/server/src/middleware/csrf.ts`
+
+**Impact**: Cross-origin local development now works correctly without CSRF 403 errors.
+
 ### ElizaCloud Plugin Integration (Commit 4d1eb53)
 
 **Change**: All duel arena AI agents now route through `@elizaos/plugin-elizacloud` for unified model access.
@@ -395,6 +445,17 @@ background-image:
 
 **Impact**: Eliminates HTTP request for background image, faster initial render, smaller bundle size.
 
+**Bundle Size Limits**:
+
+Increased `chunkSizeWarningLimit` to suppress warnings for intentionally large WebGPU/PhysX bundles:
+
+- `packages/client/vite.config.ts`: 8000 KB (up from 2000 KB)
+- `packages/asset-forge/vite.config.ts`: 9000 KB (new)
+
+**Rationale**: WebGPU renderer, TSL shader system, and PhysX WASM bindings create large bundles. These limits are intentional until deeper code splitting is implemented.
+
+**Tech Debt**: Track deeper code splitting as future optimization to reduce initial bundle size.
+
 ### Vitest 4.x Upgrade
 
 **Breaking Change** (Commit a916e4e): Vitest 2.x is incompatible with Vite 6.x.
@@ -463,5 +524,16 @@ const clobAddress = await clob.getAddress();
 ```
 
 **Impact**: Provides auditable deployment history and simplifies contract address management.
+
+### TypeScript Fixes (Commits 74b9852, 6cdbf2c, b542751)
+
+**Problem**: TS18048 errors for `GAME_API_URL` and other import.meta.env values possibly being undefined.
+
+**Fix**: Switch from `||` to `??` (nullish coalescing) for import.meta.env values so TypeScript can narrow the type through the fallback chain.
+
+**Files Changed**:
+- `packages/client/src/lib/api-config.ts` - Added explicit string types to URL exports
+
+**Impact**: Eliminates TypeScript errors without requiring non-null assertions.
 
 See CLAUDE.md for complete documentation.
