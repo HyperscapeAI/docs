@@ -4,9 +4,9 @@
 
 1. Game server + client (streaming duel scheduler enabled)
 2. Duel matchmaker bots (`dev:duel:skip-dev`)
-3. RTMP bridge fanout to public platforms (YouTube/Twitch/etc.)
-
-**Note**: The betting stack (betting app, keeper bot, contracts) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet). To run the full stack with betting, clone both repositories and follow the hyperbet setup guide.
+3. RTMP bridge fanout to public platforms (YouTube/Twitch/Kick/etc.)
+4. Betting app (testnet mode) - **Note**: Now in separate [hyperbet repository](https://github.com/HyperscapeAI/hyperbet)
+5. Keeper bot (testnet automation) - **Note**: Now in separate [hyperbet repository](https://github.com/HyperscapeAI/hyperbet)
 
 ## Run
 
@@ -23,7 +23,7 @@ No separate Docker stream container is required for stream fanout.
 Recommended fresh-install prep command:
 
 ```bash
-bun run install
+bun install
 ```
 
 This ensures assets are synced and Chromium is installed for local capture.
@@ -37,98 +37,36 @@ bun run duel --skip-stream
 bun run duel --verify
 ```
 
-## Solana Runtime Configuration
-
-The duel stack auto-discovers Solana configuration from multiple sources:
-
-**Default Values:**
-- Program ID: `9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU` (fight oracle)
-- Gold Mint: `DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump`
-- RPC URL: `https://api.devnet.solana.com`
-- WS URL: `wss://api.devnet.solana.com`
-
-**Auto-Discovery:**
-
-The `duel-stack.mjs` orchestrator automatically discovers Solana authority from multiple candidate sources:
-1. `DUEL_SOLANA_ARENA_AUTHORITY_SECRET` environment variable
-2. `SOLANA_ARENA_AUTHORITY_SECRET` environment variable
-3. `~/.config/solana/hyperscape/deployer-mainnet-20260211.json`
-4. `~/.config/solana/mainnet-deployer.json`
-5. `~/.config/solana/hyperscape-keys/deployer.json`
-6. `~/.config/solana/id.json`
-
-**Program Validation:**
-
-Before starting the keeper bot, the orchestrator validates the prediction market program by simulating an `init_oracle_round` transaction. This ensures the program is deployed and accessible.
-
-**Environment Variables:**
-
-```bash
-# Duel-specific Solana configuration (takes precedence over SOLANA_* vars)
-DUEL_SOLANA_RPC_URL=https://api.devnet.solana.com
-DUEL_SOLANA_WS_URL=wss://api.devnet.solana.com
-DUEL_SOLANA_ARENA_MARKET_PROGRAM_ID=9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU
-DUEL_SOLANA_GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump
-DUEL_SOLANA_ARENA_AUTHORITY_SECRET=~/.config/solana/id.json
-DUEL_SOLANA_ARENA_REPORTER_SECRET=~/.config/solana/id.json
-DUEL_SOLANA_ARENA_KEEPER_SECRET=~/.config/solana/id.json
-
-# Fallback to general Solana configuration if DUEL_* vars not set
-SOLANA_RPC_URL=https://api.devnet.solana.com
-SOLANA_WS_URL=wss://api.devnet.solana.com
-SOLANA_ARENA_MARKET_PROGRAM_ID=9NdidShnVzy1fc1WHWJTvyuXmH47ynfNGA6QFdyfAuSU
-SOLANA_GOLD_MINT=DK9nBUMfdu4XprPRWeh8f6KnQiGWD8Z4xz3yzs9gpump
-SOLANA_ARENA_AUTHORITY_SECRET=
-SOLANA_ARENA_REPORTER_SECRET=
-SOLANA_ARENA_KEEPER_SECRET=
-```
-
-**Keeper Program Checks:**
-
-The keeper bot validates required programs before starting:
-- Fight oracle: `6tpRysBFd1yXRipYEYwAw9jxEoVHk15kVXfkDGFLMqcD`
-- Gold clob market: `ARVJNJp49VZnkB8QBYZAAFJmufvtVSPhnuuenwwSLwpi`
-- Gold perps market (optional): `HbXhqEFevpkfYdZCN6YmJGRmQmj9vsBun2ZHjeeaLRik`
-
-If programs are not deployed, keeper bot is skipped with a warning.
-
-## Streaming Configuration (March 2026)
-
-### Aligned Stream Defaults
-
-**Changes** (commits 2b42826, 4090123, c6d31b2):**
-
-Stream defaults have been aligned with Twitch production requirements:
-- Codified vast stream deployment parity
-- Updated betting stream defaults for production
-- Improved Vast stream bootstrap configuration
-
-These changes ensure consistent streaming behavior across local development, Vast.ai deployments, and Railway deployments.
-
 ## Streaming Outputs
 
 Configure the following env vars (root `.env` or `packages/server/.env`):
 
-- `RTMP_MULTIPLEXER_URL` (+ optional `RTMP_MULTIPLEXER_STREAM_KEY`, `RTMP_MULTIPLEXER_NAME`)
+**Auto-Detection** (March 2026): Stream destinations are now auto-detected from available keys. Set any of the following and `STREAM_ENABLED_DESTINATIONS` will be automatically configured:
+
 - `TWITCH_STREAM_KEY` (or `TWITCH_RTMP_STREAM_KEY`)
-  Optional ingest override: `TWITCH_STREAM_URL` / `TWITCH_RTMP_URL` / `TWITCH_RTMP_SERVER`
+  - Optional ingest override: `TWITCH_STREAM_URL` / `TWITCH_RTMP_URL` / `TWITCH_RTMP_SERVER`
+  - Default: `rtmp://live.twitch.tv/app`
 - `YOUTUBE_STREAM_KEY` (or `YOUTUBE_RTMP_STREAM_KEY`)
-  Optional ingest override: `YOUTUBE_STREAM_URL` / `YOUTUBE_RTMP_URL`
-- `KICK_STREAM_KEY` (+ optional `KICK_RTMP_URL`)
+  - Optional ingest override: `YOUTUBE_STREAM_URL` / `YOUTUBE_RTMP_URL`
+  - Default: `rtmp://a.rtmp.youtube.com/live2`
+- `KICK_STREAM_KEY`
+  - Optional ingest override: `KICK_RTMP_URL`
+  - Default: `rtmps://fa723fc1b171.global-contribute.live-video.net/app`
 - `PUMPFUN_RTMP_URL` (+ optional `PUMPFUN_STREAM_KEY`)
 - `X_RTMP_URL` (+ optional `X_STREAM_KEY`)
+- `RTMP_MULTIPLEXER_URL` (+ optional `RTMP_MULTIPLEXER_STREAM_KEY`, `RTMP_MULTIPLEXER_NAME`)
 - `RTMP_DESTINATIONS_JSON` for additional/custom fanout destinations
-- `STREAMING_VIEWER_ACCESS_TOKEN` optional gate for live WebSocket stream/spectator viewers
 
-**New Streaming Features (March 2026):**
+**Manual Override**: If you need to manually specify destinations, set:
+```bash
+STREAM_ENABLED_DESTINATIONS=twitch,kick,youtube
+```
 
-- `STREAM_PLACEHOLDER_ENABLED=true` - Send placeholder frames during idle periods (prevents 30-minute disconnect)
-- `SPAWN_MODEL_AGENTS=true` - Auto-create agents when database is empty (useful for fresh deployments)
-- `STREAM_CAPTURE_EXECUTABLE=...` - Explicit Chrome path for WebGPU (e.g., `/usr/bin/google-chrome-unstable`)
-- `STREAM_LOW_LATENCY=true` - Use zerolatency tune for faster playback start
-- `STREAM_GOP_SIZE=60` - GOP size in frames (default: 60)
-- `STREAM_AUDIO_ENABLED=true` - Enable audio capture
-- `PULSE_AUDIO_DEVICE=...` - PulseAudio device name
+**Viewer Access Control**:
+```bash
+# Optional gate for live WebSocket stream/spectator viewers
+STREAMING_VIEWER_ACCESS_TOKEN=replace-with-random-secret-token
+```
 
 Default anti-cheat timing policy (no env required):
 
@@ -144,7 +82,7 @@ Optional client-side extra delay (usually keep `0` if server delay is enabled):
 Website/betting embed input (recommended):
 
 - `NEXT_PUBLIC_ARENA_STREAM_EMBED_URL` (in `packages/website/.env.local`)
-- `VITE_STREAM_EMBED_URL` (in `packages/gold-betting-demo/app/.env*`)
+- `VITE_STREAM_EMBED_URL` (in the Hyperbet app `.env*` files if you boot the sibling repo locally)
 
 When `STREAMING_PUBLIC_DELAY_MS > 0`, live `mode=streaming` WebSocket viewers are restricted to:
 - loopback/local capture clients, or
@@ -152,16 +90,12 @@ When `STREAMING_PUBLIC_DELAY_MS > 0`, live `mode=streaming` WebSocket viewers ar
 
 `stream-to-rtmp` automatically appends `streamToken` to capture URLs when `STREAMING_VIEWER_ACCESS_TOKEN` is set.
 
-## Spectator URLs
+## Spectator + Betting URLs
 
 - Game stream view: `http://localhost:3333/?page=stream`
 - Embedded spectator: `http://localhost:3333/?embedded=true&mode=spectator`
-
-**Betting Integration**: For betting functionality, see the [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet) repository which provides:
-- Betting app UI (default port: 4179)
-- Keeper bot for market making and oracle resolution
-- Solana and EVM smart contracts
-- Integration with duel telemetry APIs
+- Betting app: `http://localhost:4179` - **Note**: Now in [hyperbet repository](https://github.com/HyperscapeAI/hyperbet)
+- Betting video source: `VITE_STREAM_EMBED_URL` (YouTube/Twitch embed URL)
 
 ## Open APIs (duel telemetry + monologues)
 
@@ -171,48 +105,6 @@ When `STREAMING_PUBLIC_DELAY_MS > 0`, live `mode=streaming` WebSocket viewers ar
 - `GET /api/streaming/agent/:characterId/monologues?limit=20`
 
 These endpoints power the betting app live duel telemetry section (inventory, wins/losses, level, HP, and internal monologues).
-
-## Admin APIs (zero-downtime deployments)
-
-**Graceful Restart** (NEW - commit c76ca516):
-
-Request a server restart after the current duel ends:
-
-```bash
-# Request graceful restart (requires ADMIN_CODE)
-curl -X POST http://localhost:5555/admin/graceful-restart \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
-
-# Check restart status
-curl http://localhost:5555/admin/restart-status \
-  -H "x-admin-code: YOUR_ADMIN_CODE"
-```
-
-**Behavior:**
-- If no duel active (IDLE/ANNOUNCEMENT): restart immediately via SIGTERM
-- If duel in progress (FIGHTING/RESOLUTION): wait until RESOLUTION phase completes
-- PM2 automatically restarts the server with new code
-- No interruption to active duels or streams
-
-**Returns:** `{ success: true, pendingRestart: boolean, currentPhase: string }`
-
-**Use Case:** Deploy code updates without interrupting live duels.
-
-## Monitoring & Diagnostics
-
-**Streaming Status Check:**
-
-```bash
-bun run duel:status
-```
-
-Quick diagnostic for verifying streaming health on Vast.ai or Railway:
-- Server health endpoint
-- Streaming API status
-- Duel context (fighting phase)
-- RTMP bridge status and bytes streamed
-- PM2 process status
-- Recent logs
 
 ## Verification
 
@@ -226,49 +118,208 @@ bun run duel:verify --require-destinations=twitch,youtube
 This validates server/client/betting uptime, active duel combat, RTMP bridge status evidence, and telemetry endpoints.
 RTMP bridge status is best-effort by default, and can be made strict with `--require-destinations`.
 
+## Streaming Pipeline Architecture (March 2026)
+
+### Entry Points
+
+**Dedicated Streaming Entry Points**:
+- `packages/client/src/stream.html` - Streaming-optimized HTML entry point
+- `packages/client/src/stream.tsx` - React streaming app with minimal UI
+- Multi-page Vite build configuration for separate game/stream bundles
+
+**Viewport Mode Detection**:
+```typescript
+import { clientViewportMode } from '@hyperscape/shared';
+
+const mode = clientViewportMode(); // 'stream' | 'spectator' | 'normal'
+```
+
+### Auto-Detection Logic
+
+The deployment script (`scripts/deploy-vast.sh`) automatically detects enabled destinations:
+
+```bash
+# Auto-detect from available keys
+if [ -z "${STREAM_ENABLED_DESTINATIONS:-}" ]; then
+    DESTS=""
+    if [ -n "${TWITCH_STREAM_KEY:-${TWITCH_RTMP_STREAM_KEY:-}}" ]; then
+        DESTS="twitch"
+    fi
+    if [ -n "${KICK_STREAM_KEY:-}" ]; then
+        DESTS="${DESTS:+${DESTS},}kick"
+    fi
+    if [ -n "$DESTS" ]; then
+        export STREAM_ENABLED_DESTINATIONS="$DESTS"
+    fi
+fi
+```
+
+### PM2 Environment Forwarding
+
+The PM2 ecosystem config (`ecosystem.config.cjs`) explicitly forwards stream keys:
+
+```javascript
+env: {
+  TWITCH_STREAM_URL: process.env.TWITCH_STREAM_URL || "rtmp://live.twitch.tv/app",
+  TWITCH_STREAM_KEY: process.env.TWITCH_STREAM_KEY || process.env.TWITCH_RTMP_STREAM_KEY || "",
+  KICK_STREAM_KEY: process.env.KICK_STREAM_KEY || "",
+  KICK_RTMP_URL: process.env.KICK_RTMP_URL || "rtmps://fa723fc1b171.global-contribute.live-video.net/app",
+  STREAM_ENABLED_DESTINATIONS: process.env.STREAM_ENABLED_DESTINATIONS || process.env.DUEL_STREAM_DESTINATIONS || "",
+  YOUTUBE_STREAM_URL: process.env.YOUTUBE_STREAM_URL || "rtmp://a.rtmp.youtube.com/live2",
+}
+```
+
+### Secret Aliases
+
+The GitHub Actions workflow (`.github/workflows/deploy-vast.yml`) adds secret aliases for compatibility:
+
+```yaml
+- name: Write secrets file
+  run: |
+    cat > /tmp/hyperscape-secrets.env <<'EOF'
+    TWITCH_RTMP_STREAM_KEY=${{ secrets.TWITCH_STREAM_KEY }}
+    KICK_STREAM_KEY=${{ secrets.KICK_STREAM_KEY }}
+    EOF
+```
+
+This ensures both `TWITCH_STREAM_KEY` and `TWITCH_RTMP_STREAM_KEY` formats are supported.
+
 ## Troubleshooting
 
-**Stream disconnects after 30 minutes:**
-- Enable placeholder frame mode: `STREAM_PLACEHOLDER_ENABLED=true`
-- Sends minimal JPEG frames during idle periods to keep stream alive
-- Automatically exits when live frames resume
+### Stream Not Starting
 
-**WebGPU not initializing:**
-- For Vast.ai: Ensure instance has `gpu_display_active=true` (use `bun run vast:provision`)
-- Check deployment logs for GPU display driver detection
-- Run `bun run duel:status` to check streaming health
-- Verify NVIDIA display driver: `nvidia-smi` should show display mode
+**Check stream keys are set**:
+```bash
+echo $TWITCH_STREAM_KEY
+echo $KICK_STREAM_KEY
+echo $YOUTUBE_STREAM_KEY
+```
 
-**Browser timeout during page load:**
-- Set `NODE_ENV=production` or `DUEL_USE_PRODUCTION_CLIENT=true`
-- Use pre-built client via `vite preview` instead of dev server
-- Significantly faster page loads (no on-demand module compilation)
+**Verify auto-detection**:
+```bash
+echo $STREAM_ENABLED_DESTINATIONS
+# Should output: twitch,kick (or similar based on available keys)
+```
 
-**Database \"too many clients\" errors:**
-- Set `POSTGRES_POOL_MAX=3` (or 1 for duel deployments)
-- Set `POSTGRES_POOL_MIN=0` to not hold idle connections
-- Increase `restart_delay=10s` in PM2 config
-- Railway is auto-detected via `RAILWAY_ENVIRONMENT` env var
+**Check FFmpeg**:
+```bash
+which ffmpeg
+# or
+echo $FFMPEG_PATH
+```
 
-**Deploy script killing itself:**
-- Fixed in recent commits - now uses targeted process killing
-- Avoids `pkill -f bun` which killed the deploy script
-- Uses specific process names for graceful shutdown
+**Check Playwright Chromium**:
+```bash
+bunx playwright install chromium
+```
 
-**Agent memory issues:**
-- Agents now use InMemoryDatabaseAdapter (zero WASM overhead)
-- Memory capped at 50 memories per agent with ring buffer eviction
-- Adapter logs capped at 20 entries, cache at 100 entries
-- Periodic GC every 60s per agent
-- See [AGENTS.md](../AGENTS.md) for full memory management documentation
+### GPU/WebGPU Issues
 
-**Agent spawning failures:**
-- First agent spawns sequentially to complete migrations
-- Remaining agents spawn in parallel
-- Prevents concurrent ALTER TABLE races on serverless PostgreSQL
-- Auto-spawn enabled when `STREAMING_DUEL_ENABLED=true`
+**Vast.ai Requirements**:
+- GPU display driver must be active: `gpu_display_active=true`
+- Not just compute access - WebGPU requires display driver support
+- Chrome Dev channel with WebGPU enabled
+- Xorg or Xvfb for window context
 
-**Missing Anthropic agents:**
-- Ensure `@elizaos/plugin-anthropic` is installed
-- Check `MAX_MODEL_AGENTS` is set to 25 (default increased from 10)
-- 19 AI models now supported (GPT-4.1, Claude Opus 4.6, Llama 3.3 70B, etc.)
+**Verify WebGPU**:
+```bash
+# Check Chrome version
+google-chrome-unstable --version
+
+# Test WebGPU availability
+bun run test:webgpu
+```
+
+### PM2 Process Issues
+
+**Check process status**:
+```bash
+bunx pm2 status
+bunx pm2 logs hyperscape-duel
+```
+
+**Restart stack**:
+```bash
+bunx pm2 restart ecosystem.config.cjs
+```
+
+**Full reset**:
+```bash
+bunx pm2 delete all
+bunx pm2 start ecosystem.config.cjs
+```
+
+### RTMP Bridge Status
+
+**Check bridge health**:
+```bash
+curl http://localhost:5555/api/streaming/state
+```
+
+**Verify destinations**:
+```bash
+bun run duel:verify --require-destinations=twitch,youtube
+```
+
+### Database Connection Issues
+
+If seeing "timeout exceeded when trying to connect" errors:
+- Check `DUEL_DATABASE_MODE` is set correctly (`local` or `remote`)
+- Verify PostgreSQL is running: `pg_isready -h 127.0.0.1 -p 5432`
+- Check connection pool settings in `ecosystem.config.cjs`
+- Review database logs: `tail -f logs/duel-error.log`
+
+## Recent Changes (March 2026)
+
+### Streaming Pipeline Fixes (Commit 41dc606)
+
+**Auto-Detection**: Stream destinations now auto-detected from available stream keys.
+
+**Changes**:
+- `deploy-vast.sh`: Auto-detects `STREAM_ENABLED_DESTINATIONS` from `TWITCH_STREAM_KEY`, `KICK_STREAM_KEY`, etc.
+- `ecosystem.config.cjs`: Explicitly forwards stream keys through PM2 environment
+- `deploy-vast.yml`: Adds `TWITCH_RTMP_STREAM_KEY` alias to secrets file
+
+**Impact**: No manual configuration needed - just set stream keys and destinations are auto-detected.
+
+### Dedicated Stream Entry Points (Commit 71dcba8)
+
+**New Files**:
+- `packages/client/src/stream.html` - Streaming-optimized HTML entry point
+- `packages/client/src/stream.tsx` - React streaming app
+- `packages/shared/src/runtime/clientViewportMode.ts` - Viewport mode detection utility
+
+**Multi-Page Build**:
+- Vite now builds separate bundles for game and streaming
+- Reduced bundle size for streaming entry point
+- Optimized for capture performance
+
+**Impact**: Faster streaming startup, reduced memory footprint, better capture performance.
+
+### Stream Viewer Access Control (Commit 71dcba8)
+
+**New Module**: `packages/server/src/streaming/stream-viewer-access-token.ts`
+
+**Configuration**:
+```bash
+STREAMING_VIEWER_ACCESS_TOKEN=replace-with-random-secret-token
+```
+
+**Behavior**:
+- When `STREAMING_PUBLIC_DELAY_MS > 0`, live WebSocket viewers are restricted
+- Loopback/local capture clients always allowed
+- External clients must present `streamToken=<STREAMING_VIEWER_ACCESS_TOKEN>`
+- `stream-to-rtmp` automatically appends token to capture URLs
+
+**Impact**: Secure access control for live stream viewers to prevent anti-cheat bypass.
+
+### Offer Utils (Commit 71dcba8)
+
+**New Module**: `packages/vast-keeper/src/offer-utils.ts`
+
+**Features**:
+- Vast.ai GPU instance filtering by display driver support
+- Sorting by price, GPU count, and availability
+- Automatic selection of optimal streaming instances
+
+**Impact**: Simplified Vast.ai instance selection for streaming deployments.
