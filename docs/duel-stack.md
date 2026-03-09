@@ -139,12 +139,16 @@ When `STREAMING_PUBLIC_DELAY_MS > 0`, live `mode=streaming` WebSocket viewers ar
 
 `stream-to-rtmp` automatically appends `streamToken` to capture URLs when `STREAMING_VIEWER_ACCESS_TOKEN` is set.
 
-## Spectator + Betting URLs
+## Spectator URLs
 
 - Game stream view: `http://localhost:3333/?page=stream`
 - Embedded spectator: `http://localhost:3333/?embedded=true&mode=spectator`
-- Betting app: `http://localhost:4179`
-- Betting video source: `VITE_STREAM_EMBED_URL` (YouTube/Twitch embed URL)
+
+**Betting Integration**: For betting functionality, see the [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet) repository which provides:
+- Betting app UI (default port: 4179)
+- Keeper bot for market making and oracle resolution
+- Solana and EVM smart contracts
+- Integration with duel telemetry APIs
 
 ## Open APIs (duel telemetry + monologues)
 
