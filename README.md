@@ -351,6 +351,15 @@ bun run build
 
 ## Recent Updates (March 2026)
 
+### ElizaCloud Integration (commit 4d1eb53)
+- **Unified AI Provider**: All AI agents now route through `@elizaos/plugin-elizacloud` with a single API key
+- **13 Frontier Models**: Access to GPT-5, Claude 4.6 (Sonnet/Opus), Gemini 3.1 Pro, Grok 4, Llama 4 Maverick, Magistral Medium, DeepSeek V3.2, Qwen 3 Max, Minimax M2.5, GLM-5, Kimi K2.5, and Seed 1.8
+- **Simplified Configuration**: One `ELIZAOS_CLOUD_API_KEY` replaces multiple provider-specific keys
+- **Provider Consolidation**: Replaced individual OpenAI, Anthropic, and Groq plugins with unified ElizaCloud routing
+- **Model Diversity**: Balanced roster of American (OpenAI, Anthropic, Google, xAI, Meta, Mistral) and Chinese (DeepSeek, Alibaba, Minimax, Zhipu, Moonshot, ByteDance) frontier models
+
+**Migration**: Set `ELIZAOS_CLOUD_API_KEY` in `packages/server/.env` to enable all 13 AI models. Individual provider keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.) are no longer required for duel arena agents.
+
 ### Streaming System (commit 71dcba8)
 - **Dedicated Stream Entry Points**: New `stream.html` and `stream.tsx` for optimized streaming capture
 - **Viewport Mode Detection**: `clientViewportMode` utility automatically detects stream/spectator/normal modes
