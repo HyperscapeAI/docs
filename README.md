@@ -226,39 +226,26 @@ For GPU-accelerated streaming duel arena deployment on Vast.ai, see:
 - `ecosystem.config.cjs` - PM2 process configuration
 - `scripts/deploy-vast.sh` - Deployment script
 
-### Betting Stack (Cloudflare + Railway)
+### Betting Stack (Separate Repository)
 
-For production betting stack deployment:
+The betting stack has been split into a separate repository for independent development and deployment:
 
-- Frontend: Cloudflare Pages (`packages/gold-betting-demo/app`)
-- Keeper API: Railway (`packages/gold-betting-demo/keeper`)
-- Contracts: Solana mainnet-beta, BSC, Base
+**Repository**: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
 
-**Deployment guides:**
-- `docs/betting-production-deploy.md` - Complete betting stack deployment (Cloudflare + Railway)
-- `docs/evm-contracts-deployment.md` - EVM contract deployment (BSC, Base)
+**Components**:
+- Frontend: React betting UI with Solana/EVM wallet integration (Cloudflare Pages)
+- Keeper API: Backend for bet recording, market making, oracle resolution (Railway)
+- Contracts: Solana smart contracts (Anchor) and EVM contracts (Hardhat + Foundry)
+- Sim Engine: Cross-chain risk simulation and attack fuzzing
+- Market Maker Bot: Automated liquidity seeding
 
-**Quick deployment:**
+**Features**:
+- Dual-chain betting (Solana + EVM) with unified GOLD token
+- CLOB (Central Limit Order Book) market for duel outcomes
+- Perpetual futures market for agent skill ratings
+- Points system with staking multipliers and referral tracking
 
-```bash
-# Preflight validation
-cd packages/gold-betting-demo
-bun run deploy:preflight:mainnet
-
-# Deploy Solana programs
-cd anchor
-bun run deploy:mainnet
-
-# Deploy EVM contracts
-cd ../evm-contracts
-TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:bsc
-TREASURY_ADDRESS=0x... MARKET_MAKER_ADDRESS=0x... bun run deploy:base
-```
-
-**Deployment metadata:**
-- All contract addresses managed in `packages/gold-betting-demo/deployments/contracts.json`
-- EVM deployment receipts in `packages/evm-contracts/deployments/<network>.json`
-- Automatic manifest updates after successful deployment
+See the [hyperbet repository](https://github.com/HyperscapeAI/hyperbet) for deployment guides and documentation.
 
 ## Native App Distribution
 
