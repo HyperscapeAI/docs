@@ -336,17 +336,17 @@ bun run build
 ### Testing & CI
 - **Vitest 4.x Upgrade**: Required for Vite 6 compatibility (fixes `__vite_ssr_exportName__` errors)
 - **CI Stabilization**: Fixed client test runner, duel agent tests, vegetation concurrency tests, asset forge module resolution
-- **Anchor Test Config**: Skip localnet tests in CI when Solana CLI not installed
 
 ### Deployment
 - **Vast.ai Enhancements**: Production env passthrough, SSH-local health checks, targeted process killing, graceful PM2 shutdown, deterministic migrations
-- **Solana Configuration**: Runtime defaults for program IDs and gold mint, environment passthrough, auto-discovery
-- **Betting Stack Integration**: Full Solana/EVM betting system with CLOB markets, perps, points, and referrals
-  - Frontend: Cloudflare Pages deployment
-  - Keeper: Railway deployment with persistent storage
-  - Contracts: Solana mainnet-beta, BSC, Base
-  - Security: Passed Anchor audit, fuzz testing, exploit resistance
-  - See `docs/betting-production-deploy.md` for deployment guide
+- **Streaming Configuration**: Aligned stream defaults with Twitch production requirements, codified vast stream deployment parity
+
+### Code Quality
+- **GLTFExporter Static Imports**: Converted dynamic imports to static imports in asset-forge for better tree-shaking
+- **VFX Preview Cleanup**: Removed unused variables and dead code paths
+- **Client Panel Optimization**: Un-lazified critical game panels (Inventory, Stats, Prayer, Spells) for faster initial load
+- **Dashboard Background**: Replaced image-based background with CSS gradients (eliminates HTTP request)
+- **Logger Import**: Converted dynamic logger import to static import in client entry point
 
 ### Branding
 - **Git LFS Integration**: Binary branding files (.ai, .eps, .pdf, .png, .jpg) now tracked via Git LFS to prevent repo bloat (~28 MB)
@@ -356,6 +356,9 @@ bun run build
 - **Interpolation Engine Fixes**: Fixed position conflicts between tile-based and interpolated movement, proper quaternion slerp, dead entity skip
 - **Plugin Exports**: Restored world map exports for agent navigation and spatial awareness
 - **Logging Optimization**: Reduced runtime logging noise for cleaner console output
+
+### Architecture
+- **Betting Stack Split**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
 
 ## More Info
 
