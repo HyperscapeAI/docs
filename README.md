@@ -358,6 +358,7 @@ bun run build
 - **ElizaOS next-tag Upgrade**: All ElizaOS packages upgraded to `next` tag for latest features and bug fixes (commit 378058a)
 
 ### Agent Memory Management
+- **PGLite Removal**: Completely removed PGLite WASM dependency and SQL plugin (commits 429bfbf, 788036d)
 - **InMemoryDatabaseAdapter Migration**: Reduced agent memory footprint from 38-76GB to <5GB for 19 agents by eliminating PGLite WASM overhead
 - **Memory Caps**: Ring buffer limits (50 memories per agent), adapter log caps (20 entries), cache caps (100 entries with LRU eviction)
 - **Periodic GC**: Non-blocking garbage collection every 60s to reclaim short-lived allocations
