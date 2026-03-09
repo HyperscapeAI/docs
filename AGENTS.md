@@ -59,7 +59,7 @@ Hyperscape is a RuneScape-style MMORPG built on Three.js WebGPURenderer with TSL
 bun install          # Install dependencies
 bun run build        # Build all packages
 bun run dev          # Development mode
-bun run duel         # Full duel stack (game + agents + betting + streaming)
+bun run duel         # Full duel stack (game + agents + streaming)
 npm test             # Run tests
 ```
 
@@ -74,10 +74,102 @@ packages/
 ├── physx-js-webidl/ # PhysX WASM bindings
 ├── procgen/         # Procedural generation
 ├── asset-forge/     # AI asset generation + VFX catalog
+├── duel-oracle-evm/ # EVM duel outcome oracle contracts
+├── duel-oracle-solana/ # Solana duel outcome oracle program
 └── contracts/       # MUD onchain game state (experimental)
 ```
 
 **Note**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
+
+## Duel Arena Oracle (March 2026)
+
+### Oracle Architecture
+
+The duel arena oracle publishes duel outcomes to multiple blockchains for verifiable results and betting market settlement.
+
+**Components**:
+- **EVM Oracle**: Solidity contracts on Base, BSC, Avalanche (`packages/duel-oracle-evm`)
+- **Solana Oracle**: Anchor program on Solana (`packages/duel-oracle-solana`)
+- **Publisher**: Server-side oracle publisher (`packages/server/src/oracle/DuelArenaOraclePublisher.ts`)
+- **Metadata API**: REST endpoints for duel metadata (`GET /api/duel-arena/oracle/duels/:duelId`)
+
+### Oracle Event Flow
+
+1. **Announcement** (`streaming:announcement:start`) → Publish duel announcement with participants and betting window
+2. **Fight Start** (`streaming:fight:start`) → Lock betting and publish fight start time
+3. **Resolution** (`streaming:resolution:start`) → Publish winner, seed, replay hash, and result hash
+4. **Abort** (`streaming:cycle:aborted`) → Cancel duel if aborted before completion
+
+### Oracle Record Fields
+
+**New Fields** (commit aecab58):
+- `damageA` - Total damage dealt by participant A
+- `damageB` - Total damage dealt by participant B
+- `winReason` - Reason for victory (e.g., "knockout", "timeout", "forfeit")
+- `seed` - Cryptographic seed for replay verification
+- `replayHashHex` - Hash of replay data for integrity verification
+- `resultHashHex` - Combined hash of all duel outcome data
+
+These fields are stored in the `arena_rounds` table and published to all configured oracle targets (EVM + Solana).
+
+### Oracle Configuration
+
+**Server Environment Variables**:
+```bash
+DUEL_ARENA_ORACLE_ENABLED=true
+DUEL_ARENA_ORACLE_PROFILE=testnet  # testnet | mainnet | all
+DUEL_ARENA_ORACLE_METADATA_BASE_URL=https://your-domain.example/api/duel-arena/oracle
+DUEL_ARENA_ORACLE_STORE_PATH=/var/lib/hyperscape/duel-arena-oracle/records.json
+```
+
+**EVM Targets** (per chain):
+- `DUEL_ARENA_ORACLE_BASE_SEPOLIA_CONTRACT_ADDRESS`
+- `DUEL_ARENA_ORACLE_BSC_TESTNET_CONTRACT_ADDRESS`
+- `DUEL_ARENA_ORACLE_AVAX_FUJI_CONTRACT_ADDRESS`
+- `DUEL_ARENA_ORACLE_BASE_MAINNET_CONTRACT_ADDRESS`
+- `DUEL_ARENA_ORACLE_BSC_MAINNET_CONTRACT_ADDRESS`
+- `DUEL_ARENA_ORACLE_AVAX_MAINNET_CONTRACT_ADDRESS`
+
+**Solana Targets**:
+- `DUEL_ARENA_ORACLE_SOLANA_DEVNET_PROGRAM_ID`
+- `DUEL_ARENA_ORACLE_SOLANA_MAINNET_PROGRAM_ID`
+
+**Signer Secrets**:
+- `DUEL_ARENA_ORACLE_EVM_PRIVATE_KEY` - EVM deployer/reporter private key
+- `DUEL_ARENA_ORACLE_SOLANA_AUTHORITY_SECRET` - Solana authority keypair (JSON array or file path)
+- `DUEL_ARENA_ORACLE_SOLANA_REPORTER_SECRET` - Solana reporter keypair (optional, defaults to authority)
+
+### Oracle Deployment
+
+**Generate Wallets**:
+```bash
+bun --cwd packages/server run scripts/generate-duel-oracle-wallets.ts
+```
+
+**Deploy EVM Contracts**:
+```bash
+bun --cwd packages/duel-oracle-evm run deploy:base-sepolia
+bun --cwd packages/duel-oracle-evm run deploy:bsc-testnet
+bun --cwd packages/duel-oracle-evm run deploy:avax-fuji
+```
+
+**Deploy Solana Program**:
+```bash
+cd packages/duel-oracle-solana/anchor
+ANCHOR_WALLET=/path/to/solana-devnet.json bash scripts/deploy-fight-oracle.sh devnet
+ANCHOR_WALLET=/path/to/solana-mainnet.json bash scripts/deploy-fight-oracle.sh mainnet-beta
+```
+
+**Verify Deployment**:
+```bash
+# Check recent oracle records
+curl http://localhost:5555/api/duel-arena/oracle/recent
+
+# Check specific duel
+curl http://localhost:5555/api/duel-arena/oracle/duels/<duelId>
+```
+
+See `docs/duel-arena-oracle-deploy.md` for complete deployment guide.
 
 ## Agent Memory Management (March 2026)
 
@@ -408,6 +500,17 @@ STREAM_PLACEHOLDER_ENABLED=true  # Enable placeholder mode (default: false)
 - Stabilized vegetation concurrency test
 - Fixed asset forge CI module resolution
 
+### Workflow Dependency Resolution
+
+**Fix** (commit 2d63ce1): Resolved workflow dependency issues in GitHub Actions.
+
+**Changes**:
+- Fixed dependency resolution in CI workflows
+- Ensures proper build order and caching
+- Prevents intermittent CI failures
+
+**Impact**: More reliable CI/CD pipeline with consistent builds.
+
 ## Code Quality Improvements (March 2026)
 
 ### GLTFExporter Static Imports (PR #989)
@@ -561,6 +664,62 @@ background-image:
 
 **Impact**: Eliminates HTTP request for background image, faster initial render, smaller bundle size.
 
+## EVM Contract Improvements (March 2026)
+
+### Typed Contract Helpers (PR #989)
+
+**Feature**: Added type-safe deployment helpers for Hardhat contracts.
+
+**New File**: `packages/evm-contracts/typed-contracts.ts`
+
+**Exports**:
+- `GoldClobContract` - Type-safe GoldClob contract interface
+- `SkillOracleContract` - Type-safe SkillOracle contract interface
+- `MockERC20Contract` - Type-safe MockERC20 contract interface
+- `AgentPerpEngineContract` - Type-safe AgentPerpEngine contract interface
+- `AgentPerpEngineNativeContract` - Type-safe AgentPerpEngineNative contract interface
+- `deployGoldClob()` - Type-safe deployment helper
+- `deploySkillOracle()` - Type-safe deployment helper
+- `deployMockErc20()` - Type-safe deployment helper
+- `deployAgentPerpEngine()` - Type-safe deployment helper
+- `deployAgentPerpEngineNative()` - Type-safe deployment helper
+
+**Usage**:
+```typescript
+import { deployGoldClob } from "../typed-contracts";
+
+const clob = await deployGoldClob(treasury.address, marketMaker.address);
+await clob.waitForDeployment();
+const clobAddress = await clob.getAddress();
+```
+
+**Impact**: Eliminates manual type casting and provides compile-time type safety for contract interactions.
+
+### Deployment Metadata Centralization (PR #989)
+
+**Feature**: Centralized deployment metadata and receipt management.
+
+**New Files**:
+- `packages/evm-contracts/scripts/deploy.ts` - Enhanced deploy script with receipt writing
+- `packages/evm-contracts/deployments/<network>.json` - Per-network deployment receipts
+
+**Deployment Receipt Format**:
+```json
+{
+  "network": "bscTestnet",
+  "chainId": 97,
+  "deployer": "0x...",
+  "goldClobAddress": "0x...",
+  "treasuryAddress": "0x...",
+  "marketMakerAddress": "0x...",
+  "goldTokenAddress": "0x...",
+  "deploymentTxHash": "0x...",
+  "deployedAt": "2026-03-08T11:42:55.000Z"
+}
+```
+
+**Impact**: Provides auditable deployment history and simplifies contract address management.
+
 ## MUD Contracts (March 2026)
 
 ### World Address Update
@@ -662,5 +821,35 @@ MUD world contract redeployed to local chain (31337):
 - Reduced excessive runtime logging for cleaner console output
 - Improved signal-to-noise ratio for debugging
 - Maintains critical error and warning logs
+
+## Betting Stack Split (March 2026)
+
+### Repository Separation
+
+**Change** (commit 428329d): The betting stack has been split into a separate repository for independent development and deployment.
+
+**New Repository**: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
+
+**Moved Packages**:
+- `gold-betting-demo` - Betting frontend and keeper API
+- `evm-contracts` - EVM smart contracts (GoldClob, AgentPerpEngine, SkillOracle)
+- `sim-engine` - Cross-chain risk simulation and attack fuzzing
+- `market-maker-bot` - Automated liquidity seeding
+
+**Remaining in Hyperscape**:
+- `duel-oracle-evm` - EVM duel outcome oracle contracts (separate from betting)
+- `duel-oracle-solana` - Solana duel outcome oracle program (separate from betting)
+- Oracle publisher and metadata API in `packages/server/src/oracle/`
+
+**Rationale**:
+- **Independent Deployment**: Betting stack can be deployed and updated separately from game server
+- **Cleaner Separation**: Oracle (verifiable duel outcomes) vs Betting (financial markets)
+- **Reduced Complexity**: Smaller monorepo with focused scope
+- **Better CI/CD**: Separate workflows for game vs betting deployments
+
+**Migration Notes**:
+- Oracle functionality remains in Hyperscape for duel outcome verification
+- Betting markets consume oracle data from Hyperscape's metadata API
+- Cross-repository integration via REST APIs and blockchain events
 
 See CLAUDE.md for complete documentation.
