@@ -459,7 +459,6 @@ If seeing "timeout exceeded when trying to connect" errors:
 - [AGENTS.md](AGENTS.md) - AI coding assistant instructions and feature documentation
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
-- [docs/betting-production-deploy.md](docs/betting-production-deploy.md) - Betting stack deployment guide (Cloudflare + Railway)
-- [docs/evm-contracts-deployment.md](docs/evm-contracts-deployment.md) - EVM contract deployment guide (BSC, Base)
 - [docs/duel-stack.md](docs/duel-stack.md) - Duel stack documentation
+- [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet) - Betting stack (separate repository)
 - Game Design Document: See `.cursor/rules/gdd.mdc`
