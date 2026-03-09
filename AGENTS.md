@@ -149,17 +149,18 @@ packages/
 
 **Impact**: Seamless database mode switching without manual configuration.
 
-### Streaming Pipeline Fixes (Commits 41dc606, 71dcba8)
+### Streaming Pipeline Fixes (Commits 41dc606, 71dcba8, 547714e)
 
-**Change**: Fixed RTMP streaming pipeline to correctly enable Twitch and Kick destinations.
+**Change**: Fixed RTMP streaming pipeline to correctly enable Twitch and Kick destinations with Chrome Beta.
 
 **Fixes**:
-- **Auto-Detection**: `deploy-vast.sh` now auto-detects enabled destinations from available stream keys using `||` logic
-- **PM2 Environment**: `ecosystem.config.cjs` explicitly forwards stream keys through PM2 environment
-- **Secret Aliases**: `deploy-vast.yml` adds `TWITCH_RTMP_STREAM_KEY` alias to secrets file for compatibility
+- **Auto-Detection**: `scripts/deploy-vast.sh` now auto-detects enabled destinations from available stream keys using `||` logic
+- **PM2 Environment**: `ecosystem.config.cjs` explicitly forwards stream keys, `DISPLAY`, and `DATABASE_URL` through PM2 environment
+- **Secret Aliases**: `.github/workflows/deploy-vast.yml` adds `TWITCH_RTMP_STREAM_KEY` alias to secrets file for compatibility
 - **Stream Entry Points**: Added dedicated `stream.html` and `stream.tsx` for optimized streaming capture
-- **Viewport Mode Detection**: `clientViewportMode` utility automatically detects stream/spectator/normal modes
+- **Viewport Mode Detection**: `packages/shared/src/runtime/clientViewportMode.ts` utility automatically detects stream/spectator/normal modes
 - **Multi-Page Build**: Vite now builds separate bundles for game and streaming entry points
+- **Chrome Beta**: Switched to `google-chrome-beta` with default ANGLE backend for better stability
 
 **Environment Variables**:
 ```bash
@@ -173,9 +174,16 @@ TWITCH_RTMP_STREAM_KEY=live_123456789_abcdefghij
 # Kick
 KICK_STREAM_KEY=your-kick-stream-key
 KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
+
+# Streaming capture configuration
+STREAM_CAPTURE_CHANNEL=chrome-beta
+STREAM_CAPTURE_ANGLE=default
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+DISPLAY=:99
 ```
 
-**Impact**: Reliable multi-platform RTMP streaming with automatic destination detection and proper secret forwarding.
+**Impact**: Reliable multi-platform RTMP streaming with automatic destination detection, proper secret forwarding, and stable Chrome Beta rendering.
 
 ### CSRF Fix for Cross-Origin Clients (Commit 0b1a0bd, PR #991)
 
