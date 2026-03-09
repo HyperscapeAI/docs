@@ -72,10 +72,6 @@ cp packages/plugin-hyperscape/.env.example packages/plugin-hyperscape/.env
 # Asset generation tools (only if using bun run dev:forge)
 cp packages/asset-forge/.env.example packages/asset-forge/.env
 # Edit and set OPENAI_API_KEY, MESHY_API_KEY
-
-# Betting stack (only if using bun run duel)
-cp packages/gold-betting-demo/.env.example packages/gold-betting-demo/.env
-# Edit and set Solana/EVM RPC URLs and contract addresses
 ```
 
 ### Run the Game
