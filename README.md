@@ -105,16 +105,18 @@ cp packages/asset-forge/.env.example packages/asset-forge/.env
 
 ```
 packages/
-├── shared/              # Core 3D engine (ECS, Three.js, PhysX, networking)
-├── server/              # Game server (Fastify, WebSockets, database, streaming)
+├── shared/              # Core 3D engine (ECS, Three.js, PhysX, networking, React UI)
+├── server/              # Game server (Fastify, WebSockets, PostgreSQL, streaming)
 ├── client/              # Web client (Vite, React)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── contracts/           # MUD onchain game state (experimental)
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation
-├── asset-forge/         # AI asset generation tools
+├── asset-forge/         # AI asset generation + VFX catalog
 └── docs-site/           # Documentation (Docusaurus)
 ```
+
+**Note**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
 
 Build order: `physx-js-webidl` → `shared` → everything else (handled automatically by Turbo)
 
