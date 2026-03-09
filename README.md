@@ -7,10 +7,12 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 ## What Makes Hyperscape Unique
 
 - **AI Agents as Players**: Autonomous agents powered by ElizaOS that fight, skill, trade, and make decisions using LLMs
+- **13 Frontier AI Models**: GPT-5, Claude 4.6 (Sonnet/Opus), Gemini 3.1 Pro, Grok 4, Llama 4 Maverick, Magistral Medium, DeepSeek V3.2, Qwen 3 Max, Minimax M2.5, GLM-5, Kimi K2.5, Seed 1.8 (all via ElizaCloud)
 - **True OSRS Mechanics**: Authentic tick-based combat (600ms ticks), safespotting, tile-based movement, and classic progression systems
 - **Manifest-Driven Design**: Add NPCs, items, and content by editing JSON files—no code changes required
 - **Spectator Mode**: Watch agents play in real-time and observe their decision-making process
 - **Duel Arena Oracle**: Verifiable duel outcomes published to multiple blockchains (Solana, Base, BSC, Avalanche)
+- **Streaming System**: Multi-platform RTMP streaming to Twitch, YouTube, Kick, and custom destinations
 - **Open Source**: Built on open technology with extensible architecture
 
 ## Core Features
@@ -22,6 +24,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **Economy** | 480-slot bank, shops, item weights, loot drops |
 | **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
 | **Duel Arena** | Streaming duel scheduler, oracle integration, verifiable outcomes |
+| **Streaming** | Multi-platform RTMP streaming, dedicated stream entry points, viewer access control |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
 | **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics, WebGPU rendering |
 
@@ -72,6 +75,10 @@ cp packages/plugin-hyperscape/.env.example packages/plugin-hyperscape/.env
 # Asset generation tools (only if using bun run dev:forge)
 cp packages/asset-forge/.env.example packages/asset-forge/.env
 # Edit and set OPENAI_API_KEY, MESHY_API_KEY
+
+# ElizaCloud AI models (for duel arena agents)
+# Add to packages/server/.env:
+# ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
 ```
 
 ### Run the Game
@@ -230,6 +237,20 @@ For GPU-accelerated streaming duel arena deployment on Vast.ai, see:
 - `scripts/deploy-vast.sh` - Deployment script
 - `docs/duel-stack.md` - Duel stack documentation
 
+**Requirements**:
+- NVIDIA GPU with display driver (`gpu_display_active=true`)
+- Chrome Dev channel with WebGPU support
+- Xorg or Xvfb for window context
+- FFmpeg for RTMP streaming
+
+**Streaming Destinations**:
+- Twitch (via `TWITCH_STREAM_KEY` or `TWITCH_RTMP_STREAM_KEY`)
+- YouTube (via `YOUTUBE_STREAM_KEY` or `YOUTUBE_RTMP_STREAM_KEY`)
+- Kick (via `KICK_STREAM_KEY`)
+- Custom RTMP servers (via `RTMP_DESTINATIONS_JSON`)
+
+**Auto-Detection**: The deployment script automatically detects enabled destinations from available stream keys.
+
 ### Duel Arena Oracle
 
 The duel arena oracle publishes verifiable duel outcomes to multiple blockchains:
@@ -252,10 +273,18 @@ The duel arena oracle publishes verifiable duel outcomes to multiple blockchains
 - Betting window timestamps
 - Fight start time
 - Winner/loser IDs
-- Win reason
+- Win reason (knockout, timeout, forfeit, draw)
 - Damage dealt by each participant
 - Cryptographic seed and replay hash
 - Result hash for integrity verification
+
+**Configuration**:
+```bash
+# packages/server/.env
+DUEL_ARENA_ORACLE_ENABLED=true
+DUEL_ARENA_ORACLE_PROFILE=testnet  # or mainnet
+DUEL_ARENA_ORACLE_METADATA_BASE_URL=https://api.hyperscape.gg/api/duel-arena/oracle
+```
 
 ### Betting Stack (Separate Repository)
 
@@ -349,9 +378,28 @@ bun run build
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
 
+**CSRF 403 errors on account creation:**
+If you're running the client on localhost against a deployed server, ensure:
+- `UsernameSelectionScreen` includes the Privy auth token in the Authorization header
+- CSRF middleware allows localhost/private IP origins
+- Fixed in commit 0b1a0bd (PR #991)
+
 ## Recent Updates (March 2026)
 
-### ElizaCloud Integration (commit 4d1eb53)
+### Streaming Pipeline Fixes (March 9, 2026)
+- **Auto-Detection**: Stream destinations now auto-detected from available keys (Twitch, Kick, YouTube)
+- **PM2 Integration**: Explicit stream key forwarding through PM2 environment
+- **Secret Aliases**: Support for both `TWITCH_STREAM_KEY` and `TWITCH_RTMP_STREAM_KEY` formats
+- **Dedicated Entry Points**: New `stream.html` and `stream.tsx` for optimized streaming capture
+- **Multi-Page Build**: Separate Vite bundles for game and streaming with reduced bundle size
+
+### CSRF Cross-Origin Fix (March 9, 2026)
+- **Authorization Header**: Account creation now includes Privy auth token to bypass CSRF validation
+- **Token Parsing**: Client accepts both `{ token }` and `{ csrfToken }` response formats
+- **Origin Patterns**: Added localhost and private-IP patterns to CSRF middleware
+- **Impact**: Cross-origin local development works without 403 errors
+
+### ElizaCloud Integration (March 9, 2026)
 - **Unified AI Provider**: All AI agents now route through `@elizaos/plugin-elizacloud` with a single API key
 - **13 Frontier Models**: Access to GPT-5, Claude 4.6 (Sonnet/Opus), Gemini 3.1 Pro, Grok 4, Llama 4 Maverick, Magistral Medium, DeepSeek V3.2, Qwen 3 Max, Minimax M2.5, GLM-5, Kimi K2.5, and Seed 1.8
 - **Simplified Configuration**: One `ELIZAOS_CLOUD_API_KEY` replaces multiple provider-specific keys
@@ -360,15 +408,13 @@ bun run build
 
 **Migration**: Set `ELIZAOS_CLOUD_API_KEY` in `packages/server/.env` to enable all 13 AI models. Individual provider keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.) are no longer required for duel arena agents.
 
-### Streaming System (commit 71dcba8)
-- **Dedicated Stream Entry Points**: New `stream.html` and `stream.tsx` for optimized streaming capture
-- **Viewport Mode Detection**: `clientViewportMode` utility automatically detects stream/spectator/normal modes
-- **Multi-Page Vite Build**: Separate entry points for game and streaming with optimized bundles
-- **Stream Destinations Module**: Configurable RTMP destinations for Twitch, YouTube, and custom servers
-- **Viewer Access Tokens**: Secure token-based access control for stream viewers
-- **Offer Utils**: Vast.ai GPU instance filtering and sorting for optimal streaming performance
+### Betting Stack Split (March 9, 2026)
+- **Separate Repository**: Betting stack moved to [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
+- **Independent Deployment**: Betting frontend, keeper API, contracts, and market maker bot now deploy separately
+- **Oracle Remains**: Duel arena oracle stays in Hyperscape for verifiable outcome publishing
+- **Integration**: Betting markets consume oracle data via REST API and blockchain events
 
-### Oracle Enhancements (commit 71dcba8, aecab58)
+### Oracle Enhancements (March 9, 2026)
 - **Damage Tracking**: New `damageA` and `damageB` fields track total damage dealt by each participant
 - **Verification Fields**: Added `seed`, `replayHashHex`, and `resultHashHex` for deterministic replay verification
 - **Win Reason**: Detailed win reason tracking (knockout, timeout, forfeit, draw)
@@ -376,20 +422,36 @@ bun run build
 - **Solana Config**: Centralized program ID configuration in `config.json`
 - **Local Verification**: `verify-duel-oracle-local` script for testing oracle integration
 
-### WebGPU Improvements (commit 71dcba8)
+### WebGPU Improvements (March 9, 2026)
 - **Buffer Upload Fallback**: Automatic fallback for `mappedAtCreation` failures in WebGPU buffer uploads
 - **Null Safety**: Fixed physics utils, collider, and rigidbody null pointer exceptions
 - **Particle Manager Fixes**: Resolved JSON parsing errors in particle systems
 - **Vegetation System**: Fixed JSON parsing in vegetation generation
 
+### Code Quality (March 8-9, 2026)
+- **GLTFExporter Static Imports**: Converted dynamic imports to static imports in asset-forge for better tree-shaking
+- **VFX Preview Cleanup**: Removed unused variables and dead code paths (opacity, primaryColor, whiteGlow, ringMat)
+- **Client Panel Optimization**: Un-lazified critical game panels (Inventory, Stats, Prayer, Spells) for faster initial load
+- **Dashboard Background**: Replaced image-based background with CSS gradients (eliminates HTTP request)
+- **Logger Import**: Converted dynamic logger import to static import in client entry point
+- **Typed Contract Helpers**: Added type-safe deployment helpers for EVM contracts with full TypeScript interfaces
+- **WeaponHandleDetector**: Cross-runtime file writing utility supports both Bun and Node.js
+- **Bundle Size Limits**: Increased `chunkSizeWarningLimit` to 8000KB (client) and 9000KB (asset-forge) for WebGPU/PhysX bundles
+- **TypeScript Fixes**: Resolved TS18048 errors for import.meta.env values using nullish coalescing
+
+### Testing & CI (March 9, 2026)
+- **Vitest 4.x Upgrade**: Required for Vite 6 compatibility (fixes `__vite_ssr_exportName__` errors)
+- **CI Stabilization**: Fixed workflow dependency resolution and test reliability
+- **Workflow Improvements**: Enhanced GitHub Actions dependency resolution for more reliable builds
+
 ### Architecture Changes
-- **Betting Stack Split**: The betting stack has been moved to a separate repository ([HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)) for independent development and deployment (commit 428329d)
-- **Duel Arena Oracle**: New oracle system publishes verifiable duel outcomes to Solana, Base, BSC, and Avalanche (commit aecab58)
+- **Betting Stack Split**: The betting stack has been moved to a separate repository ([HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)) for independent development and deployment
+- **Duel Arena Oracle**: New oracle system publishes verifiable duel outcomes to Solana, Base, BSC, and Avalanche
 - **Oracle Metadata API**: REST endpoints for duel metadata and recent oracle records
-- **ElizaOS Alpha Alignment**: All ElizaOS packages aligned to `alpha` tag (^2.0.0-alpha.x) for stable versioned releases (commit 6d67ec1)
+- **ElizaOS Alpha Alignment**: All ElizaOS packages aligned to `alpha` tag (^2.0.0-alpha.x) for stable versioned releases
 
 ### Agent Memory Management
-- **PGLite Removal**: Completely removed PGLite WASM dependency and SQL plugin (commits 429bfbf, 788036d)
+- **PGLite Removal**: Completely removed PGLite WASM dependency and SQL plugin
 - **InMemoryDatabaseAdapter Migration**: Reduced agent memory footprint from 38-76GB to <5GB for 19 agents by eliminating PGLite WASM overhead
 - **Memory Caps**: Ring buffer limits (50 memories per agent), adapter log caps (20 entries), cache caps (100 entries with LRU eviction)
 - **Periodic GC**: Non-blocking garbage collection every 60s to reclaim short-lived allocations
@@ -401,7 +463,6 @@ bun run build
 - **Skill-Based Weapons**: Three-source weapon scoring (equipped/inventory/manifest) with tier-based selection
 - **Strategic Combat AI**: LLM-generated fight plans, phase-aware healing, movement strategies (chase/kite/circle/hold), dynamic style/prayer switching
 - **On-Deck Notifications**: Agents get full fight duration (~5+ min) to prepare instead of ~4s countdown
-- **18 Audit Fixes**: Prayer IDs, combat AI improvements, broadcast enhancements, simultaneous death handling, draw outcomes, streaming duel history
 - **Oracle Integration**: Duel outcomes published to blockchain with damage stats, win reason, seed, and replay hash
 
 ### Server Features
@@ -410,31 +471,12 @@ bun run build
 - **Railway Detection**: Automatic connection pooling optimizations for Railway deployments
 - **Oracle Publisher**: Multi-chain oracle publisher with automatic retry and state persistence
 
-### Testing & CI
-- **Vitest 4.x Upgrade**: Required for Vite 6 compatibility (fixes `__vite_ssr_exportName__` errors) (commit a916e4e)
-- **CI Stabilization**: Fixed client test runner, duel agent tests, vegetation concurrency tests, asset forge module resolution (commits 23323ac, 2ae03b4, 83a3452, 4b47012, dd991f4)
-- **Workflow Dependency Resolution**: Improved GitHub Actions dependency resolution for more reliable builds (commit 2d63ce1)
-
-### Deployment (commit 71dcba8)
+### Deployment Improvements
 - **Vast.ai Enhancements**: Production env passthrough, SSH-local health checks, targeted process killing, graceful PM2 shutdown, deterministic migrations
 - **Streaming Configuration**: Aligned stream defaults with Twitch production requirements, codified vast stream deployment parity
 - **Ecosystem Config**: Updated PM2 configuration for new deployment targets (stream, oracle, duel scheduler)
 - **Deploy Scripts**: Enhanced `deploy-vast.sh` and `vast-provision.sh` with streaming support
 - **Cloudflare Workflows**: Updated `deploy-cloudflare` and `deploy-pages` workflows for multi-page builds
-
-### Code Quality (PR #989, commit 71dcba8)
-- **GLTFExporter Static Imports**: Converted dynamic imports to static imports in asset-forge for better tree-shaking
-- **VFX Preview Cleanup**: Removed unused variables and dead code paths (opacity, primaryColor, whiteGlow, ringMat)
-- **Client Panel Optimization**: Un-lazified critical game panels (Inventory, Stats, Prayer, Spells) for faster initial load
-- **Dashboard Background**: Replaced image-based background with CSS gradients (eliminates HTTP request)
-- **Logger Import**: Converted dynamic logger import to static import in client entry point
-- **Typed Contract Helpers**: Added type-safe deployment helpers for EVM contracts with full TypeScript interfaces
-- **WeaponHandleDetector**: Cross-runtime file writing utility supports both Bun and Node.js
-- **Bundle Size Limits**: Increased `chunkSizeWarningLimit` to 8000KB (client) and 9000KB (asset-forge) for WebGPU/PhysX bundles
-
-### Branding
-- **Git LFS Integration**: Binary branding files (.ai, .eps, .pdf, .png, .jpg) now tracked via Git LFS to prevent repo bloat (~28 MB)
-- **Documentation**: `publishing/branding/README.md` documents logo variants and usage guidelines
 
 ### Network & Rendering
 - **Interpolation Engine Fixes**: Fixed position conflicts between tile-based and interpolated movement, proper quaternion slerp, dead entity skip
