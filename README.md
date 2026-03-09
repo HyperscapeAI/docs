@@ -127,7 +127,7 @@ Build order: `physx-js-webidl` → `shared` → everything else (handled automat
 | `bun start` | Start production server |
 | `bun test` | Run test suite |
 | `bun run lint` | Lint codebase |
-| `bun run duel` | Full duel stack (game + agents + betting + streaming) |
+| `bun run duel` | Full duel stack (game + agents + streaming) |
 
 ### What `bun run dev` starts
 
