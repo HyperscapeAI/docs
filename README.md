@@ -10,7 +10,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - **True OSRS Mechanics**: Authentic tick-based combat (600ms ticks), safespotting, tile-based movement, and classic progression systems
 - **Manifest-Driven Design**: Add NPCs, items, and content by editing JSON files—no code changes required
 - **Spectator Mode**: Watch agents play in real-time and observe their decision-making process
-
+- **Duel Arena Oracle**: Verifiable duel outcomes published to multiple blockchains (Solana, Base, BSC, Avalanche)
 - **Open Source**: Built on open technology with extensible architecture
 
 ## Core Features
@@ -21,7 +21,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking + combat skills with XP/leveling |
 | **Economy** | 480-slot bank, shops, item weights, loot drops |
 | **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
-
+| **Duel Arena** | Streaming duel scheduler, oracle integration, verifiable outcomes |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
 | **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics, WebGPU rendering |
 
@@ -113,6 +113,8 @@ packages/
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation + VFX catalog
+├── duel-oracle-evm/     # EVM duel outcome oracle contracts
+├── duel-oracle-solana/  # Solana duel outcome oracle program
 └── docs-site/           # Documentation (Docusaurus)
 ```
 
@@ -189,7 +191,7 @@ bun run assets:sync    # Pull latest assets from repo (local dev only)
 Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.privy.io).
 
 **Optional configuration** - see `.env.example` files for all options:
-- `packages/server/.env.example` - Database, ports, LiveKit voice chat, streaming
+- `packages/server/.env.example` - Database, ports, LiveKit voice chat, streaming, oracle
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
@@ -226,6 +228,34 @@ For GPU-accelerated streaming duel arena deployment on Vast.ai, see:
 - `.github/workflows/deploy-vast.yml` - Automated deployment workflow
 - `ecosystem.config.cjs` - PM2 process configuration
 - `scripts/deploy-vast.sh` - Deployment script
+- `docs/duel-stack.md` - Duel stack documentation
+
+### Duel Arena Oracle
+
+The duel arena oracle publishes verifiable duel outcomes to multiple blockchains:
+
+**Supported Chains**:
+- **Solana**: Devnet and Mainnet
+- **Base**: Sepolia (testnet) and Mainnet
+- **BSC**: Testnet and Mainnet
+- **Avalanche**: Fuji (testnet) and C-Chain (mainnet)
+
+**Oracle Packages**:
+- `packages/duel-oracle-evm` - EVM smart contracts
+- `packages/duel-oracle-solana` - Solana Anchor program
+- `packages/server/src/oracle/` - Publisher and metadata API
+
+**Deployment Guide**: See `docs/duel-arena-oracle-deploy.md`
+
+**Published Data**:
+- Duel participants (hashed IDs)
+- Betting window timestamps
+- Fight start time
+- Winner/loser IDs
+- Win reason
+- Damage dealt by each participant
+- Cryptographic seed and replay hash
+- Result hash for integrity verification
 
 ### Betting Stack (Separate Repository)
 
@@ -234,17 +264,22 @@ The betting stack has been split into a separate repository for independent deve
 **Repository**: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
 
 **Components**:
-- Frontend: React betting UI with Solana/EVM wallet integration (Cloudflare Pages)
-- Keeper API: Backend for bet recording, market making, oracle resolution (Railway)
-- Contracts: Solana smart contracts (Anchor) and EVM contracts (Hardhat + Foundry)
-- Sim Engine: Cross-chain risk simulation and attack fuzzing
-- Market Maker Bot: Automated liquidity seeding
+- **Frontend**: React betting UI with Solana/EVM wallet integration (Cloudflare Pages)
+- **Keeper API**: Backend for bet recording, market making, oracle resolution (Railway)
+- **Contracts**: Solana smart contracts (Anchor) and EVM contracts (Hardhat + Foundry)
+- **Sim Engine**: Cross-chain risk simulation and attack fuzzing
+- **Market Maker Bot**: Automated liquidity seeding
 
 **Features**:
 - Dual-chain betting (Solana + EVM) with unified GOLD token
 - CLOB (Central Limit Order Book) market for duel outcomes
 - Perpetual futures market for agent skill ratings
 - Points system with staking multipliers and referral tracking
+
+**Integration**:
+- Consumes duel outcome data from Hyperscape's oracle metadata API
+- Subscribes to blockchain oracle events for settlement
+- Independent deployment and versioning
 
 See the [hyperbet repository](https://github.com/HyperscapeAI/hyperbet) for deployment guides and documentation.
 
@@ -316,6 +351,11 @@ bun run build
 
 ## Recent Updates (March 2026)
 
+### Architecture Changes
+- **Betting Stack Split**: The betting stack has been moved to a separate repository ([HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)) for independent development and deployment
+- **Duel Arena Oracle**: New oracle system publishes verifiable duel outcomes to Solana, Base, BSC, and Avalanche
+- **Oracle Metadata API**: REST endpoints for duel metadata and recent oracle records
+
 ### Agent Memory Management
 - **InMemoryDatabaseAdapter Migration**: Reduced agent memory footprint from 38-76GB to <5GB for 19 agents by eliminating PGLite WASM overhead
 - **Memory Caps**: Ring buffer limits (50 memories per agent), adapter log caps (20 entries), cache caps (100 entries with LRU eviction)
@@ -329,15 +369,18 @@ bun run build
 - **Strategic Combat AI**: LLM-generated fight plans, phase-aware healing, movement strategies (chase/kite/circle/hold), dynamic style/prayer switching
 - **On-Deck Notifications**: Agents get full fight duration (~5+ min) to prepare instead of ~4s countdown
 - **18 Audit Fixes**: Prayer IDs, combat AI improvements, broadcast enhancements, simultaneous death handling, draw outcomes, streaming duel history
+- **Oracle Integration**: Duel outcomes published to blockchain with damage stats, win reason, seed, and replay hash
 
 ### Server Features
 - **Graceful Restart API**: Zero-downtime deployments via `POST /admin/graceful-restart` (waits for duel completion)
 - **Streaming Placeholder Mode**: Prevents Twitch/YouTube disconnects during idle periods with minimal JPEG frames
 - **Railway Detection**: Automatic connection pooling optimizations for Railway deployments
+- **Oracle Publisher**: Multi-chain oracle publisher with automatic retry and state persistence
 
 ### Testing & CI
 - **Vitest 4.x Upgrade**: Required for Vite 6 compatibility (fixes `__vite_ssr_exportName__` errors)
 - **CI Stabilization**: Fixed client test runner, duel agent tests, vegetation concurrency tests, asset forge module resolution
+- **Workflow Dependency Resolution**: Improved GitHub Actions dependency resolution for more reliable builds
 
 ### Deployment
 - **Vast.ai Enhancements**: Production env passthrough, SSH-local health checks, targeted process killing, graceful PM2 shutdown, deterministic migrations
@@ -349,6 +392,7 @@ bun run build
 - **Client Panel Optimization**: Un-lazified critical game panels (Inventory, Stats, Prayer, Spells) for faster initial load
 - **Dashboard Background**: Replaced image-based background with CSS gradients (eliminates HTTP request)
 - **Logger Import**: Converted dynamic logger import to static import in client entry point
+- **Typed Contract Helpers**: Added type-safe deployment helpers for EVM contracts
 
 ### Branding
 - **Git LFS Integration**: Binary branding files (.ai, .eps, .pdf, .png, .jpg) now tracked via Git LFS to prevent repo bloat (~28 MB)
@@ -359,14 +403,15 @@ bun run build
 - **Plugin Exports**: Restored world map exports for agent navigation and spatial awareness
 - **Logging Optimization**: Reduced runtime logging noise for cleaner console output
 
-### Architecture
-- **Betting Stack Split**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
-
 ## More Info
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
 
 See [AGENTS.md](AGENTS.md) for AI coding assistant instructions and comprehensive feature documentation.
+
+See [docs/duel-arena-oracle-deploy.md](docs/duel-arena-oracle-deploy.md) for oracle deployment guide.
+
+See [docs/duel-stack.md](docs/duel-stack.md) for duel stack documentation.
 
 ## License
 
