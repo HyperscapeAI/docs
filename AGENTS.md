@@ -29,6 +29,7 @@ This is a hard requirement. DO NOT:
 - **Display Driver vs Compute**: WebGPU requires GPU display driver support, not just compute access
 - Must run non-headless with Xorg or Xvfb (WebGPU requires window context)
 - Chrome uses ANGLE/Vulkan for WebGPU
+- **Xvfb Virtual Display**: `deploy-vast.sh` starts Xvfb before PM2 to ensure DISPLAY is available
 - If WebGPU cannot initialize, deployment MUST FAIL
 
 ## Project Overview
