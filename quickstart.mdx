@@ -110,25 +110,34 @@ bun run duel
 This starts:
 - Game server with streaming duel scheduler
 - Duel matchmaker bots (AI agents fighting each other)
-- RTMP bridge for multi-platform streaming (Twitch, YouTube)
+- RTMP bridge for multi-platform streaming (Twitch, Kick, X/Twitter)
 - Local HLS stream for web playback
-- Betting app with Solana integration (devnet)
-- Keeper bot for automated market operations
 
 **Streaming Options:**
 ```bash
 bun run duel --bots=8              # Start with 8 duel bots
 bun run duel --skip-betting        # Skip betting app (stream only)
 bun run duel --skip-stream         # Skip RTMP/HLS (betting only)
-bun run duel --with-mm             # Enable market maker bots
 ```
 
 **RTMP Configuration:**
 Set stream keys in `packages/server/.env`:
 ```bash
-TWITCH_STREAM_KEY=live_123456789_abcdefghij
-YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+# ElizaCloud (recommended for AI agents)
+ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
+
+# Streaming platforms
+TWITCH_RTMP_STREAM_KEY=live_123456789_abcdefghij
+KICK_STREAM_KEY=your-kick-stream-key
+X_STREAM_KEY=your-x-stream-key
+
+# Stream destinations auto-detected from configured keys
+# Or explicitly set: STREAM_ENABLED_DESTINATIONS=twitch,kick,x
 ```
+
+<Info>
+  The betting stack has been moved to a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet). The duel oracle remains in Hyperscape for verifiable outcome publishing.
+</Info>
 
 ## What Gets Started
 
