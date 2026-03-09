@@ -95,6 +95,46 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### ElizaCloud Plugin Integration (Commit 4d1eb53)
+
+**Change**: All duel arena AI agents now route through `@elizaos/plugin-elizacloud` for unified model access.
+
+**New Dependency**:
+- `@elizaos/plugin-elizacloud`: `^1.8.0`
+
+**13 Frontier Models** (all via ElizaCloud):
+
+**American Models**:
+- `openai/gpt-5` - GPT-5
+- `anthropic/claude-sonnet-4.6` - Claude Sonnet 4.6
+- `anthropic/claude-opus-4.6` - Claude Opus 4.6
+- `google/gemini-3.1-pro-preview` - Gemini 3.1 Pro
+- `xai/grok-4` - Grok 4
+- `meta/llama-4-maverick` - Llama 4 Maverick
+- `mistral/magistral-medium` - Magistral Medium
+
+**Chinese Models**:
+- `deepseek/deepseek-v3.2` - DeepSeek V3.2
+- `alibaba/qwen3-max` - Qwen 3 Max
+- `minimax/minimax-m2.5` - Minimax M2.5
+- `zai/glm-5` - GLM-5
+- `moonshotai/kimi-k2.5` - Kimi K2.5
+- `bytedance/seed-1.8` - Seed 1.8
+
+**Configuration**:
+```bash
+# packages/server/.env
+ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
+```
+
+**Impact**: 
+- Simplified configuration (one API key instead of multiple provider keys)
+- Access to 13 frontier models from 7 American and 6 Chinese providers
+- Consistent model routing and error handling
+- Reduced dependency complexity
+
+**Migration**: Individual provider plugins (`@elizaos/plugin-openai`, `@elizaos/plugin-anthropic`, `@elizaos/plugin-groq`) are still installed for backward compatibility but are no longer used by duel arena agents.
+
 ### ElizaOS Alpha Package Alignment (Commit 6d67ec1)
 
 **Change**: Aligned all ElizaOS packages to `alpha` tag for stable releases.
