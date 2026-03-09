@@ -396,7 +396,7 @@ bun run build
 - **DB Pool Optimization**: Concurrency limiting (max 5 concurrent bank queries), staggered refresh intervals, increased pool sizes
 
 ### Duel System Enhancements
-- **19 AI Models**: Expanded roster including GPT-4.1, o4 Mini, o3 Mini, Claude Opus 4, Claude Sonnet 4, Llama 3.3 70B
+- **13 Frontier AI Models**: GPT-5, Claude 4.6 (Sonnet/Opus), Gemini 3.1 Pro, Grok 4, Llama 4 Maverick, Magistral Medium, DeepSeek V3.2, Qwen 3 Max, Minimax M2.5, GLM-5, Kimi K2.5, Seed 1.8 (all via ElizaCloud)
 - **Activity-Aware Camera**: Weighted agent selection prioritizing combat > skilling > moving > idle
 - **Skill-Based Weapons**: Three-source weapon scoring (equipped/inventory/manifest) with tier-based selection
 - **Strategic Combat AI**: LLM-generated fight plans, phase-aware healing, movement strategies (chase/kite/circle/hold), dynamic style/prayer switching
