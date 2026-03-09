@@ -320,6 +320,16 @@ STREAMING_FIGHTING_MS=150000                    # Fighting phase duration (defau
 STREAMING_END_WARNING_MS=10000                  # End warning duration (default: 10s)
 STREAMING_RESOLUTION_MS=5000                    # Resolution phase duration (default: 5s)
 
+# Streaming Viewer Access Control (March 2026)
+# Optional secret token for trusted live WebSocket viewers/capture clients
+# when delayed public mode is enabled. Loopback viewers are always allowed.
+STREAMING_VIEWER_ACCESS_TOKEN=replace-with-random-secret-token
+
+# Stream Destinations Auto-Detection (March 2026)
+# Automatically enables destinations based on configured stream keys
+# Uses || logic: TWITCH_RTMP_STREAM_KEY || TWITCH_STREAM_KEY
+STREAM_ENABLED_DESTINATIONS=twitch,kick,x       # Comma-separated list (auto-detected if not set)
+
 # PostgreSQL Connection Pool (commit 0c8dbe0, Mar 2 2026)
 # Reduced pool size to prevent connection exhaustion during crash loops
 POSTGRES_POOL_MAX=3                             # Max connections (down from 6)
