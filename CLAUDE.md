@@ -466,5 +466,6 @@ If seeing "timeout exceeded when trying to connect" errors:
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - [docs/duel-stack.md](docs/duel-stack.md) - Duel stack documentation
+- [docs/duel-arena-oracle-deploy.md](docs/duel-arena-oracle-deploy.md) - Oracle deployment guide
 - [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet) - Betting stack (separate repository)
 - Game Design Document: See `.cursor/rules/gdd.mdc`
