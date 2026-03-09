@@ -171,21 +171,41 @@ curl http://localhost:5555/api/duel-arena/oracle/duels/<duelId>
 
 See `docs/duel-arena-oracle-deploy.md` for complete deployment guide.
 
+## ElizaOS Integration (March 2026)
+
+### ElizaOS next-tag Upgrade
+
+**Change** (commit 378058a): Upgraded all ElizaOS packages to `next` tag for latest features and bug fixes.
+
+**Packages Updated**:
+- `@elizaos/core`: `next`
+- `@elizaos/plugin-anthropic`: `next`
+- `@elizaos/plugin-groq`: `next`
+- `@elizaos/plugin-openai`: `next`
+- `@elizaos/plugin-sql`: `next` (removed in commit 788036d)
+- `@elizaos/prompts`: `next`
+
+**Impact**: Access to latest ElizaOS features, performance improvements, and bug fixes. Ensures compatibility with latest LLM provider APIs.
+
+**Migration**: No code changes required - ElizaOS maintains backward compatibility across `next` tag updates.
+
 ## Agent Memory Management (March 2026)
 
-### InMemoryDatabaseAdapter Migration
+### PGLite Removal and InMemoryDatabaseAdapter Migration
 
 **Problem**: Each of 19 agents was allocating ~2-4GB for a PGLite WASM instance they never used (all memory features disabled), causing 38-76GB total memory bloat.
 
-**Solution** (commit 429bfbf): Swap to ElizaOS's built-in InMemoryDatabaseAdapter — zero WASM overhead, all 19 agents still run.
+**Solution** (commits 429bfbf, 788036d): Swap to ElizaOS's built-in InMemoryDatabaseAdapter — zero WASM overhead, all 19 agents still run.
 
 **Changes**:
 - ModelAgentSpawner: pass InMemoryDatabaseAdapter to AgentRuntime, remove SQL plugin loading, PGLite retry/reset logic
 - ElizaDuelBot: same treatment — InMemoryDatabaseAdapter, no SQL plugin
 - agentHelpers: remove PGLITE_DATA_DIR from character secrets
 - Add Bun.gc(true) hint after agent stop for faster memory reclaim
+- Remove `@elizaos/plugin-sql` dependency (commit 788036d)
+- Remove PGLite test fixtures and database adapter tests (commit 788036d)
 
-**Impact**: Reduced agent memory footprint from 38-76GB to <5GB for 19 agents.
+**Impact**: Reduced agent memory footprint from 38-76GB to <5GB for 19 agents. Eliminated PGLite WASM dependency entirely.
 
 ### Memory Accumulation Caps
 
