@@ -677,7 +677,7 @@ Output: `dist/index.js` (bundled server)
 ### Database Connection Pool
 
 **Standard Pool:**
-- Max connections: 30 (increased from 20 for duel prep concurrency)
+- Max connections: 20 (increased from 10 in March 2026)
 - Idle timeout: 30s
 - Connection timeout: 5s
 
@@ -690,7 +690,12 @@ Output: `dist/index.js` (bundled server)
 - Bank queries: Max 5 concurrent (prevents pool exhaustion)
 - Staggered refresh intervals (prevents synchronized DB spikes)
 
-Adjust in `src/database/client.ts` if needed.
+**PM2 Configuration:**
+- `ecosystem.config.cjs` sets `POSTGRES_POOL_MAX=20` and `POSTGRES_POOL_MIN=2`
+- Auto-detects database mode from `DATABASE_URL` hostname
+- Explicitly forwards `DATABASE_URL` and `DISPLAY` environment variables
+
+Adjust in `src/database/client.ts` or `ecosystem.config.cjs` if needed.
 
 ### Asset Caching
 
