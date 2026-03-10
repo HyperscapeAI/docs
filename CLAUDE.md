@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with autonomous AI agents powered by ElizaOS.
+Hyper scape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with autonomous AI agents powered by ElizaOS.
 
 ## CRITICAL: Secrets and Private Keys
 
@@ -43,6 +43,8 @@ For Vast.ai and other GPU servers running the streaming pipeline:
 - **ANGLE Backend**: Use default ANGLE backend (`--use-angle=default`), NOT native Vulkan
 - **Xvfb Virtual Display**: `scripts/deploy-vast.sh` starts Xvfb before PM2 to ensure DISPLAY is available
 - **PM2 Environment**: `ecosystem.config.cjs` explicitly forwards `DISPLAY=:99` and `DATABASE_URL` through PM2
+- **Capture Mode**: Default to `STREAM_CAPTURE_MODE=cdp` (Chrome DevTools Protocol) for reliable frame capture
+- **FFmpeg**: Prefer system ffmpeg over ffmpeg-static to avoid segfaults
 - If GPU cannot initialize WebGPU, deployment MUST FAIL (no soft fallbacks)
 
 ### Development Rules for WebGPU
@@ -182,7 +184,7 @@ packages/
 2. **shared** - Depends on physx-js-webidl
 3. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
 
 > **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
 >
@@ -389,6 +391,7 @@ YOUTUBE_STREAM_KEY=...           # or YOUTUBE_RTMP_STREAM_KEY
 STREAM_ENABLED_DESTINATIONS=...  # Auto-detected if not set
 
 # Streaming Capture Configuration
+STREAM_CAPTURE_MODE=cdp               # CDP (Chrome DevTools Protocol) for reliability
 STREAM_CAPTURE_CHANNEL=chrome-beta    # Chrome Beta for stability
 STREAM_CAPTURE_ANGLE=default          # Default ANGLE backend
 STREAM_CAPTURE_WIDTH=1280
@@ -435,9 +438,11 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Database**: PostgreSQL (production via Neon/Railway), Docker (local)
 - **Testing**: Playwright, Vitest 4.x (upgraded from 2.x for Vite 6 compatibility)
 - **Build**: Turbo, esbuild, Vite
-- **Mobile**: Capacitor
-- **AI Agents**: ElizaOS `alpha` packages (^2.0.0-alpha.x) with InMemoryDatabaseAdapter (no PGLite)
+- **Mobile**: Capacitor 8.2.0
+- **AI Agents**: ElizaOS `alpha` packages with InMemoryDatabaseAdapter (no PGLite)
 - **Streaming**: FFmpeg (system preferred over ffmpeg-static), Playwright Chromium, RTMP
+- **Icons**: Lucide React 0.577.0
+- **3D Utilities**: three-mesh-bvh 0.9.9
 
 ## Troubleshooting
 
@@ -531,7 +536,7 @@ If RTMP streaming fails to start:
 ### CDN Asset Loading Issues
 
 If assets fail to load in production streaming deployments:
-- Verify `DUEL_PUBLIC_CDN_URL` is set to production CDN (not localhost)
+- Verify `PUBLIC_CDN_URL` is set to production CDN (not localhost)
 - Default: `https://assets.hyperscape.club`
 - Check `ecosystem.config.cjs` has correct CDN URL
 - Ensure CDN is accessible from deployment environment
@@ -570,7 +575,7 @@ import { atan } from 'three/tsl';
 
 ### Streaming Pipeline Optimization (March 10, 2026)
 
-**Change** (Commit c0e7313, 796b61f): Major streaming pipeline overhaul with CDP default, Vulkan ANGLE on Linux, and FFmpeg improvements.
+**Change** (Commits c0e7313, 796b61f): Major streaming pipeline overhaul with CDP default, Vulkan ANGLE on Linux, and FFmpeg improvements.
 
 **Key Changes**:
 - **Default Capture Mode**: CDP (Chrome DevTools Protocol) everywhere for reliability
@@ -702,8 +707,6 @@ isStreamingLikeViewport(window) // true for stream or spectator modes
 - Better error messages for GPU issues
 - Eliminates "Instance dropped" device-lost errors
 
-## Recent Changes (March 2026)
-
 ### CDN URL Unification (March 10, 2026)
 
 **Change** (Commit 2173086): Replaced `DUEL_PUBLIC_CDN_URL` with unified `PUBLIC_CDN_URL` environment variable.
@@ -749,68 +752,25 @@ PUBLIC_CDN_URL=https://assets.hyperscape.club
 - Prevents RTMP connection failures from zombie FFmpeg processes
 - Critical for streaming capture on Vast.ai GPU instances
 
-### CDP Capture Mode Revert (March 10, 2026)
+### Dependency Updates (March 10, 2026)
 
-**Change** (Commit 2ef995a): Reverted back to CDP (Chrome DevTools Protocol) capture mode from MediaRecorder mode.
+**Major Updates**:
+- **Capacitor**: 7.6.0 → 8.2.0 (Android, iOS, Core)
+- **lucide-react**: → 0.577.0 (icon library)
+- **three-mesh-bvh**: 0.8.3 → 0.9.9 (BVH acceleration)
+- **eslint**: → 10.0.3 (linting)
+- **jsdom**: → 28.1.0 (testing)
+- **@ai-sdk/openai**: → 3.0.41 (AI SDK)
+- **hardhat**: → 3.1.11 (smart contracts)
+- **@nomicfoundation/hardhat-chai-matchers**: → 3.0.0 (testing)
+- **globals**: → 17.4.0 (TypeScript globals)
 
-**Rationale**: Both modes were producing insufficient video output. The root issue is Chrome not rendering the game properly, not the capture mode itself. CDP mode at least produced HLS segments in a previous session, making it the more reliable fallback.
-
-**Current Status**: 
-- `STREAM_CAPTURE_MODE=cdp` (reverted from `mediarecorder`)
-- Investigation ongoing into Chrome rendering issues under Xvfb + WebGPU
-
-**Impact**: Temporary revert to more stable capture mode while investigating underlying rendering issues.
-
-### MediaRecorder Streaming Capture Mode (March 10, 2026)
-
-**Change** (Commit 72c667a): Switched from CDP (Chrome DevTools Protocol) screencast to MediaRecorder mode for streaming capture.
-
-**Problem**: CDP screencast stalls under Xvfb + WebGPU on Vast instances, causing frozen streams.
-
-**Solution**: MediaRecorder mode uses `canvas.captureStream()` → WebSocket → FFmpeg pipeline, which is more reliable for headed Linux environments.
-
-**Configuration**:
-```bash
-# ecosystem.config.cjs
-STREAM_CAPTURE_MODE=mediarecorder  # Changed from 'cdp'
-```
-
-**Technical Details**:
-- **CDP Mode**: Uses Chrome DevTools Protocol `Page.startScreencast` to capture frames
-- **MediaRecorder Mode**: Uses native browser `canvas.captureStream()` API with WebSocket transport to FFmpeg
-- **Why MediaRecorder**: More stable under Xvfb virtual displays with WebGPU rendering on Linux
-
-**Impact**: Eliminates stream freezing and stalling issues on Vast.ai GPU instances running Xvfb.
-
-**Files Changed**:
-- `ecosystem.config.cjs` - Set `STREAM_CAPTURE_MODE=mediarecorder`
-- `packages/server/src/streaming/browser-capture.ts` - MediaRecorder implementation
-- `packages/server/src/streaming/rtmp-bridge.ts` - WebSocket → FFmpeg pipeline
-
-### Equipment Visual System 404 Suppression (March 10, 2026)
-
-**Change** (Commits e8ed418, b01dd52): Suppress 404 errors for armor items without 3D models.
-
-**Problem**: Console flooded with 404 errors for armor items that don't have 3D models yet (helms, platelegs, boots, gloves, capes).
-
-**Solution**:
-- Added `equippedModelPath: null` to armor items without 3D models in `armor.json`
-- Added code guard in `EquipmentVisualSystem` to skip items with `null` equippedModelPath
-- Skip convention fallback for equipment types without 3D models
-
-**Files Changed**:
-- `packages/server/world/assets/manifests/armor.json` - Set `equippedModelPath: null` for items without models
-- `packages/shared/src/systems/EquipmentVisualSystem.ts` - Skip null paths and unsupported equipment types
-
-**Items Without 3D Models**:
-- bronze_full_helm
-- bronze_platelegs
-- bronze_kiteshield
-- leather_boots
-- leather_gloves
-- cape
-
-**Impact**: Cleaner console output without 404 errors for armor items that intentionally don't have 3D models.
+**Impact**:
+- Latest mobile platform features (Capacitor 8.2.0)
+- Improved icon library with new icons
+- Better BVH performance for collision detection
+- Latest linting rules and TypeScript support
+- Bug fixes and security updates
 
 ### WebSocket Connection Stability (March 10, 2026)
 
@@ -821,352 +781,6 @@ STREAM_CAPTURE_MODE=mediarecorder  # Changed from 'cdp'
 **Solution**: Improved connection health monitoring and error handling in WebSocket layer.
 
 **Impact**: More stable multiplayer connections during high-load scenarios (many agents, busy servers).
-
-### R2 CORS Configuration Simplification (March 10, 2026)
-
-**Change** (Commit a6e6444): Simplified Cloudflare R2 CORS configuration to use wildcard origin for public read-only assets.
-
-**Updates**:
-- Changed `AllowedOrigins` from explicit domain list to `['*']` (wildcard)
-- Added `OPTIONS` to `AllowedMethods` for proper CORS preflight handling
-- Added `Content-Range` and `Accept-Ranges` to `ExposeHeaders` for streaming support
-
-**Rationale**:
-- Assets are read-only and publicly accessible - no security risk with wildcard origin
-- Eliminates need to maintain explicit domain whitelist as new domains are added
-- Improves compatibility with CDN edge caching and client-side streaming
-
-**Impact**: Simplified CORS configuration reduces maintenance overhead while maintaining security for public assets.
-
-### Production CDN URL Fix (March 10, 2026)
-
-**Change** (Commit 2b3cbcb): Set `DUEL_PUBLIC_CDN_URL` to production CDN for Vast streaming deployments.
-
-**Update**: `ecosystem.config.cjs` now defaults to `https://assets.hyperscape.club` instead of localhost.
-
-**Configuration**:
-```javascript
-DUEL_PUBLIC_CDN_URL: process.env.PUBLIC_CDN_URL || "https://assets.hyperscape.club"
-```
-
-**Impact**: Streaming deployments on Vast.ai now correctly load assets from production CDN instead of attempting localhost connections.
-
-### PostgreSQL Connection Pool Increase (March 10, 2026)
-
-**Change** (Commit 24fa8a5): Increased PostgreSQL connection pool from 10 to 20 connections.
-
-**Configuration**:
-```bash
-# packages/server/.env or ecosystem.config.cjs
-POSTGRES_POOL_MAX=20
-POSTGRES_POOL_MIN=2
-```
-
-**Impact**: Prevents database timeout errors under high load from concurrent agent queries.
-
-### Mob Debug Logging Cleanup (March 10, 2026)
-
-**Change** (Commit cdf4925): Removed spammy mob debug logs and fixed dev server service worker proxying.
-
-**Impact**: Cleaner console output during development and improved service worker reliability.
-
-### PM2 Deployment Improvements (March 9-10, 2026)
-
-**PM2 Secrets Loading** (Commit 684b203):
-- `ecosystem.config.cjs` now reads `/tmp/hyperscape-secrets.env` directly at config load time
-- Fixes issue where `bunx pm2` doesn't reliably inherit exported environment variables
-- Ensures `DATABASE_URL` and stream keys are always available to PM2-managed processes
-
-**Database Mode Auto-Detection** (Commit 3df4370):
-- Automatically detects `DUEL_DATABASE_MODE` from `DATABASE_URL` hostname
-- Local mode: localhost, 127.0.0.1, 0.0.0.0, ::1
-- Remote mode: all other hostnames
-- Prevents `sanitizeRuntimeEnv()` from stripping `DATABASE_URL` in remote mode
-- Manual override via `DUEL_DATABASE_MODE=remote` environment variable
-
-**Chrome Beta for Streaming** (Commit 547714e):
-- Switched from `google-chrome-unstable` to `google-chrome-beta` for better stability
-- Changed `STREAM_CAPTURE_ANGLE` from `vulkan` to `default` for better compatibility
-- Default ANGLE backend automatically selects best backend for the system
-
-**DATABASE_URL PM2 Forwarding** (Commit 5d415fc):
-- `ecosystem.config.cjs` now explicitly forwards `DATABASE_URL` through PM2 environment
-- Prevents server crashes with FATAL error when DATABASE_URL is missing
-
-**Xvfb Display Environment** (Commits 704b955, 294a36c):
-- `ecosystem.config.cjs` explicitly sets `DISPLAY=:99` in PM2 environment
-- `deploy-vast.sh` starts Xvfb before PM2 to ensure virtual display is available
-- Prevents "cannot open display" errors during RTMP streaming on headless servers
-
-**Configuration**:
-```bash
-# Auto-detected database mode
-DUEL_DATABASE_MODE=remote  # or local (auto-detected from DATABASE_URL)
-
-# Chrome Beta streaming
-STREAM_CAPTURE_CHANNEL=chrome-beta
-STREAM_CAPTURE_ANGLE=default
-
-# Xvfb display
-DISPLAY=:99
-
-# Production CDN
-DUEL_PUBLIC_CDN_URL=https://assets.hyperscape.club
-```
-
-### Streaming Pipeline Fixes (March 9, 2026)
-
-**Auto-Detection**: Stream destinations now auto-detected from available keys using `||` logic.
-
-**Changes**:
-- `deploy-vast.sh`: Auto-detects enabled destinations from `TWITCH_STREAM_KEY || TWITCH_RTMP_STREAM_KEY`, `KICK_STREAM_KEY`, etc.
-- `ecosystem.config.cjs`: Explicitly forwards stream keys, `DISPLAY`, and `DATABASE_URL` through PM2 environment
-- `deploy-vast.yml`: Adds `TWITCH_RTMP_STREAM_KEY` alias to secrets file for compatibility
-- `stream.html` / `stream.tsx`: Dedicated streaming entry points with optimized bundles
-- `clientViewportMode.ts`: Utility to detect stream/spectator/normal modes
-- Multi-page Vite build: Separate bundles for game and streaming
-
-**Auto-Detection Logic**:
-```bash
-# From deploy-vast.sh
-DESTS=""
-if [ -n "${TWITCH_STREAM_KEY:-${TWITCH_RTMP_STREAM_KEY:-}}" ]; then
-    DESTS="twitch"
-fi
-if [ -n "${KICK_STREAM_KEY:-}" ]; then
-    DESTS="${DESTS:+${DESTS},}kick"
-fi
-export STREAM_ENABLED_DESTINATIONS="$DESTS"
-```
-
-**Environment Variables**:
-```bash
-# Auto-detected from available keys (no manual config needed)
-STREAM_ENABLED_DESTINATIONS=twitch,kick
-
-# Twitch (multiple formats supported)
-TWITCH_STREAM_KEY=live_123456789_abcdefghij
-TWITCH_RTMP_STREAM_KEY=live_123456789_abcdefghij
-
-# Kick
-KICK_STREAM_KEY=your-kick-stream-key
-KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
-
-# YouTube
-YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
-YOUTUBE_RTMP_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
-
-# Streaming capture configuration
-STREAM_CAPTURE_MODE=mediarecorder
-STREAM_CAPTURE_CHANNEL=chrome-beta
-STREAM_CAPTURE_ANGLE=default
-STREAM_CAPTURE_WIDTH=1280
-STREAM_CAPTURE_HEIGHT=720
-DISPLAY=:99
-```
-
-**Impact**: Reliable multi-platform RTMP streaming with automatic destination detection, proper secret forwarding, and stable Chrome Beta rendering.
-
-### CSRF Cross-Origin Fix (March 9, 2026)
-
-**Problem**: Account creation failed with 403 when client runs on localhost:3333 against deployed server.
-
-**Root Cause**: Missing Authorization header + CSRF token response shape mismatch.
-
-**Fixes**:
-- `UsernameSelectionScreen.tsx`: Include Privy auth token as `Authorization: Bearer` header
-- `api-client.ts`: Accept both `{ token }` and `{ csrfToken }` from CSRF endpoint
-- `csrf.ts`: Added localhost and private-IP patterns to `KNOWN_CROSS_ORIGIN_PATTERNS`
-
-**Impact**: Cross-origin local development works without CSRF errors.
-
-### ElizaCloud Integration (March 9, 2026)
-
-**Unified AI Provider**: All duel arena agents now use `@elizaos/plugin-elizacloud`.
-
-**13 Frontier Models**:
-- American: GPT-5, Claude 4.6 (Sonnet/Opus), Gemini 3.1 Pro, Grok 4, Llama 4 Maverick, Magistral Medium
-- Chinese: DeepSeek V3.2, Qwen 3 Max, Minimax M2.5, GLM-5, Kimi K2.5, Seed 1.8
-
-**Configuration**:
-```bash
-# packages/server/.env
-ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
-```
-
-**Code Changes**:
-- `packages/server/src/eliza/ModelAgentSpawner.ts` - Updated MODEL_AGENTS array with ElizaCloud models
-- `packages/server/src/eliza/agentHelpers.ts` - Added elizacloud provider to DEFAULT_SMALL_MODELS and MODEL_SETTING_KEYS
-- `packages/plugin-hyperscape/src/index.ts` - Added ElizaCloud plugin to type definitions
-
-**Benefits**:
-- Single API key for all models (no need for OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY)
-- Access to 13 frontier models from 13 different providers
-- Simplified agent configuration and deployment
-- Consistent error handling and retry logic
-
-### Streaming Entry Points (March 9, 2026)
-
-**Change** (Commit 71dcba8): Added dedicated streaming entry points for optimized capture and viewport mode detection.
-
-**New Files**:
-- `packages/client/src/stream.html` - Dedicated HTML entry for streaming capture
-- `packages/client/src/stream.tsx` - React entry point for streaming mode
-- `packages/shared/src/runtime/clientViewportMode.ts` - Viewport mode detection utility
-
-**Viewport Mode Detection**:
-```typescript
-// Detect if running in streaming capture mode
-isStreamPageRoute(window) // true for /stream.html or ?page=stream
-
-// Detect if running as embedded spectator
-isEmbeddedSpectatorViewport(window) // true for ?embedded=true&mode=spectator
-
-// Detect any streaming-like viewport
-isStreamingLikeViewport(window) // true for either of the above
-```
-
-**Vite Multi-Page Build**:
-- Main game: `index.html` → `dist/index.html`
-- Streaming: `stream.html` → `dist/stream.html`
-- Separate bundles optimize for different use cases
-
-**Impact**: 
-- Optimized streaming capture with minimal UI overhead
-- Clear separation between game and streaming entry points
-- Automatic viewport mode detection for conditional rendering
-
-### Betting Stack Split (March 9, 2026)
-
-**Separate Repository**: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
-
-**Moved Packages**:
-- `gold-betting-demo` - Betting frontend and keeper API
-- `evm-contracts` - EVM smart contracts (GoldClob, AgentPerpEngine, SkillOracle)
-- `sim-engine` - Cross-chain risk simulation
-- `market-maker-bot` - Automated liquidity seeding
-
-**Remaining in Hyperscape**:
-- `duel-oracle-evm` - EVM duel outcome oracle contracts
-- `duel-oracle-solana` - Solana duel outcome oracle program
-- Oracle publisher and metadata API
-
-**Rationale**:
-- Independent deployment and versioning
-- Cleaner separation: Oracle (verifiable outcomes) vs Betting (financial markets)
-- Reduced monorepo complexity
-- Better CI/CD isolation
-
-### Oracle Improvements (March 9, 2026)
-
-**New Database Fields** (Commit aecab58):
-- `damage_a` - Total damage dealt by participant A
-- `damage_b` - Total damage dealt by participant B
-- `win_reason` - Detailed win reason (knockout, timeout, forfeit, draw)
-- `seed` - Cryptographic seed for replay verification
-- `replay_hash` - Hash of replay data
-- `result_hash` - Combined hash of all outcome data
-
-**New Scripts**:
-- `verify-duel-oracle-local` - Local oracle integration testing
-- EVM deploy scripts with receipt generation
-- Solana config.json with program IDs
-
-**Configuration**:
-```bash
-# Oracle toggle
-DUEL_ARENA_ORACLE_ENABLED=true
-DUEL_ARENA_ORACLE_PROFILE=testnet  # or mainnet
-
-# Metadata API
-DUEL_ARENA_ORACLE_METADATA_BASE_URL=https://api.hyperscape.gg/api/duel-arena/oracle
-
-# Signers
-DUEL_ARENA_ORACLE_EVM_PRIVATE_KEY=0x...
-DUEL_ARENA_ORACLE_SOLANA_AUTHORITY_SECRET=base64:...
-```
-
-**Impact**: Comprehensive duel outcome data for betting market settlement and replay verification.
-
-### TypeScript Fixes (March 9, 2026)
-
-**Problem**: TS18048 errors for `GAME_API_URL` and other import.meta.env values possibly being undefined.
-
-**Fix**: Switch from `||` to `??` (nullish coalescing) for import.meta.env values so TypeScript can narrow the type through the fallback chain.
-
-**Files Changed**:
-- `packages/client/src/lib/api-config.ts` - Added explicit string types to URL exports
-
-**Impact**: Eliminates TypeScript errors without requiring non-null assertions.
-
-### ElizaOS Alpha Package Alignment (March 9, 2026)
-
-**Change** (Commit 6d67ec1): Aligned all ElizaOS packages to `alpha` tag for stable releases.
-
-**Packages Updated**:
-- `@elizaos/core`: `alpha`
-- `@elizaos/plugin-anthropic`: `alpha`
-- `@elizaos/plugin-groq`: `alpha`
-- `@elizaos/plugin-openai`: `alpha`
-- `@elizaos/plugin-sql`: `alpha`
-- `@elizaos/prompts`: `alpha`
-
-**Previous Changes**:
-- Commit 378058a: Upgraded to `next` tag for latest features
-- Commit 788036d: Removed `@elizaos/plugin-sql` dependency (replaced with InMemoryDatabaseAdapter)
-
-**Impact**: Access to stable ElizaOS alpha releases with versioned packages. Ensures compatibility with latest LLM provider APIs while maintaining version control.
-
-**Migration**: No code changes required - ElizaOS maintains backward compatibility across alpha releases.
-
-### WebGPU Fixes (March 9, 2026)
-
-**Buffer Upload Fallback**:
-- Automatic fallback when `mappedAtCreation` fails
-- Improved error handling for GPU buffer allocation
-- Better compatibility across different GPU drivers
-
-**Null Safety**:
-- Fixed physics utils null pointer exceptions
-- Collider and rigidbody null checks
-- Particle manager JSON parsing fixes
-- Vegetation system error handling
-
-### Code Quality (March 8-9, 2026)
-
-**Static Imports**:
-- GLTFExporter now uses static imports (better tree-shaking)
-- Logger import converted to static (faster module loading)
-- Eliminates async import boilerplate
-
-**Dead Code Removal**:
-- VFX Preview: Removed unused opacity, primaryColor, whiteGlow, ringMat variables
-- Type guards: Added `isCombatHud()` for proper type narrowing
-
-**Cross-Runtime Compatibility**:
-- `writeArrayBufferToFile()` utility supports both Bun and Node.js
-- Proper runtime detection for file operations
-
-**Panel Optimization**:
-- Un-lazified critical panels (Inventory, Stats, Prayer, Spells) for faster initial load
-- Other panels (Equipment, Quest, Friends) remain lazy-loaded
-
-**Bundle Size**:
-- Client: `chunkSizeWarningLimit` increased to 8000KB (up from 2000KB)
-- Asset-forge: `chunkSizeWarningLimit` increased to 9000KB (new)
-- Intentional for WebGPU/PhysX bundles until deeper code splitting
-
-### Testing & CI (March 9, 2026)
-
-**Vitest 4.x Upgrade**:
-- Required for Vite 6 compatibility
-- Fixes `__vite_ssr_exportName__` errors
-- No API changes - tests work as-is
-
-**CI Stabilization**:
-- Fixed workflow dependency resolution
-- Improved test reliability across packages
-- More reliable GitHub Actions builds
 
 ## Additional Resources
 
