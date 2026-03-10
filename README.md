@@ -34,11 +34,12 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 ### Streaming Pipeline Optimization
 - **Default Capture Mode**: CDP (Chrome DevTools Protocol) for reliable frame capture
 - **Chrome Beta**: Switched to Chrome Beta channel for better stability (from Unstable)
-- **ANGLE Backend**: Default ANGLE backend for better cross-platform compatibility
-- **FFmpeg**: System FFmpeg preferred over ffmpeg-static to avoid segfaults
-- **x264 Tuning**: `zerolatency` tune for live streaming (lower latency)
+- **ANGLE Backend**: Default ANGLE backend (`--use-angle=default`) for automatic best-backend selection
+- **FFmpeg**: System FFmpeg preferred over ffmpeg-static to avoid segfaults (resolution order: `/usr/bin` → `/usr/local/bin` → PATH → ffmpeg-static)
+- **x264 Tuning**: `zerolatency` tune for live streaming (lower latency, was `film`)
 - **GOP Size**: 30 frames (1s at 30fps) for better HLS segment alignment
 - **Physics Optimization**: Skip client-side PhysX for streaming/spectator viewports (faster startup, lower memory)
+- **Playwright Fix**: Block `--enable-unsafe-swiftshader` injection to prevent CPU software rendering from blocking WebGPU
 
 ### CDN Configuration Simplification
 - Unified `PUBLIC_CDN_URL` environment variable (replaced `DUEL_PUBLIC_CDN_URL`)
