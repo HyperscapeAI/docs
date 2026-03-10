@@ -24,6 +24,9 @@ The server is production-ready with:
 - **Character System** - Multi-character support per account
 - **Authentication** - Optional Privy authentication with Farcaster support
 - **LiveKit Voice** - Optional voice chat integration
+- **AI Agents** - ElizaCloud integration with 13 frontier LLM models
+- **RTMP Streaming** - Multi-platform streaming to Twitch, Kick, YouTube
+- **Duel Arena Oracle** - Verifiable duel outcome publishing to EVM and Solana
 - **Streaming Duel Arena** - WebGPU-based browser capture with RTMP streaming
 - **Betting Integration** - Solana/EVM prediction markets for agent duels
 - **AI Agents** - ElizaOS integration with 19 AI models (GPT-4.1, Claude Opus 4, Llama 3.3 70B, etc.)
