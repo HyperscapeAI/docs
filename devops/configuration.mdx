@@ -364,7 +364,10 @@ The production duel stack uses PM2 for process management with automatic restart
 ### PM2 Configuration
 
 ```javascript
-// From ecosystem.config.cjs (updated Mar 2 2026)
+// From ecosystem.config.cjs (updated Mar 9-10 2026)
+// Loads secrets from /tmp/hyperscape-secrets.env at config load time
+// Auto-detects database mode from DATABASE_URL hostname
+
 module.exports = {
   apps: [{
     name: "hyperscape-duel",
@@ -386,28 +389,34 @@ module.exports = {
     
     env: {
       NODE_ENV: "production",
-      USE_LOCAL_POSTGRES: "false",
-      DATABASE_URL: process.env.DATABASE_URL || "postgresql://...",
+      
+      // Database configuration (auto-detected from DATABASE_URL)
+      DUEL_DATABASE_MODE: process.env.DUEL_DATABASE_MODE || "remote",
+      DATABASE_URL: process.env.DATABASE_URL || "",
+      USE_LOCAL_POSTGRES: process.env.USE_LOCAL_POSTGRES || "false",
+      
+      // Display for Xvfb (commit 704b955)
+      DISPLAY: process.env.DISPLAY || ":99",
+      
       PUBLIC_CDN_URL: "https://assets.hyperscape.club",
       
       // PostgreSQL Connection Pool (commit 0c8dbe0)
       POSTGRES_POOL_MAX: "3",   // Down from 6 to prevent connection exhaustion
       POSTGRES_POOL_MIN: "0",   // Down from 2 to not hold idle connections
       
-      // Streaming configuration
+      // Streaming configuration (commits 547714e, 41dc606)
       STREAM_CAPTURE_MODE: "cdp",
       STREAM_CAPTURE_HEADLESS: "false",  // Headful with Xvfb
-      STREAM_CAPTURE_CHANNEL: "chrome-dev",
-      STREAM_CAPTURE_ANGLE: "vulkan",
+      STREAM_CAPTURE_CHANNEL: "chrome-beta",  // Changed from chrome-dev
+      STREAM_CAPTURE_ANGLE: "default",        // Changed from vulkan
       STREAMING_CANONICAL_PLATFORM: "twitch",
       STREAMING_PUBLIC_DELAY_MS: "0",
       
-      // Stream keys (from environment)
-      TWITCH_STREAM_KEY: process.env.TWITCH_STREAM_KEY || "",
+      // Stream keys (explicitly forwarded from environment - commit 41dc606)
+      TWITCH_STREAM_KEY: process.env.TWITCH_STREAM_KEY || process.env.TWITCH_RTMP_STREAM_KEY || "",
       KICK_STREAM_KEY: process.env.KICK_STREAM_KEY || "",
       KICK_RTMP_URL: process.env.KICK_RTMP_URL || "rtmps://fa723fc1b171.global-contribute.live-video.net/app",
-      X_STREAM_KEY: process.env.X_STREAM_KEY || "",
-      X_RTMP_URL: process.env.X_RTMP_URL || "rtmp://sg.pscp.tv:80/x"
+      STREAM_ENABLED_DESTINATIONS: process.env.STREAM_ENABLED_DESTINATIONS || process.env.DUEL_STREAM_DESTINATIONS || ""
     }
   }]
 };
