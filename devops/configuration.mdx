@@ -414,9 +414,9 @@ module.exports = {
       
       PUBLIC_CDN_URL: "https://assets.hyperscape.club",
       
-      // PostgreSQL Connection Pool (commit 0c8dbe0)
-      POSTGRES_POOL_MAX: "3",   // Down from 6 to prevent connection exhaustion
-      POSTGRES_POOL_MIN: "0",   // Down from 2 to not hold idle connections
+      // PostgreSQL Connection Pool (commit 24fa8a5)
+      POSTGRES_POOL_MAX: "20",  // Up from 10 to prevent timeouts under high load
+      POSTGRES_POOL_MIN: "2",   // Minimum idle connections
       
       // Streaming configuration (commits 547714e, 41dc606)
       STREAM_CAPTURE_MODE: "cdp",
