@@ -505,6 +505,47 @@ If RTMP streaming fails to start:
 
 ## Recent Changes (March 2026)
 
+### PM2 Deployment Improvements (March 9-10, 2026)
+
+**PM2 Secrets Loading** (Commit 684b203):
+- `ecosystem.config.cjs` now reads `/tmp/hyperscape-secrets.env` directly at config load time
+- Fixes issue where `bunx pm2` doesn't reliably inherit exported environment variables
+- Ensures `DATABASE_URL` and stream keys are always available to PM2-managed processes
+
+**Database Mode Auto-Detection** (Commit 3df4370):
+- Automatically detects `DUEL_DATABASE_MODE` from `DATABASE_URL` hostname
+- Local mode: localhost, 127.0.0.1, 0.0.0.0, ::1
+- Remote mode: all other hostnames
+- Prevents `sanitizeRuntimeEnv()` from stripping `DATABASE_URL` in remote mode
+- Manual override via `DUEL_DATABASE_MODE=remote` environment variable
+
+**Chrome Beta for Streaming** (Commit 547714e):
+- Switched from `google-chrome-unstable` to `google-chrome-beta` for better stability
+- Changed `STREAM_CAPTURE_ANGLE` from `vulkan` to `default` for better compatibility
+- Default ANGLE backend automatically selects best backend for the system
+
+**DATABASE_URL PM2 Forwarding** (Commit 5d415fc):
+- `ecosystem.config.cjs` now explicitly forwards `DATABASE_URL` through PM2 environment
+- Prevents server crashes with FATAL error when DATABASE_URL is missing
+
+**Xvfb Display Environment** (Commits 704b955, 294a36c):
+- `ecosystem.config.cjs` explicitly sets `DISPLAY=:99` in PM2 environment
+- `deploy-vast.sh` starts Xvfb before PM2 to ensure virtual display is available
+- Prevents "cannot open display" errors during RTMP streaming on headless servers
+
+**Configuration**:
+```bash
+# Auto-detected database mode
+DUEL_DATABASE_MODE=remote  # or local (auto-detected from DATABASE_URL)
+
+# Chrome Beta streaming
+STREAM_CAPTURE_CHANNEL=chrome-beta
+STREAM_CAPTURE_ANGLE=default
+
+# Xvfb display
+DISPLAY=:99
+```
+
 ### Streaming Pipeline Fixes (March 9, 2026)
 
 **Auto-Detection**: Stream destinations now auto-detected from available keys.
