@@ -624,27 +624,29 @@ The `scripts/deploy-vast.sh` script handles the full deployment with these impro
    - Fall back to headless EGL mode if X11 not available
    - Install NVIDIA Xorg drivers and configure headless X server
    - Force NVIDIA-only Vulkan ICD to avoid Mesa conflicts
-6. Install Chrome Dev channel for WebGPU support
-7. **Setup PulseAudio for audio capture** (commits 3b6f1ee, aab66b0, b9d2e41):
+9. Install Chrome Beta channel for WebGPU support (commit 547714e)
+10. **Setup PulseAudio for audio capture** (commits 3b6f1ee, aab66b0, b9d2e41):
    - Create virtual sink (`chrome_audio`) for Chrome audio output
    - Configure user-mode PulseAudio with proper permissions
    - Export PULSE_SERVER environment variable
-8. Install Playwright and dependencies
-9. Build core packages (physx, decimation, impostors, procgen, asset-forge, shared)
-10. Setup Solana keypair from `SOLANA_DEPLOYER_PRIVATE_KEY` (commit 8a677dc)
-11. Push database schema with drizzle-kit and warmup connection pool
-12. **Tear down existing processes** (commit b466233):
+11. Install Playwright and dependencies
+12. Build core packages (physx, decimation, impostors, procgen, asset-forge, shared)
+13. Setup Solana keypair from `SOLANA_DEPLOYER_PRIVATE_KEY` (commit 8a677dc)
+14. Push database schema with drizzle-kit and warmup connection pool
+15. **Tear down existing processes** (commit b466233):
     - Use `pm2 kill` instead of `pm2 delete` to restart daemon with fresh env
     - Clean up legacy watchdog processes
-13. Start port proxies (socat) for external access
-14. **Explicitly unset and re-export stream keys** (commits 7ee730d, a71d4ba, 50f8bec, b466233):
-    - Unset stale stream keys from environment
-    - Re-source .env file to get correct values
-    - Explicitly disable YouTube streaming
-15. Export GPU environment variables for PM2
-16. Start duel stack via PM2
-17. Wait for health check to pass (up to 120 seconds)
-18. Run streaming diagnostics (commit cf53ad4)
+16. Start port proxies (socat) for external access
+17. **Start Xvfb virtual display** (commits 704b955, 294a36c):
+    - Start Xvfb before PM2 to ensure DISPLAY is available
+    - Export `DISPLAY=:99` to environment
+18. Export GPU environment variables for PM2
+19. **Start duel stack via PM2** (commits 684b203, 3df4370):
+    - PM2 reads secrets from `/tmp/hyperscape-secrets.env`
+    - Auto-detects database mode from DATABASE_URL
+    - Explicitly forwards DISPLAY, DATABASE_URL, and stream keys
+20. Wait for health check to pass (up to 120 seconds)
+21. Run streaming diagnostics (commit cf53ad4)
 
 **Environment Variable Persistence (commits eec04b0, dda4396, 4a6aaaf):**
 
