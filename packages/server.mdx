@@ -122,6 +122,13 @@ bunx drizzle-kit studio    # Open Drizzle Studio GUI
 DATABASE_URL=postgresql://user:pass@host/db    # PostgreSQL (production)
 # or SQLite is used automatically for local development
 
+# PostgreSQL Connection Pool (increased March 2026)
+POSTGRES_POOL_MAX=20                           # Up from 10 (commit 24fa8a5)
+POSTGRES_POOL_MIN=2                            # Minimum idle connections
+
+# Database Mode (auto-detected from DATABASE_URL hostname)
+# DUEL_DATABASE_MODE=remote                    # or local (auto-detected)
+
 # Authentication (required for persistent accounts)
 PRIVY_APP_ID=your-privy-app-id
 PRIVY_APP_SECRET=your-privy-app-secret
@@ -133,11 +140,32 @@ NODE_ENV=development
 
 # CDN (optional)
 PUBLIC_CDN_URL=http://localhost:8080
+DUEL_PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production CDN (commit 2b3cbcb)
 
 # Voice Chat (optional)
 LIVEKIT_API_KEY=your-livekit-key
 LIVEKIT_API_SECRET=your-livekit-secret
 LIVEKIT_URL=wss://your-livekit-url
+
+# ElizaCloud AI (for duel arena agents - March 2026)
+ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key  # Access to 13 frontier models
+
+# Streaming (optional - auto-detected from available keys)
+TWITCH_STREAM_KEY=live_123456789_abcdefghij    # or TWITCH_RTMP_STREAM_KEY
+KICK_STREAM_KEY=your-kick-stream-key
+STREAM_ENABLED_DESTINATIONS=twitch,kick        # Auto-detected if not set
+
+# Streaming Capture (March 2026)
+STREAM_CAPTURE_MODE=mediarecorder              # Changed from cdp (commit 72c667a)
+STREAM_CAPTURE_CHANNEL=chrome-beta             # Changed from chrome-unstable (commit 547714e)
+STREAM_CAPTURE_ANGLE=default                   # Changed from vulkan (commit 547714e)
+DISPLAY=:99                                    # Xvfb virtual display
+
+# Duel Arena Oracle (optional)
+DUEL_ARENA_ORACLE_ENABLED=true
+DUEL_ARENA_ORACLE_PROFILE=testnet              # or mainnet
+DUEL_ARENA_ORACLE_EVM_PRIVATE_KEY=0x...
+DUEL_ARENA_ORACLE_SOLANA_AUTHORITY_SECRET=...
 ```
 
 ## Build Scripts
