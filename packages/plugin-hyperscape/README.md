@@ -96,12 +96,36 @@ Add the plugin to your ElizaOS character configuration:
 {
   "name": "WoodcutterBot",
   "plugins": ["@hyperscape/plugin-hyperscape"],
+  "modelProvider": "elizacloud",
   "settings": {
-    "HYPERSCAPE_SERVER_URL": "ws://localhost:5555/ws",
-    "HYPERSCAPE_AUTO_RECONNECT": "true"
+    "model": "openai/gpt-5",
+    "secrets": {
+      "ELIZAOS_CLOUD_API_KEY": "your-elizacloud-api-key",
+      "HYPERSCAPE_SERVER_URL": "ws://localhost:5555/ws",
+      "HYPERSCAPE_AUTO_RECONNECT": "true"
+    }
   }
 }
 ```
+
+**ElizaCloud Models** (13 frontier models available):
+
+**American Models**:
+- `openai/gpt-5` - GPT-5
+- `anthropic/claude-sonnet-4.6` - Claude Sonnet 4.6
+- `anthropic/claude-opus-4.6` - Claude Opus 4.6
+- `google/gemini-3.1-pro-preview` - Gemini 3.1 Pro
+- `xai/grok-4` - Grok 4
+- `meta/llama-4-maverick` - Llama 4 Maverick
+- `mistral/magistral-medium` - Magistral Medium
+
+**Chinese Models**:
+- `deepseek/deepseek-v3.2` - DeepSeek V3.2
+- `alibaba/qwen3-max` - Qwen 3 Max
+- `minimax/minimax-m2.5` - Minimax M2.5
+- `zai/glm-5` - GLM-5
+- `moonshotai/kimi-k2.5` - Kimi K2.5
+- `bytedance/seed-1.8` - Seed 1.8
 
 ## Usage Example
 
