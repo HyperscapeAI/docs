@@ -188,10 +188,15 @@ bun run assets:sync    # Pull latest assets from repo (local dev only)
 Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.privy.io).
 
 **Optional configuration** - see `.env.example` files for all options:
-- `packages/server/.env.example` - Database, ports, LiveKit voice chat, ElizaCloud API key
+- `packages/server/.env.example` - Database, ports, LiveKit voice chat, ElizaCloud API key, streaming (RTMP), oracle
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
+
+**Key Optional Features:**
+- **ElizaCloud AI**: Set `ELIZAOS_CLOUD_API_KEY` in server `.env` for access to 13 frontier LLM models (GPT-5, Claude 4.6, Gemini 3.1 Pro, Grok 4, DeepSeek V3.2, Qwen 3 Max, and more)
+- **RTMP Streaming**: Set `TWITCH_STREAM_KEY`, `KICK_STREAM_KEY`, or `YOUTUBE_STREAM_KEY` for multi-platform streaming (auto-detected)
+- **Duel Oracle**: Set `DUEL_ARENA_ORACLE_ENABLED=true` and configure EVM/Solana signers for verifiable duel outcome publishing
 
 ### Default Ports
 
