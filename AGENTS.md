@@ -99,6 +99,33 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Chrome Swiftshader Rendering Block Fix (Commit 7c16937)
+
+**Change**: Fixed Playwright injecting `--enable-unsafe-swiftshader` flag which forces CPU software rendering and blocks WebGPU compositor pipeline.
+
+**Problem**: Playwright's default args include `--enable-unsafe-swiftshader`, forcing Chrome to use CPU-based software rendering instead of GPU acceleration. This sabotages the WebGPU compositor pipeline and causes rendering failures.
+
+**Solution**: Use `ignoreDefaultArgs: ['--enable-unsafe-swiftshader']` in Playwright browser launch configuration to prevent Playwright from injecting this flag.
+
+**Additional Fix**: Added explicit FFmpeg cleanup in script teardown to prevent stale ffmpeg processes from blocking Twitch/Kick RTMP connections between restarts.
+
+**Impact**: 
+- Enables proper GPU-accelerated WebGPU rendering in Playwright-launched Chrome instances
+- Prevents RTMP connection failures from zombie FFmpeg processes
+- Critical for streaming capture on Vast.ai GPU instances
+
+### CDP Capture Mode Revert (Commit 2ef995a)
+
+**Change**: Reverted back to CDP (Chrome DevTools Protocol) capture mode from MediaRecorder mode.
+
+**Rationale**: Both modes were producing insufficient video output. The root issue is Chrome not rendering the game properly, not the capture mode itself. CDP mode at least produced HLS segments in a previous session, making it the more reliable fallback.
+
+**Current Status**: 
+- `STREAM_CAPTURE_MODE=cdp` (reverted from `mediarecorder`)
+- Investigation ongoing into Chrome rendering issues under Xvfb + WebGPU
+
+**Impact**: Temporary revert to more stable capture mode while investigating underlying rendering issues.
+
 ### MediaRecorder Streaming Capture Mode (Commit 72c667a, 7284882)
 
 **Change**: Switched from CDP (Chrome DevTools Protocol) screencast to MediaRecorder mode for streaming capture.
