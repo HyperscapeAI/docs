@@ -98,6 +98,19 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Production CDN URL Fix (Commit 2b3cbcb)
+
+**Change**: Set `DUEL_PUBLIC_CDN_URL` to production CDN for Vast streaming deployments.
+
+**Update**: `ecosystem.config.cjs` now defaults to `https://assets.hyperscape.club` instead of localhost.
+
+**Configuration**:
+```javascript
+DUEL_PUBLIC_CDN_URL: process.env.PUBLIC_CDN_URL || "https://assets.hyperscape.club"
+```
+
+**Impact**: Streaming deployments on Vast.ai now correctly load assets from production CDN instead of attempting localhost connections.
+
 ### Mob Debug Logging Cleanup (Commit cdf4925)
 
 **Change**: Removed spammy mob debug logs and fixed dev server service worker proxying.
