@@ -539,6 +539,32 @@ If assets fail to load in production streaming deployments:
 
 ## Recent Changes (March 2026)
 
+### MediaRecorder Streaming Capture Mode (March 10, 2026)
+
+**Change** (Commit 72c667a): Switched from CDP (Chrome DevTools Protocol) screencast to MediaRecorder mode for streaming capture.
+
+**Problem**: CDP screencast stalls under Xvfb + WebGPU on Vast instances, causing frozen streams.
+
+**Solution**: MediaRecorder mode uses `canvas.captureStream()` → WebSocket → FFmpeg pipeline, which is more reliable for headed Linux environments.
+
+**Configuration**:
+```bash
+# ecosystem.config.cjs
+STREAM_CAPTURE_MODE=mediarecorder  # Changed from 'cdp'
+```
+
+**Technical Details**:
+- **CDP Mode**: Uses Chrome DevTools Protocol `Page.startScreencast` to capture frames
+- **MediaRecorder Mode**: Uses native browser `canvas.captureStream()` API with WebSocket transport to FFmpeg
+- **Why MediaRecorder**: More stable under Xvfb virtual displays with WebGPU rendering on Linux
+
+**Impact**: Eliminates stream freezing and stalling issues on Vast.ai GPU instances running Xvfb.
+
+**Files Changed**:
+- `ecosystem.config.cjs` - Set `STREAM_CAPTURE_MODE=mediarecorder`
+- `packages/server/src/streaming/browser-capture.ts` - MediaRecorder implementation
+- `packages/server/src/streaming/rtmp-bridge.ts` - WebSocket → FFmpeg pipeline
+
 ### R2 CORS Configuration Simplification (March 10, 2026)
 
 **Change** (Commit a6e6444): Simplified Cloudflare R2 CORS configuration to use wildcard origin for public read-only assets.
