@@ -144,6 +144,7 @@ Build order: `physx-js-webidl` → `shared` → everything else (handled automat
 bun run dev:client    # Client only (port 3333)
 bun run dev:server    # Server only (port 5555)
 bun run dev:ai        # Game + ElizaOS agents (adds port 4001)
+bun run dev:duel      # Full duel stack with AI agents and streaming
 bun run dev:forge     # AssetForge tools (ports 3400, 3401)
 bun run docs:dev      # Documentation site (port 3402)
 bun run dev:all       # Everything: game + AI + AssetForge
