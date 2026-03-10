@@ -564,6 +564,24 @@ Configure these in repository settings → Secrets → Actions:
 
 The `scripts/deploy-vast.sh` script has been significantly enhanced with recent improvements:
 
+**PM2 Secrets Loading** (Commits 684b203, 3df4370):
+- Writes secrets to `/tmp/hyperscape-secrets.env` before git operations
+- `ecosystem.config.cjs` reads secrets file directly at config load time
+- Auto-detects `DUEL_DATABASE_MODE` from `DATABASE_URL` hostname
+- Prevents `sanitizeRuntimeEnv()` from stripping `DATABASE_URL` in remote mode
+- Ensures secrets persist through git reset operations
+
+**Chrome Beta for Streaming** (Commit 547714e):
+- Switched from `google-chrome-unstable` to `google-chrome-beta`
+- Changed `STREAM_CAPTURE_ANGLE` from `vulkan` to `default`
+- Better stability and compatibility across GPU configurations
+
+**Xvfb Display Setup** (Commits 704b955, 294a36c):
+- Starts Xvfb before PM2 to ensure virtual display is available
+- Exports `DISPLAY=:99` to environment
+- `ecosystem.config.cjs` explicitly sets `DISPLAY=:99` in PM2 environment
+- Prevents "cannot open display" errors during RTMP streaming
+
 **Remote Database Auto-Detection (Commit dd51c7f):**
 - Auto-detects remote database mode from `DATABASE_URL` environment variable
 - Sets `USE_LOCAL_POSTGRES=false` when remote database detected
