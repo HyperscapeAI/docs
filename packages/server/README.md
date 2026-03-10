@@ -387,6 +387,36 @@ LIVEKIT_API_SECRET=your-secret
 PUBLIC_LIVEKIT_URL=wss://your-livekit-server
 ```
 
+### ElizaCloud AI (Optional)
+
+```env
+# Unified access to 13 frontier models (GPT-5, Claude 4.6, Gemini 3.1, etc.)
+ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
+```
+
+### RTMP Streaming (Optional)
+
+```env
+# Auto-detected from available keys
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+KICK_STREAM_KEY=your-kick-stream-key
+YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+
+# Streaming capture (Vast.ai deployment)
+STREAM_CAPTURE_CHANNEL=chrome-beta
+STREAM_CAPTURE_ANGLE=default
+DISPLAY=:99
+```
+
+### Duel Arena Oracle (Optional)
+
+```env
+DUEL_ARENA_ORACLE_ENABLED=true
+DUEL_ARENA_ORACLE_PROFILE=testnet
+DUEL_ARENA_ORACLE_EVM_PRIVATE_KEY=0x...
+DUEL_ARENA_ORACLE_SOLANA_AUTHORITY_SECRET=base64:...
+```
+
 ### Monitoring & Alerting (Optional)
 
 ```env
