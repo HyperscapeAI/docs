@@ -99,6 +99,26 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### CDN URL Unification (Commit 2173086)
+
+**Change**: Replaced `DUEL_PUBLIC_CDN_URL` with unified `PUBLIC_CDN_URL` environment variable.
+
+**Rationale**: Simplifies CDN configuration by using a single environment variable across all contexts instead of separate duel-specific and general CDN URLs.
+
+**Configuration**:
+```bash
+# Old (deprecated)
+DUEL_PUBLIC_CDN_URL=https://assets.hyperscape.club
+
+# New (unified)
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+```
+
+**Impact**: 
+- Cleaner environment variable naming
+- Consistent CDN URL across client, server, and streaming contexts
+- Reduces configuration complexity
+
 ### Chrome Swiftshader Rendering Block Fix (Commit 7c16937)
 
 **Change**: Fixed Playwright injecting `--enable-unsafe-swiftshader` flag which forces CPU software rendering and blocks WebGPU compositor pipeline.
