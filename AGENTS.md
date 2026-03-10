@@ -98,13 +98,31 @@ packages/
 
 ## Recent Changes (March 2026)
 
-### PM2 Secrets Loading Fix (Commit 684b203)
+### PM2 Secrets Loading Fix (Commit 684b203, 3df4370)
 
 **Problem**: `bunx pm2` doesn't reliably inherit exported environment variables from the deploy shell script.
 
-**Fix**: `ecosystem.config.cjs` now reads `/tmp/hyperscape-secrets.env` directly at config load time.
+**Fix**: `ecosystem.config.cjs` now reads `/tmp/hyperscape-secrets.env` directly at config load time and auto-detects database mode.
 
-**Impact**: Ensures `DATABASE_URL` and other secrets are always available to PM2-managed processes.
+**Changes**:
+- Reads secrets from `/tmp/hyperscape-secrets.env` and `.env.production` at config load time
+- Auto-detects `DUEL_DATABASE_MODE` from `DATABASE_URL` hostname (local vs remote)
+- Prevents `sanitizeRuntimeEnv()` from stripping `DATABASE_URL` when mode defaults to 'local'
+
+**Database Mode Detection Logic**:
+```javascript
+// Auto-detect from DATABASE_URL hostname
+if (!process.env.DUEL_DATABASE_MODE && process.env.DATABASE_URL) {
+  const dbHost = new URL(process.env.DATABASE_URL).hostname;
+  const isLocal = ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(dbHost);
+  process.env.DUEL_DATABASE_MODE = isLocal ? "local" : "remote";
+}
+```
+
+**Impact**: 
+- Ensures `DATABASE_URL` and other secrets are always available to PM2-managed processes
+- Seamless database mode switching without manual configuration
+- Prevents server crashes from missing DATABASE_URL in remote mode
 
 ### Chrome Beta for Streaming (Commit 547714e)
 
