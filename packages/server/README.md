@@ -398,8 +398,16 @@ DUEL_ARENA_ORACLE_SOLANA_MAINNET_PROGRAM_ID=6Tx7s2UG4maFWakRFVi4GeecXJYyBXQF8f2v
 ### AI Agents (Optional)
 
 ```env
+# ElizaCloud (recommended - single key for 13 frontier models)
+ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
+
+# Agent spawning
 SPAWN_MODEL_AGENTS=true             # Auto-spawn when STREAMING_DUEL_ENABLED=true
-MAX_MODEL_AGENTS=19                 # Number of AI agents
+MAX_MODEL_AGENTS=13                 # Number of AI agents (matches ElizaCloud models)
+AUTO_START_AGENTS=true              # Auto-start agents from database
+AUTO_START_AGENTS_MAX=10            # Max auto-started agents
+
+# Legacy provider keys (optional - ElizaCloud is preferred)
 OPENAI_API_KEY=...
 ANTHROPIC_API_KEY=...
 GROQ_API_KEY=...
