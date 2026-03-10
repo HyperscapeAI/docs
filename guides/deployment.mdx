@@ -783,25 +783,29 @@ The system requires hardware GPU rendering for WebGPU. Three modes are supported
 
 ### Streaming Configuration
 
-The deployment uses these streaming settings:
+The deployment uses these streaming settings (updated March 2026):
 
 ```bash
-# From ecosystem.config.cjs
+# From ecosystem.config.cjs (commits 547714e, 684b203, 3df4370)
 STREAM_CAPTURE_MODE=cdp                    # Chrome DevTools Protocol
 STREAM_CAPTURE_HEADLESS=false              # Xorg mode (or "new" for headless EGL)
 STREAM_CAPTURE_USE_EGL=false               # true for headless EGL mode
-STREAM_CAPTURE_CHANNEL=chrome-dev          # Chrome Dev channel
-STREAM_CAPTURE_ANGLE=vulkan                # Vulkan backend
+STREAM_CAPTURE_CHANNEL=chrome-beta         # Chrome Beta (changed from chrome-dev)
+STREAM_CAPTURE_ANGLE=default               # Default ANGLE backend (changed from vulkan)
 STREAM_CAPTURE_DISABLE_WEBGPU=false        # WebGPU enabled
 STREAMING_CANONICAL_PLATFORM=twitch        # Lower latency than YouTube
 STREAMING_PUBLIC_DELAY_MS=0                # No delay (real-time)
 
 # GPU Rendering (auto-detected)
 GPU_RENDERING_MODE=xorg                    # xorg | xvfb-vulkan | headless-egl
-DISPLAY=:99                                # or empty for headless EGL
+DISPLAY=:99                                # Explicitly set in PM2 env (commit 704b955)
 DUEL_CAPTURE_USE_XVFB=false               # true for Xvfb mode
 STREAM_CAPTURE_USE_EGL=false              # true for headless EGL mode
 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+
+# Database Configuration (auto-detected - commit 3df4370)
+DUEL_DATABASE_MODE=remote                  # Auto-detected from DATABASE_URL hostname
+DATABASE_URL=postgresql://...              # Explicitly forwarded through PM2 (commit 5d415fc)
 
 # Audio Capture (commits 3b6f1ee, aab66b0, b9d2e41)
 STREAM_AUDIO_ENABLED=true
