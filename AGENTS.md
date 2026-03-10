@@ -32,7 +32,8 @@ This is a hard requirement. DO NOT:
 - **ANGLE Backend**: Use default ANGLE backend (`--use-angle=default`), NOT native Vulkan
 - **Xvfb Virtual Display**: `scripts/deploy-vast.sh` starts Xvfb before PM2 to ensure DISPLAY is available
 - **PM2 Environment**: `ecosystem.config.cjs` explicitly forwards `DISPLAY=:99` and `DATABASE_URL` through PM2
-- **MediaRecorder Mode**: Use `STREAM_CAPTURE_MODE=mediarecorder` for stable canvas capture (more reliable than CDP under Xvfb)
+- **Capture Mode**: Default to `STREAM_CAPTURE_MODE=cdp` (Chrome DevTools Protocol) for reliable frame capture
+- **FFmpeg**: Prefer system ffmpeg over ffmpeg-static to avoid segfaults
 - If WebGPU cannot initialize, deployment MUST FAIL
 
 ## Project Overview
