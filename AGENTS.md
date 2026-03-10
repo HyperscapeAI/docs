@@ -404,4 +404,17 @@ These fields are stored in the `arena_rounds` table and published to all configu
 
 **Impact**: Eliminates TypeScript errors without requiring non-null assertions.
 
+### PostgreSQL Connection Pool Increase (Commit 24fa8a5)
+
+**Change**: Increased PostgreSQL connection pool from 10 to 20 connections to prevent database timeouts under high load.
+
+**Configuration**:
+```bash
+# ecosystem.config.cjs
+POSTGRES_POOL_MAX=20
+POSTGRES_POOL_MIN=2
+```
+
+**Impact**: Prevents "timeout exceeded when trying to connect" errors from concurrent agent queries.
+
 See CLAUDE.md for complete documentation.
