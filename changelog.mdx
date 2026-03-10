@@ -23,6 +23,242 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label=\"Three.js 0.183.2 Upgrade & Streaming Optimization\" description=\"March 2026\" date=\"2026-03-10\">
+
+### 🚀 Three.js 0.183.2 Upgrade (Commit 8b93772)
+
+**Upgraded Three.js from 0.182.0 to 0.183.2 across all packages for latest WebGPU features and performance improvements.**
+
+**Breaking Changes:**
+- **TSL API Change**: `atan2` renamed to `atan` in TSL exports
+- **Type Compatibility**: Updated TSL typed node aliases (TSLNodeFloat/Vec2/Vec3/Vec4)
+- **InstancedBufferAttribute**: Fixed type cast in HealthBars system
+
+**Migration:**
+```typescript
+// Old (0.182.0)
+import { atan2 } from 'three/tsl';
+
+// New (0.183.2)
+import { atan } from 'three/tsl';
+```
+
+**Files Changed:**
+- `packages/shared/src/materials/LeafMaterialTSL.ts` - Updated `atan2` → `atan`
+- `packages/shared/src/extras/three/three.ts` - Added TSL typed node aliases
+- `packages/shared/src/systems/client/HealthBars.ts` - Fixed instancedBufferAttribute type cast
+- All `package.json` files - Updated three to 0.183.2 and @types/three to 0.183.1
+
+**Impact:**
+- Latest Three.js features and bug fixes
+- Improved WebGPU performance and stability
+- Better TSL shader compilation
+- Required for future Three.js ecosystem compatibility
+
+**Migration Guide**: See [docs/migration-threejs-0.183.md](https://github.com/HyperscapeAI/hyperscape/blob/main/docs/migration-threejs-0.183.md)
+
+### 🎥 Streaming Pipeline Optimization (Commits c0e7313, 796b61f)
+
+**Major streaming pipeline overhaul with CDP default, default ANGLE backend, and FFmpeg improvements.**
+
+**Key Changes:**
+- **Default Capture Mode**: CDP (Chrome DevTools Protocol) everywhere for reliability
+- **Chrome Beta Channel**: Switched from Chrome Unstable to Chrome Beta for better stability
+- **ANGLE Backend**: Default ANGLE backend (`--use-angle=default`) for automatic best-backend selection
+- **FFmpeg Resolution**: Prefer system ffmpeg (`/usr/bin`, `/usr/local/bin`) over ffmpeg-static to avoid segfaults
+- **x264 Tuning**: Default to `zerolatency` tune for live streaming (was `film`)
+- **GOP Size**: Set to 30 frames (1s at 30fps) to match HLS segment boundaries
+- **Playwright Fix**: Block `--enable-unsafe-swiftshader` injection to prevent CPU software rendering
+- **Dead Code Removal**: Deleted `dev-final.mjs` (875 lines), removed `SERVER_DEV_LEAN_MODE` system
+
+**ANGLE Backend Selection:**
+```bash
+# Default (auto-select) - RECOMMENDED
+STREAM_CAPTURE_ANGLE=default
+--use-angle=default
+
+# macOS (explicit)
+STREAM_CAPTURE_ANGLE=metal
+--use-angle=metal
+
+# Linux NVIDIA (explicit, if default fails)
+STREAM_CAPTURE_ANGLE=vulkan
+--use-angle=vulkan --enable-features=DefaultANGLEVulkan,Vulkan,VulkanFromANGLE
+```
+
+**Why Default ANGLE Backend:**
+- Automatically selects best backend (Vulkan, OpenGL, or D3D11) for the system
+- Better compatibility across different GPU configurations and driver versions
+- Reduces rendering artifacts and crashes from incompatible drivers
+- Simpler configuration - no platform-specific logic needed
+
+**FFmpeg Improvements:**
+```bash
+# Resolution order (avoids ffmpeg-static segfaults)
+/usr/bin/ffmpeg → /usr/local/bin/ffmpeg → PATH → ffmpeg-static
+```
+
+**Configuration:**
+```bash
+# Capture mode
+STREAM_CAPTURE_MODE=cdp  # Default: CDP for reliability
+
+# Chrome channel
+STREAM_CAPTURE_CHANNEL=chrome-beta  # Chrome Beta for stability
+
+# ANGLE backend
+STREAM_CAPTURE_ANGLE=default  # Auto-select (recommended)
+
+# x264 encoding
+x264_tune=zerolatency  # Live streaming (was film)
+gop_size=30           # 1s segments at 30fps
+```
+
+**Files Changed:**
+- `packages/server/scripts/stream-to-rtmp.ts` - ANGLE backend logic, FFmpeg resolution
+- `scripts/duel-stack.mjs` - Updated default capture mode and ANGLE backend
+- `ecosystem.config.cjs` - STREAM_CAPTURE_ANGLE=default
+- `scripts/deploy-vast.sh` - Chrome Beta installation
+- `playwright.config.ts` - Updated DEFAULT_LINUX_WEBGPU_ARGS
+- `packages/shared/src/utils/rendering/RendererFactory.ts` - Prefer high-performance GPU adapter
+
+**Impact:**
+- More reliable streaming across diverse GPU hardware
+- Lower latency with zerolatency tune
+- Eliminates FFmpeg segfaults
+- Better HLS segment alignment
+- Fewer crashes and rendering artifacts
+
+### 🎯 Physics Optimization for Streaming (Commit c0e7313)
+
+**Skip client-side PhysX initialization for streaming/spectator viewports.**
+
+**Rationale:** Streaming and spectator clients don't need physics simulation - they only render the world state.
+
+**Detection Logic:**
+```typescript
+// packages/shared/src/runtime/clientViewportMode.ts
+isStreamingLikeViewport(window) // true for stream or spectator modes
+```
+
+**Impact:**
+- Faster streaming client startup
+- Reduced memory footprint for spectator views
+- No physics overhead for non-interactive clients
+
+### 📺 Streaming Entry Points (Commit 71dcba8)
+
+**Added dedicated streaming entry points for optimized capture.**
+
+**New Files:**
+- `packages/client/src/stream.html` - Dedicated HTML entry for streaming capture
+- `packages/client/src/stream.tsx` - React entry point for streaming mode
+- `packages/shared/src/runtime/clientViewportMode.ts` - Viewport mode detection utility
+
+**Viewport Mode Detection:**
+```typescript
+// Detect if running in streaming capture mode
+isStreamPageRoute(window) // true for /stream.html or ?page=stream
+
+// Detect if running as embedded spectator
+isEmbeddedSpectatorViewport(window) // true for ?embedded=true&mode=spectator
+
+// Detect any streaming-like viewport
+isStreamingLikeViewport(window) // true for either of the above
+```
+
+**Vite Multi-Page Build:**
+- Main game: `index.html` → `dist/index.html`
+- Streaming: `stream.html` → `dist/stream.html`
+- Separate bundles optimize for different use cases
+
+**Impact:**
+- Optimized streaming capture with minimal UI overhead
+- Clear separation between game and streaming entry points
+- Automatic viewport mode detection for conditional rendering
+
+### 🔧 Service Worker Cache Strategy (Commit 796b61f)
+
+**Switched Workbox caching from `CacheFirst` to `NetworkFirst` for JS/CSS.**
+
+**Problem:** Stale service worker serving old HTML for JS chunks after rebuild, causing module loading errors.
+
+**Solution:**
+- `NetworkFirst` strategy for JS/CSS - always fetch latest, fallback to cache
+- Aggressive cache clearing for local dev (clears `workbox-*` and `hyperscape-*` caches)
+
+**Impact:**
+- Eliminates stale module errors after rebuilds
+- Better dev experience with hot reload
+- Production still benefits from cache fallback
+
+### 🌐 CDN URL Unification (Commit 2173086)
+
+**Replaced `DUEL_PUBLIC_CDN_URL` with unified `PUBLIC_CDN_URL` environment variable.**
+
+**Rationale:** Simplifies CDN configuration by using a single environment variable across all contexts.
+
+**Configuration:**
+```bash
+# Old (deprecated)
+DUEL_PUBLIC_CDN_URL=https://assets.hyperscape.club
+
+# New (unified)
+PUBLIC_CDN_URL=https://assets.hyperscape.club
+```
+
+**Impact:**
+- Cleaner environment variable naming
+- Consistent CDN URL across client, server, and streaming contexts
+- Reduces configuration complexity
+
+### 🔧 Chrome Swiftshader Rendering Block Fix (Commit 7c16937)
+
+**Fixed Playwright injecting `--enable-unsafe-swiftshader` flag which forces CPU software rendering.**
+
+**Problem:** Playwright's default args include `--enable-unsafe-swiftshader`, forcing Chrome to use CPU-based software rendering instead of GPU acceleration. This blocks the WebGPU compositor pipeline.
+
+**Solution:** Use `ignoreDefaultArgs: ['--enable-unsafe-swiftshader']` in Playwright browser launch configuration.
+
+**Additional Fix:** Added explicit FFmpeg cleanup in script teardown to prevent stale ffmpeg processes from blocking RTMP connections.
+
+**Impact:**
+- Enables proper GPU-accelerated WebGPU rendering in Playwright-launched Chrome instances
+- Prevents RTMP connection failures from zombie FFmpeg processes
+- Critical for streaming capture on Vast.ai GPU instances
+
+### 📦 Dependency Updates (March 10, 2026)
+
+**Major Updates:**
+- **Capacitor**: 7.6.0 → 8.2.0 (Android, iOS, Core)
+- **lucide-react**: → 0.577.0 (icon library)
+- **three-mesh-bvh**: 0.8.3 → 0.9.9 (BVH acceleration)
+- **eslint**: → 10.0.3 (linting)
+- **jsdom**: → 28.1.0 (testing)
+- **@ai-sdk/openai**: → 3.0.41 (AI SDK)
+- **hardhat**: → 3.1.11 (smart contracts)
+- **@nomicfoundation/hardhat-chai-matchers**: → 3.0.0 (testing)
+- **globals**: → 17.4.0 (TypeScript globals)
+
+**Impact:**
+- Latest mobile platform features (Capacitor 8.2.0)
+- Improved icon library with new icons
+- Better BVH performance for collision detection
+- Latest linting rules and TypeScript support
+- Bug fixes and security updates
+
+### 🔌 WebSocket Connection Stability (Commit 3b4dc66)
+
+**Fixed WebSocket disconnects under load.**
+
+**Problem:** WebSocket connections dropping under high load from concurrent agent queries and player actions.
+
+**Solution:** Improved connection health monitoring and error handling in WebSocket layer.
+
+**Impact:** More stable multiplayer connections during high-load scenarios (many agents, busy servers).
+
+</Update>
+
 <Update label="Streaming Infrastructure & ElizaCloud Integration" description="March 2026" date="2026-03-09">
 
 ### 🤖 ElizaCloud Plugin Integration (Commit 4d1eb53)
