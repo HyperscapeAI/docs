@@ -36,13 +36,15 @@ packages/client/
 │   ├── screens/        # UI screens
 │   ├── types/          # TypeScript types
 │   ├── utils/          # Helper functions
-│   ├── index.tsx       # React entry point
-│   ├── index.html      # HTML template
+│   ├── index.tsx       # React entry point (main game)
+│   ├── index.html      # HTML template (main game)
+│   ├── stream.tsx      # React entry point (streaming mode) - NEW March 2026
+│   ├── stream.html     # HTML template (streaming mode) - NEW March 2026
 │   └── index.css       # Global styles (Tailwind)
 ├── ios/                # iOS native project (Capacitor)
 ├── android/            # Android native project (Capacitor)
 ├── capacitor.config.ts # Mobile configuration
-├── vite.config.ts      # Vite configuration
+├── vite.config.ts      # Vite configuration (multi-page build)
 └── .env.example        # Environment template
 ```
 
