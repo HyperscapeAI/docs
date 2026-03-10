@@ -40,7 +40,7 @@ bun install
 
 ### Setup Environment Files
 
-> **⚠️ WebGPU Linux / Streaming Note**: When running Hyperscape on Linux (e.g. Vast.ai), you must use headful Chrome with Xorg/Xvfb. You MUST use the ANGLE backend for WebGPU, **NOT** Vulkan (`--use-vulkan`). Using the native Vulkan backend with WebGPU currently will crash. For production streaming, use Chrome Beta channel (`google-chrome-beta`) with `--use-angle=default`. **Critical**: When using Playwright for streaming capture, use `ignoreDefaultArgs: ['--enable-unsafe-swiftshader']` to prevent CPU software rendering from blocking WebGPU.
+> **⚠️ WebGPU Linux / Streaming Note**: When running Hyperscape on Linux (e.g. Vast.ai), you must use headful Chrome with Xorg/Xvfb. For production streaming, use Chrome Beta channel (`google-chrome-beta`) with default ANGLE backend (`--use-angle=default`). **Critical**: When using Playwright for streaming capture, use `ignoreDefaultArgs: ['--enable-unsafe-swiftshader']` to prevent CPU software rendering from blocking WebGPU. System FFmpeg is preferred over ffmpeg-static to avoid segfaults.
 
 ```bash
 # Required: Copy both client and server env files
