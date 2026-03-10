@@ -363,3 +363,34 @@ export STREAM_ENABLED_DESTINATIONS="$DESTS"
 ```
 
 **Impact**: No manual configuration needed - just set stream keys and destinations are auto-detected.
+
+### Streaming Entry Points (March 10, 2026)
+
+**Change**: Added dedicated streaming entry points for optimized capture.
+
+**New Files**:
+- `packages/client/src/stream.html` - Dedicated HTML entry for streaming capture
+- `packages/client/src/stream.tsx` - React entry point for streaming mode
+- `packages/shared/src/runtime/clientViewportMode.ts` - Viewport mode detection utility
+
+**Viewport Mode Detection**:
+```typescript
+// Detect if running in streaming capture mode
+isStreamPageRoute(window) // true for /stream.html or ?page=stream
+
+// Detect if running as embedded spectator
+isEmbeddedSpectatorViewport(window) // true for ?embedded=true&mode=spectator
+
+// Detect any streaming-like viewport
+isStreamingLikeViewport(window) // true for either of the above
+```
+
+**Vite Multi-Page Build**:
+- Main game: `index.html` → `dist/index.html`
+- Streaming: `stream.html` → `dist/stream.html`
+- Separate bundles optimize for different use cases
+
+**Impact**: 
+- Optimized streaming capture with minimal UI overhead
+- Clear separation between game and streaming entry points
+- Automatic viewport mode detection for conditional rendering (e.g., skip PhysX for streaming)
