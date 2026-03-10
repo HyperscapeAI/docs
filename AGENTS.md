@@ -102,6 +102,24 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Manifest File Loading Fix (March 10, 2026)
+
+**Change** (Commit c0898fa): Fixed legacy manifest entries that 404 on CDN.
+
+**Problem**: `DataManager` was attempting to fetch `items.json` and `resources.json` as root-level files, but these never existed - items are stored as split category files (`items/weapons.json`, `items/armor.json`, etc.).
+
+**Fix**: 
+- Removed legacy `items.json` and `resources.json` from manifest fetch list
+- Added missing newer manifests to `MANIFEST_FILES` fetch list:
+  - `ammunition.json`
+  - `combat-spells.json`
+  - `duel-arenas.json`
+  - `lod-settings.json`
+  - `quests.json`
+  - `runes.json`
+
+**Impact**: Eliminates 404 errors during manifest loading, ensures all current manifests are properly fetched.
+
 ### Three.js 0.183.2 Upgrade (March 10, 2026)
 
 **Change** (Commit 8b93772): Upgraded Three.js from 0.182.0 to 0.183.2 across all packages.
