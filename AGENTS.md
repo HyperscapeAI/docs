@@ -32,6 +32,7 @@ This is a hard requirement. DO NOT:
 - **ANGLE Backend**: Use default ANGLE backend (`--use-angle=default`), NOT native Vulkan
 - **Xvfb Virtual Display**: `scripts/deploy-vast.sh` starts Xvfb before PM2 to ensure DISPLAY is available
 - **PM2 Environment**: `ecosystem.config.cjs` explicitly forwards `DISPLAY=:99` and `DATABASE_URL` through PM2
+- **MediaRecorder Mode**: Use `STREAM_CAPTURE_MODE=mediarecorder` for stable canvas capture (more reliable than CDP under Xvfb)
 - If WebGPU cannot initialize, deployment MUST FAIL
 
 ## Project Overview
@@ -98,7 +99,7 @@ packages/
 
 ## Recent Changes (March 2026)
 
-### MediaRecorder Streaming Capture Mode (Commit 72c667a)
+### MediaRecorder Streaming Capture Mode (Commit 72c667a, 7284882)
 
 **Change**: Switched from CDP (Chrome DevTools Protocol) screencast to MediaRecorder mode for streaming capture.
 
@@ -110,22 +111,27 @@ packages/
 ```bash
 # ecosystem.config.cjs
 STREAM_CAPTURE_MODE=mediarecorder  # Changed from 'cdp'
+
+# Client-side requires internalCapture=1 URL parameter
+GAME_URL=http://localhost:3333/?page=stream&internalCapture=1
 ```
 
 **Technical Details**:
 - **CDP Mode**: Uses Chrome DevTools Protocol `Page.startScreencast` to capture frames
 - **MediaRecorder Mode**: Uses native browser `canvas.captureStream()` API with WebSocket transport
 - **Why MediaRecorder**: More stable under Xvfb virtual displays with WebGPU rendering
+- **URL Parameter**: `internalCapture=1` enables canvas.captureStream() → WebSocket bridge capture
 
 **Impact**: Eliminates stream freezing and stalling issues on Vast.ai GPU instances running Xvfb.
 
-### Equipment Visual System 404 Suppression (Commit e8ed418)
+### Equipment Visual System 404 Suppression (Commit e8ed418, b01dd52)
 
 **Change**: Suppress 404 errors for armor items without 3D models.
 
 **Updates**:
 - Added `equippedModelPath: null` to armor items in `armor.json` that don't have 3D models yet (bronze_full_helm, bronze_platelegs, bronze_kiteshield, leather_boots, leather_gloves, cape)
 - Added code guard in `EquipmentVisualSystem` to skip items with `null` equippedModelPath instead of falling through to convention URL
+- Skip convention fallback for equipment types without 3D models (helms, platelegs, boots, gloves, capes)
 
 **Impact**: Cleaner console output without 404 errors for armor items that intentionally don't have 3D models.
 
