@@ -98,6 +98,16 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Equipment Visual System 404 Suppression (Commit e8ed418)
+
+**Change**: Suppress 404 errors for armor items without 3D models.
+
+**Updates**:
+- Added `equippedModelPath: null` to armor items in `armor.json` that don't have 3D models yet (bronze_full_helm, bronze_platelegs, bronze_kiteshield, leather_boots, leather_gloves, cape)
+- Added code guard in `EquipmentVisualSystem` to skip items with `null` equippedModelPath instead of falling through to convention URL
+
+**Impact**: Cleaner console output without 404 errors for armor items that intentionally don't have 3D models.
+
 ### R2 CORS Configuration Simplification (Commit a6e6444)
 
 **Change**: Simplified Cloudflare R2 CORS configuration to use wildcard origin for public read-only assets.
