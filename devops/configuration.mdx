@@ -418,11 +418,11 @@ module.exports = {
       POSTGRES_POOL_MAX: "20",  // Up from 10 to prevent timeouts under high load
       POSTGRES_POOL_MIN: "2",   // Minimum idle connections
       
-      // Streaming configuration (commits 547714e, 41dc606)
-      STREAM_CAPTURE_MODE: "cdp",
-      STREAM_CAPTURE_HEADLESS: "false",  // Headful with Xvfb
-      STREAM_CAPTURE_CHANNEL: "chrome-beta",  // Changed from chrome-dev
-      STREAM_CAPTURE_ANGLE: "default",        // Changed from vulkan
+      // Streaming configuration (commits 72c667a, 547714e, 41dc606)
+      STREAM_CAPTURE_MODE: "mediarecorder",   // Changed from cdp (commit 72c667a)
+      STREAM_CAPTURE_HEADLESS: "false",       // Headful with Xvfb
+      STREAM_CAPTURE_CHANNEL: "chrome-beta",  // Changed from chrome-unstable (commit 547714e)
+      STREAM_CAPTURE_ANGLE: "default",        // Changed from vulkan (commit 547714e)
       STREAMING_CANONICAL_PLATFORM: "twitch",
       STREAMING_PUBLIC_DELAY_MS: "0",
       
