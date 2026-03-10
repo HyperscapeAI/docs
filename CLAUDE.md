@@ -538,6 +538,172 @@ If assets fail to load in production streaming deployments:
 
 ## Recent Changes (March 2026)
 
+### Three.js 0.183.2 Upgrade (March 10, 2026)
+
+**Change** (Commit 8b93772): Upgraded Three.js from 0.182.0 to 0.183.2 across all packages.
+
+**Breaking Changes**:
+- **TSL API Change**: `atan2` renamed to `atan` in TSL exports
+- **Type Compatibility**: Updated TSL typed node aliases (TSLNodeFloat/Vec2/Vec3/Vec4)
+- **InstancedBufferAttribute**: Fixed type cast in HealthBars system
+
+**Files Changed**:
+- `packages/shared/src/materials/LeafMaterialTSL.ts` - Updated `atan2` → `atan`
+- `packages/shared/src/three.ts` - Added TSL typed node aliases
+- `packages/shared/src/systems/HealthBars.ts` - Fixed instancedBufferAttribute type cast
+- All `package.json` files - Updated three to 0.183.2 and @types/three to 0.183.1
+
+**Migration Notes**:
+```typescript
+// Old (0.182.0)
+import { atan2 } from 'three/tsl';
+
+// New (0.183.2)
+import { atan } from 'three/tsl';
+```
+
+**Impact**: 
+- Latest Three.js features and bug fixes
+- Improved WebGPU performance and stability
+- Better TSL shader compilation
+- Required for future Three.js ecosystem compatibility
+
+### Streaming Pipeline Optimization (March 10, 2026)
+
+**Change** (Commit c0e7313, 796b61f): Major streaming pipeline overhaul with CDP default, Vulkan ANGLE on Linux, and FFmpeg improvements.
+
+**Key Changes**:
+- **Default Capture Mode**: CDP (Chrome DevTools Protocol) everywhere for reliability
+- **Linux ANGLE Backend**: Vulkan ANGLE (`--use-angle=vulkan`) on Linux NVIDIA GPUs
+- **FFmpeg Resolution**: Prefer system ffmpeg (`/usr/bin`, `/usr/local/bin`) over ffmpeg-static to avoid segfaults
+- **x264 Tuning**: Default to `zerolatency` tune for live streaming (was `film`)
+- **GOP Size**: Set to 30 frames (1s at 30fps) to match HLS segment boundaries
+- **MediaRecorder Chunks**: Tighter chunking for lower latency
+- **Dead Code Removal**: Deleted `dev-final.mjs` (875 lines), removed `SERVER_DEV_LEAN_MODE` system
+
+**ANGLE Backend Selection**:
+```bash
+# Linux (NVIDIA GPUs)
+STREAM_CAPTURE_ANGLE=vulkan
+--use-angle=vulkan --enable-features=DefaultANGLEVulkan,Vulkan,VulkanFromANGLE
+
+# macOS
+STREAM_CAPTURE_ANGLE=metal
+--use-angle=metal
+
+# Default (auto-select)
+STREAM_CAPTURE_ANGLE=default
+```
+
+**Why Vulkan ANGLE on Linux**:
+- ANGLE OpenGL ES (`--use-angle=gl`) fails with "Invalid visual ID" on NVIDIA
+- Native Vulkan (`--use-vulkan`) crashes
+- Only ANGLE's Vulkan backend works reliably for WebGPU on Linux NVIDIA
+
+**FFmpeg Improvements**:
+```bash
+# Resolution order (avoids ffmpeg-static segfaults)
+/usr/bin/ffmpeg → /usr/local/bin/ffmpeg → PATH → ffmpeg-static
+```
+
+**Configuration**:
+```bash
+# Capture mode
+STREAM_CAPTURE_MODE=cdp  # Default: CDP for reliability
+
+# ANGLE backend
+STREAM_CAPTURE_ANGLE=vulkan  # Linux NVIDIA
+STREAM_CAPTURE_ANGLE=metal   # macOS
+STREAM_CAPTURE_ANGLE=default # Auto-select
+
+# x264 encoding
+x264_tune=zerolatency  # Live streaming (was film)
+gop_size=30           # 1s segments at 30fps
+```
+
+**Files Changed**:
+- `packages/server/src/streaming/stream-to-rtmp.ts` - ANGLE backend logic, FFmpeg resolution
+- `scripts/duel-stack.mjs` - Updated default capture mode
+- `ecosystem.config.cjs` - STREAM_CAPTURE_ANGLE=vulkan
+- `playwright.config.ts` - Updated DEFAULT_LINUX_WEBGPU_ARGS
+- `packages/shared/src/rendering/RendererFactory.ts` - Prefer high-performance GPU adapter
+
+**Impact**: 
+- More reliable streaming on Linux NVIDIA GPUs
+- Lower latency with zerolatency tune
+- Eliminates FFmpeg segfaults
+- Better HLS segment alignment
+
+### Physics Optimization for Streaming (March 10, 2026)
+
+**Change** (Commit c0e7313): Skip client-side PhysX initialization for streaming/spectator viewports.
+
+**Rationale**: Streaming and spectator clients don't need physics simulation - they only render the world state. Skipping PhysX reduces memory usage and startup time.
+
+**Detection Logic**:
+```typescript
+// packages/shared/src/runtime/clientViewportMode.ts
+isStreamingLikeViewport(window) // true for stream or spectator modes
+```
+
+**Impact**: 
+- Faster streaming client startup
+- Reduced memory footprint for spectator views
+- No physics overhead for non-interactive clients
+
+### Camera Fallback for Empty Streaming Worlds (March 10, 2026)
+
+**Change** (Commit 93cac36): Added arena lobby fallback camera position when no entities exist in streaming mode.
+
+**Problem**: Streaming clients with empty world states showed a black void instead of the arena.
+
+**Solution**: `ClientCameraSystem` now defaults to arena lobby position `(0, 5, 10)` when no entities are present in streaming mode.
+
+**Impact**: Streaming always shows the arena instead of a black screen during initialization or between duels.
+
+### Service Worker Cache Strategy (March 10, 2026)
+
+**Change** (Commit 796b61f): Switched Workbox caching from `CacheFirst` to `NetworkFirst` for JS/CSS.
+
+**Problem**: Stale service worker serving old HTML for JS chunks after rebuild, causing module loading errors.
+
+**Solution**: 
+- `NetworkFirst` strategy for JS/CSS - always fetch latest, fallback to cache
+- Aggressive cache clearing for local dev (clears `workbox-*` and `hyperscape-*` caches)
+
+**Impact**: 
+- Eliminates stale module errors after rebuilds
+- Better dev experience with hot reload
+- Production still benefits from cache fallback
+
+### WebGPU Feature Flags (March 10, 2026)
+
+**Change** (Commit 796b61f, 93cac36): Updated Chrome WebGPU feature flags for better compatibility.
+
+**Added Flags**:
+- `UnsafeWebGPU` - Enable WebGPU in non-secure contexts (dev/testing)
+- `WebGPUDeveloperFeatures` - Enable developer features for debugging
+- Removed `UseSkiaRenderer` - Conflicts with WebGPU (causes "Instance dropped" errors)
+
+**Removed Flags**:
+- `--disable-gpu-sandbox` - Not needed for working Chrome
+- `--enable-webgl` - Irrelevant for WebGPU-only rendering
+- `--disable-field-trial-config` - Blocks GPU feature config propagation
+
+**Configuration**:
+```bash
+# Chrome flags for WebGPU streaming
+--enable-features=WebGPU,UnsafeWebGPU,WebGPUDeveloperFeatures
+--enable-gpu-service-logging  # Better GPU debugging
+```
+
+**Impact**: 
+- More reliable WebGPU initialization
+- Better error messages for GPU issues
+- Eliminates "Instance dropped" device-lost errors
+
+## Recent Changes (March 2026)
+
 ### CDN URL Unification (March 10, 2026)
 
 **Change** (Commit 2173086): Replaced `DUEL_PUBLIC_CDN_URL` with unified `PUBLIC_CDN_URL` environment variable.
