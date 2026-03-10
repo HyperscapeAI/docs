@@ -126,15 +126,23 @@ if (!process.env.DUEL_DATABASE_MODE && process.env.DATABASE_URL) {
 
 ### Chrome Beta for Streaming (Commit 547714e)
 
-**Change**: Switched from Chrome Unstable to Chrome Beta for streaming capture.
+**Change**: Switched from Chrome Unstable to Chrome Beta for streaming capture with default ANGLE backend.
 
 **Updates**:
 - `scripts/deploy-vast.sh`: Install `google-chrome-beta` instead of `google-chrome-unstable`
 - `ecosystem.config.cjs`: Set `STREAM_CAPTURE_CHANNEL=chrome-beta` and `STREAM_CAPTURE_ANGLE=default`
 
-**Rationale**: Chrome Beta provides better stability than Dev/Canary channels while maintaining WebGPU support.
+**ANGLE Backend Change**:
+- **Old**: `STREAM_CAPTURE_ANGLE=vulkan` (native Vulkan backend)
+- **New**: `STREAM_CAPTURE_ANGLE=default` (ANGLE's default backend selection)
+- **Why**: Better compatibility across different GPU configurations and driver versions
 
-**Impact**: More reliable streaming capture with fewer crashes and rendering artifacts.
+**Rationale**: 
+- Chrome Beta provides better stability than Dev/Canary channels while maintaining WebGPU support
+- Default ANGLE backend automatically selects the best backend (Vulkan, OpenGL, or D3D11) for the system
+- Reduces rendering artifacts and crashes from incompatible Vulkan drivers
+
+**Impact**: More reliable streaming capture with fewer crashes and rendering artifacts across diverse GPU hardware.
 
 ### DATABASE_URL PM2 Forwarding Fix (Commit 5d415fc)
 
