@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hyper scape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with autonomous AI agents powered by ElizaOS.
+Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world.
 
 ## CRITICAL: Secrets and Private Keys
 
@@ -184,7 +184,7 @@ packages/
 2. **shared** - Depends on physx-js-webidl
 3. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
 
 > **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
 >
@@ -554,8 +554,8 @@ If assets fail to load in production streaming deployments:
 
 **Files Changed**:
 - `packages/shared/src/materials/LeafMaterialTSL.ts` - Updated `atan2` → `atan`
-- `packages/shared/src/three.ts` - Added TSL typed node aliases
-- `packages/shared/src/systems/HealthBars.ts` - Fixed instancedBufferAttribute type cast
+- `packages/shared/src/extras/three/three.ts` - Added TSL typed node aliases
+- `packages/shared/src/systems/client/HealthBars.ts` - Fixed instancedBufferAttribute type cast
 - All `package.json` files - Updated three to 0.183.2 and @types/three to 0.183.1
 
 **Migration Notes**:
@@ -575,35 +575,39 @@ import { atan } from 'three/tsl';
 
 ### Streaming Pipeline Optimization (March 10, 2026)
 
-**Change** (Commits c0e7313, 796b61f): Major streaming pipeline overhaul with CDP default, Vulkan ANGLE on Linux, and FFmpeg improvements.
+**Change** (Commits c0e7313, 796b61f): Major streaming pipeline overhaul with CDP default, default ANGLE backend, and FFmpeg improvements.
 
 **Key Changes**:
 - **Default Capture Mode**: CDP (Chrome DevTools Protocol) everywhere for reliability
-- **Linux ANGLE Backend**: Vulkan ANGLE (`--use-angle=vulkan`) on Linux NVIDIA GPUs
+- **Chrome Beta Channel**: Switched from Chrome Unstable to Chrome Beta for better stability
+- **ANGLE Backend**: Default ANGLE backend (`--use-angle=default`) for cross-platform compatibility
 - **FFmpeg Resolution**: Prefer system ffmpeg (`/usr/bin`, `/usr/local/bin`) over ffmpeg-static to avoid segfaults
 - **x264 Tuning**: Default to `zerolatency` tune for live streaming (was `film`)
 - **GOP Size**: Set to 30 frames (1s at 30fps) to match HLS segment boundaries
 - **MediaRecorder Chunks**: Tighter chunking for lower latency
 - **Dead Code Removal**: Deleted `dev-final.mjs` (875 lines), removed `SERVER_DEV_LEAN_MODE` system
+- **Playwright Fix**: Block `--enable-unsafe-swiftshader` injection to prevent CPU software rendering
 
 **ANGLE Backend Selection**:
 ```bash
-# Linux (NVIDIA GPUs)
-STREAM_CAPTURE_ANGLE=vulkan
---use-angle=vulkan --enable-features=DefaultANGLEVulkan,Vulkan,VulkanFromANGLE
+# Default (auto-select) - RECOMMENDED
+STREAM_CAPTURE_ANGLE=default
+--use-angle=default
 
-# macOS
+# macOS (explicit)
 STREAM_CAPTURE_ANGLE=metal
 --use-angle=metal
 
-# Default (auto-select)
-STREAM_CAPTURE_ANGLE=default
+# Linux NVIDIA (explicit, if default fails)
+STREAM_CAPTURE_ANGLE=vulkan
+--use-angle=vulkan --enable-features=DefaultANGLEVulkan,Vulkan,VulkanFromANGLE
 ```
 
-**Why Vulkan ANGLE on Linux**:
-- ANGLE OpenGL ES (`--use-angle=gl`) fails with "Invalid visual ID" on NVIDIA
-- Native Vulkan (`--use-vulkan`) crashes
-- Only ANGLE's Vulkan backend works reliably for WebGPU on Linux NVIDIA
+**Why Default ANGLE Backend**:
+- Automatically selects best backend (Vulkan, OpenGL, or D3D11) for the system
+- Better compatibility across different GPU configurations and driver versions
+- Reduces rendering artifacts and crashes from incompatible drivers
+- Simpler configuration - no platform-specific logic needed
 
 **FFmpeg Improvements**:
 ```bash
@@ -616,10 +620,11 @@ STREAM_CAPTURE_ANGLE=default
 # Capture mode
 STREAM_CAPTURE_MODE=cdp  # Default: CDP for reliability
 
+# Chrome channel
+STREAM_CAPTURE_CHANNEL=chrome-beta  # Chrome Beta for stability
+
 # ANGLE backend
-STREAM_CAPTURE_ANGLE=vulkan  # Linux NVIDIA
-STREAM_CAPTURE_ANGLE=metal   # macOS
-STREAM_CAPTURE_ANGLE=default # Auto-select
+STREAM_CAPTURE_ANGLE=default  # Auto-select (recommended)
 
 # x264 encoding
 x264_tune=zerolatency  # Live streaming (was film)
@@ -627,17 +632,19 @@ gop_size=30           # 1s segments at 30fps
 ```
 
 **Files Changed**:
-- `packages/server/src/streaming/stream-to-rtmp.ts` - ANGLE backend logic, FFmpeg resolution
-- `scripts/duel-stack.mjs` - Updated default capture mode
-- `ecosystem.config.cjs` - STREAM_CAPTURE_ANGLE=vulkan
+- `packages/server/scripts/stream-to-rtmp.ts` - ANGLE backend logic, FFmpeg resolution
+- `scripts/duel-stack.mjs` - Updated default capture mode and ANGLE backend
+- `ecosystem.config.cjs` - STREAM_CAPTURE_ANGLE=default
+- `scripts/deploy-vast.sh` - Chrome Beta installation
 - `playwright.config.ts` - Updated DEFAULT_LINUX_WEBGPU_ARGS
-- `packages/shared/src/rendering/RendererFactory.ts` - Prefer high-performance GPU adapter
+- `packages/shared/src/utils/rendering/RendererFactory.ts` - Prefer high-performance GPU adapter
 
 **Impact**: 
-- More reliable streaming on Linux NVIDIA GPUs
+- More reliable streaming across diverse GPU hardware
 - Lower latency with zerolatency tune
 - Eliminates FFmpeg segfaults
 - Better HLS segment alignment
+- Fewer crashes and rendering artifacts
 
 ### Physics Optimization for Streaming (March 10, 2026)
 
