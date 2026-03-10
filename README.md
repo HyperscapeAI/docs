@@ -232,11 +232,13 @@ Stream destinations are auto-detected from available keys. No manual configurati
 
 ### Streaming Architecture
 
-- **Capture Mode**: CDP (Chrome DevTools Protocol) for frame capture
+- **Capture Mode**: CDP (Chrome DevTools Protocol) for reliable frame capture (default)
 - **Browser**: Chrome Beta with default ANGLE backend for WebGPU stability
-- **Virtual Display**: Xvfb on Linux for headless GPU rendering
-- **Entry Points**: Dedicated `stream.html` for optimized streaming capture
-- **Pipeline**: Playwright → CDP → FFmpeg → RTMP
+- **Virtual Display**: Xvfb on Linux for headless GPU rendering (DISPLAY=:99)
+- **Entry Points**: Dedicated `stream.html` for optimized streaming capture (separate bundle)
+- **Pipeline**: Playwright → CDP → FFmpeg (system preferred) → RTMP
+- **Encoding**: x264 with zerolatency tune, GOP=30 (1s segments at 30fps)
+- **Physics**: Client-side PhysX skipped for streaming/spectator viewports (memory optimization)
 
 ### Environment Variables
 
