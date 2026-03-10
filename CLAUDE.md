@@ -398,6 +398,10 @@ DISPLAY=:99                           # Xvfb virtual display
 # Database Mode (auto-detected from DATABASE_URL)
 DUEL_DATABASE_MODE=remote        # or local (auto-detected)
 
+# CDN Configuration
+PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production CDN
+DUEL_PUBLIC_CDN_URL=https://assets.hyperscape.club  # For duel stack
+
 # Oracle (optional)
 DUEL_ARENA_ORACLE_ENABLED=true
 DUEL_ARENA_ORACLE_PROFILE=testnet  # or mainnet
@@ -525,7 +529,28 @@ If RTMP streaming fails to start:
 - Verify DISPLAY environment variable: `echo $DISPLAY` (should be `:99`)
 - Review logs: `bunx pm2 logs hyperscape-duel`
 
+### CDN Asset Loading Issues
+
+If assets fail to load in production streaming deployments:
+- Verify `DUEL_PUBLIC_CDN_URL` is set to production CDN (not localhost)
+- Default: `https://assets.hyperscape.club`
+- Check `ecosystem.config.cjs` has correct CDN URL
+- Ensure CDN is accessible from deployment environment
+
 ## Recent Changes (March 2026)
+
+### Production CDN URL Fix (March 10, 2026)
+
+**Change** (Commit 2b3cbcb): Set `DUEL_PUBLIC_CDN_URL` to production CDN for Vast streaming deployments.
+
+**Update**: `ecosystem.config.cjs` now defaults to `https://assets.hyperscape.club` instead of localhost.
+
+**Configuration**:
+```javascript
+DUEL_PUBLIC_CDN_URL: process.env.PUBLIC_CDN_URL || "https://assets.hyperscape.club"
+```
+
+**Impact**: Streaming deployments on Vast.ai now correctly load assets from production CDN instead of attempting localhost connections.
 
 ### PostgreSQL Connection Pool Increase (March 10, 2026)
 
@@ -585,6 +610,9 @@ STREAM_CAPTURE_ANGLE=default
 
 # Xvfb display
 DISPLAY=:99
+
+# Production CDN
+DUEL_PUBLIC_CDN_URL=https://assets.hyperscape.club
 ```
 
 ### Streaming Pipeline Fixes (March 9, 2026)
