@@ -293,9 +293,9 @@ KICK_STREAM_KEY=...
 YOUTUBE_STREAM_KEY=...          # or YOUTUBE_RTMP_STREAM_KEY
 
 # Streaming configuration (defaults shown)
-STREAM_CAPTURE_MODE=cdp         # or mediarecorder
-STREAM_CAPTURE_CHANNEL=chrome-beta
-STREAM_CAPTURE_ANGLE=default
+STREAM_CAPTURE_MODE=cdp         # CDP for reliability (or mediarecorder)
+STREAM_CAPTURE_CHANNEL=chrome-beta  # Chrome Beta for stability
+STREAM_CAPTURE_ANGLE=default    # Auto-select best ANGLE backend
 STREAM_CAPTURE_WIDTH=1280
 STREAM_CAPTURE_HEIGHT=720
 DISPLAY=:99                     # Xvfb virtual display (Linux)
