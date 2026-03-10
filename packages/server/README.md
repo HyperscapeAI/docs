@@ -328,8 +328,9 @@ POSTGRES_POOL_MIN=0             # Don't hold idle connections
 ### Assets
 
 ```env
-PUBLIC_CDN_URL=http://localhost:8080    # CDN URL for static assets
-PUBLIC_WS_URL=ws://localhost:5555/ws # WebSocket URL
+PUBLIC_CDN_URL=http://localhost:8080              # CDN URL for static assets (local dev)
+DUEL_PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production CDN (Vast.ai streaming)
+PUBLIC_WS_URL=ws://localhost:5555/ws              # WebSocket URL
 ```
 
 ### Authentication (Optional)
