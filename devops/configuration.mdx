@@ -344,12 +344,12 @@ STREAM_ENABLED_DESTINATIONS=twitch,kick,x       # Comma-separated list (auto-det
 # GAME_URL=http://localhost:3333/?page=stream&internalCapture=1
 # Without internalCapture=1, browser logs 'Bridge capture disabled' and sends no frames
 
-# PostgreSQL Connection Pool (commit 0c8dbe0, Mar 2 2026)
-# Reduced pool size to prevent connection exhaustion during crash loops
-POSTGRES_POOL_MAX=3                             # Max connections (down from 6)
-POSTGRES_POOL_MIN=0                             # Min idle connections (down from 2)
-                                                # Prevents PostgreSQL error 53300 (too many connections)
-                                                # Neon serverless has strict limits; lower pool = faster recovery
+# PostgreSQL Connection Pool (commit 24fa8a5, Mar 10 2026)
+# Increased pool size to prevent database timeouts under high load
+POSTGRES_POOL_MAX=20                            # Max connections (up from 10)
+POSTGRES_POOL_MIN=2                             # Min idle connections
+                                                # Prevents "timeout exceeded when trying to connect" errors
+                                                # Required for concurrent agent queries during duel cycles
 
 # Model Agent Spawning (commit fe6b535, Mar 2 2026)
 SPAWN_MODEL_AGENTS=true                         # Auto-create agents when database is empty
