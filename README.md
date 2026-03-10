@@ -287,6 +287,12 @@ bun run build
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
 
+**Database connection pool exhaustion:**
+If seeing "timeout exceeded when trying to connect" errors, the PostgreSQL connection pool has been increased to 20 connections (March 2026). Configure via `POSTGRES_POOL_MAX` and `POSTGRES_POOL_MIN` in server `.env`.
+
+**CSRF 403 errors on account creation:**
+If account creation fails with "CSRF validation failed" when running client on localhost against a deployed server, this was fixed in March 2026 (commit 0b1a0bd). Ensure you're running the latest version.
+
 ## More Info
 
 See [AGENTS.md](AGENTS.md) for AI coding assistant instructions and recent changes documentation.
