@@ -429,7 +429,7 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 
 - **Runtime**: Bun v1.1.38+
 - **Rendering**: WebGPU ONLY (Three.js WebGPURenderer + TSL shaders) - NO WebGL
-- **Engine**: Three.js 0.182.0, PhysX (WASM)
+- **Engine**: Three.js 0.183.2, PhysX (WASM)
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
 - **Database**: PostgreSQL (production via Neon/Railway), Docker (local)
@@ -437,7 +437,7 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor
 - **AI Agents**: ElizaOS `alpha` packages (^2.0.0-alpha.x) with InMemoryDatabaseAdapter (no PGLite)
-- **Streaming**: FFmpeg, Playwright Chromium, RTMP
+- **Streaming**: FFmpeg (system preferred over ffmpeg-static), Playwright Chromium, RTMP
 
 ## Troubleshooting
 
