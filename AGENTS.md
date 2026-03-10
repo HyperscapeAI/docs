@@ -123,20 +123,37 @@ import { atan } from 'three/tsl';
 
 ### Streaming Pipeline Optimization (March 10, 2026)
 
-**Change** (Commits c0e7313, 796b61f): Major streaming pipeline overhaul with CDP default, Vulkan ANGLE on Linux, and FFmpeg improvements.
+**Change** (Commits c0e7313, 796b61f): Major streaming pipeline overhaul with CDP default, default ANGLE backend, and FFmpeg improvements.
 
 **Key Changes**:
 - **Default Capture Mode**: CDP (Chrome DevTools Protocol) everywhere for reliability
-- **Linux ANGLE Backend**: Vulkan ANGLE (`--use-angle=vulkan`) on Linux NVIDIA GPUs
-- **FFmpeg Resolution**: Prefer system ffmpeg over ffmpeg-static to avoid segfaults
+- **Chrome Beta Channel**: Switched from Chrome Unstable to Chrome Beta for better stability
+- **ANGLE Backend**: Default ANGLE backend (`--use-angle=default`) for automatic best-backend selection
+- **FFmpeg Resolution**: Prefer system ffmpeg (`/usr/bin`, `/usr/local/bin`) over ffmpeg-static to avoid segfaults
 - **x264 Tuning**: Default to `zerolatency` tune for live streaming (was `film`)
 - **GOP Size**: Set to 30 frames (1s at 30fps) to match HLS segment boundaries
+- **Playwright Fix**: Block `--enable-unsafe-swiftshader` injection to prevent CPU software rendering
 - **Dead Code Removal**: Deleted `dev-final.mjs` (875 lines), removed `SERVER_DEV_LEAN_MODE` system
 
-**Why Vulkan ANGLE on Linux**:
-- ANGLE OpenGL ES (`--use-angle=gl`) fails with "Invalid visual ID" on NVIDIA
-- Native Vulkan (`--use-vulkan`) crashes
-- Only ANGLE's Vulkan backend works reliably for WebGPU on Linux NVIDIA
+**ANGLE Backend Evolution**:
+- **Initial (commit 796b61f)**: Vulkan ANGLE on Linux NVIDIA (`--use-angle=vulkan`)
+- **Current (commit c0e7313)**: Default ANGLE backend (`--use-angle=default`) for auto-selection
+- **Why Default**: Better compatibility across different GPU configurations and driver versions
+
+**ANGLE Backend Selection**:
+```bash
+# Default (auto-select) - RECOMMENDED
+STREAM_CAPTURE_ANGLE=default
+--use-angle=default
+
+# macOS (explicit)
+STREAM_CAPTURE_ANGLE=metal
+--use-angle=metal
+
+# Linux NVIDIA (explicit, if default fails)
+STREAM_CAPTURE_ANGLE=vulkan
+--use-angle=vulkan --enable-features=DefaultANGLEVulkan,Vulkan,VulkanFromANGLE
+```
 
 **FFmpeg Improvements**:
 ```bash
@@ -144,7 +161,7 @@ import { atan } from 'three/tsl';
 /usr/bin/ffmpeg → /usr/local/bin/ffmpeg → PATH → ffmpeg-static
 ```
 
-**Impact**: More reliable streaming on Linux NVIDIA GPUs, lower latency, eliminates FFmpeg segfaults.
+**Impact**: More reliable streaming across diverse GPU hardware, lower latency, eliminates FFmpeg segfaults, fewer crashes and rendering artifacts.
 
 ### Physics Optimization for Streaming (March 10, 2026)
 
