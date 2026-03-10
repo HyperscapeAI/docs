@@ -436,12 +436,12 @@ KICK_STREAM_KEY=your-kick-stream-key
 KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
 
 # Streaming capture configuration
-STREAM_CAPTURE_MODE=cdp  # Reverted to CDP (March 10, 2026)
-STREAM_CAPTURE_CHANNEL=chrome-beta
-STREAM_CAPTURE_ANGLE=default
+STREAM_CAPTURE_MODE=cdp         # CDP for reliability (default)
+STREAM_CAPTURE_CHANNEL=chrome-beta  # Chrome Beta for stability
+STREAM_CAPTURE_ANGLE=default    # Auto-select best ANGLE backend
 STREAM_CAPTURE_WIDTH=1280
 STREAM_CAPTURE_HEIGHT=720
-DISPLAY=:99
+DISPLAY=:99                     # Xvfb virtual display (Linux)
 ```
 
 **Impact**: Reliable multi-platform RTMP streaming with automatic destination detection, proper secret forwarding, and stable Chrome Beta rendering.
