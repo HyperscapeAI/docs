@@ -103,10 +103,10 @@ cp packages/asset-forge/.env.example packages/asset-forge/.env
 
 ```
 packages/
-├── shared/              # Core 3D engine (ECS, Three.js, PhysX, networking, React UI)
-├── server/              # Game server (Fastify, WebSockets, PostgreSQL, oracle publisher)
-├── client/              # Web client (Vite, React, streaming entry points)
-├── plugin-hyperscape/   # ElizaOS AI agent plugin
+├── shared/              # Core 3D engine (ECS, Three.js 0.183.2, PhysX, networking, React UI)
+├── server/              # Game server (Fastify, WebSockets, PostgreSQL pool: 20, oracle publisher)
+├── client/              # Web client (Vite, React, streaming entry points: stream.html)
+├── plugin-hyperscape/   # ElizaOS AI agent plugin (ElizaCloud integration)
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation + VFX catalog
