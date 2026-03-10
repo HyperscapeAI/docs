@@ -803,8 +803,9 @@ STREAM_CAPTURE_MODE=mediarecorder          # Changed from cdp (commit 72c667a)
                                            # cdp: Chrome DevTools Protocol screencast (may stall under Xvfb)
 STREAM_CAPTURE_HEADLESS=false              # Xorg mode (or "new" for headless EGL)
 STREAM_CAPTURE_USE_EGL=false               # true for headless EGL mode
-STREAM_CAPTURE_CHANNEL=chrome-beta         # Chrome Beta (changed from chrome-dev)
-STREAM_CAPTURE_ANGLE=default               # Default ANGLE backend (changed from vulkan)
+STREAM_CAPTURE_CHANNEL=chrome-beta         # Changed from chrome-unstable (commit 547714e)
+STREAM_CAPTURE_ANGLE=default               # Changed from vulkan (commit 547714e)
+                                           # default: auto-selects best backend for system
 STREAM_CAPTURE_DISABLE_WEBGPU=false        # WebGPU enabled
 STREAMING_CANONICAL_PLATFORM=twitch        # Lower latency than YouTube
 STREAMING_PUBLIC_DELAY_MS=0                # No delay (real-time)
