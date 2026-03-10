@@ -418,9 +418,13 @@ This is useful for:
 
 **Deployment Process:**
 
-1. **Enter Maintenance Mode** - Pauses new duel cycles, waits for active markets to resolve
-2. **SSH Deploy** - Connects to Vast.ai instance, pulls latest code, builds, and restarts
-3. **Exit Maintenance Mode** - Resumes duel cycles after health check passes
+1. **Write Secrets to /tmp** - Saves secrets to `/tmp/hyperscape-secrets.env` before git operations (commit 684b203)
+2. **Enter Maintenance Mode** - Pauses new duel cycles, waits for active markets to resolve
+3. **SSH Deploy** - Connects to Vast.ai instance, pulls latest code, builds, and restarts
+4. **Auto-Detect Configuration** - Database mode, stream destinations, GPU rendering mode
+5. **Start Xvfb** - Virtual display started before PM2 (commit 294a36c)
+6. **PM2 Restart** - Reads secrets from `/tmp`, auto-detects database mode (commits 684b203, 3df4370)
+7. **Exit Maintenance Mode** - Resumes duel cycles after health check passes
 
 ### Graceful Restart API (Zero-Downtime Deployments)
 
