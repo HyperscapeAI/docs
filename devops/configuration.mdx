@@ -105,11 +105,19 @@ VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json  # Force NVIDIA Vulkan 
 WEBGPU_MODE=xorg                             # Working WebGPU mode from 6-stage testing
 
 # Chrome Capture Configuration (Updated March 2026)
-STREAM_CAPTURE_MODE=cdp                      # cdp (default), mediarecorder, or webcodecs
+STREAM_CAPTURE_MODE=mediarecorder            # mediarecorder (default), cdp, or webcodecs
+                                             # Changed from cdp to mediarecorder (commit 72c667a)
+                                             # mediarecorder: canvas.captureStream() → WebSocket → FFmpeg
+                                             # cdp: Chrome DevTools Protocol screencast (may stall under Xvfb)
+                                             # Requires internalCapture=1 URL param for mediarecorder mode
 STREAM_CAPTURE_HEADLESS=false                # false (Xorg/Xvfb), new (headless modes)
 STREAM_CAPTURE_USE_EGL=false                 # true for headless EGL mode
-STREAM_CAPTURE_CHANNEL=chrome-beta           # Chrome Beta (stable) - changed from chrome-dev
-STREAM_CAPTURE_ANGLE=default                 # default (auto-select), vulkan, gl, or swiftshader
+STREAM_CAPTURE_CHANNEL=chrome-beta           # Chrome Beta (stable) - changed from chrome-unstable (commit 547714e)
+STREAM_CAPTURE_ANGLE=default                 # default (auto-select) - changed from vulkan (commit 547714e)
+                                             # default: auto-selects best backend (Vulkan, OpenGL, D3D11)
+                                             # vulkan: native Vulkan (may crash on some systems)
+                                             # gl: OpenGL backend
+                                             # swiftshader: CPU fallback
 STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-beta  # Explicit Chrome path (optional)
 STREAM_CAPTURE_OZONE_HEADLESS=false          # true for ozone-platform=headless mode
 STREAM_CDP_QUALITY=80                        # JPEG quality for CDP screencast (1-100)
