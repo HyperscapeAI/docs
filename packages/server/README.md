@@ -794,7 +794,12 @@ Disable in development with `DISABLE_RATE_LIMIT=true` (not recommended for produ
 
 ## Support
 
-- **Documentation:** See `AGENTS.md` for AI agent features and `docs/betting-production-deploy.md` for betting stack deployment
+- **Documentation:** 
+  - `AGENTS.md` - AI agent features and recent changes
+  - `CLAUDE.md` - Development guidelines and architecture
+  - `docs/duel-arena-oracle-deploy.md` - Oracle deployment guide
+  - `docs/duel-stack.md` - Duel stack documentation
+  - [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet) - Betting stack (separate repository)
 - **Issues:** Report bugs in the main Hyperscape repository
 
 ## License
