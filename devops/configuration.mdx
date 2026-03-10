@@ -336,7 +336,13 @@ STREAMING_VIEWER_ACCESS_TOKEN=replace-with-random-secret-token
 # Stream Destinations Auto-Detection (March 2026)
 # Automatically enables destinations based on configured stream keys
 # Uses || logic: TWITCH_RTMP_STREAM_KEY || TWITCH_STREAM_KEY
+# Auto-detection added in commit 41dc606
 STREAM_ENABLED_DESTINATIONS=twitch,kick,x       # Comma-separated list (auto-detected if not set)
+
+# MediaRecorder Streaming Mode (March 2026)
+# Requires internalCapture=1 URL parameter for canvas capture bridge
+# GAME_URL=http://localhost:3333/?page=stream&internalCapture=1
+# Without internalCapture=1, browser logs 'Bridge capture disabled' and sends no frames
 
 # PostgreSQL Connection Pool (commit 0c8dbe0, Mar 2 2026)
 # Reduced pool size to prevent connection exhaustion during crash loops
