@@ -22,7 +22,48 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **AI Agents** | ElizaOS-powered autonomous gameplay, 13 frontier LLM models via ElizaCloud, spectator mode |
 | **Streaming** | Multi-platform RTMP streaming (Twitch, Kick, YouTube), dedicated streaming entry points |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
-| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
+| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics, WebGPU rendering |
+
+## Recent Updates (March 2026)
+
+### Three.js 0.183.2 Upgrade
+- Upgraded from 0.182.0 to 0.183.2 for latest WebGPU features and performance improvements
+- **Breaking Change**: TSL API `atan2` renamed to `atan` (migration required for custom shaders)
+- Improved WebGPU stability and shader compilation
+
+### Streaming Pipeline Optimization
+- **Default Capture Mode**: CDP (Chrome DevTools Protocol) for reliable frame capture
+- **Chrome Beta**: Switched to Chrome Beta channel for better stability (from Unstable)
+- **ANGLE Backend**: Default ANGLE backend for better cross-platform compatibility
+- **FFmpeg**: System FFmpeg preferred over ffmpeg-static to avoid segfaults
+- **x264 Tuning**: `zerolatency` tune for live streaming (lower latency)
+- **GOP Size**: 30 frames (1s at 30fps) for better HLS segment alignment
+- **Physics Optimization**: Skip client-side PhysX for streaming/spectator viewports (faster startup, lower memory)
+
+### CDN Configuration Simplification
+- Unified `PUBLIC_CDN_URL` environment variable (replaced `DUEL_PUBLIC_CDN_URL`)
+- Consistent CDN configuration across all contexts (client, server, streaming)
+- Simplified R2 CORS configuration with wildcard origin for public assets
+
+### Service Worker Improvements
+- Switched from `CacheFirst` to `NetworkFirst` strategy for JS/CSS
+- Eliminates stale module errors after rebuilds
+- Aggressive cache clearing for local development
+
+### Dependency Updates
+- **Capacitor**: 8.2.0 (Android, iOS, Core) - Latest mobile platform features
+- **lucide-react**: 0.577.0 - New icons and improvements
+- **three-mesh-bvh**: 0.9.9 - Better BVH performance
+- **eslint**: 10.0.3 - Latest linting rules
+- **jsdom**: 28.1.0 - Testing improvements
+
+### Database & Infrastructure
+- PostgreSQL connection pool increased to 20 (from 10) to prevent timeouts under load
+- Auto-detection of database mode (local vs remote) from `DATABASE_URL` hostname
+- PM2 environment variable forwarding for `DISPLAY`, `DATABASE_URL`, and stream keys
+- Xvfb virtual display started before PM2 on Linux for reliable GPU rendering
+
+See [CLAUDE.md](CLAUDE.md) for complete changelog and migration notes.
 
 ## Quick Start
 
@@ -255,6 +296,9 @@ STREAM_CAPTURE_ANGLE=default
 STREAM_CAPTURE_WIDTH=1280
 STREAM_CAPTURE_HEIGHT=720
 DISPLAY=:99                     # Xvfb virtual display (Linux)
+
+# CDN (unified configuration)
+PUBLIC_CDN_URL=https://assets.hyperscape.club
 ```
 
 ### Vast.ai GPU Streaming
@@ -372,6 +416,9 @@ If seeing "timeout exceeded when trying to connect" errors, the PostgreSQL conne
 
 **CSRF 403 errors on account creation:**
 If account creation fails with "CSRF validation failed" when running client on localhost against a deployed server, this was fixed in March 2026 (commit 0b1a0bd). Ensure you're running the latest version.
+
+**Stale module errors after rebuild:**
+Service worker cache strategy was switched to `NetworkFirst` in March 2026 to prevent stale JS/CSS. Clear your browser cache or use incognito mode if you still see errors.
 
 ## More Info
 
