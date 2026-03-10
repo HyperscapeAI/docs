@@ -443,24 +443,72 @@ bunx pm2 save
 bunx pm2 startup
 ```
 
-### Stream Key Management
+### Secrets Loading and Stream Key Management (Updated March 2026)
 
-Stream keys must be explicitly unset and re-exported before PM2 start to avoid stale environment variables:
+**PM2 Secrets Loading** (Commit 684b203):
+
+PM2 doesn't reliably inherit exported environment variables from the deploy shell script. The `ecosystem.config.cjs` now reads secrets directly from `/tmp/hyperscape-secrets.env` at config load time:
+
+```javascript
+// From ecosystem.config.cjs
+const fs = require("fs");
+const SECRETS_FILES = [
+  "/tmp/hyperscape-secrets.env",
+  require("path").join(__dirname, ".env.production"),
+];
+
+for (const secretsPath of SECRETS_FILES) {
+  try {
+    if (fs.existsSync(secretsPath)) {
+      const lines = fs.readFileSync(secretsPath, "utf-8").split("\n");
+      for (const line of lines) {
+        // Parse and load environment variables
+        // ...
+      }
+    }
+  } catch { /* ignore missing/unreadable files */ }
+}
+```
+
+**Database Mode Auto-Detection** (Commit 3df4370):
+
+After loading secrets, the config automatically detects whether `DATABASE_URL` points to a remote host:
+
+```javascript
+// Auto-detect DUEL_DATABASE_MODE from DATABASE_URL
+if (!process.env.DUEL_DATABASE_MODE && process.env.DATABASE_URL) {
+  try {
+    const dbHost = new URL(process.env.DATABASE_URL).hostname;
+    const isLocal = ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(dbHost);
+    process.env.DUEL_DATABASE_MODE = isLocal ? "local" : "remote";
+  } catch {
+    process.env.DUEL_DATABASE_MODE = "remote";
+  }
+}
+```
+
+**Stream Destination Auto-Detection** (Commit 41dc606):
+
+Stream destinations are auto-detected from available stream keys using `||` logic:
 
 ```bash
 # From scripts/deploy-vast.sh
-unset TWITCH_STREAM_KEY X_STREAM_KEY X_RTMP_URL KICK_STREAM_KEY KICK_RTMP_URL
-source /root/hyperscape/packages/server/.env
-bunx pm2 start ecosystem.config.cjs
+DESTS=""
+if [ -n "${TWITCH_STREAM_KEY:-${TWITCH_RTMP_STREAM_KEY:-}}" ]; then
+    DESTS="twitch"
+fi
+if [ -n "${KICK_STREAM_KEY:-}" ]; then
+    DESTS="${DESTS:+${DESTS},}kick"
+fi
+export STREAM_ENABLED_DESTINATIONS="$DESTS"
 ```
 
-This ensures PM2 picks up the correct stream keys from the .env file, not stale values from the shell environment.
-
 **Why This Matters:**
-- Vast.ai servers can have stale stream keys in their environment from previous deployments
-- These stale values override the .env file values
-- Explicitly unsetting ensures clean environment before sourcing .env
-- Prevents streams from going to wrong channels/accounts
+- Ensures `DATABASE_URL` and stream keys are always available to PM2-managed processes
+- Prevents server crashes from missing DATABASE_URL in remote mode
+- Seamless database mode switching without manual configuration
+- Automatic streaming destination detection from configured keys
+- No need to manually set `STREAM_ENABLED_DESTINATIONS`
 
 ## Maintenance Mode
 
