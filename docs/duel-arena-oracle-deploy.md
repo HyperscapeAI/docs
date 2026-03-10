@@ -13,8 +13,30 @@ The production event flow is:
 
 1. `streaming:announcement:start` -> publish duel announcement/open state
 2. `streaming:fight:start` -> publish locked/start state
-3. `streaming:resolution:start` -> publish result
+3. `streaming:resolution:start` -> publish result with comprehensive outcome data
 4. `streaming:cycle:aborted` -> publish cancellation
+
+## Oracle Data Fields (March 2026)
+
+The oracle now publishes comprehensive duel outcome data for betting market settlement and replay verification:
+
+**Core Fields**:
+- `roundId` - Unique duel identifier
+- `participantA` / `participantB` - Character IDs
+- `winner` - Winning character ID (or empty for draw)
+- `timestamp` - Unix timestamp of duel completion
+
+**Combat Statistics** (New in March 2026):
+- `damageA` - Total damage dealt by participant A
+- `damageB` - Total damage dealt by participant B
+- `winReason` - Detailed win reason: `knockout`, `timeout`, `forfeit`, `draw`
+
+**Verification Data** (New in March 2026):
+- `seed` - Cryptographic seed for replay verification
+- `replayHashHex` - Hash of replay data for integrity verification
+- `resultHashHex` - Combined hash of all duel outcome data
+
+These fields are stored in the `arena_rounds` database table and published to all configured oracle targets (EVM + Solana).
 
 ## Oracle Data Fields (March 2026)
 
