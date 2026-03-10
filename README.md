@@ -282,6 +282,8 @@ See `scripts/deploy-vast.sh` for full deployment automation.
 - Verify Xvfb is running: `ps aux | grep Xvfb`
 - Ensure `DISPLAY=:99` is set in environment
 - Check Playwright isn't injecting `--enable-unsafe-swiftshader` (blocks WebGPU)
+- Verify ANGLE backend is set to `default` (not `vulkan` or `gl`)
+- Check Chrome feature flags include `WebGPU,UnsafeWebGPU,WebGPUDeveloperFeatures`
 
 **RTMP connection failures:**
 - Check for stale FFmpeg processes: `pkill -f ffmpeg`
