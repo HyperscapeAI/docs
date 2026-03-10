@@ -39,7 +39,10 @@ For Vast.ai and other GPU servers running the streaming pipeline:
 - **NVIDIA GPU with Display Driver REQUIRED** - Must have `gpu_display_active=true` on Vast.ai
 - **Display Driver vs Compute**: WebGPU requires GPU display driver support, not just compute access
 - **Must run non-headless** with Xorg or Xvfb (WebGPU requires window context)
-- Chrome uses ANGLE/Vulkan backend to access WebGPU
+- **Chrome Beta Channel**: Use `google-chrome-beta` for WebGPU streaming (better stability than Dev/Canary)
+- **ANGLE Backend**: Use default ANGLE backend (`--use-angle=default`), NOT native Vulkan
+- **Xvfb Virtual Display**: `scripts/deploy-vast.sh` starts Xvfb before PM2 to ensure DISPLAY is available
+- **PM2 Environment**: `ecosystem.config.cjs` explicitly forwards `DISPLAY=:99` and `DATABASE_URL` through PM2
 - If GPU cannot initialize WebGPU, deployment MUST FAIL (no soft fallbacks)
 
 ### Development Rules for WebGPU
@@ -150,14 +153,15 @@ packages/
 │   └── React UI components
 ├── server/              # Game server (Fastify + WebSockets)
 │   ├── World management
-│   ├── PostgreSQL persistence
+│   ├── PostgreSQL persistence (connection pool: 20)
 │   ├── LiveKit voice chat integration
 │   ├── Streaming duel scheduler
 │   └── Duel arena oracle publisher
 ├── client/              # Web client (Vite + React)
 │   ├── 3D rendering (WebGPU only)
 │   ├── Player controls
-│   └── UI/HUD
+│   ├── UI/HUD
+│   └── Streaming entry points (stream.html)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── contracts/           # MUD onchain game state (experimental)
 ├── duel-oracle-evm/     # EVM duel outcome oracle contracts
@@ -371,14 +375,28 @@ JWT_SECRET=...                   # Required for production
 PRIVY_APP_ID=...                 # For Privy auth
 PRIVY_APP_SECRET=...             # For Privy auth
 
+# PostgreSQL Connection Pool (increased March 2026)
+POSTGRES_POOL_MAX=20             # Default: 20 (up from 10)
+POSTGRES_POOL_MIN=2              # Default: 2
+
 # ElizaCloud AI (for duel arena agents)
 ELIZAOS_CLOUD_API_KEY=...        # Single key for 13 frontier models
 
-# Streaming (optional)
+# Streaming (optional) - auto-detected from available keys
 TWITCH_STREAM_KEY=...            # or TWITCH_RTMP_STREAM_KEY
 KICK_STREAM_KEY=...
 YOUTUBE_STREAM_KEY=...           # or YOUTUBE_RTMP_STREAM_KEY
 STREAM_ENABLED_DESTINATIONS=...  # Auto-detected if not set
+
+# Streaming Capture Configuration
+STREAM_CAPTURE_CHANNEL=chrome-beta    # Chrome Beta for stability
+STREAM_CAPTURE_ANGLE=default          # Default ANGLE backend
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+DISPLAY=:99                           # Xvfb virtual display
+
+# Database Mode (auto-detected from DATABASE_URL)
+DUEL_DATABASE_MODE=remote        # or local (auto-detected)
 
 # Oracle (optional)
 DUEL_ARENA_ORACLE_ENABLED=true
@@ -481,7 +499,8 @@ If agents are consuming excessive memory:
 ### Database Connection Pool Exhaustion
 
 If seeing "timeout exceeded when trying to connect" errors:
-- Increase serverless PG pool max (default: 20)
+- **PostgreSQL connection pool increased to 20** (March 2026, commit 24fa8a5)
+- Increase serverless PG pool max if needed (default: 20)
 - Increase connection timeout (default: 60s)
 - Enable concurrency limiting for bank queries (max 5)
 - Stagger agent refresh intervals to distribute load
@@ -501,9 +520,31 @@ If RTMP streaming fails to start:
 - Ensure FFmpeg is installed: `which ffmpeg` or set `FFMPEG_PATH`
 - Verify Playwright Chromium is installed: `bunx playwright install chromium`
 - Check GPU display driver is active (Vast.ai: `gpu_display_active=true`)
+- Verify Chrome Beta is installed: `google-chrome-beta --version`
+- Check Xvfb is running: `ps aux | grep Xvfb`
+- Verify DISPLAY environment variable: `echo $DISPLAY` (should be `:99`)
 - Review logs: `bunx pm2 logs hyperscape-duel`
 
 ## Recent Changes (March 2026)
+
+### PostgreSQL Connection Pool Increase (March 10, 2026)
+
+**Change** (Commit 24fa8a5): Increased PostgreSQL connection pool from 10 to 20 connections.
+
+**Configuration**:
+```bash
+# packages/server/.env or ecosystem.config.cjs
+POSTGRES_POOL_MAX=20
+POSTGRES_POOL_MIN=2
+```
+
+**Impact**: Prevents database timeout errors under high load from concurrent agent queries.
+
+### Mob Debug Logging Cleanup (March 10, 2026)
+
+**Change** (Commit cdf4925): Removed spammy mob debug logs and fixed dev server service worker proxying.
+
+**Impact**: Cleaner console output during development and improved service worker reliability.
 
 ### PM2 Deployment Improvements (March 9-10, 2026)
 
@@ -555,7 +596,7 @@ DISPLAY=:99
 - `ecosystem.config.cjs`: Explicitly forwards stream keys, `DISPLAY`, and `DATABASE_URL` through PM2 environment
 - `deploy-vast.yml`: Adds `TWITCH_RTMP_STREAM_KEY` alias to secrets file for compatibility
 - `stream.html` / `stream.tsx`: Dedicated streaming entry points with optimized bundles
-- `clientViewportMode()`: Utility to detect stream/spectator/normal modes
+- `clientViewportMode.ts`: Utility to detect stream/spectator/normal modes
 - Multi-page Vite build: Separate bundles for game and streaming
 
 **Auto-Detection Logic**:
@@ -628,13 +669,44 @@ ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
 **Code Changes**:
 - `packages/server/src/eliza/ModelAgentSpawner.ts` - Updated MODEL_AGENTS array with ElizaCloud models
 - `packages/server/src/eliza/agentHelpers.ts` - Added elizacloud provider to DEFAULT_SMALL_MODELS and MODEL_SETTING_KEYS
-- `packages/server/src/eliza/index.ts` - Added elizacloud to modelProviders type union
+- `packages/plugin-hyperscape/src/index.ts` - Added ElizaCloud plugin to type definitions
 
 **Benefits**:
 - Single API key for all models (no need for OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY)
 - Access to 13 frontier models from 13 different providers
 - Simplified agent configuration and deployment
 - Consistent error handling and retry logic
+
+### Streaming Entry Points (March 9, 2026)
+
+**Change** (Commit 71dcba8): Added dedicated streaming entry points for optimized capture and viewport mode detection.
+
+**New Files**:
+- `packages/client/src/stream.html` - Dedicated HTML entry for streaming capture
+- `packages/client/src/stream.tsx` - React entry point for streaming mode
+- `packages/shared/src/runtime/clientViewportMode.ts` - Viewport mode detection utility
+
+**Viewport Mode Detection**:
+```typescript
+// Detect if running in streaming capture mode
+isStreamPageRoute(window) // true for /stream.html or ?page=stream
+
+// Detect if running as embedded spectator
+isEmbeddedSpectatorViewport(window) // true for ?embedded=true&mode=spectator
+
+// Detect any streaming-like viewport
+isStreamingLikeViewport(window) // true for either of the above
+```
+
+**Vite Multi-Page Build**:
+- Main game: `index.html` → `dist/index.html`
+- Streaming: `stream.html` → `dist/stream.html`
+- Separate bundles optimize for different use cases
+
+**Impact**: 
+- Optimized streaming capture with minimal UI overhead
+- Clear separation between game and streaming entry points
+- Automatic viewport mode detection for conditional rendering
 
 ### Betting Stack Split (March 9, 2026)
 
@@ -659,7 +731,7 @@ ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
 
 ### Oracle Improvements (March 9, 2026)
 
-**New Database Fields:**
+**New Database Fields** (Commit aecab58):
 - `damage_a` - Total damage dealt by participant A
 - `damage_b` - Total damage dealt by participant B
 - `win_reason` - Detailed win reason (knockout, timeout, forfeit, draw)
@@ -667,7 +739,7 @@ ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
 - `replay_hash` - Hash of replay data
 - `result_hash` - Combined hash of all outcome data
 
-**New Scripts:**
+**New Scripts**:
 - `verify-duel-oracle-local` - Local oracle integration testing
 - EVM deploy scripts with receipt generation
 - Solana config.json with program IDs
@@ -688,14 +760,45 @@ DUEL_ARENA_ORACLE_SOLANA_AUTHORITY_SECRET=base64:...
 
 **Impact**: Comprehensive duel outcome data for betting market settlement and replay verification.
 
+### TypeScript Fixes (March 9, 2026)
+
+**Problem**: TS18048 errors for `GAME_API_URL` and other import.meta.env values possibly being undefined.
+
+**Fix**: Switch from `||` to `??` (nullish coalescing) for import.meta.env values so TypeScript can narrow the type through the fallback chain.
+
+**Files Changed**:
+- `packages/client/src/lib/api-config.ts` - Added explicit string types to URL exports
+
+**Impact**: Eliminates TypeScript errors without requiring non-null assertions.
+
+### ElizaOS Alpha Package Alignment (March 9, 2026)
+
+**Change** (Commit 6d67ec1): Aligned all ElizaOS packages to `alpha` tag for stable releases.
+
+**Packages Updated**:
+- `@elizaos/core`: `alpha`
+- `@elizaos/plugin-anthropic`: `alpha`
+- `@elizaos/plugin-groq`: `alpha`
+- `@elizaos/plugin-openai`: `alpha`
+- `@elizaos/plugin-sql`: `alpha`
+- `@elizaos/prompts`: `alpha`
+
+**Previous Changes**:
+- Commit 378058a: Upgraded to `next` tag for latest features
+- Commit 788036d: Removed `@elizaos/plugin-sql` dependency (replaced with InMemoryDatabaseAdapter)
+
+**Impact**: Access to stable ElizaOS alpha releases with versioned packages. Ensures compatibility with latest LLM provider APIs while maintaining version control.
+
+**Migration**: No code changes required - ElizaOS maintains backward compatibility across alpha releases.
+
 ### WebGPU Fixes (March 9, 2026)
 
-**Buffer Upload Fallback:**
+**Buffer Upload Fallback**:
 - Automatic fallback when `mappedAtCreation` fails
 - Improved error handling for GPU buffer allocation
 - Better compatibility across different GPU drivers
 
-**Null Safety:**
+**Null Safety**:
 - Fixed physics utils null pointer exceptions
 - Collider and rigidbody null checks
 - Particle manager JSON parsing fixes
@@ -703,31 +806,27 @@ DUEL_ARENA_ORACLE_SOLANA_AUTHORITY_SECRET=base64:...
 
 ### Code Quality (March 8-9, 2026)
 
-**Static Imports:**
+**Static Imports**:
 - GLTFExporter now uses static imports (better tree-shaking)
 - Logger import converted to static (faster module loading)
 - Eliminates async import boilerplate
 
-**Dead Code Removal:**
+**Dead Code Removal**:
 - VFX Preview: Removed unused opacity, primaryColor, whiteGlow, ringMat variables
 - Type guards: Added `isCombatHud()` for proper type narrowing
 
-**Cross-Runtime Compatibility:**
+**Cross-Runtime Compatibility**:
 - `writeArrayBufferToFile()` utility supports both Bun and Node.js
 - Proper runtime detection for file operations
 
-**Panel Optimization:**
+**Panel Optimization**:
 - Un-lazified critical panels (Inventory, Stats, Prayer, Spells) for faster initial load
 - Other panels (Equipment, Quest, Friends) remain lazy-loaded
 
-**Bundle Size:**
+**Bundle Size**:
 - Client: `chunkSizeWarningLimit` increased to 8000KB (up from 2000KB)
 - Asset-forge: `chunkSizeWarningLimit` increased to 9000KB (new)
 - Intentional for WebGPU/PhysX bundles until deeper code splitting
-
-**TypeScript Fixes:**
-- Resolved TS18048 errors using nullish coalescing (`??`) instead of logical OR (`||`)
-- Added explicit string types to `api-config.ts` URL exports
 
 ### Testing & CI (March 9, 2026)
 
