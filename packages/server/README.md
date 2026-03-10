@@ -748,27 +748,49 @@ Disable in development with `DISABLE_RATE_LIMIT=true` (not recommended for produ
 
 ## Recent Improvements (March 2026)
 
-### Agent Memory Management
-- InMemoryDatabaseAdapter migration (38-76GB → <5GB for 19 agents)
-- Memory caps (50 memories, 20 logs, 100 cache entries)
-- Periodic garbage collection (every 60s)
-- DB pool optimization (concurrency limiting, staggered intervals)
+### Database & Performance (March 10, 2026)
+- **Connection Pool Increase**: PostgreSQL pool increased from 10 to 20 connections (commit 24fa8a5)
+- **Auto-Detection**: Database mode auto-detected from `DATABASE_URL` hostname (commit 3df4370)
+- **PM2 Secrets**: `ecosystem.config.cjs` reads secrets directly from `/tmp/hyperscape-secrets.env` (commit 684b203)
+- **Environment Forwarding**: Explicit `DATABASE_URL` and `DISPLAY` forwarding through PM2 (commits 5d415fc, 704b955)
 
-### Streaming Features
-- Graceful restart API (zero-downtime deployments)
-- Streaming placeholder mode (prevents disconnects during idle)
-- Activity-aware camera (prioritizes combat > skilling > moving > idle)
+### Streaming & Deployment (March 9-10, 2026)
+- **Chrome Beta**: Switched to `google-chrome-beta` for better stability (commit 547714e)
+- **ANGLE Backend**: Changed from Vulkan to default ANGLE backend for compatibility (commit 547714e)
+- **Xvfb Display**: Fixed startup order to ensure virtual display before PM2 (commit 294a36c)
+- **Stream Auto-Detection**: Destinations auto-detected from available stream keys (commit 41dc606)
+- **CDN URL Fix**: Production CDN URL for Vast streaming deployments (commit 2b3cbcb)
+- **Streaming Entry Points**: Dedicated `stream.html` and `stream.tsx` for optimized capture (commit 71dcba8)
+- **Viewport Detection**: `clientViewportMode.ts` utility for stream/spectator mode detection (commit 71dcba8)
 
-### Deployment
-- Railway auto-detection (automatic connection pool optimization)
-- Deterministic migrations (sorted order for consistency)
-- Sequential agent spawning (prevents ALTER TABLE races)
-- Solana configuration auto-discovery
+### AI & ElizaOS (March 9, 2026)
+- **ElizaCloud Integration**: Unified access to 13 frontier models via single API key (commit 4d1eb53)
+- **Alpha Packages**: Aligned all ElizaOS packages to `alpha` tag for stable releases (commit 6d67ec1)
+- **InMemoryDatabaseAdapter**: Replaced PGLite (38-76GB → <5GB for agents)
+- **Memory Caps**: 50 memories per agent, 20 log entries, 100 cache entries
+- **Periodic GC**: Every 60s to prevent memory leaks
 
-### Testing & CI
-- Vitest 4.x upgrade (Vite 6 compatibility)
-- CI stabilization (fixed test runner, duel agents, vegetation tests)
-- Anchor test config (skip localnet tests without Solana CLI)
+### Security & CSRF (March 9, 2026)
+- **Cross-Origin Fix**: CSRF validation now works for localhost/private IP clients (commit 0b1a0bd)
+- **Auth Header**: `UsernameSelectionScreen` includes Privy token in Authorization header
+- **Token Parsing**: Accept both `{ token }` and `{ csrfToken }` response formats
+
+### Oracle & Betting (March 9, 2026)
+- **Betting Stack Split**: Moved to [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet) (commit 428329d)
+- **Oracle Fields**: Added `damageA`, `damageB`, `winReason`, `seed`, `replayHashHex`, `resultHashHex` (commit aecab58)
+- **Oracle Scripts**: Added `verify-duel-oracle-local` for local testing
+- **Oracle Deployment**: EVM and Solana deploy scripts with receipt generation
+
+### Code Quality (March 8-9, 2026)
+- **TypeScript Fixes**: Nullish coalescing for import.meta.env (commits 74b9852, 6cdbf2c, b542751)
+- **Static Imports**: GLTFExporter and Logger converted to static imports
+- **Bundle Size**: Increased limits for WebGPU/PhysX bundles (8000KB client, 9000KB asset-forge)
+- **Panel Optimization**: Un-lazified critical panels for faster initial load
+
+### Testing & CI (March 9, 2026)
+- **Vitest 4.x Upgrade**: Required for Vite 6 compatibility
+- **CI Stabilization**: Fixed workflow dependency resolution
+- **Anchor Tests**: Skip localnet tests without Solana CLI
 
 ## Support
 
