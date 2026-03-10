@@ -15,8 +15,9 @@ bun run duel
 ```
 
 `bun run duel` now bootstraps streaming prerequisites automatically on first run:
-- uses bundled `ffmpeg-static` binary by default (or `FFMPEG_PATH` if provided)
+- uses system FFmpeg by default (resolution order: `/usr/bin/ffmpeg` → `/usr/local/bin/ffmpeg` → PATH → `ffmpeg-static`)
 - auto-installs Playwright Chromium if the bundled browser is missing
+- installs Chrome Beta on Linux for WebGPU streaming (via `deploy-vast.sh`)
 
 No separate Docker stream container is required for stream fanout.
 
