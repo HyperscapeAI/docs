@@ -312,6 +312,13 @@ POSTGRES_PORT=5432
 # Option 2: External PostgreSQL
 DATABASE_URL=postgresql://user:pass@host:5432/dbname
 
+# Database Mode (auto-detected from DATABASE_URL hostname)
+DUEL_DATABASE_MODE=remote  # or local (auto-detected)
+
+# Connection Pool (increased March 2026)
+POSTGRES_POOL_MAX=20       # Default: 20 (up from 10)
+POSTGRES_POOL_MIN=2        # Default: 2
+
 # Railway-specific (auto-detected)
 RAILWAY_ENVIRONMENT=production  # Auto-set by Railway
 POSTGRES_POOL_MAX=6             # Lower limit for pooler connections
