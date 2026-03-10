@@ -539,6 +539,22 @@ If assets fail to load in production streaming deployments:
 
 ## Recent Changes (March 2026)
 
+### R2 CORS Configuration Simplification (March 10, 2026)
+
+**Change** (Commit a6e6444): Simplified Cloudflare R2 CORS configuration to use wildcard origin for public read-only assets.
+
+**Updates**:
+- Changed `AllowedOrigins` from explicit domain list to `['*']` (wildcard)
+- Added `OPTIONS` to `AllowedMethods` for proper CORS preflight handling
+- Added `Content-Range` and `Accept-Ranges` to `ExposeHeaders` for streaming support
+
+**Rationale**:
+- Assets are read-only and publicly accessible - no security risk with wildcard origin
+- Eliminates need to maintain explicit domain whitelist as new domains are added
+- Improves compatibility with CDN edge caching and client-side streaming
+
+**Impact**: Simplified CORS configuration reduces maintenance overhead while maintaining security for public assets.
+
 ### Production CDN URL Fix (March 10, 2026)
 
 **Change** (Commit 2b3cbcb): Set `DUEL_PUBLIC_CDN_URL` to production CDN for Vast streaming deployments.
