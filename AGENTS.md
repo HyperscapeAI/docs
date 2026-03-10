@@ -101,6 +101,76 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Three.js 0.183.2 Upgrade (March 10, 2026)
+
+**Change** (Commit 8b93772): Upgraded Three.js from 0.182.0 to 0.183.2 across all packages.
+
+**Breaking Changes**:
+- **TSL API Change**: `atan2` renamed to `atan` in TSL exports
+- **Type Compatibility**: Updated TSL typed node aliases (TSLNodeFloat/Vec2/Vec3/Vec4)
+
+**Migration**:
+```typescript
+// Old (0.182.0)
+import { atan2 } from 'three/tsl';
+
+// New (0.183.2)
+import { atan } from 'three/tsl';
+```
+
+**Impact**: Latest Three.js features, improved WebGPU performance and stability.
+
+### Streaming Pipeline Optimization (March 10, 2026)
+
+**Change** (Commits c0e7313, 796b61f): Major streaming pipeline overhaul with CDP default, Vulkan ANGLE on Linux, and FFmpeg improvements.
+
+**Key Changes**:
+- **Default Capture Mode**: CDP (Chrome DevTools Protocol) everywhere for reliability
+- **Linux ANGLE Backend**: Vulkan ANGLE (`--use-angle=vulkan`) on Linux NVIDIA GPUs
+- **FFmpeg Resolution**: Prefer system ffmpeg over ffmpeg-static to avoid segfaults
+- **x264 Tuning**: Default to `zerolatency` tune for live streaming (was `film`)
+- **GOP Size**: Set to 30 frames (1s at 30fps) to match HLS segment boundaries
+- **Dead Code Removal**: Deleted `dev-final.mjs` (875 lines), removed `SERVER_DEV_LEAN_MODE` system
+
+**Why Vulkan ANGLE on Linux**:
+- ANGLE OpenGL ES (`--use-angle=gl`) fails with "Invalid visual ID" on NVIDIA
+- Native Vulkan (`--use-vulkan`) crashes
+- Only ANGLE's Vulkan backend works reliably for WebGPU on Linux NVIDIA
+
+**FFmpeg Improvements**:
+```bash
+# Resolution order (avoids ffmpeg-static segfaults)
+/usr/bin/ffmpeg → /usr/local/bin/ffmpeg → PATH → ffmpeg-static
+```
+
+**Impact**: More reliable streaming on Linux NVIDIA GPUs, lower latency, eliminates FFmpeg segfaults.
+
+### Physics Optimization for Streaming (March 10, 2026)
+
+**Change** (Commit c0e7313): Skip client-side PhysX initialization for streaming/spectator viewports.
+
+**Rationale**: Streaming and spectator clients don't need physics simulation - they only render the world state.
+
+**Impact**: Faster streaming client startup, reduced memory footprint for spectator views.
+
+### Service Worker Cache Strategy (March 10, 2026)
+
+**Change** (Commit 796b61f): Switched Workbox caching from `CacheFirst` to `NetworkFirst` for JS/CSS.
+
+**Problem**: Stale service worker serving old HTML for JS chunks after rebuild.
+
+**Solution**: `NetworkFirst` strategy - always fetch latest, fallback to cache.
+
+**Impact**: Eliminates stale module errors after rebuilds, better dev experience.
+
+### WebSocket Connection Stability (March 10, 2026)
+
+**Change** (Commit 3b4dc66): Fixed WebSocket disconnects under load.
+
+**Impact**: More stable multiplayer connections during high-load scenarios.
+
+## Recent Changes (March 2026)
+
 ### CDN URL Unification (Commit 2173086)
 
 **Change**: Replaced `DUEL_PUBLIC_CDN_URL` with unified `PUBLIC_CDN_URL` environment variable.
