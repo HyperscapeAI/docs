@@ -316,23 +316,40 @@ if (!process.env.DUEL_DATABASE_MODE && process.env.DATABASE_URL) {
 - Seamless database mode switching without manual configuration
 - Prevents server crashes from missing DATABASE_URL in remote mode
 
-### Chrome Beta for Streaming (Commit 547714e)
+### Chrome Beta for Streaming (Commit 547714e, c0e7313, 796b61f)
 
 **Change**: Switched from Chrome Unstable to Chrome Beta for streaming capture with default ANGLE backend.
 
 **Updates**:
 - `scripts/deploy-vast.sh`: Install `google-chrome-beta` instead of `google-chrome-unstable`
 - `ecosystem.config.cjs`: Set `STREAM_CAPTURE_CHANNEL=chrome-beta` and `STREAM_CAPTURE_ANGLE=default`
+- `scripts/duel-stack.mjs`: Auto-select Chrome Beta on Linux, Chrome on macOS
 
-**ANGLE Backend Change**:
-- **Old**: `STREAM_CAPTURE_ANGLE=vulkan` (native Vulkan backend)
-- **New**: `STREAM_CAPTURE_ANGLE=default` (ANGLE's default backend selection)
-- **Why**: Better compatibility across different GPU configurations and driver versions
+**ANGLE Backend Evolution**:
+- **March 10 (commit 796b61f)**: `STREAM_CAPTURE_ANGLE=vulkan` (Vulkan ANGLE on Linux NVIDIA)
+- **March 10 (commit c0e7313)**: `STREAM_CAPTURE_ANGLE=default` (auto-select best backend)
+- **Why Default**: Better compatibility across different GPU configurations and driver versions
+
+**ANGLE Backend Selection**:
+```bash
+# Default (auto-select) - RECOMMENDED
+STREAM_CAPTURE_ANGLE=default
+--use-angle=default
+
+# macOS (explicit)
+STREAM_CAPTURE_ANGLE=metal
+--use-angle=metal
+
+# Linux NVIDIA (explicit, if default fails)
+STREAM_CAPTURE_ANGLE=vulkan
+--use-angle=vulkan --enable-features=DefaultANGLEVulkan,Vulkan,VulkanFromANGLE
+```
 
 **Rationale**: 
 - Chrome Beta provides better stability than Dev/Canary channels while maintaining WebGPU support
 - Default ANGLE backend automatically selects the best backend (Vulkan, OpenGL, or D3D11) for the system
-- Reduces rendering artifacts and crashes from incompatible Vulkan drivers
+- Reduces rendering artifacts and crashes from incompatible drivers
+- Simpler configuration - no platform-specific logic needed
 
 **Impact**: More reliable streaming capture with fewer crashes and rendering artifacts across diverse GPU hardware.
 
