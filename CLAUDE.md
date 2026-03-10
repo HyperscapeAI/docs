@@ -700,6 +700,7 @@ YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
 YOUTUBE_RTMP_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
 
 # Streaming capture configuration
+STREAM_CAPTURE_MODE=mediarecorder
 STREAM_CAPTURE_CHANNEL=chrome-beta
 STREAM_CAPTURE_ANGLE=default
 STREAM_CAPTURE_WIDTH=1280
