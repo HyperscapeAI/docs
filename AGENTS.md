@@ -98,6 +98,27 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### MediaRecorder Streaming Capture Mode (Commit 72c667a)
+
+**Change**: Switched from CDP (Chrome DevTools Protocol) screencast to MediaRecorder mode for streaming capture.
+
+**Problem**: CDP screencast stalls under Xvfb + WebGPU on Vast instances, causing frozen streams.
+
+**Solution**: MediaRecorder mode uses `canvas.captureStream()` → WebSocket → FFmpeg pipeline, which is more reliable for headed Linux environments.
+
+**Configuration**:
+```bash
+# ecosystem.config.cjs
+STREAM_CAPTURE_MODE=mediarecorder  # Changed from 'cdp'
+```
+
+**Technical Details**:
+- **CDP Mode**: Uses Chrome DevTools Protocol `Page.startScreencast` to capture frames
+- **MediaRecorder Mode**: Uses native browser `canvas.captureStream()` API with WebSocket transport
+- **Why MediaRecorder**: More stable under Xvfb virtual displays with WebGPU rendering
+
+**Impact**: Eliminates stream freezing and stalling issues on Vast.ai GPU instances running Xvfb.
+
 ### Equipment Visual System 404 Suppression (Commit e8ed418)
 
 **Change**: Suppress 404 errors for armor items without 3D models.
