@@ -42,21 +42,22 @@ bun run duel --verify
 
 ### Capture Modes
 
-**MediaRecorder Mode** (default, recommended):
+**CDP Mode** (default, recommended as of March 10, 2026):
+- Uses Chrome DevTools Protocol `Page.startScreencast`
+- Most reliable for production streaming
+- Works well with Chrome Beta + default ANGLE backend
+- Lower overhead than MediaRecorder mode
+
+**MediaRecorder Mode** (legacy):
 - Uses native browser `canvas.captureStream()` API
 - WebSocket transport to FFmpeg
-- More stable under Xvfb + WebGPU on Linux
-- Lower CPU overhead than CDP screencast
-
-**CDP Mode** (legacy):
-- Uses Chrome DevTools Protocol `Page.startScreencast`
-- May stall under Xvfb + WebGPU on Vast instances
-- Not recommended for production streaming
+- Requires `internalCapture=1` URL parameter
+- May have compatibility issues with some GPU configurations
 
 **Configuration**:
 ```bash
-# Streaming capture mode (default: mediarecorder)
-STREAM_CAPTURE_MODE=mediarecorder  # or cdp
+# Streaming capture mode (default: cdp)
+STREAM_CAPTURE_MODE=cdp  # or mediarecorder
 
 # Chrome channel (default: chrome-beta)
 STREAM_CAPTURE_CHANNEL=chrome-beta
@@ -68,23 +69,57 @@ STREAM_CAPTURE_ANGLE=default
 STREAM_CAPTURE_WIDTH=1280
 STREAM_CAPTURE_HEIGHT=720
 
-# Display (for Xvfb virtual display)
+# Display (for Xvfb virtual display on Linux)
 DISPLAY=:99
-DUEL_CAPTURE_USE_XVFB=true
 ```
 
 ### Chrome Channel Selection
 
 - **chrome-beta** (recommended): Better stability than unstable/canary, reliable WebGPU support
-- **chrome-unstable**: Latest features but less stable
-- **chrome-canary**: Bleeding edge, may have rendering artifacts
+- **chrome** (macOS): Standard Chrome on macOS
+- **chrome-dev**: Development channel (less stable than beta)
+- **chromium**: Playwright bundled Chromium (fallback)
 
 ### ANGLE Backend Selection
 
-- **default** (recommended): Auto-selects best backend (Vulkan, OpenGL, D3D11) for the system
-- **vulkan**: Native Vulkan backend (may crash with incompatible drivers)
-- **opengl**: OpenGL backend (fallback for older GPUs)
-- **d3d11**: Direct3D 11 backend (Windows only)
+- **default** (recommended): Auto-selects best backend (Vulkan, OpenGL, or D3D11) for the system
+- **metal** (macOS): Metal backend for macOS
+- **vulkan** (Linux NVIDIA): Vulkan ANGLE backend (use if default fails on NVIDIA GPUs)
+- **gl**: OpenGL backend (fallback for older GPUs)
+
+**Why Default ANGLE Backend**:
+- Automatically selects the best backend for your GPU and driver configuration
+- Better cross-platform compatibility
+- Reduces rendering artifacts and crashes
+- Simpler configuration - no platform-specific logic needed
+
+### FFmpeg Configuration
+
+**FFmpeg Resolution Order** (March 10, 2026):
+```bash
+/usr/bin/ffmpeg → /usr/local/bin/ffmpeg → PATH → ffmpeg-static
+```
+
+**Why System FFmpeg**:
+- Avoids segfaults that occur with ffmpeg-static on some systems
+- Better performance with native system libraries
+- More reliable for long-running streams
+
+**Override FFmpeg Path**:
+```bash
+FFMPEG_PATH=/usr/local/bin/ffmpeg  # Explicit path
+```
+
+### Playwright Configuration
+
+**Critical**: Block Playwright's `--enable-unsafe-swiftshader` injection to prevent CPU software rendering:
+
+```typescript
+// In browser launch configuration
+ignoreDefaultArgs: ['--enable-unsafe-swiftshader']
+```
+
+**Why**: Playwright injects `--enable-unsafe-swiftshader` by default, forcing Chrome to use CPU-based software rendering instead of GPU acceleration. This blocks the WebGPU compositor pipeline and causes rendering failures.
 
 ## Streaming Outputs
 
