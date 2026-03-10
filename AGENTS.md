@@ -200,13 +200,13 @@ GAME_URL=http://localhost:3333/?page=stream&internalCapture=1
 
 ### Production CDN URL Fix (Commit 2b3cbcb)
 
-**Change**: Set `DUEL_PUBLIC_CDN_URL` to production CDN for Vast streaming deployments.
+**Change**: Set `PUBLIC_CDN_URL` to production CDN for Vast streaming deployments.
 
-**Update**: `ecosystem.config.cjs` now defaults to `https://assets.hyperscape.club` instead of localhost.
+**Update**: Deployment scripts now default to `https://assets.hyperscape.club` instead of localhost.
 
 **Configuration**:
-```javascript
-DUEL_PUBLIC_CDN_URL: process.env.PUBLIC_CDN_URL || "https://assets.hyperscape.club"
+```bash
+PUBLIC_CDN_URL=https://assets.hyperscape.club
 ```
 
 **Impact**: Streaming deployments on Vast.ai now correctly load assets from production CDN instead of attempting localhost connections.
