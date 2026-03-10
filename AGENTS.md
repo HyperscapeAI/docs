@@ -276,6 +276,7 @@ KICK_STREAM_KEY=your-kick-stream-key
 KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
 
 # Streaming capture configuration
+STREAM_CAPTURE_MODE=mediarecorder
 STREAM_CAPTURE_CHANNEL=chrome-beta
 STREAM_CAPTURE_ANGLE=default
 STREAM_CAPTURE_WIDTH=1280
