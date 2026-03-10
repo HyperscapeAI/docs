@@ -568,6 +568,13 @@ Configure these in repository settings → Secrets → Actions:
 
 The `scripts/deploy-vast.sh` script has been significantly enhanced with recent improvements:
 
+**MediaRecorder Streaming Mode** (Commits 72c667a, 7284882):
+- Switched from CDP screencast to MediaRecorder mode for streaming capture
+- Uses `canvas.captureStream()` → WebSocket → FFmpeg pipeline
+- More reliable under Xvfb + WebGPU on Vast instances
+- Requires `internalCapture=1` URL parameter for canvas capture bridge
+- Eliminates stream freezing and stalling issues
+
 **PM2 Secrets Loading** (Commits 684b203, 3df4370):
 - Writes secrets to `/tmp/hyperscape-secrets.env` before git operations
 - `ecosystem.config.cjs` reads secrets file directly at config load time
