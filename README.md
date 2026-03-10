@@ -104,19 +104,18 @@ cp packages/asset-forge/.env.example packages/asset-forge/.env
 ```
 packages/
 ├── shared/              # Core 3D engine (ECS, Three.js, PhysX, networking, React UI)
-├── server/              # Game server (Fastify, WebSockets, PostgreSQL)
-├── client/              # Web client (Vite, React)
+├── server/              # Game server (Fastify, WebSockets, PostgreSQL, oracle publisher)
+├── client/              # Web client (Vite, React, streaming entry points)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation
 ├── asset-forge/         # AI asset generation + VFX catalog
 ├── duel-oracle-evm/     # EVM duel outcome oracle contracts
 ├── duel-oracle-solana/  # Solana duel outcome oracle program
-├── contracts/           # MUD onchain game state (experimental)
-└── docs-site/           # Documentation (Docusaurus)
+└── contracts/           # MUD onchain game state (experimental)
 ```
 
-**Note**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
+**Note**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet). Oracle functionality remains in Hyperscape for duel outcome verification.
 
 Build order: `physx-js-webidl` → `shared` → everything else (handled automatically by Turbo)
 
