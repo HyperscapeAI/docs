@@ -275,12 +275,14 @@ Stream destinations are auto-detected from available keys. No manual configurati
 ### Streaming Architecture
 
 - **Capture Mode**: CDP (Chrome DevTools Protocol) for reliable frame capture (default)
-- **Browser**: Chrome Beta with default ANGLE backend for WebGPU stability
+- **Browser**: Chrome Beta with default ANGLE backend (`--use-angle=default`) for automatic best-backend selection
 - **Virtual Display**: Xvfb on Linux for headless GPU rendering (DISPLAY=:99)
 - **Entry Points**: Dedicated `stream.html` for optimized streaming capture (separate bundle)
 - **Pipeline**: Playwright → CDP → FFmpeg (system preferred) → RTMP
+- **FFmpeg Resolution**: `/usr/bin/ffmpeg` → `/usr/local/bin/ffmpeg` → PATH → ffmpeg-static (avoids segfaults)
 - **Encoding**: x264 with zerolatency tune, GOP=30 (1s segments at 30fps)
 - **Physics**: Client-side PhysX skipped for streaming/spectator viewports (memory optimization)
+- **Playwright**: Blocks `--enable-unsafe-swiftshader` injection to prevent CPU software rendering
 
 ### Environment Variables
 
