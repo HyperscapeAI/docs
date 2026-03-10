@@ -5,15 +5,15 @@ Production-ready game server for Hyperscape 3D multiplayer worlds with PostgreSQ
 ## ✅ Status: FULLY OPERATIONAL
 
 The server is production-ready with:
-- PostgreSQL database with automatic migrations
+- PostgreSQL database with automatic migrations (connection pool: 20)
 - 54 mobs + 5 NPCs spawning at startup  
 - Character creation and multi-character support
 - Complete persistence layer (inventory, equipment, skills, position)
 - Real-time multiplayer via WebSocket
 - 15 registered game actions
-- Streaming duel arena with WebGPU capture
-- Betting integration (Solana/EVM)
-- ElizaOS AI agent support (19 models)
+- Streaming duel arena with WebGPU capture (Chrome Beta + default ANGLE backend)
+- Duel arena oracle (EVM + Solana outcome publishing)
+- ElizaOS AI agent support (13 frontier models via ElizaCloud)
 
 ## Features
 
