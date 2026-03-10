@@ -609,11 +609,14 @@ The `scripts/deploy-vast.sh` script has been significantly enhanced with recent 
 The `scripts/deploy-vast.sh` script handles the full deployment with these improvements:
 
 **Key Steps:**
-1. Configure DNS resolution (some Vast containers use internal-only DNS)
-2. Pull latest code from main branch
-3. Restore environment variables after git reset (commits eec04b0, dda4396, 4a6aaaf)
-4. Install system dependencies (build-essential, ffmpeg, Vulkan drivers, Chrome Dev, PulseAudio)
-5. **GPU rendering detection and configuration** (commits dd649da, e51a332, 30bdaf0, 725e934, 012450c):
+1. **Load secrets from `/tmp/hyperscape-secrets.env`** (commit 684b203)
+2. **Auto-detect database mode from DATABASE_URL** (commit 3df4370)
+3. **Auto-detect stream destinations from available keys** (commit 41dc606)
+4. Configure DNS resolution (some Vast containers use internal-only DNS)
+5. Pull latest code from main branch
+6. Restore environment variables after git reset (commits eec04b0, dda4396, 4a6aaaf)
+7. Install system dependencies (build-essential, ffmpeg, Vulkan drivers, Chrome Beta, PulseAudio)
+8. **GPU rendering detection and configuration** (commits dd649da, e51a332, 30bdaf0, 725e934, 012450c):
    - Check for NVIDIA GPU and DRI devices
    - Try Xorg mode first (if DRI available)
    - Detect Xorg swrast fallback and switch to headless EGL if needed
