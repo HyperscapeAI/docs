@@ -548,15 +548,28 @@ DISPLAY=:99
 
 ### Streaming Pipeline Fixes (March 9, 2026)
 
-**Auto-Detection**: Stream destinations now auto-detected from available keys.
+**Auto-Detection**: Stream destinations now auto-detected from available keys using `||` logic.
 
 **Changes**:
-- `deploy-vast.sh`: Auto-detects enabled destinations from `TWITCH_STREAM_KEY`, `KICK_STREAM_KEY`, etc.
-- `ecosystem.config.cjs`: Explicitly forwards stream keys through PM2 environment
-- `deploy-vast.yml`: Adds `TWITCH_RTMP_STREAM_KEY` alias for compatibility
+- `deploy-vast.sh`: Auto-detects enabled destinations from `TWITCH_STREAM_KEY || TWITCH_RTMP_STREAM_KEY`, `KICK_STREAM_KEY`, etc.
+- `ecosystem.config.cjs`: Explicitly forwards stream keys, `DISPLAY`, and `DATABASE_URL` through PM2 environment
+- `deploy-vast.yml`: Adds `TWITCH_RTMP_STREAM_KEY` alias to secrets file for compatibility
 - `stream.html` / `stream.tsx`: Dedicated streaming entry points with optimized bundles
 - `clientViewportMode()`: Utility to detect stream/spectator/normal modes
 - Multi-page Vite build: Separate bundles for game and streaming
+
+**Auto-Detection Logic**:
+```bash
+# From deploy-vast.sh
+DESTS=""
+if [ -n "${TWITCH_STREAM_KEY:-${TWITCH_RTMP_STREAM_KEY:-}}" ]; then
+    DESTS="twitch"
+fi
+if [ -n "${KICK_STREAM_KEY:-}" ]; then
+    DESTS="${DESTS:+${DESTS},}kick"
+fi
+export STREAM_ENABLED_DESTINATIONS="$DESTS"
+```
 
 **Environment Variables**:
 ```bash
@@ -574,9 +587,16 @@ KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
 # YouTube
 YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
 YOUTUBE_RTMP_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+
+# Streaming capture configuration
+STREAM_CAPTURE_CHANNEL=chrome-beta
+STREAM_CAPTURE_ANGLE=default
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+DISPLAY=:99
 ```
 
-**Impact**: Reliable multi-platform RTMP streaming with automatic destination detection.
+**Impact**: Reliable multi-platform RTMP streaming with automatic destination detection, proper secret forwarding, and stable Chrome Beta rendering.
 
 ### CSRF Cross-Origin Fix (March 9, 2026)
 
