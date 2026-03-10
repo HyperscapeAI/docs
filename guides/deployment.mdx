@@ -813,7 +813,8 @@ STREAMING_PUBLIC_DELAY_MS=0                # No delay (real-time)
 # GPU Rendering (auto-detected)
 GPU_RENDERING_MODE=xorg                    # xorg | xvfb-vulkan | headless-egl
 DISPLAY=:99                                # Explicitly set in PM2 env (commit 704b955)
-DUEL_CAPTURE_USE_XVFB=false               # true for Xvfb mode
+DUEL_CAPTURE_USE_XVFB=true                # true for Xvfb mode (commit 294a36c)
+                                          # Xvfb started before PM2 in deploy-vast.sh
 STREAM_CAPTURE_USE_EGL=false              # true for headless EGL mode
 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
 
