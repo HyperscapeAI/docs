@@ -210,6 +210,82 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
 
+## Streaming (RTMP)
+
+Hyperscape supports multi-platform RTMP streaming to Twitch, Kick, and YouTube with automatic destination detection.
+
+### Quick Start
+
+1. **Set stream keys** in `packages/server/.env`:
+   ```bash
+   TWITCH_STREAM_KEY=live_123456789_abcdefghij
+   KICK_STREAM_KEY=your-kick-stream-key
+   YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+   ```
+
+2. **Run the duel stack** (includes streaming):
+   ```bash
+   bun run dev:duel
+   ```
+
+Stream destinations are auto-detected from available keys. No manual configuration needed.
+
+### Streaming Architecture
+
+- **Capture Mode**: CDP (Chrome DevTools Protocol) for frame capture
+- **Browser**: Chrome Beta with default ANGLE backend for WebGPU stability
+- **Virtual Display**: Xvfb on Linux for headless GPU rendering
+- **Entry Points**: Dedicated `stream.html` for optimized streaming capture
+- **Pipeline**: Playwright → CDP → FFmpeg → RTMP
+
+### Environment Variables
+
+```bash
+# Stream keys (auto-detected destinations)
+TWITCH_STREAM_KEY=...           # or TWITCH_RTMP_STREAM_KEY
+KICK_STREAM_KEY=...
+YOUTUBE_STREAM_KEY=...          # or YOUTUBE_RTMP_STREAM_KEY
+
+# Streaming configuration (defaults shown)
+STREAM_CAPTURE_MODE=cdp         # or mediarecorder
+STREAM_CAPTURE_CHANNEL=chrome-beta
+STREAM_CAPTURE_ANGLE=default
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+DISPLAY=:99                     # Xvfb virtual display (Linux)
+```
+
+### Vast.ai GPU Streaming
+
+For production streaming on Vast.ai GPU instances:
+
+1. **GPU Requirements**: NVIDIA GPU with display driver (`gpu_display_active=true`)
+2. **Chrome Beta**: Installed automatically by `scripts/deploy-vast.sh`
+3. **Xvfb**: Virtual display started before PM2 processes
+4. **PM2 Environment**: `DISPLAY`, `DATABASE_URL`, and stream keys forwarded automatically
+5. **Auto-Detection**: Database mode and stream destinations detected from environment
+
+See `scripts/deploy-vast.sh` for full deployment automation.
+
+### Troubleshooting Streaming
+
+**Stream not starting:**
+- Verify stream keys are set and valid
+- Check FFmpeg is installed: `which ffmpeg`
+- Ensure Playwright Chromium is installed: `bunx playwright install chromium`
+- Verify GPU display driver is active (Vast.ai: `gpu_display_active=true`)
+
+**Black screen / frozen stream:**
+- Check Chrome Beta is installed: `google-chrome-beta --version`
+- Verify Xvfb is running: `ps aux | grep Xvfb`
+- Ensure `DISPLAY=:99` is set in environment
+- Check Playwright isn't injecting `--enable-unsafe-swiftshader` (blocks WebGPU)
+
+**RTMP connection failures:**
+- Check for stale FFmpeg processes: `pkill -f ffmpeg`
+- Verify stream keys match platform requirements
+- Review logs: `bunx pm2 logs hyperscape-duel`
+
 ## Deployment (Railway)
 
 Railway deployment is set up for separate development and production targets:
