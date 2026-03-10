@@ -398,7 +398,7 @@ PUBLIC_WS_URL=wss://...          # Point to your server WebSocket
 
 ## Package Manager
 
-This project uses **Bun** (v1.3.10+) as the package manager and runtime.
+This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 
 - Install: `bun install` (NOT `npm install`)
 - Run scripts: `bun run <script>` or `bun <file>`
@@ -406,7 +406,7 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime.
 
 ## Tech Stack
 
-- **Runtime**: Bun v1.3.10+ (updated from v1.1.38)
+- **Runtime**: Bun v1.1.38+
 - **Rendering**: WebGPU ONLY (Three.js WebGPURenderer + TSL shaders) - NO WebGL
 - **Engine**: Three.js 0.182.0, PhysX (WASM)
 - **UI**: React 19.2.0, styled-components
