@@ -72,6 +72,60 @@ GameClient.tsx            // Main 3D gameplay
 | `DashboardScreen` | Game hub and lobby |
 | `GameClient` | Main 3D gameplay |
 | `LoadingScreen` | Asset loading state |
+| `StreamingMode` | Optimized streaming capture (minimal UI overhead) - NEW March 2026 |
+
+## Streaming Entry Points (March 2026)
+
+The client includes dedicated entry points for streaming capture (commit 71dcba8):
+
+**Entry Points:**
+- `src/index.html` / `src/index.tsx` - Main game (full UI)
+- `src/stream.html` / `src/stream.tsx` - Streaming mode (minimal UI)
+
+**Viewport Mode Detection:**
+
+```typescript
+import { isStreamPageRoute, isEmbeddedSpectatorViewport, isStreamingLikeViewport } from '@hyperscape/shared';
+
+// Detect streaming capture mode
+if (isStreamPageRoute(window)) {
+  // Running in streaming mode (/stream.html or ?page=stream)
+}
+
+// Detect embedded spectator
+if (isEmbeddedSpectatorViewport(window)) {
+  // Running as embedded spectator (?embedded=true&mode=spectator)
+}
+
+// Detect any streaming-like viewport
+if (isStreamingLikeViewport(window)) {
+  // Either streaming or embedded spectator
+}
+```
+
+**Vite Multi-Page Build:**
+
+The Vite configuration builds separate bundles for game and streaming:
+
+```typescript
+// From vite.config.ts
+export default defineConfig({
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'src/index.html'),
+        stream: resolve(__dirname, 'src/stream.html')
+      }
+    }
+  }
+});
+```
+
+**Benefits:**
+- Optimized streaming capture with minimal UI overhead
+- Separate bundles reduce streaming page load time
+- Automatic viewport mode detection for conditional rendering
+- Clear separation between game and streaming entry points
 
 ## UI Components
 
