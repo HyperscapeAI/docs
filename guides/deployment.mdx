@@ -797,8 +797,10 @@ The system requires hardware GPU rendering for WebGPU. Three modes are supported
 The deployment uses these streaming settings (updated March 2026):
 
 ```bash
-# From ecosystem.config.cjs (commits 547714e, 684b203, 3df4370)
-STREAM_CAPTURE_MODE=cdp                    # Chrome DevTools Protocol
+# From ecosystem.config.cjs (commits 72c667a, 547714e, 684b203, 3df4370)
+STREAM_CAPTURE_MODE=mediarecorder          # Changed from cdp (commit 72c667a)
+                                           # mediarecorder: canvas.captureStream() → WebSocket → FFmpeg
+                                           # cdp: Chrome DevTools Protocol screencast (may stall under Xvfb)
 STREAM_CAPTURE_HEADLESS=false              # Xorg mode (or "new" for headless EGL)
 STREAM_CAPTURE_USE_EGL=false               # true for headless EGL mode
 STREAM_CAPTURE_CHANNEL=chrome-beta         # Chrome Beta (changed from chrome-dev)
