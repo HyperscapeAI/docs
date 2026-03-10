@@ -4,10 +4,9 @@
 
 1. Game server + client (streaming duel scheduler enabled)
 2. Duel matchmaker bots (`dev:duel:skip-dev`)
-3. RTMP bridge fanout to public platforms (YouTube/Twitch/Kick/etc.)
-4. ElizaOS AI agents (13 frontier models via ElizaCloud)
-
-**Note**: The betting app and keeper bot have been moved to [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet). The duel arena oracle remains in Hyperscape for verifiable outcome publishing.
+3. RTMP bridge fanout to public platforms (YouTube/Twitch/etc.)
+4. Betting app (testnet mode)
+5. Keeper bot (testnet automation)
 
 ## Run
 
@@ -24,7 +23,7 @@ No separate Docker stream container is required for stream fanout.
 Recommended fresh-install prep command:
 
 ```bash
-bun install
+bun run install
 ```
 
 This ensures assets are synced and Chromium is installed for local capture.
@@ -32,68 +31,76 @@ This ensures assets are synced and Chromium is installed for local capture.
 Optional flags:
 
 ```bash
-bun run duel --bots=6 --rtmp-port=8765
+bun run duel --bots=6 --betting-port=4179 --rtmp-port=8765
+bun run duel --skip-keeper
 bun run duel --skip-stream
 bun run duel --verify
 ```
+
+## Streaming Capture Configuration
+
+### Capture Modes
+
+**MediaRecorder Mode** (default, recommended):
+- Uses native browser `canvas.captureStream()` API
+- WebSocket transport to FFmpeg
+- More stable under Xvfb + WebGPU on Linux
+- Lower CPU overhead than CDP screencast
+
+**CDP Mode** (legacy):
+- Uses Chrome DevTools Protocol `Page.startScreencast`
+- May stall under Xvfb + WebGPU on Vast instances
+- Not recommended for production streaming
+
+**Configuration**:
+```bash
+# Streaming capture mode (default: mediarecorder)
+STREAM_CAPTURE_MODE=mediarecorder  # or cdp
+
+# Chrome channel (default: chrome-beta)
+STREAM_CAPTURE_CHANNEL=chrome-beta
+
+# ANGLE backend (default: default)
+STREAM_CAPTURE_ANGLE=default
+
+# Stream resolution
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+
+# Display (for Xvfb virtual display)
+DISPLAY=:99
+DUEL_CAPTURE_USE_XVFB=true
+```
+
+### Chrome Channel Selection
+
+- **chrome-beta** (recommended): Better stability than unstable/canary, reliable WebGPU support
+- **chrome-unstable**: Latest features but less stable
+- **chrome-canary**: Bleeding edge, may have rendering artifacts
+
+### ANGLE Backend Selection
+
+- **default** (recommended): Auto-selects best backend (Vulkan, OpenGL, D3D11) for the system
+- **vulkan**: Native Vulkan backend (may crash with incompatible drivers)
+- **opengl**: OpenGL backend (fallback for older GPUs)
+- **d3d11**: Direct3D 11 backend (Windows only)
 
 ## Streaming Outputs
 
 Configure the following env vars (root `.env` or `packages/server/.env`):
 
-### Auto-Detection (Recommended)
-
-Stream destinations are auto-detected from available stream keys. Just set the keys you want to use:
-
-```bash
-# Twitch (multiple formats supported)
-TWITCH_STREAM_KEY=live_123456789_abcdefghij
-TWITCH_RTMP_STREAM_KEY=live_123456789_abcdefghij  # Alias supported
-
-# Kick
-KICK_STREAM_KEY=your-kick-stream-key
-KICK_RTMP_URL=rtmps://fa723fc1b171.global-contribute.live-video.net/app
-
-# YouTube
-YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
-YOUTUBE_RTMP_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx  # Alias supported
-
-# Auto-detected destinations (no manual config needed)
-# STREAM_ENABLED_DESTINATIONS=twitch,kick,youtube
-```
-
-### Manual Configuration
-
-Override auto-detection with explicit destination list:
-
-```bash
-STREAM_ENABLED_DESTINATIONS=twitch,youtube
-```
-
-### Streaming Capture Configuration
-
-```bash
-# Chrome channel (chrome-beta recommended for stability)
-STREAM_CAPTURE_CHANNEL=chrome-beta
-
-# ANGLE backend (default recommended for compatibility)
-STREAM_CAPTURE_ANGLE=default
-
-# Capture resolution
-STREAM_CAPTURE_WIDTH=1280
-STREAM_CAPTURE_HEIGHT=720
-
-# Xvfb virtual display (for headless servers)
-DISPLAY=:99
-```
-
-### Additional Streaming Options
-
 - `RTMP_MULTIPLEXER_URL` (+ optional `RTMP_MULTIPLEXER_STREAM_KEY`, `RTMP_MULTIPLEXER_NAME`)
+- `TWITCH_STREAM_KEY` (or `TWITCH_RTMP_STREAM_KEY`)
+  Optional ingest override: `TWITCH_STREAM_URL` / `TWITCH_RTMP_URL` / `TWITCH_RTMP_SERVER`
+- `YOUTUBE_STREAM_KEY` (or `YOUTUBE_RTMP_STREAM_KEY`)
+  Optional ingest override: `YOUTUBE_STREAM_URL` / `YOUTUBE_RTMP_URL`
+- `KICK_STREAM_KEY` (+ optional `KICK_RTMP_URL`)
 - `PUMPFUN_RTMP_URL` (+ optional `PUMPFUN_STREAM_KEY`)
 - `X_RTMP_URL` (+ optional `X_STREAM_KEY`)
 - `RTMP_DESTINATIONS_JSON` for additional/custom fanout destinations
 - `STREAMING_VIEWER_ACCESS_TOKEN` optional gate for live WebSocket stream/spectator viewers
+
+**Auto-Detection**: Stream destinations are automatically detected from available stream keys. Set `STREAM_ENABLED_DESTINATIONS` to override (e.g., `twitch,kick,youtube`).
 
 Default anti-cheat timing policy (no env required):
 
@@ -106,40 +113,25 @@ Optional client-side extra delay (usually keep `0` if server delay is enabled):
 
 - `VITE_UI_SYNC_DELAY_MS`
 
+Website/betting embed input (recommended):
+
+- `NEXT_PUBLIC_ARENA_STREAM_EMBED_URL` (in `packages/website/.env.local`)
+- `VITE_STREAM_EMBED_URL` (in the Hyperbet app `.env*` files if you boot the sibling repo locally)
+
 When `STREAMING_PUBLIC_DELAY_MS > 0`, live `mode=streaming` WebSocket viewers are restricted to:
 - loopback/local capture clients, or
 - clients presenting `streamToken=<STREAMING_VIEWER_ACCESS_TOKEN>`
 
 `stream-to-rtmp` automatically appends `streamToken` to capture URLs when `STREAMING_VIEWER_ACCESS_TOKEN` is set.
 
-## Spectator URLs
+## Spectator + Betting URLs
 
-- **Game stream view**: `http://localhost:3333/?page=stream`
-- **Embedded spectator**: `http://localhost:3333/?embedded=true&mode=spectator`
-- **Dedicated streaming entry**: `http://localhost:3333/stream.html`
+- Game stream view: `http://localhost:3333/?page=stream`
+- Embedded spectator: `http://localhost:3333/?embedded=true&mode=spectator`
+- Betting app: `http://localhost:4179` (see [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet))
+- Betting video source: `VITE_STREAM_EMBED_URL` (YouTube/Twitch embed URL)
 
-### Viewport Mode Detection
-
-The client automatically detects viewport mode using `clientViewportMode.ts`:
-
-```typescript
-import { isStreamPageRoute, isEmbeddedSpectatorViewport, isStreamingLikeViewport } from '@hyperscape/shared';
-
-// Detect streaming capture mode
-if (isStreamPageRoute(window)) {
-  // Optimized for streaming capture
-}
-
-// Detect embedded spectator
-if (isEmbeddedSpectatorViewport(window)) {
-  // Embedded spectator UI
-}
-
-// Detect any streaming-like viewport
-if (isStreamingLikeViewport(window)) {
-  // Minimal UI overhead
-}
-```
+**Note**: The betting stack has been split into a separate repository. See [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet) for betting app deployment.
 
 ## Open APIs (duel telemetry + monologues)
 
@@ -148,37 +140,7 @@ if (isStreamingLikeViewport(window)) {
 - `GET /api/streaming/agent/:characterId/inventory`
 - `GET /api/streaming/agent/:characterId/monologues?limit=20`
 
-These endpoints power betting app live duel telemetry (inventory, wins/losses, level, HP, and internal monologues).
-
-## Duel Arena Oracle
-
-The duel arena oracle publishes verifiable duel outcomes to EVM and Solana:
-
-```bash
-# Enable oracle
-DUEL_ARENA_ORACLE_ENABLED=true
-DUEL_ARENA_ORACLE_PROFILE=testnet  # or mainnet, all
-
-# Metadata API
-DUEL_ARENA_ORACLE_METADATA_BASE_URL=https://api.hyperscape.gg/api/duel-arena/oracle
-
-# Shared signers
-DUEL_ARENA_ORACLE_EVM_PRIVATE_KEY=0x...
-DUEL_ARENA_ORACLE_SOLANA_AUTHORITY_SECRET=base64:...
-```
-
-**Oracle Endpoints:**
-- `GET /api/duel-arena/oracle/recent` - Recent duel outcomes
-- `GET /api/duel-arena/oracle/duels/:duelId` - Specific duel outcome with chain state
-
-**Oracle Fields:**
-- `damageA`, `damageB` - Total damage dealt by each participant
-- `winReason` - Detailed win reason (knockout, timeout, forfeit, draw)
-- `seed` - Cryptographic seed for replay verification
-- `replayHashHex` - Hash of replay data
-- `resultHashHex` - Combined hash of all outcome data
-
-See `docs/duel-arena-oracle-deploy.md` for deployment guide.
+These endpoints power the betting app live duel telemetry section (inventory, wins/losses, level, HP, and internal monologues).
 
 ## Verification
 
@@ -189,66 +151,179 @@ bun run duel:verify
 bun run duel:verify --require-destinations=twitch,youtube
 ```
 
-This validates server/client uptime, active duel combat, RTMP bridge status evidence, and telemetry endpoints.
+This validates server/client/betting uptime, active duel combat, RTMP bridge status evidence, and telemetry endpoints.
 RTMP bridge status is best-effort by default, and can be made strict with `--require-destinations`.
-
-## Recent Improvements (March 2026)
-
-### Streaming Enhancements
-- **Chrome Beta**: Switched to `google-chrome-beta` for better stability (commit 547714e)
-- **ANGLE Backend**: Default ANGLE backend for better GPU compatibility (commit 547714e)
-- **Auto-Detection**: Stream destinations auto-detected from available keys (commit 41dc606)
-- **Streaming Entry Points**: Dedicated `stream.html` and `stream.tsx` for optimized capture (commit 71dcba8)
-- **Viewport Detection**: Automatic stream/spectator mode detection (commit 71dcba8)
-
-### Deployment Fixes
-- **PM2 Secrets**: Direct secrets loading in `ecosystem.config.cjs` (commit 684b203)
-- **Database Mode**: Auto-detection from `DATABASE_URL` hostname (commit 3df4370)
-- **Xvfb Display**: Fixed startup order for virtual display (commits 294a36c, 704b955)
-- **Environment Forwarding**: Explicit `DATABASE_URL` and `DISPLAY` forwarding (commits 5d415fc, 704b955)
-- **CDN URL**: Production CDN URL for Vast deployments (commit 2b3cbcb)
-
-### AI & Oracle
-- **ElizaCloud**: Unified access to 13 frontier models (commit 4d1eb53)
-- **Oracle Fields**: Added damage, winReason, seed, replay/result hashes (commit aecab58)
-- **Betting Split**: Moved to [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet) (commit 428329d)
 
 ## Troubleshooting
 
-### Streaming Issues
+### Stream Freezing or Stalling
 
-**RTMP stream not starting:**
-- Verify stream keys are set: `TWITCH_STREAM_KEY`, `KICK_STREAM_KEY`, `YOUTUBE_STREAM_KEY`
-- Check `STREAM_ENABLED_DESTINATIONS` is set or auto-detected
-- Ensure FFmpeg is installed: `which ffmpeg`
-- Verify Playwright Chromium: `bunx playwright install chromium`
+**Problem**: Stream freezes or stalls under Xvfb + WebGPU on Vast instances.
 
-**WebGPU errors:**
-- Check GPU display driver is active (Vast.ai: `gpu_display_active=true`)
-- Verify Chrome Beta is installed: `google-chrome-beta --version`
-- Check Xvfb is running: `ps aux | grep Xvfb`
-- Verify DISPLAY environment: `echo $DISPLAY` (should be `:99`)
+**Solution**: Use MediaRecorder mode (default since March 2026):
+```bash
+STREAM_CAPTURE_MODE=mediarecorder
+```
 
-**Database connection errors:**
-- Check `DATABASE_URL` is set correctly
-- Verify connection pool settings: `POSTGRES_POOL_MAX=20`
-- Review PM2 logs: `bunx pm2 logs hyperscape-duel`
+**Why**: CDP screencast can stall under Xvfb virtual displays with WebGPU rendering. MediaRecorder uses native browser `canvas.captureStream()` which is more reliable.
 
-### Agent Issues
+### WebGPU Initialization Failed
 
-**Agents not spawning:**
-- Verify `ELIZAOS_CLOUD_API_KEY` is set
-- Check `SPAWN_MODEL_AGENTS=true` and `MAX_MODEL_AGENTS=13`
-- Review agent logs in ElizaOS API
+**Problem**: "WebGPU not available" or rendering artifacts.
 
-**High memory usage:**
-- Ensure InMemoryDatabaseAdapter is being used (not PGLite)
-- Verify memory caps are in place (50 memories, 20 logs, 100 cache entries)
-- Check periodic GC is running (every 60s)
+**Solution**: Verify GPU display driver and Chrome Beta configuration:
+```bash
+# Check Chrome Beta is installed
+google-chrome-beta --version
 
-## Related Documentation
+# Verify ANGLE backend (should be 'default', not 'vulkan')
+STREAM_CAPTURE_ANGLE=default
 
-- `AGENTS.md` - AI agent features and recent changes
-- `CLAUDE.md` - Development guidelines
-- `docs/duel-arena-oracle-deploy.md` - Oracle deployment guide
-- [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet) - Betting stack (separate repository)
+# Check Xvfb is running
+ps aux | grep Xvfb
+
+# Verify DISPLAY environment
+echo $DISPLAY  # Should be :99
+```
+
+**Vast.ai Requirements**:
+- GPU instance with `gpu_display_active=true`
+- NVIDIA GPU with display driver support (not just compute)
+- Xvfb virtual display running before PM2 starts
+
+### Stream Destinations Not Detected
+
+**Problem**: RTMP streams not starting despite stream keys being set.
+
+**Solution**: Verify stream key environment variables:
+```bash
+# Check stream keys are set
+echo $TWITCH_STREAM_KEY
+echo $KICK_STREAM_KEY
+echo $YOUTUBE_STREAM_KEY
+
+# Check auto-detected destinations
+echo $STREAM_ENABLED_DESTINATIONS  # Should be: twitch,kick,youtube
+```
+
+**Auto-Detection Logic**: Destinations are detected from available stream keys. If `STREAM_ENABLED_DESTINATIONS` is not set, it's auto-detected from:
+- `TWITCH_STREAM_KEY` or `TWITCH_RTMP_STREAM_KEY` → adds `twitch`
+- `KICK_STREAM_KEY` → adds `kick`
+- `YOUTUBE_STREAM_KEY` or `YOUTUBE_RTMP_STREAM_KEY` → adds `youtube`
+
+### Database Connection Errors
+
+**Problem**: "timeout exceeded when trying to connect" or FATAL database errors.
+
+**Solution**: Connection pool increased to 20 (March 2026). Verify configuration:
+```bash
+# Check database mode (auto-detected from DATABASE_URL)
+echo $DUEL_DATABASE_MODE  # Should be 'remote' for external PostgreSQL
+
+# Verify DATABASE_URL is set
+echo $DATABASE_URL
+
+# Check connection pool settings
+POSTGRES_POOL_MAX=20
+POSTGRES_POOL_MIN=2
+```
+
+**PM2 Environment**: Ensure `ecosystem.config.cjs` explicitly forwards `DATABASE_URL` through PM2 environment.
+
+### CSRF 403 Errors
+
+**Problem**: Account creation fails with "CSRF validation failed" when running client on localhost against deployed server.
+
+**Solution**: Fixed in March 2026 (commit 0b1a0bd). Ensure:
+- Client includes Privy auth token in Authorization header
+- Server CSRF middleware allows localhost/private IP origins
+- Both `{ token }` and `{ csrfToken }` response formats are supported
+
+### CDN Asset Loading Issues
+
+**Problem**: Assets fail to load (404 errors) in production streaming deployments.
+
+**Solution**: Verify CDN URL configuration:
+```bash
+# Check CDN URL (should be production CDN, not localhost)
+echo $DUEL_PUBLIC_CDN_URL  # Should be: https://assets.hyperscape.club
+
+# Verify in ecosystem.config.cjs
+DUEL_PUBLIC_CDN_URL: process.env.PUBLIC_CDN_URL || "https://assets.hyperscape.club"
+```
+
+## Recent Changes (March 2026)
+
+### MediaRecorder Streaming Capture (March 10, 2026)
+
+**Change**: Switched from CDP screencast to MediaRecorder mode for streaming capture.
+
+**Rationale**: CDP screencast stalls under Xvfb + WebGPU on Vast instances. MediaRecorder uses `canvas.captureStream()` → WebSocket → FFmpeg which is more reliable for headed Linux environments.
+
+**Configuration**:
+```bash
+STREAM_CAPTURE_MODE=mediarecorder  # Default (changed from 'cdp')
+```
+
+### Chrome Beta for Streaming (March 9, 2026)
+
+**Change**: Switched from Chrome Unstable to Chrome Beta for better stability.
+
+**Configuration**:
+```bash
+STREAM_CAPTURE_CHANNEL=chrome-beta  # Changed from 'chrome-unstable'
+STREAM_CAPTURE_ANGLE=default        # Changed from 'vulkan'
+```
+
+### Database Auto-Detection (March 9-10, 2026)
+
+**Change**: Database mode now auto-detected from `DATABASE_URL` hostname.
+
+**Logic**:
+- localhost/127.0.0.1/0.0.0.0/::1 → local mode
+- All other hostnames → remote mode
+- Manual override via `DUEL_DATABASE_MODE=remote`
+
+### PostgreSQL Connection Pool Increase (March 10, 2026)
+
+**Change**: Increased connection pool from 10 to 20 connections.
+
+**Configuration**:
+```bash
+POSTGRES_POOL_MAX=20  # Up from 10
+POSTGRES_POOL_MIN=2
+```
+
+**Impact**: Prevents database timeout errors under high load from concurrent agent queries.
+
+### PM2 Secrets Loading (March 9, 2026)
+
+**Change**: `ecosystem.config.cjs` now reads `/tmp/hyperscape-secrets.env` directly at config load time.
+
+**Rationale**: `bunx pm2` doesn't reliably inherit exported environment variables from deploy shell scripts.
+
+**Impact**: Ensures `DATABASE_URL` and stream keys are always available to PM2-managed processes.
+
+### Xvfb Display Environment (March 9, 2026)
+
+**Change**: `ecosystem.config.cjs` explicitly sets `DISPLAY=:99` in PM2 environment.
+
+**Impact**: Ensures streaming processes can access Xvfb virtual display for WebGPU rendering.
+
+### Stream Destination Auto-Detection (March 9, 2026)
+
+**Change**: Stream destinations now auto-detected from available stream keys.
+
+**Logic**: `deploy-vast.sh` detects enabled destinations using `||` logic:
+```bash
+DESTS=""
+if [ -n "${TWITCH_STREAM_KEY:-${TWITCH_RTMP_STREAM_KEY:-}}" ]; then
+    DESTS="twitch"
+fi
+if [ -n "${KICK_STREAM_KEY:-}" ]; then
+    DESTS="${DESTS:+${DESTS},}kick"
+fi
+export STREAM_ENABLED_DESTINATIONS="$DESTS"
+```
+
+**Impact**: No manual configuration needed - just set stream keys and destinations are auto-detected.
