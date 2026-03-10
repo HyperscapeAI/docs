@@ -603,4 +603,24 @@ POSTGRES_POOL_MIN=2
 
 **Impact**: Prevents "timeout exceeded when trying to connect" errors from concurrent agent queries.
 
+### Dependency Updates (March 10, 2026)
+
+**Major Updates**:
+- **Capacitor**: 7.6.0 → 8.2.0 (Android, iOS, Core)
+- **lucide-react**: → 0.577.0 (icon library)
+- **three-mesh-bvh**: 0.8.3 → 0.9.9 (BVH acceleration)
+- **eslint**: → 10.0.3 (linting)
+- **jsdom**: → 28.1.0 (testing)
+- **@ai-sdk/openai**: → 3.0.41 (AI SDK)
+- **hardhat**: → 3.1.11 (smart contracts)
+- **@nomicfoundation/hardhat-chai-matchers**: → 3.0.0 (testing)
+- **globals**: → 17.4.0 (TypeScript globals)
+
+**Impact**:
+- Latest mobile platform features (Capacitor 8.2.0)
+- Improved icon library with new icons
+- Better BVH performance for collision detection
+- Latest linting rules and TypeScript support
+- Bug fixes and security updates
+
 See CLAUDE.md for complete documentation.
