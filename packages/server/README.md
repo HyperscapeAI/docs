@@ -345,11 +345,23 @@ ADMIN_CODE=your-admin-code          # For /admin command
 
 ```env
 STREAMING_DUEL_ENABLED=true
+
+# Stream destinations (auto-detected from available keys)
+STREAM_ENABLED_DESTINATIONS=twitch,kick  # Auto-detected if not set
+TWITCH_STREAM_KEY=live_123456789_abcdefghij
+TWITCH_RTMP_STREAM_KEY=live_123456789_abcdefghij  # Alias supported
+KICK_STREAM_KEY=your-kick-stream-key
+YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+
+# Streaming capture (Vast.ai deployment)
+STREAM_CAPTURE_CHANNEL=chrome-beta  # Chrome Beta for stability
+STREAM_CAPTURE_ANGLE=default        # Default ANGLE backend
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+DISPLAY=:99                         # Xvfb virtual display
+
+# Optional settings
 STREAM_PLACEHOLDER_ENABLED=true     # Prevents stream disconnects
-STREAM_DESTINATIONS=youtube,twitch  # Comma-separated
-YOUTUBE_STREAM_KEY=...
-TWITCH_STREAM_KEY=...
-STREAM_CAPTURE_EXECUTABLE=/usr/bin/google-chrome-unstable
 STREAM_LOW_LATENCY=true
 STREAM_GOP_SIZE=60
 STREAM_AUDIO_ENABLED=true
