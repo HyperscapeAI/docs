@@ -398,9 +398,8 @@ DISPLAY=:99                           # Xvfb virtual display
 # Database Mode (auto-detected from DATABASE_URL)
 DUEL_DATABASE_MODE=remote        # or local (auto-detected)
 
-# CDN Configuration
-PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production CDN
-DUEL_PUBLIC_CDN_URL=https://assets.hyperscape.club  # For duel stack
+# CDN Configuration (unified)
+PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production CDN (used everywhere)
 
 # Oracle (optional)
 DUEL_ARENA_ORACLE_ENABLED=true
