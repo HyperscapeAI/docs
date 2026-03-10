@@ -59,14 +59,14 @@ Hyperscape is a RuneScape-style MMORPG built on Three.js WebGPURenderer with TSL
 
 ## Tech Stack
 
-- Runtime: Bun v1.3.10+ (updated from v1.1.38)
+- Runtime: Bun v1.1.38+
 - Rendering: WebGPU ONLY (Three.js WebGPURenderer + TSL)
 - Engine: Three.js 0.182.0, PhysX (WASM)
 - UI: React 19.2.0
 - Server: Fastify, WebSockets
 - Database: PostgreSQL (production), Docker (local)
 - Testing: Vitest 4.x (upgraded from 2.x for Vite 6 compatibility)
-- AI: ElizaOS `alpha` tag (commit 6d67ec1 - aligned with latest alpha releases)
+- AI: ElizaOS `alpha` tag (aligned with latest alpha releases)
 
 ## Common Commands
 
@@ -97,6 +97,12 @@ packages/
 **Note**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
 
 ## Recent Changes (March 2026)
+
+### Mob Debug Logging Cleanup (Commit cdf4925)
+
+**Change**: Removed spammy mob debug logs and fixed dev server service worker proxying.
+
+**Impact**: Cleaner console output during development and improved service worker reliability.
 
 ### PM2 Secrets Loading Fix (Commit 684b203, 3df4370)
 
@@ -286,16 +292,48 @@ ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
 
 **Migration**: Individual provider plugins (`@elizaos/plugin-openai`, `@elizaos/plugin-anthropic`, `@elizaos/plugin-groq`) are still installed for backward compatibility but are no longer used by duel arena agents.
 
+### Streaming Entry Points (Commit 71dcba8)
+
+**Change**: Added dedicated streaming entry points for optimized capture and viewport mode detection.
+
+**New Files**:
+- `packages/client/src/stream.html` - Dedicated HTML entry for streaming capture
+- `packages/client/src/stream.tsx` - React entry point for streaming mode
+- `packages/shared/src/runtime/clientViewportMode.ts` - Viewport mode detection utility
+
+**Viewport Mode Detection**:
+```typescript
+// Detect if running in streaming capture mode
+isStreamPageRoute(window) // true for /stream.html or ?page=stream
+
+// Detect if running as embedded spectator
+isEmbeddedSpectatorViewport(window) // true for ?embedded=true&mode=spectator
+
+// Detect any streaming-like viewport
+isStreamingLikeViewport(window) // true for either of the above
+```
+
+**Vite Multi-Page Build**:
+- Main game: `index.html` → `dist/index.html`
+- Streaming: `stream.html` → `dist/stream.html`
+- Separate bundles optimize for different use cases
+
+**Impact**: 
+- Optimized streaming capture with minimal UI overhead
+- Clear separation between game and streaming entry points
+- Automatic viewport mode detection for conditional rendering
+
 ### ElizaOS Alpha Package Alignment (Commit 6d67ec1)
 
 **Change**: Aligned all ElizaOS packages to `alpha` tag for stable releases.
 
 **Packages Updated**:
-- `@elizaos/core`: `^2.0.0-alpha.33`
-- `@elizaos/plugin-anthropic`: `^2.0.0-alpha.7`
-- `@elizaos/plugin-groq`: `^2.0.0-alpha.8`
-- `@elizaos/plugin-openai`: `^2.0.0-alpha.9`
-- `@elizaos/prompts`: `^2.0.0-alpha.33`
+- `@elizaos/core`: `alpha`
+- `@elizaos/plugin-anthropic`: `alpha`
+- `@elizaos/plugin-groq`: `alpha`
+- `@elizaos/plugin-openai`: `alpha`
+- `@elizaos/plugin-sql`: `alpha`
+- `@elizaos/prompts`: `alpha`
 
 **Previous Changes**:
 - Commit 378058a: Upgraded to `next` tag for latest features
