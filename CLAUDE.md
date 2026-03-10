@@ -787,6 +787,41 @@ STREAM_CAPTURE_MODE=mediarecorder  # Changed from 'cdp'
 - `packages/server/src/streaming/browser-capture.ts` - MediaRecorder implementation
 - `packages/server/src/streaming/rtmp-bridge.ts` - WebSocket → FFmpeg pipeline
 
+### Equipment Visual System 404 Suppression (March 10, 2026)
+
+**Change** (Commits e8ed418, b01dd52): Suppress 404 errors for armor items without 3D models.
+
+**Problem**: Console flooded with 404 errors for armor items that don't have 3D models yet (helms, platelegs, boots, gloves, capes).
+
+**Solution**:
+- Added `equippedModelPath: null` to armor items without 3D models in `armor.json`
+- Added code guard in `EquipmentVisualSystem` to skip items with `null` equippedModelPath
+- Skip convention fallback for equipment types without 3D models
+
+**Files Changed**:
+- `packages/server/world/assets/manifests/armor.json` - Set `equippedModelPath: null` for items without models
+- `packages/shared/src/systems/EquipmentVisualSystem.ts` - Skip null paths and unsupported equipment types
+
+**Items Without 3D Models**:
+- bronze_full_helm
+- bronze_platelegs
+- bronze_kiteshield
+- leather_boots
+- leather_gloves
+- cape
+
+**Impact**: Cleaner console output without 404 errors for armor items that intentionally don't have 3D models.
+
+### WebSocket Connection Stability (March 10, 2026)
+
+**Change** (Commit 3b4dc66): Fixed WebSocket disconnects under load.
+
+**Problem**: WebSocket connections dropping under high load from concurrent agent queries and player actions.
+
+**Solution**: Improved connection health monitoring and error handling in WebSocket layer.
+
+**Impact**: More stable multiplayer connections during high-load scenarios (many agents, busy servers).
+
 ### R2 CORS Configuration Simplification (March 10, 2026)
 
 **Change** (Commit a6e6444): Simplified Cloudflare R2 CORS configuration to use wildcard origin for public read-only assets.
