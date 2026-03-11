@@ -103,6 +103,26 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Streaming Frame Pacing Fix (March 11, 2026)
+
+**Change** (Commit 522fe37): Enforced 30fps frame pacing to eliminate stream buffering.
+
+**Problem**: CDP screencast was delivering frames at ~60fps while FFmpeg expected 30fps input, causing buffer buildup and viewer lag.
+
+**Fix**:
+- **CDP Frame Throttling**: Changed `everyNthFrame` from 1→2 to halve compositor delivery from ~60fps to ~30fps
+- **Frame Pacing**: Skip frames arriving faster than 85% of the 33.3ms target interval (prevents burst-feeding FFmpeg)
+- **Output Resolution**: Default changed from 1920x1080→1280x720 to match capture viewport and eliminate unnecessary upscaling
+
+**Configuration**:
+```bash
+# New defaults in ecosystem.config.cjs
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+```
+
+**Impact**: Eliminates stream buffering, smoother playback for viewers, reduced bandwidth usage.
+
 ### BankTabBar Test Updates (March 11, 2026)
 
 **Change** (Commits 297539f, be2503f): Fixed BankTabBar tests to be environment-agnostic for color formats.
