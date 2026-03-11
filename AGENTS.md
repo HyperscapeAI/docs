@@ -29,7 +29,7 @@ This is a hard requirement. DO NOT:
 - **Display Driver vs Compute**: WebGPU requires GPU display driver support, not just compute access
 - Must run non-headless with Xorg or Xvfb (WebGPU requires window context)
 - **Chrome Beta Channel**: Use `google-chrome-beta` for WebGPU streaming (better stability than Dev/Canary)
-- **ANGLE Backend**: Use default ANGLE backend (`--use-angle=default`) for automatic best-backend selection
+- **ANGLE Backend**: Use Vulkan ANGLE backend (`--use-angle=vulkan`) on Linux NVIDIA for WebGPU stability
 - **Xvfb Virtual Display**: `scripts/deploy-vast.sh` starts Xvfb before PM2 to ensure DISPLAY is available
 - **PM2 Environment**: `ecosystem.config.cjs` explicitly forwards `DISPLAY=:99` and `DATABASE_URL` through PM2
 - **Capture Mode**: Default to `STREAM_CAPTURE_MODE=cdp` (Chrome DevTools Protocol) for reliable frame capture
