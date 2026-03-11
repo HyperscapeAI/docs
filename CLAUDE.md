@@ -543,6 +543,109 @@ If assets fail to load in production streaming deployments:
 
 ## Recent Changes (March 2026)
 
+### Streaming Frame Pacing Fix (March 11, 2026)
+
+**Change** (Commit 522fe37, e2c9fbf): Enforced 30fps frame pacing to eliminate stream buffering.
+
+**Problem**: CDP screencast was delivering frames at ~60fps while FFmpeg expected 30fps input, causing buffer buildup and viewer lag. Initial fix (522fe37) set `everyNthFrame: 2` to halve compositor delivery, but this was incorrect - Xvfb compositor runs at 30fps (no vsync), not 60fps.
+
+**Fix**:
+- **Reverted everyNthFrame to 1** (commit e2c9fbf) - Xvfb compositor delivers at 30fps, so no frame skipping needed
+- **Frame Pacing Guard**: Skip frames arriving faster than 85% of the 33.3ms target interval (prevents burst-feeding FFmpeg)
+- **Output Resolution**: Default changed from 1920x1080→1280x720 to match capture viewport and eliminate unnecessary upscaling
+
+**Configuration**:
+```bash
+# New defaults in ecosystem.config.cjs
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+```
+
+**Technical Details**:
+- Xvfb runs at 30fps without vsync (game is capped at 30fps)
+- `everyNthFrame: 2` would halve 30fps delivery to 15fps, causing FFmpeg underflow
+- Frame pacing guard handles edge cases where compositor exceeds TARGET_FPS
+- 1280x720 matches capture viewport, eliminating upscaling overhead
+
+**Impact**: 
+- Eliminates stream buffering
+- Smoother playback for viewers
+- Reduced bandwidth usage
+- Correct frame delivery rate (30fps)
+
+### Deployment SSH Timeout Fix (March 11, 2026)
+
+**Change** (Commit a65a308): Fixed SSH session timeout during Vast.ai deployments.
+
+**Problem**: Background processes (Xvfb, socat) were keeping SSH session file descriptors open, causing `appleboy/ssh-action` to hang for 30 minutes until `command_timeout` killed it - even though deployment completed in ~1 minute.
+
+**Solution**: Added `disown` after each background process in `scripts/deploy-vast.sh` to detach them from the shell's job table, allowing SSH to exit cleanly.
+
+**Files Changed**:
+- `scripts/deploy-vast.sh` - Added `disown` after Xvfb and socat background processes
+
+**Impact**: 
+- Deployment completes in ~1 minute instead of hanging for 30 minutes
+- CI/CD pipeline runs faster
+- No more false timeout failures
+- Cleaner SSH session management
+
+### Test Infrastructure Updates (March 11, 2026)
+
+**Change** (Commits cd253d5, 97b7a4e, d7a7995): Fixed monorepo test failures and excluded WebGPU-dependent packages from CI.
+
+**Key Changes**:
+- **CI Test Exclusions**: Excluded `@hyperscape/impostor` from headless CI test runs (requires WebGPU, unavailable on GitHub Actions runners)
+- **Test Timeouts**: Increased `sim-engine` guarded MEV fee sweep test timeout from 60s to 120s to prevent flaky CI failures
+- **Cyclic Dependencies**: Resolved circular dependency issues in monorepo package structure
+- **Port Conflicts**: Fixed port allocation conflicts between test suites
+- **Turbo Filter**: Updated test filter to exclude deleted packages from main branch
+
+**Testing Strategy**:
+- WebGPU-dependent packages (`impostor`, `client`) require local testing with GPU-enabled browsers
+- Headless CI focuses on server-side logic, data processing, and non-rendering systems
+- Full integration tests run locally or on GPU-enabled CI runners (not GitHub Actions)
+
+**Impact**: 
+- More reliable CI test runs
+- Eliminates false negatives from WebGPU-unavailable environments
+- Faster CI execution by skipping incompatible tests
+- Better separation of GPU-dependent vs headless tests
+
+### BankTabBar Test Updates (March 11, 2026)
+
+**Change** (Commits 297539f, be2503f): Fixed BankTabBar tests to be environment-agnostic for color formats.
+
+**Problem**: Tests were failing due to browser differences in CSS color representation (hex vs rgb).
+
+**Solution**: Updated test assertions to handle both hex and rgb color formats, matching the gradient background style.
+
+**Impact**: More reliable tests across different browser environments.
+
+### Manifest File Loading Fix (March 10, 2026)
+
+**Change** (Commit c0898fa): Fixed legacy manifest entries that 404 on CDN.
+
+**Problem**: `DataManager` was attempting to fetch `items.json` and `resources.json` as root-level files, but these never existed - items are stored as split category files (`items/weapons.json`, `items/armor.json`, etc.).
+
+**Solution**: 
+- Removed legacy `items.json` and `resources.json` from manifest fetch list
+- Added missing newer manifests to fetch list:
+  - `ammunition.json`
+  - `combat-spells.json`
+  - `duel-arenas.json`
+  - `lod-settings.json`
+  - `quests.json`
+  - `runes.json`
+
+**Files Changed**:
+- `packages/shared/src/data/DataManager.ts` - Updated manifest loading logic
+
+**Impact**: 
+- Eliminates 404 errors during manifest loading
+- Ensures all current manifests are properly fetched
+- Better error handling for missing optional manifests
+
 ### Three.js 0.183.2 Upgrade (March 10, 2026)
 
 **Change** (Commit 8b93772): Upgraded Three.js from 0.182.0 to 0.183.2 across all packages.
