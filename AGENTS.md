@@ -273,4 +273,19 @@ PUBLIC_CDN_URL=https://assets.hyperscape.club
 - Latest linting rules and TypeScript support
 - Bug fixes and security updates
 
+### Deployment Fixes (March 11, 2026)
+
+**Change** (Commit a65a308): Fixed SSH session timeout during Vast.ai deployments.
+
+**Problem**: Background processes (Xvfb, socat) were keeping SSH session file descriptors open, causing `appleboy/ssh-action` to hang for 30 minutes until `command_timeout` killed it - even though deployment completed in ~1 minute.
+
+**Fix**: Added `disown` after each background process in `scripts/deploy-vast.sh` to detach them from the shell's job table, allowing SSH to exit cleanly.
+
+**Impact**: 
+- Deployment completes in ~1 minute instead of hanging for 30 minutes
+- CI/CD pipeline runs faster
+- No more false timeout failures
+
+**CI Test Filter Updates** (Commit d7a7995): Updated Turbo test filter to exclude deleted packages from main branch.
+
 See CLAUDE.md for complete documentation.
