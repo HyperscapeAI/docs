@@ -105,13 +105,13 @@ packages/
 
 ### Streaming Frame Pacing Fix (March 11, 2026)
 
-**Change** (Commit 522fe37): Enforced 30fps frame pacing to eliminate stream buffering.
+**Change** (Commits 522fe37, e2c9fbf): Enforced 30fps frame pacing to eliminate stream buffering.
 
-**Problem**: CDP screencast was delivering frames at ~60fps while FFmpeg expected 30fps input, causing buffer buildup and viewer lag.
+**Problem**: CDP screencast was delivering frames at ~60fps while FFmpeg expected 30fps input, causing buffer buildup and viewer lag. Initial fix (522fe37) set `everyNthFrame: 2` to halve compositor delivery, but this was incorrect - Xvfb compositor runs at 30fps (no vsync), not 60fps.
 
 **Fix**:
-- **CDP Frame Throttling**: Changed `everyNthFrame` from 1→2 to halve compositor delivery from ~60fps to ~30fps
-- **Frame Pacing**: Skip frames arriving faster than 85% of the 33.3ms target interval (prevents burst-feeding FFmpeg)
+- **Reverted everyNthFrame to 1** (commit e2c9fbf) - Xvfb compositor delivers at 30fps, so no frame skipping needed
+- **Frame Pacing Guard**: Skip frames arriving faster than 85% of the 33.3ms target interval (prevents burst-feeding FFmpeg)
 - **Output Resolution**: Default changed from 1920x1080→1280x720 to match capture viewport and eliminate unnecessary upscaling
 
 **Configuration**:
@@ -121,7 +121,13 @@ STREAM_CAPTURE_WIDTH=1280
 STREAM_CAPTURE_HEIGHT=720
 ```
 
-**Impact**: Eliminates stream buffering, smoother playback for viewers, reduced bandwidth usage.
+**Technical Details**:
+- Xvfb runs at 30fps without vsync (game is capped at 30fps)
+- `everyNthFrame: 2` would halve 30fps delivery to 15fps, causing FFmpeg underflow
+- Frame pacing guard handles edge cases where compositor exceeds TARGET_FPS
+- 1280x720 matches capture viewport, eliminating upscaling overhead
+
+**Impact**: Eliminates stream buffering, smoother playback for viewers, reduced bandwidth usage, correct frame delivery rate (30fps).
 
 ### BankTabBar Test Updates (March 11, 2026)
 
