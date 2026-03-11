@@ -207,25 +207,22 @@ import { atan } from 'three/tsl';
 - **Playwright Fix**: Block `--enable-unsafe-swiftshader` injection to prevent CPU software rendering
 - **Dead Code Removal**: Deleted `dev-final.mjs` (875 lines), removed `SERVER_DEV_LEAN_MODE` system
 
-**ANGLE Backend Evolution**:
-- **Initial (commit 796b61f)**: Vulkan ANGLE on Linux NVIDIA (`--use-angle=vulkan`)
-- **Current (commit c0e7313)**: Default ANGLE backend (`--use-angle=default`) for auto-selection
-- **Why Default**: Better compatibility across different GPU configurations and driver versions
-
 **ANGLE Backend Selection**:
 ```bash
-# Default (auto-select) - RECOMMENDED
-STREAM_CAPTURE_ANGLE=default
---use-angle=default
+# Linux NVIDIA - RECOMMENDED for production streaming
+STREAM_CAPTURE_ANGLE=vulkan
+--use-angle=vulkan --enable-features=DefaultANGLEVulkan,Vulkan,VulkanFromANGLE
 
-# macOS (explicit)
+# macOS
 STREAM_CAPTURE_ANGLE=metal
 --use-angle=metal
 
-# Linux NVIDIA (explicit, if default fails)
-STREAM_CAPTURE_ANGLE=vulkan
---use-angle=vulkan --enable-features=DefaultANGLEVulkan,Vulkan,VulkanFromANGLE
+# Auto-select (fallback)
+STREAM_CAPTURE_ANGLE=default
+--use-angle=default
 ```
+
+**Why Vulkan ANGLE on Linux**: ANGLE OpenGL ES (`--use-angle=gl`) fails with "Invalid visual ID" on NVIDIA GPUs. Native Vulkan (`--use-vulkan`) crashes. Only ANGLE's Vulkan backend works reliably for WebGPU streaming on Linux NVIDIA hardware.
 
 **FFmpeg Improvements**:
 ```bash
