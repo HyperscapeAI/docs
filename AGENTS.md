@@ -103,6 +103,23 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Test Infrastructure Updates (March 11, 2026)
+
+**Change** (Commit cd253d5, 97b7a4e): Fixed monorepo test failures and excluded WebGPU-dependent packages from CI.
+
+**Key Changes**:
+- **CI Test Exclusions**: Excluded `@hyperscape/impostor` from headless CI test runs (requires WebGPU, unavailable on GitHub Actions runners)
+- **Test Timeouts**: Increased `sim-engine` guarded MEV fee sweep test timeout from 60s to 120s to prevent flaky CI failures
+- **Cyclic Dependencies**: Resolved circular dependency issues in monorepo package structure
+- **Port Conflicts**: Fixed port allocation conflicts between test suites
+
+**Impact**: More reliable CI test runs, eliminates false negatives from WebGPU-unavailable environments.
+
+**Testing Strategy**:
+- WebGPU-dependent packages (`impostor`, `client`) require local testing with GPU-enabled browsers
+- Headless CI focuses on server-side logic, data processing, and non-rendering systems
+- Full integration tests run locally or on GPU-enabled CI runners (not GitHub Actions)
+
 ### Manifest File Loading Fix (March 10, 2026)
 
 **Change** (Commit c0898fa): Fixed legacy manifest entries that 404 on CDN.
