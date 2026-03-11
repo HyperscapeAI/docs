@@ -301,16 +301,28 @@ PUBLIC_CDN_URL=https://assets.hyperscape.club
 
 ### Deployment Fixes (March 11, 2026)
 
-**Change** (Commit a65a308): Fixed SSH session timeout during Vast.ai deployments.
+**Change** (Commits a65a308, 9e6f5bb): Fixed SSH session timeout and orphaned process deadlocks during Vast.ai deployments.
 
-**Problem**: Background processes (Xvfb, socat) were keeping SSH session file descriptors open, causing `appleboy/ssh-action` to hang for 30 minutes until `command_timeout` killed it - even though deployment completed in ~1 minute.
+**Problem 1 - SSH Timeout**: Background processes (Xvfb, socat) were keeping SSH session file descriptors open, causing `appleboy/ssh-action` to hang for 30 minutes until `command_timeout` killed it - even though deployment completed in ~1 minute.
 
-**Fix**: Added `disown` after each background process in `scripts/deploy-vast.sh` to detach them from the shell's job table, allowing SSH to exit cleanly.
+**Fix 1**: Added `disown` after each background process in `scripts/deploy-vast.sh` to detach them from the shell's job table, allowing SSH to exit cleanly.
+
+**Problem 2 - Orphaned Bun Processes**: PM2 `kill` command was failing to terminate orphaned bun child processes (game server instances), causing them to hold database connections and deadlock subsequent deployments.
+
+**Fix 2**: Added explicit `pkill` commands in `scripts/deploy-vast.sh` to kill orphaned bun server processes before starting new deployment:
+```bash
+# Kill ORPHANED bun child processes that pm2 kill failed to terminate
+pkill -f "bun.*packages/server.*dist/index.js" || true
+pkill -f "bun.*packages/server.*start" || true
+pkill -f "bun.*dev-duel.mjs" || true
+pkill -f "bun.*preview.*3333" || true
+```
 
 **Impact**: 
 - Deployment completes in ~1 minute instead of hanging for 30 minutes
-- CI/CD pipeline runs faster
-- No more false timeout failures
+- Eliminates database connection deadlocks from ghost game servers
+- CI/CD pipeline runs faster and more reliably
+- No more false timeout failures or deployment hangs
 
 **CI Test Filter Updates** (Commit d7a7995): Updated Turbo test filter to exclude deleted packages from main branch.
 
