@@ -40,12 +40,20 @@ For Vast.ai and other GPU servers running the streaming pipeline:
 - **Display Driver vs Compute**: WebGPU requires GPU display driver support, not just compute access
 - **Must run non-headless** with Xorg or Xvfb (WebGPU requires window context)
 - **Chrome Beta Channel**: Use `google-chrome-beta` for WebGPU streaming (better stability than Dev/Canary)
-- **ANGLE Backend**: Use default ANGLE backend (`--use-angle=default`), NOT native Vulkan
+- **ANGLE Backend**: Use Vulkan ANGLE backend (`--use-angle=vulkan`) on Linux NVIDIA for WebGPU stability
 - **Xvfb Virtual Display**: `scripts/deploy-vast.sh` starts Xvfb before PM2 to ensure DISPLAY is available
 - **PM2 Environment**: `ecosystem.config.cjs` explicitly forwards `DISPLAY=:99` and `DATABASE_URL` through PM2
 - **Capture Mode**: Default to `STREAM_CAPTURE_MODE=cdp` (Chrome DevTools Protocol) for reliable frame capture
-- **FFmpeg**: Prefer system ffmpeg over ffmpeg-static to avoid segfaults
+- **FFmpeg**: Prefer system ffmpeg over ffmpeg-static to avoid segfaults (resolution order: `/usr/bin/ffmpeg` → `/usr/local/bin/ffmpeg` → PATH → ffmpeg-static)
+- **Playwright**: Block `--enable-unsafe-swiftshader` injection to prevent CPU software rendering
 - If GPU cannot initialize WebGPU, deployment MUST FAIL (no soft fallbacks)
+
+**ANGLE Backend Selection**:
+- **Linux NVIDIA**: Use ANGLE Vulkan (`--use-angle=vulkan --enable-features=DefaultANGLEVulkan,Vulkan,VulkanFromANGLE`)
+  - ANGLE OpenGL ES (`--use-angle=gl`) fails with "Invalid visual ID" on NVIDIA
+  - Native Vulkan (`--use-vulkan`) crashes
+  - Only ANGLE's Vulkan backend works reliably
+- **macOS**: Use Metal backend (`--use-angle=metal`)
 
 ### Development Rules for WebGPU
 - **NEVER add WebGL fallback code** - it will not work with TSL shaders
@@ -348,6 +356,7 @@ All services have unique default ports to avoid conflicts:
 | 3402 | Docusaurus | (hardcoded) | `bun run docs:dev` |
 | 4001 | ElizaOS API | (hardcoded) | `bun run dev:ai` |
 | 5555 | Game Server | `PORT` | `bun run dev` |
+| 8080 | Asset CDN | (hardcoded) | `bun run cdn:up` |
 
 **Note**: The betting app (port 4179) and keeper API have been moved to the [hyperbet repository](https://github.com/HyperscapeAI/hyperbet).
 
@@ -381,9 +390,6 @@ PRIVY_APP_SECRET=...             # For Privy auth
 POSTGRES_POOL_MAX=20             # Default: 20 (up from 10)
 POSTGRES_POOL_MIN=2              # Default: 2
 
-# ElizaCloud AI (for duel arena agents)
-ELIZAOS_CLOUD_API_KEY=...        # Single key for 13 frontier models
-
 # Streaming (optional) - auto-detected from available keys
 TWITCH_STREAM_KEY=...            # or TWITCH_RTMP_STREAM_KEY
 KICK_STREAM_KEY=...
@@ -393,7 +399,7 @@ STREAM_ENABLED_DESTINATIONS=...  # Auto-detected if not set
 # Streaming Capture Configuration
 STREAM_CAPTURE_MODE=cdp               # CDP (Chrome DevTools Protocol) for reliability
 STREAM_CAPTURE_CHANNEL=chrome-beta    # Chrome Beta for stability
-STREAM_CAPTURE_ANGLE=default          # Default ANGLE backend
+STREAM_CAPTURE_ANGLE=vulkan           # Vulkan ANGLE backend (Linux NVIDIA)
 STREAM_CAPTURE_WIDTH=1280
 STREAM_CAPTURE_HEIGHT=720
 DISPLAY=:99                           # Xvfb virtual display
@@ -401,14 +407,8 @@ DISPLAY=:99                           # Xvfb virtual display
 # Database Mode (auto-detected from DATABASE_URL)
 DUEL_DATABASE_MODE=remote        # or local (auto-detected)
 
-# CDN Configuration (unified)
+# CDN Configuration (unified - March 2026)
 PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production CDN (used everywhere)
-
-# Oracle (optional)
-DUEL_ARENA_ORACLE_ENABLED=true
-DUEL_ARENA_ORACLE_PROFILE=testnet  # or mainnet
-DUEL_ARENA_ORACLE_EVM_PRIVATE_KEY=...
-DUEL_ARENA_ORACLE_SOLANA_AUTHORITY_SECRET=...
 
 # Client (packages/client/.env)
 PUBLIC_PRIVY_APP_ID=...          # Must match server's PRIVY_APP_ID
@@ -435,11 +435,11 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **Engine**: Three.js 0.183.2, PhysX (WASM)
 - **UI**: React 19.2.0, styled-components
 - **Server**: Fastify, WebSockets, LiveKit
-- **Database**: PostgreSQL (production via Neon/Railway), Docker (local)
+- **Database**: PostgreSQL (production via Neon/Railway, connection pool: 20), Docker (local)
 - **Testing**: Playwright, Vitest 4.x (upgraded from 2.x for Vite 6 compatibility)
 - **Build**: Turbo, esbuild, Vite
 - **Mobile**: Capacitor 8.2.0
-- **AI Agents**: ElizaOS `alpha` packages with InMemoryDatabaseAdapter (no PGLite)
+- **AI Agents**: ElizaOS `alpha` packages
 - **Streaming**: FFmpeg (system preferred over ffmpeg-static), Playwright Chromium, RTMP
 - **Icons**: Lucide React 0.577.0
 - **3D Utilities**: three-mesh-bvh 0.9.9
@@ -456,20 +456,6 @@ bun install
 bun run build
 ```
 
-**Bundle Size Warnings:**
-
-The client and asset-forge packages have increased `chunkSizeWarningLimit` to suppress warnings for intentionally large WebGPU/PhysX bundles:
-
-- `packages/client/vite.config.ts`: 8000 KB (up from 2000 KB) - WebGPU/PhysX bundles
-- `packages/asset-forge/vite.config.ts`: 9000 KB (new) - Asset tooling with WebGPU
-
-These limits are intentional until deeper code splitting is implemented. The large bundles are due to:
-- Three.js WebGPU renderer and TSL shader system
-- PhysX WASM bindings
-- Asset processing tools (GLB decimation, impostor baking, etc.)
-
-**Tech Debt**: Track deeper code splitting as future optimization to reduce initial bundle size.
-
 ### PhysX Build Fails
 
 PhysX is pre-built and committed. If it needs rebuilding:
@@ -485,6 +471,7 @@ cd packages/physx-js-webidl
 lsof -ti:3333 | xargs kill -9  # Game Client
 lsof -ti:5555 | xargs kill -9  # Game Server
 lsof -ti:4001 | xargs kill -9  # ElizaOS API
+lsof -ti:8080 | xargs kill -9  # Asset CDN
 ```
 
 See [Port Allocation](#port-allocation) section for full port list.
@@ -495,30 +482,7 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Check `/logs/` folder for error details
 - Tests spawn their own Hyperscape instances
 - Visual tests require WebGPU support (headful browser with GPU access)
-
-### Agent Memory Issues
-
-If agents are consuming excessive memory:
-- Check that InMemoryDatabaseAdapter is being used (not PGLite)
-- Verify memory caps are in place (50 memories per agent, 20 adapter logs, 100 cache entries)
-- Monitor periodic GC is running (every 60s)
-- Check DB connection pool isn't exhausted (max 5 concurrent bank queries)
-
-### Database Connection Pool Exhaustion
-
-If seeing "timeout exceeded when trying to connect" errors:
-- **PostgreSQL connection pool increased to 20** (March 2026, commit 24fa8a5)
-- Increase serverless PG pool max if needed (default: 20)
-- Increase connection timeout (default: 60s)
-- Enable concurrency limiting for bank queries (max 5)
-- Stagger agent refresh intervals to distribute load
-
-### CSRF 403 Errors
-
-If account creation fails with "CSRF validation failed" (403) when running client on localhost against a deployed server:
-- Ensure `UsernameSelectionScreen` includes Privy auth token in Authorization header (fixed in commit 0b1a0bd)
-- Verify CSRF middleware allows localhost/private IP origins
-- Check that client's `api-client.ts` accepts both `{ token }` and `{ csrfToken }` response formats
+- **CI Test Exclusions**: `@hyperscape/impostor` excluded from headless CI (requires WebGPU)
 
 ### Streaming Issues
 
@@ -533,6 +497,24 @@ If RTMP streaming fails to start:
 - Verify DISPLAY environment variable: `echo $DISPLAY` (should be `:99`)
 - Review logs: `bunx pm2 logs hyperscape-duel`
 
+### Deployment Issues
+
+**SSH Timeout (Vast.ai)**:
+- Background processes (Xvfb, socat) must use `disown` to detach from SSH session
+- Without `disown`, SSH hangs for 30 minutes waiting for process file descriptors to close
+- Fixed in commit a65a308
+
+**Orphaned Bun Processes**:
+- PM2 `kill` may fail to terminate orphaned bun child processes
+- These ghost processes hold database connections and deadlock deployments
+- Solution: Explicit `pkill` commands in `scripts/deploy-vast.sh` before starting new deployment
+- Fixed in commit 9e6f5bb
+
+**Database Connection Deadlocks**:
+- Wait 5-30 seconds after killing processes to allow DB connections to drain
+- Remote databases need longer drain time (30s) than local (5s)
+- Increase `POSTGRES_POOL_MAX` if seeing connection exhaustion (default: 20)
+
 ### CDN Asset Loading Issues
 
 If assets fail to load in production streaming deployments:
@@ -540,12 +522,34 @@ If assets fail to load in production streaming deployments:
 - Default: `https://assets.hyperscape.club`
 - Check `ecosystem.config.cjs` has correct CDN URL
 - Ensure CDN is accessible from deployment environment
+- **Note**: `DUEL_PUBLIC_CDN_URL` was deprecated in March 2026 - use `PUBLIC_CDN_URL` instead
 
 ## Recent Changes (March 2026)
 
+### Deployment Process Cleanup (March 11, 2026)
+
+**Change** (Commit 9e6f5bb): Kill orphaned bun processes to prevent ghost game servers from deadlocking deployments.
+
+**Problem**: PM2 `kill` command was failing to terminate orphaned bun child processes (game server instances), causing them to hold database connections and deadlock subsequent deployments.
+
+**Solution**: Added explicit `pkill` commands in `scripts/deploy-vast.sh` to kill orphaned bun server processes before starting new deployment:
+```bash
+# Kill ORPHANED bun child processes that pm2 kill failed to terminate
+pkill -f "bun.*packages/server.*dist/index.js" || true
+pkill -f "bun.*packages/server.*start" || true
+pkill -f "bun.*dev-duel.mjs" || true
+pkill -f "bun.*preview.*3333" || true
+```
+
+**Impact**: 
+- Eliminates database connection deadlocks from ghost game servers
+- Deployments no longer hang waiting for stale DB connections to timeout
+- More reliable CI/CD pipeline
+- Faster deployment recovery from crashes
+
 ### Streaming Frame Pacing Fix (March 11, 2026)
 
-**Change** (Commit 522fe37, e2c9fbf): Enforced 30fps frame pacing to eliminate stream buffering.
+**Change** (Commits 522fe37, e2c9fbf): Enforced 30fps frame pacing to eliminate stream buffering.
 
 **Problem**: CDP screencast was delivering frames at ~60fps while FFmpeg expected 30fps input, causing buffer buildup and viewer lag. Initial fix (522fe37) set `everyNthFrame: 2` to halve compositor delivery, but this was incorrect - Xvfb compositor runs at 30fps (no vsync), not 60fps.
 
@@ -559,6 +563,8 @@ If assets fail to load in production streaming deployments:
 # New defaults in ecosystem.config.cjs
 STREAM_CAPTURE_WIDTH=1280
 STREAM_CAPTURE_HEIGHT=720
+STREAM_OUTPUT_WIDTH=1280
+STREAM_OUTPUT_HEIGHT=720
 ```
 
 **Technical Details**:
@@ -656,10 +662,10 @@ STREAM_CAPTURE_HEIGHT=720
 - **InstancedBufferAttribute**: Fixed type cast in HealthBars system
 
 **Files Changed**:
-- `packages/shared/src/materials/LeafMaterialTSL.ts` - Updated `atan2` → `atan`
+- `packages/procgen/src/geometry/LeafMaterialTSL.ts` - Updated `atan2` → `atan`
 - `packages/shared/src/extras/three/three.ts` - Added TSL typed node aliases
 - `packages/shared/src/systems/client/HealthBars.ts` - Fixed instancedBufferAttribute type cast
-- All `package.json` files - Updated three to 0.183.2 and @types/three to 0.183.1
+- All `package.json` files - Updated three to 0.183.2 and @types/three to 0.182.0
 
 **Migration Notes**:
 ```typescript
@@ -668,6 +674,12 @@ import { atan2 } from 'three/tsl';
 
 // New (0.183.2)
 import { atan } from 'three/tsl';
+
+// New TSL typed node aliases (packages/shared/src/extras/three/three.ts)
+export type TSLNodeFloat = ReturnType<typeof THREE_NAMESPACE.TSL.float>;
+export type TSLNodeVec2 = ReturnType<typeof THREE_NAMESPACE.TSL.vec2>;
+export type TSLNodeVec3 = ReturnType<typeof THREE_NAMESPACE.TSL.vec3>;
+export type TSLNodeVec4 = ReturnType<typeof THREE_NAMESPACE.TSL.vec4>;
 ```
 
 **Impact**: 
@@ -678,39 +690,34 @@ import { atan } from 'three/tsl';
 
 ### Streaming Pipeline Optimization (March 10, 2026)
 
-**Change** (Commits c0e7313, 796b61f): Major streaming pipeline overhaul with CDP default, default ANGLE backend, and FFmpeg improvements.
+**Change** (Commits c0e7313, 796b61f, d893fd4): Major streaming pipeline overhaul with CDP default, Vulkan ANGLE backend, and FFmpeg improvements.
 
 **Key Changes**:
 - **Default Capture Mode**: CDP (Chrome DevTools Protocol) everywhere for reliability
 - **Chrome Beta Channel**: Switched from Chrome Unstable to Chrome Beta for better stability
-- **ANGLE Backend**: Default ANGLE backend (`--use-angle=default`) for cross-platform compatibility
+- **ANGLE Backend**: Vulkan ANGLE backend (`--use-angle=vulkan`) on Linux NVIDIA for WebGPU stability
 - **FFmpeg Resolution**: Prefer system ffmpeg (`/usr/bin`, `/usr/local/bin`) over ffmpeg-static to avoid segfaults
 - **x264 Tuning**: Default to `zerolatency` tune for live streaming (was `film`)
 - **GOP Size**: Set to 30 frames (1s at 30fps) to match HLS segment boundaries
-- **MediaRecorder Chunks**: Tighter chunking for lower latency
+- **MediaRecorder Chunks**: Tighter chunking (100ms) for lower latency
 - **Dead Code Removal**: Deleted `dev-final.mjs` (875 lines), removed `SERVER_DEV_LEAN_MODE` system
 - **Playwright Fix**: Block `--enable-unsafe-swiftshader` injection to prevent CPU software rendering
 
 **ANGLE Backend Selection**:
 ```bash
-# Default (auto-select) - RECOMMENDED
-STREAM_CAPTURE_ANGLE=default
---use-angle=default
-
-# macOS (explicit)
-STREAM_CAPTURE_ANGLE=metal
---use-angle=metal
-
-# Linux NVIDIA (explicit, if default fails)
+# Linux NVIDIA - RECOMMENDED for production streaming
 STREAM_CAPTURE_ANGLE=vulkan
 --use-angle=vulkan --enable-features=DefaultANGLEVulkan,Vulkan,VulkanFromANGLE
+
+# macOS
+STREAM_CAPTURE_ANGLE=metal
+--use-angle=metal
 ```
 
-**Why Default ANGLE Backend**:
-- Automatically selects best backend (Vulkan, OpenGL, or D3D11) for the system
-- Better compatibility across different GPU configurations and driver versions
-- Reduces rendering artifacts and crashes from incompatible drivers
-- Simpler configuration - no platform-specific logic needed
+**Why Vulkan ANGLE on Linux**:
+- ANGLE OpenGL ES (`--use-angle=gl`) fails with "Invalid visual ID" on NVIDIA GPUs
+- Native Vulkan (`--use-vulkan`) crashes
+- Only ANGLE's Vulkan backend works reliably for WebGPU streaming on Linux NVIDIA hardware
 
 **FFmpeg Improvements**:
 ```bash
@@ -727,7 +734,7 @@ STREAM_CAPTURE_MODE=cdp  # Default: CDP for reliability
 STREAM_CAPTURE_CHANNEL=chrome-beta  # Chrome Beta for stability
 
 # ANGLE backend
-STREAM_CAPTURE_ANGLE=default  # Auto-select (recommended)
+STREAM_CAPTURE_ANGLE=vulkan  # Vulkan ANGLE (Linux NVIDIA)
 
 # x264 encoding
 x264_tune=zerolatency  # Live streaming (was film)
@@ -737,9 +744,9 @@ gop_size=30           # 1s segments at 30fps
 **Files Changed**:
 - `packages/server/scripts/stream-to-rtmp.ts` - ANGLE backend logic, FFmpeg resolution
 - `scripts/duel-stack.mjs` - Updated default capture mode and ANGLE backend
-- `ecosystem.config.cjs` - STREAM_CAPTURE_ANGLE=default
+- `ecosystem.config.cjs` - STREAM_CAPTURE_ANGLE=vulkan
 - `scripts/deploy-vast.sh` - Chrome Beta installation
-- `playwright.config.ts` - Updated DEFAULT_LINUX_WEBGPU_ARGS
+- `packages/client/playwright.config.ts` - Updated DEFAULT_LINUX_WEBGPU_ARGS
 - `packages/shared/src/utils/rendering/RendererFactory.ts` - Prefer high-performance GPU adapter
 
 **Impact**: 
@@ -761,6 +768,9 @@ gop_size=30           # 1s segments at 30fps
 isStreamingLikeViewport(window) // true for stream or spectator modes
 ```
 
+**Files Changed**:
+- `packages/shared/src/runtime/createClientWorld.ts` - Skip PhysX for streaming/spectator viewports
+
 **Impact**: 
 - Faster streaming client startup
 - Reduced memory footprint for spectator views
@@ -772,7 +782,10 @@ isStreamingLikeViewport(window) // true for stream or spectator modes
 
 **Problem**: Streaming clients with empty world states showed a black void instead of the arena.
 
-**Solution**: `ClientCameraSystem` now defaults to arena lobby position `(0, 5, 10)` when no entities are present in streaming mode.
+**Solution**: `ClientCameraSystem` now defaults to arena lobby position when no entities are present in streaming mode.
+
+**Files Changed**:
+- `packages/shared/src/systems/client/ClientCameraSystem.ts` - Added `positionCameraAtArenaFallback()` method
 
 **Impact**: Streaming always shows the arena instead of a black screen during initialization or between duels.
 
@@ -785,6 +798,11 @@ isStreamingLikeViewport(window) // true for stream or spectator modes
 **Solution**: 
 - `NetworkFirst` strategy for JS/CSS - always fetch latest, fallback to cache
 - Aggressive cache clearing for local dev (clears `workbox-*` and `hyperscape-*` caches)
+- Reload once after cleanup to ensure clean state
+
+**Files Changed**:
+- `packages/client/vite.config.ts` - Changed Workbox strategy to NetworkFirst
+- `packages/client/src/index.html` - Added aggressive service worker cleanup for dev
 
 **Impact**: 
 - Eliminates stale module errors after rebuilds
@@ -793,22 +811,28 @@ isStreamingLikeViewport(window) // true for stream or spectator modes
 
 ### WebGPU Feature Flags (March 10, 2026)
 
-**Change** (Commit 796b61f, 93cac36): Updated Chrome WebGPU feature flags for better compatibility.
+**Change** (Commits 796b61f, 93cac36, d893fd4): Updated Chrome WebGPU feature flags for better compatibility.
 
 **Added Flags**:
 - `UnsafeWebGPU` - Enable WebGPU in non-secure contexts (dev/testing)
 - `WebGPUDeveloperFeatures` - Enable developer features for debugging
-- Removed `UseSkiaRenderer` - Conflicts with WebGPU (causes "Instance dropped" errors)
+- `DefaultANGLEVulkan` - Enable ANGLE Vulkan backend by default
+- `Vulkan` - Enable Vulkan support
+- `VulkanFromANGLE` - Enable Vulkan via ANGLE
 
 **Removed Flags**:
+- `UseSkiaRenderer` - Conflicts with WebGPU (causes "Instance dropped" errors)
 - `--disable-gpu-sandbox` - Not needed for working Chrome
 - `--enable-webgl` - Irrelevant for WebGPU-only rendering
 - `--disable-field-trial-config` - Blocks GPU feature config propagation
 
 **Configuration**:
 ```bash
-# Chrome flags for WebGPU streaming
---enable-features=WebGPU,UnsafeWebGPU,WebGPUDeveloperFeatures
+# Chrome flags for WebGPU streaming (Linux NVIDIA)
+--use-gl=angle
+--use-angle=vulkan
+--enable-features=DefaultANGLEVulkan,Vulkan,VulkanFromANGLE,WebGPU,UnsafeWebGPU,WebGPUDeveloperFeatures
+--ignore-gpu-blocklist
 --enable-gpu-service-logging  # Better GPU debugging
 ```
 
@@ -816,10 +840,11 @@ isStreamingLikeViewport(window) // true for stream or spectator modes
 - More reliable WebGPU initialization
 - Better error messages for GPU issues
 - Eliminates "Instance dropped" device-lost errors
+- Proper ANGLE Vulkan backend selection on Linux
 
 ### CDN URL Unification (March 10, 2026)
 
-**Change** (Commit 2173086): Replaced `DUEL_PUBLIC_CDN_URL` with unified `PUBLIC_CDN_URL` environment variable.
+**Change** (Commits 2173086, 8660bca): Replaced `DUEL_PUBLIC_CDN_URL` with unified `PUBLIC_CDN_URL` environment variable.
 
 **Rationale**: Simplifies CDN configuration by using a single environment variable across all contexts instead of separate duel-specific and general CDN URLs.
 
@@ -834,6 +859,7 @@ PUBLIC_CDN_URL=https://assets.hyperscape.club
 
 **Files Changed**:
 - `scripts/deploy-vast.sh` - Updated to use `PUBLIC_CDN_URL`
+- `ecosystem.config.cjs` - Replaced `DUEL_PUBLIC_CDN_URL` with `PUBLIC_CDN_URL`
 - `packages/server/.env.example` - Updated documentation
 - All deployment scripts and configurations
 
@@ -845,17 +871,17 @@ PUBLIC_CDN_URL=https://assets.hyperscape.club
 
 ### Chrome Swiftshader Rendering Block Fix (March 10, 2026)
 
-**Change** (Commit 7c16937): Fixed Playwright injecting `--enable-unsafe-swiftshader` flag which forces CPU software rendering and blocks WebGPU compositor pipeline.
+**Change** (Commits 7c16937, 550a877): Fixed Playwright injecting `--enable-unsafe-swiftshader` flag which forces CPU software rendering and blocks WebGPU compositor pipeline.
 
 **Problem**: Playwright's default args include `--enable-unsafe-swiftshader`, forcing Chrome to use CPU-based software rendering instead of GPU acceleration. This sabotages the WebGPU compositor pipeline and causes rendering failures.
 
-**Solution**: Use `ignoreDefaultArgs: ['--enable-unsafe-swiftshader']` in Playwright browser launch configuration to prevent Playwright from injecting this flag.
+**Solution**: Use `ignoreDefaultArgs: ['--enable-unsafe-swiftshader', '--hide-scrollbars']` in Playwright browser launch configuration to prevent Playwright from injecting these flags.
 
 **Additional Fix**: Added explicit FFmpeg cleanup in script teardown to prevent stale ffmpeg processes from blocking Twitch/Kick RTMP connections between restarts.
 
 **Files Changed**:
-- `packages/server/src/streaming/browser-capture.ts` - Added `ignoreDefaultArgs` to Playwright launch config
-- `packages/server/src/streaming/rtmp-bridge.ts` - Added FFmpeg process cleanup on teardown
+- `packages/server/scripts/stream-to-rtmp.ts` - Added `ignoreDefaultArgs` to Playwright launch config, added FFmpeg cleanup
+- `packages/server/src/streaming/rtmp-bridge.ts` - Improved FFmpeg process cleanup
 
 **Impact**: 
 - Enables proper GPU-accelerated WebGPU rendering in Playwright-launched Chrome instances
@@ -865,6 +891,7 @@ PUBLIC_CDN_URL=https://assets.hyperscape.club
 ### Dependency Updates (March 10, 2026)
 
 **Major Updates**:
+- **Three.js**: 0.182.0 → 0.183.2 (WebGPU renderer, TSL shaders)
 - **Capacitor**: 7.6.0 → 8.2.0 (Android, iOS, Core)
 - **lucide-react**: → 0.577.0 (icon library)
 - **three-mesh-bvh**: 0.8.3 → 0.9.9 (BVH acceleration)
@@ -876,6 +903,7 @@ PUBLIC_CDN_URL=https://assets.hyperscape.club
 - **globals**: → 17.4.0 (TypeScript globals)
 
 **Impact**:
+- Latest Three.js WebGPU features and performance improvements
 - Latest mobile platform features (Capacitor 8.2.0)
 - Improved icon library with new icons
 - Better BVH performance for collision detection
@@ -888,7 +916,13 @@ PUBLIC_CDN_URL=https://assets.hyperscape.club
 
 **Problem**: WebSocket connections dropping under high load from concurrent agent queries and player actions.
 
-**Solution**: Improved connection health monitoring and error handling in WebSocket layer.
+**Solution**: 
+- Improved connection health monitoring in `Socket.ts`
+- Set `alive = true` on any packet receipt (proof of life)
+- Better handling of proxy-dropped protocol pongs (e.g., Cloudflare)
+
+**Files Changed**:
+- `packages/shared/src/platform/shared/Socket.ts` - Added `alive = true` on message receipt
 
 **Impact**: More stable multiplayer connections during high-load scenarios (many agents, busy servers).
 
