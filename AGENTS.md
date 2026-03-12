@@ -244,6 +244,7 @@ import { atan } from 'three/tsl';
 - **ANGLE Backend**: Default ANGLE backend (`--use-angle=default`) for automatic best-backend selection
 - **FFmpeg Resolution**: Prefer system ffmpeg (`/usr/bin`, `/usr/local/bin`) over ffmpeg-static to avoid segfaults
 - **x264 Tuning**: Default to `zerolatency` tune for live streaming (was `film`)
+- **RTMP Muxer**: Changed from `flv` to `fifo` muxer with `drop_pkts_on_overflow=1` to absorb network stalls without blocking encoder
 - **GOP Size**: Changed from 30→60 frames (2s at 30fps) per Twitch/YouTube recommendations for stability
 - **Playwright Fix**: Block `--enable-unsafe-swiftshader` injection to prevent CPU software rendering
 - **Dead Code Removal**: Deleted `dev-final.mjs` (875 lines), removed `SERVER_DEV_LEAN_MODE` system
