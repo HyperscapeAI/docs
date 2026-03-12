@@ -1,0 +1,520 @@
+---
+title: "Admin Dashboard"
+description: "Server management, maintenance mode, and live controls"
+icon: "shield-check"
+---
+
+## Overview
+
+Hyperscape includes a comprehensive **admin dashboard** for server management, monitoring, and zero-downtime deployments. The dashboard provides:
+
+- **Live Controls** - HLS stream preview, maintenance mode toggle, server restart
+- **Live Logs** - 1000-entry ring buffer with auto-refresh
+- **Maintenance Mode** - Graceful server pause/resume for deployments
+- **User Management** - View all users, characters, and sessions
+- **Activity Log** - Server-side event history with filtering
+
+<Info>
+  Admin Live Controls and Maintenance Mode added in PR #1015 (March 12, 2026).
+</Info>
+
+---
+
+## Accessing the Dashboard
+
+### Setup
+
+1. **Set admin code** in `packages/server/.env`:
+   ```bash
+   ADMIN_CODE=your-secure-admin-code
+   ```
+
+2. **Navigate to admin panel**:
+   ```
+   http://localhost:3333/?page=admin
+   ```
+
+3. **Enter admin code** when prompted
+
+<Warning>
+  The `ADMIN_CODE` is **required** in production for security. Without it, admin endpoints are inaccessible.
+</Warning>
+
+---
+
+## Live Controls Tab
+
+The Live Controls tab provides real-time server management with HLS stream preview, maintenance mode controls, and live log streaming.
+
+### Features
+
+<CardGroup cols={2}>
+  <Card title="HLS Stream Preview" icon="video">
+    Embedded video player showing live HLS stream from `/live/stream.m3u8`
+  </Card>
+  <Card title="Maintenance Mode Toggle" icon="pause">
+    Pause/resume game with safe-to-deploy status
+  </Card>
+  <Card title="Server Restart" icon="power">
+    Restart server process (requires PM2)
+  </Card>
+  <Card title="Live Logs" icon="terminal">
+    1000-entry ring buffer with auto-refresh every 3s
+  </Card>
+</CardGroup>
+
+### Stream Preview
+
+The dashboard includes an embedded HLS video player:
+
+```typescript
+// From packages/client/src/screens/AdminLiveControls.tsx
+
+// HLS.js player initialization
+const streamUrl = "/live/stream.m3u8";
+
+if (Hls.isSupported()) {
+  const hls = new Hls({
+    enableWorker: true,
+    lowLatencyMode: true,
+  });
+  hls.loadSource(streamUrl);
+  hls.attachMedia(video);
+  hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    video.muted = true;
+    video.play();
+  });
+}
+```
+
+**Features:**
+- Auto-play with muted audio
+- Low-latency mode for minimal delay
+- Fallback to native HLS on Safari
+
+### Game State Controls
+
+**Status Display:**
+- Maintenance mode active/inactive
+- Safe to deploy (yes/no)
+- Current phase (IDLE, FIGHTING, COUNTDOWN, etc.)
+- Viewer count
+
+**Control Actions:**
+- **Pause Game** - Enters maintenance mode, waits for safe state
+- **Resume Game** - Exits maintenance mode, resumes duel cycles
+- **Restart Process** - Sends SIGTERM to server (requires PM2)
+
+### Live Logs
+
+**Features:**
+- 1000 most recent log entries
+- Auto-refresh every 3 seconds
+- Color-coded by log level (DEBUG, INFO, WARN, ERROR)
+- Auto-scroll to bottom
+- Manual refresh button
+
+**Log Entry Format:**
+```typescript
+interface LogEntry {
+  timestamp: number;        // Unix timestamp (ms)
+  level: string;            // DEBUG | INFO | WARN | ERROR
+  system: string;           // System name (e.g., "DuelScheduler")
+  message: string;          // Log message
+  data?: Record<string, unknown>; // Optional structured data
+}
+```
+
+---
+
+## Maintenance Mode
+
+Maintenance mode enables **zero-downtime deployments** by gracefully pausing the game.
+
+### How It Works
+
+When maintenance mode is entered:
+
+1. **Pause new duel cycles** - Current cycle completes, no new cycles start
+2. **Lock betting markets** - No new bets accepted
+3. **Wait for resolution** - Current market resolves
+4. **Report safe state** - API returns `safeToDeploy: true`
+
+### API Endpoints
+
+All endpoints require `x-admin-code` header.
+
+#### Enter Maintenance Mode
+
+```bash
+POST /admin/maintenance/enter
+Headers:
+  x-admin-code: <ADMIN_CODE>
+  Content-Type: application/json
+Body:
+  {
+    "reason": "deployment",
+    "timeoutMs": 300000  # 5 minutes
+  }
+
+Response:
+  {
+    "success": true,
+    "status": {
+      "active": true,
+      "enteredAt": 1710187234567,
+      "reason": "deployment",
+      "safeToDeploy": true,
+      "currentPhase": "IDLE",
+      "marketStatus": "resolved",
+      "pendingMarkets": 0
+    }
+  }
+```
+
+#### Exit Maintenance Mode
+
+```bash
+POST /admin/maintenance/exit
+Headers:
+  x-admin-code: <ADMIN_CODE>
+
+Response:
+  {
+    "success": true,
+    "status": {
+      "active": false,
+      "safeToDeploy": true
+    }
+  }
+```
+
+#### Check Status
+
+```bash
+GET /admin/maintenance/status
+Headers:
+  x-admin-code: <ADMIN_CODE>
+
+Response:
+  {
+    "active": false,
+    "enteredAt": null,
+    "reason": null,
+    "safeToDeploy": true,
+    "currentPhase": "FIGHTING",
+    "marketStatus": "betting",
+    "pendingMarkets": 1
+  }
+```
+
+### Safe to Deploy Conditions
+
+The system reports `safeToDeploy: true` when:
+
+- ✅ Maintenance mode is active
+- ✅ Not in active duel phase (FIGHTING, COUNTDOWN, ANNOUNCEMENT)
+- ✅ No pending betting markets (or all markets resolved)
+
+### Helper Scripts
+
+```bash
+# Enter maintenance mode
+bash scripts/pre-deploy-maintenance.sh
+
+# Exit maintenance mode
+bash scripts/post-deploy-resume.sh
+```
+
+### CI/CD Integration
+
+The Vast.ai deployment workflow automatically uses maintenance mode:
+
+```yaml
+# .github/workflows/deploy-vast.yml
+
+- name: Enter Maintenance Mode
+  run: |
+    curl -X POST "$VAST_SERVER_URL/admin/maintenance/enter" \
+      -H "x-admin-code: $ADMIN_CODE" \
+      -d '{"reason": "deployment", "timeoutMs": 300000}'
+
+# ... deploy steps ...
+
+- name: Exit Maintenance Mode
+  run: |
+    curl -X POST "$VAST_SERVER_URL/admin/maintenance/exit" \
+      -H "x-admin-code: $ADMIN_CODE"
+```
+
+---
+
+## Maintenance Banner
+
+The client automatically displays a **maintenance banner** when the server enters maintenance mode.
+
+### Features
+
+- Polls `/health` endpoint every 5 seconds
+- Displays red warning banner when `maintenanceMode: true`
+- Visible across all screens (game, admin, leaderboard, streaming)
+- Auto-dismisses when maintenance mode exits
+
+### Implementation
+
+```typescript
+// From packages/client/src/components/common/MaintenanceBanner.tsx
+
+export const MaintenanceBanner: React.FC = () => {
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  
+  useEffect(() => {
+    const checkMaintenance = async () => {
+      try {
+        const response = await fetch('/health');
+        const data = await response.json();
+        setMaintenanceMode(data.maintenance === true);
+      } catch (error) {
+        console.error('Failed to check maintenance status:', error);
+      }
+    };
+    
+    // Poll every 5 seconds
+    const interval = setInterval(checkMaintenance, 5000);
+    checkMaintenance(); // Initial check
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  if (!maintenanceMode) return null;
+  
+  return (
+    <div className="maintenance-banner">
+      ⚠️ SERVER MAINTENANCE IMMINENT - GAME WILL PAUSE AFTER CURRENT DUEL
+    </div>
+  );
+};
+```
+
+---
+
+## Logger Ring Buffer
+
+The server maintains a **1000-entry ring buffer** of recent log entries for live streaming to the admin dashboard.
+
+### Configuration
+
+```bash
+# In packages/server/.env
+LOGGER_MAX_ENTRIES=1000  # Ring buffer size (default: 1000)
+```
+
+### API Endpoint
+
+```bash
+GET /admin/logs
+Headers:
+  x-admin-code: <ADMIN_CODE>
+
+Response:
+  {
+    "logs": [
+      {
+        "timestamp": 1710187234567,
+        "level": "INFO",
+        "system": "DuelScheduler",
+        "message": "Duel started",
+        "data": { "duelId": "duel-123" }
+      },
+      // ... up to 1000 entries
+    ]
+  }
+```
+
+### Log Levels
+
+| Level | Color | Use Case |
+|-------|-------|----------|
+| DEBUG | Gray | Verbose debugging information |
+| INFO | White | Normal operational messages |
+| WARN | Yellow | Warning conditions |
+| ERROR | Red | Error conditions |
+
+### Usage
+
+```typescript
+// From packages/server/src/systems/ServerNetwork/services/Logger.ts
+
+Logger.info("DuelScheduler", "Duel started", { duelId: "duel-123" });
+Logger.warn("Combat", "Invalid attack", { attackerId, targetId });
+Logger.error("Database", "Connection failed", { error: err.message });
+```
+
+---
+
+## Server Restart
+
+The admin dashboard can restart the server process via the `/admin/restart` endpoint.
+
+### API Endpoint
+
+```bash
+POST /admin/restart
+Headers:
+  x-admin-code: <ADMIN_CODE>
+
+Response:
+  {
+    "success": true,
+    "message": "Restarting server in 2 seconds..."
+  }
+```
+
+### Behavior
+
+1. Validates admin code
+2. Waits 2 seconds (allows response to be sent)
+3. Calls `process.exit(0)`
+4. PM2 automatically restarts the server
+
+<Warning>
+  This endpoint requires a process manager (PM2) to automatically restart the server. Without PM2, the server will exit and not restart.
+</Warning>
+
+### PM2 Configuration
+
+```javascript
+// From ecosystem.config.cjs
+{
+  autorestart: true,
+  max_restarts: 999999,
+  min_uptime: "10s",
+  restart_delay: 10000,
+}
+```
+
+---
+
+## User Management Tab
+
+View and manage all users, characters, and sessions.
+
+### Features
+
+- **User List** - All registered users with Privy IDs
+- **Character List** - All characters with levels and stats
+- **Session List** - Active player sessions
+- **Search & Filter** - Find specific users or characters
+
+---
+
+## Activity Log Tab
+
+Server-side event history with filtering and search.
+
+### Features
+
+- **Event Types** - Combat, inventory, trading, banking, etc.
+- **Time Range** - Filter by date/time range
+- **Player Filter** - Show events for specific player
+- **Export** - Download activity log as CSV
+
+---
+
+## Security
+
+### Admin Code
+
+The `ADMIN_CODE` environment variable protects all admin endpoints:
+
+```typescript
+// From packages/server/src/startup/routes/admin-routes.ts
+
+fastify.addHook('preHandler', async (request, reply) => {
+  const adminCode = request.headers['x-admin-code'];
+  
+  if (!adminCode || adminCode !== process.env.ADMIN_CODE) {
+    reply.code(403).send({ error: 'Invalid admin code' });
+    return;
+  }
+});
+```
+
+**Best Practices:**
+- Use a strong, random admin code (32+ characters)
+- Never commit admin code to git
+- Rotate admin code periodically
+- Use different codes for dev/staging/production
+
+### Rate Limiting
+
+Admin endpoints are **not rate-limited** to allow rapid operations during incidents.
+
+<Warning>
+  Protect your admin code carefully. Anyone with the code can restart the server, enter maintenance mode, and view all logs.
+</Warning>
+
+---
+
+## Troubleshooting
+
+### Logs Not Appearing
+
+**Symptom:** Live logs tab shows "No logs available..."
+
+**Causes:**
+1. Admin code incorrect
+2. Ring buffer empty (server just started)
+3. Auto-refresh disabled
+
+**Solutions:**
+- Verify admin code in server `.env`
+- Wait for server to generate logs
+- Enable auto-refresh toggle
+
+### Maintenance Mode Not Working
+
+**Symptom:** Game doesn't pause when entering maintenance mode
+
+**Causes:**
+1. Admin code incorrect
+2. Streaming duel scheduler not running
+3. Environment variable not set
+
+**Solutions:**
+- Check `/admin/maintenance/status` endpoint
+- Verify `STREAMING_DUEL_ENABLED=true`
+- Check PM2 logs: `bunx pm2 logs hyperscape-duel`
+
+### Server Restart Fails
+
+**Symptom:** Server doesn't restart after clicking restart button
+
+**Causes:**
+1. PM2 not running
+2. PM2 autorestart disabled
+3. Server crashed during restart
+
+**Solutions:**
+- Check PM2 status: `bunx pm2 status`
+- Verify `autorestart: true` in `ecosystem.config.cjs`
+- Check PM2 logs for crash details
+
+---
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Deployment" icon="rocket" href="/guides/deployment">
+    Production deployment with maintenance mode integration
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/devops/configuration">
+    Environment variables and server configuration
+  </Card>
+  <Card title="Monitoring" icon="activity" href="/devops/monitoring">
+    Health checks and alerting
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/devops/troubleshooting">
+    Common issues and solutions
+  </Card>
+</CardGroup>
