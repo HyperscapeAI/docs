@@ -876,8 +876,8 @@ VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
 DUEL_DATABASE_MODE=remote                  # Auto-detected from DATABASE_URL hostname
 DATABASE_URL=postgresql://...              # Explicitly forwarded through PM2 (commit 5d415fc)
 
-# CDN Configuration (commit 2b3cbcb)
-DUEL_PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production CDN (not localhost)
+# CDN Configuration (commit 2173086)
+PUBLIC_CDN_URL=https://assets.hyperscape.club  # Unified CDN URL (replaced DUEL_PUBLIC_CDN_URL)
 
 # Audio Capture (commits 3b6f1ee, aab66b0, b9d2e41)
 STREAM_AUDIO_ENABLED=true
