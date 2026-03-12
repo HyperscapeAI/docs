@@ -1,0 +1,367 @@
+---
+title: "Biome API"
+description: "BiomeType enum and tree configuration API"
+icon: "tree-deciduous"
+---
+
+## BiomeType Enum
+
+Type-safe biome identifiers.
+
+```typescript
+export enum BiomeType {
+  Tundra = "tundra",
+  Forest = "forest",
+  Canyon = "canyon",
+}
+
+export const DEFAULT_BIOME = BiomeType.Forest;
+export const BIOME_LIST: BiomeType[] = Object.values(BiomeType);
+```
+
+### Usage
+
+```typescript
+import { BiomeType } from '@hyperscape/shared';
+
+// Type-safe biome reference
+const biome = BiomeType.Forest;
+
+// Get all biomes
+const allBiomes = BIOME_LIST;
+console.log(allBiomes); // ["tundra", "forest", "canyon"]
+```
+
+---
+
+## getTreeConfigForBiome
+
+Gets the tree configuration for a specific biome.
+
+```typescript
+function getTreeConfigForBiome(biomeId: string): BiomeTreeConfig
+```
+
+**Parameters:**
+- `biomeId` - Biome identifier (BiomeType enum value or string)
+
+**Returns:** `BiomeTreeConfig` for the biome, or forest config as fallback
+
+**Example:**
+```typescript
+import { getTreeConfigForBiome, BiomeType } from '@hyperscape/shared';
+
+// Get forest tree config
+const forestConfig = getTreeConfigForBiome(BiomeType.Forest);
+
+// Returns:
+// {
+//   enabled: true,
+//   trees: {
+//     oak: { weight: 20, maxHeight: 25 },
+//     birch: { weight: 20, maxHeight: 25 },
+//     maple: { weight: 40, maxHeight: 25 },
+//     // ...
+//   },
+//   density: 15,
+//   minSpacing: 8,
+//   clustering: false,
+//   scaleVariation: [0.8, 1.2],
+//   maxSlope: 1.5,
+// }
+
+// Unknown biomes fall back to forest
+const unknownConfig = getTreeConfigForBiome("unknown");
+// Returns FOREST_TREE_CONFIG
+```
+
+---
+
+## BiomeTreeConfig
+
+Configuration for tree distribution and placement in a biome.
+
+```typescript
+interface BiomeTreeConfig {
+  enabled: boolean;
+  trees: Record<TreeId, TreeSpawnConfig>;
+  density: number;
+  minSpacing: number;
+  clustering: boolean;
+  scaleVariation: [number, number];
+  maxSlope: number;
+}
+```
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | `boolean` | Whether trees spawn in this biome |
+| `trees` | `Record<TreeId, TreeSpawnConfig>` | Tree spawn configs by tree type |
+| `density` | `number` | Tree density (trees per tile) |
+| `minSpacing` | `number` | Minimum distance between trees (meters) |
+| `clustering` | `boolean` | Whether trees cluster together |
+| `scaleVariation` | `[number, number]` | Min/max scale multipliers |
+| `maxSlope` | `number` | Maximum terrain slope for tree placement |
+
+### Example
+
+```typescript
+const config: BiomeTreeConfig = {
+  enabled: true,
+  trees: {
+    [TreeId.Oak]: { weight: 20, maxHeight: 25 },
+    [TreeId.Birch]: { weight: 20, maxHeight: 25 },
+    [TreeId.Maple]: { weight: 40, maxHeight: 25 },
+  },
+  density: 15,
+  minSpacing: 8,
+  clustering: false,
+  scaleVariation: [0.8, 1.2],
+  maxSlope: 1.5,
+};
+```
+
+---
+
+## TreeSpawnConfig
+
+Configuration for a specific tree type within a biome.
+
+```typescript
+interface TreeSpawnConfig {
+  weight: number;
+  minHeight?: number;
+  maxHeight?: number;
+  waterAffinity?: number;
+  waterProximityHeight?: number;
+  avoidsWaterBelow?: number;
+}
+```
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `weight` | `number` | Spawn weight (higher = more common) |
+| `minHeight` | `number?` | Minimum terrain height (meters) |
+| `maxHeight` | `number?` | Maximum terrain height (meters) |
+| `waterAffinity` | `number?` | Probability to spawn near water (0-1) |
+| `waterProximityHeight` | `number?` | "Near water" distance (meters) |
+| `avoidsWaterBelow` | `number?` | Avoid if water within N meters below |
+
+### Examples
+
+**Mountain Tree:**
+```typescript
+{
+  weight: 15,
+  minHeight: 30,  // Only spawn above 30m elevation
+  maxHeight: 60,  // Only spawn below 60m elevation
+}
+```
+
+**Coastal Tree:**
+```typescript
+{
+  weight: 20,
+  waterAffinity: 0.6,        // 60% chance to spawn near water
+  waterProximityHeight: 9,   // "Near water" = within 9m of water level
+  maxHeight: 15,             // Stay in lowlands
+}
+```
+
+**Desert Tree:**
+```typescript
+{
+  weight: 20,
+  avoidsWaterBelow: 3,  // Don't spawn if water within 3m below
+  minHeight: 20,        // Stay on higher ground
+}
+```
+
+---
+
+## TreeId Enum
+
+Type-safe tree identifiers.
+
+```typescript
+export enum TreeId {
+  Oak = "oak",
+  Birch = "birch",
+  Maple = "maple",
+  Fir = "fir",
+  Pine = "pine",
+  ChinaPine = "china_pine",
+  Bamboo = "bamboo",
+  Knotwood = "knotwood",
+  Cactus = "cactus",
+  Dead = "dead",
+  Palm = "palm",
+  Coconut = "coconut",
+  WindPine = "wind_pine",
+}
+```
+
+### Usage
+
+```typescript
+import { TreeId } from '@hyperscape/shared';
+
+// Type-safe tree reference
+const treeType = TreeId.Oak;
+
+// Use in tree config
+const config = {
+  trees: {
+    [TreeId.Oak]: { weight: 20 },
+    [TreeId.Birch]: { weight: 20 },
+  },
+};
+```
+
+### Migration from Strings
+
+```typescript
+// ❌ Old (hardcoded strings)
+const treeType = "tree_oak";
+
+// ✅ New (type-safe enum)
+const treeType = TreeId.Oak;
+```
+
+---
+
+## buildBiomeConstantsJS
+
+Generates JavaScript code for injecting biome constants into web workers.
+
+```typescript
+function buildBiomeConstantsJS(): string
+```
+
+**Returns:** JavaScript code string defining biome constants
+
+**Example:**
+```typescript
+import { buildBiomeConstantsJS } from '@hyperscape/shared';
+
+const workerCode = `
+  ${buildBiomeConstantsJS()}
+  
+  // Worker can now use BT_FOREST, BT_TUNDRA, BT_CANYON
+  function getBiomeAt(x, z) {
+    if (isDesert(x, z)) return BT_CANYON;
+    if (isTundra(x, z)) return BT_TUNDRA;
+    return BT_FOREST;
+  }
+`;
+
+const worker = new Worker(URL.createObjectURL(
+  new Blob([workerCode], { type: 'application/javascript' })
+));
+```
+
+**Generated Code:**
+```javascript
+var BT_TUNDRA = "tundra";
+var BT_FOREST = "forest";
+var BT_CANYON = "canyon";
+var BT_DEFAULT = BT_FOREST;
+```
+
+---
+
+## Biome Configs
+
+### Forest Biome
+
+```typescript
+const FOREST_TREE_CONFIG: BiomeTreeConfig = {
+  enabled: true,
+  trees: {
+    [TreeId.Knotwood]: { weight: 40, maxHeight: 25 },
+    [TreeId.Oak]: { weight: 20, maxHeight: 25 },
+    [TreeId.Birch]: { weight: 20, maxHeight: 25 },
+    [TreeId.Maple]: { weight: 40, maxHeight: 25 },
+    [TreeId.Fir]: { weight: 15, maxHeight: 25 },
+    [TreeId.Pine]: { weight: 15, maxHeight: 25 },
+    [TreeId.ChinaPine]: { weight: 15, minHeight: 30, maxHeight: 60 },
+    [TreeId.Bamboo]: { weight: 15, minHeight: 35 },
+  },
+  density: 15,
+  minSpacing: 8,
+  clustering: false,
+  scaleVariation: [0.8, 1.2],
+  maxSlope: 1.5,
+};
+```
+
+### Canyon Biome
+
+```typescript
+const CANYON_TREE_CONFIG: BiomeTreeConfig = {
+  enabled: true,
+  trees: {
+    [TreeId.Cactus]: { weight: 20, avoidsWaterBelow: 3 },
+    [TreeId.Dead]: { weight: 20, minHeight: 20 },
+    [TreeId.Palm]: {
+      weight: 20,
+      waterAffinity: 0.3,
+      waterProximityHeight: 9,
+      maxHeight: 15,
+    },
+    [TreeId.Coconut]: {
+      weight: 10,
+      waterAffinity: 0.6,
+      waterProximityHeight: 9,
+      maxHeight: 15,
+    },
+  },
+  density: 15,
+  minSpacing: 18,
+  clustering: false,
+  scaleVariation: [0.7, 1.3],
+  maxSlope: 2.0,
+};
+```
+
+### Tundra Biome
+
+```typescript
+const TUNDRA_TREE_CONFIG: BiomeTreeConfig = {
+  enabled: true,
+  trees: {
+    [TreeId.WindPine]: { weight: 40, minHeight: 15 },
+    [TreeId.Fir]: { weight: 30, minHeight: 10 },
+    [TreeId.Pine]: { weight: 25, minHeight: 8 },
+    [TreeId.Birch]: { weight: 10 },
+  },
+  density: 10,
+  minSpacing: 12,
+  clustering: false,
+  scaleVariation: [0.6, 1.0],
+  maxSlope: 1.5,
+};
+```
+
+---
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Terrain LOD API" icon="mountain" href="/api-reference/terrain-lod">
+    TerrainQuadTree and TerrainQuadNode API
+  </Card>
+  <Card title="Tree Instancing API" icon="trees" href="/api-reference/tree-instancing">
+    GLBTreeBatchedInstancer API reference
+  </Card>
+  <Card title="Resource System" icon="pickaxe" href="/wiki/game-systems/resources">
+    Resource spawning and gathering
+  </Card>
+  <Card title="World API" icon="cube" href="/api-reference/world">
+    World class and system management
+  </Card>
+</CardGroup>
