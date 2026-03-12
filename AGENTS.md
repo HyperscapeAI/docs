@@ -103,6 +103,34 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Tree Shader Lighting Fix (March 12, 2026)
+
+**Change** (PR #1022, Commits c9eaaae, f5fe2b5, e53eab9): Fixed tree lighting to use vertex sphere normals instead of normal maps.
+
+**Problem**: Tree models have sphere normals baked into the vertex normal attribute for volumetric foliage shading, but the shader was using `normalWorld` which goes through the TSL normal map pipeline, ignoring the correct vertex data. This caused incorrect lighting on tree canopies.
+
+**Fix**: 
+- Use `normalLocal` + `modelNormalMatrix` to read raw sphere normals directly from vertex attributes
+- Removed normal map clearing (BatchNode already transforms `normalLocal` per-instance)
+- Uniform night dimming for consistent tree light-shadow contrast at all times of day
+
+**Technical Details**:
+```typescript
+// Old (incorrect - uses normal map pipeline)
+const N = normalize(normalWorld);
+
+// New (correct - uses vertex sphere normals)
+const N = normalize(mul(modelNormalMatrix, normalLocal));
+```
+
+**Night Lighting Improvements**:
+- Uniform `nightDim` multiplier darkens entire tree evenly (maintains ~1.35x lit-to-shadow ratio)
+- SSS (subsurface scattering), edge brightening, and saturation boost now scale with `dayFactor`
+- Night foliage stays muted and cool-toned
+- Eliminates 4.8x contrast variance between day and night (was causing overly bright shadows at night)
+
+**Impact**: Correct volumetric foliage lighting, consistent tree appearance across day/night cycle, better visual quality.
+
 ### Biome Terrain Generation & Quadtree LOD (March 12, 2026)
 
 **Change** (PR #1018, Commits 82a5365, 6c14c8e): Merged biome-based terrain generation with hierarchical quadtree LOD system.
