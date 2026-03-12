@@ -327,6 +327,65 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
 
+## Admin Dashboard
+
+Hyperscape includes a comprehensive admin dashboard for server management and monitoring.
+
+### Accessing the Admin Dashboard
+
+1. **Set admin code** in `packages/server/.env`:
+   ```bash
+   ADMIN_CODE=your-secure-admin-code
+   ```
+
+2. **Navigate to admin panel**:
+   ```
+   http://localhost:3333/?page=admin
+   ```
+
+3. **Enter admin code** when prompted
+
+### Features
+
+- **Live Controls Tab** (NEW - March 2026):
+  - HLS stream preview with embedded video player
+  - Maintenance mode toggle (pause/resume game)
+  - Server restart button (requires PM2)
+  - Live log streaming (1000-entry ring buffer, auto-refresh every 3s)
+  - Real-time status: maintenance state, viewer count, current phase
+- **User Management**: View all users, characters, and sessions
+- **Player Management**: Inspect player state, inventory, equipment, skills
+- **Activity Log**: Server-side event history with filtering
+
+### Admin API Endpoints
+
+All endpoints require `x-admin-code` header:
+
+```bash
+# Maintenance Mode
+POST /admin/maintenance/enter    # Pause game after current duel
+POST /admin/maintenance/exit     # Resume game
+GET  /admin/maintenance/status   # Check maintenance state
+
+# Server Control
+POST /admin/restart              # Restart server process (requires PM2)
+GET  /admin/logs                 # Fetch recent logs (1000 entries)
+
+# Duel Management
+GET  /admin/duels/status         # Current duel cycle status
+```
+
+### Maintenance Mode
+
+Maintenance mode enables zero-downtime deployments:
+
+1. **Enter maintenance mode**: Pauses new duel cycles, waits for active duels to complete
+2. **Safe-to-deploy check**: `safeToDeploy: true` when no active duels
+3. **Deploy**: Restart server with new code
+4. **Exit maintenance mode**: Resume duel cycles
+
+**Client-side banner**: Automatically displays warning when maintenance mode is active (polls `/health` every 5s).
+
 ## Streaming (RTMP)
 
 Hyperscape supports multi-platform RTMP streaming to Twitch, Kick, and YouTube with automatic destination detection.
