@@ -35,9 +35,10 @@ JWT_SECRET=your-random-secret-key  # Generate with: openssl rand -base64 32
                                    # Throws error if not set in production/staging
                                    # Warns in development if not set
 
-# Admin Access (REQUIRED for production security)
+# Admin Access (REQUIRED for production security - March 2026)
 ADMIN_CODE=your-admin-code         # Prevents unauthorized admin access
-                                   # Without this, only GRANT_DEV_ADMIN provides admin
+                                   # Required for /admin/maintenance/*, /admin/logs, /admin/restart
+                                   # Without this, admin endpoints return 403 Forbidden
 
 # Authentication
 PRIVY_APP_ID=your-privy-app-id
@@ -49,6 +50,12 @@ SKIP_MIGRATIONS=true              # Skip server migration execution, table valid
 # Oracle Configuration (March 2026)
 ORACLE_SETTLEMENT_DELAY_MS=7000   # Delay oracle publish to sync with stream (default: 7000ms)
                                   # Prevents oracle publishing before stream viewers see outcome
+                                  # Typical stream latency: 7-10 seconds
+
+# Logger Configuration (March 2026)
+LOGGER_MAX_ENTRIES=1000           # Ring buffer size for live log streaming (default: 1000)
+                                  # Accessible via GET /admin/logs endpoint
+                                  # Stores most recent log entries in memory
 ```
 
 ### Optional
