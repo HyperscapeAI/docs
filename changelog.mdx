@@ -25,6 +25,46 @@ rss: true
 
 <Update label="Biome Terrain Generation & Quadtree LOD" description="March 2026" date="2026-03-12">
 
+### 🌲 Tree Shader Lighting Fix (PR #1022, Commits c9eaaae, f5fe2b5, e53eab9)
+
+**Fixed tree lighting to use vertex sphere normals instead of normal maps for correct volumetric foliage shading.**
+
+**Problem:**
+- Tree models have sphere normals baked into vertex normal attribute for volumetric foliage shading
+- Shader was using `normalWorld` which goes through TSL normal map pipeline, ignoring correct vertex data
+- Caused incorrect lighting on tree canopies with overly bright shadows at night
+
+**Solution:**
+```typescript
+// Old (incorrect - uses normal map pipeline)
+const N = normalize(normalWorld);
+
+// New (correct - uses vertex sphere normals)
+const N = normalize(mul(modelNormalMatrix, normalLocal));
+```
+
+**Night Lighting Improvements:**
+- Uniform `nightDim` multiplier maintains consistent ~1.35x lit-to-shadow ratio across day/night cycle
+- SSS (subsurface scattering), edge brightening, and saturation boost now scale with `dayFactor`
+- Night foliage stays muted and cool-toned
+- Eliminates 4.8x contrast variance between day and night (was causing overly bright shadows)
+
+**Additional Tweaks:**
+- **Tree Collision Proxy** (Commit 214c729): Reduced raycast proxy radius from 100% to 40% of bounding box
+  - Full bounding radius included canopy, making invisible collision cylinder catch clicks far from trunk
+  - More precise tree interaction, clicks only register near actual trunk
+- **Fog Distance** (Commits 5898f43, 7b2655a): Reduced `FOG_FAR` from 180m to 150m for denser atmosphere
+  - Creates more immersive depth perception
+- **Forest Tree Spacing** (Commit 927edde): Increased `maxHeight` from 25m to 30m, `minSpacing` from 8m to 12m
+  - Less cluttered forests, better navigation, more realistic tree distribution
+
+**Files Changed:**
+- `packages/shared/src/systems/shared/world/GPUMaterials.ts` - Vertex sphere normal implementation
+- `packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts` - Forest tree spacing config
+- `packages/shared/src/systems/shared/world/FogConfig.ts` - Fog distance constants
+
+**Impact:** Correct volumetric foliage lighting, consistent tree appearance across day/night cycle, better visual quality and atmosphere.
+
 ### 🏔️ Terrain Quadtree LOD System (Commits 82a5365, 6c14c8e)
 
 **Merged biome-based terrain generation with hierarchical quadtree LOD system for infinite terrain rendering.**
