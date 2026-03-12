@@ -683,9 +683,19 @@ interface VegetationAsset {
 - `fallen_tree` - Fallen logs
 - `mushroom` - Giant mushrooms (added in recent update)
 
+### Biome Configuration
+
+Biomes in `biomes.json` define terrain properties and procedural vegetation layers. The active biome set includes:
+
+- **Tundra** - Frozen terrain with wind pines (maxSlope: 1.8)
+- **Forest** - Dense woodland areas (maxSlope: 1.5)
+- **Canyon** - Rocky terrain with steep slopes (maxSlope: 2.5)
+
+The `maxSlope` threshold determines walkability and vegetation placement, adjusted to match actual terrain generation slopes from terracing and landscape features.
+
 ### Biome Vegetation Layers
 
-Biomes in `biomes.json` define procedural vegetation layers that reference vegetation assets:
+Biomes define procedural vegetation layers that reference vegetation assets:
 
 ```typescript
 interface VegetationLayer {
