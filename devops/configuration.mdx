@@ -51,11 +51,13 @@ SKIP_MIGRATIONS=true              # Skip server migration execution, table valid
 ORACLE_SETTLEMENT_DELAY_MS=7000   # Delay oracle publish to sync with stream (default: 7000ms)
                                   # Prevents oracle publishing before stream viewers see outcome
                                   # Typical stream latency: 7-10 seconds
+                                  # Added in PR #1015 (commit 38c8c89)
 
 # Logger Configuration (March 2026)
 LOGGER_MAX_ENTRIES=1000           # Ring buffer size for live log streaming (default: 1000)
                                   # Accessible via GET /admin/logs endpoint
                                   # Stores most recent log entries in memory
+                                  # Added in PR #1015 for admin dashboard live logs
 ```
 
 ### Optional
