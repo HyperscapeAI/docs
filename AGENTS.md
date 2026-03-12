@@ -103,7 +103,48 @@ packages/
 
 ## Recent Changes (March 2026)
 
-### Streaming Frame Pacing Fix (March 11, 2026)
+### Biome Terrain Generation & Quadtree LOD (March 12, 2026)
+
+**Change** (Commits 82a5365, 6c14c8e): Merged biome-based terrain generation with hierarchical quadtree LOD system.
+
+**New Features**:
+- **TerrainQuadTree**: Hierarchical LOD system that splits/unsplits terrain chunks based on camera distance
+  - Near chunks: small, high-resolution (100m at max depth)
+  - Far chunks: large, low-resolution (1600m at root)
+  - Uniform 32x32 vertex resolution across all LOD levels
+  - Skirt geometry to hide LOD seams
+- **GLBTreeBatchedInstancer**: BatchedMesh-based rendering for multi-variant trees
+  - One BatchedMesh per material slot per LOD level
+  - Supports multiple model variants per tree type
+  - Minimal draw calls regardless of variant count
+  - Texture fingerprinting for automatic material slot matching across variants
+- **Biome System**: Terrain generation now uses biome-specific parameters (plains, forest, desert, etc.)
+- **Performance Optimizations**:
+  - Reduced per-frame allocations in TerrainQuadTree (numeric grid coords instead of string keys)
+  - Optimized GLBTreeBatchedInstancer fingerprinting (deterministic fallback prevents silent matching failures)
+
+**Configuration**:
+```typescript
+// TerrainQuadTree config (packages/shared/src/systems/shared/world/TerrainQuadTree.ts)
+{
+  minSize: 100,           // Smallest chunk (matches TILE_SIZE)
+  maxDepth: 4,            // Max subdivision depth
+  splitRatio: 1.5,        // Split when distance < size * splitRatio
+  unsplitMultiplier: 1.2, // Prevents thrashing at LOD boundaries
+  resolution: 32,         // Uniform vertex resolution
+  skirtDrop: 15,          // Skirt depth in meters
+}
+```\n\n**Impact**: Infinite terrain rendering with dynamic LOD, biome-specific visuals, improved performance through reduced draw calls and smarter chunk management.\n\n### Admin Live Controls & Maintenance Mode (March 12, 2026)\n\n**Change** (PR #1015): Added admin dashboard with live controls, maintenance mode, and log streaming.\n\n**New Features**:
+- **Maintenance Mode System**: Graceful server pause/resume for deployments\n  - `POST /admin/maintenance/enter` - Pause game after current duel\n  - `POST /admin/maintenance/exit` - Resume game\n  - `GET /admin/maintenance/status` - Check maintenance state\n  - Safe-to-deploy flag prevents mid-duel restarts\n- **Live Controls Dashboard**: Real-time admin panel with:\n  - HLS stream preview\n  - Maintenance mode toggle\n  - Server restart button\n  - Live log streaming (1000-entry ring buffer)\n  - Auto-refresh (3s interval)\n- **Maintenance Banner**: Client-side banner polls `/health` every 5s, displays warning when maintenance is active\n- **Admin API Endpoints**:\n  - `GET /admin/logs` - Fetch recent server logs from in-memory ring buffer\n  - `POST /admin/restart` - Restart server process (requires PM2)\n\n**Configuration**:
+```bash\n# ecosystem.config.cjs\nORACLE_SETTLEMENT_DELAY_MS=7000  # Delay oracle publish to sync with stream\n```\n\n**Impact**: Zero-downtime deployments, better operational visibility, safer server restarts.\n\n### Oracle Settlement Delay & Stream Sync (March 11, 2026)\n\n**Change** (Commit 38c8c89): Added configurable settlement delay to sync oracle publishing with stream delivery.\n\n**Problem**: Oracle was publishing duel outcomes immediately after resolution, but stream viewers were still watching the duel (7-10s behind live).\n\n**Fix**: Added `ORACLE_SETTLEMENT_DELAY_MS` (default 7000ms) to delay oracle publishing until stream catches up.\n\n**Configuration**:
+```bash\n# ecosystem.config.cjs or .env\nORACLE_SETTLEMENT_DELAY_MS=7000  # 7 seconds to match typical stream latency\n```\n\n**Impact**: Stream viewers see duel outcome before oracle publishes, better UX for betting/spectating.\n\n### Agent Autonomous Behavior Restoration (March 11, 2026)\n\n**Change** (Commit 89322093): Fixed agent T-pose and re-enabled autonomous behavior between duels.\n\n**Fixes**:
+- **Physics Null Guards**: Added null checks in `RigidBody.ts` and `Collider.ts` for stream mode viewports where physics system is removed
+- **Autonomous Behavior**: Re-enabled mining, chopping, fishing for duel bot agents between duels (was suppressed)
+- **Post-Duel Roaming**: Relaxed restore position from 120-unit lobby radius to 2000-unit world boundary
+- **Model Provider Diversity**: Interleave Anthropic/Groq agents for provider diversity
+- **Bank State Request**: Request bank state on player spawn so goal planner has item data
+
+**Impact**: Agents now behave naturally between duels, no more T-pose in stream mode, better goal planning with bank awareness.\n\n### Streaming Frame Pacing Fix (March 11, 2026)
 
 **Change** (Commits 522fe37, e2c9fbf): Enforced 30fps frame pacing to eliminate stream buffering.
 
