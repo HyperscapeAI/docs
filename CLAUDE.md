@@ -223,6 +223,30 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 
 ## Recent Major Features (March 2026)
 
+### Tree Shader Lighting Fix (March 12, 2026)
+
+**Change** (PR #1022): Fixed tree lighting to use vertex sphere normals instead of normal maps.
+
+**Problem**: Tree models have sphere normals baked into the vertex normal attribute for volumetric foliage shading, but the shader was using `normalWorld` which goes through the TSL normal map pipeline, ignoring the correct vertex data.
+
+**Solution**:
+```typescript
+// packages/shared/src/systems/shared/world/GPUMaterials.ts
+// Old (incorrect - uses normal map pipeline)
+const N = normalize(normalWorld);
+
+// New (correct - uses vertex sphere normals)
+const N = normalize(mul(modelNormalMatrix, normalLocal));
+```
+
+**Night Lighting Improvements**:
+- Uniform `nightDim` multiplier maintains consistent ~1.35x lit-to-shadow ratio
+- SSS (subsurface scattering), edge brightening, and saturation boost scale with `dayFactor`
+- Night foliage stays muted and cool-toned
+- Eliminates 4.8x contrast variance between day and night
+
+**Impact**: Correct volumetric foliage lighting, consistent tree appearance across day/night cycle.
+
 ### Biome Terrain Generation & Quadtree LOD
 
 **New Systems** (Commits 82a5365, 6c14c8e):
