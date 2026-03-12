@@ -3,6 +3,38 @@ title: "January 2026"
 description: "Duel Arena, Prayer, Collision, Smithing, Website, and UI Improvements"
 ---
 
+## March 2026
+
+### Tree Model Updates
+
+*Merged: March 12, 2026*
+
+Visual improvements to tree models and biome vegetation:
+
+- **Wind Pine Tree**: New tree type for tundra biome (split from dead tree variants)
+- **Maple Leaves**: Recolored to warm vermillion red-orange (#D04838)
+- **Knotwood Leaves**: Recolored from golden-yellow to warm amber (#C4832A)
+- **Model Scales**: Adjusted tree model scales for better visual proportions
+- **Manifest**: Updated `vegetation.json` with new wind pine tree type
+
+---
+
+### Biome Configuration Updates
+
+*Merged: March 9-10, 2026*
+
+Biome system synchronized with server configuration:
+
+- **Active Biomes**: Reduced from 8 biomes to 3 active biomes (tundra, forest, canyon)
+- **Walkability Thresholds**: Increased maxSlope values to match terrain generation
+  - Tundra: 0.8 → 1.8
+  - Forest: 0.8 → 1.5
+  - Canyon: 0.6 → 2.5
+- **Terrain Textures**: Fixed biome textures with actual source textures from `terrain_textures/`
+- **Manifest**: `biomes.json` synchronized with server version
+
+---
+
 ## Week 6: February 2-6
 
 ### Ammunition Manifest Update
