@@ -470,9 +470,9 @@ Response:
 - Update server code without stopping duels
 - Restart after configuration changes
 
-### Maintenance Mode API
+### Maintenance Mode API (March 2026)
 
-The server provides a maintenance mode API for graceful deployments:
+The server provides a comprehensive maintenance mode system for zero-downtime deployments:
 
 **Enter Maintenance Mode:**
 ```bash
@@ -533,6 +533,43 @@ Response:
   }
 ```
 
+**Get Live Logs:**
+```bash
+GET /admin/logs
+Headers:
+  x-admin-code: <ADMIN_CODE>
+
+Response:
+  {
+    "logs": [
+      {
+        "timestamp": 1710187234567,
+        "level": "INFO",
+        "system": "DuelScheduler",
+        "message": "Duel started",
+        "data": { "duelId": "duel-123" }
+      }
+    ]
+  }
+```
+
+**Restart Server:**
+```bash
+POST /admin/restart
+Headers:
+  x-admin-code: <ADMIN_CODE>
+
+Response:
+  {
+    "success": true,
+    "message": "Restarting server in 2 seconds..."
+  }
+```
+
+<Warning>
+The restart endpoint calls `process.exit(0)` after a 2-second delay. Ensure you have a process manager (PM2) configured to automatically restart the server.
+</Warning>
+
 **Manual Maintenance Mode:**
 
 Helper scripts are available for manual control:
@@ -544,6 +581,21 @@ bash scripts/pre-deploy-maintenance.sh
 # Exit maintenance mode
 bash scripts/post-deploy-resume.sh
 ```
+
+**Client-Side Maintenance Banner:**
+
+The client automatically displays a maintenance banner when the server enters maintenance mode:
+- Polls `/health` endpoint every 5 seconds
+- Displays red warning banner when `maintenanceMode: true`
+- Banner appears across all screens (game, admin, leaderboard, streaming)
+- Message: "SERVER MAINTENANCE IMMINENT - GAME WILL PAUSE AFTER CURRENT DUEL"
+
+**Maintenance Mode Behavior:**
+- Prevents new duel cycles from starting
+- Waits for active duels to complete
+- Pauses betting markets
+- Sets `safeToDeploy: true` when safe to restart
+- Resumes automatically on exit or timeout
 
 ### Required GitHub Secrets
 
