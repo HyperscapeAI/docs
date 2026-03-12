@@ -209,11 +209,23 @@ cp packages/asset-forge/.env.example packages/asset-forge/.env
 ```
 packages/
 ├── shared/              # Core 3D engine (ECS, Three.js 0.183.2, PhysX, networking, React UI)
-├── server/              # Game server (Fastify, WebSockets, PostgreSQL pool: 20, oracle publisher)
+│                        # - Biome terrain generation with quadtree LOD
+│                        # - GLBTreeBatchedInstancer for multi-variant trees
+│                        # - Physics null guards for stream mode
+├── server/              # Game server (Fastify, WebSockets, PostgreSQL pool: 20)
+│                        # - Maintenance mode system
+│                        # - Admin live controls dashboard
+│                        # - Logger ring buffer (1000 entries)
+│                        # - Oracle settlement delay (7s default)
 ├── client/              # Web client (Vite, React, streaming entry points: stream.html)
+│                        # - Maintenance banner (polls /health every 5s)
+│                        # - Admin live controls UI
+│                        # - NetworkFirst service worker cache
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin (ElizaCloud integration)
+│                        # - Autonomous behavior between duels
+│                        # - Interleaved model providers (Anthropic/Groq)
 ├── physx-js-webidl/     # PhysX WASM bindings
-├── procgen/             # Procedural generation
+├── procgen/             # Procedural generation (terrain, trees, rocks, plants)
 ├── asset-forge/         # AI asset generation + VFX catalog
 ├── duel-oracle-evm/     # EVM duel outcome oracle contracts
 ├── duel-oracle-solana/  # Solana duel outcome oracle program
