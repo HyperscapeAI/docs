@@ -92,7 +92,7 @@ packages/
 ├── client/          # Web client (Vite + React)
 ├── plugin-hyperscape/ # ElizaOS AI agent plugin
 ├── physx-js-webidl/ # PhysX WASM bindings
-├── procgen/         # Procedural generation
+├── procgen/         # Procedural generation (terrain, biomes, vegetation)
 ├── asset-forge/     # AI asset generation + VFX catalog
 ├── duel-oracle-evm/ # EVM duel outcome oracle contracts
 ├── duel-oracle-solana/ # Solana duel outcome oracle program
@@ -105,7 +105,7 @@ packages/
 
 ### Biome Terrain Generation & Quadtree LOD (March 12, 2026)
 
-**Change** (Commits 82a5365, 6c14c8e): Merged biome-based terrain generation with hierarchical quadtree LOD system.
+**Change** (PR #1018, Commits 82a5365, 6c14c8e): Merged biome-based terrain generation with hierarchical quadtree LOD system.
 
 **New Features**:
 - **TerrainQuadTree**: Hierarchical LOD system that splits/unsplits terrain chunks based on camera distance
@@ -115,13 +115,20 @@ packages/
   - Skirt geometry to hide LOD seams
 - **GLBTreeBatchedInstancer**: BatchedMesh-based rendering for multi-variant trees
   - One BatchedMesh per material slot per LOD level
-  - Supports multiple model variants per tree type
+  - Supports multiple model variants per tree type (e.g., 5 dead tree models, 8 cactus variants)
   - Minimal draw calls regardless of variant count
   - Texture fingerprinting for automatic material slot matching across variants
-- **Biome System**: Terrain generation now uses biome-specific parameters (plains, forest, desert, etc.)
+- **Biome System**: Terrain generation now uses biome-specific parameters
+  - 3 biomes: Forest, Canyon, Tundra (defined in `TerrainBiomeTypes.ts`)
+  - 2 landscape types: Mountain, Pond (defined in `TerrainHeightParams.ts`)
+  - Per-biome tree distribution, density, spacing, and placement rules
+  - Biome-aware terrain textures and cliff colors
+- **TreeId Enum**: Centralized tree type identifiers replacing magic strings
+- **Batched Entity Spawning**: Reduces network overhead by batching all entities for a tile into single packet
 - **Performance Optimizations**:
   - Reduced per-frame allocations in TerrainQuadTree (numeric grid coords instead of string keys)
   - Optimized GLBTreeBatchedInstancer fingerprinting (deterministic fallback prevents silent matching failures)
+  - Entity cleanup on tile unload prevents memory leaks
 
 **Configuration**:
 ```typescript
@@ -134,17 +141,87 @@ packages/
   resolution: 32,         // Uniform vertex resolution
   skirtDrop: 15,          // Skirt depth in meters
 }
-```\n\n**Impact**: Infinite terrain rendering with dynamic LOD, biome-specific visuals, improved performance through reduced draw calls and smarter chunk management.\n\n### Admin Live Controls & Maintenance Mode (March 12, 2026)\n\n**Change** (PR #1015): Added admin dashboard with live controls, maintenance mode, and log streaming.\n\n**New Features**:
-- **Maintenance Mode System**: Graceful server pause/resume for deployments\n  - `POST /admin/maintenance/enter` - Pause game after current duel\n  - `POST /admin/maintenance/exit` - Resume game\n  - `GET /admin/maintenance/status` - Check maintenance state\n  - Safe-to-deploy flag prevents mid-duel restarts\n- **Live Controls Dashboard**: Real-time admin panel with:\n  - HLS stream preview\n  - Maintenance mode toggle\n  - Server restart button\n  - Live log streaming (1000-entry ring buffer)\n  - Auto-refresh (3s interval)\n- **Maintenance Banner**: Client-side banner polls `/health` every 5s, displays warning when maintenance is active\n- **Admin API Endpoints**:\n  - `GET /admin/logs` - Fetch recent server logs from in-memory ring buffer\n  - `POST /admin/restart` - Restart server process (requires PM2)\n\n**Configuration**:
-```bash\n# ecosystem.config.cjs\nORACLE_SETTLEMENT_DELAY_MS=7000  # Delay oracle publish to sync with stream\n```\n\n**Impact**: Zero-downtime deployments, better operational visibility, safer server restarts.\n\n### Oracle Settlement Delay & Stream Sync (March 11, 2026)\n\n**Change** (Commit 38c8c89): Added configurable settlement delay to sync oracle publishing with stream delivery.\n\n**Problem**: Oracle was publishing duel outcomes immediately after resolution, but stream viewers were still watching the duel (7-10s behind live).\n\n**Fix**: Added `ORACLE_SETTLEMENT_DELAY_MS` (default 7000ms) to delay oracle publishing until stream catches up.\n\n**Configuration**:
-```bash\n# ecosystem.config.cjs or .env\nORACLE_SETTLEMENT_DELAY_MS=7000  # 7 seconds to match typical stream latency\n```\n\n**Impact**: Stream viewers see duel outcome before oracle publishes, better UX for betting/spectating.\n\n### Agent Autonomous Behavior Restoration (March 11, 2026)\n\n**Change** (Commit 89322093): Fixed agent T-pose and re-enabled autonomous behavior between duels.\n\n**Fixes**:
+
+// Biome-specific tree placement (packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts)
+export const FOREST_TREE_CONFIG: BiomeTreeConfig = {
+  density: 0.15,
+  minSpacing: 8,
+  trees: {
+    [TreeId.OAK]: {
+      spawnWeight: 3,
+      placement: { minHeight: 0, maxHeight: 100 }
+    },
+    [TreeId.WILLOW]: {
+      spawnWeight: 2,
+      placement: { minHeight: 0, maxHeight: 50, waterAffinity: 0.8 }
+    }
+  }
+};
+```
+
+**Impact**: Infinite terrain rendering with dynamic LOD, biome-specific visuals, improved performance through reduced draw calls and smarter chunk management.
+
+### Admin Live Controls & Maintenance Mode (March 12, 2026)
+
+**Change** (PR #1015): Added admin dashboard with live controls, maintenance mode, and log streaming.
+
+**New Features**:
+- **Maintenance Mode System**: Graceful server pause/resume for deployments
+  - `POST /admin/maintenance/enter` - Pause game after current duel
+  - `POST /admin/maintenance/exit` - Resume game
+  - `GET /admin/maintenance/status` - Check maintenance state
+  - Safe-to-deploy flag prevents mid-duel restarts
+- **Live Controls Dashboard**: Real-time admin panel with:
+  - HLS stream preview
+  - Maintenance mode toggle
+  - Server restart button
+  - Live log streaming (1000-entry ring buffer)
+  - Auto-refresh (3s interval)
+- **Maintenance Banner**: Client-side banner polls `/health` every 5s, displays warning when maintenance is active
+- **Admin API Endpoints**:
+  - `GET /admin/logs` - Fetch recent server logs from in-memory ring buffer
+  - `POST /admin/restart` - Restart server process (requires PM2)
+
+**Configuration**:
+```bash
+# ecosystem.config.cjs
+ORACLE_SETTLEMENT_DELAY_MS=7000  # Delay oracle publish to sync with stream
+```
+
+**Impact**: Zero-downtime deployments, better operational visibility, safer server restarts.
+
+### Oracle Settlement Delay & Stream Sync (March 11, 2026)
+
+**Change** (Commit 38c8c89): Added configurable settlement delay to sync oracle publishing with stream delivery.
+
+**Problem**: Oracle was publishing duel outcomes immediately after resolution, but stream viewers were still watching the duel (7-10s behind live).
+
+**Fix**: Added `ORACLE_SETTLEMENT_DELAY_MS` (default 7000ms) to delay oracle publishing until stream catches up.
+
+**Configuration**:
+```bash
+# ecosystem.config.cjs or .env
+ORACLE_SETTLEMENT_DELAY_MS=7000  # 7 seconds to match typical stream latency
+```
+
+**Impact**: Stream viewers see duel outcome before oracle publishes, better UX for betting/spectating.
+
+### Agent Autonomous Behavior Restoration (March 11, 2026)
+
+**Change** (Commit 82a5365, ElizaDuelBot.ts changes): Fixed agent T-pose and re-enabled autonomous behavior between duels.
+
+**Fixes**:
 - **Physics Null Guards**: Added null checks in `RigidBody.ts` and `Collider.ts` for stream mode viewports where physics system is removed
 - **Autonomous Behavior**: Re-enabled mining, chopping, fishing for duel bot agents between duels (was suppressed)
 - **Post-Duel Roaming**: Relaxed restore position from 120-unit lobby radius to 2000-unit world boundary
-- **Model Provider Diversity**: Interleave Anthropic/Groq agents for provider diversity
+- **Model Provider Diversity**: Switched from ElizaCloud to direct Anthropic/Groq providers
+  - Interleaved provider selection ensures diversity (Anthropic → Groq → Anthropic → Groq...)
+  - Models: Claude Sonnet 4.6, Llama 4 Scout, Claude Opus 4.6, Llama 4 Maverick, Claude Haiku 4.5, etc.
 - **Bank State Request**: Request bank state on player spawn so goal planner has item data
 
-**Impact**: Agents now behave naturally between duels, no more T-pose in stream mode, better goal planning with bank awareness.\n\n### Streaming Frame Pacing Fix (March 11, 2026)
+**Impact**: Agents now behave naturally between duels, no more T-pose in stream mode, better goal planning with bank awareness.
+
+### Streaming Frame Pacing Fix (March 11, 2026)
 
 **Change** (Commits 522fe37, e2c9fbf): Enforced 30fps frame pacing to eliminate stream buffering.
 
@@ -152,7 +229,6 @@ packages/
 
 **Fix**:
 - **Reverted everyNthFrame to 1** (commit e2c9fbf) - Xvfb compositor delivers at 30fps, so no frame skipping needed
-- **Frame Pacing Guard**: Skip frames arriving faster than 85% of the 33.3ms target interval (prevents burst-feeding FFmpeg)
 - **Output Resolution**: Default changed from 1920x1080→1280x720 to match capture viewport and eliminate unnecessary upscaling
 
 **Configuration**:
@@ -165,20 +241,33 @@ STREAM_CAPTURE_HEIGHT=720
 **Technical Details**:
 - Xvfb runs at 30fps without vsync (game is capped at 30fps)
 - `everyNthFrame: 2` would halve 30fps delivery to 15fps, causing FFmpeg underflow
-- Frame pacing guard handles edge cases where compositor exceeds TARGET_FPS
 - 1280x720 matches capture viewport, eliminating upscaling overhead
 
 **Impact**: Eliminates stream buffering, smoother playback for viewers, reduced bandwidth usage, correct frame delivery rate (30fps).
 
-### BankTabBar Test Updates (March 11, 2026)
+### RTMP Muxer Improvements (March 12, 2026)
 
-**Change** (Commits 297539f, be2503f): Fixed BankTabBar tests to be environment-agnostic for color formats.
+**Change** (PR #1015): Switched RTMP muxer from `flv` to `fifo` with overflow handling.
 
-**Problem**: Tests were failing due to browser differences in CSS color representation (hex vs rgb).
+**Problem**: Network stalls to RTMP endpoints would block the encoder, causing frame drops and stream interruptions.
 
-**Fix**: Updated test assertions to handle both hex and rgb color formats, matching the gradient background style.
+**Fix**: Changed muxer to `fifo` format with `drop_pkts_on_overflow=1` and `attempt_recovery=1` to absorb network stalls without blocking the encoder.
 
-**Impact**: More reliable tests across different browser environments.
+**Configuration**:
+```bash
+# RTMP output format (in rtmp-bridge.ts)
+[f=fifo:fifo_format=flv:drop_pkts_on_overflow=1:attempt_recovery=1:recovery_wait_time=1]
+```
+
+**Impact**: More resilient streaming to RTMP endpoints, fewer encoder stalls during network issues.
+
+### GOP Size Adjustment (March 12, 2026)
+
+**Change** (PR #1015): Increased GOP size from 30 to 60 frames (2s at 30fps).
+
+**Rationale**: Twitch and YouTube recommend 2-second keyframe intervals for live streaming stability.
+
+**Impact**: Better stream stability on platforms, slightly higher latency for tune-in and seeking.
 
 ### Test Infrastructure Updates (March 11, 2026)
 
@@ -364,5 +453,15 @@ pkill -f "bun.*preview.*3333" || true
 - No more false timeout failures or deployment hangs
 
 **CI Test Filter Updates** (Commit d7a7995): Updated Turbo test filter to exclude deleted packages from main branch.
+
+### Procgen Package Circular Dependency Fix (March 12, 2026)
+
+**Change** (PR #1018): Resolved circular dependency between `@hyperscape/shared` and `@hyperscape/procgen`.
+
+**Problem**: `procgen` imported `TileCoord` type from `shared`, while `shared` imported procgen for terrain generation, creating a circular dependency.
+
+**Fix**: Defined `TileCoord` interface locally in `packages/procgen/src/building/viewer/index.ts` to break the cycle.
+
+**Impact**: Cleaner package boundaries, procgen can now build without TypeScript errors.
 
 See CLAUDE.md for complete documentation.
