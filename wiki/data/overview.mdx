@@ -730,6 +730,28 @@ interface VegetationAsset {
 - `fallen_tree` - Fallen logs
 - `mushroom` - Giant mushrooms (added in recent update)
 
+### Biome Configuration
+
+**Active Biomes** (3 biomes):
+- **Tundra** - Cold, snowy terrain with wind pines
+- **Forest** - Temperate woodland with varied tree types
+- **Canyon** - Rocky, arid terrain with steep slopes
+
+**Biome Terrain Textures**:
+Biomes now use dedicated terrain textures for realistic ground rendering:
+- **Grass textures**: Biome-specific grass variants
+- **Dirt textures**: Soil and earth textures
+- **Cliff textures**: Rocky cliff faces
+- **Desert textures**: Sandy terrain
+- **Snow textures**: Snowy ground for tundra
+
+**Walkability Thresholds** (maxSlope adjustments):
+- **Tundra**: 0.8 → 1.8 (allows steeper terrain navigation)
+- **Forest**: 0.8 → 1.5 (moderate slope tolerance)
+- **Canyon**: 0.6 → 2.5 (very steep terrain allowed)
+
+These adjustments match actual terrain generation slopes from terracing and landscape features.
+
 ### Biome Vegetation Layers
 
 Biomes in `biomes.json` define procedural vegetation layers that reference vegetation assets:
