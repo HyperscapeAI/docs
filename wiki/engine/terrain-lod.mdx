@@ -1,0 +1,396 @@
+---
+title: "Terrain LOD System"
+description: "Hierarchical quadtree LOD for infinite terrain rendering"
+icon: "mountain"
+---
+
+## Overview
+
+Hyperscape uses a **hierarchical quadtree LOD system** for infinite terrain rendering with dynamic chunk splitting based on camera distance. The system provides:
+
+- **5 LOD levels** (depth 0-4) from 1600m root chunks to 100m leaf chunks
+- **Uniform 32x32 vertex resolution** across all LOD levels
+- **Skirt geometry** (15m drop) to hide LOD seams
+- **Dynamic splitting/unsplitting** based on player position
+- **Client-only visual system** (server uses flat 100m tile grid)
+
+<Info>
+  Added in commits 82a5365 and 6c14c8e (March 12, 2026). This is a **client-only** visual system. Server and gameplay logic still use the flat 100m tile grid (`TerrainTile`). `getHeightAt()` is unaffected.
+</Info>
+
+---
+
+## TerrainQuadTree
+
+The `TerrainQuadTree` class manages the hierarchical quad-tree of terrain chunks.
+
+### Configuration
+
+```typescript
+export interface QuadTreeConfig {
+  /** Smallest chunk size in meters (leaf nodes). Should match TILE_SIZE for grid alignment. */
+  minSize: number;
+  /** Maximum depth of quad-tree subdivision */
+  maxDepth: number;
+  /** Split when distance < size * splitRatio */
+  splitRatio: number;
+  /** Multiplier on splitRatio for unsplit threshold (prevents thrashing at boundary). Must be > 1. */
+  unsplitMultiplier: number;
+  /** Uniform vertex resolution (segments per axis) for ALL depth levels */
+  resolution: number;
+  /** Skirt drop distance in meters to hide LOD seams */
+  skirtDrop: number;
+}
+
+export const DEFAULT_QUAD_TREE_CONFIG: QuadTreeConfig = {
+  minSize: 100,           // Smallest chunk (matches TILE_SIZE)
+  maxDepth: 4,            // Max subdivision depth
+  splitRatio: 1.5,        // Split when distance < size * splitRatio
+  unsplitMultiplier: 1.2, // Prevents thrashing at LOD boundaries
+  resolution: 32,         // Uniform vertex resolution
+  skirtDrop: 15,          // Skirt depth in meters
+};
+```
+
+### LOD Levels
+
+| Depth | Chunk Size | Use Case |
+|-------|------------|----------|
+| 0 | 1600m | Far horizon (root chunks) |
+| 1 | 800m | Distant terrain |
+| 2 | 400m | Mid-range terrain |
+| 3 | 200m | Near terrain |
+| 4 | 100m | Immediate area (matches TILE_SIZE) |
+
+### Split/Unsplit Logic
+
+**Split Condition:**
+```typescript
+distance < chunkSize * splitRatio
+// Example: 100m chunk splits when player within 150m
+```
+
+**Unsplit Condition:**
+```typescript
+distance > chunkSize * splitRatio * unsplitMultiplier
+// Example: 100m chunk unsplits when player beyond 180m
+```
+
+**Hysteresis:** The `unsplitMultiplier` (1.2) creates a 20% buffer zone to prevent rapid split/unsplit cycles at LOD boundaries.
+
+### Usage
+
+```typescript
+import { TerrainQuadTree } from '@hyperscape/shared';
+
+// Create quad-tree
+const quadTree = new TerrainQuadTree({
+  minSize: 100,
+  maxDepth: 4,
+  splitRatio: 1.5,
+  unsplitMultiplier: 1.2,
+  resolution: 32,
+  skirtDrop: 15,
+});
+
+// Set listener for geometry generation
+quadTree.setListener({
+  onNodeNeedsGeometry(node: TerrainQuadNode) {
+    // Generate terrain geometry for this node
+    generateTerrainChunk(node);
+  },
+  onNodeDestroyGeometry(node: TerrainQuadNode) {
+    // Destroy terrain geometry for this node
+    destroyTerrainChunk(node);
+  },
+});
+
+// Update every frame
+const structureChanged = quadTree.update(playerX, playerZ);
+
+// Get all leaf nodes with geometry
+const finalNodes = quadTree.getFinalNodes();
+
+// Debug stats
+console.log(`Total nodes: ${quadTree.totalNodeCount}`);
+console.log(`Visual chunks: ${quadTree.visualChunkCount}`);
+```
+
+### Performance Optimizations
+
+**Numeric Grid Coordinates** (Commit 6c14c8e):
+- Uses numeric grid coordinates instead of string keys
+- Eliminates per-frame string allocation and GC pressure
+- Compares `gridX === lastGridX && gridZ === lastGridZ` instead of string comparison
+
+**Structural Dirty Flag** (Commit 6c14c8e):
+- Set `true` whenever tree structure changes (split/unsplit)
+- Skips neighbor resolution when tree is stable
+- Cleared after `updateAllNeighbours()` completes
+
+**Lazy Terrain Generation:**
+- Only generates terrain when all 4 neighbors are resolved
+- Prevents seam artifacts from missing neighbor data
+- `terrainNeedsUpdate` flag tracks pending generation
+
+---
+
+## TerrainQuadNode
+
+Individual nodes in the quad-tree representing square terrain regions.
+
+### Properties
+
+```typescript
+class TerrainQuadNode {
+  readonly id: number;                    // Unique node ID
+  readonly tree: TerrainQuadTree;         // Parent tree reference
+  readonly parent: TerrainQuadNode | null; // Parent node (null for root)
+  readonly quadPosition: QuadPosition | null; // Position in parent (ne/nw/sw/se)
+  readonly size: number;                  // Chunk size in meters
+  readonly halfSize: number;              // size * 0.5
+  readonly quarterSize: number;           // halfSize * 0.5
+  readonly centerX: number;               // World X coordinate
+  readonly centerZ: number;               // World Z coordinate
+  readonly depth: number;                 // Depth in tree (0 = root)
+  readonly precision: number;             // Normalized LOD: 0 at root → 1 at max depth
+  readonly isMaxDepth: boolean;           // True when at maximum subdivision depth
+  
+  children: Map<QuadPosition, TerrainQuadNode>; // Child nodes (when split)
+  neighbours: Map<CardinalDirection, TerrainQuadNode | null>; // Adjacent nodes
+  splitted: boolean;                      // True when node has children
+  splitting: boolean;                     // True during split operation
+  unsplitting: boolean;                   // True during unsplit operation
+  ready: boolean;                         // True when geometry is ready
+  needsCheck: boolean;                    // True when split/unsplit check needed
+  isFinal: boolean;                       // True when leaf node with geometry
+  terrainNeedsUpdate: boolean;            // True when geometry needs generation
+  visualChunkKey: string | null;          // Assigned by TerrainVisualManager
+  
+  readonly boundingBox: {
+    xMin: number;
+    xMax: number;
+    zMin: number;
+    zMax: number;
+  };
+}
+```
+
+### Methods
+
+```typescript
+// Check if node should split/unsplit
+node.check(): void
+
+// Update terrain generation requests
+node.update(): void
+
+// Set neighbor nodes (n, e, s, w)
+node.setNeighbours(n, e, s, w): void
+
+// Test if node is ready (geometry loaded)
+node.testReady(): void
+
+// Mark node as ready
+node.setReady(): void
+
+// Split into 4 children
+node.split(): void
+
+// Unsplit (merge children back)
+node.unsplit(): void
+
+// Create final geometry
+node.createFinal(): void
+
+// Destroy final geometry
+node.destroyFinal(): void
+
+// Destroy node and all children
+node.destroy(): void
+
+// Check if point is inside node bounds
+node.isInside(x: number, z: number): boolean
+
+// Get deepest node containing point
+node.getDeepestNodeAt(x: number, z: number): TerrainQuadNode | null
+```
+
+---
+
+## Integration with TerrainVisualManager
+
+The `TerrainVisualManager` listens to quad-tree events and generates/destroys terrain geometry:
+
+```typescript
+// From packages/shared/src/systems/shared/world/TerrainVisualManager.ts
+
+class TerrainVisualManager implements QuadTreeListener {
+  onNodeNeedsGeometry(node: TerrainQuadNode): void {
+    // Generate terrain mesh for this node
+    const mesh = this.generateTerrainMesh(node);
+    
+    // Store reference on node
+    node.visualChunkKey = `chunk_${node.id}`;
+    
+    // Add to scene
+    this.scene.add(mesh);
+    
+    // Mark node as ready
+    node.testReady();
+  }
+  
+  onNodeDestroyGeometry(node: TerrainQuadNode): void {
+    // Remove terrain mesh from scene
+    const mesh = this.chunks.get(node.visualChunkKey);
+    if (mesh) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      this.chunks.delete(node.visualChunkKey);
+    }
+  }
+}
+```
+
+---
+
+## Skirt Geometry
+
+Skirts hide LOD seams by extending terrain geometry downward at chunk edges.
+
+### Implementation
+
+```typescript
+// Skirt vertices added at chunk edges
+const skirtDrop = 15; // meters
+
+// For each edge vertex:
+const skirtVertex = new THREE.Vector3(
+  edgeVertex.x,
+  edgeVertex.y - skirtDrop,  // Drop down
+  edgeVertex.z
+);
+```
+
+### Why Skirts Work
+
+- **Overlap**: Skirts from adjacent chunks overlap underground
+- **Hidden**: Skirts are below terrain surface, invisible to player
+- **Seamless**: Prevents gaps between LOD levels from being visible
+
+---
+
+## Performance Characteristics
+
+### Memory Usage
+
+**Per-Node Overhead:**
+- Node object: ~200 bytes
+- Children map: ~100 bytes
+- Neighbours map: ~100 bytes
+- Total: ~400 bytes per node
+
+**Typical World:**
+- 3×3 root chunks (9 nodes at depth 0)
+- Average 2-3 subdivisions per root
+- ~500-1000 total nodes
+- **Total memory: ~200-400 KB**
+
+### CPU Usage
+
+**Per-Frame Operations:**
+- Grid coordinate comparison (numeric, not string)
+- Neighbor resolution (only when structure changes)
+- Terrain generation requests (only for new final nodes)
+
+**Typical Frame:**
+- No structure change: ~0.1ms
+- Structure change: ~1-2ms (neighbor resolution)
+
+### GPU Usage
+
+**Draw Calls:**
+- One draw call per visible terrain chunk
+- Typical: 20-40 chunks visible
+- **Total: 20-40 draw calls** (vs 100+ without LOD)
+
+---
+
+## Debugging
+
+### Debug Stats
+
+```typescript
+// Get total node count
+const totalNodes = quadTree.totalNodeCount;
+
+// Get active visual chunk count
+const visualChunks = quadTree.visualChunkCount;
+
+// Get all final nodes
+const finalNodes = quadTree.getFinalNodes();
+console.log(`Final nodes: ${finalNodes.length}`);
+```
+
+### Visualization
+
+Enable terrain LOD visualization in dev tools:
+
+```typescript
+// Show chunk boundaries
+for (const node of quadTree.getFinalNodes()) {
+  const helper = new THREE.BoxHelper(
+    new THREE.Mesh(
+      new THREE.BoxGeometry(node.size, 1, node.size)
+    ),
+    0xff0000
+  );
+  helper.position.set(node.centerX, 0, node.centerZ);
+  scene.add(helper);
+}
+```
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Match minSize to TILE_SIZE" icon="ruler">
+    Set `minSize: 100` to match the server's 100m tile grid. This ensures terrain chunks align with gameplay tiles.
+  </Accordion>
+  
+  <Accordion title="Use hysteresis for stability" icon="wave-square">
+    Set `unsplitMultiplier > 1.0` (recommended: 1.2) to prevent rapid split/unsplit cycles at LOD boundaries.
+  </Accordion>
+  
+  <Accordion title="Uniform resolution across LODs" icon="grid-3x3">
+    Use the same vertex resolution (32x32) for all LOD levels. This simplifies shader code and ensures consistent visual quality.
+  </Accordion>
+  
+  <Accordion title="Add skirts to hide seams" icon="scissors">
+    Set `skirtDrop: 15` to extend terrain geometry downward at chunk edges. This hides gaps between LOD levels.
+  </Accordion>
+  
+  <Accordion title="Lazy generation for seamless terrain" icon="hourglass">
+    Only generate terrain when all 4 neighbors are resolved. This prevents seam artifacts from missing neighbor data.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Related Systems
+
+<CardGroup cols={2}>
+  <Card title="Biome System" icon="tree" href="/wiki/engine/biomes">
+    Biome-specific terrain generation with per-biome tree configs
+  </Card>
+  <Card title="Tree Instancing" icon="trees" href="/wiki/engine/tree-instancing">
+    Multi-variant tree rendering with BatchedMesh
+  </Card>
+  <Card title="Terrain Shaders" icon="palette" href="/wiki/engine/terrain-shaders">
+    TSL-based terrain materials with biome blending
+  </Card>
+  <Card title="World System" icon="globe" href="/wiki/engine/world">
+    World management and tile streaming
+  </Card>
+</CardGroup>
