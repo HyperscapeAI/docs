@@ -28,6 +28,12 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 ## Recent Updates (March 2026)
 
+### Tree Shader Lighting Fix (March 12, 2026)
+- **Vertex Sphere Normals**: Fixed tree lighting to use sphere normals baked into vertex attributes instead of normal maps
+- **Night Lighting**: Uniform night dimming maintains consistent light-shadow contrast (~1.35x ratio) across day/night cycle
+- **Visual Quality**: SSS (subsurface scattering), edge brightening, and saturation boost now scale with dayFactor for natural appearance
+- **Impact**: Correct volumetric foliage lighting, eliminates overly bright shadows at night
+
 ### Biome Terrain Generation & Quadtree LOD (March 12, 2026)
 - **TerrainQuadTree**: Hierarchical LOD system for infinite terrain rendering
   - Dynamic chunk splitting/unsplitting based on camera distance
