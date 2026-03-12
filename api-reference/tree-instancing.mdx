@@ -1,0 +1,471 @@
+---
+title: "Tree Instancing API"
+description: "GLBTreeBatchedInstancer API for multi-variant tree rendering"
+icon: "trees"
+---
+
+## Overview
+
+The `GLBTreeBatchedInstancer` module provides BatchedMesh-based rendering for multi-variant trees with minimal draw calls.
+
+<Info>
+  Source: `packages/shared/src/systems/shared/world/GLBTreeBatchedInstancer.ts`
+  
+  Added in commits 82a5365 and 6c14c8e (March 12, 2026).
+</Info>
+
+---
+
+## Initialization
+
+### initGLBTreeBatchedInstancer
+
+```typescript
+function initGLBTreeBatchedInstancer(scene: THREE.Scene, world: World): void
+```
+
+Initializes the tree instancing system.
+
+**Parameters:**
+- `scene` - Three.js scene for adding BatchedMesh instances
+- `world` - World instance for material setup
+
+**Example:**
+```typescript
+import { initGLBTreeBatchedInstancer } from '@hyperscape/shared';
+
+// Initialize on world startup
+initGLBTreeBatchedInstancer(world.stage.scene, world);
+```
+
+### destroyGLBTreeBatchedInstancer
+
+```typescript
+function destroyGLBTreeBatchedInstancer(): void
+```
+
+Destroys all tree instances and cleans up resources.
+
+**Example:**
+```typescript
+import { destroyGLBTreeBatchedInstancer } from '@hyperscape/shared';
+
+// Cleanup on world shutdown
+destroyGLBTreeBatchedInstancer();
+```
+
+---
+
+## Instance Management
+
+### addInstance
+
+```typescript
+async function addInstance(
+  treeType: string,
+  variantPaths: string[],
+  variantIndex: number,
+  entityId: string,
+  position: THREE.Vector3,
+  rotation: number,
+  scale: number,
+  depletedModelPath?: string | null,
+  depletedScale?: number
+): Promise<boolean>
+```
+
+Adds a tree instance to the rendering system.
+
+**Parameters:**
+- `treeType` - Tree type identifier (e.g., "oak", "birch")
+- `variantPaths` - Array of model paths for variants (e.g., ["oak_1.glb", "oak_2.glb"])
+- `variantIndex` - Index of variant to use (0-based)
+- `entityId` - Unique entity ID
+- `position` - World position (THREE.Vector3)
+- `rotation` - Y-axis rotation in radians
+- `scale` - Uniform scale multiplier
+- `depletedModelPath` - Optional path to depleted model (stump)
+- `depletedScale` - Optional scale for depleted model
+
+**Returns:** `Promise<boolean>` - `true` if successful, `false` if failed
+
+**Example:**
+```typescript
+import { addInstance } from '@hyperscape/shared';
+
+const success = await addInstance(
+  'oak',                          // Tree type
+  ['oak_1.glb', 'oak_2.glb', 'oak_3.glb'], // Variant paths
+  0,                              // Use first variant
+  'tree-123',                     // Entity ID
+  new THREE.Vector3(100, 0, 200), // Position
+  Math.PI / 4,                    // 45° rotation
+  1.0,                            // Normal scale
+  'oak_stump.glb',               // Depleted model
+  0.8                             // Stump scale (80%)
+);
+
+if (success) {
+  console.log('Tree instance added');
+} else {
+  console.error('Failed to add tree instance');
+}
+```
+
+### removeInstance
+
+```typescript
+function removeInstance(entityId: string): void
+```
+
+Removes a tree instance from the rendering system.
+
+**Parameters:**
+- `entityId` - Entity ID of tree to remove
+
+**Example:**
+```typescript
+import { removeInstance } from '@hyperscape/shared';
+
+// Remove tree instance
+removeInstance('tree-123');
+```
+
+---
+
+## State Management
+
+### setDepleted
+
+```typescript
+function setDepleted(entityId: string, depleted: boolean): void
+```
+
+Sets the depleted state of a tree (shows stump or normal tree).
+
+**Parameters:**
+- `entityId` - Entity ID of tree
+- `depleted` - `true` to show stump, `false` to show normal tree
+
+**Example:**
+```typescript
+import { setDepleted } from '@hyperscape/shared';
+
+// Tree chopped down - show stump
+setDepleted('tree-123', true);
+
+// Tree respawned - show normal tree
+setDepleted('tree-123', false);
+```
+
+**Behavior:**
+- Removes instance from current LOD pool
+- Adds instance to depleted pool (or normal pool)
+- Uses `depletedScale` for stump size
+- Preserves position and rotation
+
+### setHighlight
+
+```typescript
+function setHighlight(entityId: string, on: boolean): void
+```
+
+Highlights a tree instance (1.15x color multiplier).
+
+**Parameters:**
+- `entityId` - Entity ID of tree
+- `on` - `true` to highlight, `false` to remove highlight
+
+**Example:**
+```typescript
+import { setHighlight } from '@hyperscape/shared';
+
+// Highlight tree on hover
+setHighlight('tree-123', true);
+
+// Remove highlight
+setHighlight('tree-123', false);
+```
+
+**Behavior:**
+- Only one tree can be highlighted at a time
+- Automatically removes previous highlight when highlighting new tree
+- Highlight persists across LOD transitions
+
+### clearHighlight
+
+```typescript
+function clearHighlight(): void
+```
+
+Clears all tree highlights.
+
+**Example:**
+```typescript
+import { clearHighlight } from '@hyperscape/shared';
+
+// Clear all highlights
+clearHighlight();
+```
+
+---
+
+## Utility Functions
+
+### hasInstance
+
+```typescript
+function hasInstance(entityId: string): boolean
+```
+
+Checks if an entity has a tree instance.
+
+**Parameters:**
+- `entityId` - Entity ID to check
+
+**Returns:** `true` if instance exists, `false` otherwise
+
+**Example:**
+```typescript
+import { hasInstance } from '@hyperscape/shared';
+
+if (hasInstance('tree-123')) {
+  console.log('Tree instance exists');
+}
+```
+
+### hasDepleted
+
+```typescript
+function hasDepleted(entityId: string): boolean
+```
+
+Checks if a tree has a depleted model available.
+
+**Parameters:**
+- `entityId` - Entity ID to check
+
+**Returns:** `true` if depleted model available, `false` otherwise
+
+**Example:**
+```typescript
+import { hasDepleted } from '@hyperscape/shared';
+
+if (hasDepleted('tree-123')) {
+  // Can show stump
+  setDepleted('tree-123', true);
+} else {
+  console.warn('No depleted model for tree-123');
+}
+```
+
+### getModelDimensions
+
+```typescript
+function getModelDimensions(entityId: string): { height: number; radius: number } | null
+```
+
+Gets the model dimensions for a tree instance.
+
+**Parameters:**
+- `entityId` - Entity ID to query
+
+**Returns:** Object with `height` and `radius` in meters, or `null` if not found
+
+**Example:**
+```typescript
+import { getModelDimensions } from '@hyperscape/shared';
+
+const dims = getModelDimensions('tree-123');
+if (dims) {
+  console.log(`Tree height: ${dims.height}m, radius: ${dims.radius}m`);
+  
+  // Use for collision detection
+  const collisionRadius = dims.radius * 1.1; // 10% buffer
+}
+```
+
+---
+
+## Update Loop
+
+### updateGLBTreeBatchedInstancer
+
+```typescript
+function updateGLBTreeBatchedInstancer(): void
+```
+
+Updates LOD levels and material uniforms. Call once per frame.
+
+**Example:**
+```typescript
+import { updateGLBTreeBatchedInstancer } from '@hyperscape/shared';
+
+// In render loop
+function animate() {
+  updateGLBTreeBatchedInstancer();
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+```
+
+**Behavior:**
+- Switches LOD levels based on camera distance
+- Updates dissolve uniforms (camera pos, player pos, sun direction, wind)
+- Preserves highlight state across LOD transitions
+- Uses hysteresis (0.81x) to prevent flickering
+
+---
+
+## Constants
+
+### MAX_INSTANCES
+
+```typescript
+const MAX_INSTANCES = 512;
+```
+
+Maximum number of instances per BatchedMesh.
+
+**Usage:**
+- Limit instance count per tree type to 512
+- Split into multiple tree types if needed
+- Prevents BatchedMesh overflow
+
+---
+
+## Type Definitions
+
+### TreeSlot
+
+```typescript
+interface TreeSlot {
+  entityId: string;
+  position: THREE.Vector3;
+  rotation: number;
+  scale: number;
+  depletedScale: number;
+  yOffset: number;
+  currentLOD: 0 | 1 | 2;
+  depleted: boolean;
+  variantIndex: number;
+}
+```
+
+Internal slot tracking for tree instances.
+
+### BatchedLODPool
+
+```typescript
+interface BatchedLODPool {
+  batches: THREE.BatchedMesh[];
+  materials: DissolveMaterial[];
+  geometryIds: number[][];
+  instanceIds: Map<string, number[]>;
+}
+```
+
+Pool of BatchedMesh instances for a specific LOD level.
+
+### TreeTypePool
+
+```typescript
+interface TreeTypePool {
+  treeType: string;
+  variantPaths: string[];
+  lod0: BatchedLODPool | null;
+  lod1: BatchedLODPool | null;
+  lod2: BatchedLODPool | null;
+  depleted: BatchedLODPool | null;
+  instances: Map<string, TreeSlot>;
+  yOffset: number;
+  depletedYOffset: number;
+  modelHeight: number;
+  modelRadius: number;
+}
+```
+
+Pool of all LOD levels for a specific tree type.
+
+---
+
+## Error Handling
+
+### Model Load Failures
+
+```typescript
+try {
+  const success = await addInstance(/* ... */);
+  if (!success) {
+    console.warn('Failed to add tree instance');
+  }
+} catch (error) {
+  console.error('Tree instancing error:', error);
+}
+```
+
+**Common Causes:**
+- Model file not found
+- Invalid model format
+- Texture loading failure
+- Out of memory
+
+### Variant Matching Failures
+
+```typescript
+// Console warnings when variants don't match
+[GLBTreeBatchedInstancer] Variant oak_2.glb has 3 parts, expected 2!
+[GLBTreeBatchedInstancer] Could not match parts for oak_3.glb — using original order
+```
+
+**Causes:**
+- Variants have different numbers of meshes
+- Material slot order differs between variants
+- Texture dimensions don't match
+
+**Solution:** Ensure all variants have identical mesh structure.
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use consistent material slots" icon="palette">
+    Ensure all variants have materials in the same order (bark first, leaves second). This allows texture fingerprinting to work correctly.
+  </Accordion>
+  
+  <Accordion title="Provide depleted models" icon="tree">
+    Always provide a depleted model (stump) for harvestable trees. This improves visual feedback when trees are chopped.
+  </Accordion>
+  
+  <Accordion title="Use LOD models" icon="layer-group">
+    Provide LOD1 and LOD2 models for better performance at distance. Use `inferLOD1Path()` and `inferLOD2Path()` naming convention.
+  </Accordion>
+  
+  <Accordion title="Limit instance count" icon="hash">
+    Keep instance count below `MAX_INSTANCES` (512) per tree type. Split into multiple tree types if needed.
+  </Accordion>
+  
+  <Accordion title="Call update every frame" icon="refresh-cw">
+    Call `updateGLBTreeBatchedInstancer()` once per frame to update LOD levels and material uniforms.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Terrain LOD API" icon="mountain" href="/api-reference/terrain-lod">
+    TerrainQuadTree and TerrainQuadNode API
+  </Card>
+  <Card title="Biome API" icon="tree-deciduous" href="/api-reference/biomes">
+    BiomeType enum and tree configuration
+  </Card>
+  <Card title="Resource System" icon="pickaxe" href="/wiki/game-systems/resources">
+    Resource spawning and gathering
+  </Card>
+  <Card title="GPU Materials" icon="palette" href="/wiki/engine/gpu-materials">
+    TSL-based materials with dissolve effects
+  </Card>
+</CardGroup>
