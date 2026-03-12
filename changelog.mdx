@@ -23,6 +23,176 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Biome Terrain Generation & Quadtree LOD" description="March 2026" date="2026-03-12">
+
+### 🏔️ Terrain Quadtree LOD System (Commits 82a5365, 6c14c8e)
+
+**Merged biome-based terrain generation with hierarchical quadtree LOD system for infinite terrain rendering.**
+
+**New Features:**
+- **TerrainQuadTree**: Hierarchical LOD system that splits/unsplits terrain chunks based on camera distance
+  - Near chunks: small, high-resolution (100m at max depth)
+  - Far chunks: large, low-resolution (1600m at root)
+  - Uniform 32x32 vertex resolution across all LOD levels
+  - Skirt geometry (15m drop) to hide LOD seams
+  - 5 LOD levels (depth 0-4) with dynamic splitting
+- **GLBTreeBatchedInstancer**: BatchedMesh-based rendering for multi-variant trees
+  - One BatchedMesh per material slot per LOD level
+  - Supports multiple model variants per tree type (e.g., oak_1.glb, oak_2.glb)
+  - Minimal draw calls regardless of variant count
+  - Texture fingerprinting for automatic material slot matching across variants
+  - Smooth LOD transitions with hysteresis (0.81x multiplier prevents flickering)
+  - Depleted state support (stumps after chopping)
+- **Biome System**: Terrain generation now uses biome-specific parameters
+  - BiomeType enum: Plains, Forest, Desert, Tundra, Canyon
+  - Per-biome tree configs with spawn weights and placement rules
+  - Biome-specific height variation and vegetation density
+  - TreeId enum replaces hardcoded "tree_" prefix strings
+
+**Configuration:**
+```typescript
+// TerrainQuadTree config (packages/shared/src/systems/shared/world/TerrainQuadTree.ts)
+{
+  minSize: 100,           // Smallest chunk (matches TILE_SIZE)
+  maxDepth: 4,            // Max subdivision depth
+  splitRatio: 1.5,        // Split when distance < size * splitRatio
+  unsplitMultiplier: 1.2, // Prevents thrashing at LOD boundaries
+  resolution: 32,         // Uniform vertex resolution
+  skirtDrop: 15,          // Skirt depth in meters
+}
+```
+
+**Performance Optimizations:**
+- Reduced per-frame allocations in TerrainQuadTree (numeric grid coords instead of string keys)
+- Structural dirty flag to skip neighbor resolution when tree is stable
+- Optimized GLBTreeBatchedInstancer fingerprinting (deterministic fallback prevents silent matching failures)
+- Lazy terrain generation (only when all 4 neighbors are resolved)
+
+**API Changes:**
+```typescript
+// Add multi-variant tree instance
+await addInstance(
+  'oak',                    // Tree type
+  ['oak_1.glb', 'oak_2.glb'], // Variant paths
+  0,                        // Variant index
+  entityId,
+  position,
+  rotation,
+  scale,
+  'oak_stump.glb',         // Depleted model (optional)
+  0.8                       // Depleted scale (optional)
+);
+
+// Get tree config for biome
+const config = getTreeConfigForBiome(BiomeType.Forest);
+// Returns: { enabled, trees, density, minSpacing, clustering, scaleVariation, maxSlope }
+```
+
+**Files Changed:**
+- `packages/shared/src/systems/shared/world/TerrainQuadTree.ts` (new, 400+ lines)
+- `packages/shared/src/systems/shared/world/GLBTreeBatchedInstancer.ts` (new, 600+ lines)
+- `packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts` (new)
+- `packages/shared/src/systems/shared/world/BiomeResourceGenerator.ts` (updated)
+- `packages/shared/src/constants/TreeTypes.ts` (new TreeId enum)
+
+**Impact:** Infinite terrain rendering with dynamic LOD, biome-specific visuals, improved performance through reduced draw calls and smarter chunk management.
+
+### 🌲 Biome-Aware Tree Allocation (Commit 2751b269)
+
+**Refactored tree allocation to use biome-specific configs with per-biome placement rules.**
+
+**Key Changes:**
+- **TreeId Enum**: Replaces hardcoded "tree_" prefix strings
+  - `TreeId.Oak`, `TreeId.Birch`, `TreeId.Maple`, `TreeId.Fir`, `TreeId.Pine`, etc.
+  - Type-safe tree references throughout codebase
+- **Per-Biome Tree Configs**: Moved to `TerrainBiomeTypes.ts` alongside BiomeType enum
+  - Each biome defines its own tree distribution, placement rules, and density
+  - TreePlacementRules allow different constraints per tree type per biome
+  - Example: Dead tree minHeight differs between canyon (20m) and tundra (15m)
+- **TreeSpawnConfig**: Unified spawn weight and placement rules
+  - Combines distribution (spawn weight) and placement (height/water constraints) into single config
+  - Eliminates duplicate tree definitions
+  - Per-tree configuration: weight, minHeight, maxHeight, waterAffinity, waterProximityHeight, avoidsWaterBelow
+- **Removed Dead Code**: 
+  - `spawnWeight` removed from `TreeTypeDefinition` (now in biome config)
+  - `DEFAULT_TREE_CONFIG` removed from TerrainSystem
+- **New Tree Types**:
+  - `TreeId.WindPine` using dead_06.glb for tundra biome
+  - Biome-specific tree variants for visual diversity
+
+**Migration:**
+```typescript
+// Old (hardcoded strings)
+const treeType = "tree_oak";
+
+// New (type-safe enum)
+const treeType = TreeId.Oak;
+```
+
+**Files Changed:**
+- `packages/shared/src/constants/TreeTypes.ts` (new TreeId enum)
+- `packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts` (biome tree configs)
+- `packages/shared/src/systems/shared/world/BiomeResourceGenerator.ts` (reads from biome config)
+- `packages/shared/src/systems/shared/world/TerrainSystem.ts` (removed DEFAULT_TREE_CONFIG)
+
+### 🏔️ Slope-Based Tree Placement (Commit dd8d6ad)
+
+**Added terrain slope rejection to prevent trees on steep hillsides.**
+
+**Implementation:**
+- **maxSlope Field**: Added to `BiomeTreeConfig` (default: 1.5 for Forest/Tundra, 2.0 for Canyon)
+- **Slope Estimation**: Uses central differences to estimate terrain gradient at each candidate position
+  - Samples height at ±1m in X and Z directions
+  - Calculates slope magnitude from gradient vector
+  - Skips placement when slope exceeds threshold
+- **Biome-Specific Thresholds**:
+  - Forest: 1.5 (moderate slopes allowed)
+  - Canyon: 2.0 (steeper slopes allowed for desert trees)
+  - Tundra: 1.5 (moderate slopes)
+
+**Impact:** More realistic tree placement that respects terrain topology, prevents trees floating on cliff faces.
+
+### 🌐 Batched Entity Spawning (Commit 44d07b4)
+
+**Fixed sparse trees when moving between distant locations by batching entity spawns per tile.**
+
+**Root Causes:**
+1. Individual `entityAdded` packets were silently dropped by `BandwidthBudget` during rapid tile generation (NORMAL priority throttled under load)
+2. `ResourceEntities` were never destroyed in `EntityManager` on tile unload, causing entity leaks and preventing re-creation on tile revisit
+
+**Solution:**
+- **Batch Spawning**: All entity spawns for a tile batched into single `entitiesBatchAdded` packet
+  - High priority packet bypasses bandwidth throttling
+  - Configurable via `useHighPriorityBatch` parameter
+  - `suppressBroadcast` option added to `EntityManager.spawnEntity()` for batching
+- **Entity Cleanup**: Destroy `ResourceEntities` in `EntityManager` when tiles unload
+  - Prevents entity leaks
+  - Allows re-creation on tile revisit
+- **Network Protocol**: New `entitiesBatchAdded` packet and client handler
+  - `sendHighPriority()` method added to `ServerNetwork`
+  - Client handler processes batch and spawns all entities
+
+**Files Changed:**
+- `packages/shared/src/platform/shared/packets.ts` (new entitiesBatchAdded packet)
+- `packages/shared/src/systems/shared/entities/EntityManager.ts` (batch spawning, cleanup)
+- `packages/shared/src/systems/client/ClientNetwork.ts` (batch handler)
+- `packages/server/src/systems/ServerNetwork/index.ts` (sendHighPriority method)
+
+**Impact:** Fixes sparse trees when moving between distant locations, eliminates entity leaks, improves network efficiency under load.
+
+### 🔧 Streaming Type Fixes (Commit d36ee07)
+
+**Resolved TS2783 and TS2353 errors in streaming.ts by using ReturnType inference.**
+
+**Problem:** TypeScript couldn't infer return types for `createStreamDestinations()` and `createStreamViewerAccessToken()` due to complex conditional logic.
+
+**Solution:** Use `ReturnType<typeof function>` utility type for explicit type inference.
+
+**Files Changed:**
+- `packages/server/src/routes/streaming.ts`
+
+</Update>
+
 <Update label=\"Three.js 0.183.2 Upgrade & Streaming Optimization\" description=\"March 2026\" date=\"2026-03-10\">
 
 ### 🚀 Three.js 0.183.2 Upgrade (Commit 8b93772)
