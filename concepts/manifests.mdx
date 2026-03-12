@@ -290,22 +290,36 @@ If `inventoryActions` is not specified, the system falls back to type-based dete
 {
   "trees": [
     {
-      "id": "tree_normal",
-      "name": "Tree",
+      "id": "oak",
+      "name": "Oak",
       "type": "tree",
       "harvestSkill": "woodcutting",
-      "toolRequired": "bronze_hatchet",
-      "levelRequired": 1,
+      "levelRequired": 15,
       "baseCycleTicks": 4,
       "depleteChance": 0.125,
       "respawnTicks": 80,
+      "modelPath": "asset://trees/oak/oak_01.glb",
+      "modelVariants": [
+        "asset://trees/oak/oak_01.glb",
+        "asset://trees/oak/oak_02.glb",
+        "asset://trees/oak/oak_03.glb"
+      ],
+      "modelScale": 1.2,
       "harvestYield": [
-        { "itemId": "logs", "quantity": 1, "chance": 1.0, "xpAmount": 25 }
+        { "itemId": "oak_logs", "quantity": 1, "chance": 1.0, "xpAmount": 37.5 }
       ]
     }
   ]
 }
 ```
+
+**Tree Model System**:
+- **modelPath**: Primary model for the tree type
+- **modelVariants**: Array of model variants for visual diversity (optional)
+- **modelScale**: Scale multiplier for tree models
+- **LOD support**: Models include LOD levels (_lod1.glb, _lod2.glb) for performance
+- **12 tree types**: bamboo, birch, cactus, chinaPine, coconut, dead, fir, knotwood, maple, oak, palm, pine
+- **Wind pine**: Single-model tree type for tundra biome (uses modelPath only)
 
 **gathering/mining.json** - Ore rocks with OSRS-accurate success rates:
 ```json
