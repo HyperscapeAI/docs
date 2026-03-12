@@ -1,0 +1,431 @@
+---
+title: "Tree Instancing System"
+description: "Multi-variant tree rendering with BatchedMesh for minimal draw calls"
+icon: "trees"
+---
+
+## Overview
+
+The `GLBTreeBatchedInstancer` provides **BatchedMesh-based rendering** for multi-variant trees with minimal draw calls. It supports:
+
+- **Multiple model variants** per tree type (e.g., oak_1.glb, oak_2.glb, oak_3.glb)
+- **One BatchedMesh per material slot per LOD** (minimal draw calls)
+- **Texture fingerprinting** for automatic material slot matching across variants
+- **LOD switching** (LOD0/LOD1/LOD2) based on camera distance
+- **Depleted states** (stumps after chopping)
+- **Highlight support** for interaction feedback
+
+<Info>
+  Added in commits 82a5365 and 6c14c8e (March 12, 2026). Optimized in commit 6c14c8e with deterministic fingerprinting.
+</Info>
+
+---
+
+## Architecture
+
+### BatchedMesh Pooling
+
+**One BatchedMesh per material slot per LOD level:**
+
+```
+Tree Type: Oak (3 variants)
+├── LOD0
+│   ├── BatchedMesh[0] (bark material)    ← All 3 variants share this
+│   └── BatchedMesh[1] (leaves material)  ← All 3 variants share this
+├── LOD1
+│   ├── BatchedMesh[0] (bark material)
+│   └── BatchedMesh[1] (leaves material)
+├── LOD2
+│   ├── BatchedMesh[0] (bark material)
+│   └── BatchedMesh[1] (leaves material)
+└── Depleted
+    ├── BatchedMesh[0] (stump bark)
+    └── BatchedMesh[1] (stump leaves)
+```
+
+**Draw Call Reduction:**
+- **Without instancing**: 3 variants × 2 materials × 3 LODs = 18 draw calls
+- **With BatchedMesh**: 2 materials × 3 LODs = 6 draw calls
+- **Reduction**: 67% fewer draw calls
+
+---
+
+## API Reference
+
+### Initialization
+
+```typescript
+import { 
+  initGLBTreeBatchedInstancer,
+  destroyGLBTreeBatchedInstancer 
+} from '@hyperscape/shared';
+
+// Initialize with scene and world
+initGLBTreeBatchedInstancer(scene, world);
+
+// Cleanup on shutdown
+destroyGLBTreeBatchedInstancer();
+```
+
+### Adding Instances
+
+```typescript
+import { addInstance } from '@hyperscape/shared';
+
+// Add multi-variant tree instance
+const success = await addInstance(
+  'oak',                          // Tree type
+  ['oak_1.glb', 'oak_2.glb', 'oak_3.glb'], // Variant paths
+  0,                              // Variant index (0-2)
+  entityId,                       // Unique entity ID
+  position,                       // THREE.Vector3
+  rotation,                       // Radians (Y-axis)
+  scale,                          // Uniform scale
+  'oak_stump.glb',               // Depleted model (optional)
+  0.8                             // Depleted scale (optional)
+);
+
+if (success) {
+  console.log('Tree instance added');
+}
+```
+
+### Removing Instances
+
+```typescript
+import { removeInstance } from '@hyperscape/shared';
+
+// Remove tree instance
+removeInstance(entityId);
+```
+
+### Depleted State
+
+```typescript
+import { setDepleted } from '@hyperscape/shared';
+
+// Set tree to depleted state (shows stump)
+setDepleted(entityId, true);
+
+// Restore tree to normal state
+setDepleted(entityId, false);
+```
+
+### Highlighting
+
+```typescript
+import { setHighlight, clearHighlight } from '@hyperscape/shared';
+
+// Highlight tree (1.15x color multiplier)
+setHighlight(entityId, true);
+
+// Remove highlight
+setHighlight(entityId, false);
+
+// Clear all highlights
+clearHighlight();
+```
+
+### Utility Functions
+
+```typescript
+import { 
+  hasInstance,
+  hasDepleted,
+  getModelDimensions 
+} from '@hyperscape/shared';
+
+// Check if entity has instance
+if (hasInstance(entityId)) {
+  console.log('Tree instance exists');
+}
+
+// Check if depleted model available
+if (hasDepleted(entityId)) {
+  console.log('Can show stump');
+}
+
+// Get model dimensions
+const dims = getModelDimensions(entityId);
+if (dims) {
+  console.log(`Height: ${dims.height}m, Radius: ${dims.radius}m`);
+}
+```
+
+---
+
+## Texture Fingerprinting
+
+The instancer uses **texture fingerprinting** to match material slots across variants.
+
+### How It Works
+
+1. **Extract fingerprint** from first variant's materials:
+   ```typescript
+   function getTextureFingerprint(mat: THREE.Material): string {
+     const std = mat as THREE.MeshStandardMaterial;
+     if (std.map?.image) {
+       const img = std.map.image;
+       return `tex:${img.width}x${img.height}:${img.src ?? img.uuid}`;
+     }
+     if (std.name) return `name:${std.name}`;
+     return `idx:${_fingerprintId++}`;  // Deterministic fallback
+   }
+   ```
+
+2. **Match subsequent variants** to reference fingerprints:
+   ```typescript
+   function matchPartsToReference(
+     refFingerprints: string[],
+     parts: MeshPart[]
+   ): MeshPart[] | null {
+     // Reorder parts to match reference fingerprints
+     // Returns null if matching fails
+   }
+   ```
+
+3. **Register geometries** in correct material slot order:
+   ```typescript
+   for (let slot = 0; slot < numSlots; slot++) {
+     const bm = batches[slot];
+     for (let variant = 0; variant < numVariants; variant++) {
+       const geoId = bm.addGeometry(variantParts[variant][slot].geometry);
+       geometryIds[slot].push(geoId);
+     }
+   }
+   ```
+
+### Deterministic Fallback
+
+**Problem:** Random fingerprints could cause silent variant matching failures.
+
+**Solution** (Commit 6c14c8e):
+- Use monotonic counter `_fingerprintId++` instead of random values
+- Ensures consistent fingerprints across runs
+- Prevents silent matching failures
+
+---
+
+## LOD System
+
+### LOD Distances
+
+```typescript
+const resourceLOD = getLODDistances("resource");
+
+// LOD0: 0 - 40m (high detail)
+// LOD1: 40 - 80m (medium detail)
+// LOD2: 80+ m (low detail)
+```
+
+### LOD Switching
+
+**Hysteresis** (0.81x multiplier) prevents flickering:
+
+```typescript
+const hysteresisSq = 0.81;
+
+if (distSq < lod1DistSq * hysteresisSq) {
+  targetLOD = 0;  // Stay in LOD0
+} else if (distSq < lod1DistSq) {
+  targetLOD = currentLOD === 0 ? 0 : 1;  // Don't switch if already in LOD0
+}
+```
+
+**Benefits:**
+- Prevents rapid LOD switching at boundaries
+- Smoother visual transitions
+- Reduces GPU state changes
+
+### LOD Transition
+
+When LOD changes:
+1. Remove instance from old BatchedMesh
+2. Preserve highlight state
+3. Add instance to new BatchedMesh
+4. Restore highlight if needed
+
+```typescript
+// Preserve highlight state
+const wasHighlighted = isHighlighted(oldPool, entityId);
+
+// Remove from old LOD
+removeFromPool(oldPool, entityId);
+
+// Add to new LOD
+const mat = composeInstanceMatrix(position, rotation, scale, yOffset);
+addToPool(newPool, entityId, mat, variantIndex);
+
+// Restore highlight
+if (wasHighlighted) {
+  applyHighlightColor(newPool, entityId, true);
+}
+```
+
+---
+
+## Material System
+
+### Dissolve Materials
+
+Trees use `TreeDissolveMaterial` with TSL shaders:
+
+```typescript
+const dissolveOpts = {
+  fadeStart: GPU_VEG_CONFIG.FADE_START,
+  fadeEnd: GPU_VEG_CONFIG.FADE_END,
+  enableNearFade: false,
+  enableWaterCulling: false,
+  enableOcclusionDissolve: false,
+  enableRimHighlight: true,
+  batched: true,  // Enable batched rendering
+  isLeafMaterial: true,  // For leaf materials
+};
+
+const material = createTreeDissolveMaterial(baseMaterial, dissolveOpts);
+```
+
+### Uniform Updates
+
+Materials are updated every frame with environment data:
+
+```typescript
+// Update dissolve uniforms
+for (const mat of lodPool.materials) {
+  mat.dissolveUniforms.cameraPos.value.set(camPos.x, camY, camPos.z);
+  mat.dissolveUniforms.playerPos.value.set(playerPos.x, playerPos.y, playerPos.z);
+  
+  // Tree-specific uniforms
+  const treeMat = mat as TreeDissolveMaterial;
+  if (treeMat.treeUniforms) {
+    treeMat.treeUniforms.sunDirection.value.copy(env.lightDirection).negate();
+    treeMat.treeUniforms.sunIntensity.value = Math.min(env.sunLight.intensity, 2.0);
+    treeMat.treeUniforms.windTime.value = wind.uniforms.time.value;
+    treeMat.treeUniforms.windStrength.value = wind.uniforms.windStrength.value;
+    treeMat.treeUniforms.windDirection.value.set(wd.x, wd.z);
+  }
+}
+```
+
+---
+
+## Performance Characteristics
+
+### Memory Usage
+
+**Per Tree Type:**
+- LOD0: 2 BatchedMesh × ~1MB = 2MB
+- LOD1: 2 BatchedMesh × ~500KB = 1MB
+- LOD2: 2 BatchedMesh × ~250KB = 500KB
+- **Total: ~3.5MB per tree type**
+
+**Per Instance:**
+- Matrix: 64 bytes
+- Color: 12 bytes
+- **Total: ~76 bytes per instance**
+
+### GPU Usage
+
+**Draw Calls:**
+- 2 materials × 3 LODs = **6 draw calls per tree type**
+- Typical world: 5 tree types = **30 draw calls total**
+- **vs 1000+ draw calls without instancing**
+
+**Vertex Count:**
+- LOD0: ~2000 vertices per tree
+- LOD1: ~1000 vertices per tree
+- LOD2: ~500 vertices per tree
+- Shared across all instances (no duplication)
+
+---
+
+## Troubleshooting
+
+### Variant Matching Failures
+
+**Symptom:** Console warnings about part count mismatch.
+
+**Cause:** Variants have different numbers of material slots.
+
+**Solution:** Ensure all variants have the same mesh structure:
+- Same number of meshes
+- Same material slot order
+- Same texture dimensions
+
+### Missing Depleted Models
+
+**Symptom:** Trees don't show stumps when chopped.
+
+**Cause:** `depletedModelPath` not provided or model failed to load.
+
+**Solution:**
+```typescript
+// Check if depleted model available
+if (hasDepleted(entityId)) {
+  setDepleted(entityId, true);
+} else {
+  console.warn('No depleted model for', entityId);
+}
+```
+
+### Highlight Not Working
+
+**Symptom:** Trees don't highlight on hover.
+
+**Cause:** Highlight mesh not returned by visual strategy.
+
+**Solution:**
+```typescript
+// Ensure visual strategy implements getHighlightMesh
+class TreeVisualStrategy {
+  getHighlightMesh(ctx): THREE.Object3D | null {
+    // Return positioned mesh for outline pass
+    return highlightMesh;
+  }
+}
+```
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use consistent material slots" icon="palette">
+    Ensure all variants have materials in the same order (bark first, leaves second). This allows texture fingerprinting to work correctly.
+  </Accordion>
+  
+  <Accordion title="Provide depleted models" icon="tree">
+    Always provide a depleted model (stump) for harvestable trees. This improves visual feedback when trees are chopped.
+  </Accordion>
+  
+  <Accordion title="Use LOD models" icon="layer-group">
+    Provide LOD1 and LOD2 models for better performance at distance. Use `inferLOD1Path()` and `inferLOD2Path()` naming convention.
+  </Accordion>
+  
+  <Accordion title="Enable texture repeat" icon="grid-2x2">
+    Call `enableTextureRepeat()` on materials to prevent texture stretching on large instances.
+  </Accordion>
+  
+  <Accordion title="Limit instance count" icon="hash">
+    Keep instance count below `MAX_INSTANCES` (512) per tree type. Split into multiple tree types if needed.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Related Systems
+
+<CardGroup cols={2}>
+  <Card title="Terrain LOD" icon="mountain" href="/wiki/engine/terrain-lod">
+    Hierarchical quadtree LOD for infinite terrain
+  </Card>
+  <Card title="Biome System" icon="tree-deciduous" href="/wiki/engine/biomes">
+    Biome-specific tree distribution and placement
+  </Card>
+  <Card title="Resource System" icon="pickaxe" href="/wiki/game-systems/resources">
+    Resource spawning and gathering mechanics
+  </Card>
+  <Card title="GPU Materials" icon="palette" href="/wiki/engine/gpu-materials">
+    TSL-based materials with dissolve effects
+  </Card>
+</CardGroup>
