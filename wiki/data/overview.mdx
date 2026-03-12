@@ -751,9 +751,14 @@ interface VegetationLayer {
 ```
 
 **Recent Updates**:
+- **Tree system overhaul**: 165 tree models added (12 types × variants × 3 LOD levels)
+- **Terrain textures**: Biome-specific textures added for grass, dirt, cliff, desert, and snow
+- **Biome configuration**: Reduced to 3 active biomes (tundra, forest, canyon)
+- **Walkability adjustments**: maxSlope thresholds increased (tundra: 0.8→1.8, forest: 0.8→1.5, canyon: 0.6→2.5)
+- **Tree management**: Trees now managed via TreeTypes.ts + woodcutting.json (removed from vegetation layers)
+- **Wind pine**: New tundra-specific tree type (single model)
+- **Knotwood recolor**: Leaves changed from golden-yellow to warm amber (#C4832A)
 - Mushroom vegetation added to all biomes with varying densities (2-30)
-- Tree density reduced in plains biome (8 → 5)
-- Mushroom clustering varies by biome (cluster size 3-8)
 - Firemaking fire 3D model added (`models/firemaking-fire/firemaking-fire.glb`)
 
 ---
