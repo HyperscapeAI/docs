@@ -131,6 +131,23 @@ const N = normalize(mul(modelNormalMatrix, normalLocal));
 
 **Impact**: Correct volumetric foliage lighting, consistent tree appearance across day/night cycle, better visual quality.
 
+### Tree Collision & Fog Tweaks (March 12, 2026)
+
+**Tree Collision Proxy** (Commit 214c729):
+- Reduced raycast proxy radius from 100% to 40% of bounding box
+- **Problem**: Full bounding radius included the canopy, making invisible collision cylinder catch clicks far from trunk
+- **Impact**: More precise tree interaction, clicks only register near actual trunk
+
+**Fog Distance Adjustments** (Commits 5898f43, 7b2655a):
+- Reduced `FOG_FAR` from 180m to 150m for denser atmosphere
+- Creates more immersive depth perception
+- **Impact**: Better visual depth, more atmospheric world rendering
+
+**Forest Tree Spacing** (Commit 927edde):
+- Increased `maxHeight` from 25m to 30m for forest biome
+- Increased `minSpacing` from 8m to 12m between trees
+- **Impact**: Less cluttered forests, better navigation, more realistic tree distribution
+
 ### Biome Terrain Generation & Quadtree LOD (March 12, 2026)
 
 **Change** (PR #1018, Commits 82a5365, 6c14c8e): Merged biome-based terrain generation with hierarchical quadtree LOD system.
