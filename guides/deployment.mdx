@@ -23,12 +23,14 @@ DATABASE_URL=postgresql://...
 JWT_SECRET=your-secret-key
 PRIVY_APP_ID=your-app-id
 PRIVY_APP_SECRET=your-app-secret
+ADMIN_CODE=your-admin-code  # Required for admin API endpoints (maintenance mode, logs, restart)
 
 # Optional
 PORT=5555
 PUBLIC_CDN_URL=https://cdn.example.com
 LIVEKIT_API_KEY=...
 LIVEKIT_API_SECRET=...
+ORACLE_SETTLEMENT_DELAY_MS=7000  # Delay oracle publish to sync with stream (default: 7000ms)
 ```
 
 ### Client Production
