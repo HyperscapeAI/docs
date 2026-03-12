@@ -26,45 +26,106 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 ## Recent Updates (March 2026)
 
-### Three.js 0.183.2 Upgrade
+### Biome Terrain Generation & Quadtree LOD (March 12, 2026)
+- **TerrainQuadTree**: Hierarchical LOD system for infinite terrain rendering
+  - Dynamic chunk splitting/unsplitting based on camera distance
+  - 5 LOD levels (1600m root → 100m leaf chunks)
+  - Uniform 32x32 vertex resolution across all levels
+  - Skirt geometry to hide LOD seams
+- **GLBTreeBatchedInstancer**: Multi-variant tree rendering with BatchedMesh
+  - One BatchedMesh per material slot per LOD level (minimal draw calls)
+  - Texture fingerprinting for automatic material slot matching
+  - Smooth LOD transitions with hysteresis (prevents flickering)
+  - Depleted state support (stumps after chopping)
+- **Biome System**: Terrain generation with biome-specific parameters (plains, forest, desert, etc.)
+- **Performance**: Reduced per-frame allocations (numeric grid coords, structural dirty flag)
+
+### Admin Live Controls & Maintenance Mode (March 12, 2026)
+- **Maintenance Mode**: Graceful server pause/resume for zero-downtime deployments
+  - Safe-to-deploy flag prevents mid-duel restarts
+  - Market pause during maintenance
+  - Client-side warning banner (polls `/health` every 5s)
+- **Live Controls Dashboard**: Real-time admin panel with HLS stream preview, server controls, live log streaming
+- **Logger Ring Buffer**: 1000-entry in-memory log storage with `GET /admin/logs` API
+- **Server Restart**: `POST /admin/restart` endpoint for graceful process restart (requires PM2)
+
+### Oracle Settlement Delay & Stream Sync (March 11, 2026)
+- Added `ORACLE_SETTLEMENT_DELAY_MS` (default 7000ms) to delay oracle publishing until stream catches up
+- Prevents oracle publishing before stream viewers see duel outcome
+- Configurable per deployment based on stream latency
+
+### Agent Autonomous Behavior Restoration (March 11, 2026)
+- Fixed agent T-pose with physics null guards for stream mode viewports
+- Re-enabled autonomous behavior (mining, chopping, fishing) between duels
+- Relaxed post-duel restore position (120-unit lobby → 2000-unit world boundary)
+- Interleaved Anthropic/Groq model agents for provider diversity
+- Bank state request on spawn for better goal planning
+
+### Streaming Frame Pacing Fix (March 11, 2026)
+- Enforced 30fps frame pacing to eliminate stream buffering
+- Frame pacing guard skips frames arriving faster than 85% of 33.3ms target
+- Default resolution changed from 1920x1080→1280x720 to match capture viewport
+- GOP size changed from 30→60 frames (2s at 30fps) per Twitch/YouTube recommendations
+
+### Deployment Fixes (March 11, 2026)
+- **SSH Timeout**: Added `disown` after background processes to prevent 30-minute hangs
+- **Orphaned Processes**: Explicit `pkill` commands to kill ghost bun server processes before deployment
+- **Impact**: Deployment completes in ~1 minute, eliminates database deadlocks
+
+### Three.js 0.183.2 Upgrade (March 10, 2026)
 - Upgraded from 0.182.0 to 0.183.2 for latest WebGPU features and performance improvements
 - **Breaking Change**: TSL API `atan2` renamed to `atan` (migration required for custom shaders)
 - Improved WebGPU stability and shader compilation
 
-### Streaming Pipeline Optimization
+### Streaming Pipeline Optimization (March 10, 2026)
 - **Default Capture Mode**: CDP (Chrome DevTools Protocol) for reliable frame capture
 - **Chrome Beta**: Switched to Chrome Beta channel for better stability (from Unstable)
 - **ANGLE Backend**: Default ANGLE backend (`--use-angle=default`) for automatic best-backend selection
 - **FFmpeg**: System FFmpeg preferred over ffmpeg-static to avoid segfaults (resolution order: `/usr/bin` → `/usr/local/bin` → PATH → ffmpeg-static)
 - **x264 Tuning**: `zerolatency` tune for live streaming (lower latency, was `film`)
-- **GOP Size**: 30 frames (1s at 30fps) for better HLS segment alignment
+- **RTMP Muxer**: Changed from `flv` to `fifo` muxer with `drop_pkts_on_overflow=1` to absorb network stalls
 - **Physics Optimization**: Skip client-side PhysX for streaming/spectator viewports (faster startup, lower memory)
 - **Playwright Fix**: Block `--enable-unsafe-swiftshader` injection to prevent CPU software rendering from blocking WebGPU
 
-### CDN Configuration Simplification
+### Test Infrastructure Updates (March 10-11, 2026)
+- Excluded `@hyperscape/impostor` from headless CI (requires WebGPU)
+- Increased `sim-engine` test timeout from 60s to 120s (prevents flaky CI failures)
+- Fixed cyclic dependencies and port conflicts
+- WebGPU-dependent packages require local testing with GPU-enabled browsers
+
+### Manifest Loading Fixes (March 10, 2026)
+- Removed legacy `items.json` and `resources.json` (never existed)
+- Added missing manifests: `ammunition.json`, `combat-spells.json`, `duel-arenas.json`, `lod-settings.json`, `quests.json`, `runes.json`
+- Eliminates 404 errors during manifest loading
+
+### CDN Configuration Simplification (March 10, 2026)
 - Unified `PUBLIC_CDN_URL` environment variable (replaced `DUEL_PUBLIC_CDN_URL`)
 - Consistent CDN configuration across all contexts (client, server, streaming)
 - Simplified R2 CORS configuration with wildcard origin for public assets
 
-### Service Worker Improvements
+### Service Worker Improvements (March 10, 2026)
 - Switched from `CacheFirst` to `NetworkFirst` strategy for JS/CSS
 - Eliminates stale module errors after rebuilds
 - Aggressive cache clearing for local development
 
-### Dependency Updates
+### Dependency Updates (March 10, 2026)
 - **Capacitor**: 8.2.0 (Android, iOS, Core) - Latest mobile platform features
 - **lucide-react**: 0.577.0 - New icons and improvements
 - **three-mesh-bvh**: 0.9.9 - Better BVH performance
 - **eslint**: 10.0.3 - Latest linting rules
 - **jsdom**: 28.1.0 - Testing improvements
+- **@ai-sdk/openai**: 3.0.41 - AI SDK updates
+- **hardhat**: 3.1.11 - Smart contract tooling
+- **@nomicfoundation/hardhat-chai-matchers**: 3.0.0 - Testing matchers
+- **globals**: 17.4.0 - TypeScript globals
 
-### Database & Infrastructure
+### Database & Infrastructure (March 10, 2026)
 - PostgreSQL connection pool increased to 20 (from 10) to prevent timeouts under load
 - Auto-detection of database mode (local vs remote) from `DATABASE_URL` hostname
 - PM2 environment variable forwarding for `DISPLAY`, `DATABASE_URL`, and stream keys
 - Xvfb virtual display started before PM2 on Linux for reliable GPU rendering
 
-See [CLAUDE.md](CLAUDE.md) for complete changelog and migration notes.
+See [AGENTS.md](AGENTS.md) for complete changelog and technical details.
 
 ## Quick Start
 
