@@ -1,0 +1,418 @@
+---
+title: "Admin API"
+description: "Maintenance mode, logs, and server control endpoints"
+icon: "shield-check"
+---
+
+## Overview
+
+The Admin API provides server management endpoints for maintenance mode, live logs, and server control. All endpoints require the `x-admin-code` header for authentication.
+
+<Info>
+  Added in PR #1015 (March 12, 2026).
+</Info>
+
+---
+
+## Authentication
+
+All admin endpoints require the `x-admin-code` header:
+
+```bash
+Headers:
+  x-admin-code: <ADMIN_CODE>
+```
+
+**Configuration:**
+```bash
+# In packages/server/.env
+ADMIN_CODE=your-secure-admin-code
+```
+
+<Warning>
+  Without `ADMIN_CODE` set, all admin endpoints return `403 Forbidden`.
+</Warning>
+
+---
+
+## Maintenance Mode
+
+### Enter Maintenance Mode
+
+```http
+POST /admin/maintenance/enter
+```
+
+Pauses new duel cycles and waits for safe deploy state.
+
+**Headers:**
+```
+x-admin-code: <ADMIN_CODE>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "reason": "deployment",
+  "timeoutMs": 300000
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "status": {
+    "active": true,
+    "enteredAt": 1710187234567,
+    "reason": "deployment",
+    "safeToDeploy": true,
+    "currentPhase": "IDLE",
+    "marketStatus": "resolved",
+    "pendingMarkets": 0
+  }
+}
+```
+
+**Behavior:**
+1. Stops new duel cycles from starting
+2. Waits for current cycle to complete
+3. Locks betting markets
+4. Returns when `safeToDeploy: true`
+
+**Timeout:**
+- Default: 5 minutes (300000ms)
+- Returns status even if timeout exceeded
+- Check `safeToDeploy` field before deploying
+
+### Exit Maintenance Mode
+
+```http
+POST /admin/maintenance/exit
+```
+
+Resumes duel cycles and betting markets.
+
+**Headers:**
+```
+x-admin-code: <ADMIN_CODE>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "status": {
+    "active": false,
+    "safeToDeploy": true
+  }
+}
+```
+
+### Get Maintenance Status
+
+```http
+GET /admin/maintenance/status
+```
+
+Checks current maintenance mode status.
+
+**Headers:**
+```
+x-admin-code: <ADMIN_CODE>
+```
+
+**Response:**
+```json
+{
+  "active": false,
+  "enteredAt": null,
+  "reason": null,
+  "safeToDeploy": true,
+  "currentPhase": "FIGHTING",
+  "marketStatus": "betting",
+  "pendingMarkets": 1
+}
+```
+
+**Fields:**
+- `active` - Whether maintenance mode is active
+- `enteredAt` - Unix timestamp (ms) when entered, or `null`
+- `reason` - Reason for maintenance, or `null`
+- `safeToDeploy` - Whether it's safe to restart server
+- `currentPhase` - Current duel phase (IDLE, FIGHTING, COUNTDOWN, etc.)
+- `marketStatus` - Betting market status (betting, locked, resolved, none)
+- `pendingMarkets` - Number of unresolved markets
+
+**Safe to Deploy Conditions:**
+- `active: true` (maintenance mode entered)
+- `currentPhase` not in [FIGHTING, COUNTDOWN, ANNOUNCEMENT]
+- `pendingMarkets: 0` (all markets resolved)
+
+---
+
+## Logs
+
+### Get Live Logs
+
+```http
+GET /admin/logs
+```
+
+Fetches recent server logs from in-memory ring buffer.
+
+**Headers:**
+```
+x-admin-code: <ADMIN_CODE>
+```
+
+**Response:**
+```json
+{
+  "logs": [
+    {
+      "timestamp": 1710187234567,
+      "level": "INFO",
+      "system": "DuelScheduler",
+      "message": "Duel started",
+      "data": { "duelId": "duel-123" }
+    },
+    {
+      "timestamp": 1710187235678,
+      "level": "WARN",
+      "system": "Combat",
+      "message": "Invalid attack",
+      "data": { "attackerId": "player-1", "targetId": "player-2" }
+    }
+  ]
+}
+```
+
+**Log Entry Fields:**
+- `timestamp` - Unix timestamp in milliseconds
+- `level` - Log level (DEBUG, INFO, WARN, ERROR)
+- `system` - System name (e.g., "DuelScheduler", "Combat")
+- `message` - Log message
+- `data` - Optional structured data (object)
+
+**Ring Buffer:**
+- Stores up to 1000 most recent log entries
+- Oldest entries discarded when buffer full
+- Configurable via `LOGGER_MAX_ENTRIES` environment variable
+
+---
+
+## Server Control
+
+### Restart Server
+
+```http
+POST /admin/restart
+```
+
+Restarts the server process (requires PM2).
+
+**Headers:**
+```
+x-admin-code: <ADMIN_CODE>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Restarting server in 2 seconds..."
+}
+```
+
+**Behavior:**
+1. Validates admin code
+2. Waits 2 seconds (allows response to be sent)
+3. Calls `process.exit(0)`
+4. PM2 automatically restarts the server
+
+<Warning>
+  This endpoint requires a process manager (PM2) to automatically restart the server. Without PM2, the server will exit and not restart.
+</Warning>
+
+**PM2 Configuration:**
+```javascript
+// From ecosystem.config.cjs
+{
+  autorestart: true,
+  max_restarts: 999999,
+  min_uptime: "10s",
+  restart_delay: 10000,
+}
+```
+
+---
+
+## Duel Status
+
+### Get Duel Status
+
+```http
+GET /admin/duels/status
+```
+
+Gets current duel cycle status and leaderboard.
+
+**Headers:**
+```
+x-admin-code: <ADMIN_CODE>
+```
+
+**Response:**
+```json
+{
+  "currentCycle": {
+    "phase": "FIGHTING",
+    "duelId": "duel-123",
+    "participants": ["agent-1", "agent-2"],
+    "startedAt": 1710187234567
+  },
+  "leaderboard": [
+    {
+      "characterId": "agent-1",
+      "wins": 10,
+      "losses": 5,
+      "winRate": 0.67
+    }
+  ],
+  "recentDuels": [
+    {
+      "duelId": "duel-122",
+      "winner": "agent-1",
+      "loser": "agent-2",
+      "completedAt": 1710187200000
+    }
+  ],
+  "streamHealth": {
+    "rtmpConnected": true,
+    "viewerCount": 42
+  }
+}
+```
+
+---
+
+## Error Responses
+
+### 403 Forbidden
+
+```json
+{
+  "error": "Invalid admin code"
+}
+```
+
+**Cause:** Missing or incorrect `x-admin-code` header.
+
+**Solution:** Set correct `ADMIN_CODE` in server `.env` and include in request header.
+
+### 500 Internal Server Error
+
+```json
+{
+  "error": "Failed to enter maintenance mode",
+  "details": "Timeout waiting for safe state"
+}
+```
+
+**Cause:** Maintenance mode timeout exceeded.
+
+**Solution:** Check duel scheduler status, ensure no stuck duels.
+
+---
+
+## Usage Examples
+
+### Deployment Workflow
+
+```bash
+#!/bin/bash
+# Pre-deployment script
+
+# Enter maintenance mode
+curl -X POST "https://hyperscape.gg/admin/maintenance/enter" \
+  -H "x-admin-code: $ADMIN_CODE" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "deployment", "timeoutMs": 300000}'
+
+# Wait for safe state
+while true; do
+  STATUS=$(curl -s "https://hyperscape.gg/admin/maintenance/status" \
+    -H "x-admin-code: $ADMIN_CODE")
+  
+  SAFE=$(echo $STATUS | jq -r '.safeToDeploy')
+  
+  if [ "$SAFE" = "true" ]; then
+    echo "Safe to deploy!"
+    break
+  fi
+  
+  echo "Waiting for safe state..."
+  sleep 5
+done
+
+# Deploy new code
+# ...
+
+# Exit maintenance mode
+curl -X POST "https://hyperscape.gg/admin/maintenance/exit" \
+  -H "x-admin-code: $ADMIN_CODE"
+```
+
+### Log Monitoring
+
+```bash
+#!/bin/bash
+# Monitor live logs
+
+while true; do
+  curl -s "https://hyperscape.gg/admin/logs" \
+    -H "x-admin-code: $ADMIN_CODE" \
+    | jq -r '.logs[] | "\(.timestamp) [\(.level)] \(.system): \(.message)"'
+  
+  sleep 3
+done
+```
+
+### Health Check
+
+```bash
+#!/bin/bash
+# Check server health
+
+STATUS=$(curl -s "https://hyperscape.gg/admin/maintenance/status" \
+  -H "x-admin-code: $ADMIN_CODE")
+
+ACTIVE=$(echo $STATUS | jq -r '.active')
+SAFE=$(echo $STATUS | jq -r '.safeToDeploy')
+PHASE=$(echo $STATUS | jq -r '.currentPhase')
+
+echo "Maintenance: $ACTIVE"
+echo "Safe to deploy: $SAFE"
+echo "Current phase: $PHASE"
+```
+
+---
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Admin Dashboard" icon="shield-check" href="/guides/admin-dashboard">
+    Admin dashboard UI and features
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/guides/deployment">
+    Production deployment with maintenance mode
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/devops/configuration">
+    Environment variables and server config
+  </Card>
+  <Card title="Monitoring" icon="activity" href="/devops/monitoring">
+    Health checks and alerting
+  </Card>
+</CardGroup>
