@@ -1,0 +1,402 @@
+---
+title: "Terrain LOD API"
+description: "TerrainQuadTree and TerrainQuadNode API reference"
+icon: "mountain"
+---
+
+## TerrainQuadTree
+
+Manages hierarchical quad-tree of terrain chunks with dynamic LOD.
+
+### Constructor
+
+```typescript
+new TerrainQuadTree(config?: Partial<QuadTreeConfig>)
+```
+
+**Parameters:**
+- `config` - Optional configuration overrides
+
+**Returns:** `TerrainQuadTree` instance
+
+**Example:**
+```typescript
+const quadTree = new TerrainQuadTree({
+  minSize: 100,
+  maxDepth: 4,
+  splitRatio: 1.5,
+  unsplitMultiplier: 1.2,
+  resolution: 32,
+  skirtDrop: 15,
+});
+```
+
+### Methods
+
+#### setListener
+
+```typescript
+setListener(listener: QuadTreeListener): void
+```
+
+Sets the listener for geometry generation/destruction events.
+
+**Parameters:**
+- `listener` - Object implementing `QuadTreeListener` interface
+
+**Example:**
+```typescript
+quadTree.setListener({
+  onNodeNeedsGeometry(node: TerrainQuadNode) {
+    generateTerrainChunk(node);
+  },
+  onNodeDestroyGeometry(node: TerrainQuadNode) {
+    destroyTerrainChunk(node);
+  },
+});
+```
+
+#### update
+
+```typescript
+update(playerX: number, playerZ: number): boolean
+```
+
+Main update method - call every frame or when player moves significantly.
+
+**Parameters:**
+- `playerX` - Player world X coordinate
+- `playerZ` - Player world Z coordinate
+
+**Returns:** `true` if tree structure changed, `false` otherwise
+
+**Example:**
+```typescript
+const camera = world.camera;
+const structureChanged = quadTree.update(camera.position.x, camera.position.z);
+
+if (structureChanged) {
+  console.log('Terrain LOD updated');
+}
+```
+
+#### getFinalNodes
+
+```typescript
+getFinalNodes(): TerrainQuadNode[]
+```
+
+Gets all leaf nodes that currently have (or need) visual geometry.
+
+**Returns:** Array of `TerrainQuadNode` instances
+
+**Example:**
+```typescript
+const finalNodes = quadTree.getFinalNodes();
+console.log(`Active chunks: ${finalNodes.length}`);
+
+for (const node of finalNodes) {
+  console.log(`Chunk at (${node.centerX}, ${node.centerZ}), size: ${node.size}m`);
+}
+```
+
+#### dispose
+
+```typescript
+dispose(): void
+```
+
+Destroys all chunks and resets state.
+
+**Example:**
+```typescript
+// Cleanup on world shutdown
+quadTree.dispose();
+```
+
+### Properties
+
+#### totalNodeCount
+
+```typescript
+get totalNodeCount(): number
+```
+
+Total number of nodes in the tree (for debug stats).
+
+**Example:**
+```typescript
+console.log(`Total nodes: ${quadTree.totalNodeCount}`);
+```
+
+#### visualChunkCount
+
+```typescript
+get visualChunkCount(): number
+```
+
+Number of nodes with active visual geometry (for debug stats).
+
+**Example:**
+```typescript
+console.log(`Visual chunks: ${quadTree.visualChunkCount}`);
+```
+
+---
+
+## TerrainQuadNode
+
+Individual node in the terrain quad-tree.
+
+### Properties
+
+```typescript
+readonly id: number;                    // Unique node ID
+readonly tree: TerrainQuadTree;         // Parent tree reference
+readonly parent: TerrainQuadNode | null; // Parent node (null for root)
+readonly quadPosition: QuadPosition | null; // Position in parent (ne/nw/sw/se)
+readonly size: number;                  // Chunk size in meters
+readonly halfSize: number;              // size * 0.5
+readonly quarterSize: number;           // halfSize * 0.5
+readonly centerX: number;               // World X coordinate
+readonly centerZ: number;               // World Z coordinate
+readonly depth: number;                 // Depth in tree (0 = root)
+readonly precision: number;             // Normalized LOD: 0 at root → 1 at max depth
+readonly isMaxDepth: boolean;           // True when at maximum subdivision depth
+
+children: Map<QuadPosition, TerrainQuadNode>; // Child nodes (when split)
+neighbours: Map<CardinalDirection, TerrainQuadNode | null>; // Adjacent nodes
+splitted: boolean;                      // True when node has children
+splitting: boolean;                     // True during split operation
+unsplitting: boolean;                   // True during unsplit operation
+ready: boolean;                         // True when geometry is ready
+needsCheck: boolean;                    // True when split/unsplit check needed
+isFinal: boolean;                       // True when leaf node with geometry
+terrainNeedsUpdate: boolean;            // True when geometry needs generation
+visualChunkKey: string | null;          // Assigned by TerrainVisualManager
+
+readonly boundingBox: {
+  xMin: number;
+  xMax: number;
+  zMin: number;
+  zMax: number;
+};
+```
+
+### Methods
+
+#### check
+
+```typescript
+check(): void
+```
+
+Checks if node should split/unsplit based on camera distance.
+
+#### update
+
+```typescript
+update(): void
+```
+
+Updates terrain generation requests for this node and children.
+
+#### setNeighbours
+
+```typescript
+setNeighbours(
+  n: TerrainQuadNode | null,
+  e: TerrainQuadNode | null,
+  s: TerrainQuadNode | null,
+  w: TerrainQuadNode | null
+): void
+```
+
+Sets neighbor nodes in cardinal directions.
+
+**Parameters:**
+- `n` - North neighbor
+- `e` - East neighbor
+- `s` - South neighbor
+- `w` - West neighbor
+
+#### isInside
+
+```typescript
+isInside(x: number, z: number): boolean
+```
+
+Checks if a point is inside this node's bounding box.
+
+**Parameters:**
+- `x` - World X coordinate
+- `z` - World Z coordinate
+
+**Returns:** `true` if point is inside, `false` otherwise
+
+#### getDeepestNodeAt
+
+```typescript
+getDeepestNodeAt(x: number, z: number): TerrainQuadNode | null
+```
+
+Gets the deepest (most subdivided) node containing a point.
+
+**Parameters:**
+- `x` - World X coordinate
+- `z` - World Z coordinate
+
+**Returns:** Deepest node containing point, or `null` if not found
+
+---
+
+## QuadTreeListener
+
+Interface for receiving quad-tree events.
+
+```typescript
+interface QuadTreeListener {
+  onNodeNeedsGeometry(node: TerrainQuadNode): void;
+  onNodeDestroyGeometry(node: TerrainQuadNode): void;
+}
+```
+
+### onNodeNeedsGeometry
+
+Called when a node needs terrain geometry generated.
+
+**Parameters:**
+- `node` - Node that needs geometry
+
+**Implementation:**
+```typescript
+onNodeNeedsGeometry(node: TerrainQuadNode): void {
+  // Generate terrain mesh
+  const geometry = new THREE.PlaneGeometry(
+    node.size,
+    node.size,
+    node.resolution,
+    node.resolution
+  );
+  
+  // Apply height data
+  applyHeightData(geometry, node);
+  
+  // Add skirts
+  addSkirtGeometry(geometry, node.tree.config.skirtDrop);
+  
+  // Create mesh
+  const mesh = new THREE.Mesh(geometry, terrainMaterial);
+  mesh.position.set(node.centerX, 0, node.centerZ);
+  mesh.rotation.x = -Math.PI / 2;
+  
+  // Store reference
+  node.visualChunkKey = `chunk_${node.id}`;
+  this.chunks.set(node.visualChunkKey, mesh);
+  
+  // Add to scene
+  this.scene.add(mesh);
+  
+  // Mark ready
+  node.testReady();
+}
+```
+
+### onNodeDestroyGeometry
+
+Called when a node's geometry should be destroyed.
+
+**Parameters:**
+- `node` - Node whose geometry should be destroyed
+
+**Implementation:**
+```typescript
+onNodeDestroyGeometry(node: TerrainQuadNode): void {
+  const mesh = this.chunks.get(node.visualChunkKey);
+  if (mesh) {
+    this.scene.remove(mesh);
+    mesh.geometry.dispose();
+    this.chunks.delete(node.visualChunkKey);
+  }
+}
+```
+
+---
+
+## QuadTreeConfig
+
+Configuration for terrain quad-tree LOD system.
+
+```typescript
+interface QuadTreeConfig {
+  minSize: number;
+  maxDepth: number;
+  splitRatio: number;
+  unsplitMultiplier: number;
+  resolution: number;
+  skirtDrop: number;
+}
+```
+
+### Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `minSize` | `number` | `100` | Smallest chunk size in meters (leaf nodes) |
+| `maxDepth` | `number` | `4` | Maximum depth of quad-tree subdivision |
+| `splitRatio` | `number` | `1.5` | Split when distance < size × splitRatio |
+| `unsplitMultiplier` | `number` | `1.2` | Multiplier on splitRatio for unsplit threshold |
+| `resolution` | `number` | `32` | Uniform vertex resolution (segments per axis) |
+| `skirtDrop` | `number` | `15` | Skirt drop distance in meters |
+
+### Example
+
+```typescript
+const config: QuadTreeConfig = {
+  minSize: 100,           // 100m leaf chunks
+  maxDepth: 4,            // 5 LOD levels (0-4)
+  splitRatio: 1.5,        // Split at 150m for 100m chunk
+  unsplitMultiplier: 1.2, // Unsplit at 180m (prevents thrashing)
+  resolution: 32,         // 32×32 vertices per chunk
+  skirtDrop: 15,          // 15m skirt depth
+};
+```
+
+---
+
+## Type Definitions
+
+### QuadPosition
+
+```typescript
+type QuadPosition = "ne" | "nw" | "sw" | "se";
+```
+
+Position of a child node within its parent.
+
+### CardinalDirection
+
+```typescript
+type CardinalDirection = "n" | "e" | "s" | "w";
+```
+
+Cardinal direction for neighbor relationships.
+
+---
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Biome API" icon="tree-deciduous" href="/api-reference/biomes">
+    BiomeType enum and tree configuration API
+  </Card>
+  <Card title="Tree Instancing API" icon="trees" href="/api-reference/tree-instancing">
+    GLBTreeBatchedInstancer API reference
+  </Card>
+  <Card title="Terrain System" icon="globe" href="/api-reference/terrain-system">
+    TerrainSystem API for height queries
+  </Card>
+  <Card title="World API" icon="cube" href="/api-reference/world">
+    World class and system management
+  </Card>
+</CardGroup>
