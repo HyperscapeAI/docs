@@ -1,0 +1,387 @@
+---
+title: "Biome System"
+description: "Biome-based terrain generation with per-biome resource distribution"
+icon: "tree-deciduous"
+---
+
+## Overview
+
+Hyperscape's terrain generation uses a **biome system** with biome-specific parameters for height variation, vegetation density, and resource distribution. Each biome has unique visual characteristics and gameplay properties.
+
+<Info>
+  Added in commits 82a5365, 2751b269, dd8d6ad, and 6295345 (March 12, 2026).
+</Info>
+
+---
+
+## Biome Types
+
+```typescript
+export enum BiomeType {
+  Tundra = "tundra",
+  Forest = "forest",
+  Canyon = "canyon",
+}
+
+export const DEFAULT_BIOME = BiomeType.Forest;
+```
+
+### Biome Characteristics
+
+| Biome | Terrain | Vegetation | Trees |
+|-------|---------|------------|-------|
+| **Forest** | Rolling hills, moderate elevation | Dense grass, flowers | Oak, Birch, Maple, Fir, Pine, Bamboo |
+| **Canyon** | Steep cliffs, desert valleys | Sparse vegetation | Cactus, Dead trees, Palm, Coconut |
+| **Tundra** | Snowy plains, gentle slopes | Sparse grass, no flowers | Wind Pine, Fir, Pine, Birch |
+
+---
+
+## Tree Configuration
+
+Each biome defines its own tree distribution, placement rules, and density.
+
+### BiomeTreeConfig
+
+```typescript
+export interface BiomeTreeConfig {
+  enabled: boolean;
+  trees: Record<TreeId, TreeSpawnConfig>;
+  density: number;
+  minSpacing: number;
+  clustering: boolean;
+  scaleVariation: [number, number];
+  maxSlope: number;
+}
+
+export interface TreeSpawnConfig {
+  weight: number;
+  minHeight?: number;
+  maxHeight?: number;
+  waterAffinity?: number;
+  waterProximityHeight?: number;
+  avoidsWaterBelow?: number;
+}
+```
+
+### Forest Biome Trees
+
+```typescript
+const FOREST_TREE_CONFIG: BiomeTreeConfig = {
+  enabled: true,
+  trees: {
+    [TreeId.Knotwood]: { weight: 40, maxHeight: 25 },
+    [TreeId.Oak]: { weight: 20, maxHeight: 25 },
+    [TreeId.Birch]: { weight: 20, maxHeight: 25 },
+    [TreeId.Maple]: { weight: 40, maxHeight: 25 },
+    [TreeId.Fir]: { weight: 15, maxHeight: 25 },
+    [TreeId.Pine]: { weight: 15, maxHeight: 25 },
+    [TreeId.ChinaPine]: { weight: 15, minHeight: 30, maxHeight: 60 },
+    [TreeId.Bamboo]: { weight: 15, minHeight: 35 },
+  },
+  density: 15,
+  minSpacing: 8,
+  clustering: false,
+  scaleVariation: [0.8, 1.2],
+  maxSlope: 1.5,
+};
+```
+
+### Canyon Biome Trees
+
+```typescript
+const CANYON_TREE_CONFIG: BiomeTreeConfig = {
+  enabled: true,
+  trees: {
+    [TreeId.Cactus]: { weight: 20, avoidsWaterBelow: 3 },
+    [TreeId.Dead]: { weight: 20, minHeight: 20 },
+    [TreeId.Palm]: {
+      weight: 20,
+      waterAffinity: 0.3,
+      waterProximityHeight: 9,
+      maxHeight: 15,
+    },
+    [TreeId.Coconut]: {
+      weight: 10,
+      waterAffinity: 0.6,
+      waterProximityHeight: 9,
+      maxHeight: 15,
+    },
+  },
+  density: 15,
+  minSpacing: 18,
+  clustering: false,
+  scaleVariation: [0.7, 1.3],
+  maxSlope: 2.0,
+};
+```
+
+### Tundra Biome Trees
+
+```typescript
+const TUNDRA_TREE_CONFIG: BiomeTreeConfig = {
+  enabled: true,
+  trees: {
+    [TreeId.WindPine]: { weight: 40, minHeight: 15 },
+    [TreeId.Fir]: { weight: 30, minHeight: 10 },
+    [TreeId.Pine]: { weight: 25, minHeight: 8 },
+    [TreeId.Birch]: { weight: 10 },
+  },
+  density: 10,
+  minSpacing: 12,
+  clustering: false,
+  scaleVariation: [0.6, 1.0],
+  maxSlope: 1.5,
+};
+```
+
+---
+
+## Tree Placement Rules
+
+### Height Constraints
+
+Trees can specify minimum and maximum terrain heights:
+
+```typescript
+{
+  minHeight: 30,  // Only spawn above 30m elevation
+  maxHeight: 60,  // Only spawn below 60m elevation
+}
+```
+
+**Use Cases:**
+- Mountain trees (high minHeight)
+- Valley trees (low maxHeight)
+- Coastal trees (near water level)
+
+### Water Affinity
+
+Trees can prefer or avoid water proximity:
+
+```typescript
+{
+  waterAffinity: 0.6,        // 60% chance to spawn near water
+  waterProximityHeight: 9,   // "Near water" = within 9m of water level
+}
+```
+
+**Use Cases:**
+- Palm trees (high water affinity)
+- Coconut trees (very high water affinity)
+- Desert trees (avoid water)
+
+### Water Avoidance
+
+Trees can avoid spawning below water level:
+
+```typescript
+{
+  avoidsWaterBelow: 3,  // Don't spawn if water is within 3m below
+}
+```
+
+**Use Cases:**
+- Cacti (avoid wet areas)
+- Desert vegetation (avoid flooding)
+
+### Slope Rejection
+
+Trees are rejected on steep terrain slopes (added in commit dd8d6ad):
+
+```typescript
+{
+  maxSlope: 1.5,  // Reject if terrain slope > 1.5
+}
+```
+
+**Implementation:**
+- Estimates terrain gradient using central differences (±1m samples)
+- Calculates slope magnitude from gradient vector
+- Skips placement when slope exceeds threshold
+
+**Biome-Specific Thresholds:**
+- Forest: 1.5 (moderate slopes)
+- Canyon: 2.0 (steeper slopes allowed)
+- Tundra: 1.5 (moderate slopes)
+
+**Impact:** Prevents trees floating on cliff faces, more realistic placement.
+
+---
+
+## TreeId Enum
+
+Type-safe tree identifiers replace hardcoded strings (added in commit 2751b269):
+
+```typescript
+export enum TreeId {
+  Oak = "oak",
+  Birch = "birch",
+  Maple = "maple",
+  Fir = "fir",
+  Pine = "pine",
+  ChinaPine = "china_pine",
+  Bamboo = "bamboo",
+  Knotwood = "knotwood",
+  Cactus = "cactus",
+  Dead = "dead",
+  Palm = "palm",
+  Coconut = "coconut",
+  WindPine = "wind_pine",  // New in commit 2751b269
+}
+```
+
+### Migration
+
+```typescript
+// ❌ Old (hardcoded strings)
+const treeType = "tree_oak";
+
+// ✅ New (type-safe enum)
+const treeType = TreeId.Oak;
+```
+
+---
+
+## Getting Biome Config
+
+```typescript
+import { getTreeConfigForBiome, BiomeType } from '@hyperscape/shared';
+
+// Get tree config for specific biome
+const forestConfig = getTreeConfigForBiome(BiomeType.Forest);
+
+// Returns BiomeTreeConfig with:
+// - enabled: boolean
+// - trees: Record<TreeId, TreeSpawnConfig>
+// - density: number
+// - minSpacing: number
+// - clustering: boolean
+// - scaleVariation: [number, number]
+// - maxSlope: number
+
+// Falls back to forest config for unknown biomes
+const unknownConfig = getTreeConfigForBiome("unknown");
+// Returns FOREST_TREE_CONFIG
+```
+
+---
+
+## BiomeResourceGenerator
+
+The `BiomeResourceGenerator` class handles biome-aware resource placement:
+
+```typescript
+// From packages/shared/src/systems/shared/world/BiomeResourceGenerator.ts
+
+class BiomeResourceGenerator {
+  generateTreesForTile(
+    tileX: number,
+    tileZ: number,
+    biomeId: string
+  ): TreePlacement[] {
+    // Get biome-specific tree config
+    const config = getTreeConfigForBiome(biomeId);
+    
+    // Generate trees based on config
+    const trees: TreePlacement[] = [];
+    
+    for (const [treeId, spawnConfig] of Object.entries(config.trees)) {
+      // Check height constraints
+      if (spawnConfig.minHeight && height < spawnConfig.minHeight) continue;
+      if (spawnConfig.maxHeight && height > spawnConfig.maxHeight) continue;
+      
+      // Check water affinity
+      if (spawnConfig.waterAffinity) {
+        const nearWater = Math.abs(height - WATER_LEVEL) < spawnConfig.waterProximityHeight;
+        if (Math.random() > spawnConfig.waterAffinity && !nearWater) continue;
+      }
+      
+      // Check water avoidance
+      if (spawnConfig.avoidsWaterBelow) {
+        if (height < WATER_LEVEL + spawnConfig.avoidsWaterBelow) continue;
+      }
+      
+      // Check slope (commit dd8d6ad)
+      const slope = estimateTerrainSlope(x, z);
+      if (slope > config.maxSlope) continue;
+      
+      // Add tree placement
+      trees.push({
+        treeId,
+        position: { x, y: height, z },
+        rotation: Math.random() * Math.PI * 2,
+        scale: randomInRange(config.scaleVariation),
+      });
+    }
+    
+    return trees;
+  }
+}
+```
+
+---
+
+## Worker Integration
+
+Biome constants are injected into web workers for consistent terrain generation:
+
+```typescript
+export function buildBiomeConstantsJS(): string {
+  return `
+  var BT_TUNDRA = "${BiomeType.Tundra}";
+  var BT_FOREST = "${BiomeType.Forest}";
+  var BT_CANYON = "${BiomeType.Canyon}";
+  var BT_DEFAULT = BT_FOREST;
+  `;
+}
+
+// Injected at top of worker code
+const workerCode = `
+  ${buildBiomeConstantsJS()}
+  
+  // Worker can now use BT_FOREST, BT_TUNDRA, etc.
+  function getBiomeAt(x, z) {
+    if (isDesert(x, z)) return BT_CANYON;
+    if (isTundra(x, z)) return BT_TUNDRA;
+    return BT_FOREST;
+  }
+`;
+```
+
+---
+
+## Future Enhancements
+
+<CardGroup cols={2}>
+  <Card title="Biome Blending" icon="palette">
+    Smooth transitions between biomes with gradient blending
+  </Card>
+  <Card title="Dynamic Biomes" icon="cloud-sun">
+    Weather and seasonal biome variations
+  </Card>
+  <Card title="Custom Biomes" icon="wand-2">
+    User-defined biomes with custom tree configs
+  </Card>
+  <Card title="Biome-Specific Mobs" icon="bug">
+    Spawn different mobs based on biome type
+  </Card>
+</CardGroup>
+
+---
+
+## Related Systems
+
+<CardGroup cols={2}>
+  <Card title="Terrain LOD" icon="mountain" href="/wiki/engine/terrain-lod">
+    Hierarchical quadtree LOD for infinite terrain
+  </Card>
+  <Card title="Tree Instancing" icon="trees" href="/wiki/engine/tree-instancing">
+    Multi-variant tree rendering with BatchedMesh
+  </Card>
+  <Card title="Resource System" icon="pickaxe" href="/wiki/game-systems/resources">
+    Resource spawning and gathering mechanics
+  </Card>
+  <Card title="World Generation" icon="globe" href="/wiki/engine/world-generation">
+    Procedural world generation pipeline
+  </Card>
+</CardGroup>
