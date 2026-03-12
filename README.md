@@ -557,6 +557,21 @@ If account creation fails with "CSRF validation failed" when running client on l
 **Stale module errors after rebuild:**
 Service worker cache strategy was switched to `NetworkFirst` in March 2026 to prevent stale JS/CSS. Clear your browser cache or use incognito mode if you still see errors.
 
+**Admin dashboard not accessible:**
+Ensure `ADMIN_CODE` is set in `packages/server/.env`. Navigate to `http://localhost:3333/?page=admin` and enter the admin code when prompted.
+
+**Maintenance mode not working:**
+- Verify admin authentication (requires `ADMIN_CODE` in server `.env`)
+- Check `/admin/maintenance/status` endpoint returns valid JSON
+- Ensure no active duels: `safeToDeploy` should be `true`
+- Check PM2 logs: `bunx pm2 logs hyperscape-duel`
+
+**Live logs not appearing in admin dashboard:**
+- Verify admin authentication (requires admin role)
+- Check ring buffer size: Server logs show "Logger ring buffer: X entries"
+- Ensure auto-refresh is enabled in dashboard
+- Check browser console for fetch errors
+
 ## More Info
 
 See [AGENTS.md](AGENTS.md) for AI coding assistant instructions and recent changes documentation.
