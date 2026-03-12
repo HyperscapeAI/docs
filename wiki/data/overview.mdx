@@ -666,12 +666,17 @@ interface VegetationAsset {
   scaleVariation: [number, number]; // [min, max] scale variation
   randomRotation: boolean;          // Randomize Y-axis rotation
   weight: number;                   // Spawn probability weight
-  maxSlope: number;                 // Maximum terrain slope (0-1)
+  maxSlope: number;                 // Maximum terrain slope (0-1+)
   minSlope?: number;                // Minimum terrain slope
   alignToNormal: boolean;           // Align to terrain normal
   yOffset: number;                  // Vertical position offset
 }
 ```
+
+**Recent maxSlope Updates** (March 2026):
+- **Tundra**: 0.8 → 1.8 (increased for terraced terrain)
+- **Forest**: 0.8 → 1.5 (increased for landscape features)
+- **Canyon**: 0.6 → 2.5 (increased for steep canyon walls)
 
 **Vegetation Categories**:
 - `tree` - Large trees (oak, willow, maple, yew, magic, fir, knotwood, dead, wind_pine)
