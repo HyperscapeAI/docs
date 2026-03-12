@@ -886,6 +886,16 @@ PULSE_SERVER=unix:/tmp/pulse-runtime/pulse/native
 XDG_RUNTIME_DIR=/tmp/pulse-runtime
 ```
 
+**Frame Pacing (Commits 522fe37, e2c9fbf):**
+
+The streaming pipeline enforces 30fps frame pacing to eliminate buffering:
+- **Frame Pacing Guard**: Skips frames arriving faster than 85% of 33.3ms target interval
+- **Xvfb Compositor**: Runs at 30fps without vsync (game is capped at 30fps)
+- **everyNthFrame**: Set to 1 (Xvfb delivers at 30fps, no frame skipping needed)
+- **Resolution**: 1280x720 matches capture viewport, eliminates upscaling overhead
+
+**Impact**: Eliminates stream buffering, smoother playback for viewers, reduced bandwidth usage.
+
 **Multi-Platform Streaming:**
 
 Streams simultaneously to:
