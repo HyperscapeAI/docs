@@ -41,6 +41,11 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - **Fix**: All curl commands in `scripts/deploy-vast.sh` now have explicit 10-second timeout
 - **Impact**: Deployment scripts fail fast when services are unresponsive, prevents indefinite hangs during health checks
 
+### SSH Keepalive & Maintenance Timeout (March 13, 2026)
+- **SSH Keepalive**: Added `ServerAliveInterval=15` and `ServerAliveCountMax=3` to SSH commands in `.github/workflows/deploy-vast.yml` to prevent connection drops during long-running operations (detects dead connections within 45 seconds)
+- **Maintenance Timeout**: Reduced from 300 seconds (5 minutes) to 30 seconds for faster deployment cycles when waiting for current duel to complete
+- **Impact**: More reliable SSH connections during deployments, faster deployment cycles, prevents connection drops during maintenance mode
+
 ### OSRS-Accurate Movement Rotation (March 13, 2026)
 - **Change**: Fixed player rotation to ignore combat target rotation while moving, restoring OSRS-accurate movement behavior
 - **Problem**: Players were rotating to face their combat target even while moving, which differs from Old School RuneScape behavior where movement direction takes priority over combat facing
