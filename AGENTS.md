@@ -103,6 +103,35 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### CDN Cache Busting (March 13, 2026)
+
+**Change** (Commit db6581f): Added cache busting to CDN requests and manifest uploads to prevent stale asset issues.
+
+**Problem**: Cloudflare R2 CDN was serving stale manifests and assets even after new versions were uploaded, causing clients to load outdated game data (items, NPCs, terrain configs, etc.).
+
+**Fix**:
+- **Client-side**: Added `?v=<timestamp>` query parameter to all CDN manifest requests
+- **Server-side**: Appended `?v=<timestamp>` to manifest uploads to R2 to force cache invalidation
+- **Deployment**: `scripts/upload-to-r2.sh` now includes cache-busting timestamps on all manifest uploads
+
+**Implementation**:
+```typescript
+// Client-side (packages/shared/src/data/DataManager.ts)
+const cacheBuster = `?v=${Date.now()}`;
+const manifestUrl = `${CDN_URL}/manifests/${filename}${cacheBuster}`;
+
+// Server-side (scripts/upload-to-r2.sh)
+aws s3 cp "manifests/${file}" "s3://${BUCKET}/manifests/${file}?v=$(date +%s)" \
+  --endpoint-url "${ENDPOINT}" \
+  --content-type "application/json"
+```
+
+**Impact**: 
+- Eliminates stale manifest issues across deployments
+- Ensures clients always fetch latest game data
+- Prevents canyon biome errors from outdated manifests
+- No manual CDN cache purging required
+
 ### Manifest Embedding in Docker (March 13, 2026)
 
 **Change** (Commit efa8021): Server Docker image now embeds manifests to bypass CDN and fix canyon biome errors.
