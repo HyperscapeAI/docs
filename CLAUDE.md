@@ -512,6 +512,12 @@ Real-time admin panel (`packages/client/src/screens/AdminLiveControls.tsx`):
 - **Live Logs**: 1000-entry ring buffer with auto-refresh (3s interval)
 - **Status Display**: Maintenance state, viewer count, current phase
 
+**CSS Layout Improvements** (PR #1019):
+- Fixed scrolling issues in admin panels with proper flexbox layout
+- Added `overflow: hidden` on `.admin-content` with `overflow-y: auto` on inner containers
+- Proper `min-height: 0` overrides for nested flex containers to enable scroll containment
+- Eliminated layout thrashing and scroll conflicts in admin dashboard
+
 **Admin API Endpoints**:
 - `GET /admin/logs` - Fetch recent server logs from in-memory ring buffer
 - `POST /admin/restart` - Restart server process (requires PM2)
