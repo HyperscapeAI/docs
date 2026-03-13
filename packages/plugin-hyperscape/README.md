@@ -95,11 +95,11 @@ Add the plugin to your ElizaOS character configuration:
 {
   "name": "WoodcutterBot",
   "plugins": ["@hyperscape/plugin-hyperscape"],
-  "modelProvider": "elizacloud",
+  "modelProvider": "anthropic",
   "settings": {
-    "model": "openai/gpt-5",
+    "model": "claude-sonnet-4-6",
     "secrets": {
-      "ELIZAOS_CLOUD_API_KEY": "your-elizacloud-api-key",
+      "ANTHROPIC_API_KEY": "sk-ant-...",
       "HYPERSCAPE_SERVER_URL": "ws://localhost:5555/ws",
       "HYPERSCAPE_AUTO_RECONNECT": "true"
     }
@@ -107,24 +107,25 @@ Add the plugin to your ElizaOS character configuration:
 }
 ```
 
-**ElizaCloud Models** (13 frontier models available):
+**Direct Model Providers** (as of March 12, 2026):
 
-**American Models**:
-- `openai/gpt-5` - GPT-5
-- `anthropic/claude-sonnet-4.6` - Claude Sonnet 4.6
-- `anthropic/claude-opus-4.6` - Claude Opus 4.6
-- `google/gemini-3.1-pro-preview` - Gemini 3.1 Pro
-- `xai/grok-4` - Grok 4
-- `meta/llama-4-maverick` - Llama 4 Maverick
-- `mistral/magistral-medium` - Magistral Medium
+Hyperscape now uses direct Anthropic and Groq providers with interleaved selection for model diversity:
 
-**Chinese Models**:
-- `deepseek/deepseek-v3.2` - DeepSeek V3.2
-- `alibaba/qwen3-max` - Qwen 3 Max
-- `minimax/minimax-m2.5` - Minimax M2.5
-- `zai/glm-5` - GLM-5
-- `moonshotai/kimi-k2.5` - Kimi K2.5
-- `bytedance/seed-1.8` - Seed 1.8
+**Anthropic Models**:
+- `claude-sonnet-4-6` - Claude Sonnet 4.6
+- `claude-opus-4-6` - Claude Opus 4.6
+- `claude-haiku-4-5-20251001` - Claude Haiku 4.5
+- `claude-opus-4-20250514` - Claude Opus 4
+- `claude-sonnet-4-20250514` - Claude Sonnet 4
+
+**Groq Models**:
+- `meta-llama/llama-4-scout-17b-16e-instruct` - Llama 4 Scout
+- `meta-llama/llama-4-maverick-17b-128e-instruct` - Llama 4 Maverick
+- `llama-3.3-70b-versatile` - Llama 3.3 70B
+- `moonshotai/kimi-k2-instruct` - Kimi K2
+- `qwen/qwen3-32b` - Qwen 3 30B
+
+**Model Selection**: Agents are spawned with interleaved provider selection (Anthropic → Groq → Anthropic → Groq...) to ensure model diversity and reduce dependency on single provider.
 
 ## Usage Example
 
