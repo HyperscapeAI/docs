@@ -440,9 +440,9 @@ For GPU-accelerated streaming deployments on Vast.ai:
 
 **Requirements**:
 - NVIDIA GPU with display driver (`gpu_display_active=true`)
-- Chrome Beta installed
+- Chrome Canary installed (`google-chrome-unstable`, as of March 13, 2026)
 - Xvfb virtual display
-- FFmpeg for RTMP encoding
+- FFmpeg for RTMP encoding (system FFmpeg preferred over ffmpeg-static)
 
 **Configuration**:
 - `ecosystem.config.cjs` - PM2 configuration with streaming settings
