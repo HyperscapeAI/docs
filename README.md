@@ -502,7 +502,7 @@ YOUTUBE_STREAM_KEY=...          # or YOUTUBE_RTMP_STREAM_KEY
 
 # Streaming configuration (defaults shown)
 STREAM_CAPTURE_MODE=cdp         # CDP for reliability (or mediarecorder)
-STREAM_CAPTURE_CHANNEL=chrome-canary  # Chrome Canary for WebGPU stability (Linux, as of March 13, 2026)
+STREAM_CAPTURE_CHANNEL=chrome-beta  # Chrome Beta for WebGPU stability (Linux, as of March 13, 2026)
 STREAM_CAPTURE_ANGLE=vulkan     # Vulkan ANGLE backend (Linux NVIDIA, required for WebGPU)
 STREAM_CAPTURE_WIDTH=1280
 STREAM_CAPTURE_HEIGHT=720
