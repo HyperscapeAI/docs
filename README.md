@@ -611,6 +611,18 @@ Ensure `ADMIN_CODE` is set in `packages/server/.env`. Navigate to `http://localh
 - Ensure auto-refresh is enabled in dashboard
 - Check browser console for fetch errors
 
+**Docker module resolution errors (externalized workspace packages):**
+- **Symptom**: Server fails to start in Docker with "Cannot find module @hyperscape/decimation" or similar
+- **Cause**: Docker COPY flattens workspace symlinks
+- **Fix** (as of March 12, 2026): `bun install --production` now runs in Docker runtime stage to restore symlinks
+- **Verify**: Check Dockerfile.server includes `RUN bun install --production` after COPY steps
+
+**Biome system errors (missing biome definitions):**
+- **Symptom**: "Unknown biome name" or "Cannot read property of undefined" in terrain generation
+- **Cause**: Biome system no longer has hardcoded defaults (as of March 12, 2026)
+- **Fix**: Ensure biome definitions are passed to `BiomeSystem` constructor or `TerrainGenerator`
+- **Example**: See `packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts` for biome config structure
+
 ## More Info
 
 See [AGENTS.md](AGENTS.md) for AI coding assistant instructions and recent changes documentation.
