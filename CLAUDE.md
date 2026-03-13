@@ -916,10 +916,23 @@ See [Port Allocation](#port-allocation) section for full port list.
 
 **Cause**: Missing or stale manifests
 
-**Fix**:
-- Manifests are now embedded in Docker image (commit efa8021)
-- For local development, ensure assets are synced: `bun run assets:sync`
-- For production, rebuild Docker image to pick up latest manifests
+**Fix** (as of March 13, 2026):
+- **Docker**: Manifests are now embedded in Docker image (commit efa8021) - rebuild to pick up latest
+- **CDN**: Cache busting is automatically applied (commit db6581f) - no manual purging needed
+- **Local Dev**: Ensure assets are synced: `bun run assets:sync`
+- **Hard Refresh**: Clear browser cache (Cmd+Shift+R / Ctrl+Shift+R) to force fresh manifest fetch
+
+### Stale Manifests / Outdated Game Data
+
+**Symptom**: Seeing outdated items, NPCs, or terrain configs after deployment
+
+**Cause**: CDN caching or stale service worker
+
+**Fix** (as of March 13, 2026):
+- **Automatic**: Cache busting is now applied to all manifest requests (commit db6581f)
+- **Client**: Hard refresh browser (Cmd+Shift+R / Ctrl+Shift+R)
+- **Server**: Manifests embedded in Docker - rebuild image: `docker build -f Dockerfile.server .`
+- **Service Worker**: Workbox runtime is inlined (commit 9312a96) - PWA updates are now reliable
 
 ## Additional Resources
 
