@@ -1054,11 +1054,47 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Verify admin authentication (requires admin role)
 - Check ring buffer size: `Logger.getRecentLogs().length`
 - Ensure auto-refresh is enabled
+- Check browser console for fetch errors to `/admin/logs`
 
 **Maintenance mode not working**:
 - Check `/admin/maintenance/status` endpoint
 - Verify no active duels: `safeToDeploy` should be `true`
 - Check market status: `marketStatus` should be `PAUSED`
+- Ensure PM2 is running: `pm2 status`
+
+**Server restart button not working**:
+- Verify PM2 is managing the process: `pm2 list`
+- Check PM2 logs: `pm2 logs hyperscape-duel`
+- Ensure admin code is set: `ADMIN_CODE` in server `.env`
+- Note: Restart requires PM2 to auto-restart on `process.exit(0)`
+
+### Docker Deployment Issues
+
+**Module resolution errors for workspace packages**:
+- **Symptom**: "Cannot find module @hyperscape/decimation" or similar errors in Docker
+- **Cause**: Docker COPY flattens workspace symlinks (fixed March 12, 2026)
+- **Fix**: Ensure Dockerfile includes `RUN bun install --production` after COPY steps
+- **Verify**: Check `Dockerfile.server` has workspace symlink restoration step
+
+**Manifests not loading in Docker**:
+- **Symptom**: Server fails to start with "Failed to load manifest" errors
+- **Cause**: Manifests not embedded in Docker image (fixed March 13, 2026)
+- **Fix**: Ensure Dockerfile copies manifests from builder stage
+- **Verify**: Check `COPY --from=builder /app/packages/server/world ./packages/server/world` exists in Dockerfile
+
+### Biome System Issues
+
+**"Unknown biome name" errors**:
+- **Symptom**: Terrain generation fails with biome-related errors
+- **Cause**: Biome system no longer has hardcoded defaults (changed March 12, 2026)
+- **Fix**: Pass explicit biome definitions to `BiomeSystem` or `TerrainGenerator` constructor
+- **Example**: See `packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts`
+
+**Trees spawning on cliffs or steep slopes**:
+- **Symptom**: Trees appear on unrealistic terrain
+- **Cause**: Missing or incorrect `maxSlope` configuration
+- **Fix**: Set `maxSlope` in biome tree config (e.g., `maxSlope: 1.5` for forest, `2.0` for canyon)
+- **Location**: `packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts`
 
 ### Canyon Biome Errors
 
