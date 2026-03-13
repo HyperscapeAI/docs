@@ -149,15 +149,16 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - **Breaking Change**: TSL API `atan2` renamed to `atan` (migration required for custom shaders)
 - Improved WebGPU stability and shader compilation
 
-### Streaming Pipeline Optimization (March 10, 2026)
+### Streaming Pipeline Optimization (March 10-13, 2026)
 - **Default Capture Mode**: CDP (Chrome DevTools Protocol) for reliable frame capture
-- **Chrome Beta**: Switched to Chrome Beta channel for better stability (from Unstable)
-- **ANGLE Backend**: Default ANGLE backend (`--use-angle=default`) for automatic best-backend selection
+- **Chrome Canary**: Switched to Chrome Canary (`google-chrome-unstable`) on Linux for better WebGPU support (March 13, 2026)
+- **ANGLE Backend**: Vulkan ANGLE backend (`--use-angle=vulkan`) on Linux NVIDIA for WebGPU stability
 - **FFmpeg**: System FFmpeg preferred over ffmpeg-static to avoid segfaults (resolution order: `/usr/bin` → `/usr/local/bin` → PATH → ffmpeg-static)
 - **x264 Tuning**: `zerolatency` tune for live streaming (lower latency, was `film`)
 - **RTMP Muxer**: Changed from `flv` to `fifo` muxer with `drop_pkts_on_overflow=1` to absorb network stalls
 - **Physics Optimization**: Skip client-side PhysX for streaming/spectator viewports (faster startup, lower memory)
 - **Playwright Fix**: Block `--enable-unsafe-swiftshader` injection to prevent CPU software rendering from blocking WebGPU
+- **Health Check Timeouts**: All curl commands use `--max-time 10` to prevent indefinite hangs (March 13, 2026)
 
 ### Test Infrastructure Updates (March 10-11, 2026)
 - Excluded `@hyperscape/impostor` from headless CI (requires WebGPU)
