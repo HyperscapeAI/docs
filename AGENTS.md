@@ -145,6 +145,41 @@ aws s3 cp "manifests/${file}" "s3://${BUCKET}/manifests/${file}?v=$(date +%s)" \
 
 **Impact**: More reliable server startup, eliminates CDN dependency for manifests, fixes canyon biome loading errors.
 
+### Deployment Manifest Upload Improvements (March 13, 2026)
+
+**Changes** (Commits eb28eb1, 2d4e2ae, 8b5c5d2, 05b1d67): Fixed manifest upload workflow to prevent stale manifests in production.
+
+**Problems**:
+1. **Submodule Overwrite**: `assets/manifests` submodule was overwriting updated manifests during R2 upload
+2. **Missing Manifests**: Manifests weren't being generated before R2 upload, causing 404s
+3. **Stale CDN Cache**: Vast.ai deployments were fetching stale manifests from CDN instead of embedded versions
+
+**Fixes**:
+- **Prevent Submodule Overwrite**: Modified `scripts/upload-to-r2.sh` to skip `assets/manifests` directory during upload (manifests are now uploaded separately with cache busting)
+- **Ensure Manifests Exist**: Added `node scripts/ensure-assets.mjs` before R2 upload in GitHub Actions workflow
+- **Force Fresh Fetch**: Vast.ai deployment now clears CDN cache and forces re-fetch of manifests with cache-busting timestamps
+- **Removed Broken CORS Config**: Removed R2 CORS configuration step that was failing (CORS is now configured via Cloudflare dashboard)
+
+**Deployment Workflow**:
+```bash
+# GitHub Actions (.github/workflows/deploy-r2.yml)
+1. Checkout code
+2. Run ensure-assets.mjs to generate manifests
+3. Upload manifests to R2 with cache-busting timestamps
+4. Skip assets/manifests submodule to prevent overwrite
+
+# Vast.ai Deployment (scripts/deploy-vast.sh)
+1. Pull latest code
+2. Manifests are embedded in Docker image (no CDN dependency)
+3. Server reads from local filesystem instead of CDN
+```
+
+**Impact**:
+- Reliable manifest availability across all deployment targets
+- No more 404 errors from missing manifests
+- Consistent manifest versions between Docker and CDN
+- Simplified deployment workflow (no manual CORS config)
+
 ### Workbox Service Worker Fix (March 13, 2026)
 
 **Change** (Commit 9312a96): Inline workbox runtime to prevent MIME type errors on PWA update.
