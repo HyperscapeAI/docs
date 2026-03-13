@@ -592,6 +592,31 @@ export DISPLAY=:99
 - Verify DISPLAY environment: `echo $DISPLAY` (should be `:99`)
 - Verify curl health checks have `--max-time 10` timeout to prevent hangs
 
+### Manifest & CDN Issues
+
+**Error:** Canyon biome fails to load or \"Failed to load manifest\" errors
+
+**Solution:** Manifests are now embedded in Docker images (March 13, 2026):
+- **Docker**: Rebuild image to pick up latest manifests: `docker build -f Dockerfile.server .`
+- **Local Dev**: Ensure assets are synced: `bun run assets:sync`
+- **CDN**: Cache busting is automatically applied (no manual purging needed)
+- **Vast.ai**: Deployment script forcefully removes cached assets folder before install
+
+**Error:** Stale game data (outdated items, NPCs, terrain configs)
+
+**Solution:** Cache busting is now automatic (March 13, 2026):
+- **Client**: Hard refresh browser (Cmd+Shift+R / Ctrl+Shift+R)
+- **Server**: Manifests embedded in Docker - rebuild image
+- **CDN**: Manifests uploaded with cache-busting timestamps
+- **R2 Upload**: Wrangler uses `--remote` flag to target remote Cloudflare bucket
+
+**Error:** R2 uploads failing silently
+
+**Solution:** Ensure `--remote` flag is used (fixed March 13, 2026):
+```bash
+wrangler r2 object put --remote <bucket>/<key> --file <path>
+```
+
 ### Docker Issues
 
 **Error:** Docker daemon not running
@@ -606,6 +631,27 @@ export DISPLAY=:99
 DATABASE_URL=postgresql://user:pass@host:5432/dbname
 USE_LOCAL_POSTGRES=false
 ```
+
+**Error:** \"Cannot find module @hyperscape/decimation\" in Docker
+
+**Solution:** Workspace symlinks are now restored (March 12, 2026):
+- Verify Dockerfile includes `RUN bun install --production` after COPY steps
+- This restores workspace symlinks that Docker COPY flattens
+- Affects externalized packages: @hyperscape/decimation, @hyperscape/impostors, @hyperscape/physx-js-webidl, @hyperscape/procgen
+
+**Error:** Deployment hangs for 30 minutes on Vast.ai
+
+**Solution:** SSH timeout fixed (March 11, 2026):
+- Background processes (Xvfb, socat) are now disowned to allow SSH to exit cleanly
+- Deployment should complete in ~1 minute
+- Check `scripts/deploy-vast.sh` includes `disown` after background processes
+
+**Error:** Database connection deadlocks after deployment
+
+**Solution:** Orphaned process cleanup added (March 11, 2026):
+- Deployment script now kills ghost bun server processes before starting new deployment
+- Prevents database connection leaks from orphaned processes
+- Check `scripts/deploy-vast.sh` includes `pkill -f "bun.*packages/server"` commands
 
 ## Development
 
