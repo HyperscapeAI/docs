@@ -100,6 +100,10 @@ bun run assets:deploy
 bun run cdn:verify
 ```
 
+<Info>
+The assets repository is deployed to Railway as a static file server with Caddy, which automatically adds CORS headers (`Access-Control-Allow-Origin: *`) to enable cross-origin asset loading from the game client.
+</Info>
+
 The `ensure-assets.mjs` script detects whether you have full assets (models, audio, textures) or just manifests:
 
 ```typescript
