@@ -28,7 +28,7 @@ This is a hard requirement. DO NOT:
 - **NVIDIA GPU with Display Driver REQUIRED**: Must have `gpu_display_active=true` on Vast.ai
 - **Display Driver vs Compute**: WebGPU requires GPU display driver support, not just compute access
 - Must run non-headless with Xorg or Xvfb (WebGPU requires window context)
-- **Chrome Canary Channel**: Use `google-chrome-unstable` (Chrome Canary) for WebGPU streaming on Linux NVIDIA (best stability and WebGPU support)
+- **Chrome Beta Channel**: Use `google-chrome-beta` (Chrome Beta) for WebGPU streaming on Linux NVIDIA (best stability and WebGPU support)
 - **ANGLE Backend**: Use Vulkan ANGLE backend (`--use-angle=vulkan`) on Linux NVIDIA for WebGPU stability
 - **Xvfb Virtual Display**: `scripts/deploy-vast.sh` starts Xvfb before PM2 to ensure DISPLAY is available
 - **PM2 Environment**: `ecosystem.config.cjs` explicitly forwards `DISPLAY=:99` and `DATABASE_URL` through PM2
