@@ -103,6 +103,29 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Manifest Embedding in Docker (March 13, 2026)
+
+**Change** (Commit efa8021): Server Docker image now embeds manifests to bypass CDN and fix canyon biome errors.
+
+**Problem**: Server was fetching manifests from CDN at runtime, which could fail if CDN was unavailable or manifests were stale. Canyon biome was failing due to missing manifest data.
+
+**Fix**: 
+- Manifests are now embedded directly in the Docker image at build time
+- Server reads manifests from local filesystem instead of CDN
+- Ensures manifests are always available and match the deployed code version
+
+**Impact**: More reliable server startup, eliminates CDN dependency for manifests, fixes canyon biome loading errors.
+
+### Workbox Service Worker Fix (March 13, 2026)
+
+**Change** (Commit 9312a96): Inline workbox runtime to prevent MIME type errors on PWA update.
+
+**Problem**: Service worker was failing to update due to MIME type errors when loading workbox runtime from external CDN.
+
+**Fix**: Workbox runtime is now inlined directly into the service worker bundle instead of being loaded from external source.
+
+**Impact**: Eliminates service worker update failures, more reliable PWA updates, better offline support.
+
 ### Tree Shader Lighting Fix (March 12, 2026)
 
 **Change** (PR #1022, Commits c9eaaae, f5fe2b5, e53eab9): Fixed tree lighting to use vertex sphere normals instead of normal maps.
