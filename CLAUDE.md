@@ -1175,10 +1175,11 @@ See [Port Allocation](#port-allocation) section for full port list.
 
 **WebGPU initialization fails**:
 - Verify `gpu_display_active=true` on Vast.ai instance
-- Check Chrome Beta is installed: `google-chrome-beta --version`
+- Check Chrome Canary is installed: `google-chrome-unstable --version` (required as of March 13, 2026)
 - Verify ANGLE backend: `STREAM_CAPTURE_ANGLE=vulkan` on Linux NVIDIA
 - Check Xvfb is running: `ps aux | grep Xvfb`
 - Verify DISPLAY environment variable: `echo $DISPLAY` (should be `:99`)
+- Verify curl health checks have `--max-time 10` timeout
 
 **Orphaned processes after deployment**:
 - Check PM2 logs: `pm2 logs hyperscape-duel`
