@@ -583,9 +583,10 @@ await this.publishAcrossTargets(existing, "RESOLVE");
 - **Physics Null Guards**: Added null checks in `RigidBody.ts` and `Collider.ts` for stream mode viewports where physics system is removed
 - **Autonomous Behavior**: Re-enabled mining, chopping, fishing for duel bot agents between duels (was suppressed)
 - **Post-Duel Roaming**: Relaxed restore position from 120-unit lobby radius to 2000-unit world boundary
-- **Model Provider Diversity**: Switched from ElizaCloud to direct Anthropic/Groq providers
+- **Model Provider Diversity**: Switched from ElizaCloud to direct Anthropic/Groq providers (PR #1018)
   - Interleaved provider selection ensures diversity (Anthropic → Groq → Anthropic → Groq...)
-  - Models: Claude Sonnet 4.6, Llama 4 Scout, Claude Opus 4.6, Llama 4 Maverick, Claude Haiku 4.5, etc.
+  - Models: Claude Sonnet 4.6, Llama 4 Scout, Claude Opus 4.6, Llama 4 Maverick, Claude Haiku 4.5, Llama 3.3 70B, Kimi K2, Qwen 3 30B
+  - Updated `@elizaos/plugin-elizacloud` to `alpha` tag for compatibility
 - **Bank State Request**: Request bank state on player spawn so goal planner has item data
 
 **Code Changes**:
