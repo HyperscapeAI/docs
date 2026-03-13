@@ -689,10 +689,18 @@ if (error && typeof error === "object" && "logs" in error) {
 - Fixed cyclic dependencies and port conflicts
 - Fixed biome config loading in tests
 
+**Test Mock Refactoring** (PR #1019):
+- **DuelBot.test.ts**: Replaced `vi.hoisted()` + `vi.mock()` with `vi.spyOn()` pattern to avoid Bun hoisting issues
+- **DuelMatchmaker.test.ts**: Removed 60-line `MockDuelBot` class, now uses real `DuelBot` (aligns with "NO MOCKS" philosophy)
+- **EquipmentVisualSystem.test.ts**: Changed to `vi.spyOn()` with fallback to real `getItem()` data
+- **MobRightClickAttack.test.ts**: Added proper window mock cleanup with try/finally guards
+- **GravestoneLootSystem.test.ts**: Namespaced test items with `grave_` prefix to avoid registry collisions
+
 **Testing Strategy**:
 - WebGPU-dependent packages (`impostor`, `client`) require local testing with GPU-enabled browsers
 - Headless CI focuses on server-side logic, data processing, and non-rendering systems
 - Full integration tests run locally or on GPU-enabled CI runners (not GitHub Actions)
+- Prefer real implementations over mocks (use `vi.spyOn()` with fallbacks instead of full mocks)
 
 ### Dependency Updates (March 10, 2026)
 
