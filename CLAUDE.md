@@ -429,9 +429,8 @@ Each tree type can have biome-specific placement constraints:
 - `avoidsWaterBelow` - Reject placement if below this height above water threshold (meters)
 - `maxSlope` - Maximum terrain slope for placement (gradient, e.g., 1.5 = 56° max slope)
 
-**Example Biome Config**:
+**Example Biome Config** (from `packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts`):
 ```typescript
-// packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts
 const FOREST_TREE_CONFIG: BiomeTreeConfig = {
   enabled: true,
   trees: {
@@ -474,6 +473,21 @@ const CANYON_TREE_CONFIG: BiomeTreeConfig = {
   clustering: false,
   scaleVariation: [0.7, 1.3],
   maxSlope: 2.0,
+};
+
+const TUNDRA_TREE_CONFIG: BiomeTreeConfig = {
+  enabled: true,
+  trees: {
+    [TreeId.WindPine]: { weight: 40, minHeight: 15 },
+    [TreeId.Fir]: { weight: 30, minHeight: 10 },
+    [TreeId.Pine]: { weight: 25, minHeight: 8 },
+    [TreeId.Birch]: { weight: 10 },
+  },
+  density: 10,
+  minSpacing: 12,
+  clustering: false,
+  scaleVariation: [0.6, 1.0],
+  maxSlope: 1.5,
 };
 ```
 
