@@ -68,14 +68,14 @@ USE_LOCAL_POSTGRES=false
 
 **Streaming Configuration (Optional)**
 ```env
-# Streaming capture mode (default: mediarecorder)
-STREAM_CAPTURE_MODE=mediarecorder
+# Streaming capture mode (default: cdp)
+STREAM_CAPTURE_MODE=cdp
 
-# Chrome channel (default: chrome-beta)
-STREAM_CAPTURE_CHANNEL=chrome-beta
+# Chrome channel (default: chrome-canary for Linux, as of March 13, 2026)
+STREAM_CAPTURE_CHANNEL=chrome-canary
 
-# ANGLE backend (default: default)
-STREAM_CAPTURE_ANGLE=default
+# ANGLE backend (default: vulkan for Linux NVIDIA)
+STREAM_CAPTURE_ANGLE=vulkan
 
 # Stream keys (auto-detected destinations)
 TWITCH_STREAM_KEY=live_123456789_abcdefghij
