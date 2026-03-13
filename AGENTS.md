@@ -103,6 +103,176 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Docker Workspace Symlinks Fix (March 12, 2026)
+
+**Change** (Commit 7f1af94): Added `bun install --production` in Docker runtime stage to restore workspace symlinks.
+
+**Problem**: Docker COPY flattens workspace symlinks in `node_modules`, breaking runtime module resolution for externalized workspace packages (`@hyperscape/decimation`, `@hyperscape/impostors`, `@hyperscape/physx-js-webidl`, `@hyperscape/procgen`). The server's `framework.js` externalizes these packages, expecting them to be resolvable at runtime.
+
+**Fix**: Added `bun install --production` in the Docker runtime stage after COPY to restore the workspace symlinks.
+
+**Dockerfile Changes**:
+```dockerfile
+# Runtime stage
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+
+# Restore workspace symlinks that COPY flattened
+RUN bun install --production
+```
+
+**Impact**: Server can now resolve externalized workspace packages at runtime in Docker, fixes module resolution errors in production deployments.
+
+### Model Provider Diversity (March 12, 2026)
+
+**Change** (PR #1018, Commit 2751b26): Switched from ElizaCloud to direct Anthropic/Groq providers with interleaved selection.
+
+**Problem**: All agents were using ElizaCloud as a proxy, reducing model diversity and creating a single point of failure.
+
+**Solution**: 
+- Direct integration with Anthropic and Groq providers
+- Interleaved provider selection ensures diversity (Anthropic → Groq → Anthropic → Groq...)
+- Updated `@elizaos/plugin-elizacloud` to `alpha` tag for compatibility
+
+**Model Lineup** (`packages/server/src/eliza/ModelAgentSpawner.ts`):
+```typescript
+export const MODEL_AGENTS: ModelProviderConfig[] = [
+  { provider: "anthropic", model: "claude-sonnet-4-6", displayName: "Claude Sonnet 4.6" },
+  { provider: "groq", model: "meta-llama/llama-4-scout-17b-16e-instruct", displayName: "Llama 4 Scout" },
+  { provider: "anthropic", model: "claude-opus-4-6", displayName: "Claude Opus 4.6" },
+  { provider: "groq", model: "meta-llama/llama-4-maverick-17b-128e-instruct", displayName: "Llama 4 Maverick" },
+  { provider: "anthropic", model: "claude-haiku-4-5-20251001", displayName: "Claude Haiku 4.5" },
+  { provider: "groq", model: "llama-3.3-70b-versatile", displayName: "Llama 3.3 70B" },
+  { provider: "anthropic", model: "claude-opus-4-20250514", displayName: "Claude Opus 4" },
+  { provider: "groq", model: "moonshotai/kimi-k2-instruct", displayName: "Kimi K2" },
+  { provider: "anthropic", model: "claude-sonnet-4-20250514", displayName: "Claude Sonnet 4" },
+  { provider: "groq", model: "qwen/qwen3-32b", displayName: "Qwen 3 30B" },
+];
+```
+
+**Impact**: Better model diversity, reduced dependency on single provider, more resilient agent spawning.
+
+### Procgen Circular Dependency Resolution (March 12, 2026)
+
+**Change** (PR #1018, Commit 6295345): Resolved circular dependency between `@hyperscape/shared` and `@hyperscape/procgen`.
+
+**Problem**: `procgen` imported `TileCoord` type from `shared`, while `shared` imported procgen for terrain generation, creating a circular dependency that prevented clean builds.
+
+**Fix**: Defined `TileCoord` interface locally in `packages/procgen/src/building/viewer/index.ts`:
+```typescript
+// packages/procgen/src/building/viewer/index.ts
+export interface TileCoord {
+  x: number;
+  z: number;
+}
+```
+
+**Files Changed**:
+- `packages/procgen/src/building/viewer/index.ts` - Added local TileCoord definition
+- `packages/procgen/src/building/viewer/BuildingViewer.tsx` - Import from local index instead of shared
+- `packages/procgen/src/building/viewer/TownViewer.tsx` - Import from local index instead of shared
+
+**Impact**: Cleaner package boundaries, procgen can now build without TypeScript errors, eliminates circular dependency warnings.
+
+### Biome System Refactoring (March 12, 2026)
+
+**Change** (PR #1018, Commits 2751b26, dd8d6ad): Refactored biome system to remove hardcoded biome definitions and support explicit biome centers.
+
+**Key Changes**:
+- **Removed Hardcoded Biomes**: Deleted `DEFAULT_BIOMES` and `BIOME_IDS` constants from `BiomeSystem.ts`
+- **Dynamic Biome IDs**: Biome IDs are now auto-assigned at runtime based on provided biome definitions
+- **Explicit Centers Support**: Added `explicitCenters` option to `BiomeConfig` for pre-computed biome placement
+- **Polygon Center Helper**: Added `BiomeSystem.computePolygonCenters()` for regular polygon biome layouts
+- **Fallback Handling**: Improved fallback logic when no biome definitions are provided
+
+**API Changes**:
+```typescript
+// Old (hardcoded biomes)
+const biomeSystem = new BiomeSystem(seed, worldSize);
+
+// New (explicit biome definitions required)
+const biomeSystem = new BiomeSystem(seed, worldSize, {}, {
+  forest: { id: "forest", name: "Forest", color: 0x2f7d32, ... },
+  canyon: { id: "canyon", name: "Canyon", color: 0xdaa520, ... },
+  tundra: { id: "tundra", name: "Tundra", color: 0xb0c4de, ... },
+});
+
+// With explicit centers (skips grid-jitter placement)
+const centers = BiomeSystem.computePolygonCenters(
+  ["forest", "canyon", "tundra"],
+  5000,  // radius
+  3000   // influence
+);
+const biomeSystem = new BiomeSystem(seed, worldSize, { explicitCenters: centers }, biomes);
+```
+
+**Impact**: More flexible biome system, supports custom biome definitions, cleaner API for terrain generation.
+
+### Tree Placement Slope Rejection (March 12, 2026)
+
+**Change** (PR #1018, Commit dd8d6ad): Added slope-based tree placement rejection to prevent trees on steep terrain.
+
+**Feature**: Trees are now rejected on steep slopes using central-difference gradient estimation.
+
+**Configuration** (`packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts`):
+```typescript
+const FOREST_TREE_CONFIG: BiomeTreeConfig = {
+  // ...
+  maxSlope: 1.5,  // Gradient threshold (1.5 ≈ 56° max slope)
+};
+
+const CANYON_TREE_CONFIG: BiomeTreeConfig = {
+  // ...
+  maxSlope: 2.0,  // Canyon allows steeper placement
+};
+```
+
+**Implementation**:
+- Estimates terrain gradient at each candidate position using 4 height samples (central differences)
+- Skips placement when slope exceeds `maxSlope` threshold
+- Efficient: O(4) height queries per candidate position
+
+**Impact**: More realistic tree placement, no trees on cliffs or steep hillsides, better visual quality.
+
+### Tree Configuration Unification (March 12, 2026)
+
+**Change** (PR #1018, Commit 6295345): Merged `distribution` and `placements` into single `trees` map in `BiomeTreeConfig`.
+
+**Problem**: Tree spawn weights and placement rules were defined in separate maps, causing duplication and maintenance overhead.
+
+**Fix**: Combined into unified `TreeSpawnConfig` per tree type:
+```typescript
+// Old (separate maps)
+const FOREST_TREE_CONFIG = {
+  distribution: {
+    [TreeId.Oak]: 20,
+    [TreeId.Maple]: 40,
+  },
+  placements: {
+    [TreeId.Oak]: { minHeight: 0, maxHeight: 30 },
+    [TreeId.Maple]: { minHeight: 0, maxHeight: 30 },
+  },
+};
+
+// New (unified)
+const FOREST_TREE_CONFIG = {
+  trees: {
+    [TreeId.Oak]: { 
+      weight: 20, 
+      minHeight: 0, 
+      maxHeight: 30 
+    },
+    [TreeId.Maple]: { 
+      weight: 40, 
+      minHeight: 0, 
+      maxHeight: 30 
+    },
+  },
+};
+```
+
+**Impact**: Cleaner API, eliminates duplicate tree definitions, easier to maintain biome configs.
+
 ### Wrangler R2 Deployment Fix (March 13, 2026)
 
 **Change** (Commit 94e3a1d): Added `--remote` flag to Wrangler R2 object put command in Cloudflare deploy action.
