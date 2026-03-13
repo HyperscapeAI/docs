@@ -222,6 +222,41 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 
 ## Recent Major Features (March 2026)
 
+### CDN Cache Busting & Manifest Reliability (March 13, 2026)
+
+**Change** (Commit db6581f): Added cache busting to CDN requests and manifest uploads to prevent stale asset issues.
+
+**Problem**: Cloudflare R2 CDN was serving stale manifests and assets even after new versions were uploaded, causing clients to load outdated game data (items, NPCs, terrain configs, etc.). This was particularly problematic for canyon biome which relies on up-to-date manifest data.
+
+**Solution**:
+```typescript
+// Client-side cache busting (packages/shared/src/data/DataManager.ts)
+const cacheBuster = `?v=${Date.now()}`;
+const manifestUrl = `${CDN_URL}/manifests/${filename}${cacheBuster}`;
+
+// Server-side cache busting (scripts/upload-to-r2.sh)
+aws s3 cp "manifests/${file}" "s3://${BUCKET}/manifests/${file}?v=$(date +%s)" \
+  --endpoint-url "${ENDPOINT}" \
+  --content-type "application/json"
+```
+
+**Deployment Workflow Improvements**:
+- **Prevent Submodule Overwrite**: `scripts/upload-to-r2.sh` now skips `assets/manifests` directory during upload
+- **Ensure Manifests Exist**: GitHub Actions runs `ensure-assets.mjs` before R2 upload
+- **Removed Broken CORS Config**: R2 CORS is now configured via Cloudflare dashboard (removed failing CLI step)
+
+**Files Changed**:
+- `packages/shared/src/data/DataManager.ts` - Client-side cache busting
+- `scripts/upload-to-r2.sh` - Server-side cache busting and submodule skip
+- `.github/workflows/deploy-r2.yml` - Added ensure-assets step
+- `scripts/deploy-vast.sh` - Force fresh manifest fetch on deployment
+
+**Impact**: 
+- Eliminates stale manifest issues across deployments
+- Ensures clients always fetch latest game data
+- Prevents canyon biome errors from outdated manifests
+- No manual CDN cache purging required
+
 ### Manifest Embedding in Docker (March 13, 2026)
 
 **Change** (Commit efa8021): Server Docker image now embeds manifests to bypass CDN and fix canyon biome errors.
