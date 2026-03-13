@@ -28,6 +28,12 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 ## Recent Updates (March 2026)
 
+### PM2 Log Tail Fix for Deployment (March 13, 2026)
+- **Change**: Replaced hanging `pm2 logs` command with direct `tail` for log dumping in deployment script
+- **Problem**: `pm2 logs` command was hanging indefinitely during deployment error handling, causing GitHub Actions to timeout after 30 minutes
+- **Fix**: Now uses direct OS-level log file access (`tail -n 10000 /root/.pm2/logs/hyperscape-duel-error.log`) for immediate log retrieval
+- **Impact**: Deployment failures now exit immediately with full error logs, no more 30-minute SSH session hangs, faster GitHub Actions workflows on failures
+
 ### Chrome Beta for Linux WebGPU Support (March 13, 2026)
 - **Change**: Reverted from Chrome Canary back to Chrome Beta for Linux WebGPU streaming support
 - **Problem**: Chrome Canary was experiencing instability issues on Linux NVIDIA GPUs. Chrome Beta provides better stability for production streaming
