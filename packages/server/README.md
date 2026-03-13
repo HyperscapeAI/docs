@@ -28,7 +28,7 @@ See `FIXES-COMPLETE.md` for detailed migration changelog.
 - **LiveKit Voice** - Optional voice chat integration
 - **RTMP Streaming** - Multi-platform streaming (Twitch, Kick, YouTube) with MediaRecorder capture
 - **Duel Arena Oracle** - Verifiable duel outcome publishing to EVM and Solana
-- **AI Agents** - ElizaOS integration with 13 frontier models via ElizaCloud
+- **AI Agents** - ElizaOS integration with 10 frontier models via direct Anthropic/Groq providers (interleaved selection)
 
 ## Quick Start
 
