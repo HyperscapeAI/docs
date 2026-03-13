@@ -401,20 +401,48 @@ Terrain generation now uses biome-specific parameters:
 **Example Biome Config**:
 ```typescript
 // packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts
-export const FOREST_TREE_CONFIG: BiomeTreeConfig = {
-  density: 0.15,
-  minSpacing: 12,
-  maxSlope: 1.5,
+const FOREST_TREE_CONFIG: BiomeTreeConfig = {
+  enabled: true,
   trees: {
-    [TreeId.OAK]: {
-      spawnWeight: 3,
-      placement: { minHeight: 0, maxHeight: 100 }
+    [TreeId.Knotwood]: { weight: 40, maxHeight: 30 },
+    [TreeId.Oak]: { weight: 20, maxHeight: 30 },
+    [TreeId.Birch]: { weight: 20, maxHeight: 30 },
+    [TreeId.Maple]: { weight: 40, maxHeight: 30 },
+    [TreeId.Fir]: { weight: 15, maxHeight: 30 },
+    [TreeId.Pine]: { weight: 15, maxHeight: 30 },
+    [TreeId.ChinaPine]: { weight: 15, minHeight: 30, maxHeight: 60 },
+    [TreeId.Bamboo]: { weight: 15, minHeight: 35 },
+  },
+  density: 15,
+  minSpacing: 12,
+  clustering: false,
+  scaleVariation: [0.8, 1.2],
+  maxSlope: 1.5,
+};
+
+const CANYON_TREE_CONFIG: BiomeTreeConfig = {
+  enabled: true,
+  trees: {
+    [TreeId.Cactus]: { weight: 20, avoidsWaterBelow: 3 },
+    [TreeId.Dead]: { weight: 20, minHeight: 20 },
+    [TreeId.Palm]: {
+      weight: 20,
+      waterAffinity: 0.3,
+      waterProximityHeight: 9,
+      maxHeight: 15,
     },
-    [TreeId.WILLOW]: {
-      spawnWeight: 2,
-      placement: { minHeight: 0, maxHeight: 50, waterAffinity: 0.8 }
-    }
-  }
+    [TreeId.Coconut]: {
+      weight: 10,
+      waterAffinity: 0.6,
+      waterProximityHeight: 9,
+      maxHeight: 15,
+    },
+  },
+  density: 15,
+  minSpacing: 18,
+  clustering: false,
+  scaleVariation: [0.7, 1.3],
+  maxSlope: 2.0,
 };
 ```
 
