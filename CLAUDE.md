@@ -1119,6 +1119,29 @@ See [Port Allocation](#port-allocation) section for full port list.
 - **Client**: Hard refresh browser (Cmd+Shift+R / Ctrl+Shift+R)
 - **Server**: Manifests embedded in Docker - rebuild image: `docker build -f Dockerfile.server .`
 - **Service Worker**: Workbox runtime is inlined (commit 9312a96) - PWA updates are now reliable
+- **R2 Upload**: Wrangler now uses `--remote` flag to target remote bucket (commit 94e3a1d)
+
+### Solana Oracle Type Errors
+
+**Symptom**: TypeScript errors in Solana oracle IDL imports
+
+**Cause**: IDL types were reformatted from JSON-style to TypeScript-style (March 13, 2026)
+
+**Fix**: Update imports to use new TypeScript-style object literals:
+```typescript
+// Old (JSON-style - no longer valid)
+const idl = FIGHT_ORACLE_IDL;
+idl["address"]  // Error: Element implicitly has 'any' type
+
+// New (TypeScript-style)
+const idl = FIGHT_ORACLE_IDL;
+idl.address  // ✅ Properly typed
+```
+
+**Files Changed**:
+- `packages/duel-oracle-solana/src/generated/fightOracleIdl.ts`
+- `packages/duel-oracle-solana/src/generated/fightOracleTypes.ts`
+- `packages/duel-oracle-solana/src/generated/fight_oracle.ts`
 
 ## Additional Resources
 
