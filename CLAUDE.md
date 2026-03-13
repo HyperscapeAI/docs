@@ -665,7 +665,12 @@ if (error && typeof error === "object" && "logs" in error) {
 
 **Impact**: Significantly improved debuggability for Solana oracle failures, clearer error messages for insufficient SOL and other transaction failures.
 
-### Deployment Fixes (March 11-12, 2026)
+### Deployment Fixes (March 11-13, 2026)
+
+**Docker Workspace Symlinks** (Commit 7f1af94):
+- **Problem**: Docker COPY flattens workspace symlinks, breaking runtime module resolution for externalized packages
+- **Fix**: Added `bun install --production` in Docker runtime stage to restore symlinks
+- **Impact**: Server can resolve @hyperscape/* workspace packages in production Docker deployments
 
 **SSH Timeout Fix** (Commit a65a308):
 - **Problem**: Background processes (Xvfb, socat) keeping SSH session open, causing 30-minute hangs
