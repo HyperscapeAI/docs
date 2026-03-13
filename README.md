@@ -482,14 +482,15 @@ Stream destinations are auto-detected from available keys. No manual configurati
 ### Streaming Architecture
 
 - **Capture Mode**: CDP (Chrome DevTools Protocol) for reliable frame capture (default)
-- **Browser**: Chrome Beta with default ANGLE backend (`--use-angle=default`) for automatic best-backend selection
+- **Browser**: Chrome Canary (`google-chrome-unstable`) with Vulkan ANGLE backend (`--use-angle=vulkan`) on Linux NVIDIA for optimal WebGPU stability (as of March 13, 2026)
 - **Virtual Display**: Xvfb on Linux for headless GPU rendering (DISPLAY=:99)
 - **Entry Points**: Dedicated `stream.html` for optimized streaming capture (separate bundle)
 - **Pipeline**: Playwright → CDP → FFmpeg (system preferred) → RTMP
 - **FFmpeg Resolution**: `/usr/bin/ffmpeg` → `/usr/local/bin/ffmpeg` → PATH → ffmpeg-static (avoids segfaults)
-- **Encoding**: x264 with zerolatency tune, GOP=30 (1s segments at 30fps)
+- **Encoding**: x264 with zerolatency tune, GOP=60 (2s segments at 30fps, per Twitch/YouTube recommendations)
 - **Physics**: Client-side PhysX skipped for streaming/spectator viewports (memory optimization)
 - **Playwright**: Blocks `--enable-unsafe-swiftshader` injection to prevent CPU software rendering
+- **Health Checks**: All curl commands use `--max-time 10` timeout to prevent indefinite hangs
 
 ### Environment Variables
 
