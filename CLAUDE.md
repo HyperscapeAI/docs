@@ -1131,7 +1131,7 @@ See [Port Allocation](#port-allocation) section for full port list.
 
 **Symptom**: Seeing outdated items, NPCs, or terrain configs after deployment
 
-**Cause**: CDN caching or stale service worker
+**Cause**: CDN caching, stale service worker, or Docker build cache
 
 **Fix** (as of March 13, 2026):
 - **Automatic**: Cache busting is now applied to all manifest requests (commit db6581f)
@@ -1139,6 +1139,8 @@ See [Port Allocation](#port-allocation) section for full port list.
 - **Server**: Manifests embedded in Docker - rebuild image: `docker build -f Dockerfile.server .`
 - **Service Worker**: Workbox runtime is inlined (commit 9312a96) - PWA updates are now reliable
 - **R2 Upload**: Wrangler now uses `--remote` flag to target remote bucket (commit 94e3a1d)
+- **Vast.ai**: Deployment script forcefully removes cached assets folder before install (commit ef42c3d)
+- **Docker Cache**: Dockerfile now removes assets folder before `ensure-assets.mjs` to prevent stale cache (commits a52294, 207fd8a)
 
 ### Solana Oracle Type Errors
 
