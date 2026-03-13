@@ -36,7 +36,7 @@ See `FIXES-COMPLETE.md` for detailed migration changelog.
 
 - **Bun** (recommended) or Node.js 22+
 - **Docker Desktop** (for local PostgreSQL) OR external PostgreSQL instance
-- **Chrome Beta** (for streaming capture) - `google-chrome-beta`
+- **Chrome Canary** (for streaming capture on Linux) - `google-chrome-unstable` (as of March 13, 2026)
 - **FFmpeg** (for RTMP streaming) - `apt install ffmpeg` or `brew install ffmpeg`
 
 ### Installation
