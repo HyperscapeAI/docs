@@ -549,6 +549,8 @@ If you're seeing outdated items, NPCs, or terrain configs after a deployment, th
 - **Client**: Hard refresh your browser (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows/Linux)
 - **Server**: Manifests are now embedded in Docker images, so rebuild and redeploy: `docker build -f Dockerfile.server .`
 - **CDN**: Manifests are uploaded with cache-busting timestamps, no manual purging needed
+- **Vast.ai**: Deployment script now forcefully removes cached assets folder before install to fetch latest manifests
+- **R2 Upload**: Wrangler now uses `--remote` flag to ensure uploads target the remote Cloudflare bucket
 
 **Database schema errors or stale data after pulling updates:**
 Migrations only run once, so pulling new code won't fix an outdated database schema. Reset to fresh:
