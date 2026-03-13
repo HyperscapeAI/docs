@@ -522,6 +522,12 @@ The CDN container needs to be running. It starts automatically with `bun run dev
 bun run cdn:up
 ```
 
+**Stale manifests / outdated game data:**
+If you're seeing outdated items, NPCs, or terrain configs after a deployment, this is likely due to CDN caching. As of March 2026, cache busting is automatically applied to all manifest requests. If you're still seeing stale data:
+- **Client**: Hard refresh your browser (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows/Linux)
+- **Server**: Manifests are now embedded in Docker images, so rebuild and redeploy: `docker build -f Dockerfile.server .`
+- **CDN**: Manifests are uploaded with cache-busting timestamps, no manual purging needed
+
 **Database schema errors or stale data after pulling updates:**
 Migrations only run once, so pulling new code won't fix an outdated database schema. Reset to fresh:
 > ⚠️ **Warning:** This will delete all local data (characters, inventory, progress).
