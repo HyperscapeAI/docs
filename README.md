@@ -534,7 +534,7 @@ See `scripts/deploy-vast.sh` for full deployment automation.
 - Verify GPU display driver is active (Vast.ai: `gpu_display_active=true`)
 
 **Black screen / frozen stream:**
-- Check Chrome Canary is installed: `google-chrome-unstable --version` (Linux, required as of March 13, 2026)
+- Check Chrome Beta is installed: `google-chrome-beta --version` (Linux, required as of March 13, 2026)
 - Verify Xvfb is running: `ps aux | grep Xvfb`
 - Ensure `DISPLAY=:99` is set in environment
 - Check Playwright isn't injecting `--enable-unsafe-swiftshader` (blocks WebGPU)
