@@ -264,6 +264,33 @@ curl -fsS --max-time 10 http://127.0.0.1:5555/health > /dev/null 2>&1
 
 **Impact**: Deployment scripts fail fast when services are unresponsive, prevents indefinite hangs during health checks.
 
+### SSH Keepalive & Maintenance Timeout (March 13, 2026)
+
+**Change** (Commit fb0d154): Added strict SSH keepalive settings and reduced maintenance mode timeout for faster deployments.
+
+**SSH Keepalive Configuration**:
+- Added `ServerAliveInterval=15` and `ServerAliveCountMax=3` to SSH commands in `.github/workflows/deploy-vast.yml`
+- Prevents SSH connection drops during long-running maintenance mode operations
+- SSH will detect dead connections within 45 seconds (15s × 3 retries)
+
+**Maintenance Mode Timeout**:
+- Reduced timeout from 300 seconds (5 minutes) to 30 seconds
+- Reduced curl timeout from 600 seconds to 30 seconds
+- Faster deployment cycles when waiting for current duel to complete
+
+**Configuration**:
+```bash
+# SSH keepalive flags
+ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=3
+
+# Maintenance mode API call
+curl -X POST 'http://127.0.0.1:5555/admin/maintenance/enter' \
+  -d '{"reason":"deployment","timeoutMs":30000}' \
+  --max-time 30
+```
+
+**Impact**: More reliable SSH connections during deployments, faster deployment cycles, prevents connection drops during maintenance mode.
+
 ### OSRS-Accurate Movement Rotation (March 13, 2026)
 
 **Change** (Commit 24ed839): Fixed player rotation to ignore combat target rotation while moving, restoring OSRS-accurate movement behavior.
