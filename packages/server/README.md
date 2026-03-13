@@ -554,10 +554,18 @@ Should be at version 15 or higher. If not, restart server to run migrations.
 
 **Error:** Stream freezing or stalling under Xvfb + WebGPU
 
-**Solution:** Use MediaRecorder mode (default since March 2026):
+**Solution:** Use CDP mode (default since March 2026):
 ```env
-STREAM_CAPTURE_MODE=mediarecorder
+STREAM_CAPTURE_MODE=cdp
 ```
+
+**Error:** Stream buffering or viewer lag
+
+**Solution:** Verify frame pacing configuration (fixed March 11, 2026):
+- Xvfb runs at 30fps (no vsync)
+- `everyNthFrame: 1` in CDP screencast config (no frame skipping)
+- Output resolution matches capture viewport (1280x720)
+- GOP size is 60 frames (2s at 30fps) per Twitch/YouTube recommendations
 
 **Error:** "cannot open display"
 
