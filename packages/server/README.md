@@ -666,20 +666,26 @@ For development, disable browser cache or use incognito mode.
 
 ### Streaming Performance
 
-**MediaRecorder Mode** (default):
-- Lower CPU usage than CDP screencast
-- More stable under Xvfb + WebGPU
-- Direct canvas capture without DevTools overhead
+**CDP Mode** (default as of March 2026):
+- Chrome DevTools Protocol for reliable frame capture
+- Better frame pacing control (30fps enforcement)
+- More predictable latency
 
-**Chrome Beta**:
-- Better stability than Unstable/Canary channels
-- Reliable WebGPU support
-- Fewer rendering artifacts
+**Chrome Canary** (Linux, as of March 13, 2026):
+- Best WebGPU stability on Linux NVIDIA GPUs
+- Fewer rendering artifacts than Beta/Stable channels
+- Required for production streaming on Vast.ai
 
-**ANGLE Default Backend**:
-- Auto-selects best backend (Vulkan, OpenGL, D3D11)
-- Better compatibility across GPU drivers
-- Reduces crashes from incompatible Vulkan drivers
+**Vulkan ANGLE Backend** (Linux NVIDIA):
+- Only ANGLE backend that works reliably with WebGPU on Linux NVIDIA
+- ANGLE OpenGL ES (`--use-angle=gl`) fails with "Invalid visual ID"
+- Native Vulkan (`--use-vulkan`) crashes
+- Use `STREAM_CAPTURE_ANGLE=vulkan` for Linux NVIDIA deployments
+
+**System FFmpeg**:
+- Preferred over ffmpeg-static to avoid segfaults
+- Resolution order: `/usr/bin/ffmpeg` → `/usr/local/bin/ffmpeg` → PATH → ffmpeg-static
+- Install via package manager: `apt install ffmpeg` (Linux) or `brew install ffmpeg` (macOS)
 
 ## Security
 
