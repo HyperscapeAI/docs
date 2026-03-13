@@ -747,6 +747,14 @@ if (error && typeof error === "object" && "logs" in error) {
 - Full integration tests run locally or on GPU-enabled CI runners (not GitHub Actions)
 - Prefer real implementations over mocks (use `vi.spyOn()` with fallbacks instead of full mocks)
 
+**Test Improvements** (PR #1019):
+- **DuelBot.test.ts**: Replaced `vi.hoisted()` + `vi.mock()` with `vi.spyOn()` to avoid Bun hoisting issues
+- **DuelMatchmaker.test.ts**: Removed 60-line `MockDuelBot` class, now uses real `DuelBot` (aligns with "NO MOCKS" philosophy)
+- **EquipmentVisualSystem.test.ts**: Changed to `vi.spyOn()` with fallback to real `getItem()` data
+- **MobRightClickAttack.test.ts**: Added proper window mock cleanup with try/finally guards
+- **GravestoneLootSystem.test.ts**: Namespaced test items with `grave_` prefix to avoid registry collisions
+- **BiomeSystem Tests**: Updated to use explicit biome definitions instead of hardcoded `DEFAULT_BIOMES`
+
 ### Dependency Updates (March 10, 2026)
 
 **Major Updates**:
