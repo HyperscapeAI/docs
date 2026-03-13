@@ -627,6 +627,37 @@ STREAM_CAPTURE_MODE=cdp          # CDP (default) or webcodecs
 STREAM_CAPTURE_ANGLE=vulkan      # ANGLE backend (vulkan, metal, default)
 ```
 
+### Solana Oracle Error Handling Improvements (March 12, 2026)
+
+**Change** (PR #1019): Enhanced Solana transaction error messages with detailed log extraction.
+
+**Problem**: Solana `SendTransactionError` messages were unhelpful, showing generic "Catch the `SendTransactionError` and call `getLogs()` on it for full details" instead of actual error details.
+
+**Solution**:
+```typescript
+// packages/server/src/oracle/DuelArenaOraclePublisher.ts
+if (error && typeof error === "object" && "logs" in error) {
+  const logs = (error as any).logs;
+  if (Array.isArray(logs)) {
+    // Strip unhelpful boilerplate
+    errorMessage = errorMessage
+      .replace(/Catch the `SendTransactionError`.*$/g, "")
+      .trim();
+    
+    // Append actual transaction logs
+    const logsStr = logs.join("\\n  ");
+    errorMessage = `${errorMessage}\\nTransaction Logs:\\n  ${logsStr}`;
+    
+    // Detect common errors
+    if (logsStr.includes("insufficient lamports")) {
+      errorMessage = `Insufficient SOL to pay for transaction rent or fees.\\n${errorMessage}`;
+    }
+  }
+}
+```
+
+**Impact**: Significantly improved debuggability for Solana oracle failures, clearer error messages for insufficient SOL and other transaction failures.
+
 ### Deployment Fixes (March 11-12, 2026)
 
 **SSH Timeout Fix** (Commit a65a308):
