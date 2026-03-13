@@ -28,6 +28,13 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 ## Recent Updates (March 2026)
 
+### CDN Cache Busting & Manifest Reliability (March 13, 2026)
+- **Cache Busting**: Added timestamp query parameters to all CDN manifest requests to prevent stale asset issues
+- **Manifest Embedding**: Server Docker image now embeds manifests at build time, eliminating CDN dependency for server startup
+- **Workbox Inline Runtime**: Service worker now inlines Workbox runtime to prevent MIME type errors on PWA updates
+- **Deployment Fixes**: Improved manifest upload workflow to prevent submodule overwrites and ensure fresh manifests in production
+- **Impact**: Eliminates stale manifest errors, more reliable deployments, better PWA update experience
+
 ### Tree Shader Lighting Fix (March 12, 2026)
 - **Vertex Sphere Normals**: Fixed tree lighting to use sphere normals baked into vertex attributes instead of normal maps
 - **Night Lighting**: Uniform night dimming maintains consistent light-shadow contrast (~1.35x ratio) across day/night cycle
