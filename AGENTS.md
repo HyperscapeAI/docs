@@ -539,10 +539,14 @@ const CANYON_TREE_CONFIG: BiomeTreeConfig = {
   - `GET /admin/logs` - Fetch recent server logs from in-memory ring buffer
   - `POST /admin/restart` - Restart server process (requires PM2)
 
-**Configuration**:
+**Configuration** (from `ecosystem.config.cjs`):
 ```bash
-# ecosystem.config.cjs
-ORACLE_SETTLEMENT_DELAY_MS=7000  # Delay oracle publish to sync with stream
+ORACLE_SETTLEMENT_DELAY_MS=7000  # Delay oracle publish to sync with stream (default: 7s)
+STREAM_CAPTURE_MODE=cdp          # CDP (Chrome DevTools Protocol) for reliable capture
+STREAM_CAPTURE_CHANNEL=chrome-beta  # Chrome Beta for stability
+STREAM_CAPTURE_ANGLE=vulkan      # Vulkan ANGLE backend on Linux NVIDIA
+STREAM_CAPTURE_WIDTH=1280        # Match capture viewport
+STREAM_CAPTURE_HEIGHT=720
 ```
 
 **Impact**: Zero-downtime deployments, better operational visibility, safer server restarts.
