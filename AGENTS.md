@@ -938,9 +938,23 @@ PUBLIC_CDN_URL=https://assets.hyperscape.club
 - Latest linting rules and TypeScript support
 - Bug fixes and security updates
 
-### Deployment Fixes (March 11, 2026)
+### SSH Keepalive & Maintenance Timeout (March 13, 2026)
 
-**Change** (Commits a65a308, 9e6f5bb): Fixed SSH session timeout and orphaned process deadlocks during Vast.ai deployments.
+**Change** (PR #1028, Commit fb0d154): Added strict SSH keepalive settings and reduced maintenance mode timeout for faster deployments.
+
+**SSH Keepalive Configuration**:
+- Added `ServerAliveInterval=15` and `ServerAliveCountMax=3` to SSH commands in `.github/workflows/deploy-vast.yml`
+- Prevents SSH connection drops during long-running maintenance mode operations
+- SSH will detect dead connections within 45 seconds (15s × 3 retries)
+
+**Maintenance Mode Timeout**:
+- Reduced timeout from 300 seconds (5 minutes) to 30 seconds
+- Reduced curl timeout from 600 seconds to 30 seconds
+- Faster deployment cycles when waiting for current duel to complete
+
+**Configuration**:
+```bash
+# SSH keepalive flags\nssh -o ServerAliveInterval=15 -o ServerAliveCountMax=3\n\n# Maintenance mode API call\ncurl -X POST 'http://127.0.0.1:5555/admin/maintenance/enter' \\\n  -d '{\"reason\":\"deployment\",\"timeoutMs\":30000}' \\\n  --max-time 30\n```\n\n**Impact**: More reliable SSH connections during deployments, faster deployment cycles, prevents connection drops during maintenance mode.\n\n### Deployment Fixes (March 11, 2026)\n\n**Change** (Commits a65a308, 9e6f5bb): Fixed SSH session timeout and orphaned process deadlocks during Vast.ai deployments.
 
 **Problem 1 - SSH Timeout**: Background processes (Xvfb, socat) were keeping SSH session file descriptors open, causing `appleboy/ssh-action` to hang for 30 minutes until `command_timeout` killed it - even though deployment completed in ~1 minute.
 
