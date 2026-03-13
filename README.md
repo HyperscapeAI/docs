@@ -517,7 +517,7 @@ PUBLIC_CDN_URL=https://assets.hyperscape.club
 For production streaming on Vast.ai GPU instances:
 
 1. **GPU Requirements**: NVIDIA GPU with display driver (`gpu_display_active=true`)
-2. **Chrome Canary**: Installed automatically by `scripts/deploy-vast.sh` (as of March 13, 2026, switched from Chrome Beta for better WebGPU stability)
+2. **Chrome Beta**: Installed automatically by `scripts/deploy-vast.sh` (as of March 13, 2026, using Chrome Beta for better production stability)
 3. **Xvfb**: Virtual display started before PM2 processes
 4. **PM2 Environment**: `DISPLAY`, `DATABASE_URL`, and stream keys forwarded automatically
 5. **Auto-Detection**: Database mode and stream destinations detected from environment
