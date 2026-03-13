@@ -343,9 +343,10 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
 
 **Key Optional Features:**
-- **ElizaCloud AI**: Set `ELIZAOS_CLOUD_API_KEY` in server `.env` for access to 13 frontier LLM models (GPT-5, Claude 4.6, Gemini 3.1 Pro, Grok 4, DeepSeek V3.2, Qwen 3 Max, and more)
+- **AI Agents**: Set `ANTHROPIC_API_KEY` and/or `GROQ_API_KEY` in server `.env` for autonomous AI agents (10 frontier models: Claude Sonnet/Opus/Haiku 4.x, Llama 4 Scout/Maverick, Llama 3.3 70B, Kimi K2, Qwen 3 30B)
 - **RTMP Streaming**: Set `TWITCH_STREAM_KEY`, `KICK_STREAM_KEY`, or `YOUTUBE_STREAM_KEY` for multi-platform streaming (auto-detected)
 - **Duel Oracle**: Set `DUEL_ARENA_ORACLE_ENABLED=true` and configure EVM/Solana signers for verifiable duel outcome publishing
+- **Oracle Settlement Delay**: Set `ORACLE_SETTLEMENT_DELAY_MS=7000` to sync oracle publishing with stream latency (default: 7s)
 
 ### Default Ports
 
