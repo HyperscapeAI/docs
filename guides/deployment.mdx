@@ -636,10 +636,11 @@ The `scripts/deploy-vast.sh` script has been significantly enhanced with recent 
 - Prevents `sanitizeRuntimeEnv()` from stripping `DATABASE_URL` in remote mode
 - Ensures secrets persist through git reset operations
 
-**Chrome Beta for Streaming** (Commit 547714e):
-- Switched from `google-chrome-unstable` to `google-chrome-beta`
-- Changed `STREAM_CAPTURE_ANGLE` from `vulkan` to `default`
-- Better stability and compatibility across GPU configurations
+**Chrome Canary for Linux WebGPU Support** (Commit d37bbe3, March 13, 2026):
+- Switched from Chrome Beta to Chrome Canary (`google-chrome-unstable`) for Linux NVIDIA
+- Chrome Beta was experiencing WebGPU initialization failures and rendering artifacts on NVIDIA GPUs
+- Chrome Canary provides better WebGPU stability and support on Linux NVIDIA hardware
+- Uses Vulkan ANGLE backend (`--use-angle=vulkan`) for optimal performance
 
 **Xvfb Display Setup** (Commits 704b955, 294a36c):
 - Starts Xvfb before PM2 to ensure virtual display is available
