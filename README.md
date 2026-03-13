@@ -28,12 +28,12 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 ## Recent Updates (March 2026)
 
-### Chrome Canary for Linux WebGPU Support (March 13, 2026)
-- **Change**: Switched from Chrome Beta to Chrome Canary for Linux WebGPU streaming support
-- **Problem**: Chrome Beta on Linux was experiencing WebGPU initialization failures and rendering artifacts on NVIDIA GPUs with Vulkan ANGLE backend
-- **Fix**: Updated `scripts/deploy-vast.sh` to install `google-chrome-unstable` (Chrome Canary) instead of `google-chrome-beta`
-- **Configuration**: Linux NVIDIA deployments now use Chrome Canary with Vulkan ANGLE backend for optimal WebGPU stability
-- **Impact**: More reliable WebGPU initialization on Linux NVIDIA GPUs, eliminates rendering artifacts, better streaming stability
+### Chrome Beta for Linux WebGPU Support (March 13, 2026)
+- **Change**: Reverted from Chrome Canary back to Chrome Beta for Linux WebGPU streaming support
+- **Problem**: Chrome Canary was experiencing instability issues on Linux NVIDIA GPUs. Chrome Beta provides better stability for production streaming
+- **Fix**: Updated `scripts/deploy-vast.sh` to install `google-chrome-beta` instead of `google-chrome-unstable`
+- **Configuration**: Linux NVIDIA deployments now use Chrome Beta with Vulkan ANGLE backend for optimal WebGPU stability
+- **Impact**: More reliable WebGPU initialization on Linux NVIDIA GPUs, better production stability for streaming
 
 ### Curl Timeout Configuration (March 13, 2026)
 - **Change**: Added `--max-time 10` timeout to all curl health check commands in deployment scripts
