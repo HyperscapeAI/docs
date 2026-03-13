@@ -28,6 +28,24 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 ## Recent Updates (March 2026)
 
+### Docker Workspace Symlinks Fix (March 12, 2026)
+- **Problem**: Docker COPY flattens workspace symlinks in `node_modules`, breaking runtime module resolution for externalized packages
+- **Fix**: Added `bun install --production` in Docker runtime stage to restore workspace symlinks
+- **Impact**: Server can now resolve @hyperscape/* workspace packages in production Docker deployments
+
+### Model Provider Diversity (March 12, 2026)
+- **Change**: Switched from ElizaCloud to direct Anthropic/Groq providers with interleaved selection
+- **Models**: Claude Sonnet 4.6, Llama 4 Scout, Claude Opus 4.6, Llama 4 Maverick, Claude Haiku 4.5, Llama 3.3 70B, Kimi K2, Qwen 3 30B
+- **Impact**: Better model diversity, reduced dependency on single provider, more resilient agent spawning
+
+### Biome System Refactoring (March 12, 2026)
+- **Removed Hardcoded Biomes**: Biome definitions now passed explicitly to `BiomeSystem` constructor
+- **Dynamic Biome IDs**: Auto-assigned at runtime based on provided definitions
+- **Explicit Centers**: Added `explicitCenters` option for pre-computed biome placement
+- **Tree Config Unification**: Merged `distribution` and `placements` into single `trees` map
+- **Slope Rejection**: Trees now rejected on steep slopes (configurable `maxSlope` per biome)
+- **Impact**: More flexible biome system, cleaner API, realistic tree placement
+
 ### CDN Cache Busting & Manifest Reliability (March 13, 2026)
 - **Cache Busting**: Added timestamp query parameters to all CDN manifest requests to prevent stale asset issues
 - **Manifest Embedding**: Server Docker image now embeds manifests at build time, eliminating CDN dependency for server startup
