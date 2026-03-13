@@ -561,8 +561,11 @@ export DISPLAY=:99
 
 **Solution:** Verify GPU display driver is active:
 - Vast.ai: Ensure `gpu_display_active=true` in instance configuration
-- Check Chrome Beta is installed: `google-chrome-beta --version`
-- Verify ANGLE backend: `STREAM_CAPTURE_ANGLE=default` (not vulkan)
+- Check Chrome Canary is installed: `google-chrome-unstable --version` (required as of March 13, 2026)
+- Verify ANGLE backend: `STREAM_CAPTURE_ANGLE=vulkan` on Linux NVIDIA (required for WebGPU stability)
+- Check Xvfb is running: `ps aux | grep Xvfb`
+- Verify DISPLAY environment: `echo $DISPLAY` (should be `:99`)
+- Verify curl health checks have `--max-time 10` timeout to prevent hangs
 
 ### Docker Issues
 
