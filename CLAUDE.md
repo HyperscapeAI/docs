@@ -393,10 +393,40 @@ Terrain generation now uses biome-specific parameters:
 - **Batched Entity Spawning**: Reduces network overhead by batching all entities for a tile into single packet
 
 **Files**:
-- `packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts` - Biome definitions
+- `packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts` - Biome definitions and per-biome tree configs
 - `packages/shared/src/systems/shared/world/TerrainHeightParams.ts` - Landscape feature definitions
 - `packages/shared/src/systems/shared/world/BiomeResourceGenerator.ts` - Resource placement logic
-- `packages/shared/src/constants/TreeTypes.ts` - TreeId enum
+- `packages/shared/src/constants/TreeTypes.ts` - TreeId enum (single source of truth for tree type identifiers)
+
+**TreeId Enum Pattern**:
+All tree types are now defined using the `TreeId` enum instead of magic strings:
+```typescript
+// packages/shared/src/constants/TreeTypes.ts
+export enum TreeId {
+  Oak = "tree_oak",
+  Willow = "tree_willow",
+  Maple = "tree_maple",
+  // ... etc
+}
+
+// Usage in biome configs
+const FOREST_TREE_CONFIG: BiomeTreeConfig = {
+  trees: {
+    [TreeId.Oak]: { weight: 20, maxHeight: 30 },
+    [TreeId.Maple]: { weight: 40, maxHeight: 30 },
+  },
+  // ...
+};
+```
+
+**Tree Placement Rules**:
+Each tree type can have biome-specific placement constraints:
+- `weight` - Relative spawn probability (higher = more common)
+- `minHeight` / `maxHeight` - Elevation constraints (world units)
+- `waterAffinity` - Preference for water-adjacent placement (0-1, where 1 = only spawns near water)
+- `waterProximityHeight` - Max height above water to consider "near water" (meters)
+- `avoidsWaterBelow` - Reject placement if below this height above water threshold (meters)
+- `maxSlope` - Maximum terrain slope for placement (gradient, e.g., 1.5 = 56° max slope)
 
 **Example Biome Config**:
 ```typescript
