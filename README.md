@@ -482,7 +482,7 @@ Stream destinations are auto-detected from available keys. No manual configurati
 ### Streaming Architecture
 
 - **Capture Mode**: CDP (Chrome DevTools Protocol) for reliable frame capture (default)
-- **Browser**: Chrome Canary (`google-chrome-unstable`) with Vulkan ANGLE backend (`--use-angle=vulkan`) on Linux NVIDIA for optimal WebGPU stability (as of March 13, 2026)
+- **Browser**: Chrome Beta (`google-chrome-beta`) with Vulkan ANGLE backend (`--use-angle=vulkan`) on Linux NVIDIA for optimal WebGPU stability (as of March 13, 2026)
 - **Virtual Display**: Xvfb on Linux for headless GPU rendering (DISPLAY=:99)
 - **Entry Points**: Dedicated `stream.html` for optimized streaming capture (separate bundle)
 - **Pipeline**: Playwright → CDP → FFmpeg (system preferred) → RTMP
