@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world.
+Hyperscape is a RuneScape-style MMORPG built on a custom 3D multiplayer engine. The project features a real-time 3D metaverse engine (Hyperscape) in a persistent world with biome-based terrain generation, AI agents powered by ElizaOS, and live streaming capabilities.
 
 ## CRITICAL: Secrets and Private Keys
 
@@ -95,6 +95,7 @@ bun run build:server    # Game server
 bun run dev:shared      # Shared package with watch mode
 bun run dev:client      # Client with Vite HMR
 bun run dev:server      # Server with auto-restart
+bun run dev:ai          # Game + ElizaOS agents
 ```
 
 ### Testing
@@ -158,11 +159,13 @@ packages/
 │   ├── PostgreSQL persistence (connection pool: 20)
 │   ├── LiveKit voice chat integration
 │   ├── Maintenance mode system
-│   └── Admin live controls dashboard
+│   ├── Admin live controls dashboard
+│   └── Duel oracle publishing (EVM + Solana)
 ├── client/              # Web client (Vite + React)
 │   ├── 3D rendering (WebGPU only)
 │   ├── Player controls
-│   └── UI/HUD
+│   ├── UI/HUD
+│   └── Maintenance banner
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation (terrain, trees, rocks, plants)
@@ -172,6 +175,8 @@ packages/
 └── contracts/           # MUD onchain game state (experimental)
 ```
 
+**Note**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
+
 ### Build Dependency Graph
 
 **Critical**: Packages must build in this order due to dependencies:
@@ -180,20 +185,14 @@ packages/
 2. **shared** - Depends on physx-js-webidl
 3. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
 
-> **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
+> **RESOLVED (March 2026): CIRCULAR DEPENDENCY - shared ↔ procgen**
 >
-> There is a circular dependency between `@hyperscape/shared` and `@hyperscape/procgen`.
-> - shared imports procgen for vegetation/terrain generation
-> - procgen imports shared for TileCoord type in viewers
->
-> **Current workaround**: procgen build ignores TypeScript errors.
->
-> **Recommended fix**: Extract shared types to `@hyperscape/types` package:
-> - Create new package with only type definitions (no runtime code)
-> - Both shared and procgen depend on types (no circular dep)
-> - Move TileCoord, Position3D, EntityData to types package
+> The circular dependency between `@hyperscape/shared` and `@hyperscape/procgen` has been resolved.
+> - **Fix**: `TileCoord` interface is now defined locally in `packages/procgen/src/building/viewer/index.ts`
+> - **Impact**: Procgen can now build without TypeScript errors
+> - **Future**: Consider extracting shared types to `@hyperscape/types` package for cleaner boundaries
 
 ### Entity Component System (ECS)
 
@@ -207,7 +206,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -222,6 +221,36 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 - Separation of concerns: core engine vs. game content
 
 ## Recent Major Features (March 2026)
+
+### Manifest Embedding in Docker (March 13, 2026)
+
+**Change** (Commit efa8021): Server Docker image now embeds manifests to bypass CDN and fix canyon biome errors.
+
+**Problem**: Server was fetching manifests from CDN at runtime, which could fail if CDN was unavailable or manifests were stale. Canyon biome was failing due to missing manifest data.
+
+**Fix**: 
+- Manifests are now embedded directly in the Docker image at build time
+- Server reads manifests from local filesystem instead of CDN
+- Ensures manifests are always available and match the deployed code version
+
+**Files Changed**:
+- `Dockerfile.server` - Added COPY step for manifests
+- `packages/server/src/data/DataManager.ts` - Reads from embedded manifests
+
+**Impact**: More reliable server startup, eliminates CDN dependency for manifests, fixes canyon biome loading errors.
+
+### Workbox Service Worker Fix (March 13, 2026)
+
+**Change** (Commit 9312a96): Inline workbox runtime to prevent MIME type errors on PWA update.
+
+**Problem**: Service worker was failing to update due to MIME type errors when loading workbox runtime from external CDN.
+
+**Fix**: Workbox runtime is now inlined directly into the service worker bundle instead of being loaded from external source.
+
+**Files Changed**:
+- `packages/client/vite.config.ts` - Updated Workbox plugin configuration
+
+**Impact**: Eliminates service worker update failures, more reliable PWA updates, better offline support.
 
 ### Tree Shader Lighting Fix (March 12, 2026)
 
@@ -247,9 +276,9 @@ const N = normalize(mul(modelNormalMatrix, normalLocal));
 
 **Impact**: Correct volumetric foliage lighting, consistent tree appearance across day/night cycle.
 
-### Biome Terrain Generation & Quadtree LOD
+### Biome Terrain Generation & Quadtree LOD (March 12, 2026)
 
-**New Systems** (Commits 82a5365, 6c14c8e):
+**Change** (PR #1018): Merged biome-based terrain generation with hierarchical quadtree LOD system.
 
 #### TerrainQuadTree
 Hierarchical LOD system for infinite terrain rendering:
@@ -306,18 +335,43 @@ await addInstance(
 
 #### Biome System
 Terrain generation now uses biome-specific parameters:
-- **Biome Types**: Plains, forest, desert, tundra, etc.
-- **Resource Distribution**: Biome-specific tree/rock/plant placement
-- **Height Variation**: Per-biome terrain height parameters
-- **Vegetation Density**: Configurable grass/flower density per biome
+- **3 Biomes**: Forest, Canyon, Tundra (defined in `TerrainBiomeTypes.ts`)
+- **2 Landscape Types**: Mountain, Pond (defined in `TerrainHeightParams.ts`)
+- **Per-Biome Tree Distribution**: Each biome has unique tree types, densities, and placement rules
+- **TreeId Enum**: Centralized tree type identifiers replacing magic strings
+- **Batched Entity Spawning**: Reduces network overhead by batching all entities for a tile into single packet
 
 **Files**:
 - `packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts` - Biome definitions
+- `packages/shared/src/systems/shared/world/TerrainHeightParams.ts` - Landscape feature definitions
 - `packages/shared/src/systems/shared/world/BiomeResourceGenerator.ts` - Resource placement logic
+- `packages/shared/src/constants/TreeTypes.ts` - TreeId enum
 
-### Admin Live Controls & Maintenance Mode
+**Example Biome Config**:
+```typescript
+// packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts
+export const FOREST_TREE_CONFIG: BiomeTreeConfig = {
+  density: 0.15,
+  minSpacing: 12,
+  maxSlope: 1.5,
+  trees: {
+    [TreeId.OAK]: {
+      spawnWeight: 3,
+      placement: { minHeight: 0, maxHeight: 100 }
+    },
+    [TreeId.WILLOW]: {
+      spawnWeight: 2,
+      placement: { minHeight: 0, maxHeight: 50, waterAffinity: 0.8 }
+    }
+  }
+};
+```
 
-**New Features** (PR #1015):
+**Impact**: Infinite terrain rendering with dynamic LOD, biome-specific visuals, improved performance through reduced draw calls and smarter chunk management.
+
+### Admin Live Controls & Maintenance Mode (March 12, 2026)
+
+**Change** (PR #1015): Added admin dashboard with live controls, maintenance mode, and log streaming.
 
 #### Maintenance Mode System
 Graceful server pause/resume for zero-downtime deployments:
@@ -328,12 +382,31 @@ Graceful server pause/resume for zero-downtime deployments:
 - **Safe-to-Deploy Flag**: Prevents restarts during active duels
 - **Market Pause**: Automatically pauses betting markets during maintenance
 
+**Implementation**:
+```typescript
+// packages/server/src/startup/maintenance-mode.ts
+export interface MaintenanceState {
+  active: boolean;
+  enteredAt: number | null;
+  reason: string | null;
+  safeToDeploy: boolean;
+  currentPhase: string | null;
+  marketStatus: string;
+  pendingMarkets: number;
+}
+```
+
 #### Live Controls Dashboard
 Real-time admin panel (`packages/client/src/screens/AdminLiveControls.tsx`):
 - **HLS Stream Preview**: Embedded video player for live stream monitoring
 - **Server Controls**: Pause/resume game, restart process
 - **Live Logs**: 1000-entry ring buffer with auto-refresh (3s interval)
 - **Status Display**: Maintenance state, viewer count, current phase
+
+**Admin API Endpoints**:
+- `GET /admin/logs` - Fetch recent server logs from in-memory ring buffer
+- `POST /admin/restart` - Restart server process (requires PM2)
+- `GET /admin/duels/status` - Get current duel cycle status
 
 #### Maintenance Banner
 Client-side warning banner (`packages/client/src/components/common/MaintenanceBanner.tsx`):
@@ -356,7 +429,7 @@ ORACLE_SETTLEMENT_DELAY_MS=7000  # Delay oracle publish to sync with stream
 
 **Impact**: Zero-downtime deployments, better operational visibility, safer server restarts.
 
-### Oracle Settlement Delay & Stream Sync
+### Oracle Settlement Delay & Stream Sync (March 12, 2026)
 
 **Change** (Commit 38c8c89): Added configurable settlement delay to sync oracle publishing with stream delivery.
 
@@ -386,11 +459,43 @@ await this.publishAcrossTargets(existing, "RESOLVE");
 
 **Impact**: Stream viewers see duel outcome before oracle publishes, better UX for betting/spectating.
 
-### Streaming Pipeline Improvements
+### Agent Autonomous Behavior Restoration (March 12, 2026)
+
+**Change** (Commit 82a5365): Fixed agent T-pose and re-enabled autonomous behavior between duels.
+
+**Fixes**:
+- **Physics Null Guards**: Added null checks in `RigidBody.ts` and `Collider.ts` for stream mode viewports where physics system is removed
+- **Autonomous Behavior**: Re-enabled mining, chopping, fishing for duel bot agents between duels (was suppressed)
+- **Post-Duel Roaming**: Relaxed restore position from 120-unit lobby radius to 2000-unit world boundary
+- **Model Provider Diversity**: Switched from ElizaCloud to direct Anthropic/Groq providers
+  - Interleaved provider selection ensures diversity (Anthropic → Groq → Anthropic → Groq...)
+  - Models: Claude Sonnet 4.6, Llama 4 Scout, Claude Opus 4.6, Llama 4 Maverick, Claude Haiku 4.5, etc.
+- **Bank State Request**: Request bank state on player spawn so goal planner has item data
+
+**Code Changes**:
+```typescript
+// packages/shared/src/nodes/RigidBody.ts
+if (!this.world.physics) return; // Null guard for stream mode
+
+// packages/server/src/eliza/ElizaDuelBot.ts
+// Removed dedicatedDuelBot gates that killed all open-world autonomy
+// shouldRunOpenWorldAutonomy() now always returns true
+
+// packages/plugin-hyperscape/src/services/HyperscapeService.ts
+private shouldRunOpenWorldAutonomy(): boolean {
+  // Duel bots should perform autonomous activities (mining, chopping, fishing)
+  // between duels to make the world feel alive
+  return true;
+}
+```
+
+**Impact**: Agents now behave naturally between duels, no more T-pose in stream mode, better goal planning with bank awareness.
+
+### Streaming Pipeline Improvements (March 10-12, 2026)
 
 **Frame Pacing Fix** (Commits 522fe37, e2c9fbf):
 - **Problem**: CDP screencast delivering ~60fps to FFmpeg expecting 30fps, causing buffer buildup
-- **Fix**: Frame pacing guard skips frames arriving faster than 85% of 33.3ms target interval
+- **Fix**: Reverted `everyNthFrame` to 1 (Xvfb compositor runs at 30fps, not 60fps)
 - **Resolution**: Default changed from 1920x1080→1280x720 to match capture viewport
 - **Impact**: Eliminates stream buffering, smoother playback
 
@@ -404,30 +509,16 @@ await this.publishAcrossTargets(existing, "RESOLVE");
 - `drop_pkts_on_overflow=1` absorbs network stalls without blocking encoder
 - Better resilience to network jitter
 
-### Agent Autonomous Behavior Restoration
-
-**Change** (Commit 89322093): Fixed agent T-pose and re-enabled autonomous behavior between duels.
-
-**Fixes**:
-- **Physics Null Guards**: Added null checks in `RigidBody.ts` and `Collider.ts` for stream mode viewports where physics system is removed
-- **Autonomous Behavior**: Re-enabled mining, chopping, fishing for duel bot agents between duels (was suppressed)
-- **Post-Duel Roaming**: Relaxed restore position from 120-unit lobby radius to 2000-unit world boundary
-- **Model Provider Diversity**: Interleave Anthropic/Groq agents for provider diversity
-- **Bank State Request**: Request bank state on player spawn so goal planner has item data
-
-**Code Changes**:
-```typescript
-// packages/shared/src/nodes/RigidBody.ts
-if (!this.world.physics) return; // Null guard for stream mode
-
-// packages/server/src/eliza/ElizaDuelBot.ts
-// Removed dedicatedDuelBot gates that killed all open-world autonomy
-// shouldRunOpenWorldAutonomy() now always returns true
+**Configuration**:
+```bash
+# ecosystem.config.cjs
+STREAM_CAPTURE_WIDTH=1280
+STREAM_CAPTURE_HEIGHT=720
+STREAM_CAPTURE_MODE=cdp          # CDP (default) or webcodecs
+STREAM_CAPTURE_ANGLE=vulkan      # ANGLE backend (vulkan, metal, default)
 ```
 
-**Impact**: Agents now behave naturally between duels, no more T-pose in stream mode, better goal planning with bank awareness.
-
-### Deployment Fixes
+### Deployment Fixes (March 11-12, 2026)
 
 **SSH Timeout Fix** (Commit a65a308):
 - **Problem**: Background processes (Xvfb, socat) keeping SSH session open, causing 30-minute hangs
@@ -445,12 +536,18 @@ if (!this.world.physics) return; // Null guard for stream mode
   ```
 - **Impact**: Eliminates database connection deadlocks from ghost game servers
 
-### Test Infrastructure Updates
+**Docker Workspace Symlinks** (Commit 7f1af94):
+- **Problem**: Docker COPY flattens workspace symlinks, breaking runtime module resolution
+- **Fix**: Added `bun install --production` in Docker runtime stage to restore symlinks
+- **Impact**: Server can resolve externalized workspace packages (@hyperscape/decimation, @hyperscape/impostors, etc.)
 
-**CI Exclusions** (Commit cd253d5):
+### Test Infrastructure Updates (March 11-12, 2026)
+
+**CI Exclusions** (Commits cd253d5, 754dea2):
 - Excluded `@hyperscape/impostor` from headless CI test runs (requires WebGPU)
 - Increased `sim-engine` guarded MEV fee sweep test timeout from 60s to 120s
 - Fixed cyclic dependencies and port conflicts
+- Fixed biome config loading in tests
 
 **Testing Strategy**:
 - WebGPU-dependent packages (`impostor`, `client`) require local testing with GPU-enabled browsers
@@ -473,7 +570,7 @@ if (!this.world.physics) return; // Null guard for stream mode
 - **@nomicfoundation/hardhat-chai-matchers**: → 3.0.0 (testing)
 - **globals**: → 17.4.0 (TypeScript globals)
 
-### Manifest Loading Fixes
+### Manifest Loading Fixes (March 10, 2026)
 
 **Change** (Commit c0898fa): Fixed legacy manifest entries that 404 on CDN.
 
@@ -541,9 +638,11 @@ Visual testing uses colored cube proxies:
 - 🟡 Trees
 - 🟣 Banks
 
+**Exception**: WebGPU-dependent tests (`@hyperscape/impostor`, `@hyperscape/client`) are excluded from headless CI and must run locally with GPU-enabled browsers.
+
 ### Production Code Only
 
-- No TODOs or \"will fill this out later\" - implement completely
+- No TODOs or "will fill this out later" - implement completely
 - No hardcoded data - use JSON files and general systems
 - No shortcuts or workarounds - fix root causes
 - Build toward the general case (many items, players, mobs)
@@ -596,6 +695,7 @@ The dev server provides:
 **Commands:**
 ```bash
 bun run dev        # Core game (client + server + shared)
+bun run dev:ai     # Game + ElizaOS agents
 bun run dev:forge  # AssetForge (standalone)
 bun run docs:dev   # Documentation site (standalone)
 bun run duel       # Full duel stack (game + agents + streaming)
@@ -614,6 +714,8 @@ All services have unique default ports to avoid conflicts:
 | 4001 | ElizaOS API | `ELIZA_PORT` | `bun run dev:ai` |
 | 5555 | Game Server | `PORT` | `bun run dev` |
 | 8080 | Asset CDN | `CDN_PORT` | `bun run cdn:up` |
+| 8765 | RTMP Bridge | `RTMP_BRIDGE_PORT` | `bun run duel` |
+| 4180 | Spectator Server | `SPECTATOR_PORT` | `bun run duel` |
 
 ### Environment Variables
 
@@ -653,6 +755,8 @@ STREAM_CAPTURE_MODE=cdp          # CDP (default) or webcodecs
 STREAM_CAPTURE_WIDTH=1280        # Capture resolution
 STREAM_CAPTURE_HEIGHT=720
 STREAM_CAPTURE_ANGLE=vulkan      # ANGLE backend (vulkan, metal, default)
+RTMP_BRIDGE_PORT=8765            # RTMP bridge WebSocket port
+SPECTATOR_PORT=4180              # Spectator server port
 ```
 
 **Split deployment** (client and server on different hosts):
@@ -710,6 +814,8 @@ lsof -ti:3333 | xargs kill -9  # Game Client
 lsof -ti:5555 | xargs kill -9  # Game Server
 lsof -ti:8080 | xargs kill -9  # Asset CDN
 lsof -ti:4001 | xargs kill -9  # ElizaOS API
+lsof -ti:8765 | xargs kill -9  # RTMP Bridge
+lsof -ti:4180 | xargs kill -9  # Spectator Server
 ```
 
 See [Port Allocation](#port-allocation) section for full port list.
@@ -726,8 +832,8 @@ See [Port Allocation](#port-allocation) section for full port list.
 
 **Stream buffering / lag**:
 - Check `STREAM_CAPTURE_WIDTH` and `STREAM_CAPTURE_HEIGHT` match (default 1280x720)
-- Verify frame pacing guard is active (logs show "Frame pacing: skipped frame")
-- Ensure Xvfb is running at 30fps (no vsync)
+- Verify Xvfb is running at 30fps (no vsync)
+- Ensure `everyNthFrame: 1` in CDP screencast config
 
 **WebGPU initialization fails**:
 - Verify `gpu_display_active=true` on Vast.ai instance
@@ -753,9 +859,20 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Verify no active duels: `safeToDeploy` should be `true`
 - Check market status: `marketStatus` should be `PAUSED`
 
+### Canyon Biome Errors
+
+**Symptom**: Server fails to load canyon biome or crashes on canyon tile generation
+
+**Cause**: Missing or stale manifests
+
+**Fix**:
+- Manifests are now embedded in Docker image (commit efa8021)
+- For local development, ensure assets are synced: `bun run assets:sync`
+- For production, rebuild Docker image to pick up latest manifests
+
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
-- [AGENTS.md](AGENTS.md) - AI assistant instructions (this file)
+- [AGENTS.md](AGENTS.md) - AI assistant instructions
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
