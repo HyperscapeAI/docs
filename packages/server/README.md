@@ -448,9 +448,16 @@ For GPU-accelerated streaming deployments on Vast.ai:
 - Xvfb virtual display
 - FFmpeg for RTMP encoding (system FFmpeg preferred over ffmpeg-static)
 
+**Deployment Improvements (March 13, 2026)**:
+- **Fresh Asset Fetch**: Deployment script forcefully removes cached `packages/server/world/assets` folder before `bun install` to ensure latest manifests are fetched from Git LFS
+- **Orphaned Process Cleanup**: Explicit `pkill` commands kill ghost bun server processes before deployment to prevent database deadlocks
+- **SSH Timeout Fix**: Background processes (Xvfb, socat) are disowned to prevent 30-minute SSH hangs
+- **Health Check Timeouts**: All curl commands use `--max-time 10` to prevent indefinite hangs
+- **Docker Workspace Symlinks**: `bun install --production` runs in Docker runtime stage to restore workspace symlinks for externalized packages
+
 **Configuration**:
 - `ecosystem.config.cjs` - PM2 configuration with streaming settings
-- `scripts/deploy-vast.sh` - Deployment script with auto-detection
+- `scripts/deploy-vast.sh` - Deployment script with auto-detection and cleanup
 - See `docs/duel-stack.md` for detailed streaming setup
 
 ### Environment-Specific
