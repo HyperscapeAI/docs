@@ -103,6 +103,43 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Wrangler R2 Deployment Fix (March 13, 2026)
+
+**Change** (Commit 94e3a1d): Added `--remote` flag to Wrangler R2 object put command in Cloudflare deploy action.
+
+**Problem**: R2 uploads were failing silently because Wrangler was attempting to upload to local R2 bucket instead of the remote Cloudflare R2 bucket.
+
+**Fix**: Added `--remote` flag to `wrangler r2 object put` command in `.github/workflows/deploy-cloudflare.yml`.
+
+**Impact**: R2 asset uploads now correctly target the remote Cloudflare bucket, fixing deployment failures.
+
+### Solana Oracle IDL Type Formatting (March 13, 2026)
+
+**Change** (Commits in `packages/duel-oracle-solana/src/generated/`): Reformatted Solana oracle IDL types from JSON-style to TypeScript-style object literals.
+
+**Technical Details**:
+```typescript
+// Old (JSON-style)
+export const FIGHT_ORACLE_IDL = {
+  "address": "6Tx7s2UG4maFWakRFVi4GeecXJYyBXQF8f2vJdQShSpV",
+  "metadata": {
+    "name": "fight_oracle",
+    // ...
+  }
+}
+
+// New (TypeScript-style)
+export const FIGHT_ORACLE_IDL = {
+  address: "6Tx7s2UG4maFWakRFVi4GeecXJYyBXQF8f2vJdQShSpV",
+  metadata: {
+    name: "fight_oracle",
+    // ...
+  }
+} as const;
+```
+
+**Impact**: Better TypeScript type inference, cleaner code style, no functional changes.
+
 ### CDN Cache Busting (March 13, 2026)
 
 **Change** (Commit db6581f): Added cache busting to CDN requests and manifest uploads to prevent stale asset issues.
