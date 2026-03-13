@@ -104,29 +104,29 @@ packages/
 
 ## Recent Changes (March 2026)
 
-### Chrome Canary for Linux WebGPU Support (March 13, 2026)
+### Chrome Beta for Linux WebGPU Support (March 13, 2026)
 
-**Change** (Commit d37bbe3): Switched from Chrome Beta to Chrome Canary for Linux WebGPU streaming support.
+**Change** (Commit 154f0b6): Reverted from Chrome Canary back to Chrome Beta for Linux WebGPU streaming support.
 
-**Problem**: Chrome Beta on Linux was experiencing WebGPU initialization failures and rendering artifacts on NVIDIA GPUs with Vulkan ANGLE backend.
+**Problem**: Chrome Canary was experiencing instability issues on Linux NVIDIA GPUs. Chrome Beta provides better stability for production streaming.
 
-**Fix**: Updated `scripts/deploy-vast.sh` to install `google-chrome-unstable` (Chrome Canary) instead of `google-chrome-beta`:
+**Fix**: Updated `scripts/deploy-vast.sh` to install `google-chrome-beta` instead of `google-chrome-unstable`:
 ```bash
-# Install Chrome Canary channel (Required for WebGPU on Linux)
-echo "[deploy] Installing Chrome Canary for WebGPU support..."
-if ! command -v google-chrome-unstable &> /dev/null; then
+# Install Chrome Beta channel (Required for WebGPU on Linux)
+echo "[deploy] Installing Chrome Beta for WebGPU support..."
+if ! command -v google-chrome-beta &> /dev/null; then
     wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - || true
     echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
-    apt-get update && apt-get install -y google-chrome-unstable || true
+    apt-get update && apt-get install -y google-chrome-beta || true
 fi
 ```
 
 **Configuration**:
-- **Linux NVIDIA**: Use Chrome Canary (`google-chrome-unstable`) with Vulkan ANGLE backend
+- **Linux NVIDIA**: Use Chrome Beta (`google-chrome-beta`) with Vulkan ANGLE backend
 - **macOS**: Continue using stable Chrome with Metal ANGLE backend
-- **Deployment**: `scripts/deploy-vast.sh` now installs Chrome Canary by default on Linux
+- **Deployment**: `scripts/deploy-vast.sh` now installs Chrome Beta by default on Linux
 
-**Impact**: More reliable WebGPU initialization on Linux NVIDIA GPUs, eliminates rendering artifacts, better streaming stability.
+**Impact**: More reliable WebGPU initialization on Linux NVIDIA GPUs, better production stability for streaming.
 
 ### Curl Timeout Configuration (March 13, 2026)
 
