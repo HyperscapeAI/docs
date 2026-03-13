@@ -224,7 +224,7 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 
 ### CDN Cache Busting & Manifest Reliability (March 13, 2026)
 
-**Change** (Commit db6581f): Added cache busting to CDN requests and manifest uploads to prevent stale asset issues.
+**Change** (Commits db6581f, 94e3a1d, ef42c3d): Added cache busting to CDN requests and manifest uploads to prevent stale asset issues.
 
 **Problem**: Cloudflare R2 CDN was serving stale manifests and assets even after new versions were uploaded, causing clients to load outdated game data (items, NPCs, terrain configs, etc.). This was particularly problematic for canyon biome which relies on up-to-date manifest data.
 
@@ -245,18 +245,23 @@ aws s3 cp "manifests/${file}" "s3://${BUCKET}/manifests/${file}?v=$(date +%s)" \
 - **Ensure Manifests Exist**: GitHub Actions runs `ensure-assets.mjs` before R2 upload
 - **Removed Broken CORS Config**: R2 CORS is now configured via Cloudflare dashboard (removed failing CLI step)
 - **Wrangler R2 Fix** (Commit 94e3a1d): Added `--remote` flag to `wrangler r2 object put` in `.github/workflows/deploy-cloudflare.yml` to target remote Cloudflare bucket instead of local
+- **Vast.ai Asset Refresh** (Commit ef42c3d): Deployment script now forcefully removes cached `packages/server/world/assets` folder before `bun install` to ensure latest manifests are fetched from Git LFS
+- **Docker Cache Invalidation** (Commits a52294, 207fd8a): Added cache-busting steps to prevent Docker build cache from storing stale `biomes.json` and other manifest files
 
 **Files Changed**:
 - `packages/shared/src/data/DataManager.ts` - Client-side cache busting
 - `scripts/upload-to-r2.sh` - Server-side cache busting and submodule skip
 - `.github/workflows/deploy-r2.yml` - Added ensure-assets step
-- `scripts/deploy-vast.sh` - Force fresh manifest fetch on deployment
+- `.github/workflows/deploy-cloudflare.yml` - Added `--remote` flag to wrangler
+- `scripts/deploy-vast.sh` - Force fresh asset fetch with `rm -rf packages/server/world/assets`
+- `Dockerfile.server` - Added `rm -rf packages/server/world/assets` before `ensure-assets.mjs`
 
 **Impact**: 
-- Eliminates stale manifest issues across deployments
+- Eliminates stale manifest issues across all deployment targets (Railway, Vast.ai, Cloudflare)
 - Ensures clients always fetch latest game data
 - Prevents canyon biome errors from outdated manifests
 - No manual CDN cache purging required
+- Docker builds always use fresh manifests from Git LFS
 
 ### Manifest Embedding in Docker (March 13, 2026)
 
