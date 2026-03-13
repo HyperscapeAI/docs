@@ -447,27 +447,69 @@ const N = normalize(mul(modelNormalMatrix, normalLocal));
 **Change** (PR #1018, Commits 82a5365, 6c14c8e): Merged biome-based terrain generation with hierarchical quadtree LOD system.
 
 **New Features**:
-- **TerrainQuadTree**: Hierarchical LOD system that splits/unsplits terrain chunks based on camera distance
-  - Near chunks: small, high-resolution (100m at max depth)
-  - Far chunks: large, low-resolution (1600m at root)
-  - Uniform 32x32 vertex resolution across all LOD levels
-  - Skirt geometry to hide LOD seams
-- **GLBTreeBatchedInstancer**: BatchedMesh-based rendering for multi-variant trees
-  - One BatchedMesh per material slot per LOD level
-  - Supports multiple model variants per tree type (e.g., 5 dead tree models, 8 cactus variants)
-  - Minimal draw calls regardless of variant count
-  - Texture fingerprinting for automatic material slot matching across variants
-- **Biome System**: Terrain generation now uses biome-specific parameters
-  - 3 biomes: Forest, Canyon, Tundra (defined in `TerrainBiomeTypes.ts`)
-  - 2 landscape types: Mountain, Pond (defined in `TerrainHeightParams.ts`)
-  - Per-biome tree distribution, density, spacing, and placement rules
-  - Biome-aware terrain textures and cliff colors
-- **TreeId Enum**: Centralized tree type identifiers replacing magic strings
-- **Batched Entity Spawning**: Reduces network overhead by batching all entities for a tile into single packet
-- **Performance Optimizations**:
-  - Reduced per-frame allocations in TerrainQuadTree (numeric grid coords instead of string keys)
-  - Optimized GLBTreeBatchedInstancer fingerprinting (deterministic fallback prevents silent matching failures)
-  - Entity cleanup on tile unload prevents memory leaks
+
+#### TerrainQuadTree - Hierarchical LOD System
+Replaces flat 100m grid for **rendering only** (gameplay logic, physics, resource spawning, and server sync continue to use flat grid):
+- Near chunks: small, high-resolution (100m at max depth)
+- Far chunks: large, low-resolution (1600m at root)
+- Uniform 32x32 vertex resolution across all LOD levels
+- Skirt geometry to hide LOD seams
+- Config flags in `TerrainSystem.CONFIG`:
+  - `USE_QUADTREE_LOD` - enables quad-tree LOD (set to `false` for flat grid)
+  - `QUADTREE_DEBUG_WIREFRAME` - renders wireframe with depth-colored chunks
+
+#### GLBTreeBatchedInstancer - Multi-Variant Tree Rendering
+BatchedMesh-based instancer for tree types with multiple model variants:
+- **Why BatchedMesh over InstancedMesh**: `InstancedMesh` binds a single geometry, requiring N separate instances per material slot per LOD level for N variants. `BatchedMesh` registers all variant geometries via `addGeometry()` and each instance picks its variant via `addInstance(geometryId)`, keeping it to **1 draw call per material slot** regardless of variant count.
+- One BatchedMesh per material slot per LOD level
+- Supports multiple model variants per tree type (e.g., 5 dead tree models, 8 cactus variants)
+- Minimal draw calls regardless of variant count
+- Texture fingerprinting for automatic material slot matching across variants
+- Old `GLBTreeInstancer` (InstancedMesh-based) still used for single-model resources
+
+#### TreeId Enum - Type-Safe Tree Identifiers
+Centralized tree type identifiers replacing magic strings:
+```typescript
+// packages/shared/src/systems/shared/world/TreeId.ts
+export enum TreeId {
+  Oak = "tree_oak",
+  Maple = "tree_maple",
+  Knotwood = "tree_knotwood",
+  Palm = "tree_palm",
+  Cactus = "tree_cactus",
+  Dead = "tree_dead",
+  WindPine = "tree_wind_pine",
+}
+```
+- Provides type safety and refactoring confidence
+- Used throughout biome configs and tree placement logic
+- Helper function `treeIdToSubType()` converts enum to subtype string
+
+#### Biome System - Data-Driven Terrain Generation
+Terrain generation now uses biome-specific parameters:
+- **3 biomes**: Forest, Canyon, Tundra (defined in `TerrainBiomeTypes.ts`)
+- **2 landscape types**: Mountain, Pond (defined in `TerrainHeightParams.ts`)
+- Per-biome tree distribution, density, spacing, and placement rules
+- Biome-aware terrain textures and cliff colors
+- Per-tree placement rules support:
+  - `waterAffinity` - preference for spawning near water
+  - `avoidsWaterBelow` - minimum height above water
+  - `minHeight` / `maxHeight` - elevation constraints
+  - `maxSlope` - slope rejection threshold
+
+#### Batched Entity Spawning - Network Optimization
+Reduces network overhead by batching all entities for a tile into single packet:
+- New `entitiesBatchAdded` packet type replaces per-entity `entityAdded` packets
+- `EntityManager.spawnEntity()` now accepts `suppressBroadcast` option for batching
+- `ResourceSystem` collects all tile entities and sends single HIGH-priority batch
+- Typical tile with 15 trees: 1 packet instead of 15 packets
+- Entity cleanup on tile unload prevents memory leaks and duplicate-ID errors
+
+#### Performance Optimizations
+- Reduced per-frame allocations in TerrainQuadTree (numeric grid coords instead of string keys)
+- Optimized GLBTreeBatchedInstancer fingerprinting (deterministic fallback prevents silent matching failures)
+- Entity cleanup on tile unload prevents memory leaks
+- Batched entity spawning reduces network overhead by ~93% for typical tiles
 
 **Configuration**:
 ```typescript
