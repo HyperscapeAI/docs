@@ -244,6 +244,7 @@ aws s3 cp "manifests/${file}" "s3://${BUCKET}/manifests/${file}?v=$(date +%s)" \
 - **Prevent Submodule Overwrite**: `scripts/upload-to-r2.sh` now skips `assets/manifests` directory during upload
 - **Ensure Manifests Exist**: GitHub Actions runs `ensure-assets.mjs` before R2 upload
 - **Removed Broken CORS Config**: R2 CORS is now configured via Cloudflare dashboard (removed failing CLI step)
+- **Wrangler R2 Fix** (Commit 94e3a1d): Added `--remote` flag to `wrangler r2 object put` in `.github/workflows/deploy-cloudflare.yml` to target remote Cloudflare bucket instead of local
 
 **Files Changed**:
 - `packages/shared/src/data/DataManager.ts` - Client-side cache busting
