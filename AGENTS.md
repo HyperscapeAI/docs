@@ -104,6 +104,33 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### PM2 Log Tail Fix for Deployment (March 13, 2026)
+
+**Change** (Commit c226be7): Replaced hanging `pm2 logs` command with direct `tail` for log dumping in deployment script.
+
+**Problem**: `pm2 logs` command was hanging indefinitely during deployment error handling, preventing SSH session from closing and causing GitHub Actions to timeout after 30 minutes even though the deployment had already failed.
+
+**Fix**: Replaced `bunx pm2 logs hyperscape-duel --lines 10000 --nostream` with direct OS-level log file access:
+```bash
+# Old (hangs indefinitely)
+bunx pm2 logs hyperscape-duel --lines 10000 --nostream || true
+
+# New (returns immediately)
+tail -n 10000 /root/.pm2/logs/hyperscape-duel-error.log 2>/dev/null || true
+tail -n 10000 /root/.pm2/logs/hyperscape-duel-out.log 2>/dev/null || true
+```
+
+**Configuration**:
+- Error logs: `/root/.pm2/logs/hyperscape-duel-error.log`
+- Output logs: `/root/.pm2/logs/hyperscape-duel-out.log`
+- Both files are tailed with 10000 lines for comprehensive error context
+
+**Impact**: 
+- Deployment failures now exit immediately with full error logs
+- No more 30-minute SSH session hangs on deployment errors
+- GitHub Actions workflows complete faster on failures
+- Better debugging experience with immediate log access
+
 ### Chrome Beta for Linux WebGPU Support (March 13, 2026)
 
 **Change** (Commit 154f0b6): Reverted from Chrome Canary back to Chrome Beta for Linux WebGPU streaming support.
