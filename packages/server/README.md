@@ -405,11 +405,17 @@ to poll `/health` and trigger alerts on non-200 responses or elevated latency.
 Build and run with Docker:
 
 ```bash
-docker build -t hyperscape-server .
+docker build -t hyperscape-server -f Dockerfile.server .
 docker run -p 5555:5555 \
   -e DATABASE_URL=postgresql://... \
   hyperscape-server
 ```
+
+**Docker Improvements (March 12-13, 2026)**:
+- **Manifest Embedding**: Manifests are now embedded in Docker image at build time (eliminates CDN dependency for server startup)
+- **Workspace Symlinks**: `bun install --production` runs in runtime stage to restore workspace symlinks for externalized packages (@hyperscape/decimation, @hyperscape/impostors, @hyperscape/physx-js-webidl, @hyperscape/procgen)
+- **Cache Invalidation**: Manifest copy layer is invalidated on every build to ensure fresh manifests (prevents stale biome configs)
+- **Fresh Asset Fetch**: Assets folder is removed before `ensure-assets.mjs` to prevent Docker build cache from storing stale manifests
 
 ### Traditional Hosting
 
