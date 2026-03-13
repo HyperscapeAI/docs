@@ -13,7 +13,7 @@ The server has been successfully migrated to PostgreSQL and is production-ready 
 - 15 registered game actions
 - RTMP streaming pipeline with MediaRecorder capture mode
 - Duel arena oracle publisher (EVM + Solana)
-- ElizaOS AI agent integration with 13 frontier models
+- ElizaOS AI agent integration with 10 frontier models (direct Anthropic/Groq providers)
 
 See `FIXES-COMPLETE.md` for detailed migration changelog.
 
