@@ -78,14 +78,13 @@ HYPERSCAPE_SERVER_URL=ws://localhost:5555/ws
 # Automatically reconnect on disconnect (default: true)
 HYPERSCAPE_AUTO_RECONNECT=true
 
-# ElizaCloud API key for unified model access (recommended)
-# Provides access to 13 frontier models (GPT-5, Claude 4.6, Gemini 3.1, etc.)
-ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
+# Direct model provider API keys (as of March 12, 2026)
+# Interleaved provider selection for model diversity
+ANTHROPIC_API_KEY=sk-ant-...
+GROQ_API_KEY=gsk_...
 
-# Alternative: Individual provider API keys
-# OPENAI_API_KEY=sk-...
-# ANTHROPIC_API_KEY=sk-ant-...
-# GROQ_API_KEY=gsk_...
+# Alternative: ElizaCloud for unified model access (deprecated)
+# ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
 ```
 
 ### Character File
