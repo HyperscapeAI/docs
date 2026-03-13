@@ -28,6 +28,43 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 ## Recent Updates (March 2026)
 
+### Chrome Canary for Linux WebGPU Support (March 13, 2026)
+- **Change**: Switched from Chrome Beta to Chrome Canary for Linux WebGPU streaming support
+- **Problem**: Chrome Beta on Linux was experiencing WebGPU initialization failures and rendering artifacts on NVIDIA GPUs with Vulkan ANGLE backend
+- **Fix**: Updated `scripts/deploy-vast.sh` to install `google-chrome-unstable` (Chrome Canary) instead of `google-chrome-beta`
+- **Configuration**: Linux NVIDIA deployments now use Chrome Canary with Vulkan ANGLE backend for optimal WebGPU stability
+- **Impact**: More reliable WebGPU initialization on Linux NVIDIA GPUs, eliminates rendering artifacts, better streaming stability
+
+### Curl Timeout Configuration (March 13, 2026)
+- **Change**: Added `--max-time 10` timeout to all curl health check commands in deployment scripts
+- **Problem**: Health check curl commands could hang indefinitely if services were unresponsive, causing deployment scripts to stall
+- **Fix**: All curl commands in `scripts/deploy-vast.sh` now have explicit 10-second timeout
+- **Impact**: Deployment scripts fail fast when services are unresponsive, prevents indefinite hangs during health checks
+
+### OSRS-Accurate Movement Rotation (March 13, 2026)
+- **Change**: Fixed player rotation to ignore combat target rotation while moving, restoring OSRS-accurate movement behavior
+- **Problem**: Players were rotating to face their combat target even while moving, which differs from Old School RuneScape behavior where movement direction takes priority over combat facing
+- **Fix**: Modified movement system to ignore combat rotation updates while the player is actively moving
+- **Impact**: Movement feels more responsive and natural, matches OSRS behavior where players face their movement direction, combat rotation only applies when standing still, better player control during kiting and tactical movement
+
+### Fresh Asset Fetching on Vast.ai Deploy (March 13, 2026)
+- **Change**: Force fresh asset download on every Vast.ai deployment to prevent stale biome manifests
+- **Problem**: Vast.ai VM cache was persisting old `packages/server/world/assets` directory across deployments, causing stale biome manifests to be used even after CDN updates
+- **Fix**: Added explicit asset cleanup in `scripts/deploy-vast.sh` before `bun install`: `rm -rf packages/server/world/assets`
+- **Impact**: Eliminates stale manifest issues on Vast.ai deployments, ensures latest biome configs are always used, fixes canyon biome errors from outdated manifests, forces fresh download from CDN on every deploy
+
+### Docker Build Cache Invalidation (March 13, 2026)
+- **Change**: Prevent Docker build cache from storing old biomes.json and other manifest files
+- **Problem**: Docker layer caching was preserving old manifest files across builds, causing production deployments to use stale biome configurations even after manifest updates
+- **Fix**: Modified `packages/server/Dockerfile` to invalidate cache for manifest copy operations with cache-busting comments
+- **Impact**: Docker images always contain latest manifest files, eliminates production errors from stale biome configs, consistent manifest versions across all deployment targets, no manual cache clearing required
+
+### PM2 Dump Path Fix (March 13, 2026)
+- **Change**: Fixed PM2 error log path for remote dump functionality
+- **Problem**: PM2 dump logs were not being saved to the correct path, making debugging difficult
+- **Fix**: Updated PM2 configuration to use correct error log path for remote dump
+- **Impact**: Better debugging capabilities, proper log persistence for production deployments
+
 ### Docker Workspace Symlinks Fix (March 12, 2026)
 - **Problem**: Docker COPY flattens workspace symlinks in `node_modules`, breaking runtime module resolution for externalized packages
 - **Fix**: Added `bun install --production` in Docker runtime stage to restore workspace symlinks
