@@ -51,7 +51,9 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - **Manifest Embedding**: Server Docker image now embeds manifests at build time, eliminating CDN dependency for server startup
 - **Workbox Inline Runtime**: Service worker now inlines Workbox runtime to prevent MIME type errors on PWA updates
 - **Deployment Fixes**: Improved manifest upload workflow to prevent submodule overwrites and ensure fresh manifests in production
-- **Impact**: Eliminates stale manifest errors, more reliable deployments, better PWA update experience
+- **Wrangler R2 Fix**: Added `--remote` flag to `wrangler r2 object put` command to target remote Cloudflare bucket instead of local
+- **Vast.ai Asset Refresh**: Deployment script now forcefully removes cached assets folder before `bun install` to ensure latest manifests are fetched
+- **Impact**: Eliminates stale manifest errors, more reliable deployments, better PWA update experience, correct R2 uploads
 
 ### Tree Shader Lighting Fix (March 12, 2026)
 - **Vertex Sphere Normals**: Fixed tree lighting to use sphere normals baked into vertex attributes instead of normal maps
