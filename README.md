@@ -252,9 +252,10 @@ packages/
 │                        # - Maintenance banner (polls /health every 5s)
 │                        # - Admin live controls UI
 │                        # - NetworkFirst service worker cache
-├── plugin-hyperscape/   # ElizaOS AI agent plugin (ElizaCloud integration)
-│                        # - Autonomous behavior between duels
+├── plugin-hyperscape/   # ElizaOS AI agent plugin
+│                        # - Autonomous behavior between duels (mining, chopping, fishing)
 │                        # - Interleaved model providers (Anthropic/Groq)
+│                        # - Bank state request on spawn for goal planning
 ├── physx-js-webidl/     # PhysX WASM bindings
 ├── procgen/             # Procedural generation (terrain, trees, rocks, plants)
 ├── asset-forge/         # AI asset generation + VFX catalog
