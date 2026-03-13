@@ -292,6 +292,15 @@ COPY --from=builder /app/packages/server/world ./packages/server/world  # Runtim
 **Files Changed**:
 - `packages/client/vite.config.ts` - Updated Workbox plugin configuration
 
+**Configuration**:
+```typescript
+// packages/client/vite.config.ts
+workbox: {
+  inlineWorkboxRuntime: true,  // Inline instead of loading from CDN
+  // ... rest of config
+}
+```
+
 **Impact**: Eliminates service worker update failures, more reliable PWA updates, better offline support.
 
 ### Tree Shader Lighting Fix (March 12, 2026)
