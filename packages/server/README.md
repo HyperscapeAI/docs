@@ -340,15 +340,19 @@ DISPLAY=:99
 DUEL_CAPTURE_USE_XVFB=true
 ```
 
-### ElizaCloud AI (Optional)
+### AI Agents (Optional)
 
 ```env
-# Single API key for 13 frontier models
-ELIZAOS_CLOUD_API_KEY=your-elizacloud-api-key
+# Direct model provider API keys (as of March 12, 2026)
+ANTHROPIC_API_KEY=your-anthropic-api-key
+GROQ_API_KEY=your-groq-api-key
 
-# Auto-spawn model agents
+# Auto-spawn model agents with interleaved provider selection
 SPAWN_MODEL_AGENTS=true
 MAX_MODEL_AGENTS=4
+
+# Models: Claude Sonnet 4.6, Llama 4 Scout, Claude Opus 4.6, Llama 4 Maverick,
+#         Claude Haiku 4.5, Llama 3.3 70B, Kimi K2, Qwen 3 30B
 ```
 
 ### Duel Arena Oracle (Optional)
