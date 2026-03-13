@@ -635,6 +635,38 @@ STREAM_CAPTURE_MODE=cdp          # CDP (default) or webcodecs
 STREAM_CAPTURE_ANGLE=vulkan      # ANGLE backend (vulkan, metal, default)
 ```
 
+### Solana Oracle IDL Type Formatting (March 13, 2026)
+
+**Change** (Commits in `packages/duel-oracle-solana/src/generated/`): Reformatted Solana oracle IDL types from JSON-style to TypeScript-style object literals.
+
+**Technical Details**:
+```typescript
+// Old (JSON-style)
+export const FIGHT_ORACLE_IDL = {
+  "address": "6Tx7s2UG4maFWakRFVi4GeecXJYyBXQF8f2vJdQShSpV",
+  "metadata": {
+    "name": "fight_oracle",
+    // ...
+  }
+}
+
+// New (TypeScript-style)
+export const FIGHT_ORACLE_IDL = {
+  address: "6Tx7s2UG4maFWakRFVi4GeecXJYyBXQF8f2vJdQShSpV",
+  metadata: {
+    name: "fight_oracle",
+    // ...
+  }
+} as const;
+```
+
+**Files Changed**:
+- `packages/duel-oracle-solana/src/generated/fightOracleIdl.ts`
+- `packages/duel-oracle-solana/src/generated/fightOracleTypes.ts`
+- `packages/duel-oracle-solana/src/generated/fight_oracle.ts`
+
+**Impact**: Better TypeScript type inference, cleaner code style, improved IDE autocomplete, no functional changes.
+
 ### Solana Oracle Error Handling Improvements (March 12, 2026)
 
 **Change** (PR #1019): Enhanced Solana transaction error messages with detailed log extraction.
