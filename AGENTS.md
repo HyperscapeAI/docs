@@ -693,7 +693,7 @@ const CANYON_TREE_CONFIG: BiomeTreeConfig = {
 ```bash
 ORACLE_SETTLEMENT_DELAY_MS=7000  # Delay oracle publish to sync with stream (default: 7s)
 STREAM_CAPTURE_MODE=cdp          # CDP (Chrome DevTools Protocol) for reliable capture
-STREAM_CAPTURE_CHANNEL=chrome-beta  # Chrome Beta for stability
+STREAM_CAPTURE_CHANNEL=chrome-canary  # Chrome Canary for WebGPU stability on Linux
 STREAM_CAPTURE_ANGLE=vulkan      # Vulkan ANGLE backend on Linux NVIDIA
 STREAM_CAPTURE_WIDTH=1280        # Match capture viewport
 STREAM_CAPTURE_HEIGHT=720
