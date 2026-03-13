@@ -269,8 +269,15 @@ aws s3 cp "manifests/${file}" "s3://${BUCKET}/manifests/${file}?v=$(date +%s)" \
 - Ensures manifests are always available and match the deployed code version
 
 **Files Changed**:
-- `Dockerfile.server` - Added COPY step for manifests
-- `packages/server/src/data/DataManager.ts` - Reads from embedded manifests
+- `Dockerfile.server` - Added COPY step for manifests from builder stage
+- Server reads from `packages/server/world/assets/manifests/` (embedded in image)
+
+**Docker Build Process**:
+```dockerfile
+# Builder stage
+RUN node scripts/ensure-assets.mjs  # Fetch manifests
+COPY --from=builder /app/packages/server/world ./packages/server/world  # Runtime stage
+```
 
 **Impact**: More reliable server startup, eliminates CDN dependency for manifests, fixes canyon biome loading errors.
 
