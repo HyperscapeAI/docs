@@ -103,6 +103,113 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Chrome Canary for Linux WebGPU Support (March 13, 2026)
+
+**Change** (Commit d37bbe3): Switched from Chrome Beta to Chrome Canary for Linux WebGPU streaming support.
+
+**Problem**: Chrome Beta on Linux was experiencing WebGPU initialization failures and rendering artifacts on NVIDIA GPUs with Vulkan ANGLE backend.
+
+**Fix**: Updated `scripts/deploy-vast.sh` to install `google-chrome-unstable` (Chrome Canary) instead of `google-chrome-beta`:
+```bash
+# Install Chrome Canary channel (Required for WebGPU on Linux)
+echo "[deploy] Installing Chrome Canary for WebGPU support..."
+if ! command -v google-chrome-unstable &> /dev/null; then
+    wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - || true
+    echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+    apt-get update && apt-get install -y google-chrome-unstable || true
+fi
+```
+
+**Configuration**:
+- **Linux NVIDIA**: Use Chrome Canary (`google-chrome-unstable`) with Vulkan ANGLE backend
+- **macOS**: Continue using stable Chrome with Metal ANGLE backend
+- **Deployment**: `scripts/deploy-vast.sh` now installs Chrome Canary by default on Linux
+
+**Impact**: More reliable WebGPU initialization on Linux NVIDIA GPUs, eliminates rendering artifacts, better streaming stability.
+
+### Curl Timeout Configuration (March 13, 2026)
+
+**Change** (Commit d37bbe3): Added `--max-time 10` timeout to all curl health check commands in deployment scripts.
+
+**Problem**: Health check curl commands could hang indefinitely if services were unresponsive, causing deployment scripts to stall.
+
+**Fix**: Added explicit 10-second timeout to all curl commands in `scripts/deploy-vast.sh`:
+```bash
+# Before
+curl -fsS http://127.0.0.1:5555/health > /dev/null 2>&1
+
+# After
+curl -fsS --max-time 10 http://127.0.0.1:5555/health > /dev/null 2>&1
+```
+
+**Impact**: Deployment scripts fail fast when services are unresponsive, prevents indefinite hangs during health checks.
+
+### OSRS-Accurate Movement Rotation (March 13, 2026)
+
+**Change** (Commit 24ed839): Fixed player rotation to ignore combat target rotation while moving, restoring OSRS-accurate movement behavior.
+
+**Problem**: Players were rotating to face their combat target even while moving, which differs from Old School RuneScape behavior where movement direction takes priority over combat facing.
+
+**Fix**: Modified movement system to ignore combat rotation updates while the player is actively moving:
+```typescript
+// Movement rotation takes priority over combat rotation
+if (isMoving) {
+  // Ignore combat target rotation updates
+  return;
+}
+```
+
+**Impact**: 
+- Movement feels more responsive and natural
+- Matches OSRS behavior where players face their movement direction
+- Combat rotation only applies when standing still
+- Better player control during kiting and tactical movement
+
+### Fresh Asset Fetching on Vast.ai Deploy (March 13, 2026)
+
+**Change** (Commit ef42c3d): Force fresh asset download on every Vast.ai deployment to prevent stale biome manifests.
+
+**Problem**: Vast.ai VM cache was persisting old `packages/server/world/assets` directory across deployments, causing stale biome manifests to be used even after CDN updates.
+
+**Fix**: Added explicit asset cleanup in `scripts/deploy-vast.sh` before `bun install`:
+```bash
+# Clean up assets folder to forcefully redownload the latest biomes manifest over the VM cache.
+rm -rf packages/server/world/assets
+bun install
+```
+
+**Impact**: 
+- Eliminates stale manifest issues on Vast.ai deployments
+- Ensures latest biome configs are always used
+- Fixes canyon biome errors from outdated manifests
+- Forces fresh download from CDN on every deploy
+
+### Docker Build Cache Invalidation (March 13, 2026)
+
+**Change** (Commits a522949, 207fd8a): Prevent Docker build cache from storing old biomes.json and other manifest files.
+
+**Problem**: Docker layer caching was preserving old manifest files across builds, causing production deployments to use stale biome configurations even after manifest updates.
+
+**Fix**: Modified `packages/server/Dockerfile` to invalidate cache for manifest copy operations:
+```dockerfile
+# Create world directory structure and copy manifests where server expects them
+RUN mkdir -p ./packages/server/world/assets/manifests
+
+# Copy manifests (small JSON files needed for server-side logic)
+# This layer is invalidated on every build to ensure fresh manifests
+COPY assets/manifests ./packages/server/world/assets/manifests
+```
+
+**Additional Changes**:
+- Added cache-busting comments to force rebuild of manifest layers
+- Ensured `bun install --production` runs after manifest copy to restore workspace symlinks
+
+**Impact**: 
+- Docker images always contain latest manifest files
+- Eliminates production errors from stale biome configs
+- Consistent manifest versions across all deployment targets
+- No manual cache clearing required
+
 ### Docker Workspace Symlinks Fix (March 12, 2026)
 
 **Change** (Commit 7f1af94): Added `bun install --production` in Docker runtime stage to restore workspace symlinks.
