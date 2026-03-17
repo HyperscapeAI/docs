@@ -605,6 +605,15 @@ That tag triggers cross-platform native packaging and publishes installers to a 
 
 ## Troubleshooting
 
+**Mobs standing idle / not attacking (Fixed March 17, 2026):**
+Mob AI state machines now function correctly. Goblins and other mobs properly transition through IDLE → WANDER → CHASE → ATTACK states. If you're running an older version, update to the latest main branch.
+
+**All mobs highlighting when hovering over one (Fixed March 17, 2026):**
+VRM material instances are now isolated per mob. Each entity has independent highlight state. Update to the latest main branch if you're experiencing this issue.
+
+**Dev server consuming 100% CPU when idle (Fixed March 16, 2026):**
+File watcher polling has been optimized. Update to the latest main branch for the fix.
+
 **Characters vanishing / not appearing on character select:**
 This happens when Privy credentials are missing. Each page refresh creates a new anonymous user, orphaning your characters. Fix: Set `PUBLIC_PRIVY_APP_ID` in client `.env` and both `PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` in server `.env`.
 
