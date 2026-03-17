@@ -104,6 +104,31 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### VRM Material Isolation Fix (March 17, 2026)
+
+**Change** (PR #1061, Commit 364d0a5): Isolated VRM clone materials to prevent highlight bleed across mob instances.
+
+**Problem**: `SkeletonUtils.clone()` shares material instances across all VRM clones, causing hover highlight on one mob to affect all mobs of the same type. When hovering over a goblin, all goblins in the world would highlight simultaneously.
+
+**Fix**: Create fresh `MeshStandardNodeMaterial` per mesh in `cloneGLB()` so each entity has independent `outputNode`/uniforms. Textures remain shared by reference for memory efficiency.
+
+**Implementation** (`packages/shared/src/rendering/materials/cloneGLB.ts`):
+```typescript
+// Clone material to prevent shared state across instances
+// Textures are shared by reference (memory efficient)
+// but outputNode and uniforms are per-instance
+const clonedMaterial = new MeshStandardNodeMaterial();
+clonedMaterial.copy(originalMaterial);
+// ... copy all material properties
+mesh.material = clonedMaterial;
+```
+
+**Impact**: 
+- Each mob instance now has independent highlight state
+- Hovering over one goblin no longer highlights all goblins
+- Textures remain shared for memory efficiency
+- Fixes visual bug where all VRM mobs of same type would highlight together
+
 ### Mob AI Tick Processing Fix (March 17, 2026)
 
 **Change** (PR #1060, Commit a55079e): Wired mob AI tick processing into server tick loop to enable mob state machine transitions.
