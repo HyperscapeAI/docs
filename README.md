@@ -28,6 +28,24 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 ## Recent Updates (March 2026)
 
+### Mob AI Tick Processing Fix (March 17, 2026)
+- **Change**: Wired mob AI tick processing into server tick loop to enable mob state machine transitions
+- **Problem**: Mob AI state machines never received update() calls, causing goblins to stand idle forever after spawn
+- **Fix**: Register mob AI tick handler at MOVEMENT priority in ServerNetwork, before mob tile movement
+- **Impact**: Mob AI state machines now function correctly, goblins properly transition through IDLE → WANDER → CHASE → ATTACK states
+
+### Dev Server Watcher CPU Fix (March 16, 2026)
+- **Change**: Fixed dev server watcher burning 100% CPU when idle
+- **Problem**: `awaitWriteFinish` was polling every file at 100ms (redundant), and polling fallback was scanning every 1s
+- **Fix**: Removed `awaitWriteFinish` and increased polling fallback interval from 1s to 5s
+- **Impact**: Eliminates 100% CPU usage when dev server is idle, better developer experience with lower resource consumption
+
+### Railway ENOTDIR Fix (March 13, 2026)
+- **Change**: Added fallback to `gameAssetsRoot` to prevent Fastify static ENOTDIR crash on Railway
+- **Problem**: Railway deployments were crashing with ENOTDIR errors when Fastify tried to serve static assets from a path that wasn't a directory
+- **Fix**: Added fallback logic in server initialization to use `gameAssetsRoot` when primary asset path is unavailable
+- **Impact**: More reliable Railway deployments, eliminates ENOTDIR crashes on production servers
+
 ### PM2 Log Tail Fix for Deployment (March 13, 2026)
 - **Change**: Replaced hanging `pm2 logs` command with direct `tail` for log dumping in deployment script
 - **Problem**: `pm2 logs` command was hanging indefinitely during deployment error handling, causing GitHub Actions to timeout after 30 minutes
