@@ -223,6 +223,92 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 
 ## Recent Major Features (March 2026)
 
+### Mob AI Tick Processing Fix (March 17, 2026)
+
+**Change** (PR #1060, Commit a55079e): Wired mob AI tick processing into server tick loop to enable mob state machine transitions.
+
+**Problem**: `MobEntity.serverUpdate()` defers AI to `GameTickProcessor.runAITick()`, but `GameTickProcessor` was never instantiated — so mob AI state machines never received `update()` calls. Goblins entered IDLE on spawn and never transitioned to WANDER, CHASE, or ATTACK.
+
+**Fix**: Register mob AI tick handler at MOVEMENT priority in `ServerNetwork`, before mob tile movement, so AI decides movement targets and the movement system executes paths on the same tick.
+
+**Implementation** (`packages/server/src/systems/ServerNetwork/index.ts`):
+```typescript
+// OSRS-ACCURATE: Process mob AI BEFORE mob movement each tick
+// AI state machine (IDLE → WANDER → CHASE → ATTACK → RETURN) decides movement targets,
+// then mob tile movement executes the path on the same tick.
+// Without this, mobs stand idle forever because MobEntity.serverUpdate() defers
+// AI ticking to the tick system for deterministic OSRS ordering.
+const MOB_AI_DELTA_SECONDS = TICK_DURATION_MS / 1000;
+this.tickSystem.onTick(() => {
+  for (const entity of this.world.entities.values()) {
+    if (!(entity instanceof MobEntity)) continue;
+    if (entity.getHealth() <= 0) continue;
+    entity.runAITick(MOB_AI_DELTA_SECONDS);
+  }
+}, TickPriority.MOVEMENT);
+
+// Register mob tile movement to run on each tick (same priority as player movement)
+// Runs AFTER mob AI so paths set by AI are executed this tick
+this.tickSystem.onTick((tickNumber) => {
+  this.mobTileMovementManager.onTick(tickNumber);
+}, TickPriority.MOVEMENT);
+```
+
+**Files Changed**:
+- `packages/server/src/systems/ServerNetwork/index.ts` - Added mob AI tick processing loop
+
+**Impact**: 
+- Mob AI state machines now function correctly
+- Goblins and other mobs properly transition through IDLE → WANDER → CHASE → ATTACK states
+- Deterministic OSRS-style tick ordering (AI decides, movement executes, same tick)
+- Fixes mobs standing idle forever after spawn
+
+### Dev Server Watcher CPU Fix (March 16, 2026)
+
+**Change** (PR #1034, Commit 7b5bf08): Fixed dev server watcher burning 100% CPU when idle.
+
+**Problem**: Two compounding issues caused the dev script to consume 100% CPU core while completely idle:
+1. `awaitWriteFinish` polls every watched file at 100ms — redundant since the script already debounces rebuilds itself
+2. Polling fallback does a full recursive directory walk every 1s
+
+**Fix** (`packages/server/scripts/dev.mjs`):
+```javascript
+// Removed awaitWriteFinish (redundant with existing 200ms debounce)
+const watcher = chokidar.watch(watchRoots, {
+  ignoreInitial: true,
+  // awaitWriteFinish removed - script already debounces via setTimeout
+});
+
+// Increased polling fallback interval from 1s to 5s
+async function startPollingFallback() {
+  pollFallbackInterval = setInterval(() => {
+    // ... scan for changes
+  }, 5000); // Was 1000ms
+}
+```
+
+**Files Changed**:
+- `packages/server/scripts/dev.mjs` - Removed `awaitWriteFinish` config, increased polling interval
+
+**Impact**: 
+- Eliminates 100% CPU usage when dev server is idle
+- Reduces unnecessary file system polling
+- Better developer experience with lower resource consumption
+- No impact on rebuild responsiveness (200ms debounce still active)
+
+### Railway ENOTDIR Fix (March 13, 2026)
+
+**Change** (Commit 511519d): Added fallback to `gameAssetsRoot` to prevent Fastify static ENOTDIR crash on Railway.
+
+**Problem**: Railway deployments were crashing with ENOTDIR errors when Fastify tried to serve static assets from a path that wasn't a directory.
+
+**Fix**: Added fallback logic in server initialization to use `gameAssetsRoot` when primary asset path is unavailable.
+
+**Files Changed**:
+- `packages/server/src/startup/http-server.ts` - Added fallback logic for asset path resolution
+
+**Impact**: More reliable Railway deployments, eliminates ENOTDIR crashes on production servers.
+
 ### PM2 Log Tail Fix for Deployment (March 13, 2026)
 
 **Change** (Commit c226be7): Replaced hanging `pm2 logs` command with direct `tail` for log dumping in deployment script.
