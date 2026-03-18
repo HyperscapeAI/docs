@@ -63,7 +63,7 @@ Hyperscape is a RuneScape-style MMORPG built on Three.js WebGPURenderer with TSL
 
 ## Tech Stack
 
-- Runtime: Bun v1.1.38+
+- Runtime: Bun v1.3.10+ (upgraded from 1.1.38 for Vite build compatibility)
 - Rendering: WebGPU ONLY (Three.js WebGPURenderer + TSL)
 - Engine: Three.js 0.183.2, PhysX (WASM)
 - UI: React 19.2.0
