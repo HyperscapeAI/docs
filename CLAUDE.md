@@ -1278,7 +1278,7 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 
 ## Tech Stack
 
-- **Runtime**: Bun v1.1.38+
+- **Runtime**: Bun v1.3.10+ (upgraded from 1.1.38 for Vite 6+ compatibility)
 - **Rendering**: WebGPU ONLY (Three.js WebGPURenderer + TSL shaders) - NO WebGL
 - **Engine**: Three.js 0.183.2, PhysX (WASM)
 - **UI**: React 19.2.0, styled-components
@@ -1288,7 +1288,7 @@ This project uses **Bun** (v1.1.38+) as the package manager and runtime.
 - **AI**: ElizaOS `alpha` tag (aligned with latest alpha releases)
 - **Streaming**: FFmpeg (system preferred over ffmpeg-static), Playwright Chromium, RTMP
 - **Mobile**: Capacitor 8.2.0 (Android, iOS)
-- **Build**: Turbo, esbuild, Vite
+- **Build**: Turbo, esbuild, Vite 8.0
 
 ## Troubleshooting
 
