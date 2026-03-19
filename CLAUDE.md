@@ -1393,7 +1393,7 @@ SPECTATOR_PORT=4180              # Spectator server port
 
 ## Package Manager
 
-This project uses **Bun** (v1.1.38+) as the package manager and runtime.
+This project uses **Bun** (v1.3.10+) as the package manager and runtime.
 
 - Install: `bun install` (NOT `npm install`)
 - Run scripts: `bun run <script>` or `bun <file>`
