@@ -293,16 +293,21 @@ Fixed dev server watcher consuming 100% CPU when idle by removing redundant file
 - Removed better-sqlite3 to prevent QEMU segfaults
 
 ### Dependency Updates (March 19, 2026)
-- **Vite**: 6.4.1 → 8.0.0 (major build system upgrade)
-- **@vitejs/plugin-react**: 5.2.0 → 6.0.1 (React 19 compatibility)
-- **@types/three**: 0.182.0 → 0.183.1 (TypeScript definitions)
-- **@vitest/coverage-v8**: 4.0.18 → 4.1.0 (test coverage)
-- **jsdom**: 28.1.0 → 29.0.0 (testing environment)
-- **jest**: 29.7.0 → 30.3.0 (testing framework)
-- **@pixiv/three-vrm**: 3.4.3 → 3.5.1 (VRM avatar features)
-- **@nomicfoundation/hardhat-ethers**: 3.1.3 → 4.0.6 (smart contract tooling)
-- **@solana-mobile/wallet-standard-mobile**: 0.4.4 → 0.5.0 (Solana mobile wallet)
-- **sqlite3**: 5.1.7 → 6.0.1 (SQLite database driver)
+**Major Version Upgrades:**
+- **Vite**: 6.4.1 → 8.0.0 (MAJOR - faster builds, improved HMR, better tree-shaking)
+- **@vitejs/plugin-react**: 5.2.0 → 6.0.1 (MAJOR - new Fast Refresh implementation for React 19)
+- **@nomicfoundation/hardhat-ethers**: 3.1.3 → 4.0.6 (MAJOR - ethers.js v6 integration)
+- **jsdom**: 28.1.0 → 29.0.0 (MAJOR - improved testing environment)
+- **jest**: 29.7.0 → 30.3.0 (MAJOR - latest testing framework features)
+- **sqlite3**: 5.1.7 → 6.0.1 (MAJOR - database driver improvements)
+
+**Minor/Patch Updates:**
+- **@pixiv/three-vrm**: 3.4.3 → 3.5.1 (VRM avatar support improvements)
+- **@solana-mobile/wallet-standard-mobile**: 0.4.4 → 0.5.0 (Solana mobile wallet updates)
+- **@vitest/coverage-v8**: 4.0.18 → 4.1.0 (test coverage tooling)
+- **@types/three**: 0.182.0 → 0.183.1 (TypeScript definitions for Three.js 0.183.2)
+
+**Impact**: Latest build tooling with improved performance, better React 19 compatibility, updated testing environment, latest VRM avatar features, improved mobile wallet support.
 
 ## More Info
 
