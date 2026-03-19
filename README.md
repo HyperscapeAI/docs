@@ -271,6 +271,35 @@ bun install
 bun run build
 ```
 
+**Vite 8 / React plugin 6 errors (after March 19, 2026 updates):**
+If you see plugin errors or HMR issues after updating:
+```bash
+# Clear Vite cache
+rm -rf packages/client/.vite packages/shared/.vite packages/asset-forge/.vite
+
+# Reinstall dependencies
+bun install
+
+# Rebuild
+bun run build
+```
+
+**ethers.js v6 contract errors (after March 19, 2026 updates):**
+If contract deployment fails with `deployed() is not a function`:
+```typescript
+// Update contract scripts to use ethers v6 API
+// OLD: await contract.deployed()
+// NEW: await contract.waitForDeployment()
+```
+See `docs/migration-march-2026.md` for complete migration guide.
+
+**Jest snapshot errors (after March 19, 2026 updates):**
+If tests fail with snapshot mismatches:
+```bash
+# Regenerate snapshots with new Jest 30 format
+npm test -- -u
+```
+
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
