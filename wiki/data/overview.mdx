@@ -699,6 +699,53 @@ interface VegetationAsset {
 - `fallen_tree` - Fallen logs
 - `mushroom` - Giant mushrooms (added in recent update)
 
+### Model Bounds System
+
+The `model-bounds.json` manifest provides pre-calculated bounding boxes and footprints for 3D models:
+
+```typescript
+interface ModelBounds {
+  id: string;                    // Model identifier
+  assetPath: string;             // Path to GLB model
+  bounds: {
+    min: { x: number; y: number; z: number; };
+    max: { x: number; y: number; z: number; };
+  };
+  dimensions: {
+    x: number;                   // Width in meters
+    y: number;                   // Height in meters
+    z: number;                   // Depth in meters
+  };
+  footprint: {
+    width: number;               // Grid footprint width
+    depth: number;               // Grid footprint depth
+  };
+}
+```
+
+**Purpose:**
+- Pre-calculated bounds avoid runtime model loading for collision detection
+- Footprint data used for station placement and terrain flattening
+- Enables efficient spatial queries without loading full 3D models
+- Generated automatically from model files with 1-meter tile size
+
+The model bounds system is used by the terrain flattening system to calculate station footprints and by the collision system for efficient spatial queries.
+
+### Biomes
+
+The `biomes.json` manifest defines terrain biomes with vegetation, mobs, and environmental properties:
+
+**Available Biomes:**
+- **Plains** - Open grasslands with gentle rolling hills (difficulty 0)
+- **Forest** - Dense woodland with abundant trees (difficulty 1)
+- **Valley** - Low-lying areas between hills (difficulty 0)
+- **Mountains** - High elevation rocky peaks (difficulty 2)
+- **Tundra** - Frozen wasteland with ice and snow (difficulty 3)
+- **Desert** - Arid wasteland with sand dunes (difficulty 2)
+- **Lakes** - Water bodies and fishing spots (difficulty 0)
+- **Swamp** - Murky wetlands with twisted vegetation (difficulty 1)
+- **Canyon** - Red-rock canyon lands with terraced mesas (difficulty 2, NEW)
+
 ### Biome Vegetation Layers
 
 Biomes in `biomes.json` define procedural vegetation layers that reference vegetation assets:
