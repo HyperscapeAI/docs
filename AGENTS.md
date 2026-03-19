@@ -63,17 +63,18 @@ Hyperscape is a RuneScape-style MMORPG built on Three.js WebGPURenderer with TSL
 
 ## Tech Stack
 
-- Runtime: Bun v1.3.10+ (upgraded from 1.1.38 for Vite build compatibility)
+- Runtime: Bun v1.3.10+ (upgraded from 1.1.38 for Vite 6+ compatibility)
 - Rendering: WebGPU ONLY (Three.js WebGPURenderer + TSL)
 - Engine: Three.js 0.183.2, PhysX (WASM)
 - UI: React 19.2.0
 - Server: Fastify, WebSockets
-- Database: PostgreSQL (production, connection pool: 20), Docker (local)
-- Testing: Vitest 4.x (upgraded from 2.x for Vite 6 compatibility), Playwright (WebGPU-enabled browsers only)
-- Build: Vite 8.0.0 (upgraded from 6.4.1), Turbo
+- Database: PostgreSQL (production, connection pool: 20), Docker (local), sqlite3 6.0.1 (dev only)
+- Testing: Vitest 4.1.0+, Jest 30.3.0, Playwright (WebGPU-enabled browsers only)
+- Build: Vite 8.0.0, @vitejs/plugin-react 6.0.1, Turbo, esbuild
 - AI: ElizaOS `alpha` tag (aligned with latest alpha releases)
 - Streaming: FFmpeg (system preferred over ffmpeg-static), Playwright Chromium, RTMP
 - Mobile: Capacitor 8.2.0 (Android, iOS)
+- Smart Contracts: Hardhat 3.1.11+, @nomicfoundation/hardhat-ethers 4.0.6 (ethers.js v6)
 
 ## Common Commands
 
