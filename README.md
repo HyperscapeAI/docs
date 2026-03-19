@@ -46,6 +46,18 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 ## Recent Updates (March 2026)
 
+### Docker Build Improvements (March 18, 2026)
+- **Change**: Comprehensive Docker build improvements for multi-service deployment (PR #1033)
+- **Problems Fixed**: Missing client build, Bun 1.1.38 incompatibility with Vite 6+, node binary missing, better-sqlite3 QEMU crashes, workspace symlinks destroyed by Docker COPY, Bun 1.3 per-package node_modules
+- **Solutions**: Added client build to Dockerfile, upgraded Bun 1.1.38 → 1.3.10, changed ensure-assets to use bun instead of node, removed better-sqlite3 from manifests, restored workspace symlinks with `bun install --production`, explicitly copy per-package node_modules
+- **Impact**: Multi-service deployments now work correctly, Vite 6+ builds work in Docker, workspace packages resolve correctly at runtime, no more QEMU segfaults
+
+### VRM Material Isolation Fix (March 17, 2026)
+- **Change**: Isolated VRM clone materials to prevent highlight bleed across mob instances (PR #1061)
+- **Problem**: `SkeletonUtils.clone()` shares material instances across all VRM clones, causing hover highlight on one mob to affect all mobs of the same type
+- **Fix**: Create fresh `MeshStandardNodeMaterial` per mesh in `cloneGLB()` so each entity has independent `outputNode`/uniforms while textures remain shared for memory efficiency
+- **Impact**: Each mob instance now has independent highlight state, hovering over one goblin no longer highlights all goblins, textures remain shared for memory efficiency
+
 ### Mob AI Tick Processing Fix (March 17, 2026)
 - **Change**: Wired mob AI tick processing into server tick loop to enable mob state machine transitions
 - **Problem**: Mob AI state machines never received update() calls, causing goblins to stand idle forever after spawn
