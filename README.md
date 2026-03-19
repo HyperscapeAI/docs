@@ -28,6 +28,24 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 ## Recent Updates (March 2026)
 
+### Docker Build Improvements (March 18, 2026)
+- **Multi-Service Support**: Docker image now includes both client and server builds for multi-service deployments
+- **Bun 1.3.10 Upgrade**: Upgraded from Bun 1.1.38 to support Vite 6+ builds in Docker
+- **Workspace Symlinks**: Fixed Docker COPY flattening workspace symlinks by running `bun install --production` in runtime stage
+- **better-sqlite3 Removal**: Removed from manifests during Docker build to prevent QEMU segfaults
+- **Per-Package node_modules**: Properly handles Bun 1.3's per-package dependency structure
+- **Impact**: Multi-service deployments work correctly, Vite 6+ builds succeed, workspace packages resolve at runtime
+
+### Major Dependency Updates (March 19, 2026)
+- **Vite 8.0.0**: Upgraded from 6.4.1 (MAJOR - faster builds, improved HMR, better tree-shaking)
+- **@vitejs/plugin-react 6.0.1**: Upgraded from 5.2.0 (MAJOR - new Fast Refresh implementation)
+- **@nomicfoundation/hardhat-ethers 4.0.6**: Upgraded from 3.1.3 (MAJOR - ethers.js v6 integration)
+- **jsdom 29.0.0**: Upgraded from 28.1.0 (MAJOR - testing environment improvements)
+- **@pixiv/three-vrm 3.5.1**: Upgraded from 3.4.3 (VRM avatar support improvements)
+- **@solana-mobile/wallet-standard-mobile 0.5.0**: Upgraded from 0.4.4 (Solana mobile wallet updates)
+
+## Recent Updates (March 2026)
+
 ### Mob AI Tick Processing Fix (March 17, 2026)
 - **Change**: Wired mob AI tick processing into server tick loop to enable mob state machine transitions
 - **Problem**: Mob AI state machines never received update() calls, causing goblins to stand idle forever after spawn
