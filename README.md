@@ -19,259 +19,14 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **Combat** | Tick-based OSRS mechanics (600ms ticks), attack styles, accuracy formulas, death/respawn system |
 | **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking + combat skills with XP/leveling |
 | **Economy** | 480-slot bank, shops, item weights, loot drops |
-| **AI Agents** | ElizaOS-powered autonomous gameplay, 10 frontier LLM models (Anthropic/Groq), spectator mode, autonomous behavior between duels |
-| **Streaming** | Multi-platform RTMP streaming (Twitch, Kick, YouTube), CDP capture, 30fps frame pacing, HLS preview |
-| **Terrain** | Biome-based generation, quadtree LOD (5 levels), infinite rendering, batched tree instancing |
-| **Admin** | Maintenance mode, live controls dashboard, log streaming, graceful restarts, safe-to-deploy checks |
+| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
-| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics, WebGPU rendering |
-
-## Recent Updates (March 2026)
-
-### Docker Build Improvements (March 18, 2026)
-- **Multi-Service Support**: Docker image now includes both client and server builds for multi-service deployments
-- **Bun 1.3.10 Upgrade**: Upgraded from Bun 1.1.38 to support Vite 6+ builds in Docker
-- **Workspace Symlinks**: Fixed Docker COPY flattening workspace symlinks by running `bun install --production` in runtime stage
-- **better-sqlite3 Removal**: Removed from manifests during Docker build to prevent QEMU segfaults
-- **Per-Package node_modules**: Properly handles Bun 1.3's per-package dependency structure
-- **Impact**: Multi-service deployments work correctly, Vite 6+ builds succeed, workspace packages resolve at runtime
-
-### Major Dependency Updates (March 19, 2026)
-- **Vite 8.0.0**: Upgraded from 6.4.1 (MAJOR - faster builds, improved HMR, better tree-shaking)
-- **@vitejs/plugin-react 6.0.1**: Upgraded from 5.2.0 (MAJOR - new Fast Refresh implementation)
-- **@nomicfoundation/hardhat-ethers 4.0.6**: Upgraded from 3.1.3 (MAJOR - ethers.js v6 integration)
-- **jsdom 29.0.0**: Upgraded from 28.1.0 (MAJOR - testing environment improvements)
-- **@pixiv/three-vrm 3.5.1**: Upgraded from 3.4.3 (VRM avatar support improvements)
-- **@solana-mobile/wallet-standard-mobile 0.5.0**: Upgraded from 0.4.4 (Solana mobile wallet updates)
-
-## Recent Updates (March 2026)
-
-### Docker Build Improvements (March 18, 2026)
-- **Change**: Comprehensive Docker build improvements for multi-service deployment (PR #1033)
-- **Problems Fixed**: Missing client build, Bun 1.1.38 incompatibility with Vite 6+, node binary missing, better-sqlite3 QEMU crashes, workspace symlinks destroyed by Docker COPY, Bun 1.3 per-package node_modules
-- **Solutions**: Added client build to Dockerfile, upgraded Bun 1.1.38 → 1.3.10, changed ensure-assets to use bun instead of node, removed better-sqlite3 from manifests, restored workspace symlinks with `bun install --production`, explicitly copy per-package node_modules
-- **Impact**: Multi-service deployments now work correctly, Vite 6+ builds work in Docker, workspace packages resolve correctly at runtime, no more QEMU segfaults
-
-### VRM Material Isolation Fix (March 17, 2026)
-- **Change**: Isolated VRM clone materials to prevent highlight bleed across mob instances (PR #1061)
-- **Problem**: `SkeletonUtils.clone()` shares material instances across all VRM clones, causing hover highlight on one mob to affect all mobs of the same type
-- **Fix**: Create fresh `MeshStandardNodeMaterial` per mesh in `cloneGLB()` so each entity has independent `outputNode`/uniforms while textures remain shared for memory efficiency
-- **Impact**: Each mob instance now has independent highlight state, hovering over one goblin no longer highlights all goblins, textures remain shared for memory efficiency
-
-### Mob AI Tick Processing Fix (March 17, 2026)
-- **Change**: Wired mob AI tick processing into server tick loop to enable mob state machine transitions
-- **Problem**: Mob AI state machines never received update() calls, causing goblins to stand idle forever after spawn
-- **Fix**: Register mob AI tick handler at MOVEMENT priority in ServerNetwork, before mob tile movement
-- **Impact**: Mob AI state machines now function correctly, goblins properly transition through IDLE → WANDER → CHASE → ATTACK states
-
-### Dev Server Watcher CPU Fix (March 16, 2026)
-- **Change**: Fixed dev server watcher burning 100% CPU when idle
-- **Problem**: `awaitWriteFinish` was polling every file at 100ms (redundant), and polling fallback was scanning every 1s
-- **Fix**: Removed `awaitWriteFinish` and increased polling fallback interval from 1s to 5s
-- **Impact**: Eliminates 100% CPU usage when dev server is idle, better developer experience with lower resource consumption
-
-### Railway ENOTDIR Fix (March 13, 2026)
-- **Change**: Added fallback to `gameAssetsRoot` to prevent Fastify static ENOTDIR crash on Railway
-- **Problem**: Railway deployments were crashing with ENOTDIR errors when Fastify tried to serve static assets from a path that wasn't a directory
-- **Fix**: Added fallback logic in server initialization to use `gameAssetsRoot` when primary asset path is unavailable
-- **Impact**: More reliable Railway deployments, eliminates ENOTDIR crashes on production servers
-
-### PM2 Log Tail Fix for Deployment (March 13, 2026)
-- **Change**: Replaced hanging `pm2 logs` command with direct `tail` for log dumping in deployment script
-- **Problem**: `pm2 logs` command was hanging indefinitely during deployment error handling, causing GitHub Actions to timeout after 30 minutes
-- **Fix**: Now uses direct OS-level log file access (`tail -n 10000 /root/.pm2/logs/hyperscape-duel-error.log`) for immediate log retrieval
-- **Impact**: Deployment failures now exit immediately with full error logs, no more 30-minute SSH session hangs, faster GitHub Actions workflows on failures
-
-### Chrome Beta for Linux WebGPU Support (March 13, 2026)
-- **Change**: Reverted from Chrome Canary back to Chrome Beta for Linux WebGPU streaming support
-- **Problem**: Chrome Canary was experiencing instability issues on Linux NVIDIA GPUs. Chrome Beta provides better stability for production streaming
-- **Fix**: Updated `scripts/deploy-vast.sh` to install `google-chrome-beta` instead of `google-chrome-unstable`
-- **Configuration**: Linux NVIDIA deployments now use Chrome Beta with Vulkan ANGLE backend for optimal WebGPU stability
-- **Impact**: More reliable WebGPU initialization on Linux NVIDIA GPUs, better production stability for streaming
-
-### Curl Timeout Configuration (March 13, 2026)
-- **Change**: Added `--max-time 10` timeout to all curl health check commands in deployment scripts
-- **Problem**: Health check curl commands could hang indefinitely if services were unresponsive, causing deployment scripts to stall
-- **Fix**: All curl commands in `scripts/deploy-vast.sh` now have explicit 10-second timeout
-- **Impact**: Deployment scripts fail fast when services are unresponsive, prevents indefinite hangs during health checks
-
-### SSH Keepalive & Maintenance Timeout (March 13, 2026)
-- **SSH Keepalive**: Added `ServerAliveInterval=15` and `ServerAliveCountMax=3` to SSH commands in `.github/workflows/deploy-vast.yml` to prevent connection drops during long-running operations (detects dead connections within 45 seconds)
-- **Maintenance Timeout**: Reduced from 300 seconds (5 minutes) to 30 seconds for faster deployment cycles when waiting for current duel to complete
-- **Impact**: More reliable SSH connections during deployments, faster deployment cycles, prevents connection drops during maintenance mode
-
-### OSRS-Accurate Movement Rotation (March 13, 2026)
-- **Change**: Fixed player rotation to ignore combat target rotation while moving, restoring OSRS-accurate movement behavior
-- **Problem**: Players were rotating to face their combat target even while moving, which differs from Old School RuneScape behavior where movement direction takes priority over combat facing
-- **Fix**: Modified movement system to ignore combat rotation updates while the player is actively moving
-- **Impact**: Movement feels more responsive and natural, matches OSRS behavior where players face their movement direction, combat rotation only applies when standing still, better player control during kiting and tactical movement
-
-### Fresh Asset Fetching on Vast.ai Deploy (March 13, 2026)
-- **Change**: Force fresh asset download on every Vast.ai deployment to prevent stale biome manifests
-- **Problem**: Vast.ai VM cache was persisting old `packages/server/world/assets` directory across deployments, causing stale biome manifests to be used even after CDN updates
-- **Fix**: Added explicit asset cleanup in `scripts/deploy-vast.sh` before `bun install`: `rm -rf packages/server/world/assets`
-- **Impact**: Eliminates stale manifest issues on Vast.ai deployments, ensures latest biome configs are always used, fixes canyon biome errors from outdated manifests, forces fresh download from CDN on every deploy
-
-### Docker Build Cache Invalidation (March 13, 2026)
-- **Change**: Prevent Docker build cache from storing old biomes.json and other manifest files
-- **Problem**: Docker layer caching was preserving old manifest files across builds, causing production deployments to use stale biome configurations even after manifest updates
-- **Fix**: Modified `packages/server/Dockerfile` to invalidate cache for manifest copy operations with cache-busting comments
-- **Impact**: Docker images always contain latest manifest files, eliminates production errors from stale biome configs, consistent manifest versions across all deployment targets, no manual cache clearing required
-
-### PM2 Dump Path Fix (March 13, 2026)
-- **Change**: Fixed PM2 error log path for remote dump functionality
-- **Problem**: PM2 dump logs were not being saved to the correct path, making debugging difficult
-- **Fix**: Updated PM2 configuration to use correct error log path for remote dump
-- **Impact**: Better debugging capabilities, proper log persistence for production deployments
-
-### Docker Workspace Symlinks Fix (March 12, 2026)
-- **Problem**: Docker COPY flattens workspace symlinks in `node_modules`, breaking runtime module resolution for externalized packages
-- **Fix**: Added `bun install --production` in Docker runtime stage to restore workspace symlinks
-- **Impact**: Server can now resolve @hyperscape/* workspace packages in production Docker deployments
-
-### Model Provider Diversity (March 12, 2026)
-- **Change**: Switched from ElizaCloud to direct Anthropic/Groq providers with interleaved selection
-- **Models**: Claude Sonnet 4.6, Llama 4 Scout, Claude Opus 4.6, Llama 4 Maverick, Claude Haiku 4.5, Llama 3.3 70B, Kimi K2, Qwen 3 30B
-- **Impact**: Better model diversity, reduced dependency on single provider, more resilient agent spawning
-
-### Biome System Refactoring (March 12, 2026)
-- **Removed Hardcoded Biomes**: Biome definitions now passed explicitly to `BiomeSystem` constructor
-- **Dynamic Biome IDs**: Auto-assigned at runtime based on provided definitions
-- **Explicit Centers**: Added `explicitCenters` option for pre-computed biome placement
-- **Tree Config Unification**: Merged `distribution` and `placements` into single `trees` map
-- **Slope Rejection**: Trees now rejected on steep slopes (configurable `maxSlope` per biome)
-- **Impact**: More flexible biome system, cleaner API, realistic tree placement
-
-### CDN Cache Busting & Manifest Reliability (March 13, 2026)
-- **Cache Busting**: Added timestamp query parameters to all CDN manifest requests to prevent stale asset issues
-- **Manifest Embedding**: Server Docker image now embeds manifests at build time, eliminating CDN dependency for server startup
-- **Workbox Inline Runtime**: Service worker now inlines Workbox runtime to prevent MIME type errors on PWA updates
-- **Deployment Fixes**: Improved manifest upload workflow to prevent submodule overwrites and ensure fresh manifests in production
-- **Wrangler R2 Fix**: Added `--remote` flag to `wrangler r2 object put` command to target remote Cloudflare bucket instead of local
-- **Vast.ai Asset Refresh**: Deployment script now forcefully removes cached assets folder before `bun install` to ensure latest manifests are fetched
-- **Impact**: Eliminates stale manifest errors, more reliable deployments, better PWA update experience, correct R2 uploads
-
-### Tree Shader Lighting Fix (March 12, 2026)
-- **Vertex Sphere Normals**: Fixed tree lighting to use sphere normals baked into vertex attributes instead of normal maps
-- **Night Lighting**: Uniform night dimming maintains consistent light-shadow contrast (~1.35x ratio) across day/night cycle
-- **Visual Quality**: SSS (subsurface scattering), edge brightening, and saturation boost now scale with dayFactor for natural appearance
-- **Impact**: Correct volumetric foliage lighting, eliminates overly bright shadows at night
-
-### Biome Terrain Generation & Quadtree LOD (March 12, 2026)
-- **TerrainQuadTree**: Hierarchical LOD system for infinite terrain rendering
-  - Dynamic chunk splitting/unsplitting based on camera distance
-  - 5 LOD levels (1600m root → 100m leaf chunks)
-  - Uniform 32x32 vertex resolution across all levels
-  - Skirt geometry to hide LOD seams
-- **GLBTreeBatchedInstancer**: Multi-variant tree rendering with BatchedMesh
-  - One BatchedMesh per material slot per LOD level (minimal draw calls)
-  - Texture fingerprinting for automatic material slot matching
-  - Smooth LOD transitions with hysteresis (prevents flickering)
-  - Depleted state support (stumps after chopping)
-- **Biome System**: Terrain generation with biome-specific parameters (plains, forest, desert, etc.)
-- **Performance**: Reduced per-frame allocations (numeric grid coords, structural dirty flag)
-
-### Admin Live Controls & Maintenance Mode (March 12, 2026)
-- **Maintenance Mode**: Graceful server pause/resume for zero-downtime deployments
-  - Safe-to-deploy flag prevents mid-duel restarts
-  - Market pause during maintenance
-  - Client-side warning banner (polls `/health` every 5s)
-- **Live Controls Dashboard**: Real-time admin panel with HLS stream preview, server controls, live log streaming
-- **Logger Ring Buffer**: 1000-entry in-memory log storage with `GET /admin/logs` API
-- **Server Restart**: `POST /admin/restart` endpoint for graceful process restart (requires PM2)
-
-### Oracle Settlement Delay & Stream Sync (March 11, 2026)
-- Added `ORACLE_SETTLEMENT_DELAY_MS` (default 7000ms) to delay oracle publishing until stream catches up
-- Prevents oracle publishing before stream viewers see duel outcome
-- Configurable per deployment based on stream latency
-
-### Agent Autonomous Behavior Restoration (March 11, 2026)
-- Fixed agent T-pose with physics null guards for stream mode viewports
-- Re-enabled autonomous behavior (mining, chopping, fishing) between duels
-- Relaxed post-duel restore position (120-unit lobby → 2000-unit world boundary)
-- Interleaved Anthropic/Groq model agents for provider diversity
-- Bank state request on spawn for better goal planning
-
-### Streaming Frame Pacing Fix (March 11, 2026)
-- Enforced 30fps frame pacing to eliminate stream buffering
-- Frame pacing guard skips frames arriving faster than 85% of 33.3ms target
-- Default resolution changed from 1920x1080→1280x720 to match capture viewport
-- GOP size changed from 30→60 frames (2s at 30fps) per Twitch/YouTube recommendations
-
-### Deployment Fixes (March 11, 2026)
-- **SSH Timeout**: Added `disown` after background processes to prevent 30-minute hangs
-- **Orphaned Processes**: Explicit `pkill` commands to kill ghost bun server processes before deployment
-- **Impact**: Deployment completes in ~1 minute, eliminates database deadlocks
-
-### Three.js 0.183.2 Upgrade (March 10, 2026)
-- Upgraded from 0.182.0 to 0.183.2 for latest WebGPU features and performance improvements
-- **Breaking Change**: TSL API `atan2` renamed to `atan` (migration required for custom shaders)
-- Improved WebGPU stability and shader compilation
-
-### Streaming Pipeline Optimization (March 10-13, 2026)
-- **Default Capture Mode**: CDP (Chrome DevTools Protocol) for reliable frame capture
-- **Chrome Canary**: Switched to Chrome Canary (`google-chrome-unstable`) on Linux for better WebGPU support (March 13, 2026)
-- **ANGLE Backend**: Vulkan ANGLE backend (`--use-angle=vulkan`) on Linux NVIDIA for WebGPU stability
-- **FFmpeg**: System FFmpeg preferred over ffmpeg-static to avoid segfaults (resolution order: `/usr/bin` → `/usr/local/bin` → PATH → ffmpeg-static)
-- **x264 Tuning**: `zerolatency` tune for live streaming (lower latency, was `film`)
-- **RTMP Muxer**: Changed from `flv` to `fifo` muxer with `drop_pkts_on_overflow=1` to absorb network stalls
-- **Physics Optimization**: Skip client-side PhysX for streaming/spectator viewports (faster startup, lower memory)
-- **Playwright Fix**: Block `--enable-unsafe-swiftshader` injection to prevent CPU software rendering from blocking WebGPU
-- **Health Check Timeouts**: All curl commands use `--max-time 10` to prevent indefinite hangs (March 13, 2026)
-
-### Test Infrastructure Updates (March 10-11, 2026)
-- Excluded `@hyperscape/impostor` from headless CI (requires WebGPU)
-- Increased `sim-engine` test timeout from 60s to 120s (prevents flaky CI failures)
-- Fixed cyclic dependencies and port conflicts
-- WebGPU-dependent packages require local testing with GPU-enabled browsers
-
-### Manifest Loading Fixes (March 10, 2026)
-- Removed legacy `items.json` and `resources.json` (never existed)
-- Added missing manifests: `ammunition.json`, `combat-spells.json`, `duel-arenas.json`, `lod-settings.json`, `quests.json`, `runes.json`
-- Eliminates 404 errors during manifest loading
-
-### CDN Configuration Simplification (March 10, 2026)
-- Unified `PUBLIC_CDN_URL` environment variable (replaced `DUEL_PUBLIC_CDN_URL`)
-- Consistent CDN configuration across all contexts (client, server, streaming)
-- Simplified R2 CORS configuration with wildcard origin for public assets
-
-### Service Worker Improvements (March 10, 2026)
-- Switched from `CacheFirst` to `NetworkFirst` strategy for JS/CSS
-- Eliminates stale module errors after rebuilds
-- Aggressive cache clearing for local development
-
-### Dependency Updates (March 10-19, 2026)
-
-**March 19, 2026**:
-- **Vite**: 6.4.1 → 8.0.0 - Major version bump, requires Bun 1.3.10+
-- **@vitejs/plugin-react**: 5.2.0 → 6.0.1 - React plugin for Vite 8.0
-- **@pixiv/three-vrm**: 3.4.3 → 3.5.1 - VRM avatar support improvements
-- **jsdom**: 28.1.0 → 29.0.0 - Testing environment updates
-- **@nomicfoundation/hardhat-ethers**: 3.1.3 → 4.0.6 - Hardhat Ethers plugin
-- **@solana-mobile/wallet-standard-mobile**: 0.4.4 → 0.5.0 - Solana mobile wallet
-
-**March 10, 2026**:
-- **Capacitor**: 8.2.0 (Android, iOS, Core) - Latest mobile platform features
-- **lucide-react**: 0.577.0 - New icons and improvements
-- **three-mesh-bvh**: 0.9.9 - Better BVH performance
-- **eslint**: 10.0.3 - Latest linting rules
-- **@ai-sdk/openai**: 3.0.41 - AI SDK updates
-- **hardhat**: 3.1.11 - Smart contract tooling
-- **@nomicfoundation/hardhat-chai-matchers**: 3.0.0 - Testing matchers
-- **globals**: 17.4.0 - TypeScript globals
-
-### Database & Infrastructure (March 10, 2026)
-- PostgreSQL connection pool increased to 20 (from 10) to prevent timeouts under load
-- Auto-detection of database mode (local vs remote) from `DATABASE_URL` hostname
-- PM2 environment variable forwarding for `DISPLAY`, `DATABASE_URL`, and stream keys
-- Xvfb virtual display started before PM2 on Linux for reliable GPU rendering
-
-See [AGENTS.md](AGENTS.md) for complete changelog and technical details.
+| **Tech** | VRM avatars, WebSocket networking, PostgreSQL persistence, PhysX physics |
 
 ## Quick Start
 
 **Prerequisites:**
-- [Bun](https://bun.sh) (v1.3.10+) - **Note**: Upgraded from 1.1.38 for Vite 6+ compatibility
+- [Bun](https://bun.sh) (v1.3.10+) - **Updated from 1.1.38 for Vite 6+ compatibility**
 - [Git LFS](https://git-lfs.com) - `brew install git-lfs` (macOS) or `apt install git-lfs` (Linux)
 - Docker - [Docker Desktop](https://docker.com/products/docker-desktop) for macOS/Windows, or `apt install docker.io` on Linux
 - [Privy](https://privy.io) account (required for authentication)
@@ -284,7 +39,7 @@ bun install
 
 ### Setup Environment Files
 
-> **⚠️ WebGPU Linux / Streaming Note**: When running Hyperscape on Linux (e.g. Vast.ai), you must use headful Chrome with Xorg/Xvfb. For production streaming, use **Chrome Beta** channel (`google-chrome-beta`) with Vulkan ANGLE backend (`--use-angle=vulkan`) for optimal WebGPU stability on NVIDIA GPUs (as of March 13, 2026). **Critical**: When using Playwright for streaming capture, use `ignoreDefaultArgs: ['--enable-unsafe-swiftshader']` to prevent CPU software rendering from blocking WebGPU. System FFmpeg is preferred over ffmpeg-static to avoid segfaults (resolution order: `/usr/bin/ffmpeg` → `/usr/local/bin/ffmpeg` → PATH → ffmpeg-static). All curl health check commands use `--max-time 10` to prevent indefinite hangs.
+> **⚠️ WebGPU Linux / Streaming Note**: When running Hyperscape on Linux (e.g. Vast.ai), you must use headful Chrome with Xorg/Xvfb. You MUST use the ANGLE backend for WebGPU, **NOT** Vulkan (`--use-vulkan`). Using the native Vulkan backend with WebGPU currently will crash.
 
 ```bash
 # Required: Copy both client and server env files
@@ -347,32 +102,14 @@ cp packages/asset-forge/.env.example packages/asset-forge/.env
 
 ```
 packages/
-├── shared/              # Core 3D engine (ECS, Three.js 0.183.2, PhysX, networking, React UI)
-│                        # - Biome terrain generation with quadtree LOD
-│                        # - GLBTreeBatchedInstancer for multi-variant trees
-│                        # - Physics null guards for stream mode
-├── server/              # Game server (Fastify, WebSockets, PostgreSQL pool: 20)
-│                        # - Maintenance mode system
-│                        # - Admin live controls dashboard
-│                        # - Logger ring buffer (1000 entries)
-│                        # - Oracle settlement delay (7s default)
-├── client/              # Web client (Vite, React, streaming entry points: stream.html)
-│                        # - Maintenance banner (polls /health every 5s)
-│                        # - Admin live controls UI
-│                        # - NetworkFirst service worker cache
+├── shared/              # Core 3D engine (ECS, Three.js, PhysX, networking)
+├── server/              # Game server (Fastify, WebSockets, database)
+├── client/              # Web client (Vite, React)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
-│                        # - Autonomous behavior between duels (mining, chopping, fishing)
-│                        # - Interleaved model providers (Anthropic/Groq)
-│                        # - Bank state request on spawn for goal planning
 ├── physx-js-webidl/     # PhysX WASM bindings
-├── procgen/             # Procedural generation (terrain, trees, rocks, plants)
-├── asset-forge/         # AI asset generation + VFX catalog
-├── duel-oracle-evm/     # EVM duel outcome oracle contracts
-├── duel-oracle-solana/  # Solana duel outcome oracle program
-└── contracts/           # MUD onchain game state (experimental)
+├── asset-forge/         # AI asset generation tools
+└── docs-site/           # Documentation (Docusaurus)
 ```
-
-**Note**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet). Oracle functionality remains in Hyperscape for duel outcome verification.
 
 Build order: `physx-js-webidl` → `shared` → everything else (handled automatically by Turbo)
 
@@ -401,7 +138,6 @@ Build order: `physx-js-webidl` → `shared` → everything else (handled automat
 bun run dev:client    # Client only (port 3333)
 bun run dev:server    # Server only (port 5555)
 bun run dev:ai        # Game + ElizaOS agents (adds port 4001)
-bun run duel          # Full duel stack with AI agents and streaming
 bun run dev:forge     # AssetForge tools (ports 3400, 3401)
 bun run docs:dev      # Documentation site (port 3402)
 bun run dev:all       # Everything: game + AI + AssetForge
@@ -445,16 +181,10 @@ bun run assets:sync    # Pull latest assets from repo (local dev only)
 Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.privy.io).
 
 **Optional configuration** - see `.env.example` files for all options:
-- `packages/server/.env.example` - Database, ports, LiveKit voice chat, ElizaCloud API key, streaming (RTMP), oracle
+- `packages/server/.env.example` - Database, ports, LiveKit voice chat
 - `packages/client/.env.example` - API URLs, Farcaster integration
 - `packages/asset-forge/.env.example` - AI API keys (OpenAI, Meshy)
 - `packages/plugin-hyperscape/.env.example` - ElizaOS agent config
-
-**Key Optional Features:**
-- **AI Agents**: Set `ANTHROPIC_API_KEY` and/or `GROQ_API_KEY` in server `.env` for autonomous AI agents (10 frontier models: Claude Sonnet/Opus/Haiku 4.x, Llama 4 Scout/Maverick, Llama 3.3 70B, Kimi K2, Qwen 3 30B)
-- **RTMP Streaming**: Set `TWITCH_STREAM_KEY`, `KICK_STREAM_KEY`, or `YOUTUBE_STREAM_KEY` for multi-platform streaming (auto-detected)
-- **Duel Oracle**: Set `DUEL_ARENA_ORACLE_ENABLED=true` and configure EVM/Solana signers for verifiable duel outcome publishing
-- **Oracle Settlement Delay**: Set `ORACLE_SETTLEMENT_DELAY_MS=7000` to sync oracle publishing with stream latency (default: 7s)
 
 ### Default Ports
 
@@ -467,153 +197,6 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 | 3401 | AssetForge API | `bun run dev:forge` |
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
-
-## Admin Dashboard
-
-Hyperscape includes a comprehensive admin dashboard for server management and monitoring.
-
-### Accessing the Admin Dashboard
-
-1. **Set admin code** in `packages/server/.env`:
-   ```bash
-   ADMIN_CODE=your-secure-admin-code
-   ```
-
-2. **Navigate to admin panel**:
-   ```
-   http://localhost:3333/?page=admin
-   ```
-
-3. **Enter admin code** when prompted
-
-### Features
-
-- **Live Controls Tab** (NEW - March 2026):
-  - HLS stream preview with embedded video player
-  - Maintenance mode toggle (pause/resume game)
-  - Server restart button (requires PM2)
-  - Live log streaming (1000-entry ring buffer, auto-refresh every 3s)
-  - Real-time status: maintenance state, viewer count, current phase
-- **User Management**: View all users, characters, and sessions
-- **Player Management**: Inspect player state, inventory, equipment, skills
-- **Activity Log**: Server-side event history with filtering
-
-### Admin API Endpoints
-
-All endpoints require `x-admin-code` header:
-
-```bash
-# Maintenance Mode
-POST /admin/maintenance/enter    # Pause game after current duel
-POST /admin/maintenance/exit     # Resume game
-GET  /admin/maintenance/status   # Check maintenance state
-
-# Server Control
-POST /admin/restart              # Restart server process (requires PM2)
-GET  /admin/logs                 # Fetch recent logs (1000 entries)
-
-# Duel Management
-GET  /admin/duels/status         # Current duel cycle status
-```
-
-### Maintenance Mode
-
-Maintenance mode enables zero-downtime deployments:
-
-1. **Enter maintenance mode**: Pauses new duel cycles, waits for active duels to complete
-2. **Safe-to-deploy check**: `safeToDeploy: true` when no active duels
-3. **Deploy**: Restart server with new code
-4. **Exit maintenance mode**: Resume duel cycles
-
-**Client-side banner**: Automatically displays warning when maintenance mode is active (polls `/health` every 5s).
-
-## Streaming (RTMP)
-
-Hyperscape supports multi-platform RTMP streaming to Twitch, Kick, and YouTube with automatic destination detection.
-
-### Quick Start
-
-1. **Set stream keys** in `packages/server/.env`:
-   ```bash
-   TWITCH_STREAM_KEY=live_123456789_abcdefghij
-   KICK_STREAM_KEY=your-kick-stream-key
-   YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
-   ```
-
-2. **Run the duel stack** (includes streaming):
-   ```bash
-   bun run dev:duel
-   ```
-
-Stream destinations are auto-detected from available keys. No manual configuration needed.
-
-### Streaming Architecture
-
-- **Capture Mode**: CDP (Chrome DevTools Protocol) for reliable frame capture (default)
-- **Browser**: Chrome Beta (`google-chrome-beta`) with Vulkan ANGLE backend (`--use-angle=vulkan`) on Linux NVIDIA for optimal WebGPU stability (as of March 13, 2026)
-- **Virtual Display**: Xvfb on Linux for headless GPU rendering (DISPLAY=:99)
-- **Entry Points**: Dedicated `stream.html` for optimized streaming capture (separate bundle)
-- **Pipeline**: Playwright → CDP → FFmpeg (system preferred) → RTMP
-- **FFmpeg Resolution**: `/usr/bin/ffmpeg` → `/usr/local/bin/ffmpeg` → PATH → ffmpeg-static (avoids segfaults)
-- **Encoding**: x264 with zerolatency tune, GOP=60 (2s segments at 30fps, per Twitch/YouTube recommendations)
-- **Physics**: Client-side PhysX skipped for streaming/spectator viewports (memory optimization)
-- **Playwright**: Blocks `--enable-unsafe-swiftshader` injection to prevent CPU software rendering
-- **Health Checks**: All curl commands use `--max-time 10` timeout to prevent indefinite hangs
-
-### Environment Variables
-
-```bash
-# Stream keys (auto-detected destinations)
-TWITCH_STREAM_KEY=...           # or TWITCH_RTMP_STREAM_KEY
-KICK_STREAM_KEY=...
-YOUTUBE_STREAM_KEY=...          # or YOUTUBE_RTMP_STREAM_KEY
-
-# Streaming configuration (defaults shown)
-STREAM_CAPTURE_MODE=cdp         # CDP for reliability (or mediarecorder)
-STREAM_CAPTURE_CHANNEL=chrome-beta  # Chrome Beta for WebGPU stability (Linux, as of March 13, 2026)
-STREAM_CAPTURE_ANGLE=vulkan     # Vulkan ANGLE backend (Linux NVIDIA, required for WebGPU)
-STREAM_CAPTURE_WIDTH=1280
-STREAM_CAPTURE_HEIGHT=720
-DISPLAY=:99                     # Xvfb virtual display (Linux)
-
-# CDN (unified configuration)
-PUBLIC_CDN_URL=https://assets.hyperscape.club
-```
-
-### Vast.ai GPU Streaming
-
-For production streaming on Vast.ai GPU instances:
-
-1. **GPU Requirements**: NVIDIA GPU with display driver (`gpu_display_active=true`)
-2. **Chrome Beta**: Installed automatically by `scripts/deploy-vast.sh` (as of March 13, 2026, using Chrome Beta for better production stability)
-3. **Xvfb**: Virtual display started before PM2 processes
-4. **PM2 Environment**: `DISPLAY`, `DATABASE_URL`, and stream keys forwarded automatically
-5. **Auto-Detection**: Database mode and stream destinations detected from environment
-6. **Health Checks**: All curl commands use `--max-time 10` timeout to prevent indefinite hangs
-
-See `scripts/deploy-vast.sh` for full deployment automation.
-
-### Troubleshooting Streaming
-
-**Stream not starting:**
-- Verify stream keys are set and valid
-- Check FFmpeg is installed: `which ffmpeg`
-- Ensure Playwright Chromium is installed: `bunx playwright install chromium`
-- Verify GPU display driver is active (Vast.ai: `gpu_display_active=true`)
-
-**Black screen / frozen stream:**
-- Check Chrome Beta is installed: `google-chrome-beta --version` (Linux, required as of March 13, 2026)
-- Verify Xvfb is running: `ps aux | grep Xvfb`
-- Ensure `DISPLAY=:99` is set in environment
-- Check Playwright isn't injecting `--enable-unsafe-swiftshader` (blocks WebGPU)
-- Verify ANGLE backend is set to `vulkan` on Linux NVIDIA: `STREAM_CAPTURE_ANGLE=vulkan`
-- Check Chrome feature flags include `WebGPU,UnsafeWebGPU,WebGPUDeveloperFeatures,DefaultANGLEVulkan,Vulkan,VulkanFromANGLE`
-- Verify curl health checks have `--max-time 10` timeout to prevent hangs
-
-**RTMP connection failures:**
-- Check for stale FFmpeg processes: `pkill -f ffmpeg`
-- Verify stream keys match platform requirements
-- Review logs: `bunx pm2 logs hyperscape-duel`
 
 ## Deployment (Railway)
 
@@ -644,15 +227,6 @@ That tag triggers cross-platform native packaging and publishes installers to a 
 
 ## Troubleshooting
 
-**Mobs standing idle / not attacking (Fixed March 17, 2026):**
-Mob AI state machines now function correctly. Goblins and other mobs properly transition through IDLE → WANDER → CHASE → ATTACK states. If you're running an older version, update to the latest main branch.
-
-**All mobs highlighting when hovering over one (Fixed March 17, 2026):**
-VRM material instances are now isolated per mob. Each entity has independent highlight state. Update to the latest main branch if you're experiencing this issue.
-
-**Dev server consuming 100% CPU when idle (Fixed March 16, 2026):**
-File watcher polling has been optimized. Update to the latest main branch for the fix.
-
 **Characters vanishing / not appearing on character select:**
 This happens when Privy credentials are missing. Each page refresh creates a new anonymous user, orphaning your characters. Fix: Set `PUBLIC_PRIVY_APP_ID` in client `.env` and both `PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` in server `.env`.
 
@@ -661,14 +235,6 @@ The CDN container needs to be running. It starts automatically with `bun run dev
 ```bash
 bun run cdn:up
 ```
-
-**Stale manifests / outdated game data:**
-If you're seeing outdated items, NPCs, or terrain configs after a deployment, this is likely due to CDN caching. As of March 2026, cache busting is automatically applied to all manifest requests. If you're still seeing stale data:
-- **Client**: Hard refresh your browser (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows/Linux)
-- **Server**: Manifests are now embedded in Docker images, so rebuild and redeploy: `docker build -f Dockerfile.server .`
-- **CDN**: Manifests are uploaded with cache-busting timestamps, no manual purging needed
-- **Vast.ai**: Deployment script now forcefully removes cached assets folder before install to fetch latest manifests
-- **R2 Upload**: Wrangler now uses `--remote` flag to ensure uploads target the remote Cloudflare bucket
 
 **Database schema errors or stale data after pulling updates:**
 Migrations only run once, so pulling new code won't fix an outdated database schema. Reset to fresh:
@@ -709,47 +275,33 @@ bun run build
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
 - Set `PUBLIC_CDN_URL` in both server and client `.env` to your asset hosting URL
 
-**Database connection pool exhaustion:**
-If seeing "timeout exceeded when trying to connect" errors, the PostgreSQL connection pool has been increased to 20 connections (March 2026). Configure via `POSTGRES_POOL_MAX` and `POSTGRES_POOL_MIN` in server `.env`.
+## Recent Updates (March 2026)
 
-**CSRF 403 errors on account creation:**
-If account creation fails with "CSRF validation failed" when running client on localhost against a deployed server, this was fixed in March 2026 (commit 0b1a0bd). Ensure you're running the latest version.
+### VRM Material Isolation (March 17, 2026)
+Fixed highlight bleed where hovering over one mob would highlight all mobs of the same type. Each VRM clone now has independent material instances while sharing textures for memory efficiency.
 
-**Stale module errors after rebuild:**
-Service worker cache strategy was switched to `NetworkFirst` in March 2026 to prevent stale JS/CSS. Clear your browser cache or use incognito mode if you still see errors.
+### Mob AI Tick Processing (March 17, 2026)
+Wired mob AI state machines into the server tick loop. Mobs now properly transition through IDLE → WANDER → CHASE → ATTACK states instead of standing idle forever.
 
-**Admin dashboard not accessible:**
-Ensure `ADMIN_CODE` is set in `packages/server/.env`. Navigate to `http://localhost:3333/?page=admin` and enter the admin code when prompted.
+### Dev Server Performance (March 16, 2026)
+Fixed dev server watcher consuming 100% CPU when idle by removing redundant file polling and increasing fallback interval from 1s to 5s.
 
-**Maintenance mode not working:**
-- Verify admin authentication (requires `ADMIN_CODE` in server `.env`)
-- Check `/admin/maintenance/status` endpoint returns valid JSON
-- Ensure no active duels: `safeToDeploy` should be `true`
-- Check PM2 logs: `bunx pm2 logs hyperscape-duel`
+### Docker Build Improvements (March 15, 2026)
+- Upgraded to Bun 1.3.10 for Vite 6+ compatibility
+- Added client build to Docker image for multi-service deployments
+- Fixed workspace symlink resolution after Docker COPY
+- Removed better-sqlite3 to prevent QEMU segfaults
 
-**Live logs not appearing in admin dashboard:**
-- Verify admin authentication (requires admin role)
-- Check ring buffer size: Server logs show "Logger ring buffer: X entries"
-- Ensure auto-refresh is enabled in dashboard
-- Check browser console for fetch errors
-
-**Docker module resolution errors (externalized workspace packages):**
-- **Symptom**: Server fails to start in Docker with "Cannot find module @hyperscape/decimation" or similar
-- **Cause**: Docker COPY flattens workspace symlinks
-- **Fix** (as of March 12, 2026): `bun install --production` now runs in Docker runtime stage to restore symlinks
-- **Verify**: Check Dockerfile.server includes `RUN bun install --production` after COPY steps
-
-**Biome system errors (missing biome definitions):**
-- **Symptom**: "Unknown biome name" or "Cannot read property of undefined" in terrain generation
-- **Cause**: Biome system no longer has hardcoded defaults (as of March 12, 2026)
-- **Fix**: Ensure biome definitions are passed to `BiomeSystem` constructor or `TerrainGenerator`
-- **Example**: See `packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts` for biome config structure
+### Dependency Updates (March 19, 2026)
+- **Vite**: 6.4.1 → 8.0.0 (major build system upgrade)
+- **@vitejs/plugin-react**: 5.2.0 → 6.0.1 (React 19 compatibility)
+- **jsdom**: 28.1.0 → 29.0.0 (testing environment)
+- **@pixiv/three-vrm**: 3.4.3 → 3.5.1 (VRM avatar features)
+- **@nomicfoundation/hardhat-ethers**: 3.1.3 → 4.0.6 (smart contract tooling)
 
 ## More Info
 
-See [AGENTS.md](AGENTS.md) for AI coding assistant instructions and recent changes documentation.
-
-See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
+See [AGENTS.md](AGENTS.md) for detailed development guidelines, architecture documentation, and coding standards.
 
 ## License
 
