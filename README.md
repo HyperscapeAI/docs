@@ -312,21 +312,46 @@ bun run build
 **Impact**: Multi-service deployments work correctly, Vite 6+ builds succeed, workspace packages (@hyperscape/*) resolve at runtime, no more QEMU segfaults.
 
 ### Dependency Updates (March 19, 2026)
-**Major Version Upgrades:**
-- **Vite**: 6.4.1 → 8.0.0 (MAJOR - faster builds, improved HMR, better tree-shaking)
-- **@vitejs/plugin-react**: 5.2.0 → 6.0.1 (MAJOR - new Fast Refresh implementation for React 19)
-- **@nomicfoundation/hardhat-ethers**: 3.1.3 → 4.0.6 (MAJOR - ethers.js v6 integration)
-- **jsdom**: 28.1.0 → 29.0.0 (MAJOR - improved testing environment)
-- **jest**: 29.7.0 → 30.3.0 (MAJOR - latest testing framework features)
-- **sqlite3**: 5.1.7 → 6.0.1 (MAJOR - database driver improvements)
+**Major Version Upgrades (Breaking Changes):**
+- **Vite**: 6.4.1 → 8.0.0
+  - New plugin API and config schema
+  - Faster builds, improved HMR, better tree-shaking
+  - **Migration**: Update `vite.config.ts` for Vite 8 plugin API
+- **@vitejs/plugin-react**: 5.2.0 → 6.0.1
+  - New Fast Refresh implementation for React 19
+  - **Migration**: Update plugin configuration in `vite.config.ts`
+- **@nomicfoundation/hardhat-ethers**: 3.1.3 → 4.0.6
+  - ethers.js v6 integration
+  - **Migration**: Update contract deployment scripts for ethers v6 API
+- **jsdom**: 28.1.0 → 29.0.0
+  - Improved DOM API compatibility and performance
+  - Better test environment for React 19 components
+- **jest**: 29.7.0 → 30.3.0
+  - New snapshot format and improved performance
+  - **Migration**: Regenerate snapshots with `npm test -- -u`
+- **sqlite3**: 5.1.7 → 6.0.1
+  - Node.js 18+ required
+  - Performance improvements
+  - **Note**: Removed from Docker builds to prevent QEMU segfaults (production uses PostgreSQL)
 
 **Minor/Patch Updates:**
 - **@pixiv/three-vrm**: 3.4.3 → 3.5.1 (VRM avatar support improvements)
-- **@solana-mobile/wallet-standard-mobile**: 0.4.4 → 0.5.0 (Solana mobile wallet updates)
-- **@vitest/coverage-v8**: 4.0.18 → 4.1.0 (test coverage tooling)
+- **@solana-mobile/wallet-standard-mobile**: 0.4.4 → 0.5.0 (enhanced mobile wallet integration)
+- **@vitest/coverage-v8**: 4.0.18 → 4.1.0 (improved coverage reporting)
 - **@types/three**: 0.182.0 → 0.183.1 (TypeScript definitions for Three.js 0.183.2)
 
-**Impact**: Latest build tooling with improved performance, better React 19 compatibility, updated testing environment, latest VRM avatar features, improved mobile wallet support.
+**Impact**: 
+- **Performance**: Faster builds, improved HMR, better test execution
+- **Compatibility**: Better React 19 support, latest VRM features, enhanced mobile wallet integration
+- **Type Safety**: Improved TypeScript definitions for Three.js WebGPU renderer
+- **Breaking Changes**: Requires migration for Vite configs, contract scripts, and test snapshots
+
+**Migration Checklist**:
+1. Update `vite.config.ts` plugin configurations for Vite 8 API
+2. Ensure Fast Refresh configuration is compatible with React plugin 6
+3. Update contract deployment scripts to use ethers v6 API
+4. Regenerate Jest snapshots: `npm test -- -u`
+5. Verify Node.js 18+ is installed (for sqlite3 6, though not used in production)
 
 ## More Info
 
