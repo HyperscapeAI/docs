@@ -104,6 +104,71 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Dependency Updates (March 19, 2026)
+
+**Major Version Bumps**:
+- **sqlite3**: 5.1.7 → 6.0.1 (major version bump)
+- **Vite**: 6.4.1 → 8.0.0 (major version bump)
+- **jsdom**: 28.1.0 → 29.0.0 (major version bump)
+- **@vitejs/plugin-react**: 5.2.0 → 6.0.1 (major version bump)
+- **@nomicfoundation/hardhat-ethers**: 3.1.3 → 4.0.6 (major version bump)
+
+**Minor Version Bumps**:
+- **@pixiv/three-vrm**: 3.4.3 → 3.5.1 (VRM avatar support)
+- **@solana-mobile/wallet-standard-mobile**: 0.4.4 → 0.5.0 (Solana mobile wallet)
+
+**Impact**: 
+- Latest build tooling and testing infrastructure
+- Improved VRM avatar rendering
+- Better Solana mobile wallet integration
+- Breaking changes in Vite 8.0 require updated build configurations
+
+### Docker Build Improvements (March 15, 2026)
+
+**Change** (PR #1033, Commit 7519105): Fixed Docker build to support client build and preserve Bun workspace dependencies.
+
+**Problems**:
+1. **Missing Client Build**: Dockerfile was server-only but multi-service template uses same image for both app and web containers
+2. **Bun Version Mismatch**: Old Bun 1.1.38 couldn't run Vite builds
+3. **Node Binary Missing**: `node` command not available in bun-only base image
+4. **better-sqlite3 QEMU Crash**: Native build segfaults under QEMU cross-compilation
+5. **Workspace Symlinks Destroyed**: Docker COPY flattens Bun workspace symlinks
+6. **Bun 1.3 Per-Package node_modules**: Bun 1.3 no longer hoists all deps to root
+
+**Fixes**:
+- Added `packages/client` to builder and `packages/client/dist` to runtime
+- Upgraded Bun from 1.1.38 → 1.3.10 in both builder and runtime stages
+- Changed `node scripts/ensure-assets.mjs` to `bun scripts/ensure-assets.mjs`
+- Stripped better-sqlite3 from manifests before install (project uses bun:sqlite/PostgreSQL)
+- Recreated workspace symlinks manually in runtime stage with `bun install --production`
+- Explicitly copied per-package node_modules from builder (three, dotenv, etc.)
+- Copied cleaned package manifests from builder instead of originals
+
+**Dockerfile Changes**:
+```dockerfile
+# Builder stage - Bun 1.3.10
+FROM oven/bun:1.3.10-alpine AS builder
+
+# Build client (new)
+WORKDIR /app/packages/client
+RUN bun run build
+
+# Runtime stage - Bun 1.3.10
+FROM oven/bun:1.3.10-alpine AS runtime
+
+# Copy client dist (new)
+COPY --from=builder /app/packages/client/dist ./packages/client/dist
+
+# Restore workspace symlinks that COPY flattened
+RUN bun install --production
+```
+
+**Impact**: 
+- Docker images now include both client and server builds
+- Fixes module resolution errors in production deployments
+- Eliminates QEMU cross-compilation crashes
+- Proper workspace dependency resolution at runtime
+
 ### VRM Material Isolation Fix (March 17, 2026)
 
 **Change** (PR #1061, Commit 364d0a5): Isolated VRM clone materials to prevent highlight bleed across mob instances.
