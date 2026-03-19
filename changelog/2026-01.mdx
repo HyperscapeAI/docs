@@ -3,6 +3,45 @@ title: "January 2026"
 description: "Duel Arena, Prayer, Collision, Smithing, Website, and UI Improvements"
 ---
 
+## Week 7: February 8-12
+
+### New Mobs
+
+*Merged: February 12, 2026*
+
+Added three new hostile NPCs to expand combat variety:
+
+- **Cow**: Level 2 passive mob that drops cowhide and bones
+  - **Stats**: 8 HP, non-aggressive, retaliates when attacked
+  - **Drops**: Cowhide (always), bones (default)
+  - **Spawns**: Plains and forest biomes
+  - **Model**: `models/cow/cow.vrm`
+- **Dark Wizard**: Level 22 aggressive magic user
+  - **Combat**: Casts Wind Strike spell, 10-tile range
+  - **Stats**: 22 HP, 22 Magic, 11 Defense
+  - **Drops**: Air/mind/water/earth runes, coins, wizard hat, staff
+  - **Spawns**: Plains and forest biomes
+  - **Model**: `models/dark-wizard/dark-wizard.vrm` with air staff
+- **Dark Ranger**: Level 15 aggressive ranged attacker
+  - **Combat**: Fires bronze arrows, 7-tile range
+  - **Stats**: 18 HP, 15 Ranged, 8 Defense
+  - **Drops**: Bronze arrows, coins, shortbow, leather armor
+  - **Spawns**: Plains and forest biomes
+  - **Model**: `models/dark-ranger/dark-ranger.vrm` with wooden bow
+
+**Integration**: All mobs added to `manifests/npcs.json` with complete combat stats, drop tables, and spawn configurations
+
+---
+
+### Ammunition Manifest Update (Week 6)
+
+*Merged: February 8, 2026*
+
+Updated ammunition manifest with additional arrow tier:
+
+- **Rune Arrows**: Added missing rune arrow tier (ranged strength: 49, level 40 requirement)
+- **Arrow Progression**: Complete F2P arrow set from bronze to rune
+- **Manifest**: Updated `manifests/ammunition.json` with all arrow tiers
 ## Week 11: March 9-12
 
 ### Tree Model Updates
