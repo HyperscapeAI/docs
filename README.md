@@ -250,7 +250,7 @@ See [AGENTS.md](AGENTS.md) for complete changelog and technical details.
 ## Quick Start
 
 **Prerequisites:**
-- [Bun](https://bun.sh) (v1.1.38+)
+- [Bun](https://bun.sh) (v1.3.10+) - **Note**: Upgraded from 1.1.38 for Vite 6+ compatibility
 - [Git LFS](https://git-lfs.com) - `brew install git-lfs` (macOS) or `apt install git-lfs` (Linux)
 - Docker - [Docker Desktop](https://docker.com/products/docker-desktop) for macOS/Windows, or `apt install docker.io` on Linux
 - [Privy](https://privy.io) account (required for authentication)
