@@ -3,6 +3,77 @@ title: "January 2026"
 description: "Duel Arena, Prayer, Collision, Smithing, Website, and UI Improvements"
 ---
 
+## Week 7: February 8-12
+
+### New Mobs
+
+*Merged: February 12, 2026*
+
+Added three new hostile NPCs to expand combat variety:
+
+- **Cow**: Level 2 passive mob that drops cowhide and bones
+  - **Stats**: 8 HP, non-aggressive, retaliates when attacked
+  - **Drops**: Cowhide (always), bones (default)
+  - **Spawns**: Plains and forest biomes
+  - **Model**: `models/cow/cow.vrm`
+- **Dark Wizard**: Level 22 aggressive magic user
+  - **Combat**: Casts Wind Strike spell, 10-tile range
+  - **Stats**: 22 HP, 22 Magic, 11 Defense
+  - **Drops**: Air/mind/water/earth runes, coins, wizard hat, staff
+  - **Spawns**: Plains and forest biomes
+  - **Model**: `models/dark-wizard/dark-wizard.vrm` with air staff
+- **Dark Ranger**: Level 15 aggressive ranged attacker
+  - **Combat**: Fires bronze arrows, 7-tile range
+  - **Stats**: 18 HP, 15 Ranged, 8 Defense
+  - **Drops**: Bronze arrows, coins, shortbow, leather armor
+  - **Spawns**: Plains and forest biomes
+  - **Model**: `models/dark-ranger/dark-ranger.vrm` with wooden bow
+
+**Integration**: All mobs added to `manifests/npcs.json` with complete combat stats, drop tables, and spawn configurations
+
+---
+
+### Ammunition Manifest Update (Week 6)
+
+*Merged: February 8, 2026*
+
+Updated ammunition manifest with additional arrow tier:
+
+- **Rune Arrows**: Added missing rune arrow tier (ranged strength: 49, level 40 requirement)
+- **Arrow Progression**: Complete F2P arrow set from bronze to rune
+- **Manifest**: Updated `manifests/ammunition.json` with all arrow tiers
+## Week 11: March 9-12
+
+### Tree Model Updates
+
+*Merged: March 12, 2026*
+
+Comprehensive tree model improvements for better visual quality and consistency:
+
+- **Wind Pine Tree**: New tree type for tundra biome (split from dead tree variants)
+- **Maple Leaves**: Recolored to warm vermillion red-orange (#D04838)
+- **Knotwood Leaves**: Recolored from golden-yellow to warm amber (#C4832A)
+- **Model Scales**: Adjusted tree model scales for better visual proportions
+- **Root Depth Normalization**: Fixed floating tree models
+  - All fir variants aligned to fir_03's minY (-59.46)
+  - All maple variants aligned to maple_01's minY (-114.76)
+  - Extra downward shift for maple_03 trunk base alignment
+
+---
+
+### Biome Configuration Updates
+
+*Merged: March 10, 2026*
+
+Updated biome walkability thresholds to match actual terrain generation:
+
+- **Tundra**: maxSlope 0.8 → 1.8 (for terraced terrain)
+- **Forest**: maxSlope 0.8 → 1.5 (for landscape features)
+- **Canyon**: maxSlope 0.6 → 2.5 (for steep canyon walls)
+- **Biome Sync**: Replaced outdated 8-biome manifest with active 3-biome version (tundra, forest, canyon)
+
+---
+
 ## Week 6: February 2-6
 
 ### Ammunition Manifest Update
