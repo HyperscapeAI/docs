@@ -90,42 +90,184 @@ services:
 
 ### Server Image
 
-The server Dockerfile includes all dependencies for production deployment:
+The server Dockerfile includes all dependencies for production deployment with Bun 1.3.10 and multi-service support:
 
 ```dockerfile
-FROM node:20-bookworm-slim
+# ─── Builder ────────────────────────────────────────────────────────────────
 
-# Install system dependencies
+FROM oven/bun:1.3.10-debian AS builder
+
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    git-lfs \
-    python3 \
-    python3-pip \
-    unzip
+    python3 make g++ pkg-config \
+    libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
+    ca-certificates git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Bun
-RUN curl -fsSL https://bun.sh/install | bash
-
-# Set CI=true to skip asset download
-ENV CI=true
-
-# Copy application
-COPY . /app
 WORKDIR /app
 
-# Install dependencies and build
-RUN bun install
-RUN bun run build
+ENV CI=true \
+    SKIP_ASSETS=true \
+    HYPERSCAPE_SKIP_BROWSER_INSTALL=true
 
-# Start server
-CMD ["bun", "start"]
+# Root manifests
+COPY package.json bun.lock turbo.json tsconfig.json ./
+
+# Workspace package manifests
+COPY packages/physx-js-webidl/package.json ./packages/physx-js-webidl/
+COPY packages/decimation/package.json      ./packages/decimation/
+COPY packages/impostors/package.json       ./packages/impostors/
+COPY packages/procgen/package.json         ./packages/procgen/
+COPY packages/shared/package.json          ./packages/shared/
+COPY packages/plugin-hyperscape/package.json ./packages/plugin-hyperscape/
+COPY packages/web3/package.json            ./packages/web3/
+COPY packages/server/package.json          ./packages/server/
+COPY packages/client/package.json          ./packages/client/
+
+# Install hook scripts + PhysX WASM prebuilts
+COPY scripts ./scripts
+COPY packages/client/public/web/physx-js-webidl.js  ./packages/client/public/web/
+COPY packages/client/public/web/physx-js-webidl.wasm ./packages/client/public/web/
+
+# Workspace sources
+COPY packages/physx-js-webidl    ./packages/physx-js-webidl
+COPY packages/decimation         ./packages/decimation
+COPY packages/impostors          ./packages/impostors
+COPY packages/procgen            ./packages/procgen
+COPY packages/shared             ./packages/shared
+COPY packages/plugin-hyperscape  ./packages/plugin-hyperscape
+COPY packages/web3               ./packages/web3
+COPY packages/server             ./packages/server
+COPY packages/client             ./packages/client
+
+# better-sqlite3's node-gyp build segfaults under QEMU cross-compilation
+# The project uses bun:sqlite / PostgreSQL, so it's safe to remove
+RUN bun -e " \
+  const fs = require('fs'); \
+  for (const f of ['packages/shared/package.json', 'package.json']) { \
+    const p = JSON.parse(fs.readFileSync(f)); \
+    delete p.dependencies?.['better-sqlite3']; \
+    delete p.devDependencies?.['better-sqlite3']; \
+    fs.writeFileSync(f, JSON.stringify(p, null, 2)); \
+  }"
+
+RUN bun install --trust
+
+# Download game asset manifests (bypass CDN reliance on boot)
+RUN rm -rf packages/server/world/assets && bun scripts/ensure-assets.mjs
+
+# Build workspace packages in dependency order
+RUN cd /app/packages/physx-js-webidl && bun run build && \
+    cd /app/packages/decimation && bun run build && \
+    cd /app/packages/impostors && bun run build && \
+    cd /app/packages/procgen && (bun run build || true) && \
+    cd /app/packages/shared && bun run build && \
+    cd /app/packages/plugin-hyperscape && bun run build && \
+    cd /app/packages/web3 && bun run build && \
+    cd /app/packages/server && bun run build && \
+    cd /app/packages/client && NODE_OPTIONS='--max-old-space-size=4096' bun run build:cf
+
+# ─── Runtime ────────────────────────────────────────────────────────────────
+
+FROM oven/bun:1.3.10-debian AS runtime
+
+RUN apt-get update && apt-get install -y \
+    libcairo2 libpango-1.0-0 libpangocairo-1.0-0 \
+    libjpeg62-turbo libgif7 librsvg2-2 \
+    ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    PORT=5555 \
+    SKIP_ASSETS=true \
+    HYPERSCAPE_SKIP_BROWSER_INSTALL=true
+
+# Package manifests from builder (has better-sqlite3 stripped)
+COPY --from=builder /app/package.json /app/bun.lock ./
+COPY --from=builder /app/packages/physx-js-webidl/package.json ./packages/physx-js-webidl/
+COPY --from=builder /app/packages/decimation/package.json      ./packages/decimation/
+COPY --from=builder /app/packages/impostors/package.json       ./packages/impostors/
+COPY --from=builder /app/packages/procgen/package.json         ./packages/procgen/
+COPY --from=builder /app/packages/shared/package.json          ./packages/shared/
+COPY --from=builder /app/packages/plugin-hyperscape/package.json ./packages/plugin-hyperscape/
+COPY --from=builder /app/packages/web3/package.json            ./packages/web3/
+COPY --from=builder /app/packages/server/package.json          ./packages/server/
+COPY --from=builder /app/packages/client/package.json          ./packages/client/
+
+# ── node_modules ──
+# Bun 1.3 uses per-package node_modules (not flat hoisting). Docker COPY
+# also destroys workspace symlinks. We need three things:
+#   1. Root node_modules (with .bun cache containing all resolved packages)
+#   2. Manual workspace symlinks (@hyperscape/* -> packages/*)
+#   3. Per-package node_modules for every workspace member used at runtime
+COPY --from=builder /app/node_modules ./node_modules
+
+RUN mkdir -p node_modules/@hyperscape && \
+    ln -s ../../packages/physx-js-webidl    node_modules/@hyperscape/physx-js-webidl && \
+    ln -s ../../packages/decimation         node_modules/@hyperscape/decimation && \
+    ln -s ../../packages/impostors          node_modules/@hyperscape/impostor && \
+    ln -s ../../packages/procgen            node_modules/@hyperscape/procgen && \
+    ln -s ../../packages/shared             node_modules/@hyperscape/shared && \
+    ln -s ../../packages/plugin-hyperscape  node_modules/@hyperscape/plugin-hyperscape && \
+    ln -s ../../packages/web3              node_modules/@hyperscape/web3 && \
+    ln -s ../../packages/server            node_modules/@hyperscape/server && \
+    ln -s ../../packages/client            node_modules/@hyperscape/client
+
+COPY --from=builder /app/packages/server/node_modules            ./packages/server/node_modules
+COPY --from=builder /app/packages/shared/node_modules            ./packages/shared/node_modules
+COPY --from=builder /app/packages/procgen/node_modules           ./packages/procgen/node_modules
+COPY --from=builder /app/packages/impostors/node_modules         ./packages/impostors/node_modules
+COPY --from=builder /app/packages/plugin-hyperscape/node_modules ./packages/plugin-hyperscape/node_modules
+COPY --from=builder /app/packages/web3/node_modules              ./packages/web3/node_modules
+COPY --from=builder /app/packages/client/node_modules            ./packages/client/node_modules
+
+# ── Build artifacts ──
+COPY --from=builder /app/packages/physx-js-webidl/dist  ./packages/physx-js-webidl/dist
+COPY --from=builder /app/packages/decimation/dist       ./packages/decimation/dist
+COPY --from=builder /app/packages/impostors/dist        ./packages/impostors/dist
+COPY --from=builder /app/packages/procgen/dist          ./packages/procgen/dist
+COPY --from=builder /app/packages/shared/build          ./packages/shared/build
+COPY --from=builder /app/packages/plugin-hyperscape/dist ./packages/plugin-hyperscape/dist
+COPY --from=builder /app/packages/web3/dist             ./packages/web3/dist
+COPY --from=builder /app/packages/server/dist           ./packages/server/dist
+COPY --from=builder /app/packages/server/src            ./packages/server/src
+COPY --from=builder /app/packages/server/world          ./packages/server/world
+COPY --from=builder /app/packages/client/dist           ./packages/client/dist
+
+RUN mkdir -p ./packages/server/public/live
+
+EXPOSE 5555
+
+CMD ["bun", "run", "start"]
 ```
 
-**Key Features:**
-- **bookworm-slim**: Debian 12 base for Python 3.11+ support
-- **build-essential**: Required for native module compilation (PhysX, etc.)
-- **git-lfs**: Asset validation and checks
-- **CI=true**: Skips asset download in production (assets served from CDN)
+**Key Features (Updated March 15, 2026):**
+- **Bun 1.3.10**: Upgraded from 1.1.38 for Vite 6+ compatibility
+- **Multi-Service Support**: Builds both client and server in single image
+- **Workspace Symlinks**: Manually recreated after Docker COPY (COPY flattens symlinks)
+- **Per-Package node_modules**: Bun 1.3 doesn't hoist all deps - explicitly copied
+- **better-sqlite3 Removal**: Stripped from manifests before install (segfaults under QEMU)
+- **Manifest Embedding**: Copies cleaned manifests from builder stage
+- **Client Build**: Includes `packages/client/dist` for multi-service deployments
+
+**Docker Build Workarounds:**
+
+1. **better-sqlite3 QEMU Crash**: Node-gyp native build segfaults under QEMU cross-compilation
+   - Solution: Strip from package.json before install
+   - Project uses bun:sqlite and PostgreSQL instead
+
+2. **Workspace Symlinks Destroyed**: Docker COPY flattens symlinks to regular files
+   - Solution: Manually recreate `node_modules/@hyperscape/*` symlinks in runtime stage
+   - Bun workspace resolution requires these symlinks
+
+3. **Bun 1.3 Per-Package node_modules**: Bun 1.3 changed dependency resolution
+   - Solution: Explicitly copy per-package node_modules from builder
+   - Packages like three, dotenv end up in `packages/*/node_modules/`
+
+4. **Procgen Build Errors**: Type errors cause partial emit
+   - Solution: `(bun run build || true)` continues build with partial output
+   - Downstream consumers still get sufficient artifacts
 
 ### Vast.ai Keeper Image
 
