@@ -223,6 +223,53 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 
 ## Recent Major Features (March 2026)
 
+### Docker Build Improvements (March 18, 2026)
+
+**Change** (PR #1033, Commit 7519105): Comprehensive Docker build improvements for multi-service deployment.
+
+**Problems Fixed**:
+1. **Missing Client Build**: Dockerfile was server-only but multi-service template uses same image for both app and web containers
+2. **Bun Version Incompatibility**: Bun 1.1.38 couldn't run Vite 6+ builds
+3. **Node Binary Missing**: `ensure-assets.mjs` was called with `node` but bun-only base image doesn't have node binary
+4. **better-sqlite3 QEMU Crash**: Native build segfaults under QEMU cross-compilation
+5. **Workspace Symlinks Destroyed**: Docker COPY flattens Bun workspace symlinks in `node_modules/@hyperscape/*`
+6. **Per-Package node_modules**: Bun 1.3 no longer hoists all deps to root, packages have their own `node_modules/`
+
+**Solutions**:
+```dockerfile
+# Builder stage
+FROM oven/bun:1.3.10 AS builder  # Upgraded from 1.1.38
+
+# Add packages/client to builder
+COPY packages/client ./packages/client
+
+# Use bun instead of node for ensure-assets
+RUN bun run ensure-assets.mjs
+
+# Remove better-sqlite3 from manifests before install
+RUN find packages -name package.json -exec sed -i '/"better-sqlite3"/d' {} \\;
+
+# Copy per-package node_modules from builder
+COPY --from=builder /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=builder /app/packages/server/node_modules ./packages/server/node_modules
+
+# Restore workspace symlinks in runtime stage
+RUN bun install --production
+```
+
+**Files Changed**:
+- `Dockerfile.server` - Added client build, Bun 1.3.10, workspace symlink restoration
+- `packages/*/package.json` - better-sqlite3 removed during Docker build
+
+**Impact**: 
+- Multi-service deployments now work correctly (app + web containers)
+- Vite 6+ builds work in Docker
+- Workspace packages resolve correctly at runtime
+- No more QEMU segfaults from better-sqlite3
+- Cleaner manifest files without unused dependencies
+
+## Recent Major Features (March 2026)
+
 ### Docker Build Improvements (March 15, 2026)
 
 **Change** (PR #1033, Commit 7519105): Comprehensive Docker build improvements for multi-service deployment.
