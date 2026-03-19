@@ -277,16 +277,25 @@ XP lamps are commonly awarded as quest rewards, allowing players to choose which
 Gathering resources is now defined in `manifests/gathering/` with OSRS-accurate XP values:
 
 **Woodcutting** (`gathering/woodcutting.json`):
-| Tree | Level | XP |
-|------|-------|-----|
-| Normal | 1 | 25 |
-| Oak | 15 | 37.5 |
-| Willow | 30 | 67.5 |
-| Teak | 35 | 85 |
-| Maple | 45 | 100 |
-| Mahogany | 50 | 125 |
-| Yew | 60 | 175 |
-| Magic | 75 | 250 |
+| Tree | Level | XP | Variants |
+|------|-------|-----|----------|
+| Fir | 1 | 25 | 4 variants + LOD |
+| Pine | 1 | 25 | 3 variants + LOD |
+| Birch | 1 | 25 | 5 variants + LOD |
+| Bamboo | 1 | 25 | 4 variants + LOD |
+| China Pine | 1 | 25 | 4 variants + LOD |
+| Coconut Palm | 1 | 25 | 5 variants + LOD |
+| Desert Palm | 1 | 25 | 5 variants + LOD |
+| Dead Tree | 1 | 25 | 5 variants + LOD |
+| Cactus | 1 | 25 | 8 variants + LOD |
+| Knotwood | 1 | 25 | 4 variants + LOD (warm amber leaves #C4832A) |
+| Wind Pine | 1 | 25 | 1 variant (tundra biome) |
+| Oak | 15 | 37.5 | 4 variants + LOD |
+| Maple | 45 | 100 | 3 variants + LOD (vermillion red-orange leaves #D04838) |
+
+<Note>
+The game now features 12 distinct tree types with 165 total model variants (55 base models × 3 LOD levels). Each tree type has multiple visual variants for environmental diversity. All tree models have been normalized to consistent root depths to prevent floating or sinking into terrain. Trees are now managed via TreeTypes.ts + woodcutting manifest instead of the vegetation system.
+</Note>
 
 **Mining** (`gathering/mining.json`):
 | Ore | Level | XP | Success Rate (L1 → L99) |

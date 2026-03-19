@@ -42,6 +42,35 @@ Updated ammunition manifest with additional arrow tier:
 - **Rune Arrows**: Added missing rune arrow tier (ranged strength: 49, level 40 requirement)
 - **Arrow Progression**: Complete F2P arrow set from bronze to rune
 - **Manifest**: Updated `manifests/ammunition.json` with all arrow tiers
+## Week 11: March 9-12
+
+### Tree Model Updates
+
+*Merged: March 12, 2026*
+
+Comprehensive tree model improvements for better visual quality and consistency:
+
+- **Wind Pine Tree**: New tree type for tundra biome (split from dead tree variants)
+- **Maple Leaves**: Recolored to warm vermillion red-orange (#D04838)
+- **Knotwood Leaves**: Recolored from golden-yellow to warm amber (#C4832A)
+- **Model Scales**: Adjusted tree model scales for better visual proportions
+- **Root Depth Normalization**: Fixed floating tree models
+  - All fir variants aligned to fir_03's minY (-59.46)
+  - All maple variants aligned to maple_01's minY (-114.76)
+  - Extra downward shift for maple_03 trunk base alignment
+
+---
+
+### Biome Configuration Updates
+
+*Merged: March 10, 2026*
+
+Updated biome walkability thresholds to match actual terrain generation:
+
+- **Tundra**: maxSlope 0.8 → 1.8 (for terraced terrain)
+- **Forest**: maxSlope 0.8 → 1.5 (for landscape features)
+- **Canyon**: maxSlope 0.6 → 2.5 (for steep canyon walls)
+- **Biome Sync**: Replaced outdated 8-biome manifest with active 3-biome version (tundra, forest, canyon)
 
 ---
 
