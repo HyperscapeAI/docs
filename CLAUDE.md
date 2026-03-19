@@ -1168,7 +1168,9 @@ if (error && typeof error === "object" && "logs" in error) {
 - **GravestoneLootSystem.test.ts**: Namespaced test items with `grave_` prefix to avoid registry collisions
 - **BiomeSystem Tests**: Updated to use explicit biome definitions instead of hardcoded `DEFAULT_BIOMES`
 
-### Dependency Updates (March 10-19, 2026)
+### Dependency Updates & Migration Guide (March 10-19, 2026)
+
+**📖 Complete Migration Guide**: See [`docs/migration-march-2026.md`](../docs/migration-march-2026.md) for detailed migration steps, code examples, and troubleshooting.
 
 **Major Updates**:
 - **Vite**: 6.4.1 → 8.0.0 (MAJOR - build tool upgrade)
