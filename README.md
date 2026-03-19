@@ -291,8 +291,14 @@ bun run build
 
 **Impact**: Mob AI state machines now function correctly, goblins properly transition through IDLE → WANDER → CHASE → ATTACK states, deterministic OSRS-style tick ordering.
 
-### Dev Server Performance (March 16, 2026)
-Fixed dev server watcher consuming 100% CPU when idle by removing redundant file polling and increasing fallback interval from 1s to 5s.
+### Dev Server Performance Fix (March 16, 2026)
+**Problem**: Two compounding issues caused the dev script to consume 100% CPU core while completely idle:
+1. `awaitWriteFinish` polls every watched file at 100ms (redundant since script already debounces rebuilds)
+2. Polling fallback does a full recursive directory walk every 1s
+
+**Fix**: Removed `awaitWriteFinish` config and increased polling fallback interval from 1s to 5s.
+
+**Impact**: Eliminates 100% CPU usage when dev server is idle, reduces unnecessary file system polling, better developer experience with lower resource consumption, no impact on rebuild responsiveness (200ms debounce still active).
 
 ### Docker Build Improvements (March 15-18, 2026)
 **Key Changes:**
