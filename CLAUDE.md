@@ -1168,17 +1168,30 @@ if (error && typeof error === "object" && "logs" in error) {
 - **GravestoneLootSystem.test.ts**: Namespaced test items with `grave_` prefix to avoid registry collisions
 - **BiomeSystem Tests**: Updated to use explicit biome definitions instead of hardcoded `DEFAULT_BIOMES`
 
-### Dependency Updates (March 10, 2026)
+### Dependency Updates (March 10-19, 2026)
 
 **Major Updates**:
+- **Bun**: 1.1.38 → 1.3.10 (runtime, required for Vite 6+ compatibility)
+- **Vite**: 6.4.1 → 8.0.0 (MAJOR - build tool upgrade)
+  - **Breaking**: New plugin API, updated config schema
+  - **Migration**: Update `vite.config.ts` for Vite 8 plugin API
+  - **Impact**: Faster builds, improved HMR, better tree-shaking
+- **@vitejs/plugin-react**: 5.2.0 → 6.0.1 (MAJOR - React plugin upgrade)
+  - **Breaking**: New Fast Refresh implementation
+  - **Migration**: Update plugin configuration in `vite.config.ts`
+- **@nomicfoundation/hardhat-ethers**: 3.1.3 → 4.0.6 (MAJOR - Hardhat plugin)
+  - **Breaking**: New ethers.js v6 integration
+  - **Migration**: Update contract deployment scripts for ethers v6 API
 - **Three.js**: 0.182.0 → 0.183.2
   - **Breaking**: `atan2` renamed to `atan` in TSL exports
   - Migration: `import { atan } from 'three/tsl'` (was `atan2`)
 - **Capacitor**: 7.6.0 → 8.2.0 (Android, iOS, Core)
+- **jsdom**: 28.1.0 → 29.0.0 (MAJOR - testing environment)
+- **@pixiv/three-vrm**: 3.4.3 → 3.5.1 (VRM avatar support)
+- **@solana-mobile/wallet-standard-mobile**: 0.4.4 → 0.5.0 (Solana mobile wallet)
 - **lucide-react**: → 0.577.0 (icon library)
 - **three-mesh-bvh**: 0.8.3 → 0.9.9 (BVH acceleration)
 - **eslint**: → 10.0.3 (linting)
-- **jsdom**: → 28.1.0 (testing)
 - **@ai-sdk/openai**: → 3.0.41 (AI SDK)
 - **hardhat**: → 3.1.11 (smart contracts)
 - **@nomicfoundation/hardhat-chai-matchers**: → 3.0.0 (testing)
