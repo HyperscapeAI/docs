@@ -109,18 +109,31 @@ packages/
 ### Dependency Updates (March 19, 2026)
 
 **Major Updates**:
-- **Vite**: 6.4.1 → 8.0.0 (build tool, breaking changes)
-- **@vitejs/plugin-react**: 5.2.0 → 6.0.1 (React plugin for Vite)
-- **@nomicfoundation/hardhat-ethers**: 3.1.3 → 4.0.6 (Hardhat Ethereum integration)
+- **Vite**: 6.4.1 → 8.0.0 (MAJOR - build tool upgrade)
+  - **Breaking**: New plugin API, updated config schema
+  - **Impact**: Faster builds, improved HMR, better tree-shaking
+- **@vitejs/plugin-react**: 5.2.0 → 6.0.1 (MAJOR - React plugin upgrade)
+  - **Breaking**: New Fast Refresh implementation
+  - **Impact**: Better React 19 compatibility
+- **@types/three**: 0.182.0 → 0.183.1 (TypeScript definitions for Three.js 0.183.2)
+- **@vitest/coverage-v8**: 4.0.18 → 4.1.0 (test coverage tooling)
+- **jsdom**: 28.1.0 → 29.0.0 (MAJOR - testing environment)
+- **jest**: 29.7.0 → 30.3.0 (MAJOR - testing framework)
+- **@nomicfoundation/hardhat-ethers**: 3.1.3 → 4.0.6 (MAJOR - Hardhat plugin)
+  - **Breaking**: New ethers.js v6 integration
 - **@pixiv/three-vrm**: 3.4.3 → 3.5.1 (VRM avatar support)
 - **@solana-mobile/wallet-standard-mobile**: 0.4.4 → 0.5.0 (Solana mobile wallet)
-- **jsdom**: 28.1.0 → 29.0.0 (DOM testing environment)
+- **sqlite3**: 5.1.7 → 6.0.1 (SQLite database driver)
 
-**Impact**:
-- Vite 8.0 brings performance improvements and new features
-- Better VRM avatar support with latest three-vrm
-- Improved Solana mobile wallet integration
-- Latest testing environment with jsdom 29
+**Impact Summary**:
+- Latest build tooling with improved performance and faster builds
+- Better React 19 compatibility with new Fast Refresh implementation
+- Updated testing environment with Jest 30.x and jsdom 29.x
+- Latest VRM avatar features and improvements
+- Improved mobile wallet support for Solana
+- Updated TypeScript definitions matching Three.js 0.183.2
+- Enhanced test coverage reporting with Vitest 4.1
+- SQLite 6.x with performance improvements and bug fixes
 
 ### Docker Client Build & Workspace Dependencies (March 15, 2026)
 
