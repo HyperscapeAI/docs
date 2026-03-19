@@ -223,6 +223,69 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 
 ## Recent Major Features (March 2026)
 
+### Docker Build Improvements (March 15, 2026)
+
+**Change** (PR #1033, Commit 7519105): Comprehensive Docker build improvements for multi-service deployment.
+
+**Problems Fixed**:
+1. **Missing Client Build**: Dockerfile was server-only but multi-service template uses same image for both app and web containers
+2. **Bun Version Incompatibility**: Bun 1.1.38 couldn't run Vite builds
+3. **Node Binary Missing**: `ensure-assets.mjs` was called with `node` but bun-only base image doesn't have node binary
+4. **better-sqlite3 QEMU Crash**: Native build segfaults under QEMU cross-compilation
+5. **Workspace Symlinks Destroyed**: Docker COPY flattens Bun workspace symlinks to `packages/*`
+6. **Bun 1.3 Per-Package node_modules**: Bun 1.3 no longer hoists all deps to root
+
+**Fixes**:
+- **Client Build Added**: Added `packages/client` to builder and `packages/client/dist` to runtime
+- **Bun Upgrade**: Updated both builder and runtime stages from 1.1.38 → 1.3.10
+- **Node → Bun**: Changed `ensure-assets.mjs` to use `bun` instead of `node`
+- **better-sqlite3 Removal**: Stripped from manifests before install (project uses bun:sqlite/PostgreSQL)
+- **Workspace Symlinks Restored**: Manually recreated symlinks in runtime stage with `bun install --production`
+- **Per-Package node_modules**: Explicitly copy package-specific node_modules from builder (three, dotenv, etc.)
+- **Manifest Preservation**: Package manifests copied from builder to ensure cleaned manifests (better-sqlite3 removed)
+
+**Dockerfile Changes**:
+```dockerfile
+# Builder stage - Bun 1.3.10
+FROM oven/bun:1.3.10-alpine AS builder
+
+# Build packages in correct order
+WORKDIR /app/packages/physx-js-webidl
+RUN bun run build || echo \"PhysX build skipped\"
+
+WORKDIR /app/packages/shared
+RUN bun run build
+
+WORKDIR /app/packages/server
+RUN bun run build
+
+# Runtime stage - Bun 1.3.10
+FROM oven/bun:1.3.10-alpine AS runtime
+
+# Copy built artifacts from builder
+COPY --from=builder /app/packages/physx-js-webidl/dist ./packages/physx-js-webidl/dist
+COPY --from=builder /app/packages/shared/build ./packages/shared/build
+COPY --from=builder /app/packages/server/dist ./packages/server/dist
+COPY --from=builder /app/packages/plugin-hyperscape ./packages/plugin-hyperscape
+
+# Copy manifests where server expects them
+RUN mkdir -p ./packages/server/world/assets/manifests
+COPY assets/manifests ./packages/server/world/assets/manifests
+
+# Restore workspace symlinks (flattened by Docker COPY)
+RUN bun install --production
+```
+
+**Files Changed**:
+- `packages/server/Dockerfile` - Complete rewrite for multi-service support
+
+**Impact**: 
+- Docker images now support both server and client deployments
+- Vite builds work correctly with Bun 1.3.10
+- Workspace dependencies resolve correctly at runtime
+- No more QEMU crashes from better-sqlite3
+- Consistent manifest versions across deployments
+
 ### VRM Material Isolation Fix (March 17, 2026)
 
 **Change** (PR #1061, Commit 364d0a5): Isolated VRM clone materials to prevent highlight bleed across mob instances.
