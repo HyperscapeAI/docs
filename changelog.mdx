@@ -23,6 +23,246 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Dependency Updates & Bug Fixes" description="March 2026" date="2026-03-19">
+
+### 📦 Major Dependency Updates (March 19, 2026)
+
+**Build System & Tooling:**
+- **Vite**: 6.4.1 → 8.0.0 (major version bump for build system)
+  - Improved build performance and faster development server
+  - Better React 19 compatibility
+  - Enhanced HMR (Hot Module Replacement) stability
+- **@vitejs/plugin-react**: 5.2.0 → 6.0.1 (React plugin compatibility)
+  - New Fast Refresh implementation for React 19
+  - Improved error recovery during development
+  - Better TypeScript integration
+
+**Testing & Development:**
+- **Vitest**: 4.0.18 → 4.1.0 (test coverage tooling)
+  - Enhanced coverage reporting
+  - Better browser mode support
+  - Improved test performance
+- **jest**: 29.7.0 → 30.3.0 (testing framework)
+  - Major version bump with new features
+  - Better async test handling
+  - Improved snapshot testing
+- **jsdom**: 28.1.0 → 29.0.0 (testing environment)
+  - Updated DOM API compatibility
+  - Better browser API mocking
+  - Performance improvements
+
+**Three.js & Graphics:**
+- **@types/three**: 0.182.0 → 0.183.1 (TypeScript definitions for Three.js 0.183.2)
+  - Updated type definitions matching Three.js 0.183.2
+  - Better WebGPU type coverage
+  - Improved TSL shader type safety
+- **@pixiv/three-vrm**: 3.4.3 → 3.5.1 (VRM avatar support)
+  - Latest VRM avatar features
+  - Improved animation blending
+  - Better material handling
+
+**Blockchain & Web3:**
+- **@nomicfoundation/hardhat-ethers**: 3.1.3 → 4.0.6 (smart contract tooling)
+  - Updated for ethers.js v6 compatibility
+  - Improved contract deployment
+  - Better TypeScript support
+- **@solana-mobile/wallet-standard-mobile**: 0.4.4 → 0.5.0 (mobile wallet integration)
+  - Enhanced mobile wallet support
+  - Better Saga/Seeker device compatibility
+  - Improved transaction signing
+
+**Database:**
+- **sqlite3**: 5.1.7 → 6.0.1 (SQLite database driver)
+  - Performance improvements
+  - Bug fixes and stability updates
+  - Better async/await support
+
+**Impact:**
+- Latest build tooling with improved performance and faster builds
+- Better React 19 compatibility with new Fast Refresh implementation
+- Updated testing environment with Jest 30.x and jsdom 29.x
+- Latest VRM avatar features and improvements
+- Improved mobile wallet support for Solana
+- Updated TypeScript definitions matching Three.js 0.183.2
+- Enhanced test coverage reporting with Vitest 4.1
+- SQLite 6.x with performance improvements and bug fixes
+
+### 🐛 VRM Material Isolation Fix (March 17, 2026)
+
+**Fixed highlight bleed across VRM mob instances** (PR #1061, Commit 364d0a5)
+
+**Problem**: `SkeletonUtils.clone()` shares material instances across all VRM clones, causing hover highlight on one mob to affect all mobs of the same type. When hovering over a goblin, all goblins in the world would highlight simultaneously.
+
+**Fix**: Create fresh `MeshStandardNodeMaterial` per mesh in `cloneGLB()` so each entity has independent `outputNode`/uniforms. Textures remain shared by reference for memory efficiency.
+
+**Implementation** (`packages/shared/src/extras/three/createVRMFactory.ts`):
+```typescript
+// Clone material to prevent shared state across instances
+// Textures are shared by reference (memory efficient)
+// but outputNode and uniforms are per-instance
+const clonedMaterial = new MeshStandardNodeMaterial();
+clonedMaterial.copy(originalMaterial);
+// ... copy all material properties
+mesh.material = clonedMaterial;
+```
+
+**Impact**: 
+- Each mob instance now has independent highlight state
+- Hovering over one goblin no longer highlights all goblins
+- Textures remain shared for memory efficiency
+- Fixes visual bug where all VRM mobs of same type would highlight together
+
+### 🤖 Mob AI Tick Processing Fix (March 17, 2026)
+
+**Wired mob AI tick processing into server tick loop** (PR #1060, Commit a55079e)
+
+**Problem**: `MobEntity.serverUpdate()` defers AI to `GameTickProcessor.runAITick()`, but `GameTickProcessor` was never instantiated — so mob AI state machines never received `update()` calls. Goblins entered IDLE on spawn and never transitioned to WANDER, CHASE, or ATTACK.
+
+**Fix**: Register mob AI tick handler at MOVEMENT priority in `ServerNetwork`, before mob tile movement, so AI decides movement targets and the movement system executes paths on the same tick.
+
+**Implementation** (`packages/server/src/systems/ServerNetwork/index.ts`):
+```typescript
+// OSRS-ACCURATE: Process mob AI BEFORE mob movement each tick
+// AI state machine (IDLE → WANDER → CHASE → ATTACK → RETURN) decides movement targets,
+// then mob tile movement executes the path on the same tick.
+// Without this, mobs stand idle forever because MobEntity.serverUpdate() defers
+// AI ticking to the tick system for deterministic OSRS ordering.
+const MOB_AI_DELTA_SECONDS = TICK_DURATION_MS / 1000;
+this.tickSystem.onTick(() => {
+  for (const entity of this.world.entities.values()) {
+    if (!(entity instanceof MobEntity)) continue;
+    if (entity.getHealth() <= 0) continue;
+    entity.runAITick(MOB_AI_DELTA_SECONDS);
+  }
+}, TickPriority.MOVEMENT);
+
+// Register mob tile movement to run on each tick (same priority as player movement)
+// Runs AFTER mob AI so paths set by AI are executed this tick
+this.tickSystem.onTick((tickNumber) => {
+  this.mobTileMovementManager.onTick(tickNumber);
+}, TickPriority.MOVEMENT);
+```
+
+**Impact**: 
+- Mob AI state machines now function correctly
+- Goblins and other mobs properly transition through IDLE → WANDER → CHASE → ATTACK states
+- Deterministic OSRS-style tick ordering (AI decides, movement executes, same tick)
+- Fixes mobs standing idle forever after spawn
+
+### ⚡ Dev Server Watcher CPU Fix (March 16, 2026)
+
+**Fixed dev server watcher burning 100% CPU when idle** (PR #1034, Commit 7b5bf08)
+
+**Problem**: Two compounding issues caused the dev script to consume 100% CPU core while completely idle:
+1. `awaitWriteFinish` polls every watched file at 100ms — redundant since the script already debounces rebuilds itself
+2. Polling fallback does a full recursive directory walk every 1s
+
+**Fix** (`packages/server/scripts/dev.mjs`):
+```javascript
+// Removed awaitWriteFinish (redundant with existing 200ms debounce)
+const watcher = chokidar.watch(watchRoots, {
+  ignoreInitial: true,
+  // awaitWriteFinish removed - script already debounces via setTimeout
+});
+
+// Increased polling fallback interval from 1s to 5s
+async function startPollingFallback() {
+  pollFallbackInterval = setInterval(() => {
+    // ... scan for changes
+  }, 5000); // Was 1000ms
+}
+```
+
+**Impact**: 
+- Eliminates 100% CPU usage when dev server is idle
+- Reduces unnecessary file system polling
+- Better developer experience with lower resource consumption
+- No impact on rebuild responsiveness (200ms debounce still active)
+
+### 🐳 Docker Build Improvements (March 15, 2026)
+
+**Major Dockerfile improvements for production deployment** (PR #1033, Commit 7519105)
+
+**Key Changes**:
+- **Bun 1.3.10 Upgrade**: Updated from 1.1.38 to support Vite 6+ builds
+  - Required for Vite 8.0.0 compatibility
+  - Better workspace dependency resolution
+  - Improved build performance
+- **Client Build**: Added `packages/client` build to Docker image (required for multi-service deployments)
+  - Enables single image for both server and client services
+  - Supports multi-service deployment templates
+  - Reduces deployment complexity
+- **Workspace Symlinks**: Manually recreate Bun workspace symlinks after Docker COPY (COPY flattens symlinks)
+  - Docker COPY flattens symlinks to regular files
+  - Bun workspace resolution requires symlinks in `node_modules/@hyperscape/*`
+  - Manual symlink recreation ensures runtime resolution works
+- **Per-Package node_modules**: Bun 1.3 no longer hoists all deps to root - explicitly copy package-level node_modules
+  - Bun 1.3 changed dependency resolution strategy
+  - Some packages now have their own `node_modules/` directories
+  - Must explicitly copy per-package node_modules from builder stage
+- **better-sqlite3 Removal**: Strip from manifests before install (segfaults under QEMU cross-compilation)
+  - Native module compilation fails under QEMU emulation
+  - Project uses bun:sqlite and PostgreSQL instead
+  - Safe to remove from Docker builds
+- **Manifest Embedding**: Copy manifests from builder stage to ensure cleaned versions are used
+  - Runtime gets cleaned manifests (better-sqlite3 removed)
+  - Prevents using original manifests from build context
+
+**Implementation** (`Dockerfile.server`):
+```dockerfile
+# Builder stage - Bun 1.3.10
+FROM oven/bun:1.3.10-debian AS builder
+
+# Strip better-sqlite3 from manifests (segfaults under QEMU)
+RUN bun -e " \
+  const fs = require('fs'); \
+  for (const f of ['packages/shared/package.json', 'package.json']) { \
+    const p = JSON.parse(fs.readFileSync(f)); \
+    delete p.dependencies?.['better-sqlite3']; \
+    delete p.devDependencies?.['better-sqlite3']; \
+    fs.writeFileSync(f, JSON.stringify(p, null, 2)); \
+  }"
+
+# Build client (required for multi-service template)
+WORKDIR /app/packages/client
+RUN NODE_OPTIONS='--max-old-space-size=4096' bun run build:cf
+
+# Runtime stage - Bun 1.3.10
+FROM oven/bun:1.3.10-debian AS runtime
+
+# Copy per-package node_modules (Bun 1.3 doesn't hoist)
+COPY --from=builder /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=builder /app/packages/server/node_modules ./packages/server/node_modules
+COPY --from=builder /app/packages/client/node_modules ./packages/client/node_modules
+
+# Restore workspace symlinks (Docker COPY flattens them)
+RUN mkdir -p node_modules/@hyperscape && \
+    ln -s ../../packages/physx-js-webidl    node_modules/@hyperscape/physx-js-webidl && \
+    ln -s ../../packages/decimation         node_modules/@hyperscape/decimation && \
+    ln -s ../../packages/impostors          node_modules/@hyperscape/impostor && \
+    ln -s ../../packages/procgen            node_modules/@hyperscape/procgen && \
+    ln -s ../../packages/shared             node_modules/@hyperscape/shared && \
+    ln -s ../../packages/plugin-hyperscape  node_modules/@hyperscape/plugin-hyperscape && \
+    ln -s ../../packages/web3              node_modules/@hyperscape/web3 && \
+    ln -s ../../packages/server            node_modules/@hyperscape/server && \
+    ln -s ../../packages/client            node_modules/@hyperscape/client
+
+# Copy client build output
+COPY --from=builder /app/packages/client/dist ./packages/client/dist
+```
+
+**Impact**: 
+- Production Docker images now build successfully with Vite 8.0.0
+- Client and server can run from same image (multi-service deployments)
+- Workspace dependencies resolve correctly at runtime
+- No more QEMU segfaults from better-sqlite3
+- Simplified deployment with single Docker image
+
+**Files Changed:**
+- `Dockerfile.server` (+106/-79 lines)
+
+</Update>
+
 <Update label="Biome Terrain Generation & Quadtree LOD" description="March 2026" date="2026-03-12">
 
 ### 🌲 Tree Shader Lighting Fix (PR #1022, Commits c9eaaae, f5fe2b5, e53eab9)
