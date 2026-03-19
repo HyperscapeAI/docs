@@ -682,15 +682,20 @@ interface VegetationAsset {
   scaleVariation: [number, number]; // [min, max] scale variation
   randomRotation: boolean;          // Randomize Y-axis rotation
   weight: number;                   // Spawn probability weight
-  maxSlope: number;                 // Maximum terrain slope (0-1)
+  maxSlope: number;                 // Maximum terrain slope (0-1+)
   minSlope?: number;                // Minimum terrain slope
   alignToNormal: boolean;           // Align to terrain normal
   yOffset: number;                  // Vertical position offset
 }
 ```
 
+**Recent maxSlope Updates** (March 2026):
+- **Tundra**: 0.8 → 1.8 (increased for terraced terrain)
+- **Forest**: 0.8 → 1.5 (increased for landscape features)
+- **Canyon**: 0.6 → 2.5 (increased for steep canyon walls)
+
 **Vegetation Categories**:
-- `tree` - Large trees
+- `tree` - Large trees (oak, willow, maple, yew, magic, fir, knotwood, dead, wind_pine)
 - `bush` - Small bushes and shrubs
 - `fern` - Ground ferns
 - `flower` - Decorative flowers
@@ -699,6 +704,13 @@ interface VegetationAsset {
 - `fallen_tree` - Fallen logs
 - `mushroom` - Giant mushrooms (added in recent update)
 
+**Tree Types**:
+- **Oak, Willow, Yew, Magic** - Standard woodcutting trees with multiple model variants
+- **Maple** - Autumn trees with warm vermillion red-orange leaves (#D04838)
+- **Fir** - Coniferous trees for forest biomes
+- **Knotwood** - Trees with warm amber-colored leaves (#C4832A)
+- **Dead** - Barren trees for tundra/canyon biomes
+- **Wind Pine** - Specialized pine tree for tundra biome (single model variant)
 ### Model Bounds System
 
 The `model-bounds.json` manifest provides pre-calculated bounding boxes and footprints for 3D models:
@@ -779,6 +791,10 @@ interface VegetationLayer {
 - Tree density reduced in plains biome (8 → 5)
 - Mushroom clustering varies by biome (cluster size 3-8)
 - Firemaking fire 3D model added (`models/firemaking-fire/firemaking-fire.glb`)
+- Tree model scales adjusted for better visual proportions (March 2026)
+- Fir and maple model root depths normalized to prevent floating (March 2026)
+  - All fir variants aligned to fir_03's minY (-59.46)
+  - All maple variants aligned to maple_01's minY (-114.76)
 
 ---
 
