@@ -240,12 +240,21 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 - Eliminates stale module errors after rebuilds
 - Aggressive cache clearing for local development
 
-### Dependency Updates (March 10, 2026)
+### Dependency Updates (March 10-19, 2026)
+
+**March 19, 2026**:
+- **Vite**: 6.4.1 → 8.0.0 - Major version bump, requires Bun 1.3.10+
+- **@vitejs/plugin-react**: 5.2.0 → 6.0.1 - React plugin for Vite 8.0
+- **@pixiv/three-vrm**: 3.4.3 → 3.5.1 - VRM avatar support improvements
+- **jsdom**: 28.1.0 → 29.0.0 - Testing environment updates
+- **@nomicfoundation/hardhat-ethers**: 3.1.3 → 4.0.6 - Hardhat Ethers plugin
+- **@solana-mobile/wallet-standard-mobile**: 0.4.4 → 0.5.0 - Solana mobile wallet
+
+**March 10, 2026**:
 - **Capacitor**: 8.2.0 (Android, iOS, Core) - Latest mobile platform features
 - **lucide-react**: 0.577.0 - New icons and improvements
 - **three-mesh-bvh**: 0.9.9 - Better BVH performance
 - **eslint**: 10.0.3 - Latest linting rules
-- **jsdom**: 28.1.0 - Testing improvements
 - **@ai-sdk/openai**: 3.0.41 - AI SDK updates
 - **hardhat**: 3.1.11 - Smart contract tooling
 - **@nomicfoundation/hardhat-chai-matchers**: 3.0.0 - Testing matchers
