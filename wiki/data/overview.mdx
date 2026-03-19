@@ -179,8 +179,24 @@ Each NPC has these properties (from `types/entities/npc-mob-types.ts`):
 **Vegetation**:
 ```
 /assets/trees/
-└── mushroom.glb                 → Giant mushroom (new)
+├── mushroom.glb                 → Giant mushroom
+├── bamboo_01.glb - bamboo_04.glb (+ LOD variants) → Bamboo trees
+├── birch_01.glb - birch_05.glb (+ LOD variants)   → Birch trees with white bark
+├── cactus01.glb - cactus08.glb (+ LOD variants)   → Desert cacti
+├── chinaPine_01.glb - chinaPine_04.glb (+ LOD)    → China pine trees
+├── coconut_01.glb - coconut_05.glb (+ LOD)        → Coconut palms
+├── dead_01.glb - dead_06.glb (+ LOD variants)     → Dead/withered trees
+├── fir_01.glb - fir_04.glb (+ LOD variants)       → Fir trees
+├── knotwood_01.glb - knotwood_04.glb (+ LOD)      → Knotwood trees (warm amber leaves #C4832A)
+├── maple_01.glb - maple_03.glb (+ LOD variants)   → Maple trees (vermillion red-orange leaves #D04838)
+├── oak_01.glb - oak_04.glb (+ LOD variants)       → Oak trees
+├── palm_01.glb - palm_05.glb (+ LOD variants)     → Desert palms
+└── pine_01.glb - pine_03.glb (+ LOD variants)     → Pine trees
 ```
+
+<Note>
+Tree models include LOD (Level of Detail) variants for performance optimization. Each tree type has multiple variants (e.g., `fir_01.glb`, `fir_01_lod1.glb`, `fir_01_lod2.glb`) for different viewing distances. All tree models have been normalized to consistent root depths to prevent floating or sinking into terrain.
+</Note>
 
 ### NPC Helper Functions
 
@@ -751,10 +767,14 @@ interface VegetationLayer {
 ```
 
 **Recent Updates**:
-- **Canyon biome added** - Red-rock terrain with terraced mesas and sparse vegetation
-- **Tree model improvements** - Normalized fir and maple root depths to prevent floating
-- **Tree recoloring** - Maple leaves now vermillion red-orange (#D04838), knotwood leaves warm amber (#C4832A)
-- **Tree scale adjustments** - Better visual proportions across all tree variants
+- **165 tree model variants** added across 12 tree types (bamboo, birch, cactus, chinaPine, coconut, dead, fir, knotwood, maple, oak, palm, pine) with 3 LOD levels each
+- **Tree model depth normalization**: All fir variants aligned to fir_03's minY (-59.46), all maple variants aligned to maple_01's minY (-114.76) to prevent floating
+- **Maple tree recoloring**: Leaves changed to warm vermillion red-orange (#D04838)
+- **Knotwood tree recoloring**: Leaves changed from golden-yellow to warm amber (#C4832A)
+- **Terrain biome textures** added for TerrainShader rendering (grass, dirt, cliff, desert, snow variants)
+- **Woodcutting manifest updated**: Replaced 8 generic trees with 12 new tree types using `modelVariants` arrays
+- **Biomes manifest updated**: Removed stale `tree1` vegetation layers (trees now managed via TreeTypes.ts + woodcutting manifest)
+- **Wind Pine tree type** added for tundra biome (split from dead tree variants)
 - Mushroom vegetation added to all biomes with varying densities (2-30)
 - Tree density reduced in plains biome (8 → 5)
 - Mushroom clustering varies by biome (cluster size 3-8)
