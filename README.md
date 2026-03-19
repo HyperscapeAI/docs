@@ -286,11 +286,16 @@ Wired mob AI state machines into the server tick loop. Mobs now properly transit
 ### Dev Server Performance (March 16, 2026)
 Fixed dev server watcher consuming 100% CPU when idle by removing redundant file polling and increasing fallback interval from 1s to 5s.
 
-### Docker Build Improvements (March 15, 2026)
-- Upgraded to Bun 1.3.10 for Vite 6+ compatibility
-- Added client build to Docker image for multi-service deployments
-- Fixed workspace symlink resolution after Docker COPY
-- Removed better-sqlite3 to prevent QEMU segfaults
+### Docker Build Improvements (March 15-18, 2026)
+**Key Changes:**
+- **Bun 1.3.10 Upgrade**: Updated from 1.1.38 to support Vite 6+ builds in Docker
+- **Multi-Service Support**: Added `packages/client` build to Docker image (required for multi-service deployments)
+- **Workspace Symlinks**: Fixed Docker COPY flattening workspace symlinks with `bun install --production` in runtime stage
+- **Per-Package node_modules**: Properly handles Bun 1.3's per-package dependency structure (no longer hoists to root)
+- **better-sqlite3 Removal**: Stripped from manifests during build to prevent QEMU cross-compilation segfaults
+- **Manifest Embedding**: Copies cleaned manifests from builder stage to ensure consistency
+
+**Impact**: Multi-service deployments work correctly, Vite 6+ builds succeed, workspace packages (@hyperscape/*) resolve at runtime, no more QEMU segfaults.
 
 ### Dependency Updates (March 19, 2026)
 **Major Version Upgrades:**
