@@ -277,11 +277,19 @@ bun run build
 
 ## Recent Updates (March 2026)
 
-### VRM Material Isolation (March 17, 2026)
-Fixed highlight bleed where hovering over one mob would highlight all mobs of the same type. Each VRM clone now has independent material instances while sharing textures for memory efficiency.
+### VRM Material Isolation Fix (March 17, 2026)
+**Problem**: `SkeletonUtils.clone()` shares material instances across all VRM clones, causing hover highlight on one mob to affect all mobs of the same type (hovering over one goblin highlighted all goblins).
 
-### Mob AI Tick Processing (March 17, 2026)
-Wired mob AI state machines into the server tick loop. Mobs now properly transition through IDLE → WANDER → CHASE → ATTACK states instead of standing idle forever.
+**Fix**: Create fresh `MeshStandardNodeMaterial` per mesh in `cloneGLB()` so each entity has independent `outputNode`/uniforms. Textures remain shared by reference for memory efficiency.
+
+**Impact**: Each mob instance now has independent highlight state, fixes visual bug where all VRM mobs of same type would highlight together.
+
+### Mob AI Tick Processing Fix (March 17, 2026)
+**Problem**: `MobEntity.serverUpdate()` defers AI to `GameTickProcessor.runAITick()`, but `GameTickProcessor` was never instantiated — so mob AI state machines never received `update()` calls. Goblins entered IDLE on spawn and never transitioned to WANDER, CHASE, or ATTACK.
+
+**Fix**: Register mob AI tick handler at MOVEMENT priority in `ServerNetwork`, before mob tile movement, so AI decides movement targets and the movement system executes paths on the same tick.
+
+**Impact**: Mob AI state machines now function correctly, goblins properly transition through IDLE → WANDER → CHASE → ATTACK states, deterministic OSRS-style tick ordering.
 
 ### Dev Server Performance (March 16, 2026)
 Fixed dev server watcher consuming 100% CPU when idle by removing redundant file polling and increasing fallback interval from 1s to 5s.
