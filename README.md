@@ -382,6 +382,8 @@ npm test -- -u
 4. Regenerate Jest snapshots: `npm test -- -u`
 5. Verify Node.js 18+ is installed (for sqlite3 6, though not used in production)
 
+**📖 Complete Migration Guide**: See [`docs/migration-march-2026.md`](docs/migration-march-2026.md) for detailed migration steps, code examples, and troubleshooting.
+
 ## More Info
 
 See [AGENTS.md](AGENTS.md) for detailed development guidelines, architecture documentation, and coding standards.
