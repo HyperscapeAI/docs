@@ -108,6 +108,60 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Performance & Scalability Overhaul (March 19-20, 2026)
+
+**PR #1064**: Major architectural changes to improve server tick reliability and support 50+ concurrent players with 25+ AI agents.
+
+**Key Changes**:
+1. **Server Runtime Migration**: Bun → Node.js 22+ (V8 incremental GC eliminates 500-1200ms stop-the-world pauses)
+2. **uWebSockets.js Integration**: Native pub/sub broadcasting on port 5556 (eliminates O(n) socket iteration)
+3. **Agent AI Worker Thread**: Decision logic runs off main thread (eliminates 200-600ms blocking)
+4. **BFS Pathfinding Optimization**: Global iteration budget, zero-allocation scratch tiles, per-tick walkability cache
+5. **Terrain System Optimization**: Low-res collision (16×16), time-budgeted processing, pre-baked walkability flags
+6. **Tick System Reliability**: Drift correction, health monitoring, per-handler timing
+
+**Impact**:
+- Tick blocking: 900-2400ms → 110-200ms (81-92% reduction)
+- Missed ticks: 3-5/min → 0 under normal load
+- Event loop blocking: 62.5% → <3%
+- Scalability: 20 players + 10 agents → 50+ players + 25+ agents
+
+**Breaking Changes**:
+- Server now requires Node.js 22+ (Bun no longer supported for server runtime)
+- WebSocket port changed from 5555 → 5556 (uWS, configurable with `UWS_PORT`)
+- Client `PUBLIC_WS_URL` must be updated to `ws://localhost:5556/ws`
+
+**Configuration**:
+```bash
+# Server runtime (REQUIRED)
+node >= 22.0.0
+
+# WebSocket transport
+UWS_ENABLED=true          # Enable uWS (default: true)
+UWS_PORT=5556             # uWS port (default: 5556)
+PUBLIC_WS_URL=ws://localhost:5556/ws
+
+# Agent AI worker thread
+EMBEDDED_BEHAVIOR_TICK_INTERVAL=8000  # Agent tick interval (ms)
+AGENT_STAGGER_OFFSET_MS=800           # Stagger offset (ms)
+MAX_AGENTS_PER_POLL=5                 # Max agents per poll cycle
+
+# BFS pathfinding
+MAX_BFS_ITERATIONS_PER_TICK=12000     # Global budget
+DEFAULT_MAX_ITERATIONS=4000           # Per-call limit
+
+# Terrain system
+SERVER_COLLISION_RESOLUTION=16        # Collision mesh resolution
+COLLISION_BUDGET_MS=8                 # Collision queue budget (ms)
+WALKABILITY_BUDGET_MS=4               # Walkability baking budget (ms)
+```
+
+**Files Changed**: 54 files, 6,502 additions, 1,164 deletions
+
+**Documentation**: See `docs/performance-march-2026.md` for complete details.
+
+## Recent Changes (March 2026)
+
 ### VRM Material Isolation Fix (March 17, 2026)
 
 **Change** (PR #1061, Commit 364d0a5): Isolated VRM clone materials to prevent highlight bleed across mob instances.
