@@ -23,16 +23,20 @@ See `FIXES-COMPLETE.md` for detailed migration changelog.
 
 ## Features
 
+- **Node.js Runtime** - V8 incremental GC for <10ms pauses (migrated from Bun - March 2026)
+- **uWebSockets.js** - Native pub/sub broadcasting for 50+ concurrent players (March 2026)
+- **Worker Thread AI** - Agent behavior runs off main thread, supports 25+ agents (March 2026)
+- **Optimized Pathfinding** - Global BFS budget, pre-baked walkability, per-tick caching (March 2026)
 - **PostgreSQL Database** - Full persistence with automatic migrations (connection pool: 20)
-- **WebSocket Support** - Real-time multiplayer via Fastify WebSockets
+- **Dual WebSocket Ports** - Fastify (5555) for HTTP, uWS (5556) for game traffic
 - **Docker Integration** - Automatic local PostgreSQL via Docker (optional)
 - **Asset Serving** - Efficient static asset delivery via CDN
 - **Character System** - Multi-character support per account
 - **Authentication** - Optional Privy authentication with Farcaster support
 - **LiveKit Voice** - Optional voice chat integration
-- **RTMP Streaming** - Multi-platform streaming (Twitch, Kick, YouTube) with MediaRecorder capture
+- **RTMP Streaming** - Multi-platform streaming (Twitch, Kick, YouTube) with CDP capture
 - **Duel Arena Oracle** - Verifiable duel outcome publishing to EVM and Solana
-- **AI Agents** - ElizaOS integration with 10 frontier models via direct Anthropic/Groq providers (interleaved selection)
+- **AI Agents** - ElizaOS integration with 10+ frontier models (OpenAI, Anthropic, Groq)
 
 ## Quick Start
 
