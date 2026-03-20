@@ -221,6 +221,455 @@ The RPG is built directly into [packages/shared/src/](packages/shared/src/) usin
 - Don't reinvent systems that Hyperscape already provides
 - Separation of concerns: core engine vs. game content
 
+## Major Architectural Changes (March 2026)
+
+### Server Runtime Migration (March 19-20, 2026)
+
+**Change** (PR #1064): Migrated server runtime from Bun to Node.js to eliminate stop-the-world GC pauses.
+
+**Problem**: Bun's JavaScriptCore (JSC) engine uses stop-the-world garbage collection for old-generation objects, causing 500-1200ms GC pauses that destroyed the 600ms game tick. With 25+ AI agents and complex pathfinding, the server would miss multiple ticks in a row, causing rubber-banding and combat desync.
+
+**Solution**: Switch to Node.js runtime which uses V8's incremental/concurrent GC that keeps pauses <10ms.
+
+**Implementation**:
+```bash
+# Old (Bun runtime)
+bun --preload ./src/shared/polyfills.ts ./dist/index.js
+
+# New (Node.js runtime with ESM hooks)
+node --import ./scripts/register-hooks.mjs dist/index.js
+```
+
+**ESM Resolution Hooks** (`packages/server/scripts/node-esm-hooks.mjs`):
+Node.js requires explicit `.js` extensions for ESM imports, but Bun workspace packages use extensionless imports. The hooks automatically resolve:
+- Extensionless imports: `from "./Foo"` → `from "./Foo.js"`
+- Directory imports: `from "./bar"` → `from "./bar/index.js"`
+
+**Files Changed**:
+- `packages/server/package.json` - Changed `start` script to use `node` instead of `bun`
+- `packages/server/scripts/dev.mjs` - Dev server now spawns Node.js process
+- `packages/server/scripts/node-esm-hooks.mjs` - NEW: ESM resolution hooks for Bun workspace packages
+- `packages/server/scripts/register-hooks.mjs` - NEW: Hook registration entry point
+
+**Impact**: 
+- Tick reliability improved from 500-1200ms blocking → <10ms GC pauses
+- Eliminated missed ticks and rubber-banding under load
+- Server can handle 25+ AI agents without event loop starvation
+- **Breaking**: Server now requires Node.js 22+ (Bun no longer supported for server runtime)
+
+### uWebSockets.js Integration (March 20, 2026)
+
+**Change** (PR #1064): Replaced Fastify WebSocket with uWebSockets.js for game traffic, using native pub/sub for broadcast fan-out.
+
+**Problem**: Fastify WebSocket broadcast (`sendToAll`, `sendToNearby`) iterated all sockets in JavaScript, which became a bottleneck with 50+ concurrent connections. Each broadcast required O(n) iteration in the JS event loop.
+
+**Solution**: Use uWebSockets.js with native pub/sub topics. The C++ kernel handles per-subscriber delivery, eliminating the JS iteration loop.
+
+**Architecture**:
+- **Dual Ports**: 
+  - Port 5555 (Fastify): HTTP API, health checks, admin endpoints
+  - Port 5556 (uWebSockets.js): Game WebSocket traffic (real-time multiplayer)
+- **Pub/Sub Topics**:
+  - `global` - All connected players
+  - `region:<key>` - Players in specific spatial region (9 regions per player for nearby broadcasts)
+  - `spectator` - Spectator/streaming clients
+- **Subscription Lifecycle**:
+  - Global topic on connection open
+  - Region topics on player join (9 adjacent regions)
+  - Region diff on player movement (subscribe new, unsubscribe old)
+  - Spectator topic for streaming clients
+
+**Implementation** (`packages/server/src/startup/uws-server.ts`):
+```typescript
+import uWS from "uWebSockets.js";
+
+const app = uWS.App({
+  maxPayloadLength: 512 * 1024,
+  idleTimeout: 120,
+  maxBackpressure: 1024 * 1024,
+});
+
+app.ws("/ws", {
+  upgrade: (res, req, context) => {
+    // Parse query params, validate token
+    res.upgrade({ /* user data */ }, ...);
+  },
+  open: (ws) => {
+    ws.subscribe("global");
+    // ... handle connection
+  },
+  message: (ws, message, isBinary) => {
+    // Dispatch to game handlers
+  },
+  close: (ws, code, message) => {
+    // Cleanup subscriptions
+  },
+});
+```
+
+**Adapter Pattern** (`packages/server/src/startup/UwsWebSocketAdapter.ts`):
+Bridges uWS callback API to `NodeWebSocket` interface used by existing game code:
+```typescript\nexport class UwsWebSocketAdapter implements NodeWebSocket {\n  subscribe(topic: string): void {\n    this.ws.subscribe(topic);\n  }\n  \n  publish(topic: string, message: string | ArrayBuffer): void {\n    this.ws.publish(topic, message);\n  }\n  \n  // ... implements full NodeWebSocket interface\n}\n```
+
+**Broadcast Manager** (`packages/server/src/systems/ServerNetwork/broadcast.ts`):
+Dual-path broadcasting with pub/sub fast path and legacy fallback:
+```typescript\nsendToAll(packet: string, data: unknown): number {\n  if (this.uwsApp) {\n    // Fast path: native pub/sub\n    this.uwsApp.publish(\"global\", buffer);\n    return this.sockets.size; // Estimate\n  }\n  // Fallback: JS iteration\n  for (const socket of this.sockets.values()) {\n    socket.send(buffer);\n  }\n  return sentCount;\n}\n```
+
+**Configuration**:
+```bash\n# Enable/disable uWS (default: enabled)\nUWS_ENABLED=true\n\n# uWS port (default: 5556)\nUWS_PORT=5556\n\n# Client connection URL\nPUBLIC_WS_URL=ws://localhost:5556/ws  # uWS (default)\n# or\nPUBLIC_WS_URL=ws://localhost:5555/ws  # Fastify fallback (UWS_ENABLED=false)\n```
+
+**Files Changed**:
+- `packages/server/src/startup/uws-server.ts` - NEW: uWS server implementation
+- `packages/server/src/startup/UwsWebSocketAdapter.ts` - NEW: Adapter bridging uWS to NodeWebSocket
+- `packages/server/src/systems/ServerNetwork/broadcast.ts` - Added pub/sub fast path
+- `packages/server/src/systems/ServerNetwork/SpatialIndex.ts` - Added region topic cache and subscription diffing
+- `packages/server/src/main.ts` - Start uWS server alongside Fastify
+- `packages/server/package.json` - Added `uWebSockets.js` dependency
+- `packages/client/vite.config.ts` - Updated default WS URL to use port 5556
+
+**Impact**: 
+- Eliminates O(n) socket iteration bottleneck for broadcasts
+- Native C++ pub/sub handles per-subscriber delivery
+- Supports 50+ concurrent connections without event loop blocking
+- Full fallback via `UWS_ENABLED=false` (zero behavioral change)
+- F5 DevStats panel shows pub/sub publish count
+
+### Agent AI Worker Thread Architecture (March 20, 2026)
+
+**Change** (PR #1064): Moved agent behavior decision-making to a worker thread to prevent blocking the game tick loop.
+
+**Problem**: With 25+ AI agents, each running autonomous behavior ticks (pathfinding, inventory management, quest logic, combat decisions) on the main thread, the event loop was blocked for 200-600ms per tick. This prevented the 600ms game tick from firing on time, causing missed ticks and gameplay lag.
+
+**Solution**: Extract pure decision logic into a worker thread. Main thread collects game state snapshots, sends to worker for decisions, receives action commands back, and executes them.
+
+**Architecture**:
+- **AgentBehaviorBridge** (main thread): Coordinates worker communication, collects snapshots, applies results
+- **AgentBehaviorEngine** (worker thread): Pure decision functions (no World access, no side effects)
+- **Shared Entity Snapshot**: Scanned once per second across ALL agents instead of per-agent scans
+- **Batch Processing**: Up to 5 agents processed per poll cycle (1000ms interval)
+- **Staggered Scheduling**: 800ms offset between agent start times to prevent simultaneous ticks
+
+**Implementation** (`packages/server/src/eliza/managers/AgentBehaviorBridge.ts`):
+```typescript\nexport class AgentBehaviorBridge {\n  private worker: Worker | null = null;\n  private schedules = new Map<string, AgentSchedule>();\n  \n  async start(): Promise<void> {\n    // Spawn worker thread\n    this.worker = new Worker(\"./agentBehaviorWorker.js\");\n    \n    // Poll for due agents every 1000ms\n    this.pollInterval = setInterval(() => {\n      void this.pollAndDispatch();\n    }, 1000);\n  }\n  \n  private async pollAndDispatch(): Promise<void> {\n    // Collect snapshots for due agents (max 5 per poll)\n    const dueAgents: AgentTickInput[] = [];\n    \n    // Send to worker and wait for decisions\n    const results = await this.sendTickAndWait(dueAgents, sharedData);\n    \n    // Apply results on main thread (execute actions)\n    for (const result of results) {\n      await this.applyTickResult(result);\n      await yieldToEventLoop(); // Don't block tick loop\n    }\n  }\n}\n```
+
+**Worker Thread** (`packages/server/src/eliza/worker/AgentBehaviorEngine.ts`):
+```typescript\n// Pure decision logic - no World access, serializable I/O only\nexport function processAgentTicks(agents: AgentTickInput[]): AgentTickOutput[] {\n  const results: AgentTickOutput[] = [];\n  for (const input of agents) {\n    results.push(processOneAgent(input));\n  }\n  return results;\n}\n```
+
+**Shared Entity Snapshot** (`packages/server/src/eliza/EmbeddedHyperscapeService.ts`):
+```typescript\n// Scan all entities once per second, share across all agent instances\nconst snapshot = getSharedEntitySnapshot(world, getPos);\n// Reduces O(agents × entities) to O(entities) per second\n```
+
+**Configuration**:
+```bash\n# Agent behavior tick interval (default: 8000ms)\nEMBEDDED_BEHAVIOR_TICK_INTERVAL=8000\n\n# Agent stagger offset (default: 800ms)\nAGENT_STAGGER_OFFSET_MS=800\n\n# Max agents per poll cycle (default: 5)\nMAX_AGENTS_PER_POLL=5\n```
+
+**Files Changed**:
+- `packages/server/src/eliza/managers/AgentBehaviorBridge.ts` - NEW: Main thread coordinator
+- `packages/server/src/eliza/worker/AgentBehaviorEngine.ts` - NEW: Pure decision logic
+- `packages/server/src/eliza/worker/agentBehaviorWorker.ts` - NEW: Worker thread entry point
+- `packages/server/src/eliza/worker/workerTypes.ts` - NEW: Serializable message protocol
+- `packages/server/src/eliza/AgentManager.ts` - Replaced `AgentBehaviorTicker` with `AgentBehaviorBridge`
+- `packages/server/src/eliza/EmbeddedHyperscapeService.ts` - Added shared entity snapshot cache
+- `packages/server/scripts/build-server.mjs` - Build worker as separate bundle
+- `packages/server/scripts/dev.mjs` - Build worker in dev mode
+
+**Impact**: 
+- Agent AI no longer blocks the game tick loop
+- Tick blocking reduced from 200-600ms → <10ms
+- Supports 25+ AI agents without event loop starvation
+- Shared snapshot reduces entity scanning from O(agents × entities) to O(entities)
+- Worker crash recovery with automatic restart
+
+### BFS Pathfinding Optimization (March 20, 2026)
+
+**Change** (PR #1064): Optimized BFS pathfinding with global iteration budget, scratch tile reuse, and per-tick walkability caching.
+
+**Problem**: 25+ agents each triggering full 4000-iteration BFS calls per tick with expensive per-iteration walkability checks (9 `getHeightAt` calls for slope calculation alone) monopolized the event loop.
+
+**Solutions**:
+
+#### 1. Global BFS Iteration Budget
+Shared budget across ALL pathfinding callers (combat follow, gathering, path continuation, player clicks):
+```typescript\n// packages/shared/src/systems/shared/movement/BFSPathfinder.ts\nconst MAX_BFS_ITERATIONS_PER_TICK = 12000; // Shared across all callers\nlet _globalIterationsUsedThisTick = 0;\nlet _lastBudgetResetTick = -1;\n\nfindPath(from, to, maxIterations = 4000): TileCoord[] | null {\n  // Reset budget at start of new tick\n  if (currentTick !== _lastBudgetResetTick) {\n    _globalIterationsUsedThisTick = 0;\n    _lastBudgetResetTick = currentTick;\n  }\n  \n  // Check remaining budget\n  const remainingBudget = MAX_BFS_ITERATIONS_PER_TICK - _globalIterationsUsedThisTick;\n  if (remainingBudget <= 0) return null; // Budget exhausted\n  \n  const effectiveMax = Math.min(maxIterations, remainingBudget);\n  // ... BFS with effectiveMax iterations\n}\n```\n\n#### 2. Zero-Allocation Scratch Tiles\nReuse instance fields instead of allocating new objects per iteration:\n```typescript\nprivate _scratchNeighbor = { x: 0, z: 0 };\nprivate _scratchCardinalX = { x: 0, z: 0 };\nprivate _scratchCardinalZ = { x: 0, z: 0 };\n\n// Old (allocates 8 objects per iteration)\nconst neighbors = [\n  { x: current.x + 1, z: current.z },\n  { x: current.x - 1, z: current.z },\n  // ... 6 more\n];\n\n// New (zero allocations)\nthis._scratchNeighbor.x = current.x + 1;\nthis._scratchNeighbor.z = current.z;\nif (canMoveTo(current, this._scratchNeighbor)) {\n  // ... process neighbor\n}\n```\n\n#### 3. Per-Tick Walkability Cache
+Cache terrain/slope/biome results by tile key within a tick:\n```typescript\n// packages/server/src/systems/ServerNetwork/mob-tile-movement.ts\nprivate _walkabilityCache = new Map<number, boolean>();\nprivate _directionalBlockCache = new Map<number, boolean>();\nprivate _lastCacheClearTick = -1;\n\nisTileWalkable(tile: TileCoord): boolean {\n  const currentTick = this.world.currentTick ?? 0;\n  \n  // Clear cache at start of new tick\n  if (currentTick !== this._lastCacheClearTick) {\n    this._walkabilityCache.clear();\n    this._directionalBlockCache.clear();\n    this._lastCacheClearTick = currentTick;\n  }\n  \n  const key = tileKeyNumeric(tile);\n  const cached = this._walkabilityCache.get(key);\n  if (cached !== undefined) return cached;\n  \n  // Expensive check (terrain queries, slope calculation)\n  const walkable = /* ... */;\n  this._walkabilityCache.set(key, walkable);\n  return walkable;\n}\n```\n\n**Impact**: 25 agents checking same tiles → first check expensive, remaining 24 are O(1).\n\n#### 4. Iteration Tracking API\n```typescript\nconst pathfinder = new BFSPathfinder(/* ... */);\nconst path = pathfinder.findPath(from, to);\nconst iterationsUsed = pathfinder.getLastIterationsUsed();\n// Use for diagnostics, budget monitoring\n```\n\n**Configuration**:
+```typescript\n// Global budget (shared across all callers)\nconst MAX_BFS_ITERATIONS_PER_TICK = 12000;\n\n// Per-call limit (default: 4000, reduced from 8000)\nconst DEFAULT_MAX_ITERATIONS = 4000;\n```
+
+**Files Changed**:
+- `packages/shared/src/systems/shared/movement/BFSPathfinder.ts` - Added budget system, scratch tiles, iteration tracking
+- `packages/server/src/systems/ServerNetwork/mob-tile-movement.ts` - Added walkability cache
+- `packages/shared/src/systems/shared/world/TerrainSystem.ts` - Optimized slope calculation
+
+**Impact**: 
+- BFS pathfinding cost reduced by ~70% (from 200-600ms → 100-190ms per tick)
+- Short paths are cheap, long paths cost proportionally
+- 25 agents can pathfind simultaneously without blocking the tick
+- Path continuation handles budget exhaustion gracefully
+
+### Terrain Walkability Baking (March 20, 2026)
+
+**Change** (PR #1064): Pre-compute WATER and STEEP_SLOPE collision flags into the CollisionMatrix at terrain generation time.
+
+**Problem**: BFS pathfinding was calling `getHeightAt()` 9 times per tile to calculate slope, plus biome checks for water. With 25 agents pathfinding simultaneously, this was the primary CPU bottleneck.
+
+**Solution**: Bake walkability flags into the collision matrix during terrain generation. Each walkability check drops from ~10 `getHeightAt()` calls to a single `Int32Array` bitwise AND.
+
+**Implementation** (`packages/shared/src/systems/shared/world/TerrainSystem.ts`):
+```typescript\n// Deferred walkability baking (spreads 10,000-iteration bakeWalkabilityFlags\n// across ticks with 4ms budget, row-by-row resumable progress)\nprivate processWalkabilityQueue(): void {\n  const budget = 4; // ms\n  const t0 = performance.now();\n  \n  while (this.pendingWalkabilityTiles.length > 0) {\n    const entry = this.pendingWalkabilityTiles[0];\n    \n    // Process one row at a time\n    for (let localZ = entry.lastProcessedRow; localZ < TILE_SIZE; localZ++) {\n      for (let localX = 0; localX < TILE_SIZE; localX++) {\n        const worldX = entry.tileX * TILE_SIZE + localX;\n        const worldZ = entry.tileZ * TILE_SIZE + localZ;\n        \n        // Check water\n        const biome = this.getBiomeAt(worldX, worldZ);\n        if (biome?.name === \"water\") {\n          this.collisionMatrix.setFlag(worldX, worldZ, CollisionFlags.WATER);\n        }\n        \n        // Check slope\n        const slope = this.calculateSlope(worldX, worldZ);\n        if (slope > MAX_WALKABLE_SLOPE) {\n          this.collisionMatrix.setFlag(worldX, worldZ, CollisionFlags.STEEP_SLOPE);\n        }\n      }\n      \n      entry.lastProcessedRow = localZ + 1;\n      \n      // Check budget\n      if (performance.now() - t0 > budget) {\n        return; // Resume next tick\n      }\n    }\n    \n    // Tile complete\n    this.pendingWalkabilityTiles.shift();\n  }\n}\n```\n\n**Collision Matrix Integration** (`packages/shared/src/systems/shared/movement/CollisionMatrix.ts`):
+```typescript\nexport enum CollisionFlags {\n  OCCUPIED = 1 << 0,      // Entity occupying tile\n  BUILDING = 1 << 1,      // Building collision\n  WATER = 1 << 2,         // Water tile (unbaked)\n  STEEP_SLOPE = 1 << 3,   // Slope too steep (unbaked)\n}\n\n// Fast walkability check (single bitwise AND)\nisWalkable(x: number, z: number): boolean {\n  const flags = this.getFlags(x, z);\n  return (flags & (CollisionFlags.WATER | CollisionFlags.STEEP_SLOPE)) === 0;\n}\n```
+
+**Cancellation on Tile Unload**:
+```typescript\nunloadTile(tileX: number, tileZ: number): void {\n  // Cancel pending/in-progress walkability work\n  this.pendingWalkabilityTiles = this.pendingWalkabilityTiles.filter(\n    (entry) => entry.tileX !== tileX || entry.tileZ !== tileZ\n  );\n}\n```
+
+**Files Changed**:
+- `packages/shared/src/systems/shared/world/TerrainSystem.ts` - Added deferred walkability baking
+- `packages/shared/src/systems/shared/movement/CollisionMatrix.ts` - Added WATER and STEEP_SLOPE flags
+- `packages/shared/src/systems/shared/movement/BFSPathfinder.ts` - Use baked flags instead of runtime queries
+
+**Impact**: 
+- Walkability checks drop from ~10 `getHeightAt()` calls to 1 bitwise AND
+- Terrain generation spreads across ticks (4ms budget) instead of blocking synchronously
+- Cancels pending work on tile unload (no wasted CPU)
+- BFS pathfinding cost reduced by ~80%
+
+### Terrain System Server Optimization (March 20, 2026)
+
+**Change** (PR #1064): Reduced terrain generation cost on server with low-res collision mesh and time-budgeted processing.
+
+**Optimizations**:
+
+#### 1. Low-Resolution Collision Mesh
+```typescript\n// Old: 64×64 vertices = 8192 triangles per tile\nconst COLLISION_RESOLUTION = 64;\n\n// New: 16×16 vertices = 512 triangles per tile (~16x faster PhysX cooking)\nconst COLLISION_RESOLUTION = 16;\n```\n\n#### 2. Time-Budgeted Collision Queue
+Process multiple tiles per tick within 8ms budget instead of exactly 1 per tick:
+```typescript\nprivate processCollisionQueue(): void {\n  const budget = 8; // ms\n  const t0 = performance.now();\n  \n  while (this.pendingCollisionTiles.length > 0) {\n    const tile = this.pendingCollisionTiles.shift()!;\n    this.buildServerCollisionGeometry(tile.tileX, tile.tileZ);\n    \n    if (performance.now() - t0 > budget) break;\n  }\n}\n```\n\n#### 3. Server-Only Lightweight Tiles
+Skip client-only data on server:\n```typescript\nif (this.runtimeIsServer) {\n  // Skip: colors, biomeIds, roadInfluences, forestWeights, canyonWeights\n  // Keep: heights (for pathfinding), collision geometry\n  return {\n    heights: new Float32Array(TILE_SIZE * TILE_SIZE),\n    // ~80% memory reduction per tile\n  };\n}\n```\n\n**Files Changed**:
+- `packages/shared/src/systems/shared/world/TerrainSystem.ts` - Low-res collision, time-budgeted queue, lightweight tiles
+
+**Impact**: 
+- PhysX triangle mesh cooking ~16x faster per tile
+- Collision queue processes multiple tiles per tick (8ms budget)
+- Server terrain memory reduced by ~80% per tile
+- Deferred walkability baking spreads 10,000-iteration work across ticks
+
+### ElizaOS API Migration (March 20, 2026)
+
+**Change** (Commit 12e8d78): Updated ElizaOS adapter API for current alpha release.
+
+**API Changes**:
+```typescript\n// Old API (no longer exists)\nadapter.log(params);           // ❌ Removed\nadapter.deleteMemory(memoryId); // ❌ Removed\n\n// New API (current ElizaOS alpha)\nadapter.createLogs([params]);  // ✅ Takes array\nadapter.deleteMemories([id]);  // ✅ Cleans memoriesByRoom natively\n```\n\n**Implementation**:
+```typescript\n// packages/server/src/eliza/ElizaDuelBot.ts\nconst origCreateLogs = adapter.createLogs.bind(adapter);\nadapter.createLogs = async (params) => {\n  await origCreateLogs(params);\n  const logs = adapter.logs;\n  if (logs && logs.length > MAX_LOGS) {\n    logs.splice(0, logs.length - MAX_LOGS); // Cap at 20 logs\n  }\n};\n\n// deleteMemory monkey-patch removed - deleteMemories now cleans memoriesByRoom\n```\n\n**Files Changed**:
+- `packages/server/src/eliza/ElizaDuelBot.ts` - Updated to `createLogs`, removed `deleteMemory` patch
+- `packages/server/src/eliza/ModelAgentSpawner.ts` - Updated to `createLogs`, removed `deleteMemory` patch
+
+**Impact**: 
+- Compatible with current ElizaOS alpha releases
+- Eliminates \"Cannot read properties of undefined (reading 'bind')\" errors
+- All 10 AI agents now spawn correctly
+- Memory leak from `memoriesByRoom` fixed natively in ElizaOS
+
+### Model Agent Spawning Fix (March 20, 2026)
+
+**Change** (Commit 90e8d9a): Fixed model agent spawning being blocked by stale database agents.
+
+**Problem**: `loadAgentsFromDatabase()` finds `isAgent=1` records from previous runs, setting `embeddedAgentCount > 0` which silently skipped `spawnModelAgents()`. Model agents manage their own deduplication via the `runningAgents` Map, so this gate was unnecessary and caused 0/10 agents to spawn.
+
+**Fix**: Removed the `embeddedAgentCount > 0` gate:
+```typescript\n// Old (blocked model agents if DB had stale agent records)\nconst shouldSpawnAgents = spawnRequested && \n  (embeddedAgentCount === 0 || allowSpawnWithEmbeddedAgents);\n\n// New (model agents always spawn if requested)\nconst shouldSpawnAgents = spawnRequested;\n```\n\n**Files Changed**:
+- `packages/server/src/eliza/index.ts` - Removed `embeddedAgentCount` gate
+
+**Impact**: 
+- Model agents (GPT-4o, Claude, Llama) now spawn correctly
+- No longer blocked by stale database records
+- Deduplication handled by `runningAgents` Map as intended
+
+### Additional Model Agents (March 20, 2026)
+
+**Change** (Commit 21d8984): Added OpenAI model agents and increased default duel bot count.
+
+**New Agents**:
+- GPT-4o (OpenAI)
+- GPT-4.1 (OpenAI)
+- GPT-4o Mini (OpenAI)
+- o4-mini (OpenAI)
+
+**Configuration**:
+```typescript\n// packages/server/src/eliza/ModelAgentSpawner.ts\nexport const MODEL_AGENTS: ModelProviderConfig[] = [\n  { provider: \"openai\", model: \"gpt-4o\", displayName: \"GPT-4o\" },\n  { provider: \"anthropic\", model: \"claude-sonnet-4.6\" },\n  { provider: \"openai\", model: \"gpt-4.1\", displayName: \"GPT-4.1\" },\n  { provider: \"groq\", model: \"meta-llama/llama-4-scout-17b-16e-instruct\" },\n  { provider: \"openai\", model: \"gpt-4o-mini\", displayName: \"GPT-4o Mini\" },\n  { provider: \"anthropic\", model: \"claude-opus-4.6\" },\n  { provider: \"openai\", model: \"o4-mini\", displayName: \"o4-mini\" },\n  // ... more models\n];\n```\n\n**Duel Bot Count**:
+```bash\n# Old default: 4 bots\n# New default: 10 bots\nDUEL_BOT_COUNT=10\n```\n\n**Files Changed**:
+- `packages/server/src/eliza/ModelAgentSpawner.ts` - Added OpenAI agents, increased default count
+
+**Impact**: 
+- More diverse AI agent pool (OpenAI + Anthropic + Groq)
+- 10 concurrent duel bots for better matchmaking
+- Requires `OPENAI_API_KEY` for OpenAI agents
+
+### uWS Transport Wiring for Duel Bots (March 20, 2026)
+
+**Change** (Commit 3bd085f): Fixed duel bot WebSocket connections to use uWS port instead of Fastify port.
+
+**Problem**: Duel bots were connecting to `ws://localhost:5555/ws` (Fastify) but game traffic now runs on `ws://localhost:5556/ws` (uWS). Bots would connect but never receive game state updates.
+
+**Fixes**:
+
+#### 1. Port Routing
+```bash\n# packages/server/scripts/dev-duel.mjs\n# Old: ws://127.0.0.1:5555/ws\n# New: ws://127.0.0.1:5556/ws (uWS port)\nconst wsUrl = process.env.PUBLIC_WS_URL || \"ws://127.0.0.1:5556/ws\";\n```\n\n#### 2. API URL Flag
+```bash\n# Health checks hit Fastify /health (port 5555), not uWS\nnode dev-duel.mjs --api-url http://127.0.0.1:5555\n```\n\n#### 3. Lazy Service Start
+ElizaOS v2 lazy-starts services — explicitly call `_ensureServiceStarted(\"hyperscapeService\")` after `runtime.initialize()`:
+```typescript\n// packages/server/src/eliza/ElizaDuelBot.ts\nif (typeof runtime._ensureServiceStarted === \"function\") {\n  await runtime._ensureServiceStarted(\"hyperscapeService\");\n}\n```\n\n#### 4. uWS Error Handling
+```typescript\n// packages/server/src/startup/uws-server.ts\nopen: (ws) => {\n  try {\n    world.network.onConnection(socket);\n  } catch (err) {\n    console.error(\"[uWS] Connection error:\", err);\n    ws.close(); // Prevent zombie connections\n  }\n}\n```\n\n**Files Changed**:
+- `packages/server/scripts/dev-duel.mjs` - Route to uWS port, add `--api-url` flag
+- `packages/server/scripts/duel-stack.mjs` - Set `HYPERSCAPE_SERVER_URL` + `SECRET_SALT` in gameEnv
+- `packages/server/src/eliza/ElizaDuelBot.ts` - Explicit service start
+- `packages/server/src/eliza/ModelAgentSpawner.ts` - Explicit service start
+- `packages/server/src/startup/uws-server.ts` - Add `.catch()` to `onConnection`
+- `packages/server/scripts/dev.mjs` - Fix `PUBLIC_WS_URL` to use `UWS_PORT` when enabled
+
+**Impact**: 
+- Duel bots now connect to correct WebSocket port
+- Health checks hit Fastify HTTP API (not uWS)
+- ElizaOS services start correctly in v2
+- Connection errors are surfaced instead of silently failing
+
+### Tick System Reliability Improvements (March 20, 2026)
+
+**Change** (PR #1064): Added tick health monitoring, drift correction, and per-handler timing.
+
+**Features**:
+
+#### 1. Tick Health Monitoring
+```typescript\n// packages/server/src/systems/TickSystem.ts\ninterface TickHealth {\n  missedTicks: number;      // Ticks skipped due to overrun\n  lateTicks: number;        // Ticks that started late\n  maxLateness: number;      // Worst lateness (ms)\n  avgDuration: number;      // Average tick duration (ms)\n  lastTickDuration: number; // Most recent tick (ms)\n}\n```\n\n#### 2. Drift-Corrected setTimeout
+```typescript\nprivate scheduleNextTick(): void {\n  const now = Date.now();\n  const drift = now - this.nextTickTime;\n  const delay = Math.max(0, this.tickInterval - drift);\n  \n  this.tickTimeout = setTimeout(() => {\n    this.processTick();\n  }, delay);\n  \n  this.nextTickTime += this.tickInterval;\n}\n```\n\n#### 3. Per-Handler Timing
+```typescript\nthis.tickSystem.onTick(() => {\n  // ... handler logic\n}, TickPriority.MOVEMENT, \"mobAI\"); // Named handler for diagnostics\n```\n\n#### 4. DevStats F5 Panel
+Real-time tick health display (press F5 in-game):
+```\nTick Health:\n  Missed: 0 | Late: 2 | Max Lateness: 45ms\n  Avg Duration: 120ms | Last: 115ms\n  Pub/Sub Publishes: 1,234\n```\n\n**Files Changed**:
+- `packages/server/src/systems/TickSystem.ts` - Drift correction, health tracking, named handlers
+- `packages/shared/src/systems/client/DevStats.ts` - Added tick health panel
+- `packages/server/src/systems/ServerNetwork/index.ts` - Per-handler timing instrumentation
+
+**Impact**: 
+- Tick drift eliminated (stays aligned with wall clock)
+- Missed ticks are tracked and logged
+- Per-handler timing identifies bottlenecks
+- F5 panel provides real-time diagnostics
+
+### Quest System Network Flow Fix (March 20, 2026)
+
+**Change** (Commit f79767b): Fixed quest accept to send over network instead of local event.
+
+**Problem**: `InterfaceModals.tsx` was emitting `QUEST_START_ACCEPTED` as a local event which never reached the server. Quest accept UI would close but the quest never started server-side.
+
+**Fix**: Changed to `network.send("questAccept")` to match `Sidebar` and `MobileInterfaceManager`:
+```typescript\n// Old (local event - never reaches server)\nworld.emit(EventType.QUEST_START_ACCEPTED, {\n  playerId: localPlayer.id,\n  questId: questStartData.questId,\n});\n\n// New (network packet - reaches server)\nworld.network.send(\"questAccept\", {\n  questId: questStartData.questId,\n});\n```\n\n**Network Listeners**: Added listeners for server→client quest packets to trigger UI updates:
+```typescript\n// packages/client/src/game/panels/QuestJournalPanel.tsx\nworld.network?.on(\"questStarted\", onQuestEvent);\nworld.network?.on(\"questProgressed\", onQuestProgressed);\nworld.network?.on(\"questCompleted\", onQuestEvent);\n```\n\n**Files Changed**:
+- `packages/client/src/game/interface/InterfaceModals.tsx` - Send quest accept over network
+- `packages/client/src/game/panels/QuestJournalPanel.tsx` - Listen for server quest packets
+- `packages/client/src/game/panels/QuestsPanel.tsx` - Listen for server quest packets
+- `packages/client/src/game/hud/Minimap.tsx` - Listen for server quest packets
+
+**Impact**: 
+- Quest accept now works correctly from all UI entry points
+- Quest panels update after server-side state changes
+- Eliminates quest accept UI closing without quest starting
+
+### Spectator Account ID Fix (March 20, 2026)
+
+**Change** (Commit e7ad12b): Fixed spectator `accountId` ternary bug and added defensive guard on `onConnection`.
+
+**Bugs Fixed**:
+
+#### 1. Copy-Paste Bug
+```typescript\n// Old (both branches undefined)\nsocket.accountId = isAgentCharacter ? undefined : undefined;\n\n// New (uses verifiedUserId for authenticated non-agent spectators)\nsocket.accountId = isAgentCharacter ? undefined : verifiedUserId;\n```\n\n#### 2. Non-Null Assertion
+```typescript\n// Old (crashes if onConnection is undefined)\nworld.network.onConnection!(socket);\n\n// New (defensive guard + early close)\nif (!world.network?.onConnection) {\n  console.error(\"[uWS] onConnection handler not registered\");\n  ws.close();\n  return;\n}\nworld.network.onConnection(socket);\n```\n\n**Files Changed**:
+- `packages/server/src/startup/uws-server.ts` - Fixed `accountId` ternary, added `onConnection` guard
+
+**Impact**: 
+- Spectator accounts now tracked correctly
+- Server doesn't crash if network system not initialized
+- Zombie connections prevented with early close
+
+### Worker Crash Recovery Fix (March 20, 2026)
+
+**Change** (Commit e363a36): Reset `tickInProgress` on worker crash to prevent permanent agent stall.
+
+**Problem**: When the agent behavior worker crashed, `restartWorker()` spawned a new worker but didn't clear `tickInProgress` flags. Agents in the crashed batch would be permanently stuck (never tick again).
+
+**Fix**:
+```typescript\n// packages/server/src/eliza/managers/AgentBehaviorBridge.ts\nprivate async restartWorker(): Promise<void> {\n  // Clear tickInProgress for all agents so they aren't permanently stuck\n  for (const schedule of this.schedules.values()) {\n    schedule.tickInProgress = false;\n  }\n  \n  // Reject any pending tick promise\n  if (this.pendingResolve) {\n    this.pendingResolve([]);\n    this.pendingResolve = null;\n  }\n  \n  // Re-spawn worker\n  setTimeout(() => {\n    void this.start().catch(/* ... */);\n  }, 100);\n}\n```\n\n**Files Changed**:
+- `packages/server/src/eliza/managers/AgentBehaviorBridge.ts` - Clear `tickInProgress` on crash
+
+**Impact**: 
+- Agents recover from worker crashes automatically
+- No permanent stalls after worker restart
+- Matches timeout-path fix (both paths now clear `tickInProgress`)
+
+### Code Quality Fixes (March 20, 2026)
+
+**Change** (Commit 210ddde): Addressed PR review feedback with code quality improvements and 69 new unit tests.
+
+**Code Quality**:
+- **Replaced 6 unsafe `(this as { _lastXTime })` casts** with proper class fields
+- **Removed dead code**: Identical server/client branch in `TerrainSystem.getTerrainCenters`
+- **Gated tick health transport/connections** behind `NODE_ENV !== production`
+- **Fixed entity snapshot cross-contamination**: `WeakMap` keyed by world instance instead of module-level globals
+
+**New Tests** (69 total):
+- **BFSPathfinder**: Iteration budget enforcement, multi-destination `findPathToAny`, partial paths
+- **SpatialIndex**: Region tracking, subscription diffs, adjacent keys
+- **AgentBehaviorEngine**: Batch processing, combat chat, food/equipment/inventory management
+
+**Files Changed**:
+- `packages/server/src/systems/ServerNetwork/index.ts` - Proper class fields for timing
+- `packages/shared/src/systems/shared/world/TerrainSystem.ts` - Removed dead branch
+- `packages/shared/src/systems/client/DevStats.ts` - Gate transport info behind dev mode
+- `packages/server/src/eliza/EmbeddedHyperscapeService.ts` - `WeakMap` for snapshot cache
+- `packages/shared/src/systems/shared/movement/BFSPathfinder.ts` - Added tests
+- `packages/server/src/systems/ServerNetwork/SpatialIndex.ts` - Added tests
+- `packages/server/src/eliza/worker/AgentBehaviorEngine.ts` - Added tests
+
+**Impact**: 
+- Cleaner codebase with proper type safety
+- No cross-contamination between World instances
+- Comprehensive test coverage for new systems
+- Production deployments don't leak internal diagnostics
+
+### Critical Bug Fixes (March 20, 2026)
+
+**Change** (Commit 21d8984): Fixed tick deadlock, cache collision, and uWS hardening issues.
+
+**Bugs Fixed**:
+
+#### 1. Tick Deadlock
+Worker timeout now clears `tickInProgress` so agents aren't permanently stuck:
+```typescript\n// packages/server/src/eliza/managers/AgentBehaviorBridge.ts\nsetTimeout(() => {\n  if (this.pendingResolve === resolve) {\n    // Clear tickInProgress for all agents in this batch\n    for (const agent of dueAgents) {\n      const schedule = this.schedules.get(agent.characterId);\n      if (schedule) schedule.tickInProgress = false;\n    }\n    this.pendingResolve = null;\n    resolve([]);\n  }\n}, 5000);\n```\n\n#### 2. Directional Block Cache Key Collision
+Fixed bit-overlap in cache key encoding:
+```typescript\n// Old (z*4 causes bit-overlap with direction bits)\nconst dirKey = fromTile.z * 4 + (dx+1)*2 + (dz+1);\n\n// New (z*9 provides enough bits, x*18.8M for large coordinates)\nconst dirKey =\n  ((fromTile.x + 1048576) | 0) * 18874368 +\n  ((fromTile.z + 1048576) | 0) * 9 +\n  ((tile.x - fromTile.x + 1) | 0) * 3 +\n  ((tile.z - fromTile.z + 1) | 0);\n```\n\n#### 3. uWS URI Decoding
+Wrapped `decodeURIComponent` in try/catch for malformed URIs:
+```typescript\n// packages/server/src/startup/uws-server.ts\nfunction parseQueryString(query: string): Record<string, string> {\n  const params: Record<string, string> = {};\n  for (const pair of query.split(\"&\")) {\n    const [key, value] = pair.split(\"=\");\n    try {\n      params[key] = decodeURIComponent(value || \"\");\n    } catch {\n      params[key] = value || \"\"; // Fallback for malformed encoding\n    }\n  }\n  return params;\n}\n```\n\n#### 4. uWS Port Bind Failure
+Throw on port bind failure instead of silently continuing:
+```typescript\n// packages/server/src/startup/uws-server.ts\nconst listenSocket = await createUwsServer(world, config.uwsPort);\nif (!listenSocket) {\n  throw new Error(`uWS failed to bind to port ${config.uwsPort}`);\n}\n```\n\n#### 5. Worker Init Listener Leak
+Remove `onReady` handler after worker init resolves/times out:
+```typescript\n// packages/server/src/eliza/managers/AgentBehaviorBridge.ts\nconst onReady = (msg: WorkerToMainMessage) => {\n  if (msg.type === \"ready\") {\n    this.worker?.off(\"message\", onReady); // Clean up\n    this.workerReady = true;\n    resolve();\n  }\n};\n\nsetTimeout(() => {\n  if (!this.workerReady) {\n    this.worker?.off(\"message\", onReady); // Clean up on timeout\n    resolve();\n  }\n}, 5000);\n```\n\n**Files Changed**:
+- `packages/server/src/eliza/managers/AgentBehaviorBridge.ts` - Timeout fix, listener cleanup
+- `packages/server/src/systems/ServerNetwork/mob-tile-movement.ts` - Cache key fix
+- `packages/server/src/startup/uws-server.ts` - URI decoding, port bind error
+
+**Impact**: 
+- Agents no longer get stuck after worker timeout
+- Directional block cache now collision-free
+- Server fails fast on port bind errors
+- No listener leaks in worker initialization
+
+### BFS Early Exit Fix (March 20, 2026)
+
+**Change** (Commit 19cae48): Reset `_lastIterationsUsed` on BFS early exit to prevent stale budget tracking.
+
+**Problem**: When BFS found an adjacent tile or same-tile path (early exit), `_lastIterationsUsed` wasn't reset. Subsequent `getLastIterationsUsed()` calls would return stale values from previous pathfinding attempts.
+
+**Fix**:
+```typescript\n// packages/shared/src/systems/shared/movement/BFSPathfinder.ts\nfindPath(from: TileCoord, to: TileCoord): TileCoord[] | null {\n  // Early exit: already at destination\n  if (from.x === to.x && from.z === to.z) {\n    this._lastIterationsUsed = 0; // Reset for accurate tracking\n    return [from];\n  }\n  \n  // Early exit: adjacent tile\n  if (Math.abs(dx) <= 1 && Math.abs(dz) <= 1) {\n    this._lastIterationsUsed = 1; // One iteration to check neighbor\n    return [from, to];\n  }\n  \n  // ... full BFS\n}\n```\n\n**Files Changed**:
+- `packages/shared/src/systems/shared/movement/BFSPathfinder.ts` - Reset `_lastIterationsUsed` on early exit
+
+**Impact**: 
+- Accurate iteration tracking for budget monitoring
+- Diagnostics show correct BFS cost per call
+- No stale values from previous pathfinding attempts
+
 ## Recent Major Features (March 2026)
 
 ### Docker Build Improvements (March 18, 2026)
