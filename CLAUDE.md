@@ -1406,19 +1406,23 @@ SPECTATOR_PORT=4180              # Spectator server port
 
 ## Package Manager
 
-This project uses **Bun** (v1.3.10+) as the package manager and runtime.
+This project uses **Bun** (v1.3.10+) as the package manager.
 
 - Install: `bun install` (NOT `npm install`)
 - Run scripts: `bun run <script>` or `bun <file>`
 - Some commands use `npm` prefix for Turbo workspace filtering
 
+**IMPORTANT**: The **server runtime** uses **Node.js 22+** (not Bun) as of March 2026. See [Server Runtime Migration](#server-runtime-migration-march-2026) for details.
+
 ## Tech Stack
 
-- **Runtime**: Bun v1.3.10+ (upgraded from 1.1.38 for Vite 6+ compatibility)
+- **Runtime**: 
+  - **Client/Build**: Bun v1.3.10+ (upgraded from 1.1.38 for Vite 6+ compatibility)
+  - **Server**: Node.js 22+ (migrated from Bun for V8 incremental GC - see [Server Runtime Migration](#server-runtime-migration-march-2026))
 - **Rendering**: WebGPU ONLY (Three.js WebGPURenderer + TSL shaders) - NO WebGL
 - **Engine**: Three.js 0.183.2, PhysX (WASM)
 - **UI**: React 19.2.0, styled-components
-- **Server**: Fastify, WebSockets, LiveKit
+- **Server**: Fastify (HTTP), uWebSockets.js (game WebSocket), LiveKit (voice)
 - **Database**: PostgreSQL (production, connection pool: 20), Docker (local), sqlite3 6.0.1 (dev only)
 - **Testing**: Vitest 4.1.0+, Jest 30.3.0, Playwright (WebGPU-enabled browsers only)
 - **Build**: Vite 8.0.0, @vitejs/plugin-react 6.0.1, Turbo, esbuild
