@@ -128,9 +128,14 @@ Build order: `physx-js-webidl` → `shared` → everything else (handled automat
 | Service | Port | Description |
 |---------|------|-------------|
 | Client | 3333 | Vite dev server with hot reload |
-| Server | 5555 | Game server (Fastify + WebSockets) |
+| Server (HTTP) | 5555 | Game server HTTP API (Fastify) |
+| Server (WebSocket) | 5556 | Game WebSocket (uWebSockets.js) |
 | CDN | 8080 | Asset server (Docker nginx) |
 | PostgreSQL | 5432 | Database (Docker) |
+
+**Note**: As of March 2026, the server uses **dual ports**:
+- **Port 5555** (Fastify): HTTP API, health checks, admin endpoints
+- **Port 5556** (uWebSockets.js): Game WebSocket traffic for real-time multiplayer (can be disabled with `UWS_ENABLED=false`)
 
 ### Run specific services
 
