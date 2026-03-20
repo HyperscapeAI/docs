@@ -212,20 +212,61 @@ bunx drizzle-kit migrate   # Run pending migrations
 
 ## Architecture
 
+### Runtime Architecture (Updated March 2026)
+
+**Node.js Runtime**: Server runs on Node.js 22+ (migrated from Bun)
+- **Why**: V8 incremental GC keeps pauses <10ms vs Bun's JSC stop-the-world GC (500-1200ms)
+- **ESM Hooks**: `scripts/node-esm-hooks.mjs` resolves Bun workspace package imports
+- **Start Command**: `node --import ./scripts/register-hooks.mjs dist/index.js`
+
+**Dual WebSocket Ports**: Optimized for different traffic patterns
+- **Port 5555** (Fastify): HTTP API, health checks, admin endpoints, file uploads
+- **Port 5556** (uWebSockets.js): Game WebSocket traffic (real-time multiplayer)
+- **Pub/Sub Topics**: `global`, `region:<key>`, `spectator` for native C++ fan-out
+- **Fallback**: Set `UWS_ENABLED=false` to use Fastify WebSocket on port 5555
+
+**Worker Thread AI**: Agent behavior runs off main thread
+- **AgentBehaviorBridge** (main thread): Collects snapshots, applies results
+- **AgentBehaviorEngine** (worker thread): Pure decision logic (no World access)
+- **Batch Processing**: Up to 5 agents per 1000ms poll cycle
+- **Staggered Scheduling**: 800ms offset between agents to prevent simultaneous ticks
+- **Shared Snapshot**: Entity scan once per second across ALL agents (not per-agent)
+
+**Optimized Pathfinding**: Global BFS iteration budget
+- **Budget**: 12,000 iterations/tick shared across all callers
+- **Scratch Tiles**: Zero-allocation neighbor checks
+- **Walkability Cache**: Per-tick cache (first check expensive, rest O(1))
+- **Pre-Baked Flags**: WATER and STEEP_SLOPE baked into collision matrix at terrain generation
+
+**Tick System**: 600ms OSRS-accurate ticks
+- **Drift Correction**: setTimeout adjusted for accumulated drift
+- **Health Monitoring**: Tracks missed ticks, lateness, duration
+- **Per-Handler Timing**: Identifies bottlenecks (mob AI, combat, movement)
+- **Named Handlers**: `onTick(handler, priority, "mobAI")` for diagnostics
+
 ### Core Systems
 
 **ServerNetwork** (`src/systems/ServerNetwork/`)
-- WebSocket connection handling
+- Dual WebSocket transport (Fastify + uWS)
+- Native pub/sub broadcasting (region-based topics)
 - Player spawning and lifecycle
 - Character selection flow
 - Message routing and broadcasting
 - CSRF protection for cross-origin clients
+- Spatial indexing for nearby entity queries
 
 **DatabaseSystem** (`src/systems/DatabaseSystem/`)
-- PostgreSQL connection management
+- PostgreSQL connection management (pool: 20)
 - Character CRUD operations
 - Player data persistence
 - Inventory and equipment management
+- Activity logging with ring buffer
+
+**AgentManager** (`src/eliza/AgentManager.ts`)
+- Agent lifecycle management (start, stop, pause, resume)
+- Worker thread coordination via AgentBehaviorBridge
+- Combat damage event handling
+- Model agent spawning (OpenAI, Anthropic, Groq)
 
 **StreamingDuelScheduler** (`src/systems/StreamingDuelScheduler/`)
 - Automated duel matchmaking
@@ -237,6 +278,7 @@ bunx drizzle-kit migrate   # Run pending migrations
 - Publishes duel outcomes to EVM and Solana
 - Comprehensive outcome data (damage, win reason, replay hash)
 - Metadata API for betting markets
+- Settlement delay for stream sync (7s default)
 
 ### Character System
 
