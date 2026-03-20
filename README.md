@@ -318,6 +318,66 @@ npm test -- -u
 
 ## Recent Updates (March 2026)
 
+### Performance & Scalability Overhaul (March 19-20, 2026)
+
+**Major architectural changes** to improve server tick reliability and support 50+ concurrent players with 25+ AI agents:
+
+#### Server Runtime Migration: Bun → Node.js
+**Problem**: Bun's JavaScriptCore (JSC) uses stop-the-world GC causing 500-1200ms pauses that destroyed the 600ms game tick.
+
+**Solution**: Migrated to Node.js 22+ which uses V8's incremental/concurrent GC (pauses <10ms).
+
+**Impact**: Eliminated missed ticks and rubber-banding under load. **Breaking**: Server now requires Node.js 22+ (Bun no longer supported for server runtime).
+
+#### uWebSockets.js Integration
+**Problem**: Fastify WebSocket broadcast iterated all sockets in JavaScript (O(n) bottleneck with 50+ connections).
+
+**Solution**: Replaced with uWebSockets.js using native pub/sub topics. C++ kernel handles per-subscriber delivery.
+
+**Architecture**:
+- **Dual Ports**: Port 5555 (Fastify HTTP), Port 5556 (uWS game WebSocket)
+- **Pub/Sub Topics**: `global`, `region:<key>`, `spectator`
+- **Configuration**: `UWS_ENABLED=true` (default), `UWS_PORT=5556`
+
+**Impact**: Eliminates O(n) socket iteration, supports 50+ concurrent connections without event loop blocking.
+
+#### Agent AI Worker Thread
+**Problem**: 25+ AI agents running behavior ticks on main thread blocked event loop for 200-600ms per tick.
+
+**Solution**: Moved agent decision logic to worker thread. Main thread collects snapshots, worker makes decisions, main thread executes actions.
+
+**Features**:
+- Batch processing (up to 5 agents per 1000ms poll)
+- Staggered scheduling (800ms offset between agents)
+- Shared entity snapshot (scanned once per second across ALL agents)
+
+**Impact**: Agent AI no longer blocks game tick, tick blocking reduced from 200-600ms → <10ms.
+
+#### BFS Pathfinding Optimization
+**Problem**: 25+ agents each triggering 4000-iteration BFS with expensive walkability checks monopolized event loop.
+
+**Solutions**:
+- **Global iteration budget**: 12,000 iterations/tick shared across ALL callers
+- **Zero-allocation scratch tiles**: Reuse instance fields instead of allocating per iteration
+- **Per-tick walkability cache**: First check expensive, remaining 24 are O(1)
+- **Pre-baked terrain walkability**: WATER and STEEP_SLOPE flags baked into collision matrix
+
+**Impact**: BFS cost reduced by ~70% (200-600ms → 100-190ms per tick), 25 agents can pathfind simultaneously.
+
+#### Terrain System Server Optimization
+**Changes**:
+- **Low-res collision mesh**: 16×16 vertices (512 triangles) instead of 64×64 (8192 triangles) — ~16x faster PhysX cooking
+- **Time-budgeted processing**: Multiple tiles per tick within 8ms budget
+- **Deferred walkability baking**: Spreads 10,000-iteration work across ticks (4ms budget)
+- **Server-only lightweight tiles**: Skip client-only data (~80% memory reduction per tile)
+
+**Impact**: PhysX cooking ~16x faster, collision queue processes multiple tiles per tick, server terrain memory reduced by ~80%.
+
+**Configuration**:
+```bash\n# Enable/disable uWS (default: enabled)\nUWS_ENABLED=true\nUWS_PORT=5556\n\n# Client WebSocket URL\nPUBLIC_WS_URL=ws://localhost:5556/ws  # uWS (default)\n# or\nPUBLIC_WS_URL=ws://localhost:5555/ws  # Fastify fallback\n```\n\n**Files Changed**: 54 files, 6,502 additions, 1,164 deletions. See PR #1064 for complete details.
+
+## Recent Updates (March 2026)
+
 ### VRM Material Isolation Fix (March 17, 2026)
 **Problem**: `SkeletonUtils.clone()` shares material instances across all VRM clones, causing hover highlight on one mob to affect all mobs of the same type (hovering over one goblin highlighted all goblins).
 
