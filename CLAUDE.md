@@ -1352,10 +1352,15 @@ All services have unique default ports to avoid conflicts:
 | 3401 | AssetForge API | `ASSET_FORGE_API_PORT` | `bun run dev:forge` |
 | 3402 | Docusaurus | (hardcoded) | `bun run docs:dev` |
 | 4001 | ElizaOS API | `ELIZA_PORT` | `bun run dev:ai` |
-| 5555 | Game Server | `PORT` | `bun run dev` |
+| 5555 | Game Server (HTTP) | `PORT` | `bun run dev` |
+| 5556 | Game WebSocket (uWS) | `UWS_PORT` | `bun run dev` (when `UWS_ENABLED=true`) |
 | 8080 | Asset CDN | `CDN_PORT` | `bun run cdn:up` |
 | 8765 | RTMP Bridge | `RTMP_BRIDGE_PORT` | `bun run duel` |
 | 4180 | Spectator Server | `SPECTATOR_PORT` | `bun run duel` |
+
+**Note**: As of March 2026, the game uses **dual WebSocket ports**:
+- **Port 5555** (Fastify): HTTP API, health checks, admin endpoints
+- **Port 5556** (uWebSockets.js): Game WebSocket traffic (default, can be disabled with `UWS_ENABLED=false`)
 
 ### Environment Variables
 
