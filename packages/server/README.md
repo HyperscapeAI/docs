@@ -42,10 +42,13 @@ See `FIXES-COMPLETE.md` for detailed migration changelog.
 
 ### Prerequisites
 
-- **Bun** (recommended) or Node.js 22+
+- **Node.js 22+** (REQUIRED for server runtime as of March 2026)
+- **Bun 1.3.10+** (for package management and build scripts)
 - **Docker Desktop** (for local PostgreSQL) OR external PostgreSQL instance
-- **Chrome Canary** (for streaming capture on Linux) - `google-chrome-unstable` (as of March 13, 2026)
+- **Chrome Beta** (for streaming capture on Linux) - `google-chrome-beta` (as of March 20, 2026)
 - **FFmpeg** (for RTMP streaming) - `apt install ffmpeg` or `brew install ffmpeg`
+
+**Important**: The server runtime was migrated from Bun to Node.js in March 2026 to eliminate stop-the-world GC pauses. Bun is still used for package management and build scripts, but the production server runs on Node.js.
 
 ### Installation
 
