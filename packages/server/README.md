@@ -320,9 +320,15 @@ POSTGRES_POOL_MIN=2          # Min idle connections
 
 ```env
 PUBLIC_CDN_URL=http://localhost:8080    # CDN URL for static assets
-PUBLIC_WS_URL=ws://localhost:5555/ws    # WebSocket URL
+PUBLIC_WS_URL=ws://localhost:5556/ws    # WebSocket URL (uWS port) - UPDATED March 2026
+PUBLIC_API_URL=http://localhost:5555    # HTTP API URL (Fastify port)
 DUEL_PUBLIC_CDN_URL=https://assets.hyperscape.club  # Production CDN for duel stack
 ```
+
+**WebSocket URL Configuration** (March 2026):
+- **Default**: `ws://localhost:5556/ws` (uWebSockets.js on port 5556)
+- **Fallback**: `ws://localhost:5555/ws` (Fastify WebSocket when `UWS_ENABLED=false`)
+- **Production**: `wss://hyperscape.gg/ws` (load balancer routes to uWS port)
 
 ### Authentication (Optional)
 
