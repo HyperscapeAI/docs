@@ -269,7 +269,8 @@ bun run dev
 
 **Port conflicts:**
 ```bash
-lsof -ti:5555 | xargs kill -9   # Server
+lsof -ti:5555 | xargs kill -9   # Server HTTP
+lsof -ti:5556 | xargs kill -9   # Server WebSocket (uWS)
 lsof -ti:3333 | xargs kill -9   # Client
 lsof -ti:8080 | xargs kill -9   # CDN
 ```
