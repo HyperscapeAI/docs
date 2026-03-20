@@ -289,8 +289,11 @@ Login → Character List → Select/Create Character → Enter World → Spawn a
 ### Required
 
 ```env
-PORT=5555                    # Server port
-WORLD=world                   # World directory path
+PORT=5555                    # Server HTTP port (Fastify)
+UWS_PORT=5556                # Game WebSocket port (uWebSockets.js) - NEW March 2026
+UWS_ENABLED=true             # Enable uWS transport (default: true) - NEW March 2026
+WORLD=world                  # World directory path
+NODE_ENV=development         # Environment (development, production, staging, test)
 ```
 
 ### Database
