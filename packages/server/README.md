@@ -5,15 +5,19 @@ Production-ready game server for Hyperscape 3D multiplayer worlds with PostgreSQ
 ## ✅ Status: FULLY OPERATIONAL
 
 The server has been successfully migrated to PostgreSQL and is production-ready with:
-- PostgreSQL database with automatic migrations
-- 54 mobs + 5 NPCs spawning at startup  
+- **Runtime**: Node.js 22+ (migrated from Bun for V8 incremental GC - March 2026)
+- **WebSocket**: Dual-port architecture (Fastify HTTP + uWebSockets.js game traffic - March 2026)
+- **AI Agents**: Worker thread architecture supporting 25+ agents without tick blocking (March 2026)
+- **Pathfinding**: Global BFS iteration budget with pre-baked terrain walkability (March 2026)
+- PostgreSQL database with automatic migrations (connection pool: 20)
+- 54 mobs + 5 NPCs spawning at startup with functional AI state machines
 - Character creation and multi-character support
 - Complete persistence layer (inventory, equipment, skills, position)
-- Real-time multiplayer via WebSocket
+- Real-time multiplayer via WebSocket (uWS pub/sub for 50+ concurrent players)
 - 15 registered game actions
-- RTMP streaming pipeline with MediaRecorder capture mode
+- RTMP streaming pipeline with CDP capture mode
 - Duel arena oracle publisher (EVM + Solana)
-- ElizaOS AI agent integration with 10 frontier models (direct Anthropic/Groq providers)
+- ElizaOS AI agent integration with 10+ frontier models (OpenAI, Anthropic, Groq)
 
 See `FIXES-COMPLETE.md` for detailed migration changelog.
 
