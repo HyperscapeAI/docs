@@ -195,13 +195,19 @@ Both must use the same Privy App ID from [Privy Dashboard](https://dashboard.pri
 
 | Port | Service | Started By |
 |------|---------|------------|
-| 5555 | Game Server | `bun run dev` |
+| 5555 | Game Server (HTTP) | `bun run dev` |
+| 5556 | Game WebSocket (uWS) | `bun run dev` |
 | 3333 | Client | `bun run dev` |
 | 8080 | Asset CDN | `bun run dev` |
 | 3400 | AssetForge UI | `bun run dev:forge` |
 | 3401 | AssetForge API | `bun run dev:forge` |
 | 4001 | ElizaOS API | `bun run dev:ai` |
 | 3402 | Documentation | `bun run docs:dev` |
+
+**WebSocket Configuration**:
+- **Default**: Game WebSocket runs on port 5556 (uWebSockets.js for high performance)
+- **Fallback**: Set `UWS_ENABLED=false` to use port 5555 (Fastify WebSocket)
+- **Client**: Update `PUBLIC_WS_URL` in `packages/client/.env` to match your configuration
 
 ## Deployment (Railway)
 
