@@ -456,9 +456,38 @@ npm test -- -u
 
 **📖 Complete Migration Guide**: See [`docs/migration-march-2026.md`](docs/migration-march-2026.md) for detailed migration steps, code examples, and troubleshooting.
 
+## Performance & Architecture
+
+### Server Requirements (Updated March 2026)
+
+**Runtime**: Node.js 22+ (migrated from Bun for V8 incremental GC)
+
+**Why Node.js?** Bun's JavaScriptCore uses stop-the-world GC causing 500-1200ms pauses that destroyed the 600ms game tick. Node.js V8 has incremental/concurrent GC keeping pauses <10ms.
+
+**WebSocket Architecture**: Dual-port design for optimal performance
+- **Port 5555** (Fastify): HTTP API, health checks, admin endpoints
+- **Port 5556** (uWebSockets.js): Game WebSocket traffic (real-time multiplayer)
+
+**AI Agent Architecture**: Worker thread isolation
+- Agent decision logic runs in worker thread (doesn't block game tick)
+- Main thread collects snapshots, worker makes decisions, main thread executes actions
+- Supports 25+ AI agents without event loop starvation
+
+**Pathfinding**: Global BFS iteration budget
+- 12,000 iterations/tick shared across all pathfinding callers
+- Zero-allocation scratch tiles
+- Per-tick walkability cache
+- Pre-baked terrain walkability flags
+
+**Tick System**: 600ms OSRS-accurate ticks
+- Drift-corrected setTimeout for precise timing
+- Tick health monitoring (missed ticks, lateness, duration)
+- Per-handler timing for bottleneck identification
+- F5 DevStats panel for real-time diagnostics
+
 ## More Info
 
-See [AGENTS.md](AGENTS.md) for detailed development guidelines, architecture documentation, and coding standards.
+See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture documentation, and coding standards.
 
 ## License
 
