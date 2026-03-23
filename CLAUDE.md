@@ -672,6 +672,196 @@ Remove `onReady` handler after worker init resolves/times out:
 
 ## Recent Major Features (March 2026)
 
+### Internal Bet Sync Feed & Renderer Health (March 20-23, 2026)
+
+**Change** (PR #1065): Added authenticated internal betting sync API with renderer health monitoring.
+
+**Problem**: Betting consumers (Hyperbet) were relying on delayed public spectator snapshots as the primary sync input, causing market state to drift from the actual streaming duel lifecycle. No visibility into renderer health meant betting could occur on degraded/loading frames.
+
+**Solution**: Make Hyperscape the authoritative source for duel lifecycle events with sequence-aware SSE feeds and renderer health signals.
+
+**New API Endpoints**:
+```typescript
+// Bootstrap endpoint - get current state + replay buffer
+GET /api/internal/bet-sync/state
+Authorization: Bearer <BETTING_FEED_ACCESS_TOKEN>
+
+// SSE feed - real-time duel lifecycle events
+GET /api/internal/bet-sync/events?since=<sequence>
+Authorization: Bearer <BETTING_FEED_ACCESS_TOKEN>
+// or (for EventSource which can't set headers)
+GET /api/internal/bet-sync/events?streamToken=<token>&since=<sequence>
+```
+
+**Payload Structure**:
+```typescript
+interface BettingFeedPayload {
+  seq: number;              // Monotonic sequence number
+  sourceEpoch: number;      // Server start timestamp (for sequence continuity)
+  emittedAt: number;        // Emission timestamp
+  phaseVersion: number;     // Increments on phase transitions (idempotent dedup)
+  cycle: {
+    cycleId: string;
+    phase: "IDLE" | "ANNOUNCEMENT" | "COUNTDOWN" | "FIGHTING" | "RESOLUTION";
+    agent1: AgentSnapshot;
+    agent2: AgentSnapshot;
+    arenaPositions: { agent1: [x,y,z], agent2: [x,y,z] };
+    winnerId: string | null;
+    winnerName: string | null;
+    // ... full cycle state
+  };
+  rendererHealth: {
+    ready: boolean;
+    degradedReason: string | null;  // e.g., "loading_overlay_active", "arena_positions_invalid"
+    updatedAt: number;
+    phase: string | null;
+  };
+}
+```
+
+**Renderer Health Detection**:
+```typescript
+// Client-side globals (exposed for capture pipeline)
+window.__HYPERSCAPE_STREAM_READY__: boolean
+window.__HYPERSCAPE_STREAM_RENDERER_HEALTH__: {
+  ready: boolean;
+  degradedReason: string | null;
+  updatedAt: number;
+  phase: string | null;
+}
+window.__HYPERSCAPE_STREAM_BOOT_STATUS__: string | null  // "connecting" | "initializing" | "loading_assets" | "finalizing" | "error:*"
+```
+
+**Streaming Guardrails** (`packages/shared/src/utils/rendering/streamingGuardrails.ts`):
+```typescript
+export function deriveStreamingGuardrailReason(params: {
+  phase: StreamingGuardrailPhase | null;
+  agent1: StreamingGuardrailAgentSnapshot | null;
+  agent2: StreamingGuardrailAgentSnapshot | null;
+  arenaPositions: { agent1: [x,y,z], agent2: [x,y,z] } | null | undefined;
+}): string | null {
+  // Returns degraded reason or null if healthy
+  // Checks: agent presence, HP validity, arena position sanity
+}
+```
+
+**DuelBettingBridge Lifecycle** (`packages/server/src/systems/DuelScheduler/DuelBettingBridge.ts`):
+```typescript
+// Announcement → create or sync market
+handleStreamingAnnouncement(data: { duelId, agent1, agent2 })
+  → createOrSyncMarket() → solanaOperator.initRound()
+
+// Fight Start → lock market (no new bets)
+handleStreamingFightStart(data: { duelId })
+  → lockMarket() → solanaOperator.lockMarket()
+
+// Resolution → resolve market with outcome
+handleStreamingResolution(data: { duelId, winnerId, loserId })
+  → resolveMarket() → solanaOperator.resolveRound()
+
+// Abort → clean up local state
+handleStreamingAbort(data: { duelId })
+  → deleteMarket() // Note: on-chain cancellation not yet supported
+```
+
+**Reconciliation Loop**:
+```typescript
+// Runs every 1s to ensure market state stays aligned with streaming lifecycle
+private async reconcileLiveCycle(): Promise<void> {
+  const scheduler = getStreamingDuelScheduler();
+  const cycle = scheduler?.getCurrentCycle();
+  
+  // Create/sync market if in valid phase
+  if (canCreateMarketForStreamingPhase(cycle.phase)) {
+    await this.createOrSyncMarket(cycle);
+  }
+  
+  // Resolve if in RESOLUTION phase
+  if (cycle.phase === "RESOLUTION" && cycle.winnerId) {
+    await this.resolveMarket(market, cycle);
+  }
+}
+```
+
+**Configuration**:
+```bash
+# Betting feed authentication
+BETTING_FEED_ACCESS_TOKEN=your-random-secret-token
+
+# Fallback to viewer token (temporary)
+STREAMING_VIEWER_ACCESS_TOKEN=your-viewer-token
+
+# CORS for betting consumers
+INTERNAL_BET_SYNC_ALLOWED_ORIGIN=https://your-betting-frontend.com
+
+# SSE feed tuning
+BETTING_SSE_MAX_CLIENTS=32
+STREAMING_SSE_REPLAY_BUFFER=2048
+STREAMING_SSE_PUSH_INTERVAL_MS=500
+STREAMING_SSE_MAX_PENDING_BYTES=1048576
+
+# Capture browser security
+CAPTURE_DISABLE_SANDBOX=false  # Only enable if required for Docker/CI
+
+# Embed security (client)
+PUBLIC_EMBED_ALLOWED_ORIGINS=https://embed.example.com,https://partner.example.com
+```
+
+**Embedded Auth Hardening** (`packages/client/src/lib/embeddedAuth.ts`):
+```typescript
+// Validates postMessage origins against explicit allowlist
+export function resolveTrustedEmbedOrigins(params: {
+  currentOrigin: string;
+  publicAppUrl?: string | null;
+  embedAllowedOrigins?: string | null;
+}): string[]
+
+// Rejects wildcard, null, and non-http(s) origins
+export function isTrustedEmbedOrigin(
+  eventOrigin: string,
+  trustedOrigins: readonly string[]
+): boolean
+
+// Parses and validates HYPERSCAPE_AUTH bootstrap messages
+export function parseHyperscapeAuthMessage(data: unknown): ParsedHyperscapeAuthMessage | null
+```
+
+**Streaming Access Token Management** (`packages/client/src/lib/streamingAccessToken.ts`):
+```typescript
+// Extracts token from URL hash (preferred) or query, scrubs from URL
+export function resolveStreamingAccessTokenFromHref(href: string): {
+  token: string | null;
+  nextUrl: string | null;
+}
+
+// Primes token cache and scrubs URL before React mounts
+export function primeStreamingAccessTokenFromWindow(window: Window): string | null
+
+// Returns cached token (no re-parsing)
+export function getStreamingAccessToken(): string | null
+```
+
+**Files Changed**:
+- `packages/server/src/routes/streaming-betting-routes.ts` - NEW: Betting feed endpoints
+- `packages/server/src/routes/streaming-betting-auth.ts` - NEW: Timing-safe token auth
+- `packages/server/src/routes/streaming-betting-feed.ts` - NEW: Feed payload construction
+- `packages/server/src/routes/streaming-betting-health.ts` - NEW: Renderer health derivation
+- `packages/server/src/routes/streaming-external-status.ts` - NEW: External RTMP status parsing
+- `packages/server/src/systems/DuelScheduler/DuelBettingBridge.ts` - Lifecycle management
+- `packages/client/src/lib/embeddedAuth.ts` - NEW: Origin validation for embedded clients
+- `packages/client/src/lib/streamingAccessToken.ts` - NEW: Token scrubbing and caching
+- `packages/client/src/lib/streamingWindow.ts` - NEW: Window global types
+- `packages/client/src/screens/StreamingMode.tsx` - Renderer health integration
+- `packages/shared/src/utils/rendering/streamingGuardrails.ts` - NEW: Shared validation logic
+
+**Impact**:
+- Betting consumers have reliable, authoritative duel lifecycle feed
+- Renderer health signals prevent betting on degraded frames
+- Sequence-aware payloads enable idempotent deduplication
+- Token scrubbing prevents leakage via browser history/referrer headers
+- Origin validation prevents unauthorized embedded auth injection
+- Capture browser hardening improves security posture
+
 ### Docker Build Improvements (March 18, 2026)
 
 **Change** (PR #1033, Commit 7519105): Comprehensive Docker build improvements for multi-service deployment.
