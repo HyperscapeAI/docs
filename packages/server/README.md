@@ -903,12 +903,43 @@ Admin commands require:
 - Restrict database access to server IP
 - Enable SSL for remote PostgreSQL connections
 
+### Betting Feed Security (March 2026)
+
+**Timing-Safe Token Comparison**:
+- Uses `timingSafeEqual` on SHA-256 digests to prevent timing attacks
+- Constant-time comparison for `BETTING_FEED_ACCESS_TOKEN`
+
+**Token Handling**:
+- Tokens moved to URL hash fragments (not sent to servers in HTTP requests)
+- Immediate scrubbing via `history.replaceState` prevents browser history leakage
+- Log redaction via `redactStreamingSecretsFromUrl` for all log output
+
+**Embedded Client Security**:
+- Origin validation for `postMessage` auth bootstrap
+- Rejects wildcard (`*`), `null`, and non-http(s) origins
+- Explicit allowlist via `PUBLIC_EMBED_ALLOWED_ORIGINS`
+- `HYPERSCAPE_READY` no longer broadcasts with wildcard in production
+
+**Capture Browser Hardening**:
+- Removed `--disable-web-security` from default Chromium args
+- Made `--no-sandbox` opt-in via `CAPTURE_DISABLE_SANDBOX` environment variable
+- Navigation allowlist prevents redirect-to-malicious-origin attacks
+- Capture browser only navigates to allowed game origins
+
+**Shell Injection Prevention**:
+- Migrated from `exec` (shell-interpreted) to `execFile` (no shell)
+- Container names passed as array args, not interpolated into command strings
+
 ### Rate Limiting
 
-Not implemented yet. Consider adding:
-- Connection rate limiting (websocket)
-- API endpoint rate limiting
-- Upload size limits (currently 50MB)
+**Betting Feed Endpoints** (March 2026):
+- Bootstrap endpoint: 240 requests/minute per IP
+- SSE events endpoint: 60 requests/minute per IP
+- Max concurrent SSE clients: 32 (configurable via `BETTING_SSE_MAX_CLIENTS`)
+
+**General Endpoints**:
+- Upload size limits: 50MB (configurable via `PUBLIC_MAX_UPLOAD_SIZE`)
+- WebSocket connection limits enforced by `ConnectionHandler`
 
 ## Support
 
