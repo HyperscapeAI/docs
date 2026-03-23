@@ -307,7 +307,7 @@ Login → Character List → Select/Create Character → Enter World → Spawn a
 
 ### WebSocket
 
-- `GET /ws` - WebSocket connection for real-time gameplay
+- `GET /ws` - WebSocket connection for real-time gameplay (Fastify on port 5555 or uWS on port 5556)
 
 ### Actions (HTTP API)
 
@@ -319,6 +319,58 @@ Login → Character List → Select/Create Character → Enter World → Spawn a
 
 - `GET /api/duel-arena/oracle/metadata/:roundId` - Get duel outcome metadata
 - `POST /api/duel-arena/oracle/publish` - Publish duel outcome (internal)
+
+### Internal Betting Feed (March 2026)
+
+**Authentication Required**: All endpoints require `Authorization: Bearer <BETTING_FEED_ACCESS_TOKEN>` header or `?streamToken=<token>` query parameter (SSE only).
+
+- `GET /api/internal/bet-sync/state` - Bootstrap endpoint with current state + replay buffer
+  - Returns: Current duel cycle state, renderer health, and recent frame history
+  - Rate limit: 240 requests/minute per IP
+  
+- `GET /api/internal/bet-sync/events` - Server-Sent Events (SSE) feed for real-time updates
+  - Query params: `?since=<sequence>` for replay from specific sequence number
+  - Returns: Stream of `BettingFeedPayload` events with sequence numbers
+  - Rate limit: 60 requests/minute per IP
+  - Max clients: 32 concurrent connections
+  - Heartbeat: Every 15 seconds
+  - Replay buffer: 2048 frames
+
+**Payload Structure**:
+```typescript
+interface BettingFeedPayload {
+  seq: number;              // Monotonic sequence number
+  sourceEpoch: number;      // Server start timestamp
+  emittedAt: number;        // Emission timestamp
+  phaseVersion: number;     // Increments on phase transitions
+  cycle: StreamingCycleState;
+  rendererHealth: {
+    ready: boolean;
+    degradedReason: string | null;
+    updatedAt: number;
+    phase: string | null;
+  };
+}
+```
+
+**Configuration**:
+```bash
+# Required
+BETTING_FEED_ACCESS_TOKEN=your-random-secret-token
+
+# Optional
+INTERNAL_BET_SYNC_ALLOWED_ORIGIN=https://your-betting-frontend.com
+BETTING_SSE_MAX_CLIENTS=32
+STREAMING_SSE_REPLAY_BUFFER=2048
+```
+
+### Admin Endpoints
+
+- `GET /admin/logs` - Fetch recent server logs (requires admin auth)
+- `POST /admin/restart` - Restart server process (requires PM2)
+- `GET /admin/maintenance/status` - Get maintenance mode status
+- `POST /admin/maintenance/enter` - Enter maintenance mode
+- `POST /admin/maintenance/exit` - Exit maintenance mode
 
 ### Utility
 
