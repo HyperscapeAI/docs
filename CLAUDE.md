@@ -1807,6 +1807,54 @@ if (error && typeof error === "object" && "logs" in error) {
 - **GravestoneLootSystem.test.ts**: Namespaced test items with `grave_` prefix to avoid registry collisions
 - **BiomeSystem Tests**: Updated to use explicit biome definitions instead of hardcoded `DEFAULT_BIOMES`
 
+### Vite 8 Polyfill Migration (March 2026)
+
+**Change** (PR #1064): Removed `vite-plugin-node-polyfills` and manually inject Buffer global for Vite 8 compatibility.
+
+**Problem**: Vite 8 is incompatible with `vite-plugin-node-polyfills`. Solana libraries and crypto dependencies require `Buffer` global.
+
+**Solution**: Manual Buffer injection in `packages/client/src/polyfills/buffer-shim.ts`:
+```typescript
+import { Buffer } from "buffer";
+
+// Inject Buffer global for libraries that expect it (Solana, crypto, bn.js)
+// Previously handled by vite-plugin-node-polyfills, which is incompatible with Vite 8
+(globalThis as Record<string, unknown>).Buffer = Buffer;
+
+export default Buffer;
+```
+
+**Vite Config Changes** (`packages/client/vite.config.ts`):
+```typescript
+// REMOVED: vite-plugin-node-polyfills plugin
+// REMOVED: nodePolyfills({ include: ["buffer"], globals: { Buffer: true } })
+// REMOVED: Alias paths for vite-plugin-node-polyfills shims
+
+// ADDED: Manual chunk splitting function (Rolldown requires function, not object)
+manualChunks(id: string) {
+  if (id.includes("node_modules/react-dom") || id.includes("node_modules/react/")) {
+    return "vendor-react";
+  }
+  if (id.includes("node_modules/three/")) {
+    return "vendor-three";
+  }
+  if (id.includes("node_modules/lucide-react")) {
+    return "vendor-ui";
+  }
+}
+```
+
+**Files Changed**:
+- `packages/client/src/polyfills/buffer-shim.ts` - Added manual Buffer injection
+- `packages/client/vite.config.ts` - Removed node-polyfills plugin, updated chunk splitting
+- `packages/client/package.json` - Removed `vite-plugin-node-polyfills` dependency
+
+**Impact**:
+- Compatible with Vite 8 (Rolldown bundler)
+- Solana and crypto libraries work correctly
+- Smaller bundle size (no unused polyfills)
+- Manual control over polyfill injection
+
 ### Dependency Updates & Migration Guide (March 10-19, 2026)
 
 **📖 Complete Migration Guide**: See [`docs/migration-march-2026.md`](../docs/migration-march-2026.md) for detailed migration steps, code examples, and troubleshooting.
