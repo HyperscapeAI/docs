@@ -2487,7 +2487,20 @@ idl.address  // ✅ Properly typed
 
 ## Additional Resources
 
+### Core Documentation
 - [README.md](README.md) - Full project documentation
 - [AGENTS.md](AGENTS.md) - AI assistant instructions
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
+
+### Streaming & Betting (March 2026)
+- [docs/streaming-betting-integration.md](docs/streaming-betting-integration.md) - Integration guide for betting consumers
+- [docs/api-betting-feed.md](docs/api-betting-feed.md) - Complete API reference for internal betting feed
+- [docs/migration-march-2026-streaming.md](docs/migration-march-2026-streaming.md) - Breaking changes and migration steps
+
+### Performance & Architecture (March 2026)
+- [docs/performance-march-2026.md](docs/performance-march-2026.md) - Performance overhaul details (PR #1064)
+- Server Runtime Migration: Node.js 22+ (V8 incremental GC)
+- uWebSockets.js Integration: Native pub/sub broadcasting
+- Agent AI Worker Thread: Off-main-thread decision-making
+- BFS Pathfinding Optimization: Global iteration budget, pre-baked walkability
