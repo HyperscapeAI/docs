@@ -318,6 +318,87 @@ npm test -- -u
 
 ## Recent Updates (March 2026)
 
+### Internal Bet Sync Feed & Renderer Health (March 20-23, 2026)
+
+**Major streaming infrastructure upgrade** to make Hyperscape the authoritative source for duel lifecycle events and betting market synchronization.
+
+#### Authenticated Internal Bet Sync API
+**New Endpoints**:
+- `GET /api/internal/bet-sync/state` - Bootstrap endpoint for betting consumers (authenticated)
+- `GET /api/internal/bet-sync/events` - Server-Sent Events (SSE) feed with sequence-aware payloads (authenticated)
+
+**Features**:
+- **Sequence-Aware Payloads**: Monotonic `phaseVersion` counter enables idempotent deduplication
+- **Renderer Health Signals**: Distinguishes healthy live arena frames from degraded initialization shells
+- **Replay Buffer**: 2048-frame buffer with byte-size limits for SSE reconnection support
+- **Source Epoch Persistence**: Database-backed sequence continuity across server restarts
+
+**Authentication**:
+```bash
+# Required for internal betting feed access
+BETTING_FEED_ACCESS_TOKEN=your-random-secret-token
+
+# Fallback to viewer token (temporary - will be deprecated)
+STREAMING_VIEWER_ACCESS_TOKEN=your-viewer-token
+
+# CORS configuration for betting consumers
+INTERNAL_BET_SYNC_ALLOWED_ORIGIN=https://your-betting-frontend.com
+```
+
+**Security Improvements**:
+- **Timing-Safe Token Comparison**: Uses `timingSafeEqual` on SHA-256 digests to prevent timing attacks
+- **Token Scrubbing**: Stream tokens moved to URL hash fragments (not sent to servers) and immediately scrubbed via `history.replaceState`
+- **Origin Validation**: Embedded auth validates `postMessage` origins against explicit allowlist
+- **Capture Browser Hardening**: Removed `--disable-web-security`, made `--no-sandbox` opt-in via `CAPTURE_DISABLE_SANDBOX`
+- **Shell Injection Fix**: Migrated from `exec` to `execFile` in Docker manager
+
+**Configuration**:
+```bash
+# Betting feed settings
+BETTING_FEED_ACCESS_TOKEN=your-secret-token
+BETTING_SSE_MAX_CLIENTS=32
+STREAMING_SSE_REPLAY_BUFFER=2048
+STREAMING_SSE_PUSH_INTERVAL_MS=500
+
+# Renderer health probe interval
+STREAMING_SSE_HEARTBEAT_MS=15000
+
+# Capture browser security
+CAPTURE_DISABLE_SANDBOX=false  # Only enable if required for Docker/CI
+
+# Embed security (client)
+PUBLIC_EMBED_ALLOWED_ORIGINS=https://embed.example.com,https://partner.example.com
+```
+
+**Renderer Health API**:
+```typescript
+// Client-side global (exposed for capture pipeline)
+window.__HYPERSCAPE_STREAM_READY__: boolean
+window.__HYPERSCAPE_STREAM_RENDERER_HEALTH__: {
+  ready: boolean;
+  degradedReason: string | null;
+  updatedAt: number;
+  phase: string | null;
+}
+window.__HYPERSCAPE_STREAM_BOOT_STATUS__: string | null
+```
+
+**DuelBettingBridge Lifecycle**:
+- **Announcement Phase**: Creates or syncs market with Solana operator
+- **Fight Start**: Locks market (no new bets)
+- **Resolution**: Resolves market with winner/loser data
+- **Abort Handling**: Cleans up local state (on-chain cancellation not yet supported)
+- **Reconciliation Loop**: 1-second interval ensures market state stays aligned with streaming lifecycle
+
+**Impact**:
+- Betting consumers can reliably sync to Hyperscape's duel lifecycle
+- Renderer health signals prevent betting on degraded/loading frames
+- Sequence-aware payloads enable idempotent deduplication on consumer side
+- Source epoch persistence ensures sequence continuity across restarts
+- **Breaking**: Requires `BETTING_FEED_ACCESS_TOKEN` for internal betting endpoints
+
+**Files Changed**: 71 files, 6,875 additions, 541 deletions. See PR #1065 for complete details.
+
 ### Performance & Scalability Overhaul (March 19-20, 2026)
 
 **Major architectural changes** to improve server tick reliability and support 50+ concurrent players with 25+ AI agents:
