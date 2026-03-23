@@ -479,6 +479,53 @@ Skip client-only data on server:\n```typescript\nif (this.runtimeIsServer) {\n  
 - No longer blocked by stale database records
 - Deduplication handled by `runningAgents` Map as intended
 
+### Equipment Slot Type Safety Fix (March 2026)
+
+**Change** (PR #1064): Fixed equipment slot extraction to handle both string and object formats.
+
+**Problem**: Equipment slots (`weapon`, `helmet`, `body`, etc.) can be either strings (item ID) or objects (`{ itemId, name, ... }`). Agent behavior code was assuming string format, causing crashes when slots contained objects.
+
+**Fix**: Added type-safe extraction helper:
+```typescript
+// packages/server/src/eliza/managers/autonomous-behavior-manager.ts
+const extractSlotName = (slot: unknown): string => {
+  if (!slot) return "";
+  if (typeof slot === "string") return slot;
+  return String(
+    (slot as Record<string, unknown>).itemId ||
+    (slot as Record<string, unknown>).name ||
+    ""
+  );
+};
+
+// Usage for weapon slot
+const weaponSlot = player.equipment?.weapon;
+const weapon = weaponSlot
+  ? typeof weaponSlot === "string"
+    ? weaponSlot
+    : String(
+        (weaponSlot as Record<string, unknown>).itemId ||
+        (weaponSlot as Record<string, unknown>).name ||
+        "fists"
+      )
+  : "fists";
+
+// Usage for armor slots
+const armor = [eq?.helmet, eq?.body, eq?.legs, eq?.shield]
+  .map(extractSlotName)
+  .filter(Boolean)
+  .join(", ") || "none";
+```
+
+**Files Changed**:
+- `packages/server/src/eliza/managers/autonomous-behavior-manager.ts` - Added `extractSlotName` helper, fixed weapon/armor extraction
+
+**Impact**:
+- Agents no longer crash when equipment slots contain objects
+- Combat role detection works correctly
+- Post-combat analysis handles both string and object formats
+- More robust equipment handling across agent behavior code
+
 ### Additional Model Agents (March 20, 2026)
 
 **Change** (Commit 21d8984): Added OpenAI model agents and increased default duel bot count.
