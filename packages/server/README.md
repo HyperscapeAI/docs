@@ -438,11 +438,14 @@ ADMIN_CODE=your-admin-code          # For /admin command
 # Capture mode (default: cdp)
 STREAM_CAPTURE_MODE=cdp
 
-# Chrome channel (default: chrome-canary for Linux, as of March 13, 2026)
-STREAM_CAPTURE_CHANNEL=chrome-canary
+# Chrome channel (default: chrome-beta for Linux, as of March 20, 2026)
+STREAM_CAPTURE_CHANNEL=chrome-beta
 
 # ANGLE backend (default: vulkan for Linux NVIDIA)
 STREAM_CAPTURE_ANGLE=vulkan
+
+# Capture browser security (March 2026)
+CAPTURE_DISABLE_SANDBOX=false  # Only enable for Docker/CI
 
 # Stream keys (auto-detected destinations)
 TWITCH_STREAM_KEY=live_123456789_abcdefghij
@@ -452,6 +455,30 @@ YOUTUBE_STREAM_KEY=your-youtube-stream-key
 # Display (for Xvfb virtual display)
 DISPLAY=:99
 DUEL_CAPTURE_USE_XVFB=true
+
+# Streaming viewer access token (optional)
+# Passed as #streamToken in URL hash (not query params)
+STREAMING_VIEWER_ACCESS_TOKEN=your-viewer-token
+```
+
+### Internal Betting Feed (March 2026)
+
+```env
+# Required for betting feed access
+BETTING_FEED_ACCESS_TOKEN=your-random-secret-token
+
+# CORS origin for betting consumers
+INTERNAL_BET_SYNC_ALLOWED_ORIGIN=https://your-betting-frontend.com
+
+# SSE feed configuration
+BETTING_SSE_MAX_CLIENTS=32
+STREAMING_SSE_REPLAY_BUFFER=2048
+STREAMING_SSE_PUSH_INTERVAL_MS=500
+STREAMING_SSE_MAX_PENDING_BYTES=1048576
+STREAMING_SSE_HEARTBEAT_MS=15000
+
+# Development-only auth bypass (NEVER enable in production)
+BETTING_FEED_SKIP_AUTH=false
 ```
 
 ### AI Agents (Optional)
