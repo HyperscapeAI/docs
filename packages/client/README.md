@@ -786,6 +786,23 @@ POST /api/actions/attack
 - Monitor memory usage (4GB+ recommended)
 - Check database size and optimize if needed
 
+**Streaming renderer health issues** (March 2026)
+- Check `window.__HYPERSCAPE_STREAM_RENDERER_HEALTH__` in browser console
+- Common `degradedReason` values:
+  - `"loading_overlay_active"` - Loading screen still visible
+  - `"arena_positions_invalid"` - Agents spawned at same position
+  - `"initialization_failed"` - World init error (check console)
+  - `"camera_target_unresolved"` - Camera hasn't locked to target yet
+- Verify `window.__HYPERSCAPE_STREAM_BOOT_STATUS__` is `null` when ready
+- Check browser console for WebGPU initialization errors
+
+**Embedded client auth failures** (March 2026)
+- Verify parent origin is in `PUBLIC_EMBED_ALLOWED_ORIGINS`
+- Check browser console for "Ignoring HYPERSCAPE_AUTH from untrusted origin" warnings
+- Ensure `HYPERSCAPE_AUTH` message includes required `authToken` field
+- Verify `event.source === window.parent` (messages from other frames are rejected)
+- Check `HYPERSCAPE_READY` is sent to correct target origin (not wildcard in production)
+
 ### Debug Mode
 
 Enable debug logging:
