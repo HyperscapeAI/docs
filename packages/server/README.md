@@ -1132,6 +1132,9 @@ Admin commands require:
 ## Support
 
 - **Documentation:** See `MIGRATION-FIXES.md` for recent changes
+- **Streaming & Betting:** See `docs/streaming-betting-integration.md` for integration guide
+- **Betting Feed API:** See `docs/api-betting-feed.md` for complete API reference
+- **Migration Guide:** See `docs/migration-march-2026-streaming.md` for breaking changes
 - **Cloudflare Deployment:** See `CLOUDFLARE.md` (currently disabled)
 - **Duel Stack:** See `docs/duel-stack.md` for streaming setup
 - **Oracle Deployment:** See `docs/duel-arena-oracle-deploy.md`
