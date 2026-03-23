@@ -2070,6 +2070,7 @@ This project uses **Bun** (v1.3.10+) as the package manager.
 - **Database**: PostgreSQL (production, connection pool: 20), Docker (local), sqlite3 6.0.1 (dev only)
 - **Testing**: Vitest 4.1.0+, Jest 30.3.0, Playwright (WebGPU-enabled browsers only)
 - **Build**: Vite 8.0.0, @vitejs/plugin-react 6.0.1, Turbo, esbuild
+- **Polyfills**: Manual Buffer injection (Vite 8 removed vite-plugin-node-polyfills)
 - **AI**: ElizaOS `alpha` tag (aligned with latest alpha releases)
 - **Streaming**: FFmpeg (system preferred over ffmpeg-static), Playwright Chromium, RTMP
 - **Mobile**: Capacitor 8.2.0 (Android, iOS)
