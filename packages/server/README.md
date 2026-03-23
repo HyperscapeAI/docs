@@ -484,16 +484,24 @@ BETTING_FEED_SKIP_AUTH=false
 ### AI Agents (Optional)
 
 ```env
-# Direct model provider API keys (as of March 12, 2026)
+# Direct model provider API keys (as of March 20, 2026)
 ANTHROPIC_API_KEY=your-anthropic-api-key
 GROQ_API_KEY=your-groq-api-key
+OPENAI_API_KEY=your-openai-api-key  # NEW: Added March 20, 2026
 
 # Auto-spawn model agents with interleaved provider selection
 SPAWN_MODEL_AGENTS=true
-MAX_MODEL_AGENTS=4
+DUEL_BOT_COUNT=10  # Increased from 4 to 10 (March 20, 2026)
 
-# Models: Claude Sonnet 4.6, Llama 4 Scout, Claude Opus 4.6, Llama 4 Maverick,
-#         Claude Haiku 4.5, Llama 3.3 70B, Kimi K2, Qwen 3 30B
+# Available models (as of March 20, 2026):
+# - OpenAI: GPT-4o, GPT-4.1, GPT-4o Mini, o4-mini
+# - Anthropic: Claude Sonnet 4.6, Claude Opus 4.6, Claude Haiku 4.5, Claude Opus 4, Claude Sonnet 4
+# - Groq: Llama 4 Scout, Llama 4 Maverick, Llama 3.3 70B, Kimi K2, Qwen 3 30B
+
+# Agent behavior configuration (March 2026)
+EMBEDDED_BEHAVIOR_TICK_INTERVAL=8000  # Agent tick interval (ms)
+AGENT_STAGGER_OFFSET_MS=800           # Stagger offset between agents (ms)
+MAX_AGENTS_PER_POLL=5                 # Max agents per poll cycle
 ```
 
 ### Duel Arena Oracle (Optional)
