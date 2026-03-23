@@ -195,6 +195,14 @@ The `turbo.json` configuration handles this automatically via `dependsOn: ["^bui
 > - **Impact**: Procgen can now build without TypeScript errors
 > - **Future**: Consider extracting shared types to `@hyperscape/types` package for cleaner boundaries
 
+> **UPDATED (March 2026): PROCGEN TYPESCRIPT PATH MAPPING**
+>
+> Procgen now has TypeScript path mapping for `@hyperscape/shared` to support type imports during development.
+> - **Added**: `tsconfig.json` now includes `baseUrl` and `paths` mapping
+> - **Mapping**: `"@hyperscape/shared": ["../shared/build/framework.d.ts"]`
+> - **Impact**: Procgen can import types from shared during development
+> - **Note**: This maps to a single `.d.ts` file - if shared's build output changes, update the path
+
 ### Entity Component System (ECS)
 
 The RPG is built using Hyperscape's ECS architecture:
