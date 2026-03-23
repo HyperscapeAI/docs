@@ -65,10 +65,13 @@ Hyperscape includes dedicated entry points optimized for RTMP streaming capture:
 - Minimal UI optimized for streaming capture
 - Reduced overhead for better performance
 - Automatic viewport mode detection
+- Renderer health monitoring for capture pipeline
 - URL: `http://localhost:3333/stream.html` or `?page=stream`
 
 **Embedded Spectator**:
 - Spectator-only view with no player controls
+- Secure `postMessage` auth bootstrap
+- Origin validation for iframe parents
 - URL: `http://localhost:3333/?embedded=true&mode=spectator`
 
 **Viewport Mode Detection**:
@@ -89,6 +92,69 @@ if (isEmbeddedSpectatorViewport(window)) {
 if (isStreamingLikeViewport(window)) {
   // Optimize for streaming capture
 }
+```
+
+**Renderer Health Monitoring** (March 2026):
+```typescript
+// Exposed for capture pipeline health probes
+window.__HYPERSCAPE_STREAM_READY__: boolean
+window.__HYPERSCAPE_STREAM_RENDERER_HEALTH__: {
+  ready: boolean;
+  degradedReason: string | null;  // e.g., "loading_overlay_active", "arena_positions_invalid"
+  updatedAt: number;
+  phase: string | null;
+}
+window.__HYPERSCAPE_STREAM_BOOT_STATUS__: string | null  // "connecting" | "initializing" | "loading_assets" | "finalizing" | "error:*"
+```
+
+**Streaming Access Token Management** (March 2026):
+```typescript
+import { getStreamingAccessToken, primeStreamingAccessTokenFromWindow } from '@/lib/streamingAccessToken';
+
+// Extract token from URL hash (preferred) or query, scrub from URL
+primeStreamingAccessTokenFromWindow(window);  // Call before React mounts
+
+// Get cached token (no re-parsing)
+const token = getStreamingAccessToken();
+```
+
+**Embedded Auth Security** (March 2026):
+```typescript
+import { 
+  resolveTrustedEmbedOrigins, 
+  isTrustedEmbedOrigin,
+  parseHyperscapeAuthMessage,
+  applyHyperscapeAuthMessage 
+} from '@/lib/embeddedAuth';
+
+// Build trusted origin allowlist
+const trustedOrigins = resolveTrustedEmbedOrigins({
+  currentOrigin: window.location.origin,
+  publicAppUrl: import.meta.env.PUBLIC_APP_URL,
+  embedAllowedOrigins: import.meta.env.PUBLIC_EMBED_ALLOWED_ORIGINS,
+});
+
+// Validate postMessage origin
+window.addEventListener("message", (event) => {
+  if (!isTrustedEmbedOrigin(event.origin, trustedOrigins)) {
+    console.warn("Ignoring message from untrusted origin:", event.origin);
+    return;
+  }
+  
+  const message = parseHyperscapeAuthMessage(event.data);
+  if (message) {
+    applyHyperscapeAuthMessage(config, message);
+  }
+});
+```
+
+**Configuration**:
+```bash
+# Embed security (comma-separated allowlist)
+PUBLIC_EMBED_ALLOWED_ORIGINS=https://embed.example.com,https://partner.example.com
+
+# Referrer policy (prevents token leakage)
+# Added to stream.html: <meta name="referrer" content="same-origin" />
 ```
 
 **Vite Multi-Page Build**:
