@@ -1984,6 +1984,31 @@ if (error && typeof error === "object" && "logs" in error) {
 - **GravestoneLootSystem.test.ts**: Namespaced test items with `grave_` prefix to avoid registry collisions
 - **BiomeSystem Tests**: Updated to use explicit biome definitions instead of hardcoded `DEFAULT_BIOMES`
 
+### TensorFlow.js Import Path Fix (March 2026)
+
+**Change** (PR #1064): Fixed hand pose detection import to use explicit `/dist/index.js` path.
+
+**Problem**: TensorFlow.js hand pose detection module wasn't resolving correctly, causing import errors in asset-forge.
+
+**Fix**:
+```typescript
+// packages/asset-forge/src/services/hand-rigging/HandPoseDetectionService.ts
+
+// Old (ambiguous module resolution)
+import * as handPoseDetection from "@tensorflow-models/hand-pose-detection";
+
+// New (explicit dist path)
+import * as handPoseDetection from "@tensorflow-models/hand-pose-detection/dist/index.js";
+```
+
+**Files Changed**:
+- `packages/asset-forge/src/services/hand-rigging/HandPoseDetectionService.ts` - Explicit import path
+
+**Impact**:
+- Hand pose detection service loads correctly
+- Asset-forge hand rigging tools work as expected
+- Eliminates module resolution errors
+
 ### Vite 8 Polyfill Migration (March 2026)
 
 **Change** (PR #1064): Removed `vite-plugin-node-polyfills` and manually inject Buffer global for Vite 8 compatibility.
