@@ -672,6 +672,128 @@ Remove `onReady` handler after worker init resolves/times out:
 
 ## Recent Major Features (March 2026)
 
+### Streaming Guardrails & Validation (March 2026)
+
+**New Shared Module** (`packages/shared/src/utils/rendering/streamingGuardrails.ts`):
+
+Centralized validation logic for streaming duel health, shared between client and server to prevent drift.
+
+**Core Functions**:
+```typescript
+// Validate agent snapshot has required fields and sane values
+export function hasValidStreamingGuardrailAgentSnapshot(
+  agent: StreamingGuardrailAgentSnapshot | null | undefined
+): boolean {
+  if (!agent) return false;
+  if (!agent.id || !agent.name) return false;
+  if (typeof agent.hp !== "number" || typeof agent.maxHp !== "number") return false;
+  if (agent.hp < 0 || agent.maxHp <= 0 || agent.hp > agent.maxHp) return false;
+  return true;
+}
+
+// Check if phase requires arena positions
+export function requiresArenaPositions(
+  phase: StreamingGuardrailPhase | null
+): boolean {
+  return phase === "COUNTDOWN" || phase === "FIGHTING";
+}
+
+// Validate arena positions are sane (no overlaps, within bounds)
+export function hasValidArenaPositions(
+  positions: { agent1: [x,y,z], agent2: [x,y,z] } | null | undefined
+): boolean {
+  if (!positions) return false;
+  const { agent1, agent2 } = positions;
+  
+  // Check both positions exist
+  if (!Array.isArray(agent1) || !Array.isArray(agent2)) return false;
+  if (agent1.length !== 3 || agent2.length !== 3) return false;
+  
+  // Check positions are not overlapping (same tile)
+  const dx = Math.abs(agent1[0] - agent2[0]);
+  const dz = Math.abs(agent1[2] - agent2[2]);
+  if (dx < 1 && dz < 1) return false;  // Overlapping positions
+  
+  return true;
+}
+
+// Derive degraded reason or null if healthy
+export function deriveStreamingGuardrailReason(params: {
+  phase: StreamingGuardrailPhase | null;
+  agent1: StreamingGuardrailAgentSnapshot | null;
+  agent2: StreamingGuardrailAgentSnapshot | null;
+  arenaPositions: { agent1: [x,y,z], agent2: [x,y,z] } | null | undefined;
+}): string | null {
+  const { phase, agent1, agent2, arenaPositions } = params;
+  
+  // IDLE phase is always healthy (no active duel)
+  if (!phase || phase === "IDLE") return null;
+  
+  // Active phases require valid agents
+  if (!hasValidStreamingGuardrailAgentSnapshot(agent1)) {
+    return "agent1_invalid";
+  }
+  if (!hasValidStreamingGuardrailAgentSnapshot(agent2)) {
+    return "agent2_invalid";
+  }
+  
+  // COUNTDOWN and FIGHTING require valid arena positions
+  if (requiresArenaPositions(phase)) {
+    if (!hasValidArenaPositions(arenaPositions)) {
+      return "arena_positions_invalid";
+    }
+  }
+  
+  return null;  // Healthy
+}
+```
+
+**Usage on Client** (`packages/client/src/screens/StreamingMode.tsx`):
+```typescript
+import { deriveStreamingGuardrailReason } from "@hyperscape/shared";
+
+const rendererHealth = deriveStreamingRendererHealth({
+  // ... surface-level checks (connected, worldReady, etc.)
+  
+  // Streaming guardrails (shared validation)
+  phase: streamingState?.cycle.phase ?? null,
+  agent1: toGuardrailAgent(streamingState?.cycle.agent1),
+  agent2: toGuardrailAgent(streamingState?.cycle.agent2),
+  arenaPositions: streamingState?.cycle.arenaPositions,
+});
+```
+
+**Usage on Server** (`packages/server/src/routes/streaming-betting-health.ts`):
+```typescript
+import { deriveStreamingGuardrailReason } from "@hyperscape/shared";
+
+export function deriveBettingRendererHealth(
+  cycle: StreamingCycleState | null
+): RendererHealth {
+  // ... external RTMP status, capture stats
+  
+  // Streaming guardrails (shared validation)
+  const guardrailReason = deriveStreamingGuardrailReason({
+    phase: cycle?.phase ?? null,
+    agent1: toGuardrailAgent(cycle?.agent1),
+    agent2: toGuardrailAgent(cycle?.agent2),
+    arenaPositions: cycle?.arenaPositions,
+  });
+  
+  return {
+    ready: guardrailReason === null,
+    degradedReason: guardrailReason,
+    // ...
+  };
+}
+```
+
+**Impact**:
+- Single source of truth for streaming health validation
+- Client and server use identical logic (no drift)
+- Prevents betting on degraded frames (overlapping agents, missing data, etc.)
+- Shared types ensure consistency across packages
+
 ### Internal Bet Sync Feed & Renderer Health (March 20-23, 2026)
 
 **Change** (PR #1065): Added authenticated internal betting sync API with renderer health monitoring.
