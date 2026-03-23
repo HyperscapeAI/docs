@@ -550,11 +550,11 @@ Real-time tick health display (press F5 in-game):
 
 ### Quest System Network Flow Fix (March 20, 2026)
 
-**Change** (Commit f79767b): Fixed quest accept to send over network instead of local event.
+**Change** (Commit f79767b, PR #1064): Fixed quest accept to send over network instead of local event, and added network listeners for server→client quest packets.
 
-**Problem**: `InterfaceModals.tsx` was emitting `QUEST_START_ACCEPTED` as a local event which never reached the server. Quest accept UI would close but the quest never started server-side.
+**Problem**: `InterfaceModals.tsx` was emitting `QUEST_START_ACCEPTED` as a local event which never reached the server. Quest accept UI would close but the quest never started server-side. Additionally, quest panels weren't listening for server→client quest packets, so UI wouldn't update after server-side quest state changes.
 
-**Fix**: Changed to `network.send("questAccept")` to match `Sidebar` and `MobileInterfaceManager`:
+**Fix**: Changed to `network.send("questAccept")` to match `Sidebar` and `MobileInterfaceManager`, and added network listeners:
 ```typescript\n// Old (local event - never reaches server)\nworld.emit(EventType.QUEST_START_ACCEPTED, {\n  playerId: localPlayer.id,\n  questId: questStartData.questId,\n});\n\n// New (network packet - reaches server)\nworld.network.send(\"questAccept\", {\n  questId: questStartData.questId,\n});\n```\n\n**Network Listeners**: Added listeners for server→client quest packets to trigger UI updates:
 ```typescript\n// packages/client/src/game/panels/QuestJournalPanel.tsx\nworld.network?.on(\"questStarted\", onQuestEvent);\nworld.network?.on(\"questProgressed\", onQuestProgressed);\nworld.network?.on(\"questCompleted\", onQuestEvent);\n```\n\n**Files Changed**:
 - `packages/client/src/game/interface/InterfaceModals.tsx` - Send quest accept over network
