@@ -828,6 +828,115 @@ bun run build
 
 Output: `dist/index.js` (bundled server)
 
+## Streaming & Betting Integration (March 2026)
+
+### Internal Betting Feed
+
+The server provides an authenticated SSE feed for betting market synchronization:
+
+**Architecture**:
+- **Source of Truth**: Hyperscape is authoritative for duel lifecycle events
+- **Sequence-Aware**: Monotonic sequence numbers enable idempotent deduplication
+- **Renderer Health**: Signals distinguish healthy frames from degraded/loading states
+- **Replay Buffer**: 2048-frame buffer supports SSE reconnection with `?since=<seq>`
+
+**Endpoints**:
+```bash
+# Bootstrap - get current state + replay buffer
+curl -H "Authorization: Bearer $BETTING_FEED_ACCESS_TOKEN" \
+  http://localhost:5555/api/internal/bet-sync/state
+
+# SSE feed - real-time updates
+curl -H "Authorization: Bearer $BETTING_FEED_ACCESS_TOKEN" \
+  http://localhost:5555/api/internal/bet-sync/events?since=0
+```
+
+**DuelBettingBridge Lifecycle**:
+1. **Announcement**: Creates or syncs market with Solana operator
+2. **Fight Start**: Locks market (no new bets)
+3. **Resolution**: Resolves market with winner/loser data
+4. **Reconciliation**: 1-second loop ensures market stays aligned with streaming lifecycle
+
+**Configuration**:
+```bash
+# Required
+BETTING_FEED_ACCESS_TOKEN=your-random-secret-token
+
+# Optional
+INTERNAL_BET_SYNC_ALLOWED_ORIGIN=https://your-betting-frontend.com
+BETTING_SSE_MAX_CLIENTS=32
+STREAMING_SSE_REPLAY_BUFFER=2048
+STREAMING_SSE_PUSH_INTERVAL_MS=500
+```
+
+**Renderer Health Monitoring**:
+```typescript
+// Server-side health derivation
+function deriveBettingRendererHealth(cycle: StreamingCycleState): {
+  ready: boolean;
+  degradedReason: string | null;
+  updatedAt: number;
+  phase: string | null;
+}
+
+// Checks:
+// - Active streaming phase (ANNOUNCEMENT, COUNTDOWN, FIGHTING)
+// - Agent presence and HP validity
+// - Arena position sanity (no overlaps, within bounds)
+// - External RTMP status (if available)
+// - Capture pipeline health
+```
+
+**Security**:
+- Timing-safe token comparison (SHA-256 + `timingSafeEqual`)
+- CORS restricted to `INTERNAL_BET_SYNC_ALLOWED_ORIGIN`
+- Rate limiting: 240 req/min (bootstrap), 60 req/min (SSE)
+- Fails closed in production when `BETTING_FEED_ACCESS_TOKEN` is unset
+
+### Streaming Capture Pipeline
+
+**Renderer Health Probes** (`packages/server/scripts/stream-to-rtmp.ts`):
+```typescript
+// Lightweight window global probe (no DOM text computation)
+window.__HYPERSCAPE_STREAM_BOOT_STATUS__: string | null
+// Values: "connecting" | "initializing" | "loading_assets" | "finalizing"
+//         "error:webgpu_required" | "error:init_failed" | "error:http"
+
+// Explicit health object (set by StreamingMode component)
+window.__HYPERSCAPE_STREAM_RENDERER_HEALTH__: {
+  ready: boolean;
+  degradedReason: string | null;
+  updatedAt: number;
+  phase: string | null;
+}
+```
+
+**Capture Browser Policy** (`packages/server/src/streaming/captureBrowserPolicy.ts`):
+```typescript
+// Default launch args (secure by default)
+buildDefaultCaptureLaunchArgs({
+  angleBackend: "vulkan",  // or "metal" on macOS
+  featureFlags: "--enable-features=Vulkan,UseSkiaRenderer,WebGPU",
+  disableSandbox: false,   // Opt-in via CAPTURE_DISABLE_SANDBOX=true
+})
+
+// Navigation allowlist (prevents redirect attacks)
+resolveAllowedCaptureOrigins(gameUrlCandidates)
+assertAllowedCaptureNavigation(rawUrl)
+```
+
+**Configuration**:
+```bash
+# Capture mode
+STREAM_CAPTURE_MODE=cdp  # or webcodecs, mediarecorder
+
+# Browser security
+CAPTURE_DISABLE_SANDBOX=false  # Only enable for Docker/CI
+
+# Renderer health probe
+STREAMING_SSE_HEARTBEAT_MS=15000
+```
+
 ## Performance
 
 ### Database Connection Pool
