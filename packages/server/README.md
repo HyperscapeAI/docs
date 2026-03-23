@@ -735,11 +735,55 @@ export DISPLAY=:99
 
 **Solution:** Verify GPU display driver is active:
 - Vast.ai: Ensure `gpu_display_active=true` in instance configuration
-- Check Chrome Canary is installed: `google-chrome-unstable --version` (required as of March 13, 2026)
+- Check Chrome Beta is installed: `google-chrome-beta --version` (recommended as of March 20, 2026)
 - Verify ANGLE backend: `STREAM_CAPTURE_ANGLE=vulkan` on Linux NVIDIA (required for WebGPU stability)
 - Check Xvfb is running: `ps aux | grep Xvfb`
 - Verify DISPLAY environment: `echo $DISPLAY` (should be `:99`)
 - Verify curl health checks have `--max-time 10` timeout to prevent hangs
+
+**Error:** Renderer health shows degraded (March 2026)
+
+**Solution:** Check renderer health diagnostics:
+```bash
+# Query renderer health from capture pipeline
+curl http://localhost:3333/stream.html
+# Then in browser console:
+window.__HYPERSCAPE_STREAM_RENDERER_HEALTH__
+```
+
+Common `degradedReason` values:
+- `"loading_overlay_active"` - Loading screen hasn't dismissed yet (wait or check for init errors)
+- `"arena_positions_invalid"` - Agents spawned at overlapping positions (server bug)
+- `"initialization_failed"` - World init error (check browser console for details)
+- `"camera_target_unresolved"` - Camera hasn't locked to target (usually resolves automatically)
+- `"renderer_unavailable"` - WebGPU not available (check GPU drivers)
+
+**Error:** Betting feed authentication failures (March 2026)
+
+**Solution:** Verify token configuration:
+```bash
+# Check token is set
+echo $BETTING_FEED_ACCESS_TOKEN
+
+# Test bootstrap endpoint
+curl -H "Authorization: Bearer $BETTING_FEED_ACCESS_TOKEN" \
+  http://localhost:5555/api/internal/bet-sync/state
+
+# Test SSE endpoint
+curl -H "Authorization: Bearer $BETTING_FEED_ACCESS_TOKEN" \
+  http://localhost:5555/api/internal/bet-sync/events
+```
+
+**Error:** Embedded client not receiving auth bootstrap (March 2026)
+
+**Solution:** Verify origin allowlist:
+```bash
+# Check client .env
+PUBLIC_EMBED_ALLOWED_ORIGINS=https://embed.example.com
+
+# Verify parent origin is in allowlist
+# Check browser console for "Ignoring HYPERSCAPE_AUTH from untrusted origin" warnings
+```
 
 ### Manifest & CDN Issues
 
