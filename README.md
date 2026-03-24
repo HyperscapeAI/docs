@@ -318,6 +318,199 @@ npm test -- -u
 
 ## Recent Updates (March 2026)
 
+### Client UI Modernization & Startup Hardening (March 23-24, 2026)
+
+**Major client-side refactoring** (PR #1067) to modernize the UI shell, improve startup reliability, and fix gameplay regressions.
+
+#### UI Shell & Design System
+**Changes**:
+- **Premium Shell Foundation**: Unified design language for windows, tabs, modals, overlays, and HUD framing
+- **Onyx/Graphite Palette**: Moved from warm brown tones to cooler graphite surfaces with restrained metallic accents
+- **Layer Hierarchy**: Normalized z-index system with proper elevation for focused windows, overlays, and modals
+- **Panel Internals**: Improved styling across inventory, action bar, skills, prayers, spells, bank, store, trade, quests, and betting panels
+- **Icon-Only Tabs**: Restored icon-only window tab presentation for compact UI
+
+**New Design Tokens** (`packages/client/src/constants/tokens.ts`):
+```typescript
+export const zIndex = {
+  base: 0,
+  raised: 10,
+  dropdown: 100,
+  sticky: 200,
+  sidebar: 300,
+  panel: 400,
+  panelActive: 500,
+  chat: 600,
+  overlay: 800,
+  modalBackdrop: 999,
+  modal: 1000,
+  tooltip: 1100,
+  toast: 1200,        // NEW: Toast notifications layer
+  contextMenu: 1300,  // NEW: Context menu layer
+  critical: 10000,
+  // Mobile HUD layers (7000-8000 range)
+  mobileStatusHud: 7000,
+  mobileMinimap: 7200,
+  mobileActionBar: 7500,
+  mobileChatOverlay: 7800,
+  mobileDrawer: 8000,
+};
+```
+
+**UI Constants** (`packages/client/src/constants/ui.ts`):
+```typescript
+export const UI = {
+  Z_INDEX: {
+    // ... existing layers
+    OVERLAY: zIndex.overlay,
+    TOAST: zIndex.toast,           // NEW: Alias for toast layer
+    CONTEXT_MENU: zIndex.contextMenu,  // NEW: Alias for context menu layer
+    CRITICAL: zIndex.critical,
+  },
+};
+```
+
+#### Gameplay HUD & Minimap
+**Minimap Modularization**:
+- **useMinimapTerrainCache**: Terrain rendering, biome coloring, zoom behavior, cache updates
+- **useMinimapEntityPips**: Entity markers (players, NPCs, resources) with icon caching
+- **useMinimapWorldCaches**: Road and town network caching with event-driven updates
+
+**HUD Improvements**:
+- Status bars, XP cluster composition, action progress updates
+- Death/disconnect overlays with proper layering
+- Context menu z-index fixes (now uses `zIndex.contextMenu` instead of hardcoded values)
+- Combat panel composition and auto-retaliate presentation
+
+**Minimap Features**:
+- Improved terrain detail and biome coloring
+- Better zoom scaling and camera controls
+- Resize with drag handles (bottom-right corner)
+- Collapse/expand with compass button
+- Event-driven cache updates for roads and towns
+
+#### Client Startup & Readiness
+**Auth Hardening**:
+- **Auth-Authoritative Login**: Startup gating now derives from Privy SDK state, not localStorage
+- **Storage Restoration**: `restoreFromStorage()` hydrates cached metadata without asserting authenticated session
+- **Farcaster Auto-Login**: Added try/catch to prevent permanent spinner on auto-login failure
+
+**Loading Gates**:
+- **Live World State**: Derives readiness from actual world state instead of stale React state
+- **Terrain Timeout**: 20-second timeout for terrain initialization (spectator mode shows error, player mode continues)
+- **Loading Overlay**: Fades out after readiness with 220ms delay for smooth transition
+- **Error Recovery**: Shows actionable error screen with reload button on initialization failure
+
+**Readiness Checks**:
+```typescript
+// Hydrates from live world state instead of stale React state
+const livePlayerReady = playerReady || Boolean(world.entities.player?.avatar);
+const livePhysReady = physReady || Boolean(world.physics?.isInitialized?.());
+const liveTerrainReady = terrainReady || terrainTimedOut || Boolean(world.getSystem?.("terrain")?.isReady?.());
+
+// Gates presentation on all subsystems + loading complete
+const canPresent = livePlayerReady && livePhysReady && liveTerrainReady &&
+  (loadingComplete || systemsComplete || assetsProgress >= 100);
+```
+
+#### Runtime Hardening
+**Polling Reduction**:
+- **Dashboard Panels**: Adaptive polling (10s visible → 30s background) with visibility-aware scheduling
+- **Window Manager**: Reduced render churn with proper memoization
+- **Modal State**: Eliminated unnecessary re-renders with equality checks
+- **HUD Timers**: Stable `setInterval` instead of chained `setTimeout` (prevents stalls)
+
+**Configuration Sync**:
+- **Manifest Loading**: Hardened asset-base resolution with runtime configuration paths
+- **API Config**: `getRuntimeAssetBaseUrl()` replaces hardcoded `GAME_API_URL` for manifest icons
+- **Debug Logging**: Cleaned up noisy success-path logging across client/shared surfaces
+
+**Type Safety**:
+- **Frontend Typecheck**: Brought clean across `packages/client`, `packages/shared`, and `packages/website`
+- **SetStateAction Narrowing**: Fixed `SetStateAction<number>` type narrowing for coins setter
+- **Unknown Catch Variables**: Fixed unknown catch variable passed to logger.warn
+
+#### Gameplay System Fixes
+**Combat & Prayer**:
+- **Combat Controls**: Restored combat style and prayer interactions
+- **Prayer Initialization**: Added lazy initialization recovery to prevent missed lifecycle events
+- **Altar Pray Path**: Fixed altar interaction flow with proper network packet handling
+- **Prayer State Backfill**: Prevents gameplay breakage from missed initialization
+
+**UI Sync**:
+- **Panel Sync**: Restored realtime panel synchronization with server state
+- **Combat Flow**: Fixed combat target health display with conditional rendering
+- **Prayer System**: Converted async event handlers to sync with `.then()/.catch()` to prevent unhandled promise rejections
+
+**Modal Window**:
+- **Body Overflow**: Ref-counted body overflow management fixes stacked modal close ordering
+- **Focus Trap**: Proper focus management for accessibility
+- **Resize Listeners**: Store resize listeners for cleanup on unmount during mid-drag
+
+#### New React Hooks
+**usePlayerData** (`packages/client/src/hooks/usePlayerData.ts`):
+- Centralized player data subscription (inventory, equipment, stats, coins)
+- Eliminates duplicate event listeners across components
+- Proper equality checks prevent cascading re-renders
+- Used by both `InterfaceManager` and `MobileInterfaceManager`
+
+**PlayerDataProvider** (React Context):
+```typescript
+import { PlayerDataProvider, usePlayerDataContext, usePlayerStatsContext } from '@/hooks';
+
+// Wrap your component tree
+<PlayerDataProvider world={world}>
+  <YourComponent />
+</PlayerDataProvider>
+
+// Access player data in child components
+const { inventory, equipment, playerStats, coins } = usePlayerDataContext();
+
+// Or just stats
+const playerStats = usePlayerStatsContext();
+```
+
+**useModalPanels** (`packages/client/src/hooks/useModalPanels.ts`):
+- Centralized modal panel state (bank, store, dialogue, smelting, smithing, etc.)
+- Eliminates duplicate event listeners
+- Provides close handlers for all modal types
+- Shared between desktop and mobile interfaces
+
+**useMinimapTerrainCache** (`packages/client/src/game/hud/useMinimapTerrainCache.ts`):
+- Terrain rendering with biome coloring
+- Chunked generation with cancellation support
+- LRU biome color cache (max 256 entries)
+- Zoom-aware detail levels
+
+**useMinimapEntityPips** (`packages/client/src/game/hud/useMinimapEntityPips.ts`):
+- Entity marker rendering (players, NPCs, resources)
+- Icon caching with `OffscreenCanvas`
+- Quest status indicators (available, in-progress, completed)
+- Spectator target highlighting
+
+**useMinimapWorldCaches** (`packages/client/src/game/hud/useMinimapWorldCaches.ts`):
+- Road and town network caching
+- Event-driven updates (`roads:generated`, `towns:generated`)
+- Proper cleanup on unmount
+
+#### Component Deletions
+**Removed** (consolidated into modular architecture):
+- `Sidebar.tsx` (1,345 lines) - Replaced by `InterfaceManager` with windowed panels
+- Inline minimap logic (772 lines) - Extracted to dedicated hooks
+
+**Impact**:
+- Cleaner codebase with better separation of concerns
+- Easier to maintain and extend
+- No broken imports or orphaned code
+
+#### Breaking Changes
+**WebSocket Port**:
+- Default changed from `ws://localhost:5555/ws` to `ws://localhost:5556/ws`
+- Update `PUBLIC_WS_URL` in `packages/client/.env` if using custom configuration
+- Fallback to port 5555 available with `UWS_ENABLED=false`
+
+**Files Changed**: 166 files, 9,162 additions, 6,454 deletions. See PR #1067 for complete details.
+
 ### Internal Bet Sync Feed & Renderer Health (March 20-23, 2026)
 
 **Major streaming infrastructure upgrade** to make Hyperscape the authoritative source for duel lifecycle events and betting market synchronization.
