@@ -2504,3 +2504,11 @@ idl.address  // ✅ Properly typed
 - uWebSockets.js Integration: Native pub/sub broadcasting
 - Agent AI Worker Thread: Off-main-thread decision-making
 - BFS Pathfinding Optimization: Global iteration budget, pre-baked walkability
+
+### UI & Client (March 2026)
+- [docs/ui-modernization-march-2026.md](docs/ui-modernization-march-2026.md) - Client UI modernization details (PR #1067)
+- Sidebar Deletion & Interface Manager Migration: Modular hook-based architecture
+- Minimap Modularization: Dedicated hooks for terrain, entities, and world caches
+- Player Data Context Provider: Centralized subscriptions with equality checks
+- Auth-Authoritative Startup: Privy SDK is source of truth
+- Dashboard Polling Optimization: Adaptive intervals with visibility awareness
