@@ -542,6 +542,48 @@ The RPG is built using Hyperscape's Entity Component System:
 - **StoreSystem**: Shop functionality
 - **ResourceSystem**: Gathering mechanics
 
+### UI Architecture (Updated March 2026)
+
+**Interface Manager**: Modular hook-based UI architecture replacing monolithic `Sidebar.tsx`
+
+**Core Hooks**:
+- **usePlayerData** (`src/hooks/usePlayerData.ts`) - Centralized player data subscription
+  - Eliminates duplicate event listeners
+  - Proper equality checks prevent cascading re-renders
+  - Provides `PlayerDataProvider` context for child components
+- **useModalPanels** (`src/hooks/useModalPanels.ts`) - Centralized modal panel state
+  - Manages bank, store, dialogue, crafting, and other modal panels
+  - Provides close handlers for all modal types
+  - Shared between desktop and mobile interfaces
+
+**Minimap Hooks**:
+- **useMinimapTerrainCache** (`src/game/hud/useMinimapTerrainCache.ts`) - Terrain rendering with biome coloring
+- **useMinimapEntityPips** (`src/game/hud/useMinimapEntityPips.ts`) - Entity markers with icon caching
+- **useMinimapWorldCaches** (`src/game/hud/useMinimapWorldCaches.ts`) - Road/town network caching
+
+**Usage Example**:
+```typescript
+import { PlayerDataProvider, usePlayerDataContext } from '@/hooks';
+
+// Wrap your component tree
+<PlayerDataProvider world={world}>
+  <YourComponent />
+</PlayerDataProvider>
+
+// Access player data in child components
+function YourComponent() {
+  const { inventory, equipment, playerStats, coins } = usePlayerDataContext();
+  // ... use player data
+}
+```
+
+**Design System**:
+- **Z-Index Hierarchy**: Centralized in `src/constants/tokens.ts`
+- **UI Constants**: Game-specific dimensions in `src/constants/ui.ts`
+- **Panel Styles**: Unified styling in `tokens.ts` with `getPanelStyle()` helper
+
+**See Also**: [docs/ui-modernization-march-2026.md](../../docs/ui-modernization-march-2026.md) for complete UI modernization details
+
 ### File Structure
 
 ```
