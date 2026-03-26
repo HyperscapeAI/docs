@@ -2,314 +2,429 @@
 
 Core 3D multiplayer engine for Hyperscape. Provides Entity Component System (ECS), Three.js WebGPU rendering, PhysX physics, real-time networking, and React UI components.
 
+## Overview
+
+The shared package is the heart of Hyperscape, containing all core game systems that run on both client and server. It's designed for deterministic gameplay with client-side prediction and server-side authority.
+
 ## Features
 
-- **Entity Component System (ECS)** - Flexible game object architecture
-- **WebGPU Rendering** - Modern GPU-accelerated graphics with TSL shaders
-- **Instanced Rendering** - Optimized rendering for resources (trees, rocks, ores, herbs)
-- **PhysX Physics** - WASM-based physics simulation
-- **Real-time Networking** - WebSocket-based multiplayer synchronization
-- **React UI Components** - Game interface panels and HUD elements
-- **Procedural Integration** - Terrain, vegetation, and building generation
+### Rendering (WebGPU Only)
+- **Three.js 0.183.2** with WebGPURenderer
+- **TSL Shaders** (Three Shading Language) for all materials
+- **Post-Processing** - Bloom, tone mapping, color grading
+- **VRM Avatars** - Full VRM 1.0 support with animations
+- **Impostor System** - LOD optimization for distant entities
+- **Procedural Generation** - Terrain, vegetation, buildings
+
+### Physics
+- **PhysX WASM** - High-performance physics simulation
+- **Tile-Based Movement** - OSRS-style grid movement
+- **Collision Detection** - Character controllers, raycasting
+- **Pathfinding** - BFS pathfinding with walkability cache
+
+### Networking
+- **Client-Side Prediction** - Smooth movement with rollback
+- **Server Authority** - All game logic validated server-side
+- **Entity Interpolation** - Smooth remote player movement
+- **Event System** - Type-safe event bus for game events
+
+### Game Systems
+- **Combat System** - Tick-based OSRS combat (600ms ticks)
+- **Skills System** - XP-based progression (9+ skills)
+- **Inventory System** - 28-slot inventory with drag-and-drop
+- **Equipment System** - Paperdoll with stat bonuses
+- **Banking System** - 480-slot bank with tabs
+- **Death System** - OSRS keep-3 with gravestone loot
+- **Prayer System** - Prayer points and active prayers
+- **Quest System** - Quest tracking and progression
+
+### UI Components
+- **React 19.2.0** - Modern React with hooks
+- **Themed UI** - Consistent design system
+- **Drag-and-Drop** - dnd-kit integration
+- **Modal System** - Window management
+- **Skilling Panels** - Unified crafting/processing UI
+- **Dialogue System** - NPC dialogue with live portraits
 
 ## Installation
 
 ```bash
-cd packages/shared
+# From monorepo root
 bun install
-bun run build
+
+# Build shared package
+bun run build:shared
+```
+
+## Usage
+
+### Client-Side
+
+```typescript
+import { createClientWorld } from "@hyperscape/shared";
+
+const world = await createClientWorld({
+  canvas: document.getElementById("game-canvas"),
+  isServer: false,
+});
+
+// Start game loop
+function animate() {
+  requestAnimationFrame(animate);
+  world.update(deltaTime);
+}
+animate();
+```
+
+### Server-Side
+
+```typescript
+import { createServerWorld } from "@hyperscape/shared";
+
+const world = await createServerWorld({
+  isServer: true,
+  worldPath: "./world",
+});
+
+// Start tick loop (600ms OSRS ticks)
+setInterval(() => {
+  world.update(0.6);
+}, 600);
 ```
 
 ## Architecture
 
-### Entity Component System
-
-The engine uses a pure ECS architecture:
-
-- **Entities**: Game objects (players, mobs, items, resources)
-- **Components**: Data containers (position, health, inventory, combat stats)
-- **Systems**: Logic processors (combat, movement, rendering, networking)
-
-All game logic runs through systems. Entities are just data containers with no behavior.
-
-### Key Systems
-
-**Client Systems** (`src/systems/client/`):
-- `ClientGraphics` - WebGPU rendering, post-processing, LOD management
-- `ClientInput` - Keyboard, mouse, touch input handling
-- `ClientNetwork` - Server synchronization, interpolation
-- `ClientCameraSystem` - Camera controls and positioning
-- `EquipmentVisualSystem` - Equipment rendering on player avatars
-- `HealthBars` - 3D health bar rendering above entities
-- `ProjectileRenderer` - Arrow/spell projectile visualization
-
-**Server Systems** (`src/systems/server/`):
-- `ServerRuntime` - Game loop, tick processing
-- `ServerLoader` - World loading, entity spawning
-- `PersistenceSystem` - Database save/load operations
-
-**Shared Systems** (`src/systems/shared/`):
-- `CombatSystem` - Tick-based combat mechanics
-- `InventorySystem` - Item management, stacking, transactions
-- `SkillsSystem` - XP tracking, leveling, skill unlocks
-- `TileSystem` - Tile-based movement and pathfinding
-- `ResourceSystem` - Resource gathering (woodcutting, mining, fishing)
-- `TerrainSystem` - Procedural terrain generation and rendering
-- `VegetationSystem` - GPU-accelerated grass and vegetation
-
-### Rendering Pipeline
-
-**WebGPU-Only Rendering:**
-- All materials use Three.js Shading Language (TSL)
-- Post-processing effects (bloom, tone mapping) use TSL node materials
-- No WebGL fallback - WebGPU is required
-
-**Instanced Rendering:**
-- `GLBResourceInstancer` - Rocks, ores, herbs (non-tree resources)
-- `GLBTreeInstancer` - Trees with dissolve materials
-- `PlaceholderInstancer` - Colored cube proxies for missing models
-- Reduces draw calls from O(n) to O(1) per unique model
-- Distance-based LOD switching (LOD0/LOD1/LOD2)
-- Automatic depleted state transitions (tree → stump)
-
-**Model Cache:**
-- IndexedDB-based model caching for faster loads
-- Preserves index buffer types (Uint16Array vs Uint32Array)
-- Cache version 4 (invalidates corrupt entries from v3)
-
-## Performance Optimizations
-
-### Instanced Rendering
-
-Resources (trees, rocks, ores, herbs) use instanced rendering for optimal performance:
-
-**GLBResourceInstancer** (`src/systems/shared/world/GLBResourceInstancer.ts`):
-- Pools instances by model path
-- Separate `InstancedMesh` per LOD level (LOD0, LOD1, LOD2)
-- Max 512 instances per model per LOD
-- Distance-based LOD switching with hysteresis to prevent flickering
-- Automatic depleted model transitions (e.g., tree → stump)
-
-**GLBTreeInstancer** (`src/systems/shared/world/GLBTreeInstancer.ts`):
-- Specialized instancer for tree resources
-- Dissolve materials for fade effects
-- Supports depleted models (stumps) with separate scale
-
-**InstancedModelVisualStrategy** (`src/entities/world/visuals/InstancedModelVisualStrategy.ts`):
-- Thin wrapper around GLBResourceInstancer
-- Creates invisible collision proxy for raycasting
-- Falls back to StandardModelVisualStrategy if instancing fails
-
-**Depleted Models** (NEW):
-- Resources can specify `depletedModelPath` and `depletedModelScale` in config
-- Instancer maintains separate pools for normal and depleted states
-- Automatic transition on resource depletion without individual model loading
-- Collision proxy persists across state transitions
-- Highlight mesh support for hover/selection on instanced entities
-
-**API Changes**:
-- `ResourceVisualStrategy.onDepleted()` now returns `boolean`
-  - `true` = strategy handled depletion (instanced stump)
-  - `false` = ResourceEntity should load individual depleted model
-- New optional method: `getHighlightMesh(ctx)` for instanced entity highlighting
-- `EntityHighlightService` supports instanced highlight meshes via `getHighlightRoot()`
-
-### Model Cache Integrity
-
-**Index Buffer Type Preservation** (Cache v4):
-- Model cache now preserves original index buffer type (Uint16Array vs Uint32Array)
-- Fixes silent geometry corruption and RangeError crashes on cached model restore
-- Three.js uses Uint16Array for meshes with <65536 vertices
-- Previous cache versions always deserialized as Uint32Array, causing corruption
-- Cache version bumped to 4 to invalidate corrupt entries
-- Affects all GLB models loaded via ModelCache (resources, NPCs, items)
-
-## Usage
-
-### Creating a World
+### Entity Component System (ECS)
 
 ```typescript
-import { createClientWorld } from '@hyperscape/shared';
+// Entities are game objects
+class PlayerEntity extends Entity {
+  health: number;
+  position: Vector3;
+  inventory: InventoryComponent;
+}
 
-const world = createClientWorld();
-await world.init();
-```
+// Systems process entities
+class CombatSystem extends SystemBase {
+  update(deltaTime: number) {
+    for (const entity of this.world.entities.values()) {
+      if (entity instanceof CombatantEntity) {
+        this.processCombat(entity, deltaTime);
+      }
+    }
+  }
+}
 
-### Spawning Entities
-
-```typescript
-import { PlayerEntity } from '@hyperscape/shared';
-
-const player = new PlayerEntity(world, {
-  id: 'player-1',
-  position: { x: 0, y: 0, z: 0 },
-  name: 'TestPlayer',
-});
-
-world.addEntity(player);
-```
-
-### Using Systems
-
-```typescript
-const combatSystem = world.getSystem('combat') as CombatSystem;
-combatSystem.startAttack(attackerId, targetId);
-```
-
-### Instanced Resources
-
-Resources automatically use instanced rendering when a GLB model is specified:
-
-```typescript
-// In resource config JSON
-{
-  "id": "oak_tree",
-  "name": "Oak tree",
-  "resourceType": "tree",
-  "model": "/assets/world/resources/trees/oak.glb",
-  "modelScale": 3.0,
-  "depletedModelPath": "/assets/world/resources/trees/oak_stump.glb",
-  "depletedModelScale": 0.3,
-  "skill": "woodcutting",
-  "level": 1,
-  "xp": 25
+// Components are data containers
+interface InventoryComponent {
+  items: InventoryItem[];
+  capacity: number;
 }
 ```
 
-The `InstancedModelVisualStrategy` will:
-1. Load the model once and create an instanced mesh pool
-2. Add this tree as an instance (no individual mesh)
-3. Create an invisible collision proxy for raycasting
-4. Automatically transition to stump model when depleted
-5. Support hover highlighting via temporary highlight mesh
+### Event System
 
-## Development
+```typescript
+// Type-safe event bus
+world.on("PLAYER_SET_DEAD", (data: { playerId: string; killedBy?: string }) => {
+  console.log(`Player ${data.playerId} died`);
+});
 
-### Building
-
-```bash
-bun run build        # Production build
-bun run dev          # Watch mode with hot reload
+world.emit("PLAYER_SET_DEAD", { playerId: "player_123", killedBy: "Goblin" });
 ```
 
-### Testing
+### System Registration
 
-```bash
-npm test             # Run all tests
-npm test -- --ui     # Run with Vitest UI
+```typescript
+// Systems are registered in world creation
+const world = await createServerWorld({
+  systems: [
+    PlayerSystem,
+    CombatSystem,
+    InventorySystem,
+    SkillsSystem,
+    // ... more systems
+  ],
+});
 ```
 
-Tests use real Playwright browser sessions with WebGPU support. No mocks allowed.
+## Key Systems
 
-### Linting
+### PlayerDeathSystem
 
-```bash
-npm run lint         # Check for issues
-npm run lint:fix     # Auto-fix issues
-```
+Handles player death with OSRS-accurate mechanics:
+
+- **Keep-3 System**: Safe zone deaths keep 3 most valuable items
+- **Two-Phase Persist**: In-memory clear inside tx, DB persist after
+- **Death Locks**: Prevent state desync during death-to-respawn window
+- **Gravestone Privacy**: Loot items hidden from broadcast
+- **Crash Recovery**: Persist kept items for server crash scenarios
+
+**Documentation**: See `docs/death-system-architecture.md`
+
+### CombatSystem
+
+Tick-based OSRS combat:
+
+- **600ms Ticks**: All combat actions aligned to tick boundaries
+- **Attack Styles**: Accurate, Aggressive, Defensive, Controlled
+- **Damage Calculation**: Based on Attack/Strength levels and equipment
+- **Auto-Retaliate**: Automatic counter-attacks
+- **Prayer System**: Prayer points and active prayers
+
+### InventorySystem
+
+28-slot inventory with OSRS mechanics:
+
+- **Stack Handling**: Stackable items (arrows, coins) vs non-stackable (equipment)
+- **Weight System**: Item weights affect movement speed
+- **Drag-and-Drop**: Reorder items, drop to ground
+- **Transaction Locks**: Prevent item duplication during trades/banking
+
+### BankingSystem
+
+480-slot bank with tabs:
+
+- **Tab System**: Organize items into tabs
+- **Placeholders**: Reserve slots for specific items
+- **Equipment Storage**: Store/retrieve equipped items
+- **Coin Pouch**: Separate coin storage
+
+### TerrainSystem
+
+Procedural terrain generation:
+
+- **Biome System**: Multiple biomes with unique vegetation
+- **Height Mapping**: Realistic terrain with hills and valleys
+- **Walkability**: Pre-baked walkability flags for pathfinding
+- **Collision**: Low-res collision mesh (16×16) for performance
+- **Streaming**: Chunk-based loading for large worlds
+
+## Recent Changes (March 2026)
+
+### Player Death System Overhaul (March 26, 2026)
+
+Complete rewrite to fix SQLite deadlock, equipment duplication, and implement OSRS keep-3.
+
+**New Files**:
+- `src/systems/shared/combat/DeathUtils.ts` - Pure utility functions
+- `src/systems/shared/combat/DeathTypes.ts` - Type definitions
+- `src/systems/shared/death/DeathStateManager.ts` - Death lock CRUD
+
+**Breaking Changes**:
+- `PLAYER_DIED` event deprecated → use `PLAYER_SET_DEAD`
+- Death lock schema includes `keptItems` field
+
+**Documentation**: See `docs/death-system-architecture.md` and `docs/migrations/player-died-event-migration.md`
+
+### UI Improvements (March 26, 2026)
+
+**Skilling Panels** (PR #1093):
+- Unified layouts across all skilling panels
+- Shared components: `SkillingPanelBody`, `SkillingSection`, `SkillingQuantitySelector`
+- Consistent styling with `getSkillingSelectableStyle()` and `getSkillingBadgeStyle()`
+
+**Dialogue System** (PR #1093):
+- `DialoguePopupShell` - Dedicated modal for NPC dialogue
+- `DialogueCharacterPortrait` - Live 3D VRM portrait rendering
+- Service handoff fix (bank/store/tanner closes dialogue)
+
+**Documentation**: See `docs/ui-improvements-march-2026.md`
+
+### Performance Optimizations (March 19-20, 2026)
+
+**BFS Pathfinding**:
+- Global iteration budget (12,000 per tick)
+- Zero-allocation scratch tiles
+- Per-tick walkability cache
+
+**Terrain System**:
+- Low-res collision (16×16)
+- Time-budgeted processing
+- Pre-baked walkability flags
+
+**Documentation**: See `docs/performance-march-2026.md`
 
 ## API Reference
 
 ### Core Classes
 
-- `World` - Main world container, manages entities and systems
-- `Entity` - Base entity class
-- `PlayerEntity` - Player character with inventory, skills, equipment
-- `MobEntity` - NPC mob with AI and combat
-- `ResourceEntity` - Gatherable resource (tree, rock, ore, herb)
-- `ItemEntity` - Dropped item in the world
+#### World
 
-### Visual Strategies
-
-Resource entities use pluggable visual strategies:
-
-- `InstancedModelVisualStrategy` - Instanced rendering for GLB models (default)
-- `TreeGLBVisualStrategy` - Instanced trees with dissolve materials
-- `TreeProcgenVisualStrategy` - Procedurally generated trees
-- `StandardModelVisualStrategy` - Individual mesh per resource (fallback)
-- `PlaceholderVisualStrategy` - Colored cube proxy
-- `FishingSpotVisualStrategy` - Fishing spot with glow effect
-
-### Instancing API
-
-**GLBResourceInstancer** (`src/systems/shared/world/GLBResourceInstancer.ts`):
+Main game world container:
 
 ```typescript
-// Initialize (called by createClientWorld)
-initGLBResourceInstancer(scene: THREE.Scene, world: World): void
-
-// Add instance
-addInstance(
-  modelPath: string,
-  entityId: string,
-  position: THREE.Vector3,
-  rotation: number,
-  scale: number,
-  depletedModelPath?: string | null,
-  depletedScale?: number
-): Promise<boolean>
-
-// Remove instance
-removeInstance(entityId: string): void
-
-// Set depleted state
-setDepleted(entityId: string, depleted: boolean): void
-
-// Check if entity is instanced
-hasInstance(entityId: string): boolean
-
-// Check if instancer has depleted model
-hasDepleted(entityId: string): boolean
-
-// Get highlight mesh for outlining
-getHighlightMesh(entityId: string): THREE.Object3D | null
-
-// Update LOD switching (called every frame)
-updateGLBResourceInstancer(): void
-
-// Cleanup
-destroyGLBResourceInstancer(): void
-```
-
-**GLBTreeInstancer** (`src/systems/shared/world/GLBTreeInstancer.ts`):
-
-Same API as GLBResourceInstancer, with tree-specific dissolve materials.
-
-### ResourceVisualStrategy Interface
-
-```typescript
-interface ResourceVisualStrategy {
-  createVisual(ctx: ResourceVisualContext): Promise<void>;
+class World {
+  entities: Map<string, Entity>;
+  systems: Map<string, System>;
   
-  /**
-   * @returns true if strategy handled depletion (instanced stump),
-   *          false if ResourceEntity should load individual depleted model
-   */
-  onDepleted(ctx: ResourceVisualContext): Promise<boolean>;
-  
-  onRespawn(ctx: ResourceVisualContext): Promise<void>;
-  update(ctx: ResourceVisualContext, deltaTime: number): void;
-  destroy(ctx: ResourceVisualContext): void;
-  
-  /** Return a temporary mesh positioned at this instance for the outline pass. */
-  getHighlightMesh?(ctx: ResourceVisualContext): THREE.Object3D | null;
+  getEntity(id: string): Entity | undefined;
+  getSystem(name: string): System | undefined;
+  update(deltaTime: number): void;
+  on(event: string, handler: Function): void;
+  emit(event: string, data: unknown): void;
 }
 ```
 
-## Dependencies
+#### Entity
 
-- `three` (0.180.0) - 3D rendering engine
-- `@webgpu/types` - WebGPU TypeScript definitions
-- `physx-js-webidl` - PhysX WASM bindings
-- `react` (19.2.0) - UI components
-- `@hyperscape/procgen` - Procedural generation
+Base class for all game objects:
 
-## Browser Requirements
+```typescript
+class Entity {
+  id: string;
+  type: string;
+  position: Vector3;
+  
+  update(deltaTime: number): void;
+  serialize(): EntityData;
+  deserialize(data: EntityData): void;
+}
+```
 
-- **WebGPU support is REQUIRED**
-- Chrome 113+, Edge 113+, Safari 18+ (macOS 15+)
-- Check: [webgpureport.org](https://webgpureport.org)
+#### SystemBase
+
+Base class for all game systems:
+
+```typescript
+class SystemBase {
+  world: World;
+  logger: Logger;
+  
+  init(): void;
+  update(deltaTime: number): void;
+  destroy(): void;
+}
+```
+
+### Utility Functions
+
+#### DeathUtils
+
+```typescript
+// XSS/Unicode/injection protection
+function sanitizeKilledBy(killedBy: unknown): string
+
+// OSRS keep-3 with stack handling
+function splitItemsForSafeDeath(
+  allItems: InventoryItem[],
+  keepCount: number
+): { kept: InventoryItem[]; dropped: InventoryItem[] }
+
+// Position validation
+function validatePosition(position: Position3D): Position3D | null
+function isPositionInBounds(position: Position3D): boolean
+```
+
+#### CombatCalculations
+
+```typescript
+// Calculate max hit for melee
+function calculateMaxHit(
+  strengthLevel: number,
+  strengthBonus: number,
+  prayerMultiplier: number
+): number
+
+// Calculate accuracy roll
+function calculateAccuracyRoll(
+  attackLevel: number,
+  attackBonus: number,
+  prayerMultiplier: number
+): number
+
+// Calculate defense roll
+function calculateDefenseRoll(
+  defenseLevel: number,
+  defenseBonus: number,
+  prayerMultiplier: number
+): number
+```
+
+## Testing
+
+### Unit Tests
+
+```bash
+# Run all shared package tests
+npm test --workspace=packages/shared
+
+# Run specific test file
+npm test --workspace=packages/shared -- DeathUtils.test.ts
+```
+
+### Integration Tests
+
+Tests use real Hyperscape instances with Playwright:
+
+```bash
+# Run integration tests
+npm test --workspace=packages/shared -- --grep "integration"
+```
+
+## Contributing
+
+### Code Standards
+
+- **No `any` types** - ESLint will reject them
+- **Prefer classes over interfaces** - For type definitions
+- **No mocks in tests** - Use real Hyperscape instances
+- **WebGPU only** - No WebGL code or fallbacks
+- **Strong typing** - Make type assumptions based on context
+
+### File Organization
+
+- **Systems**: `src/systems/shared/` (shared), `src/systems/client/` (client-only), `src/systems/server/` (server-only)
+- **Entities**: `src/entities/player/`, `src/entities/npc/`, `src/entities/world/`
+- **Types**: `src/types/` with subdirectories for categories
+- **Utils**: `src/utils/` with subdirectories for categories
+
+### Adding New Systems
+
+1. Create system class extending `SystemBase`
+2. Implement `init()`, `update()`, `destroy()` methods
+3. Register in world creation (`createClientWorld` or `createServerWorld`)
+4. Add tests in `__tests__/` directory
+5. Document in system file with JSDoc comments
+
+## Troubleshooting
+
+### Build Errors
+
+```bash
+# Clean and rebuild
+bun run clean
+rm -rf node_modules
+bun install
+bun run build
+```
+
+### PhysX Errors
+
+PhysX WASM is pre-built. If you need to rebuild:
+
+```bash
+cd packages/physx-js-webidl
+./make.sh  # Requires emscripten toolchain
+```
+
+### Type Errors
+
+```bash
+# Check types without building
+bun run typecheck
+```
+
+### WebGPU Not Available
+
+**Error**: `navigator.gpu is undefined`
+
+**Solutions**:
+1. Use Chrome 113+, Edge 113+, or Safari 18+
+2. Check [webgpureport.org](https://webgpureport.org) for browser support
+3. Enable WebGPU in browser flags (if behind flag)
+4. Update graphics drivers
 
 ## License
 
-MIT
+MIT - See LICENSE file
