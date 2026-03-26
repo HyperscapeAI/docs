@@ -318,6 +318,273 @@ npm test -- -u
 
 ## Recent Updates (March 2026)
 
+### Equipment Panel & Combat UI Fixes (March 25-26, 2026)
+
+**Major combat UI improvements** (PR #1089) to fix cross-player data leaks, improve responsiveness, and remove dead code.
+
+#### Equipment Panel Cross-Player Leak Fix
+**Problem**: Equipment panel was displaying AI agents' weapons (e.g., bronze_longsword) because `equipmentUpdated` broadcasts hit all players and the UI had no `playerId` filter. When an AI agent equipped a weapon, all players' equipment panels would show that weapon.
+
+**Fix**: Filter equipment UI updates by local `playerId` in `usePlayerData.ts`:
+```typescript
+// Only update if this equipment belongs to the local player
+if (playerId && equipmentPayload.playerId && equipmentPayload.playerId !== playerId) {
+  return;
+}
+```
+
+**Impact**: 
+- Equipment panel now shows only the local player's gear
+- Eliminates visual bug where AI agent equipment appeared in player UI
+- Server includes `playerId` in all equipment update broadcasts
+
+#### Combat Style & Auto-Retaliate Optimistic Updates
+**Changes**:
+- **Instant Feedback**: Combat style and auto-retaliate toggles now update UI immediately (OSRS-accurate zero-delay feel)
+- **Server Confirmation**: Server sends authoritative value via `attackStyleChanged` / `autoRetaliateChanged` packets
+- **Cache Management**: Module-level caches (`combatStyleCache`, `autoRetaliateCache`) for late-mounting UI hydration
+
+**Implementation** (`packages/client/src/game/panels/CombatPanel.tsx`):
+```typescript
+const handleStyleChange = (next: string) => {
+  // Optimistic: update UI instantly (OSRS has zero visible delay)
+  combatStyleCache.set(playerId, next);
+  setStyle(next);
+
+  // Send to server — server confirms via attackStyleChanged packet
+  actions.actionMethods.changeAttackStyle(playerId, next);
+};
+
+const handleAutoRetaliateToggle = () => {
+  const newValue = !autoRetaliate;
+  
+  // Optimistic: update UI instantly
+  autoRetaliateCache.set(playerId, newValue);
+  setAutoRetaliate(newValue);
+  
+  // Send to server — server confirms via autoRetaliateChanged packet
+  actions.actionMethods.setAutoRetaliate(playerId, newValue);
+};
+```
+
+**Impact**:
+- Combat controls feel instant and responsive
+- Matches OSRS behavior (zero visible delay on style/retaliate changes)
+- Server remains authoritative (can reject invalid changes)
+
+#### Attack Style Cooldown System Removed
+**Changes**:
+- Removed `STYLE_CHANGE_COOLDOWN` (was hardcoded to 0ms)
+- Removed `styleChangeTimers` Map and timer cleanup logic
+- Removed `combatStyleHistory` tracking (write-only, never displayed)
+- Removed dead API methods: `canPlayerChangeStyle()`, `getRemainingStyleCooldown()`, `getPlayerStyleHistory()`
+
+**Impact**:
+- Cleaner codebase with ~200 lines of dead code removed
+- No functional changes (cooldown was already 0ms)
+- Simpler attack style system without unnecessary complexity
+
+#### Combat Damage Deduplication
+**Problem**: `sendToNearby` publishes to 9 region topics, causing players near region boundaries to receive the same damage packet 2-3 times, resulting in duplicate damage splats.
+
+**Fix**: Deduplicate `combatDamageDealt` packets using tick-based keys:
+```typescript
+// ClientNetwork.ts
+const tick = data.tick ?? Math.floor(performance.now() / 125);
+const dedupKey = `${data.attackerId}|${data.targetId}|${data.damage}|${tick}`;
+
+if (this._recentDamageKeys.has(dedupKey)) {
+  return; // Already processed this damage event
+}
+
+this._recentDamageKeys.set(dedupKey, now);
+```
+
+**Dedup Strategy**:
+- **Soft Sweep**: Clears entries >500ms old when map exceeds 150 entries
+- **Hard Cap**: Trims to 100 entries if map exceeds 200 (prevents unbounded growth)
+- **Tick-Based Keys**: Distinguishes same-damage rapid hits on different ticks
+- **Rolling Deploy Fallback**: Uses `performance.now() / 125` when server tick field is missing
+
+**Impact**:
+- Eliminates duplicate damage splats near region boundaries
+- Bounded memory usage (max 200 entries)
+- Graceful handling during rolling deploys
+
+#### Starter Equipment Fix
+**Change**: Fixed `STARTER_EQUIPMENT` referencing non-existent `bronze_sword` → `bronze_shortsword`.
+
+**Files Changed**:
+- `packages/shared/src/systems/shared/character/InventorySystem.ts`
+- `packages/shared/src/systems/shared/character/PlayerSystem.ts`
+- `packages/shared/src/systems/shared/entities/ItemSpawnerSystem.ts`
+
+**Impact**: New players receive correct starter weapon, eliminates item lookup failures.
+
+#### Auto-Initialization for Event Ordering Races
+**Changes**:
+- **Attack Style**: Auto-initialize with weapon-appropriate default if player exists but `onPlayerRegister` hasn't fired yet
+- **Auto-Retaliate**: Auto-initialize with default `true` if player exists but not registered
+- **Equipment**: Made `initializePlayerEquipment` idempotent to prevent reconnection from wiping gear
+- **Weapon Change**: Auto-switch attack style when weapon changes and current style is invalid
+
+**Implementation** (`packages/shared/src/systems/shared/character/PlayerSystem.ts`):
+```typescript
+// Auto-initialize if player exists but wasn't registered yet (event ordering)
+if (!playerState) {
+  if (this.isKnownPlayer(playerId)) {
+    const weaponType = this.getPlayerWeaponType(playerId);
+    const defaultStyle = getDefaultStyleForWeapon(weaponType);
+    this.initializePlayerAttackStyle(playerId, defaultStyle);
+    playerState = this.playerAttackStyles.get(playerId);
+  }
+}
+```
+
+**Impact**:
+- Eliminates "no state for player" errors from event ordering races
+- Player choices take precedence over DB-saved values during session
+- Reconnection preserves in-session equipment and combat preferences
+
+#### Event Type Consistency
+**Change**: Replaced raw string event names with `EventType` enum constants in `Entities.ts`:
+```typescript
+// Old (string literals - error-prone)
+this.emitTypedEvent("PLAYER_JOINED", { ... });
+this.emitTypedEvent("PLAYER_REGISTERED", { ... });
+
+// New (typed enum - type-safe)
+this.world.emit(EventType.PLAYER_JOINED, { ... });
+this.world.emit(EventType.PLAYER_REGISTERED, { ... });
+```
+
+**Impact**: Better type safety, prevents typo bugs, improves grep-ability.
+
+**Files Changed**: 12 files, 250 additions, 194 deletions. See PR #1089 for complete details.
+
+### Inventory UI & Firemaking Fixes (March 25, 2026)
+
+**Inventory interaction improvements** (PR #1087) to fix firemaking, targeting mode, and optimistic inventory updates.
+
+#### Optimistic Inventory Rollback Consolidation
+**Change**: Moved `PendingActionTracker` and rollback logic from `InventoryActionDispatcher` into `ClientNetwork` as shared infrastructure.
+
+**Old Pattern** (duplicate trackers):
+```typescript
+// InventoryActionDispatcher had its own tracker
+const inventoryTracker = new PendingActionTracker<InventorySnapshot>(5000);
+
+// InventoryInteractionSystem had its own tracker
+private inventoryTracker = new PendingActionTracker<InventorySnapshot>(5000);
+```
+
+**New Pattern** (single shared tracker):
+```typescript
+// ClientNetwork owns the tracker
+export class ClientNetwork extends SystemBase {
+  private inventoryTracker = new PendingActionTracker<InventorySnapshot>(5000);
+  
+  applyOptimisticRemoval(playerId: string, slot: number, quantity: number): void {
+    // Auto-snapshots before mutation, manages rollback internally
+    const snapshot = this.snapshotInventory(playerId);
+    if (snapshot) this.inventoryTracker.add(snapshot);
+    
+    // Apply optimistic removal
+    // ... mutation logic
+    
+    this.world.emit(EventType.INVENTORY_UPDATED, { ...cached });
+  }
+}
+```
+
+**Callers** (simplified to one line):
+```typescript
+// InventoryActionDispatcher
+network?.applyOptimisticRemoval(localPlayer.id, slot, 1);
+
+// InventoryInteractionSystem (firemaking)
+this.clientNetwork?.applyOptimisticRemoval(playerId, logsSlot, 1);
+```
+
+**Impact**:
+- Eliminates duplicate tracker instances and timers
+- Single source of truth for optimistic inventory mutations
+- Reduced ~70 lines of boilerplate across callers
+- Proper cleanup on disconnect (no leaked intervals)
+
+#### Firemaking Optimistic Removal
+**Change**: Added optimistic inventory removal for firemaking so logs disappear instantly.
+
+**Implementation**:
+```typescript
+// InventoryInteractionSystem.ts
+this.applyOptimisticRemoval(playerId, logsSlot, 1);
+
+// Server's authoritative inventoryUpdated packet replaces cache within ~100-200ms
+// If server never confirms, PendingActionTracker rolls back after 5 seconds
+```
+
+**Impact**: Logs disappear from inventory immediately when firemaking starts, matching eat/drop/bury behavior.
+
+#### Fire Model Asset Path Fix
+**Change**: Corrected fire model path from `models/firemaking-fire/` to `models/misc/firemaking-fire/`.
+
+**Files Changed**:
+- `packages/shared/src/systems/shared/interaction/ProcessingSystem.ts`
+
+**Impact**: Eliminates 404 errors when spawning firemaking fires.
+
+#### Targeting Mode UI Fixes
+**Changes**:
+- **Immediate Clear**: Targeting state clears immediately after target selection (no server round-trip wait)
+- **Hover State**: Removed `isTargetingActive` from slot hover condition to prevent grey flash on all filled slots
+- **System Registration**: Registered `InventoryInteractionSystem` on client for targeting support
+
+**Implementation**:
+```typescript
+// InventoryPanel.tsx
+if (targetingState.active && targetingState.sourceItem) {
+  this.world.emit(EventType.TARGETING_SELECT, {
+    targetType: "inventory_item",
+    targetSlot: slotIndex,
+  });
+  // Clear targeting immediately — action is committed
+  setTargetingState(initialTargetingState);
+}
+```
+
+**Impact**: 
+- Targeting mode feels more responsive
+- No stale highlights after target selection
+- Cleaner visual feedback
+
+#### Panel Data Synchronization Fix
+**Change**: Added `panelDataVersion` counter to break through React.memo barriers in `WindowRenderer`/`WindowItem`.
+
+**Problem**: `WindowRenderer` and `WindowItem` are wrapped in `React.memo()`, which blocked prop updates when inventory/equipment/stats changed. The `renderPanel` function stayed stable (ref-based late binding), but panels never re-rendered with fresh data.
+
+**Solution**:
+```typescript
+// InterfaceManager.tsx
+const panelDataVersionRef = useRef(0);
+const panelDataVersion = useMemo(() => {
+  return ++panelDataVersionRef.current;
+}, [inventory, coins, playerStats, equipment]);
+
+// Pass to WindowRenderer
+<WindowRenderer
+  renderPanel={renderPanel}
+  panelDataVersion={panelDataVersion}  // Breaks memo barrier
+/>
+```
+
+**Impact**:
+- Inventory panels update in real-time when data changes
+- Lightweight counter (number) breaks memo without forcing panel re-mount
+- `renderPanel` stays stable (no unnecessary panel recreation)
+
+**Files Changed**: 9 files, 149 additions, 171 deletions. See PR #1087 for complete details.
+
 ### Client UI Modernization & Startup Hardening (March 23-24, 2026)
 
 **Major client-side refactoring** (PR #1067) to modernize the UI shell, improve startup reliability, and fix gameplay regressions.
