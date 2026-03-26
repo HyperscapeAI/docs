@@ -318,6 +318,53 @@ npm test -- -u
 
 ## Recent Updates (March 2026)
 
+### UI Panel Modernization (March 25-26, 2026)
+
+**Comprehensive UI panel redesign** with unified layout system, optimistic updates, and cross-player data leak fixes.
+
+**Key Features**:
+- **Combat Panel Redesign**: Horizontal heraldic shield banners with SVG shields, protruding icons, and theme gradients
+- **Equipment Panel Paperdoll**: Live 3D character preview with equipped gear (interactive rotation and zoom)
+- **Unified Panel Layout**: Shared constants (`PANEL_PADDING`, `PANEL_GRID_GAP`, `PANEL_ICON_SIZE`) across all panels
+- **CursorTooltip Component**: Reusable portal-based tooltip with auto-measurement and viewport-edge flipping
+- **Tab Persistence**: Tabs stay mounted with `display:none/flex` toggling (preserves scroll position and state)
+- **Optimistic UI Updates**: Combat controls and inventory actions update instantly before server confirmation
+- **Spells Panel**: Added to default layout alongside Prayer panel
+
+**Combat UI Improvements**:
+- Instant feedback for attack style changes and auto-retaliate toggles
+- Heraldic shield banners with filled geometric icons (accurate, aggressive, defensive, controlled, rapid, longrange, autocast)
+- Theme-derived gradients and style-colored tints
+- Horizontal layout fits more styles in compact space
+
+**Equipment Panel Enhancements**:
+- Live 3D paperdoll portrait with equipped gear
+- Interactive rotation (drag) and zoom (scroll)
+- Equipment visual helpers extracted for reuse (`EquipmentVisualHelpers.ts`)
+- Fallback to stylized silhouette when avatar unavailable
+- Improved slot layout with better spacing and visual hierarchy
+
+**Inventory & Targeting**:
+- Optimistic removal for firemaking (logs disappear instantly)
+- Consolidated rollback logic in `ClientNetwork` (single shared tracker)
+- Immediate targeting state clear after selection
+- Fixed grey flash on filled slots when entering targeting mode
+
+**Bug Fixes**:
+- **Cross-Player Equipment Leak**: Equipment panel now filters by `playerId` (no longer shows AI agents' gear)
+- **Combat Damage Deduplication**: Eliminates duplicate damage splats near region boundaries
+- **Starter Equipment**: Fixed `bronze_sword` → `bronze_shortsword` reference
+- **Fire Model Path**: Corrected asset path to `models/misc/firemaking-fire/`
+- **Panel Data Sync**: Added `panelDataVersion` counter to break through React.memo barriers
+
+**Code Quality**:
+- Removed attack style cooldown system (was hardcoded to 0ms, ~200 lines of dead code)
+- Auto-initialization guards for event ordering races
+- Weapon change auto-style switching (OSRS-accurate)
+- Event type consistency (replaced string literals with `EventType` enum)
+
+**Files Changed**: 54 files, ~4,600 additions, ~2,700 deletions across PR #1088, #1089, #1087.
+
 ### Equipment Panel & Combat UI Fixes (March 25-26, 2026)
 
 **Major combat UI improvements** (PR #1089) to fix cross-player data leaks, improve responsiveness, and remove dead code.
