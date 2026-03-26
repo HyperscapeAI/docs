@@ -108,245 +108,65 @@ packages/
 
 ## Recent Changes (March 2026)
 
-### Player Death Pipeline Overhaul (March 26, 2026)
+### Player Death System Overhaul (March 26, 2026)
 
-**Change** (PR #1094): Complete rewrite of player death system to fix SQLite deadlock, prevent item duplication, and add OSRS-style "keep 3 most valuable items" mechanic.
+**Change** (PR #1094): Complete rewrite of player death pipeline to fix SQLite deadlock, equipment duplication, and implement OSRS-style "keep 3 most valuable items" for safe zone deaths.
 
-**Root Cause**: Death transaction called `clearEquipmentAndReturn()` and `clearInventoryImmediate()` which each opened nested DB transactions inside the outer `executeInTransaction()`, causing SQLite to deadlock silently. Players would play the death animation but never respawn.
-
-**Critical Fixes**:
-1. **SQLite Deadlock**: Two-phase clear pattern — in-memory clear inside transaction, DB persist after transaction completes
-2. **Item Duplication**: Gravestone loot items now sync via `HeadstoneEntity.modify()` to prevent stale client-side item lists
-3. **Equipment Duplication**: Atomic `clearEquipmentAndReturn()` prevents race conditions between read and clear
-4. **Death State Softlock**: `deathProcessingInProgress` guard prevents respawn during async death transaction
-5. **Duel Escape Exploit**: Respawn blocked during active duels in both `handleRespawnRequest` and `initiateRespawn`
-
-**New Features**:
-- **OSRS Keep-3**: In safe zones, players keep their 3 most valuable items on death (returned on respawn)
-- **Event Migration**: `PLAYER_DIED` deprecated → use `PLAYER_SET_DEAD` (client UI) or `ENTITY_DEATH` (server processing)
-- **Crash Recovery**: Death locks persist dropped/kept items to DB for server restart recovery
-- **Persist Retry Queue**: Single-retry mechanism for post-transaction DB failures (bounded to 100 entries)
+**Key Features**:
+- **Two-Phase Persist Pattern**: In-memory clear inside transaction, DB persist after transaction
+- **OSRS Keep-3 System**: Safe zone deaths keep 3 most valuable items (by manifest value)
+- **Event Migration**: `PLAYER_DIED` deprecated → use `PLAYER_SET_DEAD`
+- **Gravestone Privacy**: Loot items hidden from broadcast, only sent to interacting player
+- **Death Lock Recovery**: Persist kept items in death lock for crash recovery
+- **Persist Retry Queue**: Single-retry queue for post-transaction DB persist failures
 
 **New Utilities** (`packages/shared/src/systems/shared/combat/DeathUtils.ts`):
-```typescript
-// OSRS keep-3 constant
-export const ITEMS_KEPT_ON_DEATH = 3;
-
-// Gravestone ID prefix for filtering
-export const GRAVESTONE_ID_PREFIX = "gravestone_";
-
-// Input sanitization (XSS, Unicode normalization, BiDi override removal)
-export function sanitizeKilledBy(killedBy: unknown): string
-
-// OSRS-style item splitting (O(n log n) on unique items, no stack expansion)
-export function splitItemsForSafeDeath(
-  allItems: InventoryItem[],
-  keepCount: number,
-): { kept: InventoryItem[]; dropped: InventoryItem[] }
-
-// Position validation and clamping
-export function validatePosition(position: { x: number; y: number; z: number }): { x: number; y: number; z: number } | null
-export function isPositionInBounds(position: { x: number; y: number; z: number }): boolean
-export function isValidPositionNumber(n: number): boolean
-```
-
-**Type Definitions** (`packages/shared/src/systems/shared/combat/DeathTypes.ts`):
-```typescript
-// Extracted interfaces for duck-typed system dependencies
-export interface PlayerSystemLike { ... }
-export interface DatabaseSystemLike { ... }
-export interface EquipmentSystemLike { ... }
-export interface TerrainSystemLike { ... }
-export interface NetworkLike { ... }
-export interface TickSystemLike { ... }
-export interface PlayerEntityLike { ... }
-export interface DeathLocationDataWithHeadstone extends DeathLocationData { ... }
-```
-
-**Death Flow Architecture**:
-1. **PlayerSystem.handleDeath**: Sets entity death state (`deathState = DYING`, `emote = "death"`), emits `PLAYER_SET_DEAD` (immediate client feedback), then emits `ENTITY_DEATH`
-2. **PlayerDeathSystem.handlePlayerDeath**: Processes `ENTITY_DEATH`, runs death transaction (clear inventory/equipment, create death lock, spawn gravestone), schedules tick-based respawn
-3. **Tick-Based Respawn**: `processPendingRespawns()` polls all players in `DYING` state, respawns when `currentTick >= respawnTick`
-4. **Kept Items Return**: On respawn, `itemsKeptOnDeath` Map is checked, items added back via `InventorySystem.addItemDirect()`
-
-**Event Migration**:
-- **DEPRECATED**: `PLAYER_DIED` (marked `@deprecated` in `event-types.ts`, no longer emitted)
-- **NEW**: `ENTITY_DEATH` with `{ entityId, entityType, killedBy, deathPosition }` for server-side death processing
-- **CANONICAL**: `PLAYER_SET_DEAD` with `{ playerId, isDead, deathPosition }` for client death UI state
-
-**Crash Recovery**:
-- Death locks persist `items` (dropped to gravestone) and `keptItems` (returned on respawn) to DB
-- `onPlayerReconnect()` blocks inventory load when active death lock exists
-- `recoverUnrecoveredDeaths()` on server startup handles unprocessed deaths from crashes
-- Persist retry queue handles transient DB failures with `AUDIT_LOG` events for ops alerting
-
-**Security Improvements**:
-- `sanitizeKilledBy()`: Unicode NFKC normalization, zero-width character stripping, BiDi override removal, HTML character filtering, 64-char limit
-- Duel escape prevention: Respawn blocked during active duels (defense-in-depth in two locations)
-- Client-side death processing blocked: `!this.world.isServer` guard prevents client-triggered death transactions
-- Gravestone privacy: `lootItems` not broadcast to all clients (only `lootItemCount` sent, full loot via `corpseLoot` packet on interaction)
-
-**Bug Fixes**:
-- `CombatantEntity`: `||` → `??` for config values (0 is now respected for `attackPower`, `defense`, `criticalChance`, etc.)
-- `CombatantEntity.isDead`: Fixed method call (was property reference, always truthy)
-- `PlayerLocal`: Extracted `clearDeathAnimationState()` to eliminate duplicated death→idle reset code
-- `HeadstoneEntity`: Entity destruction now handled by `PlayerDeathSystem.handleCorpseEmpty()` via `EntityManager` (was unreliable `setTimeout`)
-
-**Test Coverage**: 1,534 lines of new tests
-- `DeathUtils.test.ts` (502 lines): Unit tests for sanitization, keep-3 logic, position validation, stack splitting edge cases
-- `PlayerDeathFlow.test.ts` (1,032 lines): Integration tests for death guards, transaction failure recovery, tick-based respawn, persist retry queue
-
-**Impact**:
-- Players no longer stuck in death state (SQLite deadlock fixed)
-- Item duplication exploits eliminated (atomic operations, network sync, entity cleanup)
-- OSRS-authentic death mechanics (keep 3 most valuable items in safe zones)
-- Robust crash recovery with death locks and persist retry queue
-- Clean event architecture (`ENTITY_DEATH` unifies player/mob death processing)
-
-**Files Changed**: 23 files, 2,574 additions, 566 deletions.
+- `sanitizeKilledBy()` - XSS/Unicode/injection protection
+- `splitItemsForSafeDeath()` - OSRS keep-3 with stack handling
+- `validatePosition()` - Position validation and clamping
+- `GRAVESTONE_ID_PREFIX` - Constant for gravestone entity ID filtering
 
 **Breaking Changes**:
-- `PLAYER_DIED` event no longer emitted (migrate to `PLAYER_SET_DEAD` or `ENTITY_DEATH`)
-- External plugins listening for `PLAYER_DIED` must update to `ENTITY_DEATH` with `entityType === "player"` filter
+- `PLAYER_DIED` event is deprecated - use `PLAYER_SET_DEAD` instead
+- Death lock schema now includes `keptItems` field
 
 ### Dialogue and Skilling Panel Polish (March 26, 2026)
 
 **Change** (PR #1093): Unified skilling panel layouts and redesigned NPC dialogue system with dedicated in-world panels.
 
 **Skilling Panel Improvements**:
-- **Shared Components**: Extracted `SkillingPanelBody`, `SkillingSection`, `SkillingQuantitySelector` into `SkillingPanelShared.tsx`
-- **Unified Layouts**: All skilling panels (Fletching, Cooking, Smelting, Smithing, Crafting, Tanning) now use consistent styling
-- **Shared Style Helpers**: `getSkillingSelectableStyle()` and `getSkillingBadgeStyle()` for consistent visual treatment
+- **Shared Components**: `SkillingPanelBody`, `SkillingSection`, `SkillingQuantitySelector` in `SkillingPanelShared.tsx`
+- **Unified Layouts**: All skilling panels (Fletching, Cooking, Smelting, Smithing, Crafting, Tanning) use consistent styling
 - **Quantity Selector**: Reusable component with preset buttons (1, 5, 10, All, X) and custom input mode
-- **Responsive Design**: Mobile and desktop variants with proper touch targets
-
-**Implementation** (`packages/client/src/game/panels/skilling/SkillingPanelShared.tsx`):
-```typescript
-// Shared panel body with intro text and empty state
-export function SkillingPanelBody({ theme, children, emptyMessage, intro }: SkillingPanelBodyProps)
-
-// Themed section card for recipe groups
-export function SkillingSection({ theme, children }: SkillingSectionProps)
-
-// Reusable quantity selector with preset buttons and custom input
-export function SkillingQuantitySelector({
-  theme,
-  showCustomInput,
-  customQuantity,
-  lastCustomQuantity,
-  onCustomQuantityChange,
-  onCustomSubmit,
-  onCancelCustomInput,
-  onPresetQuantity,
-  allQuantity,
-  onShowCustomInput,
-}: SkillingQuantitySelectorProps)
-
-// Style helpers for consistent visual treatment
-export function getSkillingSelectableStyle(theme: Theme, selected: boolean, disabled = false): CSSProperties
-export function getSkillingBadgeStyle(theme: Theme): CSSProperties
-```
 
 **Dialogue System Redesign**:
-- **DialoguePopupShell**: New dedicated modal shell for NPC dialogue with proper focus management
+- **DialoguePopupShell**: Dedicated modal shell for NPC dialogue with focus management
 - **DialogueCharacterPortrait**: Live 3D VRM portrait rendering in dialogue panels
-- **Service Handoff Fix**: Opening bank/store/tanner now properly closes dialogue instead of leaving terminal continue step
-- **Improved Layout**: Horizontal layout with portrait on left, dialogue text and responses on right
+- **Service Handoff Fix**: Opening bank/store/tanner properly closes dialogue
 
-**Implementation** (`packages/client/src/game/panels/dialogue/DialoguePopupShell.tsx`):
-```typescript
-export function DialoguePopupShell({
-  visible,
-  title,
-  children,
-  onClose,
-  width = 700,
-  maxWidth = "min(86vw, 700px)",
-  maxHeight = "min(40vh, 400px)",
-  contentStyle,
-}: DialoguePopupShellProps)
-```
+**Impact**: Eliminates ~500 lines of duplicated styling, more immersive NPC interactions.
 
-**DialogueCharacterPortrait** (`packages/client/src/game/panels/dialogue/DialogueCharacterPortrait.tsx`):
-```typescript
-export const DialogueCharacterPortrait = React.memo(function DialogueCharacterPortrait({
-  world,
-  npcEntityId,
-  npcName,
-  className = "",
-}: DialogueCharacterPortraitProps)
-```
+### Home Teleport Feature (March 26, 2026)
 
-**Service Handoff Logic** (`packages/shared/src/systems/shared/interaction/DialogueSystem.ts`):
-```typescript
-private isImmediateHandoffEffect(effect?: string): boolean {
-  if (!effect) return false;
-  const [effectName] = effect.split(":");
-  return (
-    effectName === "openBank" ||
-    effectName === "openShop" ||
-    effectName === "openStore" ||
-    effectName === "openTanner"
-  );
-}
+**Change** (PR #1095): Polished home teleport cast effects and cooldown flow.
 
-// In handleDialogueResponse:
-if (effect && this.isImmediateHandoffEffect(effect)) {
-  this.executeEffect(playerId, npcId, effect, state.npcEntityId);
-  this.endDialogue(playerId, npcId);
-  return;
-}
-```
-
-**Dialogue Close Handlers** (`packages/client/src/hooks/useModalPanels.ts`):
-```typescript
-// Close dialogue when opening service panels
-const handleBankOpen = (data: unknown) => {
-  const d = data as BankData;
-  if (d) {
-    setBankData({ ...d, visible: true });
-    setDialogueData(null);  // Close dialogue
-  }
-};
-
-const handleStoreOpen = (data: unknown) => {
-  const d = data as StoreData;
-  if (d) {
-    setStoreData({ ...d, visible: true });
-    setDialogueData(null);  // Close dialogue
-  }
-};
-```
-
-**Impact**:
-- Eliminates ~500 lines of duplicated styling across 5 skilling panels
-- Consistent visual language for all crafting/processing interfaces
-- NPC dialogue feels more immersive with live character portraits
-- Service handoffs (bank, store, tanner) no longer leave orphaned dialogue panels
-- Better mobile responsiveness with proper touch targets
-- Reusable components reduce maintenance burden
-
-**Files Changed**: 15 files, 1,623 additions, 1,265 deletions.
+**Features**: Visual cast effects, cooldown system, minimap orb integration, smooth teleport animation.
 
 ### Game UI Tab Arrow Key Capture Fix (March 26, 2026)
 
-**Change** (PR #1092): Fixed arrow keys being consumed by in-game panel tabs, preventing camera controls from working.
+**Change** (PR #1092): Fixed arrow keys being consumed by in-game panel tabs, preventing camera controls.
 
-**Problem**: When a combined panel tab retained focus, pressing an arrow key would switch tabs instead of moving the camera.
+**Fix**: Added `reserveArrowKeys` prop to disable arrow key consumption for game windows.
 
-**Fix**: Added `reserveArrowKeys` prop to disable arrow key consumption for game windows while preserving tab navigation for non-game UI.
-
-**Impact**: Arrow keys now control camera movement even when panel tabs have focus. Enter/Space still activate tabs for keyboard accessibility.
-
-**Files Changed**: 9 files, 392 additions, 4 deletions.
+**Impact**: Arrow keys now control camera movement even when panel tabs have focus.
 
 ### Missing Packet Handlers Fix (March 26, 2026)
 
-**Change** (PR #1091): Added 8 missing server→client packet handlers to eliminate console errors.
+**Change** (PR #1091): Added 8 missing server→client packet handlers.
 
 **Missing Handlers**: `onFletchingComplete`, `onCookingComplete`, `onSmeltingComplete`, `onSmithingComplete`, `onCraftingComplete`, `onTanningComplete`, `onCombatEnded`, `onQuestStarted`
 
-**Impact**: Eliminates "No handler for packet" errors, UI systems can react to skill completion and combat events.
+**Impact**: Eliminates "No handler for packet" errors.
 
 ### Prayer Login Sync Fix (March 26, 2026)
 
@@ -405,8 +225,6 @@ WALKABILITY_BUDGET_MS=4               # Walkability baking budget (ms)
 **Files Changed**: 54 files, 6,502 additions, 1,164 deletions
 
 **Documentation**: See `docs/performance-march-2026.md` for complete details.
-
-## Recent Changes (March 2026)
 
 ### VRM Material Isolation Fix (March 17, 2026)
 
