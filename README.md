@@ -318,6 +318,44 @@ npm test -- -u
 
 ## Recent Updates (March 2026)
 
+### Player Death System Overhaul (March 26, 2026)
+
+**Complete rewrite of player death pipeline** (PR #1094) to fix critical bugs and add OSRS-style death mechanics.
+
+**Critical Fixes**:
+- **SQLite Deadlock**: Fixed nested DB transactions causing players to never respawn (two-phase clear pattern)
+- **Item Duplication**: Eliminated gravestone item duplication exploits with network sync and atomic operations
+- **Death State Softlock**: Added `deathProcessingInProgress` guard to prevent respawn race conditions
+- **Duel Escape Exploit**: Blocked respawn during active duels (defense-in-depth in two locations)
+
+**New Features**:
+- **OSRS Keep-3**: Players keep their 3 most valuable items on death in safe zones (returned on respawn)
+- **Event Migration**: `PLAYER_DIED` deprecated → use `PLAYER_SET_DEAD` (client UI) or `ENTITY_DEATH` (server processing)
+- **Crash Recovery**: Death locks persist dropped/kept items to DB for server restart recovery
+- **Persist Retry Queue**: Single-retry mechanism for post-transaction DB failures (bounded to 100 entries)
+
+**New Utilities** (`packages/shared/src/systems/shared/combat/DeathUtils.ts`):
+- `sanitizeKilledBy()` - XSS prevention, Unicode normalization, BiDi override removal
+- `splitItemsForSafeDeath()` - OSRS keep-3 logic (O(n log n) on unique items, no stack expansion)
+- `validatePosition()` - Position validation and world-bounds clamping
+- `ITEMS_KEPT_ON_DEATH` constant (3), `GRAVESTONE_ID_PREFIX` constant
+
+**Security Improvements**:
+- Input sanitization for `killedBy` strings (prevents homograph attacks, XSS, injection)
+- Gravestone privacy (loot items not broadcast to all clients)
+- Client-side death processing blocked (server-only transaction)
+- Duel escape prevention (respawn blocked during active duels)
+
+**Test Coverage**: 1,534 lines of new tests
+- `DeathUtils.test.ts` (502 lines): Sanitization, keep-3 logic, position validation
+- `PlayerDeathFlow.test.ts` (1,032 lines): Death guards, transaction recovery, tick-based respawn
+
+**Impact**: Players no longer stuck in death state, item duplication exploits eliminated, OSRS-authentic death mechanics, robust crash recovery.
+
+**Files Changed**: 23 files, 2,574 additions, 566 deletions.
+
+**Breaking Changes**: External plugins listening for `PLAYER_DIED` must migrate to `ENTITY_DEATH` with `entityType === "player"` filter.
+
 ### Dialogue and Skilling Panel Polish (March 26, 2026)
 
 **Comprehensive UI improvements** (PR #1093) for skilling interfaces and NPC dialogue system.
