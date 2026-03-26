@@ -108,6 +108,125 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Dialogue and Skilling Panel Polish (March 26, 2026)
+
+**Change** (PR #1093): Unified skilling panel layouts and redesigned NPC dialogue system with dedicated in-world panels.
+
+**Skilling Panel Improvements**:
+- **Shared Components**: Extracted `SkillingPanelBody`, `SkillingSection`, `SkillingQuantitySelector` into `SkillingPanelShared.tsx`
+- **Unified Layouts**: All skilling panels (Fletching, Cooking, Smelting, Smithing, Crafting, Tanning) now use consistent styling
+- **Shared Style Helpers**: `getSkillingSelectableStyle()` and `getSkillingBadgeStyle()` for consistent visual treatment
+- **Quantity Selector**: Reusable component with preset buttons (1, 5, 10, All, X) and custom input mode
+- **Responsive Design**: Mobile and desktop variants with proper touch targets
+
+**Implementation** (`packages/client/src/game/panels/skilling/SkillingPanelShared.tsx`):
+```typescript
+// Shared panel body with intro text and empty state
+export function SkillingPanelBody({ theme, children, emptyMessage, intro }: SkillingPanelBodyProps)
+
+// Themed section card for recipe groups
+export function SkillingSection({ theme, children }: SkillingSectionProps)
+
+// Reusable quantity selector with preset buttons and custom input
+export function SkillingQuantitySelector({
+  theme,
+  showCustomInput,
+  customQuantity,
+  lastCustomQuantity,
+  onCustomQuantityChange,
+  onCustomSubmit,
+  onCancelCustomInput,
+  onPresetQuantity,
+  allQuantity,
+  onShowCustomInput,
+}: SkillingQuantitySelectorProps)
+
+// Style helpers for consistent visual treatment
+export function getSkillingSelectableStyle(theme: Theme, selected: boolean, disabled = false): CSSProperties
+export function getSkillingBadgeStyle(theme: Theme): CSSProperties
+```
+
+**Dialogue System Redesign**:
+- **DialoguePopupShell**: New dedicated modal shell for NPC dialogue with proper focus management
+- **DialogueCharacterPortrait**: Live 3D VRM portrait rendering in dialogue panels
+- **Service Handoff Fix**: Opening bank/store/tanner now properly closes dialogue instead of leaving terminal continue step
+- **Improved Layout**: Horizontal layout with portrait on left, dialogue text and responses on right
+
+**Implementation** (`packages/client/src/game/panels/dialogue/DialoguePopupShell.tsx`):
+```typescript
+export function DialoguePopupShell({
+  visible,
+  title,
+  children,
+  onClose,
+  width = 700,
+  maxWidth = "min(86vw, 700px)",
+  maxHeight = "min(40vh, 400px)",
+  contentStyle,
+}: DialoguePopupShellProps)
+```
+
+**DialogueCharacterPortrait** (`packages/client/src/game/panels/dialogue/DialogueCharacterPortrait.tsx`):
+```typescript
+export const DialogueCharacterPortrait = React.memo(function DialogueCharacterPortrait({
+  world,
+  npcEntityId,
+  npcName,
+  className = "",
+}: DialogueCharacterPortraitProps)
+```
+
+**Service Handoff Logic** (`packages/shared/src/systems/shared/interaction/DialogueSystem.ts`):
+```typescript
+private isImmediateHandoffEffect(effect?: string): boolean {
+  if (!effect) return false;
+  const [effectName] = effect.split(":");
+  return (
+    effectName === "openBank" ||
+    effectName === "openShop" ||
+    effectName === "openStore" ||
+    effectName === "openTanner"
+  );
+}
+
+// In handleDialogueResponse:
+if (effect && this.isImmediateHandoffEffect(effect)) {
+  this.executeEffect(playerId, npcId, effect, state.npcEntityId);
+  this.endDialogue(playerId, npcId);
+  return;
+}
+```
+
+**Dialogue Close Handlers** (`packages/client/src/hooks/useModalPanels.ts`):
+```typescript
+// Close dialogue when opening service panels
+const handleBankOpen = (data: unknown) => {
+  const d = data as BankData;
+  if (d) {
+    setBankData({ ...d, visible: true });
+    setDialogueData(null);  // Close dialogue
+  }
+};
+
+const handleStoreOpen = (data: unknown) => {
+  const d = data as StoreData;
+  if (d) {
+    setStoreData({ ...d, visible: true });
+    setDialogueData(null);  // Close dialogue
+  }
+};
+```
+
+**Impact**:
+- Eliminates ~500 lines of duplicated styling across 5 skilling panels
+- Consistent visual language for all crafting/processing interfaces
+- NPC dialogue feels more immersive with live character portraits
+- Service handoffs (bank, store, tanner) no longer leave orphaned dialogue panels
+- Better mobile responsiveness with proper touch targets
+- Reusable components reduce maintenance burden
+
+**Files Changed**: 15 files, 1,623 additions, 1,265 deletions.
+
 ### Game UI Tab Arrow Key Capture Fix (March 26, 2026)
 
 **Change** (PR #1092): Fixed arrow keys being consumed by in-game panel tabs, preventing camera controls from working.
