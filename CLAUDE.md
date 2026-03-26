@@ -727,6 +727,448 @@ Remove `onReady` handler after worker init resolves/times out:
 
 ## Recent Major Features (March 2026)
 
+### Player Death Pipeline Overhaul (March 26, 2026)
+
+**Change** (PR #1094): Complete rewrite of player death system to fix SQLite deadlock, prevent item duplication, and add OSRS-style "keep 3 most valuable items" mechanic.
+
+**Root Cause**: Death transaction called `clearEquipmentAndReturn()` and `clearInventoryImmediate()` which each opened nested DB transactions inside the outer `executeInTransaction()`, causing SQLite to deadlock silently. Players would play the death animation but never respawn.
+
+#### Critical Fixes
+
+1. **SQLite Deadlock**: Two-phase clear pattern — in-memory clear inside transaction, DB persist after transaction completes
+2. **Item Duplication**: Gravestone loot items now sync via `HeadstoneEntity.modify()` to prevent stale client-side item lists
+3. **Equipment Duplication**: Atomic `clearEquipmentAndReturn()` prevents race conditions between read and clear
+4. **Death State Softlock**: `deathProcessingInProgress` guard prevents respawn during async death transaction
+5. **Duel Escape Exploit**: Respawn blocked during active duels in both `handleRespawnRequest` and `initiateRespawn`
+
+#### New Features
+
+- **OSRS Keep-3**: In safe zones, players keep their 3 most valuable items on death (returned on respawn)
+- **Event Migration**: `PLAYER_DIED` deprecated → use `PLAYER_SET_DEAD` (client UI) or `ENTITY_DEATH` (server processing)
+- **Crash Recovery**: Death locks persist dropped/kept items to DB for server restart recovery
+- **Persist Retry Queue**: Single-retry mechanism for post-transaction DB failures (bounded to 100 entries)
+
+#### Death Utilities Module
+
+**New File**: `packages/shared/src/systems/shared/combat/DeathUtils.ts`
+
+Pure utility functions extracted from `PlayerDeathSystem` for testability:
+
+```typescript
+// OSRS keep-3 constant
+export const ITEMS_KEPT_ON_DEATH = 3;
+
+// Gravestone ID prefix for filtering
+export const GRAVESTONE_ID_PREFIX = "gravestone_";
+
+// Input sanitization (XSS, Unicode normalization, BiDi override removal)
+export function sanitizeKilledBy(killedBy: unknown): string {
+  // Normalizes Unicode to NFKC form to prevent homograph attacks
+  // Removes zero-width characters and BiDi overrides
+  // Removes control characters and dangerous HTML characters
+  // Limits length to 64 characters
+  // Defaults to "unknown" for invalid inputs
+}
+
+// OSRS-style item splitting (O(n log n) on unique items, no stack expansion)
+export function splitItemsForSafeDeath(
+  allItems: InventoryItem[],
+  keepCount: number,
+): { kept: InventoryItem[]; dropped: InventoryItem[] } {
+  // Keeps the N most valuable individual items
+  // For stacked items (quantity > 1), each unit counts as one item
+  // Uses greedy quantity assignment without expanding stacks
+  // Avoids memory explosion for large quantities (e.g., 10,000 arrows)
+}
+
+// Get item value from manifest data (returns 0 for unknown items)
+export function getItemValue(itemId: string): number
+
+// Position validation and clamping
+export const POSITION_VALIDATION = {
+  WORLD_BOUNDS: 10000,  // Max 10km from origin
+  MAX_HEIGHT: 500,      // Max height
+  MIN_HEIGHT: -50,      // Allow some underground (caves)
+} as const;
+
+export function validatePosition(position: {
+  x: number;
+  y: number;
+  z: number;
+}): { x: number; y: number; z: number } | null
+
+export function isPositionInBounds(position: {
+  x: number;
+  y: number;
+  z: number;
+}): boolean
+
+export function isValidPositionNumber(n: number): boolean
+```
+
+#### Death Type Definitions
+
+**New File**: `packages/shared/src/systems/shared/combat/DeathTypes.ts`
+
+Extracted interfaces for duck-typed system dependencies:
+
+```typescript
+export interface PlayerSystemLike {
+  players?: Map<string, { position?: { x: number; y: number; z: number } }>;
+}
+
+export interface DatabaseSystemLike {
+  executeInTransaction: (
+    fn: (tx: TransactionContext) => Promise<void>,
+  ) => Promise<void>;
+}
+
+export interface EquipmentSystemLike {
+  getPlayerEquipment: (playerId: string) => EquipmentData | null;
+  clearEquipmentImmediate?: (playerId: string) => Promise<void>;
+  clearEquipmentAndReturn?: (
+    playerId: string,
+    tx?: TransactionContext,
+  ) => Promise<Array<{ itemId: string; slot: string; quantity: number }>>;
+}
+
+export interface TerrainSystemLike { ... }
+export interface NetworkLike { ... }
+export interface TickSystemLike { ... }
+export interface PlayerEntityLike { ... }
+export interface DeathLocationDataWithHeadstone extends DeathLocationData { ... }
+```
+
+#### Death Flow Architecture
+
+**Two-Phase Death Processing**:
+
+1. **PlayerSystem.handleDeath** (immediate client feedback):
+   - Sets entity death state (`deathState = DYING`, `emote = "death"`)
+   - Emits `PLAYER_SET_DEAD` with `{ playerId, isDead: true, deathPosition }`
+   - Emits `ENTITY_DEATH` with `{ entityId, entityType: "player", killedBy, deathPosition }`
+
+2. **PlayerDeathSystem.handlePlayerDeath** (async transaction):
+   - Processes `ENTITY_DEATH` event
+   - Runs death transaction (clear inventory/equipment, create death lock, spawn gravestone)
+   - Schedules tick-based respawn via `respawnTick` field
+
+3. **Tick-Based Respawn**:
+   - `processPendingRespawns()` polls all players in `DYING` state each tick
+   - Respawns when `currentTick >= respawnTick`
+   - Returns kept items via `InventorySystem.addItemDirect()`
+
+**Death Transaction Flow**:
+```typescript
+// Inside transaction (atomic)
+await databaseSystem.executeInTransaction(async (tx) => {
+  // 1. Snapshot inventory and equipment
+  const inventoryItems = inventory?.items.map(...) || [];
+  const equipmentItems = await equipmentSystem.clearEquipmentAndReturn(playerId, tx);
+  
+  // 2. Split items (OSRS keep-3 for safe zones)
+  const allItems = [...inventoryItems, ...equipmentItems];
+  const { kept, dropped } = splitItemsForSafeDeath(allItems, ITEMS_KEPT_ON_DEATH);
+  
+  // 3. Create death lock with items
+  await deathStateManager.createDeathLock(playerId, {
+    gravestoneId: "",
+    position: deathPosition,
+    zoneType: ZoneType.SAFE_AREA,
+    itemCount: dropped.length,
+    items: dropped.map(item => ({ itemId: item.itemId, quantity: item.quantity })),
+    keptItems: kept.map(item => ({ itemId: item.itemId, quantity: item.quantity })),
+    killedBy,
+  }, tx);
+  
+  // 4. Clear inventory in-memory (skipPersist=true to avoid nested transaction)
+  await inventorySystem.clearInventoryImmediate(playerId, true);
+});
+
+// After transaction (persist to DB)
+// These calls are idempotent — clearing an already-empty inventory/equipment is a no-op
+try {
+  await equipmentSystem.clearEquipmentImmediate(playerId);
+} catch (err) {
+  // Queue single retry on failure
+  this.queuePersistRetry(playerId, "equipment");
+}
+
+try {
+  await inventorySystem.clearInventoryImmediate(playerId, false);
+} catch (err) {
+  this.queuePersistRetry(playerId, "inventory");
+}
+
+// Schedule respawn and spawn gravestone
+this.postDeathCleanup(playerId, deathPosition, dropped, killedBy, kept);
+```
+
+**Crash Recovery Path**:
+- Death lock exists in DB with `items` (dropped) and `keptItems` (returned on respawn)
+- `onPlayerReconnect()` checks for active death lock and blocks inventory load from DB
+- `recoverUnrecoveredDeaths()` on server startup handles unprocessed deaths
+- Persist retry queue handles transient DB failures with `AUDIT_LOG` events
+
+#### Event Migration Guide
+
+**DEPRECATED**: `PLAYER_DIED` (marked `@deprecated` in `event-types.ts`, no longer emitted)
+
+**NEW EVENTS**:
+
+1. **`ENTITY_DEATH`** - Server-side death processing (replaces `PLAYER_DIED`)
+   ```typescript
+   // Payload
+   {
+     entityId: string;
+     entityType: "player" | "mob";
+     killedBy?: string;
+     deathPosition?: { x: number; y: number; z: number };
+   }
+   
+   // Usage
+   world.on(EventType.ENTITY_DEATH, (data) => {
+     if (data.entityType === "player") {
+       // Handle player death
+     }
+   });
+   ```
+
+2. **`PLAYER_SET_DEAD`** - Client death UI state (canonical for death screen)
+   ```typescript
+   // Payload
+   {
+     playerId: string;
+     isDead: boolean;
+     deathPosition?: { x: number; y: number; z: number };
+   }
+   
+   // Usage
+   world.on(EventType.PLAYER_SET_DEAD, (data) => {
+     if (data.isDead) {
+       // Show death screen
+     } else {
+       // Hide death screen, restore controls
+     }
+   });
+   ```
+
+**Migration Steps**:
+
+1. **Replace `PLAYER_DIED` subscriptions**:
+   ```typescript
+   // Old
+   world.on(EventType.PLAYER_DIED, (data: { playerId: string }) => {
+     handlePlayerDeath(data.playerId);
+   });
+   
+   // New (server-side processing)
+   world.on(EventType.ENTITY_DEATH, (data: { entityId: string; entityType: string }) => {
+     if (data.entityType === "player") {
+       handlePlayerDeath(data.entityId);
+     }
+   });
+   
+   // OR (client UI)
+   world.on(EventType.PLAYER_SET_DEAD, (data: { playerId: string; isDead: boolean }) => {
+     if (data.isDead) {
+       showDeathScreen(data.playerId);
+     }
+   });
+   ```
+
+2. **Update external plugins** (e.g., `plugin-hyperscape`):
+   ```typescript
+   // packages/plugin-hyperscape/src/events/handlers.ts
+   
+   // Old
+   service.onGameEvent("PLAYER_DIED", async (data: unknown) => {
+     await storeCombatMemory(runtime, "Player died in combat", data, ["combat", "death"]);
+   });
+   
+   // New
+   service.onGameEvent("ENTITY_DEATH", async (data: unknown) => {
+     const eventData = data as { entityType?: string };
+     if (eventData.entityType === "player") {
+       await storeCombatMemory(runtime, "Player died in combat", data, ["combat", "death"]);
+     }
+   });
+   ```
+
+3. **Update event type unions**:
+   ```typescript
+   // Remove PLAYER_DIED from custom event type unions
+   // Add ENTITY_DEATH and PLAYER_SET_DEAD
+   
+   export type EventType =
+     | "PLAYER_JOINED"
+     | "PLAYER_LEFT"
+     | "ENTITY_DEATH"      // NEW
+     | "PLAYER_SET_DEAD"   // NEW
+     // | "PLAYER_DIED"    // REMOVED (deprecated)
+     | ...
+   ```
+
+#### Security Improvements
+
+**Input Sanitization** (`sanitizeKilledBy`):
+- Unicode NFKC normalization (prevents homograph attacks like Cyrillic 'а' vs Latin 'a')
+- Zero-width character stripping (U+200B-U+200D, U+FEFF)
+- BiDi override removal (U+202A-U+202E)
+- Control character removal (0x00-0x1F, 0x7F)
+- HTML character filtering (`<>'\"&`)
+- 64-character length limit
+
+**Duel Escape Prevention**:
+```typescript
+// Defense-in-depth: block respawn during active duels in TWO locations
+
+// 1. handleRespawnRequest (client-initiated respawn button)
+const duelSystem = this.world.getSystem?.("duel");
+if (duelSystem?.isPlayerInActiveDuel?.(data.playerId)) {
+  this.logger.warn("Blocked respawn request during active duel", { playerId: data.playerId });
+  return;
+}
+
+// 2. initiateRespawn (tick-based respawn)
+if (duelSystem?.isPlayerInActiveDuel?.(playerId)) {
+  this.logger.warn("Blocked initiateRespawn during active duel", { playerId });
+  return;
+}
+```
+
+**Gravestone Privacy**:
+```typescript
+// HeadstoneEntity.getNetworkData() - only broadcast lootItemCount, not full lootItems
+getNetworkData(): Record<string, unknown> {
+  const buf = super.getNetworkData();
+  buf.lootItemCount = this.lootItemCount;  // Number only
+  buf.lootItems = this.lootItems;          // Full array (sent when dirty)
+  // ... other fields
+  return buf;
+}
+
+// Full loot data sent only to interacting player via corpseLoot packet
+```
+
+**Client-Side Death Processing Blocked**:
+```typescript
+// PlayerDeathSystem._processPlayerDeathInner
+if (!this.world.isServer) {
+  this.logger.warn("Client attempted server-only death processing — blocked", { playerId });
+  return;
+}
+```
+
+#### Bug Fixes
+
+**CombatantEntity Config Initialization**:
+```typescript
+// Old (|| skips valid 0 values)
+this.attackPower = config.combat.attack || this.attackPower;
+this.defense = config.combat.defense || this.defense;
+this.criticalChance = config.combat.criticalChance || this.criticalChance;
+
+// New (?? respects 0 values)
+this.attackPower = config.combat.attack ?? this.attackPower;
+this.defense = config.combat.defense ?? this.defense;
+this.criticalChance = config.combat.criticalChance ?? this.criticalChance;
+```
+
+**CombatantEntity.isDead Method Call**:
+```typescript
+// Old (property reference, always truthy)
+if (wasAlive && this.getHealth() <= 0 && !this.isDead) {
+  this.die();
+}
+
+// New (method call, correct)
+if (wasAlive && this.getHealth() <= 0 && !this.isDead()) {
+  this.die();
+}
+```
+
+**PlayerLocal Death Animation Reset**:
+```typescript
+// Extracted duplicated code into helper method
+private clearDeathAnimationState(): void {
+  const playerWithDying = this as PlayerLocalWithDying;
+  playerWithDying.isDying = false;
+  playerWithDying.data.isDying = false;
+
+  this.data.e = "idle";
+  this.data.emote = "idle";
+  this.emote = "idle";
+  if (this._avatar?.setEmote) {
+    this._avatar.setEmote(Emotes.IDLE);
+  }
+
+  this.data.deathState = undefined;
+  this.data.deathPosition = undefined;
+}
+```
+
+**HeadstoneEntity Cleanup**:
+```typescript
+// Old (unreliable setTimeout)
+if (this.lootItems.length === 0) {
+  setTimeout(() => {
+    const entityManager = this.getEntityManager();
+    if (entityManager) {
+      entityManager.destroyEntity(this.id);
+    }
+  }, 500);
+}
+
+// New (system-driven cleanup)
+if (this.lootItemCount === 0 && !this.despawnScheduled) {
+  this.despawnScheduled = true;
+  this.world.emit(EventType.CORPSE_EMPTY, {
+    corpseId: this.id,
+    playerId: this.headstoneData.playerId,
+  });
+  // Entity destruction handled by PlayerDeathSystem.handleCorpseEmpty()
+  // which destroys via EntityManager → sends entityRemoved to all clients
+}
+```
+
+#### Test Coverage
+
+**1,534 lines of new tests** across two files:
+
+**DeathUtils.test.ts** (502 lines):
+- `sanitizeKilledBy`: XSS prevention, Unicode normalization, injection defense (51 tests)
+- `splitItemsForSafeDeath`: OSRS keep-3 logic, stack handling, value sorting (30 tests)
+- `validatePosition`: NaN/Infinity rejection, world-bounds clamping (10 tests)
+- `isPositionInBounds`: Boundary detection without clamping (7 tests)
+- `isValidPositionNumber`: Finite number validation (3 tests)
+
+**PlayerDeathFlow.test.ts** (1,032 lines):
+- Duel guard blocks respawn during active duels
+- Death processing guard prevents respawn race conditions
+- Tick-based respawn timing and execution
+- Persist retry queue draining
+- Transaction failure recovery (revive in-place)
+- Double-death cooldown guard
+- Kept items returned on respawn
+- Event migration (`PLAYER_DIED` → `PLAYER_SET_DEAD`)
+- `HeadstoneEntity.modify()` network sync logic
+
+#### Impact
+
+- **Players no longer stuck in death state** (SQLite deadlock fixed)
+- **Item duplication exploits eliminated** (atomic operations, network sync, entity cleanup)
+- **OSRS-authentic death mechanics** (keep 3 most valuable items in safe zones)
+- **Robust crash recovery** with death locks and persist retry queue
+- **Clean event architecture** (`ENTITY_DEATH` unifies player/mob death processing)
+- **Comprehensive test coverage** (1,534 lines of tests)
+
+**Files Changed**: 23 files, 2,574 additions, 566 deletions.
+
+**Breaking Changes**:
+- `PLAYER_DIED` event no longer emitted (migrate to `PLAYER_SET_DEAD` or `ENTITY_DEATH`)
+- External plugins listening for `PLAYER_DIED` must update to `ENTITY_DEATH` with `entityType === "player"` filter
+
 ### Dialogue and Skilling Panel Polish (March 26, 2026)
 
 **Change** (PR #1093): Unified skilling panel layouts and redesigned NPC dialogue system with dedicated in-world panels.
