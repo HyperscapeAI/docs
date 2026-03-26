@@ -108,6 +108,107 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Player Death Pipeline Overhaul (March 26, 2026)
+
+**Change** (PR #1094): Complete rewrite of player death system to fix SQLite deadlock, prevent item duplication, and add OSRS-style "keep 3 most valuable items" mechanic.
+
+**Root Cause**: Death transaction called `clearEquipmentAndReturn()` and `clearInventoryImmediate()` which each opened nested DB transactions inside the outer `executeInTransaction()`, causing SQLite to deadlock silently. Players would play the death animation but never respawn.
+
+**Critical Fixes**:
+1. **SQLite Deadlock**: Two-phase clear pattern — in-memory clear inside transaction, DB persist after transaction completes
+2. **Item Duplication**: Gravestone loot items now sync via `HeadstoneEntity.modify()` to prevent stale client-side item lists
+3. **Equipment Duplication**: Atomic `clearEquipmentAndReturn()` prevents race conditions between read and clear
+4. **Death State Softlock**: `deathProcessingInProgress` guard prevents respawn during async death transaction
+5. **Duel Escape Exploit**: Respawn blocked during active duels in both `handleRespawnRequest` and `initiateRespawn`
+
+**New Features**:
+- **OSRS Keep-3**: In safe zones, players keep their 3 most valuable items on death (returned on respawn)
+- **Event Migration**: `PLAYER_DIED` deprecated → use `PLAYER_SET_DEAD` (client UI) or `ENTITY_DEATH` (server processing)
+- **Crash Recovery**: Death locks persist dropped/kept items to DB for server restart recovery
+- **Persist Retry Queue**: Single-retry mechanism for post-transaction DB failures (bounded to 100 entries)
+
+**New Utilities** (`packages/shared/src/systems/shared/combat/DeathUtils.ts`):
+```typescript
+// OSRS keep-3 constant
+export const ITEMS_KEPT_ON_DEATH = 3;
+
+// Gravestone ID prefix for filtering
+export const GRAVESTONE_ID_PREFIX = "gravestone_";
+
+// Input sanitization (XSS, Unicode normalization, BiDi override removal)
+export function sanitizeKilledBy(killedBy: unknown): string
+
+// OSRS-style item splitting (O(n log n) on unique items, no stack expansion)
+export function splitItemsForSafeDeath(
+  allItems: InventoryItem[],
+  keepCount: number,
+): { kept: InventoryItem[]; dropped: InventoryItem[] }
+
+// Position validation and clamping
+export function validatePosition(position: { x: number; y: number; z: number }): { x: number; y: number; z: number } | null
+export function isPositionInBounds(position: { x: number; y: number; z: number }): boolean
+export function isValidPositionNumber(n: number): boolean
+```
+
+**Type Definitions** (`packages/shared/src/systems/shared/combat/DeathTypes.ts`):
+```typescript
+// Extracted interfaces for duck-typed system dependencies
+export interface PlayerSystemLike { ... }
+export interface DatabaseSystemLike { ... }
+export interface EquipmentSystemLike { ... }
+export interface TerrainSystemLike { ... }
+export interface NetworkLike { ... }
+export interface TickSystemLike { ... }
+export interface PlayerEntityLike { ... }
+export interface DeathLocationDataWithHeadstone extends DeathLocationData { ... }
+```
+
+**Death Flow Architecture**:
+1. **PlayerSystem.handleDeath**: Sets entity death state (`deathState = DYING`, `emote = "death"`), emits `PLAYER_SET_DEAD` (immediate client feedback), then emits `ENTITY_DEATH`
+2. **PlayerDeathSystem.handlePlayerDeath**: Processes `ENTITY_DEATH`, runs death transaction (clear inventory/equipment, create death lock, spawn gravestone), schedules tick-based respawn
+3. **Tick-Based Respawn**: `processPendingRespawns()` polls all players in `DYING` state, respawns when `currentTick >= respawnTick`
+4. **Kept Items Return**: On respawn, `itemsKeptOnDeath` Map is checked, items added back via `InventorySystem.addItemDirect()`
+
+**Event Migration**:
+- **DEPRECATED**: `PLAYER_DIED` (marked `@deprecated` in `event-types.ts`, no longer emitted)
+- **NEW**: `ENTITY_DEATH` with `{ entityId, entityType, killedBy, deathPosition }` for server-side death processing
+- **CANONICAL**: `PLAYER_SET_DEAD` with `{ playerId, isDead, deathPosition }` for client death UI state
+
+**Crash Recovery**:
+- Death locks persist `items` (dropped to gravestone) and `keptItems` (returned on respawn) to DB
+- `onPlayerReconnect()` blocks inventory load when active death lock exists
+- `recoverUnrecoveredDeaths()` on server startup handles unprocessed deaths from crashes
+- Persist retry queue handles transient DB failures with `AUDIT_LOG` events for ops alerting
+
+**Security Improvements**:
+- `sanitizeKilledBy()`: Unicode NFKC normalization, zero-width character stripping, BiDi override removal, HTML character filtering, 64-char limit
+- Duel escape prevention: Respawn blocked during active duels (defense-in-depth in two locations)
+- Client-side death processing blocked: `!this.world.isServer` guard prevents client-triggered death transactions
+- Gravestone privacy: `lootItems` not broadcast to all clients (only `lootItemCount` sent, full loot via `corpseLoot` packet on interaction)
+
+**Bug Fixes**:
+- `CombatantEntity`: `||` → `??` for config values (0 is now respected for `attackPower`, `defense`, `criticalChance`, etc.)
+- `CombatantEntity.isDead`: Fixed method call (was property reference, always truthy)
+- `PlayerLocal`: Extracted `clearDeathAnimationState()` to eliminate duplicated death→idle reset code
+- `HeadstoneEntity`: Entity destruction now handled by `PlayerDeathSystem.handleCorpseEmpty()` via `EntityManager` (was unreliable `setTimeout`)
+
+**Test Coverage**: 1,534 lines of new tests
+- `DeathUtils.test.ts` (502 lines): Unit tests for sanitization, keep-3 logic, position validation, stack splitting edge cases
+- `PlayerDeathFlow.test.ts` (1,032 lines): Integration tests for death guards, transaction failure recovery, tick-based respawn, persist retry queue
+
+**Impact**:
+- Players no longer stuck in death state (SQLite deadlock fixed)
+- Item duplication exploits eliminated (atomic operations, network sync, entity cleanup)
+- OSRS-authentic death mechanics (keep 3 most valuable items in safe zones)
+- Robust crash recovery with death locks and persist retry queue
+- Clean event architecture (`ENTITY_DEATH` unifies player/mob death processing)
+
+**Files Changed**: 23 files, 2,574 additions, 566 deletions.
+
+**Breaking Changes**:
+- `PLAYER_DIED` event no longer emitted (migrate to `PLAYER_SET_DEAD` or `ENTITY_DEATH`)
+- External plugins listening for `PLAYER_DIED` must update to `ENTITY_DEATH` with `entityType === "player"` filter
+
 ### Dialogue and Skilling Panel Polish (March 26, 2026)
 
 **Change** (PR #1093): Unified skilling panel layouts and redesigned NPC dialogue system with dedicated in-world panels.
