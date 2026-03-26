@@ -108,6 +108,18 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Game UI Tab Arrow Key Capture Fix (March 26, 2026)
+
+**Change** (PR #1092): Fixed arrow keys being consumed by in-game panel tabs, preventing camera controls from working.
+
+**Problem**: When a combined panel tab retained focus, pressing an arrow key would switch tabs instead of moving the camera.
+
+**Fix**: Added `reserveArrowKeys` prop to disable arrow key consumption for game windows while preserving tab navigation for non-game UI.
+
+**Impact**: Arrow keys now control camera movement even when panel tabs have focus. Enter/Space still activate tabs for keyboard accessibility.
+
+**Files Changed**: 9 files, 392 additions, 4 deletions.
+
 ### Missing Packet Handlers Fix (March 26, 2026)
 
 **Change** (PR #1091): Added 8 missing server→client packet handlers to eliminate console errors.
