@@ -4681,6 +4681,109 @@ idl.address  // ✅ Properly typed
 - `packages/duel-oracle-solana/src/generated/fightOracleTypes.ts`
 - `packages/duel-oracle-solana/src/generated/fight_oracle.ts`
 
+### Player Death System Issues
+
+**Symptom**: Players stuck in death state, never respawn
+
+**Possible Causes** (as of March 26, 2026):
+1. **SQLite Deadlock** (FIXED in PR #1094): Nested DB transactions inside death transaction
+2. **Death Processing Guard**: Player stuck with `deathProcessingInProgress` flag set
+3. **Missing Respawn Tick**: `respawnTick` field not set on player entity
+4. **Duel System Block**: Player in active duel (respawn intentionally blocked)
+
+**Diagnostic Steps**:
+```typescript
+// Check player death state
+const player = world.entities.get(playerId);
+console.log(player.data.deathState);  // Should be DeathState.DYING (2)
+console.log(player.data.respawnTick); // Should be a future tick number
+
+// Check death lock
+const deathLock = await deathStateManager.getDeathLock(playerId);
+console.log(deathLock);  // Should exist if player died
+
+// Check duel system
+const duelSystem = world.getSystem("duel");
+const inDuel = duelSystem?.isPlayerInActiveDuel?.(playerId);
+console.log(inDuel);  // Should be false for normal deaths
+```
+
+**Fix**:
+- **If stuck in DYING state**: Check server logs for transaction errors
+- **If respawnTick missing**: Verify `TickSystem` is initialized and `getCurrentTick()` returns valid number
+- **If in duel**: Wait for duel to complete (respawn is intentionally blocked)
+- **If death lock exists but player alive**: Run `await deathStateManager.clearDeathLock(playerId)`
+
+**Symptom**: Item duplication after death
+
+**Possible Causes** (as of March 26, 2026):
+1. **Stale Gravestone Items** (FIXED in PR #1094): Client-side gravestone not syncing loot items
+2. **Post-Transaction Persist Failure**: Equipment/inventory DB persist failed after transaction
+3. **Reconnect During Death**: Player reconnected before death processing completed
+
+**Diagnostic Steps**:
+```bash
+# Check server logs for DEATH_PERSIST_DESYNC errors
+grep "DEATH_PERSIST_DESYNC" /root/.pm2/logs/hyperscape-*.log
+
+# Check for AUDIT_LOG events
+grep "AUDIT_LOG.*DEATH" /root/.pm2/logs/hyperscape-*.log
+
+# Check persist retry queue
+# (requires adding debug log to PlayerDeathSystem.processPersistRetries)
+```
+
+**Fix**:
+- **If DEATH_PERSIST_DESYNC in logs**: Persist retry queue handled it automatically (check for success log)
+- **If AUDIT_LOG with failure**: Manual DB reconciliation may be needed (check inventory/equipment tables)
+- **If gravestone shows old items**: Ensure `HeadstoneEntity.modify()` is being called on network updates
+
+**Symptom**: Kept items not returned on respawn
+
+**Possible Causes** (as of March 26, 2026):
+1. **Server Crash**: In-memory `itemsKeptOnDeath` Map lost (crash recovery uses death lock DB)
+2. **Death Lock Missing keptItems**: Death lock created before keep-3 feature was added
+3. **InventorySystem Unavailable**: `addItemDirect` failed silently
+
+**Diagnostic Steps**:
+```typescript
+// Check in-memory kept items
+const keptItems = playerDeathSystem.itemsKeptOnDeath.get(playerId);
+console.log(keptItems);  // Should be array of 3 items (or fewer)
+
+// Check death lock keptItems field
+const deathLock = await deathStateManager.getDeathLock(playerId);
+console.log(deathLock.keptItems);  // Should match in-memory
+
+// Check server logs for addItemDirect errors
+grep "Failed to return kept item" /root/.pm2/logs/hyperscape-*.log
+```
+
+**Fix**:
+- **If in-memory missing but DB has keptItems**: Crash recovery path should restore them (check logs)
+- **If both missing**: Death occurred before keep-3 feature (expected, no items to return)
+- **If addItemDirect errors**: Check inventory system initialization and DB connection
+
+**Symptom**: "No handler for packet" errors for skill completion
+
+**Cause** (FIXED in PR #1091): Missing packet handlers in `ClientNetwork`
+
+**Fix**: Ensure you're running latest code with all 8 packet handlers:
+- `onFletchingComplete`
+- `onCookingComplete`
+- `onSmeltingComplete`
+- `onSmithingComplete`
+- `onCraftingComplete`
+- `onTanningComplete`
+- `onCombatEnded`
+- `onQuestStarted`
+
+**Verification**:
+```bash
+# Check ClientNetwork.ts has all handlers
+grep "onFletchingComplete\|onCookingComplete\|onSmeltingComplete" packages/shared/src/systems/client/ClientNetwork.ts
+```
+
 ## Additional Resources
 
 ### Core Documentation
