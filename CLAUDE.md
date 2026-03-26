@@ -1537,7 +1537,7 @@ onClickCapture={(e) => {
 
 ### Missing Packet Handlers Fix (March 26, 2026)
 
-**Change** (PR #1091): Added 8 missing server→client packet handlers in `ClientNetwork`.
+**Change** (PR #1091): Added 8 missing server→client packet handlers in `ClientNetwork` to eliminate console errors and enable UI event reactions.
 
 **Problem**: Server was sending packets via event-bridge that the client had no handler for, causing "No handler for packet" console errors. These packets were being queued but never processed, leading to UI systems missing important events.
 
