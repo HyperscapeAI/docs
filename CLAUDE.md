@@ -727,6 +727,861 @@ Remove `onReady` handler after worker init resolves/times out:
 
 ## Recent Major Features (March 2026)
 
+### UI Panel Modernization (March 25-26, 2026)
+
+**Change** (PR #1088, PR #1089, PR #1087): Comprehensive UI panel redesign with unified layout system, optimistic updates, and cross-player data leak fixes.
+
+#### Combat Panel Heraldic Shield Redesign
+
+**Change**: Replaced vertical combat style list with horizontal heraldic shield banners featuring SVG shields, protruding icons, theme gradients, and style-colored tints.
+
+**Implementation** (`packages/client/src/game/panels/CombatPanel.tsx`):
+```typescript
+// Heraldic shield SVG with theme-derived gradients
+const SHIELD_OUTER = "M 5 0 L 95 0 Q 100 0 100 5 L 100 82 Q 100 102 50 128 Q 0 102 0 82 L 0 5 Q 0 0 5 0 Z";
+const SHIELD_INNER = "M 8 3 L 92 3 Q 97 3 97 7 L 97 80 Q 97 99 50 123 Q 3 99 3 80 L 3 7 Q 3 3 8 3 Z";
+
+// Banner component with filled game-style icons
+const CombatStyleBanner = ({ style, isActive, disabled, onClick }) => (
+  <div style={{ flex: "0 0 calc((100% - 3 * (var(--banner-gap))) / 4)" }}>
+    <button onClick={onClick}>
+      <svg viewBox="0 0 100 130">
+        {/* Base gradient */}
+        <linearGradient id={baseGradId}>
+          <stop offset="0%" stopColor={isActive ? bgLight : bgMid} />
+          <stop offset="50%" stopColor={isActive ? bgMid : bgDark} />
+          <stop offset="100%" stopColor={bgDark} />
+        </linearGradient>
+        
+        {/* Active color tint overlay */}
+        {isActive && (
+          <linearGradient id={tintGradId}>
+            <stop offset="0%" stopColor={styleInfo.color} stopOpacity={0.28} />
+            <stop offset="55%" stopColor={styleInfo.color} stopOpacity={0.1} />
+          </linearGradient>
+        )}
+        
+        {/* Shield shape with gradients */}
+        <path d={SHIELD_OUTER} fill={`url(#${baseGradId})`} />
+        {isActive && <path d={SHIELD_OUTER} fill={`url(#${tintGradId})`} />}
+        <path d={SHIELD_OUTER} stroke={isActive ? styleInfo.color : borderClr} />
+      </svg>
+      
+      {/* Protruding icon at top of shield */}
+      <div style={{ position: "absolute", top: 0, transform: "translate(-50%, -50%)" }}>
+        <BannerStyleIcon style={styleInfo.id} color={isActive ? styleInfo.color : accentGold} />
+      </div>
+      
+      {/* Style name and XP bonus */}
+      <div style={{ paddingTop: "16px" }}>
+        <span>{styleInfo.label}</span>
+        <span>{shortXp}</span>
+      </div>
+    </button>
+  </div>
+);
+```
+
+**Banner Style Icons**: Filled geometric icons for combat styles (accurate = concentric circles, aggressive = double arrows, defensive = shield, controlled = crosshair, rapid = lightning bolt, longrange = arrow, autocast = sparkle).
+
+**Impact**: 
+- More immersive fantasy UI matching OSRS/RS3 aesthetic
+- Instant visual feedback with optimistic updates
+- Horizontal layout fits more styles in compact space
+- Theme-derived gradients ensure consistency across themes
+
+#### Equipment Panel Paperdoll Portrait
+
+**Change**: Added live 3D character preview with equipped gear in equipment panel center.
+
+**Implementation** (`packages/client/src/game/panels/equipment/EquipmentPaperdollPortrait.tsx`):
+```typescript
+export const EquipmentPaperdollPortrait = React.memo(function EquipmentPaperdollPortrait({
+  world,
+  equipment,
+  equipmentSignature,
+  compact,
+}) {
+  // Create dedicated WebGPU viewport for portrait
+  const viewport = await createAvatarPreviewViewport({
+    container,
+    canvas,
+    cameraPosition: new THREE.Vector3(0, 1.32, 2.95),
+    adjustCameraDepth: false,
+  });
+  
+  // Load player's VRM avatar
+  const avatarNode = loadedAvatar.toNodes({ scene: viewport.scene, loader: world.loader }).get("avatar");
+  
+  // Attach equipment visuals to VRM
+  await loadPreviewEquipmentVisuals({
+    world,
+    equipment,
+    vrm,
+    avatarRoot: avatarScene,
+    visuals: previewVisualsRef.current,
+  });
+  
+  // Interactive rotation and zoom
+  onPointerMove={(e) => {
+    const deltaX = e.clientX - lastMousePosRef.current.x;
+    targetRotationRef.current += deltaX * 0.01;
+  }}
+  onWheel={(e) => {
+    const zoomDelta = e.deltaY > 0 ? 0.1 : -0.1;
+    targetZoomRef.current = Math.max(0.4, Math.min(1.15, targetZoomRef.current + zoomDelta));
+  }}
+});
+```
+
+**Equipment Visual Helpers** (`packages/shared/src/systems/client/EquipmentVisualHelpers.ts`):
+Extracted shared logic from `EquipmentVisualSystem` for reuse in portrait:
+```typescript
+// Resolve equipment visual data (attachment points, model paths)
+export function resolveEquipmentVisualData(params: { itemId: string }): EquipmentVisualModelData | null
+
+// Resolve primary and fallback URLs for equipment models
+export function resolveEquipmentVisualUrls(params: {
+  assetsUrl: string;
+  itemId: string;
+  slot: string;
+  itemData: EquipmentVisualModelData | null;
+}): EquipmentVisualUrlResolution | null
+
+// Attach equipment model to VRM skeleton
+export function attachEquipmentVisualToVRM(params: {
+  slot: string;
+  modelRoot: THREE.Object3D;
+  visuals: EquipmentVisualStore;
+  vrm: VRM;
+  avatarRoot: THREE.Object3D;
+}): void
+
+// Remove equipment visual from VRM
+export function removeEquipmentVisual(visuals: EquipmentVisualStore, slot: string): void
+```
+
+**Avatar Preview Viewport** (`packages/client/src/game/character/avatarPreviewViewport.ts`):
+Reusable WebGPU viewport factory for character previews:
+```typescript
+export async function createAvatarPreviewViewport(options: {
+  container: HTMLDivElement;
+  canvas: HTMLCanvasElement;
+  cameraPosition?: THREE.Vector3;
+  fov?: number;
+  adjustCameraDepth?: boolean;
+}): Promise<AvatarPreviewViewport> {
+  const renderer = await createRenderer({ canvas, alpha: true, antialias: true });
+  
+  return {
+    scene,
+    camera,
+    renderer,
+    resize: () => { /* ... */ },
+    start: (onFrame?: (delta: number) => void) => { /* ... */ },
+    stop: () => { /* ... */ },
+    dispose: () => { /* ... */ },
+  };
+}
+```
+
+**Paperdoll Grid Layout**:
+```typescript
+// 5-column grid with portrait in center, slots around edges
+gridTemplateColumns: `${slotWidth}px ${slotWidth}px 1fr ${slotWidth}px ${slotWidth}px`,
+gridTemplateRows: `repeat(5, ${slotHeight}px)`,
+gridTemplateAreas: `
+  "head . . . cape"
+  "body . . . amulet"
+  "legs . . . ring"
+  "boots . . . gloves"
+  "ammo weapon . shield ."
+`,
+```
+
+**Impact**:
+- Live 3D preview of equipped gear
+- Interactive rotation (drag) and zoom (scroll)
+- Shared equipment visual logic between system and portrait
+- Fallback to stylized silhouette when avatar unavailable
+- Reusable viewport factory for other character previews
+
+#### Unified Panel Layout Constants
+
+**Change**: Extracted shared panel dimensions into `panelLayout.ts` for consistency across all icon-grid panels.
+
+**Implementation** (`packages/client/src/constants/panelLayout.ts`):
+```typescript
+/**
+ * Single source of truth for icon-grid panel dimensions used by:
+ *   - InventoryPanel   (4px outer padding, 4px grid gap, 3px mobile)
+ *   - EquipmentPanel   (4px outer padding, 8px grid gap, 3px mobile)
+ *   - PrayerPanel
+ *   - SpellsPanel
+ *   - SkillsPanel
+ */
+
+// Desktop
+export const PANEL_PADDING = 4;           // Outer panel wrapper
+export const PANEL_GRID_GAP = 4;          // Gap between icons
+export const PANEL_GRID_PADDING = 4;      // Inner grid inset
+export const PANEL_ICON_SIZE = 36;        // Icon/slot size
+
+// Mobile
+export const PANEL_MOBILE_PADDING = 3;
+export const PANEL_MOBILE_ICON_SIZE = 48; // Touch target size
+export const PANEL_MOBILE_GRID_GAP = 4;
+
+// Border radius
+export const PANEL_SLOT_RADIUS = 4;       // Square aesthetic
+```
+
+**Usage**:
+```typescript
+// PrayerPanel.tsx
+import { PANEL_ICON_SIZE, PANEL_GRID_GAP, PANEL_PADDING } from "@/constants/panelLayout";
+
+const PRAYER_ICON_SIZE = PANEL_ICON_SIZE;  // 36px
+const PRAYER_GAP = PANEL_GRID_GAP;         // 4px
+```
+
+**Impact**:
+- Consistent spacing across all panels (Inventory, Equipment, Prayer, Spells, Skills)
+- Single place to adjust panel dimensions
+- Eliminates scattered magic numbers
+- Mobile and desktop variants clearly defined
+
+#### CursorTooltip Component
+
+**Change**: Created reusable portal-based mouse-following tooltip with auto-measurement and viewport-edge flipping.
+
+**Implementation** (`packages/client/src/ui/core/tooltip/CursorTooltip.tsx`):
+```typescript
+export const CursorTooltip = React.memo(function CursorTooltip({
+  visible,
+  position,
+  estimatedSize = { width: 140, height: 60 },
+  cursorOffset = 4,
+  children,
+  style,
+}) {
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  
+  // Measure actual rendered dimensions for precise alignment
+  const actualSize = useTooltipSize(visible, tooltipRef, estimatedSize);
+  
+  // Calculate safe bounding-box positioning with edge flipping
+  const { left, top } = calculateCursorTooltipPosition(
+    position,
+    actualSize,
+    cursorOffset,
+  );
+  
+  return createPortal(
+    <div
+      ref={tooltipRef}
+      style={{
+        position: "fixed",
+        left,
+        top,
+        background: `linear-gradient(180deg, ${theme.colors.background.primary}, ${theme.colors.background.secondary})`,
+        border: `1px solid ${theme.colors.border.hover}`,
+        borderRadius: "4px",
+        padding: "8px 10px",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+        ...style,
+      }}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+});
+```
+
+**Replaced Patterns**:
+```typescript
+// Old (duplicated across 5+ panels)
+const tooltipRef = useRef<HTMLDivElement>(null);
+const tooltipSize = useTooltipSize(hoveredItem, tooltipRef, { width: 200, height: 100 });
+const { left, top } = calculateCursorTooltipPosition(mousePos, tooltipSize, 4, 8);
+return createPortal(
+  <div ref={tooltipRef} style={{ position: "fixed", left, top, ... }}>
+    {/* tooltip content */}
+  </div>,
+  document.body,
+);
+
+// New (one line)
+<CursorTooltip visible={!!hoveredItem} position={mousePos} estimatedSize={{ width: 200, height: 100 }}>
+  {/* tooltip content */}
+</CursorTooltip>
+```
+
+**Panels Updated**:
+- `InventoryPanel.tsx` - Item tooltips
+- `PrayerPanel.tsx` - Prayer tooltips
+- `SpellsPanel.tsx` - Spell tooltips
+- `SkillsPanel.tsx` - Skill tooltips
+- `EquipmentPanel.tsx` - Equipment tooltips
+
+**Impact**:
+- Eliminates ~50 lines of duplicated tooltip code per panel
+- Consistent tooltip behavior across all panels
+- Auto-measurement prevents clipping
+- Viewport-edge flipping for better UX
+
+#### Tab Persistence System
+
+**Change**: Render all window tabs simultaneously with `display:none/flex` toggling instead of unmounting inactive tabs.
+
+**Problem**: Switching tabs would unmount the inactive panel, losing scroll position and component state.
+
+**Solution** (`packages/client/src/game/interface/InterfacePanels.tsx`):
+```typescript
+// Old (unmounts inactive tabs)
+if (typeof activeTab.content === "string") {
+  const panelContent = renderPanel(activeTab.content, undefined, windowId);
+  return <div>{panelContent}</div>;
+}
+
+// New (mounts all tabs, toggles visibility)
+return (
+  <div style={{ position: "relative", flex: 1 }}>
+    {tabs.map((tab, idx) => {
+      const isActive = idx === activeTabIndex;
+      const panelContent = typeof tab.content === "string"
+        ? renderPanel(tab.content, undefined, windowId)
+        : tab.content;
+      
+      return (
+        <div
+          key={tab.id || idx}
+          style={{
+            display: isActive ? "flex" : "none",
+            position: "absolute",
+            inset: 0,
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+          {panelContent}
+        </div>
+      );
+    })}
+  </div>
+);
+```
+
+**Impact**:
+- Scroll position preserved across tab switches
+- Component state (expanded sections, filters) retained
+- Smoother tab switching experience
+- Matches modern browser tab behavior
+
+#### Spells Panel Added to Default Layout
+
+**Change**: Added Spells tab alongside Prayer in the default right-column window.
+
+**Implementation**:
+```typescript
+// DefaultLayoutFactory.ts
+{
+  id: "spells",
+  label: "Spells",
+  icon: "🪄",
+  content: "spells",
+  closeable: true,
+}
+
+// windowStore.ts - Schema migration v17
+const SCHEMA_VERSION = 17;  // Bumped from 16
+
+migrations[17] = () => {
+  // Clear all windows to include spellbook in default layout
+  return new Map<string, WindowState>();
+};
+```
+
+**Impact**:
+- Spells panel now visible by default for new users
+- Existing users get spells tab on next layout reset
+- Consistent with Prayer panel positioning
+
+#### Optimistic UI Updates
+
+**Change**: Combat style and auto-retaliate toggles now update UI instantly before server confirmation.
+
+**Implementation** (`packages/client/src/game/panels/CombatPanel.tsx`):
+```typescript
+// Local caches for optimistic updates
+const combatStyleCache = new Map<string, string>();
+const autoRetaliateCache = new Map<string, boolean>();
+
+const changeStyle = (next: string) => {
+  // Optimistic: update UI instantly (OSRS has zero visible delay)
+  combatStyleCache.set(playerId, next);
+  setStyle(next);
+
+  // Send to server — server confirms via attackStyleChanged packet,
+  // which will overwrite our optimistic value with the authoritative one
+  actions.actionMethods.changeAttackStyle(playerId, next);
+};
+
+const toggleAutoRetaliate = () => {
+  const newValue = !autoRetaliate;
+
+  // Optimistic: update UI instantly
+  autoRetaliateCache.set(playerId, newValue);
+  setAutoRetaliate(newValue);
+
+  // Send to server — server confirms via autoRetaliateChanged packet
+  actions.actionMethods.setAutoRetaliate(playerId, newValue);
+};
+```
+
+**Inventory Optimistic Removal** (`packages/shared/src/systems/client/ClientNetwork.ts`):
+```typescript
+/**
+ * Optimistically remove an item from the inventory cache and emit an
+ * immediate UI update. Automatically snapshots before mutation for
+ * rollback if the server doesn't confirm within 5 seconds.
+ */
+applyOptimisticRemoval(playerId: string, slot: number, quantity: number): void {
+  const cached = this.lastInventoryByPlayerId[playerId];
+  if (!cached) return;
+
+  const itemIndex = cached.items.findIndex((i) => i.slot === slot);
+  if (itemIndex === -1) return;
+
+  // Snapshot before mutation for rollback on timeout
+  const snapshot = this.snapshotInventory(playerId);
+  if (snapshot) this.inventoryTracker.add(snapshot);
+  this.ensureInventoryPruner();
+
+  const item = cached.items[itemIndex];
+  if (item.quantity <= quantity) {
+    cached.items.splice(itemIndex, 1);
+  } else {
+    item.quantity -= quantity;
+  }
+
+  this.world.emit(EventType.INVENTORY_UPDATED, { ...cached });
+}
+```
+
+**Rollback System**:
+- **Timeout**: 5 seconds (if server doesn't confirm)
+- **Pruner**: Runs every 1 second to check for stale actions
+- **Cleanup**: Clears on `INVENTORY_UPDATED` (server confirmation) or disconnect
+- **Shared Tracker**: Single `PendingActionTracker` in `ClientNetwork` used by all callers
+
+**Impact**:
+- Zero perceived latency for combat controls (matches OSRS)
+- Instant feedback for eat/drop/bury/firemaking actions
+- Server remains authoritative (can reject invalid actions)
+- Automatic rollback if server doesn't respond within 5s
+
+#### Equipment Panel Cross-Player Leak Fix
+
+**Problem**: Equipment panel was displaying other players' gear because `equipmentUpdated` broadcasts hit all players without filtering. When an AI agent equipped a weapon, all players' equipment panels would show that weapon.
+
+**Root Cause**: `usePlayerData.ts` had no `playerId` filter on equipment updates.
+
+**Fix** (`packages/client/src/hooks/usePlayerData.ts`):
+```typescript
+// Old (no filter - shows everyone's equipment)
+if (update.component === "equipment" && isObject(update.data)) {
+  const equipmentPayload = update.data as { equipment?: RawEquipmentData };
+  setEquipment(processRawEquipment(equipmentPayload.equipment));
+}
+
+// New (filtered - shows only local player's equipment)
+const equipmentPayload = update.data as {
+  playerId?: string;
+  equipment?: RawEquipmentData;
+};
+
+// Only update if this equipment belongs to the local player
+if (playerId && equipmentPayload.playerId && equipmentPayload.playerId !== playerId) {
+  return;
+}
+
+const nextEquipment = processRawEquipment(equipmentPayload.equipment);
+setEquipment((prev) => areEquipmentItemsEqual(prev, nextEquipment) ? prev : nextEquipment);
+```
+
+**Server Changes** (`packages/shared/src/systems/client/ClientNetwork.ts`):
+```typescript
+// Include playerId in equipment broadcasts
+this.world.emit(EventType.UI_UPDATE, {
+  component: "equipment",
+  data: {
+    playerId: data.playerId,  // NEW: Include playerId for filtering
+    equipment: data.equipment,
+  },
+});
+```
+
+**Impact**: Equipment panel now shows only the local player's gear, eliminates cross-player data leak.
+
+#### Combat Damage Deduplication
+
+**Problem**: `sendToNearby` publishes to 9 region topics (player's region + 8 adjacent), causing players near region boundaries to receive the same damage packet 2-3 times, resulting in duplicate damage splats.
+
+**Solution** (`packages/shared/src/systems/client/ClientNetwork.ts`):
+```typescript
+private readonly _recentDamageKeys = new Map<string, number>();
+
+onCombatDamageDealt = (data: {
+  attackerId: string;
+  targetId: string;
+  damage: number;
+  tick?: number;
+}) => {
+  // Include server tick so same-damage rapid hits on different ticks are NOT dropped
+  // Use | separator (not -) to avoid collisions if IDs contain hyphens
+  // If tick is missing (rolling deploy), fall back to ms timestamp rounded to 125ms
+  const tick = data.tick ?? Math.floor(performance.now() / 125);
+  const dedupKey = `${data.attackerId}|${data.targetId}|${data.damage}|${tick}`;
+  
+  if (this._recentDamageKeys.has(dedupKey)) {
+    return; // Already processed this damage event
+  }
+
+  // Periodic sweep: clear stale entries (>500ms old) when map exceeds threshold
+  const now = performance.now();
+  if (this._recentDamageKeys.size > 150) {
+    // Soft sweep: remove entries older than 500ms
+    for (const [key, ts] of this._recentDamageKeys) {
+      if (now - ts > 500) this._recentDamageKeys.delete(key);
+    }
+    
+    // Hard cap: trim to 100 if sweep didn't clear enough
+    if (this._recentDamageKeys.size > 200) {
+      const excess = this._recentDamageKeys.size - 100;
+      let dropped = 0;
+      for (const key of this._recentDamageKeys.keys()) {
+        this._recentDamageKeys.delete(key);
+        if (++dropped >= excess) break;
+      }
+    }
+  }
+
+  this._recentDamageKeys.set(dedupKey, now);
+  this.world.emit(EventType.COMBAT_DAMAGE_DEALT, data);
+};
+```
+
+**Server Changes** (`packages/server/src/systems/ServerNetwork/event-bridge.ts`):
+```typescript
+// Include server tick in damage broadcasts
+this.broadcast.sendToNearby("combatDamageDealt", pos, {
+  attackerId: data.attackerId,
+  targetId: data.targetId,
+  damage: data.damage,
+  targetType: data.targetType,
+  position: { x: pos.x, y: pos.y, z: pos.z },
+  tick: currentTick,  // NEW: Include server tick for dedup
+});
+```
+
+**Dedup Strategy**:
+- **Soft Sweep**: Clears entries >500ms old when map exceeds 150 entries
+- **Hard Cap**: Trims to 100 entries if map exceeds 200 (prevents unbounded growth)
+- **Tick-Based Keys**: Distinguishes same-damage rapid hits on different ticks
+- **Rolling Deploy Fallback**: Uses `performance.now() / 125` when server tick field is missing
+
+**Impact**: Eliminates duplicate damage splats near region boundaries, bounded memory usage.
+
+#### Attack Style System Cleanup
+
+**Change**: Removed dead cooldown infrastructure that was hardcoded to 0ms.
+
+**Removed**:
+- `STYLE_CHANGE_COOLDOWN = 0` constant
+- `styleChangeTimers` Map and timer cleanup logic
+- `combatStyleHistory` array (write-only, never displayed)
+- `lastStyleChange` timestamp tracking
+- Dead API methods: `canPlayerChangeStyle()`, `getRemainingStyleCooldown()`, `getPlayerStyleHistory()`
+
+**Files Changed**:
+- `packages/shared/src/systems/shared/character/PlayerSystem.ts` - Removed cooldown logic (~150 lines)
+- `packages/shared/src/systems/shared/infrastructure/SystemLoader.ts` - Removed API bindings
+- `packages/shared/src/types/entities/player-types.ts` - Removed `PlayerAttackStyleState` fields
+
+**Impact**: Cleaner codebase, simpler attack style system, no functional changes (cooldown was already 0ms).
+
+#### Auto-Initialization for Event Ordering Races
+
+**Change**: Added auto-initialization guards to handle cases where UI events arrive before `onPlayerRegister`.
+
+**Attack Style Auto-Init** (`packages/shared/src/systems/shared/character/PlayerSystem.ts`):
+```typescript
+let playerState = this.playerAttackStyles.get(playerId);
+if (!playerState) {
+  // Auto-initialize if player exists but wasn't registered yet (event ordering)
+  if (this.isKnownPlayer(playerId)) {
+    const weaponType = this.getPlayerWeaponType(playerId);
+    const defaultStyle = getDefaultStyleForWeapon(weaponType);
+    this.logger.debug(
+      `Auto-initializing attack style for ${playerId} (event ordering race), default: ${defaultStyle}`
+    );
+    this.initializePlayerAttackStyle(playerId, defaultStyle);
+    playerState = this.playerAttackStyles.get(playerId);
+  }
+}
+```
+
+**Equipment Idempotency**:
+```typescript
+// EquipmentSystem.ts - initializePlayerEquipment
+if (this.playerEquipment.has(playerData.id)) {
+  this.logger.debug(`Equipment already initialized for ${playerData.id}, skipping`);
+  return;
+}
+```
+
+**Reconnection Guard**:
+```typescript
+// EquipmentSystem.ts - PLAYER_JOINED handler
+if (typedData.isReconnect && this.playerEquipment.has(typedData.playerId)) {
+  this.sendEquipmentUpdated(typedData.playerId);
+  this.emitEquipmentChangedForAllSlots(typedData.playerId);
+  return;
+}
+```
+
+**Impact**:
+- Eliminates \"no state for player\" errors from event ordering races
+- Player choices take precedence over DB-saved values during session
+- Reconnection preserves in-session equipment and combat preferences
+
+#### Weapon Change Auto-Style Switching
+
+**Change**: Auto-switch attack style when weapon changes and current style is invalid for new weapon.
+
+**Implementation** (`packages/shared/src/systems/shared/character/PlayerSystem.ts`):
+```typescript
+private handleWeaponChange(playerId: string): void {
+  const playerState = this.playerAttackStyles.get(playerId);
+  if (!playerState) return;
+
+  const weaponType = this.getPlayerWeaponType(playerId);
+  const currentStyle = playerState.selectedStyle as CombatStyleExtended;
+
+  if (!isStyleValidForWeapon(weaponType, currentStyle)) {
+    const newStyle = getDefaultStyleForWeapon(weaponType);
+    this.handleStyleChange({ playerId, newStyle });
+  }
+}
+
+// Subscribe to equipment changes (server-only)
+if (this.world.isServer) {
+  this.subscribe(EventType.PLAYER_EQUIPMENT_CHANGED, (data) => {
+    const eqData = data as { playerId: string; slot: string; itemId: string | null };
+    if (eqData.slot === "weapon") {
+      this.handleWeaponChange(eqData.playerId);
+    }
+  });
+}
+```
+
+**Example**: Switching from staff (autocast) to sword → auto-select \"accurate\" style.
+
+**Impact**: Prevents invalid style errors when weapon changes, OSRS-accurate behavior.
+
+#### Firemaking Optimistic Removal
+
+**Change**: Added optimistic inventory removal for firemaking so logs disappear instantly.
+
+**Implementation** (`packages/shared/src/systems/shared/interaction/InventoryInteractionSystem.ts`):
+```typescript
+// Optimistic removal: remove the logs from the client inventory cache
+// so the UI updates immediately (same pattern as eat/drop/bury in
+// InventoryActionDispatcher). The server's authoritative inventoryUpdated
+// packet will replace this cache within ~100-200ms.
+this.applyOptimisticRemoval(playerId, logsSlot, 1);
+```
+
+**Consolidated Rollback Logic** (`packages/shared/src/systems/client/ClientNetwork.ts`):
+```typescript
+// Single tracker for all optimistic inventory mutations (shared by all callers)
+private inventoryTracker = new PendingActionTracker<InventorySnapshot>(5000);
+private inventoryPrunerInterval: ReturnType<typeof setInterval> | null = null;
+
+// Public API for optimistic mutations
+applyOptimisticRemoval(playerId: string, slot: number, quantity: number): void
+snapshotInventory(playerId: string): InventorySnapshot | null
+```
+
+**Impact**:
+- Logs disappear from inventory immediately when firemaking starts
+- Eliminates duplicate tracker instances (two timers, two listeners)
+- Single source of truth for optimistic inventory mutations
+- Reduced ~70 lines of boilerplate across callers
+
+#### Targeting Mode UI Fixes
+
+**Changes**:
+- **Immediate Clear**: Targeting state clears immediately after target selection (no server round-trip wait)
+- **Hover State**: Removed `isTargetingActive` from slot hover condition to prevent grey flash on all filled slots
+- **System Registration**: Registered `InventoryInteractionSystem` on client for targeting support
+
+**Implementation** (`packages/client/src/game/panels/InventoryPanel.tsx`):
+```typescript
+if (targetingState.active && targetingState.sourceItem) {
+  this.world.emit(EventType.TARGETING_SELECT, {
+    targetType: "inventory_item",
+    targetSlot: slotIndex,
+  });
+  // Clear targeting immediately — action is committed
+  setTargetingState(initialTargetingState);
+}
+
+// DraggableInventorySlot - removed targeting from hover condition
+const slotChrome = useMemo(
+  () => getInteractiveTileStyle(theme, {
+    active: isSourceItem,
+    hovered: !isEmpty,  // Removed: && !isTargetingActive
+    dragging: isDragging,
+    dropTarget: isOver,
+  }),
+  [theme, isSourceItem, isEmpty, isDragging, isOver]
+);
+```
+
+**Impact**: 
+- Targeting mode feels more responsive
+- No stale highlights after target selection
+- No grey flash on all filled slots when entering targeting mode
+
+#### Quest UI Theme Modernization
+
+**Change**: Updated quest log and detail popup to use theme utility functions and panel layout constants.
+
+**Implementation** (`packages/client/src/game/components/quest/QuestLog.tsx`):
+```typescript
+import {
+  getPanelSurfaceStyle,
+  getPanelInsetStyle,
+  getPanelHeaderStyle,
+  getInteractiveTileStyle,
+  getWindowSurfaceStyle,
+  getDecorativeBorderStyle,
+} from "@/ui/theme/themes";
+import {
+  PANEL_PADDING,
+  PANEL_GRID_GAP,
+  PANEL_MOBILE_PADDING,
+  PANEL_SLOT_RADIUS,
+} from "../../../constants/panelLayout";
+
+// Quest list items now use themed interactive tiles
+const tileStyle: CSSProperties = {
+  ...getInteractiveTileStyle(theme, {
+    hovered: isHovered,
+    active: isSelected,
+    radius: PANEL_SLOT_RADIUS,
+  }),
+  borderLeft: `3px solid ${isSelected ? theme.colors.border.active : stateColor}`,
+};
+
+// Category headers use themed inset style
+const headerStyle: CSSProperties = {
+  ...getPanelInsetStyle(theme, { emphasis: "normal", radius: PANEL_SLOT_RADIUS }),
+  borderLeft: `3px solid ${config.color}`,
+};
+```
+
+**Visual Improvements**:
+- Compact pill badges for quest metadata (category, level, state, progress)
+- Inline progress bars with state-colored fills
+- Category icons (crown, scroll, sun, calendar, star)
+- Gold-accented pinned quest section
+- Themed section cards with panel inset styling
+
+**Impact**:
+- Consistent visual language with other game panels
+- Better use of theme colors and spacing constants
+- More compact and information-dense layout
+- Improved mobile responsiveness
+
+#### Panel Data Synchronization Fix
+
+**Change**: Added `panelDataVersion` counter to break through React.memo barriers in `WindowRenderer`/`WindowItem`.
+
+**Problem**: `WindowRenderer` and `WindowItem` are wrapped in `React.memo()`, which blocked prop updates when inventory/equipment/stats changed.
+
+**Solution** (`packages/client/src/game/interface/InterfaceManager.tsx`):
+```typescript
+// Monotonic counter that changes when panel data updates, breaking
+// through React.memo barriers in WindowRenderer/WindowItem without
+// recreating renderPanel (which would re-mount all panels).
+const panelDataVersionRef = useRef(0);
+const panelDataVersion = useMemo(() => {
+  return ++panelDataVersionRef.current;
+}, [inventory, coins, playerStats, equipment]);
+
+// Pass to WindowRenderer
+<WindowRenderer
+  renderPanel={renderPanel}
+  panelDataVersion={panelDataVersion}  // Breaks memo barrier
+/>
+
+// WindowItem - intentionally unused prop breaks React.memo
+const WindowItem = memo(function WindowItem({
+  windowId,
+  isEditMode,
+  windowCombiningEnabled,
+  renderPanel,
+  // Intentionally unused — its presence in props breaks React.memo's
+  // shallow comparison when panel data changes, causing WindowItem to
+  // re-render and call renderPanel with fresh ref-based data.
+  panelDataVersion: _,
+}: WindowItemProps) {
+  // ...
+});
+```
+
+**Impact**:
+- Inventory panels update in real-time when data changes
+- Lightweight counter (number) breaks memo without forcing panel re-mount
+- `renderPanel` stays stable (no unnecessary panel recreation)
+
+#### Starter Equipment Fix
+
+**Change**: Fixed `STARTER_EQUIPMENT` referencing non-existent `bronze_sword` → `bronze_shortsword`.
+
+**Files Changed**:
+- `packages/shared/src/systems/shared/character/InventorySystem.ts`
+- `packages/shared/src/systems/shared/character/PlayerSystem.ts`
+- `packages/shared/src/systems/shared/entities/ItemSpawnerSystem.ts`
+
+**Impact**: New players receive correct starter weapon, eliminates item lookup failures.
+
+#### Event Type Consistency
+
+**Change**: Replaced raw string event names with `EventType` enum constants.
+
+**Implementation** (`packages/shared/src/systems/shared/entities/Entities.ts`):
+```typescript
+// Old (string literals - error-prone)
+this.emitTypedEvent("PLAYER_JOINED", { ... });
+
+// New (typed enum - type-safe)
+this.world.emit(EventType.PLAYER_JOINED, { ... });
+```
+
+**Impact**: Better type safety, prevents typo bugs, improves grep-ability.
+
+**Files Changed**: 
+- PR #1088: 33 files, 4,211 additions, 2,320 deletions
+- PR #1089: 12 files, 250 additions, 194 deletions
+- PR #1087: 9 files, 149 additions, 171 deletions
+
+**Total Impact**: ~4,600 additions, ~2,700 deletions across 54 files.
+
 ### Equipment Panel & Combat UI Fixes (March 25-26, 2026)
 
 **Change** (PR #1089): Fixed cross-player equipment data leak, added optimistic combat UI updates, removed attack style cooldown system, and added combat damage deduplication.
