@@ -727,6 +727,59 @@ Remove `onReady` handler after worker init resolves/times out:
 
 ## Recent Major Features (March 2026)
 
+### Missing Packet Handlers Fix (March 26, 2026)
+
+**Change** (PR #1091): Added 8 missing server→client packet handlers in `ClientNetwork`.
+
+**Problem**: Server was sending packets via event-bridge that the client had no handler for, causing "No handler for packet" console errors. These packets were being queued but never processed, leading to UI systems missing important events.
+
+**Missing Handlers Added**:
+- `onFletchingComplete` - Fletching batch finished notification
+- `onCookingComplete` - Cooking result with burn check
+- `onSmeltingComplete` - Smelting batch finished notification
+- `onSmithingComplete` - Smithing batch finished notification
+- `onCraftingComplete` - Crafting batch finished notification
+- `onTanningComplete` - Tanning batch finished notification
+- `onCombatEnded` - Combat session ended notification
+- `onQuestStarted` - Quest begun notification
+
+**Implementation Pattern**:
+```typescript
+// Each handler forwards packet data to client world event bus
+onCookingComplete = (data: {
+  rawItemId: string;
+  resultItemId: string;
+  wasBurnt: boolean;
+  xpGained: number;
+}) => {
+  this.world.emit(EventType.COOKING_COMPLETE, {
+    playerId: this.world?.entities?.player?.id || "",
+    ...data,
+  });
+};
+```
+
+**Impact**:
+- Eliminates "No handler for packet" console errors
+- UI systems can now react to skill completion events
+- Quest notifications work correctly
+- Combat end events properly trigger UI updates
+
+**Files Changed**: `packages/shared/src/systems/client/ClientNetwork.ts` (81 additions).
+
+### Prayer Login Sync Fix (March 26, 2026)
+
+**Change** (PR #1090): Fixed prayer state synchronization on player login.
+
+**Problem**: Prayer state wasn't properly syncing when players logged in, causing prayer points and active prayers to be out of sync with server state.
+
+**Fix**: Improved prayer state initialization and synchronization flow to ensure prayer data is correctly loaded and sent to client on login.
+
+**Impact**:
+- Prayer points display correctly on login
+- Active prayers sync properly between sessions
+- Eliminates prayer state desync issues
+
 ### UI Panel Modernization (March 25-26, 2026)
 
 **Change** (PR #1088, PR #1089, PR #1087): Comprehensive UI panel redesign with unified layout system, optimistic updates, and cross-player data leak fixes.
