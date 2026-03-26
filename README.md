@@ -318,6 +318,29 @@ npm test -- -u
 
 ## Recent Updates (March 2026)
 
+### Dialogue and Skilling Panel Polish (March 26, 2026)
+
+**Comprehensive UI improvements** (PR #1093) for skilling interfaces and NPC dialogue system.
+
+**Skilling Panel Unification**:
+- Extracted shared components (`SkillingPanelBody`, `SkillingSection`, `SkillingQuantitySelector`) to eliminate ~500 lines of duplicated code
+- Unified visual treatment across Fletching, Cooking, Smelting, Smithing, Crafting, and Tanning panels
+- Consistent spacing, borders, and responsive behavior
+- Reusable quantity selector with preset buttons (1, 5, 10, All, X) and custom input mode
+
+**NPC Dialogue Redesign**:
+- New `DialoguePopupShell` component with proper focus management and Escape key handling
+- Live 3D character portraits using `DialogueCharacterPortrait` component (renders NPC's VRM model)
+- Horizontal layout: portrait on left, dialogue text and responses on right
+- Lighter shell chrome for better readability
+
+**Service Handoff Fix**:
+- Opening bank/store/tanner from dialogue now properly closes the dialogue panel
+- Added `isImmediateHandoffEffect()` check in `DialogueSystem` to detect service panel transitions
+- Prevents orphaned "Click to continue" dialogue steps after service opens
+
+**Files Changed**: 15 files, 1,623 additions, 1,265 deletions.
+
 ### Missing Packet Handlers Fix (March 26, 2026)
 
 **Change** (PR #1091): Added 8 missing server→client packet handlers in `ClientNetwork` to eliminate console errors.
