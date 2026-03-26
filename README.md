@@ -397,19 +397,69 @@ onSmeltingComplete = (data: {
 
 ### Prayer Login Sync Fix (March 26, 2026)
 
-**Change** (PR #1090): Fixed prayer state synchronization on player login.
+**Change** (PR #1090): Fixed prayer state synchronization on player login and reconnection.
 
-**Problem**: Prayer state wasn't properly syncing when players logged in, causing prayer points and active prayers to be out of sync with server state.
+**Problem**: Prayer state wasn't properly syncing when players logged in. The client bootstrap path was overwriting authoritative cached prayer state with local entity fallback values before real prayer data had finished hydrating, causing the HUD and prayer panel to show stale state until the player toggled a prayer.
 
-**Fix**: Improved prayer state initialization and synchronization flow to ensure prayer data is correctly loaded and sent to client on login.
+**Root Cause**: `usePlayerData` hook was unconditionally seeding prayer points from entity data, overwriting the authoritative cache from `lastPrayerStateByPlayerId`.
+
+**Fix**: 
+- Only use entity prayer fallback when both `prayerPoints` and `maxPrayerPoints` are explicitly present and finite
+- Preserve authoritative prayer cache during initial player-data hydration
+- Rerun initial hydration when local player becomes available via `PLAYER_SPAWNED` event
+- Re-emit authoritative `PRAYER_STATE_SYNC` on `PLAYER_JOINED` from `PrayerSystem`
+
+**Implementation** (`packages/client/src/hooks/usePlayerData.ts`):
+```typescript
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === \"number\" && Number.isFinite(value);
+}
+
+const prayerPoints = entityData.data?.prayerPoints;
+const maxPrayerPoints = entityData.data?.maxPrayerPoints;
+const hasExplicitPrayerPoints =
+  isFiniteNumber(prayerPoints) && isFiniteNumber(maxPrayerPoints);
+
+// Only seed entity prayer points when both values are finite
+if (hasExplicitPrayerPoints) {
+  setPlayerStats((prev) => {
+    const merged = mergePlayerStats(prev, {
+      prayerPoints: { current: prayerPoints, max: maxPrayerPoints },
+    });
+    return arePlayerStatsEqual(prev, merged) ? prev : merged;
+  });
+}
+```
+
+**PrayerSystem Changes** (`packages/shared/src/systems/shared/character/PrayerSystem.ts`):
+```typescript
+// Re-emit authoritative prayer snapshot on PLAYER_JOINED
+private readonly onPlayerJoined = async (event: unknown): Promise<void> => {
+  if (!this.world.isServer) return;
+  
+  const payload = event as Partial<PlayerJoinedPayload>;
+  if (!payload.playerId || typeof payload.playerId !== \"string\") return;
+  
+  const state = await this.ensurePlayerPrayerInitialized(payload.playerId);
+  if (!state) return;
+  
+  this.emitPrayerStateSync(payload.playerId, state);
+};
+```
 
 **Impact**:
-- Prayer points display correctly on login
-- Active prayers sync properly between sessions
+- Prayer points display correctly on login without requiring a prayer toggle
+- Active prayers sync properly between sessions and reconnections
 - Eliminates prayer state desync issues
+- Authoritative cache takes precedence over entity fallback values
 - Better player experience with consistent prayer state
 
-**Files Changed**: See PR #1090 for complete details.
+**Test Coverage**:
+- E2E test: `packages/client/tests/e2e/prayer-sync.spec.ts` - Verifies prayer state persists across reload
+- Unit test: `packages/client/tests/unit/hooks/usePlayerData.test.ts` - Tests cache preservation and finite number guards
+- System test: `packages/shared/src/systems/shared/character/__tests__/PrayerSystem.sync.test.ts` - Tests PLAYER_REGISTERED → PLAYER_JOINED sync flow
+
+**Files Changed**: 5 files, 520 additions, 30 deletions.
 
 ### UI Panel Modernization (March 25-26, 2026)
 
