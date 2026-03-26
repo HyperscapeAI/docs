@@ -727,6 +727,260 @@ Remove `onReady` handler after worker init resolves/times out:
 
 ## Recent Major Features (March 2026)
 
+### Dialogue and Skilling Panel Polish (March 26, 2026)
+
+**Change** (PR #1093): Unified skilling panel layouts and redesigned NPC dialogue system with dedicated in-world panels.
+
+#### Skilling Panel Component Extraction
+
+**Problem**: Fletching, Cooking, Smelting, Smithing, Crafting, and Tanning panels had ~500 lines of duplicated styling, layout logic, and quantity selector code.
+
+**Solution**: Extract shared components into `SkillingPanelShared.tsx`:
+
+**Shared Components** (`packages/client/src/game/panels/skilling/SkillingPanelShared.tsx`):
+```typescript
+// Panel body wrapper with intro text and empty state handling
+export function SkillingPanelBody({
+  theme,
+  children,
+  emptyMessage,
+  intro,
+}: SkillingPanelBodyProps): React.ReactElement
+
+// Themed section card for recipe groups
+export function SkillingSection({
+  theme,
+  children,
+  className,
+  style,
+}: SkillingSectionProps): React.ReactElement
+
+// Reusable quantity selector with preset buttons and custom input
+export function SkillingQuantitySelector({
+  theme,
+  showCustomInput,
+  customQuantity,
+  lastCustomQuantity,
+  onCustomQuantityChange,
+  onCustomSubmit,
+  onCancelCustomInput,
+  onPresetQuantity,
+  allQuantity,
+  onShowCustomInput,
+}: SkillingQuantitySelectorProps): React.ReactElement
+
+// Style helper for selectable recipe tiles
+export function getSkillingSelectableStyle(
+  theme: Theme,
+  selected: boolean,
+  disabled = false,
+): CSSProperties
+
+// Style helper for badge elements (XP, level, cost)
+export function getSkillingBadgeStyle(theme: Theme): CSSProperties
+```
+
+**Usage Example** (from `CraftingPanel.tsx`):
+```typescript
+import {
+  getSkillingBadgeStyle,
+  getSkillingSelectableStyle,
+  SkillingPanelBody,
+  SkillingQuantitySelector,
+  SkillingSection,
+} from "./skilling/SkillingPanelShared";
+
+return (
+  <SkillingPanelBody
+    theme={theme}
+    intro="Browse available recipes by category, then inspect the exact inputs and crafting XP before starting a batch."
+    emptyMessage={
+      availableRecipes.length === 0
+        ? "You don't have the materials to craft anything."
+        : undefined
+    }
+  >
+    <div className="flex flex-col gap-3">
+      {groupedRecipes.map(([category, recipes]) => (
+        <SkillingSection key={category} theme={theme}>
+          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.18em]">
+            {CATEGORY_LABELS[category] || category}
+          </div>
+          
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            {recipes.map((recipe) => (
+              <button
+                key={recipe.output}
+                onClick={() => setSelectedRecipe(recipe)}
+                style={getSkillingSelectableStyle(theme, isSelected, !canCraft)}
+              >
+                {/* Recipe content */}
+              </button>
+            ))}
+          </div>
+        </SkillingSection>
+      ))}
+      
+      {selectedRecipe && (
+        <SkillingSection theme={theme}>
+          {/* Recipe details */}
+          
+          <SkillingQuantitySelector
+            theme={theme}
+            showCustomInput={showQuantityInput}
+            customQuantity={customQuantity}
+            lastCustomQuantity={lastCustomQuantity}
+            onCustomQuantityChange={setCustomQuantity}
+            onCustomSubmit={handleCustomQuantitySubmit}
+            onCancelCustomInput={() => setShowQuantityInput(false)}
+            onPresetQuantity={(qty) => handleCraft(selectedRecipe, qty)}
+            allQuantity={-1}
+            onShowCustomInput={() => setShowQuantityInput(true)}
+          />
+        </SkillingSection>
+      )}
+    </div>
+  </SkillingPanelBody>
+);
+```
+
+**Impact**:
+- Eliminates ~500 lines of duplicated code across 5 panels
+- Single source of truth for skilling UI patterns
+- Consistent visual language and behavior
+- Easier to maintain and extend
+- Better mobile responsiveness
+
+#### NPC Dialogue System Redesign
+
+**Changes**:
+- **DialoguePopupShell**: New dedicated modal shell for NPC dialogue
+- **DialogueCharacterPortrait**: Live 3D VRM portrait rendering
+- **Service Handoff Fix**: Opening bank/store/tanner properly closes dialogue
+- **Improved Layout**: Horizontal layout with portrait on left, dialogue on right
+
+**DialoguePopupShell** (`packages/client/src/game/panels/dialogue/DialoguePopupShell.tsx`):
+```typescript
+export function DialoguePopupShell({
+  visible,
+  title,
+  children,
+  onClose,
+  width = 700,
+  maxWidth = "min(86vw, 700px)",
+  maxHeight = "min(40vh, 400px)",
+  contentStyle,
+}: DialoguePopupShellProps): React.ReactElement | null {
+  // Focus management
+  useEffect(() => {
+    if (!visible) return;
+    panelRef.current?.focus();
+    
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      onCloseRef.current();
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [visible]);
+  
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      {/* Shell content */}
+    </div>
+  );
+}
+```
+
+**DialogueCharacterPortrait** (`packages/client/src/game/panels/dialogue/DialogueCharacterPortrait.tsx`):
+```typescript
+export const DialogueCharacterPortrait = React.memo(function DialogueCharacterPortrait({
+  world,
+  npcEntityId,
+  npcName,
+  className = "",
+}: DialogueCharacterPortraitProps): React.ReactElement {
+  // Create dedicated WebGPU viewport for portrait
+  const viewport = await createAvatarPreviewViewport({
+    container,
+    canvas,
+    cameraPosition: new THREE.Vector3(0, 1.58, 1.02),
+    adjustCameraDepth: false,
+    fov: 26,
+  });
+  
+  // Load NPC's VRM model
+  const avatarNode = loadedAvatar
+    .toNodes({ scene: viewport.scene, loader: world.loader })
+    .get("avatar");
+  
+  // Set idle emote
+  await avatarInstance.setEmoteAndWait(Emotes.IDLE, 3000);
+  
+  // Frame camera to show character
+  frameDialogueAvatar(avatarScene, viewport.camera, baseCameraStateRef);
+  
+  return (
+    <div className="relative min-h-[194px] overflow-hidden rounded-xl">
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+      {mode !== "live" && <PortraitFallback npcName={npcName} mode={mode} />}
+    </div>
+  );
+});
+```
+
+**Service Handoff Logic** (`packages/shared/src/systems/shared/interaction/DialogueSystem.ts`):
+```typescript
+private isImmediateHandoffEffect(effect?: string): boolean {
+  if (!effect) return false;
+  const [effectName] = effect.split(":");
+  return (
+    effectName === "openBank" ||
+    effectName === "openShop" ||
+    effectName === "openStore" ||
+    effectName === "openTanner"
+  );
+}
+
+// In handleDialogueResponse:
+if (effect && this.isImmediateHandoffEffect(effect)) {
+  this.executeEffect(playerId, npcId, effect, state.npcEntityId);
+  this.endDialogue(playerId, npcId);  // Close dialogue immediately
+  return;
+}
+```
+
+**Dialogue Close Integration** (`packages/client/src/hooks/useModalPanels.ts`):
+```typescript
+// Close dialogue when opening service panels
+const handleBankOpen = (data: unknown) => {
+  const d = data as BankData;
+  if (d) {
+    setBankData({ ...d, visible: true });
+    setDialogueData(null);  // Close dialogue
+  }
+};
+```
+
+**Impact**:
+- More immersive NPC interactions with live character portraits
+- Consistent visual language across all skilling interfaces
+- Service handoffs (bank, store, tanner) work correctly without orphaned dialogue
+- Reduced code duplication and maintenance burden
+- Better mobile responsiveness with proper touch targets
+
+**Files Changed**: 15 files, 1,623 additions, 1,265 deletions.
+
 ### Game UI Tab Arrow Key Capture Fix (March 26, 2026)
 
 **Change** (PR #1092): Fixed arrow keys being consumed by in-game panel tabs, preventing camera controls from working.
