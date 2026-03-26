@@ -727,6 +727,118 @@ Remove `onReady` handler after worker init resolves/times out:
 
 ## Recent Major Features (March 2026)
 
+### Game UI Tab Arrow Key Capture Fix (March 26, 2026)
+
+**Change** (PR #1092): Fixed arrow keys being consumed by in-game panel tabs, preventing camera controls from working.
+
+**Problem**: The shared shell tab component handled ArrowLeft, ArrowRight, ArrowUp, and ArrowDown as roving tab-navigation keys. When a combined panel tab retained focus (e.g., after clicking Inventory tab), pressing an arrow key would switch tabs in the UI instead of moving the camera, breaking gameplay controls.
+
+**Root Cause**: Tab keyboard navigation (WAI-ARIA tabs pattern) was enabled for all tabs, including in-game windows where arrow keys should control the camera.
+
+**Solution**: Added opt-in `reserveArrowKeys` prop to disable arrow key consumption for game windows while preserving standard tab navigation for non-game UI (settings, admin panels, etc.).
+
+**Implementation** (`packages/client/src/ui/components/Tab.tsx`):
+```typescript
+export interface TabProps {
+  // ... existing props
+  /** When true, shared shell tabs must not consume arrow keys */
+  reserveArrowKeys?: boolean;
+}
+
+// Tab component - conditional arrow key handling
+onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    onActivate();
+    return;
+  }
+  // Only handle arrow keys when NOT reserved for gameplay
+  if (!reserveArrowKeys && (e.key === "ArrowLeft" || e.key === "ArrowUp")) {
+    e.preventDefault();
+    onNavigate?.("previous");
+    return;
+  }
+  if (!reserveArrowKeys && (e.key === "ArrowRight" || e.key === "ArrowDown")) {
+    e.preventDefault();
+    onNavigate?.("next");
+    return;
+  }
+}}
+
+// Auto-blur on pointer click to prevent focus retention
+onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+  onActivate();
+  if (reserveArrowKeys && e.detail > 0) {
+    e.currentTarget.blur();
+  }
+}}
+
+onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => {
+  if (reserveArrowKeys) {
+    // Keep pointer-clicked game shell tabs from holding keyboard focus
+    // so arrow keys remain visually and behaviorally attached to gameplay.
+    e.preventDefault();
+  }
+}}
+```
+
+**WindowRenderer Integration** (`packages/client/src/game/interface/WindowRenderer.tsx`):
+```typescript
+// Enable reserveArrowKeys only for combined in-game windows
+{showTabBar ? (
+  <TabBar windowId={windowState.id} reserveArrowKeys={true} />
+) : null}
+```
+
+**Pointer Focus Management** (`packages/client/src/ui/utils/pointerFocus.ts`):
+```typescript
+// NEW: Utility to identify interactive controls that should release focus after pointer click
+export function getPointerFocusedControl(target: EventTarget | null): HTMLElement | null {
+  if (!(target instanceof Element)) return null;
+  
+  // Exclude text inputs and explicitly allowed controls
+  if (target.closest('input,textarea,select,[contenteditable="true"],[data-allow-pointer-focus="true"]')) {
+    return null;
+  }
+  
+  // Find nearest interactive control
+  return target.closest<HTMLElement>('button,[role="button"],[role="tab"],[aria-pressed]');
+}
+```
+
+**Window-Level Focus Release** (`packages/client/src/ui/components/Window.tsx`):
+```typescript
+// Auto-blur interactive controls after pointer click (game windows only)
+onClickCapture={(e) => {
+  if (isUnlocked || e.detail <= 0) return;
+  
+  const control = getPointerFocusedControl(e.target);
+  if (!control) return;
+  
+  requestAnimationFrame(() => {
+    if (document.activeElement === control) {
+      control.blur();
+    }
+  });
+}}
+```
+
+**Impact**:
+- Arrow keys now control camera movement even when panel tabs have focus
+- Enter/Space still activate focused tabs (keyboard accessibility preserved)
+- Pointer-clicked tabs auto-blur to prevent focus retention
+- Non-game UI (settings, admin) retains standard tab navigation
+- Backward compatible (default `reserveArrowKeys={false}` preserves existing behavior)
+
+**Accessibility Note**: Keyboard-only users can still navigate tabs with Tab key (focus next element) and activate with Enter/Space. Arrow key navigation is disabled only for game windows where arrow keys control the camera.
+
+**Test Coverage**:
+- `packages/client/tests/unit/ui/Tab.test.tsx` - Tab keyboard behavior with/without `reserveArrowKeys`
+- `packages/client/tests/unit/interface/WindowRenderer.test.tsx` - WindowRenderer passes prop correctly
+- `packages/client/tests/unit/ui/pointerFocus.test.ts` - Pointer focus utility behavior
+
+**Files Changed**: 9 files, 392 additions, 4 deletions. See PR #1092 for complete details.
+
 ### Missing Packet Handlers Fix (March 26, 2026)
 
 **Change** (PR #1091): Added 8 missing server→client packet handlers in `ClientNetwork`.
