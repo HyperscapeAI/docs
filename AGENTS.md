@@ -108,6 +108,20 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Missing Packet Handlers Fix (March 26, 2026)
+
+**Change** (PR #1091): Added 8 missing server→client packet handlers to eliminate console errors.
+
+**Missing Handlers**: `onFletchingComplete`, `onCookingComplete`, `onSmeltingComplete`, `onSmithingComplete`, `onCraftingComplete`, `onTanningComplete`, `onCombatEnded`, `onQuestStarted`
+
+**Impact**: Eliminates "No handler for packet" errors, UI systems can react to skill completion and combat events.
+
+### Prayer Login Sync Fix (March 26, 2026)
+
+**Change** (PR #1090): Fixed prayer state synchronization on player login.
+
+**Impact**: Prayer points and active prayers now sync correctly between sessions.
+
 ### Performance & Scalability Overhaul (March 19-20, 2026)
 
 **PR #1064**: Major architectural changes to improve server tick reliability and support 50+ concurrent players with 25+ AI agents.
