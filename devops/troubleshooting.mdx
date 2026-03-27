@@ -1707,6 +1707,133 @@ bun run build
   - Test files - acceptable for test fixtures
 - Commit: d911359 (Feb 26, 2026)
 
+### Gathering Tools Not Showing in Hand
+
+**Symptom**: Woodcutting and mining don't display tools in hand during gathering, only fishing shows tools
+
+**Cause**: Fishing-only gate in `GATHERING_TOOL_SHOW/HIDE` event handlers
+
+**Solution**: Update to latest code (commit 1f789cb fixed this)
+
+**Technical Details:**
+- Removed fishing-only gate from `ClientGraphics.ts`
+- All gathering skills (woodcutting, mining, fishing) now display correct tool
+- Tool overrides equipped weapon during gathering action
+- Visual feedback matches actual tool being used
+
+**Impact**: Woodcutting shows hatchet, mining shows pickaxe, consistent with fishing rod display
+
+**Files Changed**: 1 file, 2 additions, 4 deletions
+
+### Pickaxe Can Cut Trees / Hatchet Can Mine Rocks
+
+**Symptom**: Cross-skill tool usage allowed (pickaxe for woodcutting, hatchet for mining)
+
+**Cause**: Substring matching in `itemMatchesToolCategory()` - "pickaxe" contains "axe"
+
+**Solution**: Update to latest code (PR #1098 fixed this)
+
+**Technical Details:**
+- **Manifest-Based Validation**: Each tool in `tools.json` declares its skill explicitly
+- **Primary Path**: `getExternalTool()` lookup with skill comparison
+- **Fallback Guards**: Hatchet rejects "pickaxe"/"pick", pickaxe rejects "hatchet"
+- **Fishing Exact Match**: Fishing tools require exact ID match (not interchangeable)
+- **Warn-Once Logging**: Bounded Set (max 50 entries) prevents log flooding
+
+**Implementation** (`packages/shared/src/systems/shared/entities/gathering/ToolUtils.ts`):
+```typescript
+// Manifest lookup (primary path)
+const toolData = getExternalTool(lowerItemId);
+if (toolData) {
+  const expectedSkill = CATEGORY_TO_SKILL[category] ?? category;
+  return toolData.skill === expectedSkill;
+}
+
+// Fallback with cross-skill guards
+if (category === "hatchet") {
+  if (lowerItemId.includes("pickaxe") || lowerItemId.includes("pick")) {
+    return false; // Reject pickaxes for woodcutting
+  }
+  return lowerItemId.includes("hatchet");
+}
+```
+
+**Impact**: 
+- Prevents cross-skill tool usage (OSRS-accurate)
+- Eliminates false positives from combat weapons (battleaxe, greataxe)
+- Forces all gathering tools to be in manifest for proper validation
+
+**Files Changed**: 2 files, 234 additions, 31 deletions
+
+### Mob Names Show Duplicate Levels
+
+**Symptom**: Context menus show "Attack Bandit (Lv8) (Level: 8)" with duplicate level display
+
+**Cause**: Mob names like "Bandit (Lv8)" already contain level, context menu adds "(Level: 8)" again
+
+**Solution**: Update to latest code (PR #1097 fixed this)
+
+**Technical Details:**
+- Strip trailing `(Lv#)` suffix from mob display names before building context menu
+- Authoritative level from mob data still shown in full "(Level: X)" format
+- Regex pattern: `/\s*\(Lv\d+\)\s*$/u`
+
+**Implementation** (`packages/shared/src/systems/client/interaction/handlers/MobInteractionHandler.ts`):
+```typescript
+private getDisplayName(name: string): string {
+  return name.replace(/\s*\(Lv\d+\)\s*$/u, "");
+}
+```
+
+**Impact**: Context menus now show clean mob names without duplicate level information
+
+**Files Changed**: 2 files, 33 additions, 5 deletions
+
+### Resources Not Respawning Reliably
+
+**Symptom**: Trees, rocks, or fishing spots don't respawn after depletion, or respawn timing is inconsistent
+
+**Cause**: Legacy `setTimeout`-based respawn in `ResourceEntity.deplete()` was unreliable
+
+**Solution**: Update to latest code (PR #1099 fixed this)
+
+**Technical Details:**
+- **Tick-Based Respawn**: `ResourceSystem.processRespawns()` is now the single source of truth
+- **Deterministic Timing**: Respawn based on tick counting, not setTimeout
+- **OSRS-Accurate**: Matches Old School RuneScape tick-based mechanics
+- **Manifest Depletion**: Mining reads `depleteChance` from manifest (supports rune essence rocks with `depleteChance: 0`)
+
+**Implementation**:
+```typescript
+// ResourceEntity.deplete() - no setTimeout
+public deplete(): void {
+  this.isDepleted = true;
+  this.depletedAtTick = this.world.currentTick;
+  // ResourceSystem.processRespawns() handles respawn
+}
+
+// ResourceSystem.processRespawns() - tick-based
+public processRespawns(): void {
+  const currentTick = this.world.currentTick;
+  for (const resource of this.world.entities.values()) {
+    if (!(resource instanceof ResourceEntity)) continue;
+    if (!resource.isDepleted) continue;
+    
+    const ticksSinceDepleted = currentTick - resource.depletedAtTick;
+    if (ticksSinceDepleted >= resource.respawnTicks) {
+      resource.respawn();
+    }
+  }
+}
+```
+
+**Impact**:
+- Eliminates race conditions and missed respawns
+- Predictable respawn timing for testing
+- Rune essence rocks work correctly (never deplete)
+
+**Files Changed**: 4 files, 89 additions, 35 deletions
+
 ### Duplicate Teleport VFX
 
 **Symptom**: Three teleport effects play when agents exit duel arena (should only be one)
