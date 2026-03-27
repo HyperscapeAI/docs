@@ -801,7 +801,10 @@ interface VegetationLayer {
 }
 ```
 
-**Recent Updates**:
+**Recent Updates** (March 2026):
+- **Canyon biome added**: New red-rock canyon biome with terraced mesas, steep slopes (maxSlope: 2.5), and sparse desert vegetation
+- **Model bounds manifest**: Pre-calculated bounding boxes and footprints for all 3D models in `model-bounds.json` for efficient collision detection
+- **CORS headers**: Cross-origin asset loading support added to CDN (Caddyfile configuration)
 - **165 tree model variants** added across 12 tree types (bamboo, birch, cactus, chinaPine, coconut, dead, fir, knotwood, maple, oak, palm, pine) with 3 LOD levels each
 - **Tree model depth normalization**: All fir variants aligned to fir_03's minY (-59.46), all maple variants aligned to maple_01's minY (-114.76) to prevent floating
 - **Maple tree recoloring**: Leaves changed to warm vermillion red-orange (#D04838)
@@ -814,10 +817,7 @@ interface VegetationLayer {
 - Tree density reduced in plains biome (8 → 5)
 - Mushroom clustering varies by biome (cluster size 3-8)
 - Firemaking fire 3D model added (`models/firemaking-fire/firemaking-fire.glb`)
-- Tree model scales adjusted for better visual proportions (March 2026)
-- Fir and maple model root depths normalized to prevent floating (March 2026)
-  - All fir variants aligned to fir_03's minY (-59.46)
-  - All maple variants aligned to maple_01's minY (-114.76)
+- Tree model scales adjusted for better visual proportions
 
 ---
 
