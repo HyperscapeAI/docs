@@ -1,368 +1,571 @@
-# Migration Guide - March 2026 Dependency Updates
+# Migration Guide - March 2026 Updates
 
-This guide covers breaking changes and migration steps for the major dependency updates merged to `main` on March 19, 2026.
+This guide covers breaking changes and migration steps for updates released in March 2026.
 
-## Overview
+## Table of Contents
 
-The March 2026 update includes **6 major version upgrades** with breaking changes:
+- [Player Death System (PR #1094)](#player-death-system-pr-1094)
+- [Home Teleport System (PR #1095)](#home-teleport-system-pr-1095)
+- [Skilling Panel Components (PR #1093)](#skilling-panel-components-pr-1093)
+- [UI Tab Arrow Keys (PR #1092)](#ui-tab-arrow-keys-pr-1092)
+- [Missing Packet Handlers (PR #1091)](#missing-packet-handlers-pr-1091)
 
-| Package | Old Version | New Version | Impact |
-|---------|-------------|-------------|--------|
-| Vite | 6.4.1 | 8.0.0 | Build configuration |
-| @vitejs/plugin-react | 5.2.0 | 6.0.1 | React plugin config |
-| @nomicfoundation/hardhat-ethers | 3.1.3 | 4.0.6 | Contract scripts |
-| jsdom | 28.1.0 | 29.0.0 | Test environment |
-| jest | 29.7.0 | 30.3.0 | Test snapshots |
-| sqlite3 | 5.1.7 | 6.0.1 | Node.js version |
+## Player Death System (PR #1094)
 
-## Prerequisites
+### Breaking Changes
 
-Before migrating, ensure you have:
+#### 1. `PLAYER_DIED` Event Deprecated
 
-- **Bun 1.3.10+** (required for Vite 8.0)
-- **Node.js 18+** (required for sqlite3 6.0.1, though not used in production)
-- **Git** with clean working directory (commit or stash changes)
+**Status**: DEPRECATED (March 26, 2026)
 
-## Migration Steps
+**Replacement**: Use `PLAYER_SET_DEAD` for client death UI, or `ENTITY_DEATH` for server-side death processing.
 
-### 1. Vite 8.0.0 - Build System Upgrade
-
-**Breaking Changes:**
-- New plugin API
-- Updated config schema
-- Changed HMR behavior
-
-**Migration:**
-
-1. **Update `vite.config.ts` files** in affected packages:
+**Migration**:
 
 ```typescript
-// packages/client/vite.config.ts
-// packages/shared/vite.config.ts
-// packages/asset-forge/vite.config.ts
+// ❌ OLD (deprecated - will stop receiving events)
+world.on(EventType.PLAYER_DIED, (data: { playerId: string }) => {
+  handlePlayerDeath(data.playerId);
+});
 
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-
-export default defineConfig({
-  plugins: [
-    react(), // Ensure using @vitejs/plugin-react 6.0.1+
-  ],
-  // ... rest of config
+// ✅ NEW (use ENTITY_DEATH with type filter)
+world.on(EventType.ENTITY_DEATH, (data: { 
+  entityId: string; 
+  entityType: string;
+  killedBy?: string;
+  deathPosition?: { x: number; y: number; z: number };
+}) => {
+  if (data.entityType === 'player') {
+    handlePlayerDeath(data.entityId);
+  }
 });
 ```
 
-2. **Verify plugin compatibility:**
-   - All Vite plugins must be compatible with Vite 8
-   - Check plugin documentation for Vite 8 support
-   - Update plugins if needed
+**Why**: `ENTITY_DEATH` is a unified event for all entity types (players, mobs, NPCs), reducing event proliferation and improving consistency.
 
-3. **Test build:**
-   ```bash
-   bun run build
-   ```
+**Timeline**: `PLAYER_DIED` is marked deprecated but still exists in the enum for backward compatibility. It will be removed in the next major version.
 
-**Common Issues:**
-- **Plugin errors**: Update plugins to Vite 8-compatible versions
-- **Config errors**: Check Vite 8 migration guide for config schema changes
-- **HMR issues**: Clear browser cache and restart dev server
+#### 2. Death Lock Schema Change
 
-### 2. @vitejs/plugin-react 6.0.1 - React Plugin Upgrade
+**Change**: Death lock now includes `keptItems` field for crash recovery.
 
-**Breaking Changes:**
-- New Fast Refresh implementation
-- Updated React 19 integration
+**Database Migration**: Automatic (migration 0018 adds column with default `NULL`)
 
-**Migration:**
-
-1. **Verify React version:**
-   ```bash
-   # Should be React 19.2.0+
-   grep '"react":' packages/*/package.json
-   ```
-
-2. **Update plugin configuration** (if customized):
-   ```typescript
-   // vite.config.ts
-   import react from '@vitejs/plugin-react';
-   
-   export default defineConfig({
-     plugins: [
-       react({
-         // Fast Refresh is enabled by default
-         // Customize only if needed
-       }),
-     ],
-   });
-   ```
-
-3. **Test HMR:**
-   ```bash
-   bun run dev:client
-   # Make a change to a React component
-   # Verify hot reload works without full page refresh
-   ```
-
-**Common Issues:**
-- **Fast Refresh errors**: Check React component syntax (hooks, exports)
-- **HMR not working**: Ensure components are exported correctly
-
-### 3. @nomicfoundation/hardhat-ethers 4.0.6 - ethers.js v6
-
-**Breaking Changes:**
-- ethers.js v5 → v6 API changes
-- Contract deployment API changed
-- Provider/Signer API changed
-
-**Migration:**
-
-1. **Update contract deployment scripts:**
+**Code Impact**:
 
 ```typescript
-// packages/duel-oracle-evm/scripts/deploy.ts
-// OLD (ethers v5)
-const Contract = await ethers.getContractFactory("MyContract");
-const contract = await Contract.deploy(...args);
-await contract.deployed(); // ❌ Removed in v6
+// ❌ OLD
+interface DeathLock {
+  items?: DeathItemData[];  // Dropped items only
+}
 
-// NEW (ethers v6)
-const Contract = await ethers.getContractFactory("MyContract");
-const contract = await Contract.deploy(...args);
-await contract.waitForDeployment(); // ✅ New method
+// ✅ NEW
+interface DeathLock {
+  items?: DeathItemData[];      // Dropped items for gravestone
+  keptItems?: DeathItemData[];  // OSRS keep-3 items returned on respawn
+}
 ```
 
-2. **Update provider/signer usage:**
+**Action Required**: None (backward compatible - old death locks have `keptItems: null`)
+
+#### 3. HeadstoneEntity Network Sync
+
+**Change**: `HeadstoneEntity.modify()` now syncs `lootItems` from network data.
+
+**Impact**: Client-side gravestone entities now receive loot item updates, preventing stale item lists after looting.
+
+**Code Impact**:
 
 ```typescript
-// OLD (ethers v5)
-const signer = provider.getSigner();
-const address = await signer.getAddress();
+// ❌ OLD (client never synced lootItems)
+getNetworkData(): Record<string, unknown> {
+  return {
+    lootItemCount: this.lootItems.length,
+    // lootItems NOT included
+  };
+}
 
-// NEW (ethers v6)
-const signer = await provider.getSigner();
-const address = await signer.getAddress();
+// ✅ NEW (client syncs lootItems for accurate state)
+getNetworkData(): Record<string, unknown> {
+  return {
+    lootItemCount: this.lootItemCount,
+    lootItems: this.lootItems,  // Full items for client sync
+  };
+}
+
+// Client applies updates via modify()
+modify(data: Partial<EntityData>): void {
+  super.modify(data);
+  if (Array.isArray(changes.lootItems)) {
+    this.lootItems = validated.map(item => ({ ...item }));
+    this.lootItemCount = this.lootItems.length;
+  }
+}
 ```
 
-3. **Update contract interaction:**
+**Action Required**: None (automatic via network sync)
+
+### New Features
+
+#### OSRS Keep-3 System
+
+Players now keep their 3 most valuable items on death in safe zones:
 
 ```typescript
-// OLD (ethers v5)
-const tx = await contract.myFunction(...args);
-await tx.wait();
+import { splitItemsForSafeDeath, ITEMS_KEPT_ON_DEATH } from '@hyperscape/shared';
 
-// NEW (ethers v6) - same API, but better types
-const tx = await contract.myFunction(...args);
-await tx.wait();
+const { kept, dropped } = splitItemsForSafeDeath(allItems, ITEMS_KEPT_ON_DEATH);
+// kept: top 3 most valuable items (returned on respawn)
+// dropped: remaining items (go to gravestone)
 ```
 
-4. **Test contract scripts:**
-   ```bash
-   cd packages/duel-oracle-evm
-   npx hardhat test
-   ```
+**Value Source**: Item values come from `world/assets/manifests/items.json` (`value` field)
 
-**Common Issues:**
-- **`deployed()` not found**: Use `waitForDeployment()` instead
-- **Type errors**: Update TypeScript types for ethers v6
-- **Provider errors**: Ensure provider is properly initialized
+**Stack Handling**: Stacks are split intelligently - if you have 10,000 arrows and they're in the top 3 most valuable, you keep 3 arrows and drop 9,997.
 
-**Resources:**
-- [ethers.js v6 Migration Guide](https://docs.ethers.org/v6/migrating/)
+#### Death Utilities
 
-### 4. jsdom 29.0.0 - Testing Environment
+New utility functions for death-related operations:
 
-**Breaking Changes:**
-- Improved DOM API compatibility
-- Changed behavior for some edge cases
+```typescript
+import {
+  sanitizeKilledBy,
+  validatePosition,
+  isPositionInBounds,
+  GRAVESTONE_ID_PREFIX,
+} from '@hyperscape/shared';
 
-**Migration:**
+// Sanitize killer names for display
+const safeKiller = sanitizeKilledBy(event.killedBy);
 
-1. **Run test suite:**
-   ```bash
-   npm test
-   ```
+// Validate death position
+const validPos = validatePosition(deathPosition);
+if (!validPos) {
+  // Position invalid (NaN, Infinity)
+}
 
-2. **Fix failing tests:**
-   - Most tests should pass without changes
-   - Check for tests that rely on specific DOM behavior
-   - Update assertions if needed
+// Check if position is in bounds
+if (!isPositionInBounds(position)) {
+  // Out of world bounds
+}
 
-**Common Issues:**
-- **DOM API differences**: Check jsdom 29 changelog for specific changes
-- **Event handling**: Verify event listeners work as expected
+// Filter gravestone entities
+if (entityId.startsWith(GRAVESTONE_ID_PREFIX)) {
+  // This is a gravestone, not a player
+}
+```
 
-### 5. Jest 30.3.0 - Testing Framework
+### Troubleshooting
 
-**Breaking Changes:**
-- New snapshot format
-- Updated matcher API
-- Performance improvements
+#### Player Stuck in Death Animation
 
-**Migration:**
+**Symptoms**: Player plays death animation but never respawns.
 
-1. **Regenerate snapshots:**
-   ```bash
-   npm test -- -u
-   ```
+**Diagnosis**:
+```sql
+-- Check for active death lock
+SELECT * FROM death_locks WHERE player_id = 'player_<id>';
+```
 
-2. **Review snapshot changes:**
-   ```bash
-   git diff
-   # Review snapshot changes carefully
-   # Ensure they're expected
-   ```
+**Recovery**:
+```sql
+-- Clear stuck death lock
+DELETE FROM death_locks WHERE player_id = 'player_<id>';
+```
 
-3. **Update custom matchers** (if any):
-   ```typescript
-   // Check packages/*/test/setup.ts for custom matchers
-   // Update to Jest 30 API if needed
-   ```
+**Prevention**: Death system now has robust retry logic and crash recovery. If issues persist:
+1. Check server logs for `DEATH_PERSIST_DESYNC` tag
+2. Check for `AUDIT_LOG` events
+3. Verify database connection pool health
 
-4. **Run full test suite:**
-   ```bash
-   npm test
-   ```
+#### Equipment Duplication
 
-**Common Issues:**
-- **Snapshot mismatches**: Regenerate with `-u` flag
-- **Custom matcher errors**: Update to Jest 30 API
-- **Performance**: Jest 30 is faster, but may expose timing issues
+**Symptoms**: Player has duplicate equipment after death.
 
-### 6. sqlite3 6.0.1 - Database Driver
+**Root Cause**: Fixed in PR #1094 - was caused by nested DB transactions deadlocking.
 
-**Breaking Changes:**
-- Node.js 18+ required (was 16+)
-- Updated native bindings
+**Action**: Update to latest version (March 26, 2026 or later).
 
-**Migration:**
+## Home Teleport System (PR #1095)
 
-1. **Verify Node.js version:**
-   ```bash
-   node --version
-   # Should be v18.0.0 or higher
-   ```
+### Breaking Changes
 
-2. **Note**: sqlite3 is **not used in production** (PostgreSQL only)
-   - Only affects local development if you use sqlite3 directly
-   - Removed from Docker builds to prevent QEMU segfaults
+#### Cooldown Reduced
 
-3. **No action required** for most users
+**Change**: Home teleport cooldown reduced from 15 minutes to 30 seconds.
 
-**Common Issues:**
-- **Node.js version**: Upgrade to Node.js 18+ if needed
-- **Docker builds**: sqlite3 is already removed from Dockerfile
+**Constant Update**:
 
-## Post-Migration Verification
+```typescript
+// ❌ OLD
+export const HOME_TELEPORT_CONSTANTS = {
+  COOLDOWN_MS: 15 * 60 * 1000,  // 15 minutes
+};
 
-After completing all migration steps:
+// ✅ NEW
+export const HOME_TELEPORT_CONSTANTS = {
+  COOLDOWN_MS: 30 * 1000,  // 30 seconds
+};
+```
 
-### 1. Build All Packages
+**Impact**: Existing cooldown timers will complete at the old 15-minute duration. New teleports use 30-second cooldown.
+
+**Action Required**: None (automatic after server restart)
+
+### New Features
+
+#### Server-Authoritative Cooldown
+
+Server now sends remaining cooldown time in rejection packets:
+
+```typescript
+// Server sends:
+socket.send("homeTeleportFailed", {
+  reason: "Home teleport on cooldown (25s remaining)",
+  remainingMs: 25000,  // NEW field
+});
+
+// Client reads:
+import { readHomeTeleportRemainingMs } from '@/game/hud/homeTeleportUi';
+
+const onFailed = (event?: unknown) => {
+  const remainingMs = readHomeTeleportRemainingMs(event);
+  if (remainingMs > 0) {
+    // Enter cooldown state with server-authoritative time
+    setState("cooldown");
+    setCooldownEndTime(performance.now() + remainingMs);
+  }
+};
+```
+
+#### Cooldown Formatting
+
+New utility for human-readable cooldown display:
+
+```typescript
+import { formatCooldownRemaining } from '@/server/systems/ServerNetwork/handlers/home-teleport';
+
+formatCooldownRemaining(0);      // "1s" (rounds up)
+formatCooldownRemaining(999);    // "1s"
+formatCooldownRemaining(60000);  // "1m"
+formatCooldownRemaining(90500);  // "1m 31s"
+```
+
+#### Cast Effects
+
+New channel-mode portal effect with terrain-aware anchoring:
+
+- Dedicated cast-time portal (veil + orbital rings)
+- Grounded to player's lowest bone position
+- Separate from arrival burst effect
+- Auto-stops on fail/cancel/completion
+
+**No Action Required**: Effects are automatic when `HOME_TELEPORT_CAST_START` event fires.
+
+## Skilling Panel Components (PR #1093)
+
+### Breaking Changes
+
+#### Shared Component Extraction
+
+**Change**: Skilling panel styling and quantity selector extracted to shared components.
+
+**Migration**: If you have custom skilling panels, update to use shared components:
+
+```typescript
+// ❌ OLD (duplicated styling in each panel)
+<div className="rounded-lg shadow-2xl border" style={{...getPanelSurfaceStyle(theme)}}>
+  <div className="p-3 overflow-y-auto">
+    {/* Recipe list */}
+  </div>
+</div>
+
+// ✅ NEW (use shared components)
+import {
+  SkillingPanelBody,
+  SkillingSection,
+  SkillingQuantitySelector,
+  getSkillingSelectableStyle,
+  getSkillingBadgeStyle,
+} from '@/game/panels/skilling/SkillingPanelShared';
+
+<SkillingPanelBody
+  theme={theme}
+  intro="Browse available recipes..."
+  emptyMessage="You don't have the materials to craft anything."
+>
+  <SkillingSection theme={theme}>
+    {/* Recipe list */}
+  </SkillingSection>
+  
+  <SkillingQuantitySelector
+    theme={theme}
+    showCustomInput={showQuantityInput}
+    customQuantity={customQuantity}
+    lastCustomQuantity={lastCustomQuantity}
+    onCustomQuantityChange={setCustomQuantity}
+    onCustomSubmit={handleCustomQuantitySubmit}
+    onCancelCustomInput={() => setShowQuantityInput(false)}
+    onPresetQuantity={(qty) => handleCraft(selectedRecipe, qty)}
+    allQuantity={-1}
+    onShowCustomInput={() => setShowQuantityInput(true)}
+  />
+</SkillingPanelBody>
+```
+
+**Benefits**:
+- Eliminates ~500 lines of duplicated code
+- Consistent visual language across all skilling panels
+- Easier to maintain and update styling
+
+### New Features
+
+#### Dialogue Character Portraits
+
+Live 3D VRM portrait rendering in dialogue panels:
+
+```typescript
+import { DialogueCharacterPortrait } from '@/game/panels/dialogue/DialogueCharacterPortrait';
+
+<DialogueCharacterPortrait
+  world={world}
+  npcEntityId={npcEntityId}
+  npcName={npcName}
+  className="self-start"
+/>
+```
+
+**Features**:
+- WebGPU viewport with live VRM rendering
+- Terrain-aware grounding
+- Automatic cleanup on unmount
+- Fallback to initials badge if model unavailable
+
+#### Dialogue Popup Shell
+
+Dedicated modal shell for NPC dialogue:
+
+```typescript
+import { DialoguePopupShell } from '@/game/panels/dialogue/DialoguePopupShell';
+
+<DialoguePopupShell
+  visible={true}
+  onClose={closeDialogue}
+  title={npcName}
+  width={700}
+  maxWidth="min(86vw, 700px)"
+  maxHeight="min(40vh, 400px)"
+>
+  <DialoguePanel {...dialogueProps} />
+</DialoguePopupShell>
+```
+
+**Features**:
+- Proper focus management with focus trap
+- ARIA attributes for accessibility
+- Escape key handling
+- Backdrop click to close
+
+#### Service Handoff Fix
+
+Opening bank/store/tanner now properly closes dialogue:
+
+```typescript
+// In useModalPanels.ts:
+const handleBankOpen = (data: unknown) => {
+  if (d) {
+    setBankData({ ...d, visible: true });
+    setDialogueData(null);  // NEW: Close dialogue
+  }
+};
+```
+
+**Impact**: No more orphaned dialogue panels when transitioning to service UIs.
+
+## UI Tab Arrow Keys (PR #1092)
+
+### Breaking Changes
+
+#### `reserveArrowKeys` Prop
+
+**Change**: `TabBar` component now accepts `reserveArrowKeys` prop to disable arrow key consumption.
+
+**Migration**:
+
+```typescript
+// ❌ OLD (arrow keys always consumed by tabs)
+<TabBar
+  tabs={tabs}
+  activeTab={activeTab}
+  onTabChange={setActiveTab}
+/>
+
+// ✅ NEW (reserve arrow keys for game controls)
+<TabBar
+  tabs={tabs}
+  activeTab={activeTab}
+  onTabChange={setActiveTab}
+  reserveArrowKeys={true}  // NEW: Don't consume arrow keys
+/>
+```
+
+**When to Use**:
+- Set `reserveArrowKeys={true}` for in-game panels (inventory, equipment, combat)
+- Set `reserveArrowKeys={false}` or omit for non-game UI (settings, character editor)
+
+**Impact**: Arrow keys control camera movement even when panel tabs have focus. Enter/Space still activate tabs for keyboard accessibility.
+
+## Missing Packet Handlers (PR #1091)
+
+### New Handlers
+
+**Change**: Added 8 missing server→client packet handlers to `ClientNetwork.ts`.
+
+**Handlers Added**:
+- `onFletchingComplete` - Fletching batch finished
+- `onCookingComplete` - Cooking result with burn check
+- `onSmeltingComplete` - Smelting batch finished
+- `onSmithingComplete` - Smithing batch finished
+- `onCraftingComplete` - Crafting batch finished
+- `onTanningComplete` - Tanning batch finished
+- `onCombatEnded` - Combat session ended
+- `onQuestStarted` - Quest begun notification
+
+**Migration**: If you were handling these events manually, remove custom handlers:
+
+```typescript
+// ❌ OLD (custom handler for missing packet)
+world.on('fletchingComplete', (data) => {
+  // Custom handling
+});
+
+// ✅ NEW (automatic via ClientNetwork)
+// No action required - ClientNetwork forwards to event bus
+world.on(EventType.FLETCHING_COMPLETE, (data) => {
+  // Handle event
+});
+```
+
+**Impact**: Eliminates "No handler for packet" console errors.
+
+## Database Schema Changes
+
+### Death Lock Table
+
+**Migration 0018**: Added `kept_items` column to `death_locks` table.
+
+```sql
+ALTER TABLE death_locks ADD COLUMN kept_items JSONB;
+```
+
+**Action Required**: None (automatic via Drizzle migrations)
+
+**Rollback**: If you need to rollback to pre-March-26 version:
+
+```sql
+-- Remove kept_items column (data loss)
+ALTER TABLE death_locks DROP COLUMN IF EXISTS kept_items;
+```
+
+## Configuration Changes
+
+### Home Teleport Cooldown
+
+**File**: `packages/shared/src/constants/GameConstants.ts`
+
+```typescript
+// OLD
+COOLDOWN_MS: 15 * 60 * 1000,  // 15 minutes
+
+// NEW
+COOLDOWN_MS: 30 * 1000,  // 30 seconds
+```
+
+**Action Required**: None (automatic after rebuild)
+
+### WebSocket Port
+
+**File**: `packages/client/.env`
+
 ```bash
-bun run clean
-bun install
+# OLD
+PUBLIC_WS_URL=ws://localhost:5555/ws
+
+# NEW
+PUBLIC_WS_URL=ws://localhost:5556/ws
+```
+
+**Action Required**: Update `.env` file if you're using custom WebSocket URL.
+
+**Note**: This change was from the March 19-20 performance overhaul (PR #1064), not March 26 updates.
+
+## Testing Updates
+
+### New Test Files
+
+**DeathUtils Tests** (`packages/shared/src/systems/shared/combat/__tests__/DeathUtils.test.ts`):
+- 51 tests covering sanitization, stack splitting, position validation
+- Run: `bunx vitest run packages/shared/src/systems/shared/combat/__tests__/DeathUtils.test.ts`
+
+**PlayerDeathFlow Tests** (`packages/shared/src/systems/shared/combat/__tests__/PlayerDeathFlow.test.ts`):
+- 10 tests covering death-to-respawn flow, guards, retry queue
+- Run: `bunx vitest run packages/shared/src/systems/shared/combat/__tests__/PlayerDeathFlow.test.ts`
+
+**Home Teleport Tests** (`packages/server/tests/unit/teleport/HomeTeleportManager.test.ts`):
+- Updated tests for 30-second cooldown and `remainingMs` field
+- Run: `bunx vitest run packages/server/tests/unit/teleport/HomeTeleportManager.test.ts`
+
+## Deprecation Timeline
+
+### Immediate (March 26, 2026)
+
+- `PLAYER_DIED` event marked deprecated
+- All internal code migrated to `ENTITY_DEATH`
+
+### Next Major Version (TBD)
+
+- `PLAYER_DIED` event will be removed from `EventType` enum
+- External plugins must migrate before upgrading
+
+## Rollback Instructions
+
+If you need to rollback to pre-March-26 state:
+
+### 1. Revert Code Changes
+
+```bash
+# Rollback to commit before PR #1094
+git checkout <commit-before-1094>
+```
+
+### 2. Revert Database Schema
+
+```sql
+-- Remove kept_items column
+ALTER TABLE death_locks DROP COLUMN IF EXISTS kept_items;
+```
+
+### 3. Clear Death Locks
+
+```sql
+-- Clear any active death locks (prevents desync)
+DELETE FROM death_locks;
+```
+
+### 4. Restart Services
+
+```bash
 bun run build
-```
-
-### 2. Run Test Suite
-```bash
-npm test
-```
-
-### 3. Start Development Server
-```bash
 bun run dev
 ```
 
-### 4. Verify Key Features
-- [ ] Client loads without errors
-- [ ] Server starts successfully
-- [ ] HMR works in development
-- [ ] Tests pass
-- [ ] Contract scripts work (if using)
-
-### 5. Check Production Build
-```bash
-bun run build
-bun start
-```
-
-## Rollback Plan
-
-If you encounter issues:
-
-1. **Revert to previous commit:**
-   ```bash
-   git reset --hard HEAD~1
-   ```
-
-2. **Or checkout specific commit before updates:**
-   ```bash
-   git checkout <commit-hash-before-march-19>
-   ```
-
-3. **Reinstall dependencies:**
-   ```bash
-   rm -rf node_modules packages/*/node_modules
-   bun install
-   bun run build
-   ```
-
-## Performance Improvements
-
-Expected performance gains from these updates:
-
-| Area | Improvement | Notes |
-|------|-------------|-------|
-| Build Time | 20-30% faster | Vite 8 optimizations |
-| HMR | 40-50% faster | Improved Fast Refresh |
-| Test Execution | 15-20% faster | Jest 30 optimizations |
-| Type Checking | 10-15% faster | Better TypeScript integration |
-
-## Breaking Changes Summary
-
-### Vite 8.0.0
-- ❌ Old plugin API
-- ✅ New plugin API (update `vite.config.ts`)
-
-### @vitejs/plugin-react 6.0.1
-- ❌ Old Fast Refresh
-- ✅ New Fast Refresh (better React 19 support)
-
-### @nomicfoundation/hardhat-ethers 4.0.6
-- ❌ `contract.deployed()`
-- ✅ `contract.waitForDeployment()`
-- ❌ ethers v5 API
-- ✅ ethers v6 API
-
-### jsdom 29.0.0
-- ❌ Some edge case DOM behaviors
-- ✅ Improved DOM API compatibility
-
-### Jest 30.3.0
-- ❌ Old snapshot format
-- ✅ New snapshot format (regenerate with `-u`)
-
-### sqlite3 6.0.1
-- ❌ Node.js 16
-- ✅ Node.js 18+ required
-
-## Additional Resources
-
-- [Vite 8 Migration Guide](https://vitejs.dev/guide/migration.html)
-- [ethers.js v6 Migration Guide](https://docs.ethers.org/v6/migrating/)
-- [Jest 30 Release Notes](https://jestjs.io/blog/)
-- [React 19 Upgrade Guide](https://react.dev/blog/2024/04/25/react-19-upgrade-guide)
-
 ## Support
 
-If you encounter issues during migration:
+For issues or questions about these changes:
 
-1. Check this guide for common issues
-2. Review package-specific migration guides (linked above)
-3. Check GitHub Issues for known problems
-4. Ask in Discord/Slack for help
-
-## Changelog
-
-- **March 19, 2026**: Initial migration guide created
-- **March 19, 2026**: All dependency updates merged to `main`
+1. Check [GitHub Issues](https://github.com/HyperscapeAI/hyperscape/issues)
+2. Review PR discussions:
+   - [PR #1094 - Player Death System](https://github.com/HyperscapeAI/hyperscape/pull/1094)
+   - [PR #1095 - Home Teleport](https://github.com/HyperscapeAI/hyperscape/pull/1095)
+   - [PR #1093 - Dialogue & Skilling](https://github.com/HyperscapeAI/hyperscape/pull/1093)
+3. See [CLAUDE.md](../CLAUDE.md) for development guidelines
