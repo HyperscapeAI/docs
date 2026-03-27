@@ -335,10 +335,27 @@ world.on(EventType.PLAYER_SET_DEAD, (data: {
 
 ```typescript
 // From CombatConstants.ts
-GRAVESTONE_TICKS: 1500,              // 15 minutes to reclaim
-GROUND_ITEM_DESPAWN_TICKS: 200,      // 2 minutes on ground
-LOOT_PROTECTION_TICKS: 100,          // 1 minute killer protection
-UNTRADEABLE_DESPAWN_TICKS: 300,      // 3 minutes for untradeable
+export const COMBAT_CONSTANTS = {
+  DEATH: {
+    ANIMATION_TICKS: 5,              // Death animation duration (3 seconds)
+    COOLDOWN_TICKS: 1,               // Death cooldown (600ms)
+    RECONNECT_RESPAWN_DELAY_TICKS: 2, // Delay before auto-respawn on reconnect
+    STALE_LOCK_AGE_TICKS: 600000,    // 10 minutes (stale lock cleanup)
+    DEFAULT_RESPAWN_POSITION: { x: 0, y: 10, z: 0 },
+    DEFAULT_RESPAWN_TOWN: "Central Haven",
+  },
+  GRAVESTONE_TICKS: 500,             // 5 minutes to reclaim (reduced from 15 minutes)
+  GROUND_ITEM_TICKS: 200,            // 2 minutes on ground
+};
+
+// From DeathUtils.ts
+export const ITEMS_KEPT_ON_DEATH = 3;  // OSRS keep-3 system
+
+export const POSITION_VALIDATION = {
+  WORLD_BOUNDS: 10000,  // Max 10km from origin
+  MAX_HEIGHT: 500,      // Max height
+  MIN_HEIGHT: -50,      // Allow some underground (caves)
+} as const;
 ```
 
 ---
