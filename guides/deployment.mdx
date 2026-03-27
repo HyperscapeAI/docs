@@ -438,15 +438,30 @@ assets/
 
 ### CORS Configuration for Assets
 
-The assets CDN is configured with CORS headers to allow cross-origin loading from game clients:
+The assets CDN is configured with CORS headers to allow cross-origin loading from game clients. This is essential for loading 3D models, textures, audio, and manifests from the CDN.
 
+**Cloudflare R2 Configuration:**
 ```
 Access-Control-Allow-Origin: *
 Access-Control-Allow-Methods: GET, HEAD, OPTIONS
 Access-Control-Max-Age: 86400
 ```
 
-This enables the game client to load 3D models, textures, and manifests from the CDN regardless of the client's origin. The CORS configuration is automatically applied to all assets served from Cloudflare R2.
+**Local Development (Caddyfile):**
+```
+:8080 {
+    root * /assets
+    file_server browse
+    
+    header {
+        Access-Control-Allow-Origin *
+        Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+        Access-Control-Max-Age 86400
+    }
+}
+```
+
+This enables the game client to load assets from the CDN regardless of the client's origin. The CORS configuration is automatically applied to all assets served from both Cloudflare R2 (production) and the local Caddy server (development).
 
 ### Development CDN Fallback
 
