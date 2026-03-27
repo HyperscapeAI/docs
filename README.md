@@ -22,7 +22,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
 | **Tech** | VRM avatars, WebSocket networking (uWebSockets.js), PostgreSQL persistence, PhysX physics |
-| **UI** | Unified skilling panels, live NPC dialogue portraits, drag-and-drop action bars, home teleport system |
+| **UI** | Unified skilling panels, live NPC dialogue portraits, drag-and-drop action bars, home teleport system with visual effects |
 
 ## Quick Start
 
