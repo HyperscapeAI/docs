@@ -291,11 +291,43 @@ This prevents:
 
 | Event | Data | Description |
 |-------|------|-------------|
-| `ENTITY_DEATH` | `entityId`, `killerId`, `position` | Entity died |
-| `PLAYER_DEATH` | `playerId`, `killerId`, `position`, `zoneType` | Player death |
-| `PLAYER_RESPAWNED` | `playerId`, `spawnPosition` | Player respawned |
-| `GRAVESTONE_SPAWNED` | `gravestoneId`, `playerId`, `position` | Gravestone created |
-| `GRAVESTONE_EXPIRED` | `gravestoneId`, `playerId`, `groundItemIds` | Gravestone timed out |
+| `ENTITY_DEATH` | `entityId`, `entityType`, `killedBy`, `deathPosition` | Entity died (use this for death processing) |
+| `PLAYER_SET_DEAD` | `playerId`, `isDead`, `deathPosition?` | Player death state changed (use this for client UI) |
+| `PLAYER_DIED` | `playerId` | **DEPRECATED** - Use `PLAYER_SET_DEAD` or `ENTITY_DEATH` instead |
+| `PLAYER_RESPAWNED` | `playerId`, `spawnPosition`, `townName`, `deathLocation?` | Player respawned |
+| `DEATH_RECOVERED` | `playerId`, `position`, `items`, `killedBy`, `zoneType` | Crash recovery (server restart) |
+| `CORPSE_EMPTY` | `corpseId`, `playerId` | All items looted from gravestone |
+| `DEATH_HEADSTONE_EXPIRED` | `headstoneId`, `playerId` | Gravestone timed out |
+| `AUDIT_LOG` | `action`, `playerId`, `success`, `failureReason?` | Ops-visible audit events |
+
+**Event Migration** (PR #1094):
+```typescript
+// ❌ OLD (deprecated)
+world.on(EventType.PLAYER_DIED, (data: { playerId: string }) => {
+  // Handle player death
+});
+
+// ✅ NEW (use ENTITY_DEATH with type filter)
+world.on(EventType.ENTITY_DEATH, (data: { 
+  entityId: string; 
+  entityType: string;
+  killedBy?: string;
+  deathPosition?: { x: number; y: number; z: number };
+}) => {
+  if (data.entityType === 'player') {
+    // Handle player death
+  }
+});
+
+// ✅ NEW (use PLAYER_SET_DEAD for client UI)
+world.on(EventType.PLAYER_SET_DEAD, (data: {
+  playerId: string;
+  isDead: boolean;
+  deathPosition?: [number, number, number];
+}) => {
+  // Update death screen UI
+});
+```
 
 ---
 
