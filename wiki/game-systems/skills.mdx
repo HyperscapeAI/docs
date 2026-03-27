@@ -28,11 +28,15 @@ Skills are managed by `SkillsSystem` in `packages/shared/src/systems/shared/char
 
 ### Gathering Skills
 
-| Skill | Description | Training Methods |
-|-------|-------------|------------------|
-| **Woodcutting** | Chop trees | Using hatchet on trees |
-| **Mining** | Mine ore | Using pickaxe on rocks |
-| **Fishing** | Catch fish | Using fishing rod at spots |
+| Skill | Description | Training Methods | Tool Validation |
+|-------|-------------|------------------|-----------------|
+| **Woodcutting** | Chop trees | Using hatchet on trees | Manifest-based (prevents pickaxe usage) |
+| **Mining** | Mine ore | Using pickaxe on rocks | Manifest-based (prevents hatchet usage) |
+| **Fishing** | Catch fish | Using fishing rod at spots | Exact match required (tools not interchangeable) |
+
+<Info>
+**Tool Validation** (Updated March 2026): The gathering system now uses manifest-based tool validation to prevent cross-skill usage. Each tool in `tools.json` declares its skill explicitly ("woodcutting", "mining", "fishing"). This prevents exploits like using a pickaxe to cut trees.
+</Info>
 
 ### Support Skills
 
