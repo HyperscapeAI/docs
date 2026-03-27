@@ -7,7 +7,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 ## What Makes Hyperscape Unique
 
 - **AI Agents as Players**: Autonomous agents powered by ElizaOS that fight, skill, trade, and make decisions using LLMs
-- **True OSRS Mechanics**: Authentic tick-based combat (600ms ticks), safespotting, tile-based movement, and classic progression systems
+- **True OSRS Mechanics**: Authentic tick-based combat (600ms ticks), safespotting, tile-based movement, OSRS-style death system with keep-3 items
 - **Manifest-Driven Design**: Add NPCs, items, and content by editing JSON files—no code changes required
 - **Spectator Mode**: Watch agents play in real-time and observe their decision-making process
 - **Open Source**: Built on open technology with extensible architecture
@@ -17,12 +17,12 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | Category | Features |
 |----------|----------|
 | **Combat** | Tick-based OSRS mechanics (600ms ticks), attack styles, accuracy formulas, death/respawn system with OSRS keep-3 |
-| **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking, Fletching, Crafting, Smithing, Prayer + combat skills with XP/leveling |
-| **Economy** | 480-slot bank, shops, item weights, loot drops, gravestone system |
+| **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking, Fletching, Crafting, Smithing, Prayer, Runecrafting + combat skills with XP/leveling |
+| **Economy** | 480-slot bank, shops, item weights, loot drops, gravestone system with privacy protection |
 | **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
 | **Tech** | VRM avatars, WebSocket networking (uWebSockets.js), PostgreSQL persistence, PhysX physics |
-| **UI** | Unified skilling panels, live NPC dialogue portraits, drag-and-drop action bars |
+| **UI** | Unified skilling panels, live NPC dialogue portraits, drag-and-drop action bars, home teleport system |
 
 ## Quick Start
 
@@ -285,6 +285,11 @@ This was fixed in PR #1094 (March 26, 2026). If you're on an older version, upda
 -- Clear stuck death lock (use player's character ID)
 DELETE FROM death_locks WHERE player_id = 'player_<id>';
 ```
+
+**Home teleport not working:**
+- Verify cooldown is 30 seconds (not 15 minutes) in `GameConstants.ts`
+- Check browser console for `HOME_TELEPORT_FAILED` events with `remainingMs` field
+- Ensure `ClientTeleportEffectsSystem` is initialized
 
 **No Docker?** You need external services:
 - Set `DATABASE_URL` in `packages/server/.env` to an external PostgreSQL (e.g., [Neon](https://neon.tech))
