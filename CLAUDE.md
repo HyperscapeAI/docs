@@ -402,6 +402,60 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 ## Recent Changes (March 2026)
 
+### Resource Respawn System Overhaul (March 27, 2026)
+
+**Change** (PR #1099): Made resource respawn purely tick-based and use manifest `depleteChance` for mining.
+
+**Problem**: Legacy `setTimeout`-based respawn in `ResourceEntity.deplete()` was unreliable and non-deterministic. Mining used hardcoded `MINING_DEPLETE_CHANCE` constant instead of manifest values, preventing rune essence rocks (depleteChance: 0) from working correctly.
+
+**Fix**: Remove `setTimeout` respawn entirely. Respawn is now exclusively handled by `ResourceSystem.processRespawns()` via deterministic tick counting (OSRS-accurate). Mining depletion now reads `depleteChance` from manifest.
+
+**Key Changes**:
+- **Tick-Based Respawn**: `ResourceSystem.processRespawns()` is the single source of truth for respawn timing
+- **Manifest Depletion**: Mining reads `depleteChance` from manifest instead of hardcoded constant
+- **Rune Essence Support**: Resources with `depleteChance: 0` never deplete (OSRS-accurate)
+- **Removed Dead Code**: Deleted unused `MINING_DEPLETE_CHANCE` and `MINING_REDWOOD_DEPLETE_CHANCE` constants
+
+**Implementation** (`packages/shared/src/entities/world/ResourceEntity.ts`):
+```typescript
+// OLD (unreliable setTimeout)
+public deplete(): void {
+  this.isDepleted = true;
+  this.respawnTimer = setTimeout(() => {
+    this.respawn();
+  }, this.respawnTime);
+}
+
+// NEW (tick-based, handled by ResourceSystem)
+public deplete(): void {
+  this.isDepleted = true;
+  this.depletedAtTick = this.world.currentTick;
+  // No setTimeout - ResourceSystem.processRespawns() handles respawn
+}
+```
+
+**Mining Depletion** (`packages/shared/src/systems/shared/entities/gathering/MiningSystem.ts`):
+```typescript
+// Read depleteChance from manifest (fallback to 1.0 for safety)
+const depleteChance = resourceManifest.depleteChance ?? 1.0;
+
+// Roll for depletion
+if (Math.random() < depleteChance) {
+  resource.deplete();
+  this.logger.debug(`Resource ${resource.id} depleted (chance: ${depleteChance})`);
+}
+```
+
+**Impact**:
+- Deterministic OSRS-accurate respawn timing
+- Rune essence rocks work correctly (never deplete)
+- Eliminates race conditions from setTimeout
+- Consistent with forestry system (already tick-based)
+
+**Tests**: 2 new tests covering `depleteChance: 0` (essence rock) and `depleteChance: 1.0` (regular ore) depletion behavior.
+
+**Files Changed**: 4 files, 89 additions, 35 deletions
+
 ### Tool Validation System Overhaul (March 27, 2026)
 
 **Change** (PR #1098): Manifest-based tool validation to prevent cross-skill tool usage.
