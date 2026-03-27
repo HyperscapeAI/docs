@@ -48,11 +48,20 @@ NPCs are defined with combat stats, drops, and spawn locations:
   aggroRange: 3,
   drops: [
     { itemId: "coins", quantity: [1, 10], chance: 1.0 },
+    { itemId: "bones", quantity: 1, chance: 1.0 },
     { itemId: "bronze_sword", quantity: 1, chance: 0.05 }
   ],
   respawnTime: 15000
 }
 ```
+
+### Recent NPC Additions
+
+The assets repository includes new NPCs and mobs:
+
+- **Stores**: New shop NPCs including Lowe (archery), Dommik (crafting), Horvik (smithing), Zamorin (magic)
+- **Mobs**: Bandits, Barbarians, Dark Rangers, Dark Wizards, Guards
+- **Models**: Optimized VRM models for all NPCs with proper rigging
 
 ### Difficulty Levels
 
@@ -88,6 +97,15 @@ Items include equipment, resources, and consumables. Add to the appropriate cate
   }
 }
 ```
+
+### Recent Weapon Additions
+
+New weapon types and models have been added:
+
+- **Magic Staffs**: Air, Water, Earth, and Fire staffs with elemental bonuses
+- **Bows**: Oak and Willow bows for ranged combat
+- **Arrows**: Bronze arrows with proper ammunition system
+- **Models**: All weapons include aligned GLB models for proper hand positioning
 
 ### Example: Adding a Tool
 
@@ -126,6 +144,15 @@ Items include equipment, resources, and consumables. Add to the appropriate cate
   "notedItemId": "mithril_ore_noted"
 }
 ```
+
+### Recent Resource Additions
+
+New resources and items have been added:
+
+- **Currency**: Coin pile models for dropped coins
+- **Combat Drops**: Bones (universal mob drop for Prayer skill)
+- **Ashes**: Firemaking byproduct
+- **Ammunition**: Bronze arrows with proper manifest definitions
 
 ### Tier-Based Requirements
 
@@ -169,6 +196,15 @@ Shops define available items and prices:
 }
 ```
 
+### Recent Store Additions
+
+New specialized shops have been added:
+
+- **Lowe's Archery Emporium**: Bows, arrows, and ranged equipment
+- **Dommik's Crafting Store**: Crafting supplies and tools
+- **Horvik's Armour Shop**: Smithing equipment and armor
+- **Zamorin's Magic Shop**: Magic staffs, runes, and spell components
+
 ## Adding Stations
 
 Stations are interactive objects for crafting and processing:
@@ -190,6 +226,15 @@ Stations are interactive objects for crafting and processing:
 - **furnace**: Smelt ores into bars
 - **range**: Cook food with reduced burn chance
 - **bank**: Store items
+- **runecrafting_altar**: Craft runes from essence
+
+### Recent Station Updates
+
+New stations and models have been added:
+
+- **Runecrafting Altars**: Air, Water, Earth, Fire altars for rune crafting
+- **Optimized Models**: All station models have been optimized for better performance
+- **Firemaking Fire**: Visual model for active fires created through Firemaking skill
 
 ## Adding World Areas
 
@@ -285,6 +330,40 @@ World areas define zones with biomes and mob spawns:
   "level": 75,
   "xp": 303.8,
   "ticks": 4
+}
+```
+
+### Runecrafting Recipe
+
+**File**: `packages/server/world/assets/manifests/recipes/runecrafting.json`
+
+```json
+{
+  "output": "air_rune",
+  "inputs": [
+    { "item": "rune_essence", "amount": 1 }
+  ],
+  "level": 1,
+  "xp": 5,
+  "ticks": 3,
+  "altar": "air_altar"
+}
+```
+
+### Fletching Recipe
+
+**File**: `packages/server/world/assets/manifests/recipes/fletching.json`
+
+```json
+{
+  "output": "oak_shortbow",
+  "inputs": [
+    { "item": "oak_logs", "amount": 1 }
+  ],
+  "level": 20,
+  "xp": 16.5,
+  "ticks": 3,
+  "category": "bows"
 }
 ```
 
