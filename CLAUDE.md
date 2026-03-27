@@ -402,7 +402,22 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 ## Recent Changes (March 2026)
 
-### Mob Level Display Fix (March 27, 2026)
+### Tool Validation System Overhaul (March 27, 2026)
+
+**Change** (PR #1098): Manifest-based tool validation to prevent cross-skill tool usage.
+
+**Problem**: Substring matching in `itemMatchesToolCategory()` allowed pickaxes to cut trees and hatchets to mine rocks because "pickaxe" contains "axe". This violated OSRS mechanics where tools are skill-specific.
+
+**Fix**: Use `tools.json` manifest as single source of truth. Each tool declares its skill explicitly ("woodcutting", "mining", "fishing"). Manifest lookup prevents cross-skill usage. Substring fallback has symmetric exclusions to prevent false positives.
+
+**Key Features**:
+- **Manifest-First Validation**: Primary path uses `getExternalTool()` lookup with explicit skill comparison
+- **Fallback Guards**: Hatchet fallback rejects items containing "pickaxe"/"pick", pickaxe fallback rejects "hatchet"
+- **Warn-Once Logging**: Bounded Set (max 50 entries) prevents log flooding for unmanifested tools
+- **Fishing Tool Exact Match**: Fishing tools require exact ID match (not interchangeable like pickaxe tiers)
+- **Category-to-Skill Mapping**: `CATEGORY_TO_SKILL` map must be updated when new gathering skills are added
+
+**New Utilities** (`packages/shared/src/systems/shared/entities/gathering/ToolUtils.ts`):\n```typescript\n// Manifest-based tool validation with fallback guards\nexport function itemMatchesToolCategory(\n  itemId: string,\n  category: string,\n): boolean\n\n// Extract tool category from item ID\nexport function getToolCategory(toolRequired: string): string\n\n// Map tool categories to gathering skills\nconst CATEGORY_TO_SKILL: Partial<Record<string, GatheringSkill>> = {\n  hatchet: \"woodcutting\",\n  pickaxe: \"mining\",\n}\n\n// Test helper for warning cache isolation\nexport function _resetFallbackWarnings(): void\n```\n\n**Implementation Example**:\n```typescript\n// Manifest-based validation (primary path)\nconst toolData = getExternalTool(lowerItemId);\nif (toolData) {\n  const expectedSkill = CATEGORY_TO_SKILL[category] ?? category;\n  return toolData.skill === expectedSkill;\n}\n\n// Fallback with cross-skill guards\nif (category === \"hatchet\") {\n  if (lowerItemId.includes(\"pickaxe\") || lowerItemId.includes(\"pick\")) {\n    return false; // Reject pickaxes for woodcutting\n  }\n  return lowerItemId.includes(\"hatchet\");\n}\n```\n\n**Impact**: \n- Prevents cross-skill tool usage (pickaxe for woodcutting, hatchet for mining)\n- Forces all gathering tools to be in manifest for proper validation\n- Eliminates false positives from combat weapons (battleaxe, greataxe)\n- Maintains OSRS-accurate fishing tool behavior (exact match required)\n\n**Tests**: 15 new tests covering manifest validation, cross-skill rejection, fallback warnings, and fishing tool exact matching.\n\n**Files Changed**: 2 files, 234 additions, 31 deletions\n\n### Gathering Tool Visual Display Fix (March 27, 2026)\n\n**Change** (Commit 1f789cb): Show correct tool in hand for all gathering skills, not just fishing.\n\n**Problem**: Fishing-only gate in `GATHERING_TOOL_SHOW/HIDE` event handlers meant woodcutting and mining didn't display tools. A player with a pickaxe equipped and hatchet in inventory would visually swing the pickaxe at trees.\n\n**Fix**: Remove fishing-only gate from `ClientGraphics.ts` so all gathering skills (woodcutting, mining, fishing) display the correct tool during gathering actions.\n\n**Implementation** (`packages/shared/src/systems/client/ClientGraphics.ts`):\n```typescript\n// OLD (fishing-only)\nif (data.skill === 'fishing') {\n  this.handleGatheringToolShow(data);\n}\n\n// NEW (all gathering skills)\nthis.handleGatheringToolShow(data);\n```\n\n**Impact**: \n- Woodcutting now shows hatchet in hand (overrides equipped weapon)\n- Mining now shows pickaxe in hand (overrides equipped weapon)\n- Visual feedback matches actual tool being used\n- Consistent behavior across all gathering skills\n\n**Files Changed**: 1 file, 2 additions, 4 deletions\n\n### Mob Level Display Fix (March 27, 2026)
 
 **Change** (PR #1097): Fixed duplicate mob levels showing in right-click context menus.
 
