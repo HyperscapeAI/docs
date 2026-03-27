@@ -684,7 +684,7 @@ P(Level) = (1 + floor(low × (99 - L) / 98 + high × (L - 1) / 98 + 0.5)) / 256
 | Runite | ~6.64% (L85) | ~7.42% (L97+) | Extremely rare |
 
 <Warning>
-**Rock Depletion**: Mining rocks ALWAYS deplete after yielding one ore (100% chance). This matches OSRS behavior. The only exception would be Mining gloves (not currently implemented).
+**Rock Depletion** (Updated March 2026): Regular mining rocks deplete after yielding one ore (`depleteChance: 1.0`). Rune essence rocks never deplete (`depleteChance: 0`, OSRS-accurate). Depletion chance is now read from the manifest instead of hardcoded constants. The only exception would be Mining gloves (not currently implemented).
 </Warning>
 
 ### Pickaxe Speed Bonuses
