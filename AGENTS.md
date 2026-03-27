@@ -57,9 +57,10 @@ Hyperscape is a RuneScape-style MMORPG built on Three.js WebGPURenderer with TSL
 1. **No `any` types** - ESLint will reject them
 2. **WebGPU only** - No WebGL code or fallbacks
 3. **No mocks in tests** - Use real Playwright browser sessions
-4. **Bun package manager** - Use `bun install`, not npm
-5. **Strong typing** - Prefer classes over interfaces
-6. **Secrets stay out of git** - Real keys must only come from local `.env` files or secret managers
+4. **Bun package manager** - Use `bun install`, not npm (client/build tasks)
+5. **Node.js 22+ for server** - Server runtime migrated from Bun (March 2026)
+6. **Strong typing** - Prefer classes over interfaces
+7. **Secrets stay out of git** - Real keys must only come from local `.env` files or secret managers
 
 ## Tech Stack
 
@@ -93,7 +94,7 @@ npm test             # Run tests
 ```
 packages/
 ├── shared/          # Core engine (ECS, Three.js, PhysX, networking, React UI)
-├── server/          # Game server (Fastify, WebSockets, PostgreSQL)
+├── server/          # Game server (Fastify, uWebSockets.js, PostgreSQL)
 ├── client/          # Web client (Vite + React)
 ├── plugin-hyperscape/ # ElizaOS AI agent plugin
 ├── physx-js-webidl/ # PhysX WASM bindings
@@ -108,6 +109,28 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### Mob Level Display Fix (March 27, 2026)
+
+**Change** (PR #1097): Fixed duplicate mob levels showing in right-click context menus.
+
+**Problem**: Mob names like "Bandit (Lv8)" would show as "Attack Bandit (Lv8) (Level: 8)", displaying the level twice.
+
+**Fix**: Strip trailing `(Lv#)` suffix from mob display names before building context menu labels.
+
+**Impact**: Context menus now show clean mob names without duplicate level information.
+
+### Home Teleport Polish (March 26, 2026)
+
+**Change** (PR #1095): Polished home teleport cast effects and cooldown flow.
+
+**Features**: Visual cast effects, cooldown system (30s), minimap orb integration, smooth teleport animation.
+
+**Key Changes**:
+- Cooldown reduced from 15 minutes to 30 seconds
+- Server sends `remainingMs` in cooldown rejection packets
+- Dedicated channel-mode portal effect with terrain-aware anchoring
+- Both `HomeTeleportButton` and `MinimapHomeTeleportOrb` show cooldown progress
+
 ### Player Death System Overhaul (March 26, 2026)
 
 **Change** (PR #1094): Complete rewrite of player death pipeline to fix SQLite deadlock, equipment duplication, and implement OSRS-style "keep 3 most valuable items" for safe zone deaths.
@@ -115,7 +138,7 @@ packages/
 **Key Features**:
 - **Two-Phase Persist Pattern**: In-memory clear inside transaction, DB persist after transaction
 - **OSRS Keep-3 System**: Safe zone deaths keep 3 most valuable items (by manifest value)
-- **Event Migration**: `PLAYER_DIED` deprecated → use `PLAYER_SET_DEAD`
+- **Event Migration**: `PLAYER_DIED` deprecated → use `PLAYER_SET_DEAD` or `ENTITY_DEATH`
 - **Gravestone Privacy**: Loot items hidden from broadcast, only sent to interacting player
 - **Death Lock Recovery**: Persist kept items in death lock for crash recovery
 - **Persist Retry Queue**: Single-retry queue for post-transaction DB persist failures
@@ -145,12 +168,6 @@ packages/
 - **Service Handoff Fix**: Opening bank/store/tanner properly closes dialogue
 
 **Impact**: Eliminates ~500 lines of duplicated styling, more immersive NPC interactions.
-
-### Home Teleport Feature (March 26, 2026)
-
-**Change** (PR #1095): Polished home teleport cast effects and cooldown flow.
-
-**Features**: Visual cast effects, cooldown system, minimap orb integration, smooth teleport animation.
 
 ### Game UI Tab Arrow Key Capture Fix (March 26, 2026)
 
