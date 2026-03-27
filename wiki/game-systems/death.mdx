@@ -27,10 +27,14 @@ Death code lives in `packages/shared/src/systems/shared/` with:
 
 ```typescript
 type ZoneType = 
-  | "safe"       // Town, bank areas - items kept
-  | "dangerous"  // PvE wilderness - items drop on death
-  | "pvp";       // PvP zones - items dropped, lootable by killer
+  | "SAFE_AREA"   // Town, bank areas - keep 3 most valuable items (OSRS-style)
+  | "WILDERNESS"; // PvP wilderness - all items drop on death
 ```
+
+**OSRS-Accurate Mechanics**:
+- **Safe Zone**: Keep 3 most valuable items (by manifest value), rest goes to gravestone
+- **Wilderness**: All items drop immediately to ground (no gravestone)
+- **Duel Arena**: No item drops (inventory/equipment preserved)
 
 ---
 
