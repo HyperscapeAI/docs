@@ -109,6 +109,22 @@ packages/
 
 ## Recent Changes (March 2026)
 
+### UI Panel Tooltip Improvements (March 27, 2026)
+
+**Change** (PR #1102): Unified panel tooltips and bank equipment layout.
+
+**Features**: Consistent tooltip behavior across all UI panels with improved bank equipment grid layout.
+
+**Key Changes**:
+- **Unified Tooltips**: All panel tooltips now use consistent styling and positioning
+- **Bank Equipment Layout**: Improved equipment slot grid layout in bank interface
+- **Hover Effects**: Standardized hover effects across inventory, equipment, and bank panels
+
+**Impact**: 
+- More consistent user experience across all UI panels
+- Better visual feedback for interactive elements
+- Improved bank interface usability
+
 ### Tree Dissolve Transparency System (March 27, 2026)
 
 **Change** (PR #1101): Added dissolve transparency for depleted trees with smooth respawn animation.
