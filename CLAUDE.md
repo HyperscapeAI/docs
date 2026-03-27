@@ -402,96 +402,77 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 ## Recent Changes (March 2026)
 
+### Tree Dissolve Transparency System (March 27, 2026)
+
+**Change** (PR #1101): Added dissolve transparency for depleted trees with smooth respawn animation.
+
+**Features**: Depleted trees become 80% transparent instantly on depletion and animate back to full opacity over 0.3s on respawn. Uses per-instance dissolve attributes (InstancedMesh) and batch color blue channel (BatchedMesh) to drive real alpha transparency in the TSL shader.
+
+**Key Implementation**:
+- **Shared Animation Module**: `DissolveAnimation.ts` provides `startDissolve()` and `tickDissolveAnims()` for both instancer types
+- **GPU Attribute Encoding**: Blue channel of batch color encodes `1.0 - dissolveVal` (1.0 = fully visible, 0.0 = fully dissolved)
+- **Dithered Discard**: Uses Bayer 4×4 screen-door dithering in `alphaTestNode` instead of alpha blending to keep trees in opaque render pass with full early-Z rejection
+- **LOD Transition Preservation**: Dissolve state carries over during LOD swaps to prevent visual pops
+- **Atomic Initial Dissolve**: Pass `initialDissolve` through `addInstance()` → `addToPool()` so depleted trees have GPU attribute set at pool insertion time (no 1-frame flash)
+
+**New Files**:
+- `packages/shared/src/systems/shared/world/DissolveAnimation.ts` - Shared dissolve animation state machine
+
+**Configuration** (`packages/shared/src/systems/shared/world/GPUMaterials.ts`):
+```typescript
+GPU_VEG_CONFIG = {
+  DISSOLVE_DURATION: 0.3,  // Animation duration (seconds)
+  DISSOLVE_MAX: 1.0,       // Max dissolve progress (not visual opacity)
+  FADE_START: 40,          // Distance fade start (meters)
+  FADE_END: 60,            // Distance fade end (meters)
+}
+```
+
+**Impact**: 
+- Visual feedback for resource depletion/respawn
+- No performance cost (opaque render pass with early-Z)
+- Smooth animations without visual pops during LOD transitions
+- Eliminates ~60 lines of duplication between instancer files
+
 ### Tree Collision Proxy Improvements (March 27, 2026)
 
 **Change** (PR #1100): Use LOD2 model geometry for tree collision proxy instead of oversized cylinder.
 
-**Problem**: Trees used an invisible cylinder hitbox with 0.4 radius factor, which was much larger than the visible tree silhouette. Ground clicks near trees were being intercepted by the collision proxy, making it difficult to click on the ground near trees.
+**Problem**: Trees used an invisible cylinder hitbox with 0.4 radius factor, which was much larger than the visible tree silhouette. Ground clicks near trees were being intercepted by the collision proxy.
 
 **Fix**: Replace cylinder with actual LOD2 mesh geometry so clicks only register on the visible tree silhouette. Multi-part geometries (bark + leaves) are merged into a single proxy mesh. Falls back to tighter cylinder (0.25 radius factor) if LOD unavailable.
 
 **Key Features**:
 - **Geometry-Based Proxy**: Uses actual LOD2 model geometry for accurate collision detection
-- **Multi-Part Merging**: `mergeGeometries()` combines bark and leaves into single proxy mesh
-- **Proxy Geometry Cache**: Cache merged+scaled proxy geometry per `(sourceGeometries, scale)` to avoid redundant merges
-- **Defensive Filtering**: Filters out geometry parts missing position attribute before merging
-- **Bulk Copy Optimization**: Uses `Float32Array.set()` for non-interleaved position buffers
+- **Multi-Part Merging**: Combines bark and leaves into single proxy mesh
+- **Proxy Geometry Cache**: Cache merged+scaled proxy geometry to avoid redundant merges
 - **Shared Geometry Safety**: Proxy mesh geometry is shared (read-only) - callers must clone before mutating
 - **Cache Cleanup**: `clearProxyGeometryCache()` disposes cached geometries during world teardown
-- **Float Key Safety**: Round scale key to 3 decimal places to prevent floating-point cache misses
 
-**New Utilities** (`packages/shared/src/systems/shared/world/GLBTreeInstancer.ts`, `GLBTreeBatchedInstancer.ts`):
+**New Functions** (`packages/shared/src/systems/shared/world/GLBTreeInstancer.ts`, `GLBTreeBatchedInstancer.ts`):
 ```typescript
 /**
  * Get proxy geometry for collision detection.
- * Returns stable source geometry refs (not live InstancedMesh geometry).
- * 
  * CALLERS MUST CLONE BEFORE MUTATING - geometry is shared across all instances.
- * 
- * @returns Array of source geometries for LOD2, or undefined if unavailable
  */
 export function getProxyGeometry(): THREE.BufferGeometry[] | undefined
 
 /**
- * Merge multiple geometries into a single geometry.
- * Filters out parts missing position attribute.
- * Uses bulk copy for non-interleaved buffers.
- */
-function mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry | null
-
-/**
  * Clear the proxy geometry cache and dispose all cached geometries.
- * Called during world teardown to prevent memory leaks.
  */
 export function clearProxyGeometryCache(): void
-```
-
-**Implementation** (`packages/shared/src/entities/world/visuals/TreeGLBVisualStrategy.ts`):
-```typescript
-// Get LOD2 source geometries from instancer
-const proxyData = this.instancer.getProxyGeometry?.();
-
-if (merged && proxyData) {
-  // Clone and merge multi-part geometries (bark + leaves)
-  const clonedParts = proxyData.map((g) => g.clone());
-  const mergedGeometry = mergeGeometries(clonedParts);
-  
-  if (mergedGeometry) {
-    // Scale to match instance scale
-    mergedGeometry.scale(scale.x, scale.y, scale.z);
-    
-    // Cache the merged+scaled geometry
-    const cacheKey = `${sourceGeometries.join(',')}:${scale.x.toFixed(3)}`;
-    proxyGeometryCache.set(cacheKey, mergedGeometry);
-    
-    // Create proxy mesh with cached geometry
-    const proxyMesh = new THREE.Mesh(mergedGeometry);
-    proxyMesh.position.copy(position);
-    proxyMesh.visible = false;
-    return proxyMesh;
-  }
-}
-
-// Fallback to tighter cylinder if LOD unavailable
-const radius = boundingSphere.radius * 0.25; // Reduced from 0.4
 ```
 
 **Impact**:
 - Accurate click detection on tree silhouettes
 - Ground clicks near trees no longer intercepted
-- Reduced false-positive interactions
 - Memory-efficient geometry caching
-- Proper cleanup during world teardown
-
-**Tests**: Existing tree interaction tests verify collision proxy behavior.
-
-**Files Changed**: 7 files, 312 additions, 27 deletions
 
 ### Resource Respawn System Overhaul (March 27, 2026)
 
 **Change** (PR #1099): Made resource respawn purely tick-based and use manifest `depleteChance` for mining.
 
-**Problem**: Legacy `setTimeout`-based respawn in `ResourceEntity.deplete()` was unreliable and non-deterministic. Mining used hardcoded `MINING_DEPLETE_CHANCE` constant instead of manifest values, preventing rune essence rocks (depleteChance: 0) from working correctly.
+**Problem**: Legacy `setTimeout`-based respawn was unreliable and non-deterministic. Mining used hardcoded `MINING_DEPLETE_CHANCE` constant instead of manifest values, preventing rune essence rocks (depleteChance: 0) from working correctly.
 
 **Fix**: Remove `setTimeout` respawn entirely. Respawn is now exclusively handled by `ResourceSystem.processRespawns()` via deterministic tick counting (OSRS-accurate). Mining depletion now reads `depleteChance` from manifest.
 
@@ -499,353 +480,118 @@ const radius = boundingSphere.radius * 0.25; // Reduced from 0.4
 - **Tick-Based Respawn**: `ResourceSystem.processRespawns()` is the single source of truth for respawn timing
 - **Manifest Depletion**: Mining reads `depleteChance` from manifest instead of hardcoded constant
 - **Rune Essence Support**: Resources with `depleteChance: 0` never deplete (OSRS-accurate)
-- **Removed Dead Code**: Deleted unused `MINING_DEPLETE_CHANCE` and `MINING_REDWOOD_DEPLETE_CHANCE` constants
 
-**Implementation** (`packages/shared/src/entities/world/ResourceEntity.ts`):
+**Implementation**:
 ```typescript
-// OLD (unreliable setTimeout)
-public deplete(): void {
-  this.isDepleted = true;
-  this.respawnTimer = setTimeout(() => {
-    this.respawn();
-  }, this.respawnTime);
-}
-
-// NEW (tick-based, handled by ResourceSystem)
-public deplete(): void {
-  this.isDepleted = true;
-  this.depletedAtTick = this.world.currentTick;
-  // No setTimeout - ResourceSystem.processRespawns() handles respawn
-}
-```
-
-**Mining Depletion** (`packages/shared/src/systems/shared/entities/gathering/MiningSystem.ts`):
-```typescript
-// Read depleteChance from manifest (fallback to 1.0 for safety)
-const depleteChance = resourceManifest.depleteChance ?? 1.0;
-
-// Roll for depletion
+// Manifest-based depletion (mining)
+const depleteChance = resourceData.depleteChance ?? 1.0;
 if (Math.random() < depleteChance) {
   resource.deplete();
-  this.logger.debug(`Resource ${resource.id} depleted (chance: ${depleteChance})`);
+}
+
+// Tick-based respawn (ResourceSystem)
+if (ticksSinceDepleted >= resource.respawnTicks) {
+  resource.respawn();
 }
 ```
 
-**Impact**:
-- Deterministic OSRS-accurate respawn timing
-- Rune essence rocks work correctly (never deplete)
-- Eliminates race conditions from setTimeout
-- Consistent with forestry system (already tick-based)
-
-**Tests**: 2 new tests covering `depleteChance: 0` (essence rock) and `depleteChance: 1.0` (regular ore) depletion behavior.
-
-**Files Changed**: 4 files, 89 additions, 35 deletions
+**Impact**: 
+- OSRS-accurate tick-based respawn mechanics
+- Rune essence rocks (depleteChance: 0) never deplete per OSRS behavior
+- Deterministic respawn timing
 
 ### Tool Validation System Overhaul (March 27, 2026)
 
 **Change** (PR #1098): Manifest-based tool validation to prevent cross-skill tool usage.
 
-**Problem**: Substring matching in `itemMatchesToolCategory()` allowed pickaxes to cut trees and hatchets to mine rocks because "pickaxe" contains "axe". This violated OSRS mechanics where tools are skill-specific.
+**Problem**: Substring matching allowed pickaxes to cut trees and hatchets to mine rocks because "pickaxe" contains "axe". This violated OSRS mechanics where tools are skill-specific.
 
-**Fix**: Use `tools.json` manifest as single source of truth. Each tool declares its skill explicitly ("woodcutting", "mining", "fishing"). Manifest lookup prevents cross-skill usage. Substring fallback has symmetric exclusions to prevent false positives.
+**Fix**: Use `tools.json` manifest as single source of truth. Each tool declares its skill explicitly ("woodcutting", "mining", "fishing"). Manifest lookup prevents cross-skill usage.
 
 **Key Features**:
 - **Manifest-First Validation**: Primary path uses `getExternalTool()` lookup with explicit skill comparison
 - **Fallback Guards**: Hatchet fallback rejects items containing "pickaxe"/"pick", pickaxe fallback rejects "hatchet"
 - **Warn-Once Logging**: Bounded Set (max 50 entries) prevents log flooding for unmanifested tools
 - **Fishing Tool Exact Match**: Fishing tools require exact ID match (not interchangeable like pickaxe tiers)
-- **Category-to-Skill Mapping**: `CATEGORY_TO_SKILL` map must be updated when new gathering skills are added
 
-**New Utilities** (`packages/shared/src/systems/shared/entities/gathering/ToolUtils.ts`):\n```typescript\n// Manifest-based tool validation with fallback guards\nexport function itemMatchesToolCategory(\n  itemId: string,\n  category: string,\n): boolean\n\n// Extract tool category from item ID\nexport function getToolCategory(toolRequired: string): string\n\n// Map tool categories to gathering skills\nconst CATEGORY_TO_SKILL: Partial<Record<string, GatheringSkill>> = {\n  hatchet: \"woodcutting\",\n  pickaxe: \"mining\",\n}\n\n// Test helper for warning cache isolation\nexport function _resetFallbackWarnings(): void\n```\n\n**Implementation Example**:\n```typescript\n// Manifest-based validation (primary path)\nconst toolData = getExternalTool(lowerItemId);\nif (toolData) {\n  const expectedSkill = CATEGORY_TO_SKILL[category] ?? category;\n  return toolData.skill === expectedSkill;\n}\n\n// Fallback with cross-skill guards\nif (category === \"hatchet\") {\n  if (lowerItemId.includes(\"pickaxe\") || lowerItemId.includes(\"pick\")) {\n    return false; // Reject pickaxes for woodcutting\n  }\n  return lowerItemId.includes(\"hatchet\");\n}\n```\n\n**Impact**: \n- Prevents cross-skill tool usage (pickaxe for woodcutting, hatchet for mining)\n- Forces all gathering tools to be in manifest for proper validation\n- Eliminates false positives from combat weapons (battleaxe, greataxe)\n- Maintains OSRS-accurate fishing tool behavior (exact match required)\n\n**Tests**: 15 new tests covering manifest validation, cross-skill rejection, fallback warnings, and fishing tool exact matching.\n\n**Files Changed**: 2 files, 234 additions, 31 deletions\n\n### Gathering Tool Visual Display Fix (March 27, 2026)\n\n**Change** (Commit 1f789cb): Show correct tool in hand for all gathering skills, not just fishing.\n\n**Problem**: Fishing-only gate in `GATHERING_TOOL_SHOW/HIDE` event handlers meant woodcutting and mining didn't display tools. A player with a pickaxe equipped and hatchet in inventory would visually swing the pickaxe at trees.\n\n**Fix**: Remove fishing-only gate from `ClientGraphics.ts` so all gathering skills (woodcutting, mining, fishing) display the correct tool during gathering actions.\n\n**Implementation** (`packages/shared/src/systems/client/ClientGraphics.ts`):\n```typescript\n// OLD (fishing-only)\nif (data.skill === 'fishing') {\n  this.handleGatheringToolShow(data);\n}\n\n// NEW (all gathering skills)\nthis.handleGatheringToolShow(data);\n```\n\n**Impact**: \n- Woodcutting now shows hatchet in hand (overrides equipped weapon)\n- Mining now shows pickaxe in hand (overrides equipped weapon)\n- Visual feedback matches actual tool being used\n- Consistent behavior across all gathering skills\n\n**Files Changed**: 1 file, 2 additions, 4 deletions\n\n### Mob Level Display Fix (March 27, 2026)
+**New Utilities** (`packages/shared/src/systems/shared/entities/gathering/ToolUtils.ts`):
+- `itemMatchesToolCategory()` - Manifest-based tool validation with fallback guards
+- `getToolCategory()` - Extract tool category from item ID
+- `CATEGORY_TO_SKILL` - Map tool categories to gathering skills
+- `_resetFallbackWarnings()` - Test helper for warning cache isolation
+
+**Impact**: 
+- Prevents cross-skill tool usage (pickaxe for woodcutting, hatchet for mining)
+- Forces all gathering tools to be in manifest for proper validation
+- Eliminates false positives from combat weapons (battleaxe, greataxe)
+- Maintains OSRS-accurate fishing tool behavior (exact match required)
+
+### Gathering Tool Visual Display Fix (March 27, 2026)
+
+**Change** (Commit 1f789cb): Show correct tool in hand for all gathering skills, not just fishing.
+
+**Problem**: Fishing-only gate in `GATHERING_TOOL_SHOW/HIDE` events meant woodcutting and mining didn't display tools. A player with a pickaxe equipped and hatchet in inventory would visually swing the pickaxe at trees.
+
+**Fix**: Remove fishing-only gate so all gathering skills (woodcutting, mining, fishing) display the correct tool during gathering actions.
+
+**Impact**: 
+- Woodcutting now shows hatchet in hand (overrides equipped weapon)
+- Mining now shows pickaxe in hand (overrides equipped weapon)
+- Visual feedback matches actual tool being used
+
+### Mob Level Display Fix (March 27, 2026)
 
 **Change** (PR #1097): Fixed duplicate mob levels showing in right-click context menus.
 
-**Problem**: Mob names like "Bandit (Lv8)" would show as "Attack Bandit (Lv8) (Level: 8)" in context menus, displaying the level twice.
+**Problem**: Mob names like "Bandit (Lv8)" would show as "Attack Bandit (Lv8) (Level: 8)", displaying the level twice.
 
-**Fix**: Strip trailing `(Lv#)` suffix from mob display names before building context menu labels. The authoritative level from mob data is still shown in the full "(Level: X)" format.
-
-**Implementation** (`packages/shared/src/systems/client/interaction/handlers/MobInteractionHandler.ts`):
-```typescript
-private getDisplayName(name: string): string {
-  return name.replace(/\s*\(Lv\d+\)\s*$/u, "");
-}
-```
+**Fix**: Strip trailing `(Lv#)` suffix from mob display names before building context menu labels.
 
 **Impact**: Context menus now show clean mob names without duplicate level information.
-
-**Files Changed**: 2 files, 33 additions, 5 deletions
 
 ### Home Teleport Polish (March 26, 2026)
 
 **Change** (PR #1095): Polished home teleport cast effects and cooldown flow.
 
-**Features**:
-- **Visual Cast Effects**: Dedicated channel-mode portal effect with veil and orbital rings
-- **Cooldown System**: 30-second cooldown with server-authoritative remaining time
-- **UI Integration**: Both `HomeTeleportButton` and `MinimapHomeTeleportOrb` show cooldown progress
-- **Smooth Animations**: Cast progress bar, cooldown refill visual, portal formation effects
-- **Terrain-Aware Anchoring**: Portal effect anchored to player's lowest bone position for grounded appearance
+**Features**: Visual cast effects, cooldown system (30s), minimap orb integration, smooth teleport animation.
 
-**Constants** (`packages/shared/src/constants/GameConstants.ts`):
-```typescript
-export const HOME_TELEPORT_CONSTANTS = {
-  COOLDOWN_MS: 30 * 1000,        // 30 seconds (reduced from 15 minutes)
-  CAST_TIME_MS: 10 * 1000,       // 10 seconds (interruptible)
-  CAST_TIME_TICKS: 17,           // ~17 ticks at 600ms/tick
-} as const;
-```
-
-**New Utilities** (`packages/client/src/game/hud/homeTeleportUi.ts`):
-- `readHomeTeleportRemainingMs()` - Extract remaining cooldown from server event
-- `getHomeTeleportCooldownProgress()` - Calculate cooldown progress percentage
-
-**Server Changes** (`packages/server/src/systems/ServerNetwork/handlers/home-teleport.ts`):
-- `formatCooldownRemaining()` - Format cooldown as "Xm Ys" or "Xs"
-- Server now sends `remainingMs` in `homeTeleportFailed` packet when blocked by cooldown
-
-**Impact**: 
-- Polished teleport experience with clear visual feedback
-- Server-authoritative cooldown prevents client-side manipulation
-- Cooldown reduced from 15 minutes to 30 seconds for better gameplay flow
-
-**Files Changed**: 8 files, 649 additions, 53 deletions
+**Key Changes**:
+- Cooldown reduced from 15 minutes to 30 seconds
+- Server sends `remainingMs` in cooldown rejection packets
+- Dedicated channel-mode portal effect with terrain-aware anchoring
+- Both `HomeTeleportButton` and `MinimapHomeTeleportOrb` show cooldown progress
 
 ### Player Death System Overhaul (March 26, 2026)
 
 **Change** (PR #1094): Complete rewrite of player death pipeline to fix SQLite deadlock, equipment duplication, and implement OSRS-style "keep 3 most valuable items" for safe zone deaths.
 
-**Root Cause**: Death transaction called `clearEquipmentAndReturn()` and `clearInventoryImmediate()` which each opened nested DB transactions inside the outer `executeInTransaction()`, causing SQLite to deadlock silently. Players would play the death animation but never respawn.
-
-**Key Fixes**:
-1. **Two-Phase Persist Pattern**: In-memory clear inside transaction, DB persist after transaction completes
-2. **OSRS Keep-3 System**: Safe zone deaths keep 3 most valuable items (by manifest value), returned on respawn
-3. **Event Migration**: All `PLAYER_DIED` subscribers migrated to `ENTITY_DEATH` (deprecated event)
-4. **Gravestone Privacy**: Loot items stripped from network broadcast, only sent to interacting player
-5. **Death Lock Recovery**: Persist kept items in death lock for crash recovery
-6. **Persist Retry Queue**: Single-retry queue (bounded to 100 entries) for post-transaction DB persist failures
-7. **Duel Respawn Guard**: Block respawn during active duels to prevent escape exploit
-8. **Death Processing Guard**: Prevent respawn race while death transaction is in progress
+**Key Features**:
+- **Two-Phase Persist Pattern**: In-memory clear inside transaction, DB persist after transaction
+- **OSRS Keep-3 System**: Safe zone deaths keep 3 most valuable items (by manifest value)
+- **Event Migration**: `PLAYER_DIED` deprecated → use `PLAYER_SET_DEAD` or `ENTITY_DEATH`
+- **Gravestone Privacy**: Loot items hidden from broadcast, only sent to interacting player
+- **Death Lock Recovery**: Persist kept items in death lock for crash recovery
+- **Persist Retry Queue**: Single-retry queue for post-transaction DB persist failures
 
 **New Utilities** (`packages/shared/src/systems/shared/combat/DeathUtils.ts`):
-```typescript
-// XSS/Unicode/injection protection for killer names
-export function sanitizeKilledBy(killedBy: unknown): string
-
-// OSRS keep-3 with stack handling (O(n log n) on unique items)
-export function splitItemsForSafeDeath(
-  allItems: InventoryItem[],
-  keepCount: number,
-): { kept: InventoryItem[]; dropped: InventoryItem[] }
-
-// Position validation and clamping to world bounds
-export function validatePosition(position: {
-  x: number; y: number; z: number;
-}): { x: number; y: number; z: number } | null
-
-// Bounds checking without clamping
-export function isPositionInBounds(position: {
-  x: number; y: number; z: number;
-}): boolean
-
-// Gravestone entity ID prefix constant
-export const GRAVESTONE_ID_PREFIX = "gravestone_"
-```
-
-**New Types** (`packages/shared/src/systems/shared/combat/DeathTypes.ts`):
-- `PlayerSystemLike` - Duck-typed interface for PlayerSystem
-- `DatabaseSystemLike` - Duck-typed interface for DatabaseSystem
-- `EquipmentSystemLike` - Duck-typed interface for EquipmentSystem
-- `TerrainSystemLike` - Duck-typed interface for TerrainSystem
-- `NetworkLike` - Duck-typed interface for network layer
-- `TickSystemLike` - Duck-typed interface for TickSystem
-- `PlayerEntityLike` - Duck-typed interface for player entities
-- `DeathLocationDataWithHeadstone` - Extended death location data
+- `sanitizeKilledBy()` - XSS/Unicode/injection protection
+- `splitItemsForSafeDeath()` - OSRS keep-3 with stack handling
+- `validatePosition()` - Position validation and clamping
+- `GRAVESTONE_ID_PREFIX` - Constant for gravestone entity ID filtering
 
 **Breaking Changes**:
-- `PLAYER_DIED` event is deprecated - use `PLAYER_SET_DEAD` for client death UI, or `ENTITY_DEATH` for server-side death processing
-- Death lock schema now includes `keptItems` field for crash recovery
-- `HeadstoneEntity.modify()` now syncs `lootItems` from network data (privacy fix)
+- `PLAYER_DIED` event is deprecated - use `PLAYER_SET_DEAD` instead
+- Death lock schema now includes `keptItems` field
 
-**Migration Guide**:
-```typescript
-// ❌ OLD (deprecated)
-world.on(EventType.PLAYER_DIED, (data: { playerId: string }) => {
-  // Handle player death
-});
+## Package Manager
 
-// ✅ NEW (use ENTITY_DEATH with type filter)
-world.on(EventType.ENTITY_DEATH, (data: { 
-  entityId: string; 
-  entityType: string;
-  killedBy?: string;
-  deathPosition?: { x: number; y: number; z: number };
-}) => {
-  if (data.entityType === 'player') {
-    // Handle player death
-  }
-});
-```
+This project uses **Bun** (v1.3.10+) as the package manager and runtime for client/build tasks.
 
-**Impact**: 
-- Eliminates death softlock where players never respawn
-- Prevents equipment duplication on death
-- OSRS-accurate safe zone death mechanics (keep 3 most valuable items)
-- Robust crash recovery for death-window scenarios
-- Privacy-preserving gravestone loot (hidden until interaction)
-- Duel escape exploit prevented
+**Server Runtime**: Node.js 22+ (migrated from Bun in March 2026 for V8 incremental GC)
 
-**Files Changed**: 23 files, 2,574 additions, 566 deletions
-
-### Dialogue and Skilling Panel Polish (March 26, 2026)
-
-**Change** (PR #1093): Unified skilling panel layouts and redesigned NPC dialogue system with dedicated in-world panels.
-
-**Skilling Panel Improvements**:
-- **Shared Components**: Extracted `SkillingPanelBody`, `SkillingSection`, `SkillingQuantitySelector` into `SkillingPanelShared.tsx`
-- **Unified Layouts**: All skilling panels (Fletching, Cooking, Smelting, Smithing, Crafting, Tanning) now use consistent styling
-- **Shared Style Helpers**: `getSkillingSelectableStyle()` and `getSkillingBadgeStyle()` for consistent visual treatment
-- **Quantity Selector**: Reusable component with preset buttons (1, 5, 10, All, X) and custom input mode
-- **Responsive Design**: Mobile and desktop variants with proper touch targets
-
-**New Components** (`packages/client/src/game/panels/skilling/SkillingPanelShared.tsx`):
-```typescript
-// Shared panel body with intro text and empty state
-export function SkillingPanelBody(props: {
-  theme: Theme;
-  children?: ReactNode;
-  emptyMessage?: string;
-  intro?: string;
-})
-
-// Shared section container with consistent styling
-export function SkillingSection(props: {
-  theme: Theme;
-  children: ReactNode;
-  className?: string;
-  style?: CSSProperties;
-})
-
-// Reusable quantity selector with presets and custom input
-export function SkillingQuantitySelector(props: {
-  theme: Theme;
-  showCustomInput: boolean;
-  customQuantity: string;
-  lastCustomQuantity: number;
-  onCustomQuantityChange: (value: string) => void;
-  onCustomSubmit: () => void;
-  onCancelCustomInput: () => void;
-  onPresetQuantity: (quantity: number) => void;
-  allQuantity: number;
-  onShowCustomInput: () => void;
-})
-
-// Style helpers for consistent visual treatment
-export function getSkillingSelectableStyle(
-  theme: Theme,
-  selected: boolean,
-  disabled?: boolean,
-): CSSProperties
-
-export function getSkillingBadgeStyle(theme: Theme): CSSProperties
-```
-
-**Dialogue System Redesign**:
-- **DialoguePopupShell**: New dedicated modal shell for NPC dialogue with proper focus management and ARIA attributes
-- **DialogueCharacterPortrait**: Live 3D VRM portrait rendering in dialogue panels using WebGPU viewport
-- **Service Handoff Fix**: Opening bank/store/tanner now properly closes dialogue instead of leaving terminal continue step
-- **Improved Layout**: Horizontal layout with portrait on left, dialogue text and responses on right
-
-**New Components** (`packages/client/src/game/panels/dialogue/`):
-```typescript
-// Dedicated modal shell for dialogue with focus trap
-export function DialoguePopupShell(props: {
-  visible: boolean;
-  title: string;
-  children: ReactNode;
-  onClose: () => void;
-  width?: number | string;
-  maxWidth?: number | string;
-  maxHeight?: number | string;
-  contentStyle?: CSSProperties;
-})
-
-// Live 3D VRM portrait renderer
-export const DialogueCharacterPortrait = React.memo(
-  function DialogueCharacterPortrait(props: {
-    world: ClientWorld;
-    npcEntityId?: string;
-    npcName: string;
-    className?: string;
-  })
-)
-```
-
-**Impact**:
-- Eliminates ~500 lines of duplicated styling across 5 skilling panels
-- Consistent visual language for all crafting/processing interfaces
-- NPC dialogue feels more immersive with live character portraits
-- Service handoffs (bank, store, tanner) no longer leave orphaned dialogue panels
-- Better mobile responsiveness with proper touch targets
-
-**Files Changed**: 15 files, 1,623 additions, 1,265 deletions
-
-### Game UI Tab Arrow Key Capture Fix (March 26, 2026)
-
-**Change** (PR #1092): Fixed arrow keys being consumed by in-game panel tabs, preventing camera controls from working.
-
-**Problem**: When a combined panel tab retained focus, pressing an arrow key would switch tabs instead of moving the camera.
-
-**Fix**: Added `reserveArrowKeys` prop to `TabBar` component to disable arrow key consumption for game windows while preserving tab navigation for non-game UI.
-
-**Implementation** (`packages/client/src/ui/components/TabBar.tsx`):
-```typescript
-interface TabBarProps {
-  // ... other props
-  /** If true, arrow keys are not consumed (reserved for camera/game controls) */
-  reserveArrowKeys?: boolean;
-}
-
-// In keyboard handler:
-if (reserveArrowKeys && (key === 'ArrowLeft' || key === 'ArrowRight')) {
-  return; // Don't consume arrow keys - let camera controls handle them
-}
-```
-
-**Impact**: Arrow keys now control camera movement even when panel tabs have focus. Enter/Space still activate tabs for keyboard accessibility.
-
-**Files Changed**: 9 files, 392 additions, 4 deletions
-
-### Missing Packet Handlers Fix (March 26, 2026)
-
-**Change** (PR #1091): Added 8 missing server→client packet handlers to eliminate console errors.
-
-**Missing Handlers** (added to `ClientNetwork.ts`):
-- `onFletchingComplete` - Fletching batch finished
-- `onCookingComplete` - Cooking result with burn check
-- `onSmeltingComplete` - Smelting batch finished
-- `onSmithingComplete` - Smithing batch finished
-- `onCraftingComplete` - Crafting batch finished
-- `onTanningComplete` - Tanning batch finished
-- `onCombatEnded` - Combat session ended
-- `onQuestStarted` - Quest begun notification
-
-**Implementation**: Each handler forwards the packet data to the client world event bus so UI systems can react to these events.
-
-**Impact**: Eliminates "No handler for packet" errors, UI systems can react to skill completion and combat events.
-
-**Files Changed**: 1 file, 48 additions, 0 deletions
-
-### Prayer Login Sync Fix (March 26, 2026)
-
-**Change** (PR #1090): Fixed prayer state synchronization on player login.
-
-**Problem**: Prayer points and active prayers were not syncing correctly between sessions, causing desync between client and server state.
-
-**Fix**: Properly sync prayer state during player login sequence.
-
-**Impact**: Prayer points and active prayers now sync correctly between sessions.
-
-**Files Changed**: 3 files, 28 additions, 12 deletions
+- Install: `bun install` (NOT `npm install`)
+- Run scripts: `bun run <script>` or `bun <file>`
+- Some commands use `npm` prefix for Turbo workspace filtering
 
 ## Troubleshooting
 
