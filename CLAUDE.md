@@ -402,6 +402,91 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 ## Recent Changes (March 2026)
 
+### Tree Collision Proxy Improvements (March 27, 2026)
+
+**Change** (PR #1100): Use LOD2 model geometry for tree collision proxy instead of oversized cylinder.
+
+**Problem**: Trees used an invisible cylinder hitbox with 0.4 radius factor, which was much larger than the visible tree silhouette. Ground clicks near trees were being intercepted by the collision proxy, making it difficult to click on the ground near trees.
+
+**Fix**: Replace cylinder with actual LOD2 mesh geometry so clicks only register on the visible tree silhouette. Multi-part geometries (bark + leaves) are merged into a single proxy mesh. Falls back to tighter cylinder (0.25 radius factor) if LOD unavailable.
+
+**Key Features**:
+- **Geometry-Based Proxy**: Uses actual LOD2 model geometry for accurate collision detection
+- **Multi-Part Merging**: `mergeGeometries()` combines bark and leaves into single proxy mesh
+- **Proxy Geometry Cache**: Cache merged+scaled proxy geometry per `(sourceGeometries, scale)` to avoid redundant merges
+- **Defensive Filtering**: Filters out geometry parts missing position attribute before merging
+- **Bulk Copy Optimization**: Uses `Float32Array.set()` for non-interleaved position buffers
+- **Shared Geometry Safety**: Proxy mesh geometry is shared (read-only) - callers must clone before mutating
+- **Cache Cleanup**: `clearProxyGeometryCache()` disposes cached geometries during world teardown
+- **Float Key Safety**: Round scale key to 3 decimal places to prevent floating-point cache misses
+
+**New Utilities** (`packages/shared/src/systems/shared/world/GLBTreeInstancer.ts`, `GLBTreeBatchedInstancer.ts`):
+```typescript
+/**
+ * Get proxy geometry for collision detection.
+ * Returns stable source geometry refs (not live InstancedMesh geometry).
+ * 
+ * CALLERS MUST CLONE BEFORE MUTATING - geometry is shared across all instances.
+ * 
+ * @returns Array of source geometries for LOD2, or undefined if unavailable
+ */
+export function getProxyGeometry(): THREE.BufferGeometry[] | undefined
+
+/**
+ * Merge multiple geometries into a single geometry.
+ * Filters out parts missing position attribute.
+ * Uses bulk copy for non-interleaved buffers.
+ */
+function mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry | null
+
+/**
+ * Clear the proxy geometry cache and dispose all cached geometries.
+ * Called during world teardown to prevent memory leaks.
+ */
+export function clearProxyGeometryCache(): void
+```
+
+**Implementation** (`packages/shared/src/entities/world/visuals/TreeGLBVisualStrategy.ts`):
+```typescript
+// Get LOD2 source geometries from instancer
+const proxyData = this.instancer.getProxyGeometry?.();
+
+if (merged && proxyData) {
+  // Clone and merge multi-part geometries (bark + leaves)
+  const clonedParts = proxyData.map((g) => g.clone());
+  const mergedGeometry = mergeGeometries(clonedParts);
+  
+  if (mergedGeometry) {
+    // Scale to match instance scale
+    mergedGeometry.scale(scale.x, scale.y, scale.z);
+    
+    // Cache the merged+scaled geometry
+    const cacheKey = `${sourceGeometries.join(',')}:${scale.x.toFixed(3)}`;
+    proxyGeometryCache.set(cacheKey, mergedGeometry);
+    
+    // Create proxy mesh with cached geometry
+    const proxyMesh = new THREE.Mesh(mergedGeometry);
+    proxyMesh.position.copy(position);
+    proxyMesh.visible = false;
+    return proxyMesh;
+  }
+}
+
+// Fallback to tighter cylinder if LOD unavailable
+const radius = boundingSphere.radius * 0.25; // Reduced from 0.4
+```
+
+**Impact**:
+- Accurate click detection on tree silhouettes
+- Ground clicks near trees no longer intercepted
+- Reduced false-positive interactions
+- Memory-efficient geometry caching
+- Proper cleanup during world teardown
+
+**Tests**: Existing tree interaction tests verify collision proxy behavior.
+
+**Files Changed**: 7 files, 312 additions, 27 deletions
+
 ### Resource Respawn System Overhaul (March 27, 2026)
 
 **Change** (PR #1099): Made resource respawn purely tick-based and use manifest `depleteChance` for mining.
