@@ -1,20 +1,27 @@
 ---
 title: "Death & Respawn System"
-description: "Player death handling, gravestones, and item recovery"
+description: "Player death handling, gravestones, and item recovery with OSRS keep-3 mechanics"
 icon: "skull"
 ---
 
 # Death & Respawn System
 
-The death system handles player deaths with zone-aware mechanics, gravestone spawning, and secure item recovery. It uses database persistence to prevent item duplication exploits.
+The death system handles player deaths with zone-aware mechanics, gravestone spawning, and secure item recovery. Completely rewritten in PR #1094 (March 2026) to fix SQLite deadlock, equipment duplication, and implement OSRS-style "keep 3 most valuable items" for safe zone deaths.
 
 <Info>
-Death code lives in `packages/shared/src/systems/shared/death/` with:
-- `DeathStateManager.ts` - Death tracking and persistence
-- `SafeAreaDeathHandler.ts` - Safe zone death logic
-- `WildernessDeathHandler.ts` - PvP zone death logic
-- `ZoneDetectionSystem.ts` - Zone type detection
+Death code lives in `packages/shared/src/systems/shared/` with:
+- `combat/PlayerDeathSystem.ts` - Main death orchestrator
+- `combat/DeathUtils.ts` - Pure utility functions (sanitization, keep-3, validation)
+- `combat/DeathTypes.ts` - Type definitions
+- `death/DeathStateManager.ts` - Death lock persistence and crash recovery
+- `death/SafeAreaDeathHandler.ts` - Safe zone death logic (gravestone system)
+- `death/WildernessDeathHandler.ts` - Wilderness death logic (immediate ground drop)
+- `death/ZoneDetectionSystem.ts` - Zone type detection
 </Info>
+
+<Warning>
+**Breaking Change (March 2026)**: `PLAYER_DIED` event is deprecated. Use `PLAYER_SET_DEAD` for client death UI, or `ENTITY_DEATH` with type filter for server-side death processing.
+</Warning>
 
 ## Death Zones
 
