@@ -186,6 +186,14 @@ export const GATHERING_CONSTANTS = {
 } as const;
 ```
 
+<Info>
+**Resource Respawn** (Updated March 2026): All resource respawns are now purely tick-based and handled by `ResourceSystem.processRespawns()`. Legacy `setTimeout`-based respawn has been removed for deterministic OSRS-accurate timing.
+</Info>
+
+<Info>
+**Mining Depletion** (Updated March 2026): Mining depletion now reads `depleteChance` from manifest instead of hardcoded constants. Regular ore rocks have `depleteChance: 1.0` (always deplete). Rune essence rocks have `depleteChance: 0` (never deplete, OSRS-accurate).
+</Info>
+
 ---
 
 ## XP Constants
