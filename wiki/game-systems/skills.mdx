@@ -747,6 +747,47 @@ Defined in `recipes/*.json`:
 
 ---
 
+## Resource Respawn System (Updated March 2026)
+
+**Tick-Based Respawn**: All resource respawns are now handled by `ResourceSystem.processRespawns()` via deterministic tick counting (OSRS-accurate). Legacy `setTimeout`-based respawn has been removed.
+
+**How It Works**:
+1. When a resource depletes, `depletedAtTick` is set to current tick
+2. `ResourceSystem.processRespawns()` runs every tick
+3. Checks if `currentTick - depletedAtTick >= respawnTicks`
+4. If true, resource respawns deterministically
+
+**Benefits**:
+- **Deterministic**: Same respawn timing every time (no setTimeout variance)
+- **OSRS-Accurate**: Matches Old School RuneScape tick-based mechanics
+- **Reliable**: No race conditions or missed respawns
+- **Testable**: Predictable behavior for integration tests
+
+**Manifest-Based Depletion**:
+- Mining now reads `depleteChance` from manifest instead of hardcoded constants
+- Regular ore rocks: `depleteChance: 1.0` (always deplete)
+- Rune essence rocks: `depleteChance: 0` (never deplete, OSRS-accurate)
+- Allows per-resource depletion behavior without code changes
+
+**Implementation** (`packages/shared/src/systems/shared/entities/gathering/ResourceSystem.ts`):
+```typescript
+public processRespawns(): void {
+  const currentTick = this.world.currentTick;
+  
+  for (const resource of this.world.entities.values()) {
+    if (!(resource instanceof ResourceEntity)) continue;
+    if (!resource.isDepleted) continue;
+    
+    const ticksSinceDepleted = currentTick - resource.depletedAtTick;
+    if (ticksSinceDepleted >= resource.respawnTicks) {
+      resource.respawn();
+    }
+  }
+}
+```
+
+---
+
 ## Anti-Exploit Protections
 
 ### Resource Spam Click Prevention
