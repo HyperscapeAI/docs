@@ -149,7 +149,7 @@ packages/
 │   ├── Three.js + PhysX integration
 │   ├── Real-time multiplayer networking
 │   └── React UI components
-├── server/              # Game server (Fastify + WebSockets)
+├── server/              # Game server (Fastify + uWebSockets.js)
 │   ├── World management
 │   ├── SQLite/PostgreSQL persistence
 │   └── LiveKit voice chat integration
@@ -158,9 +158,9 @@ packages/
 │   ├── Player controls
 │   └── UI/HUD
 ├── physx-js-webidl/     # PhysX WASM bindings
-├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
 ├── plugin-hyperscape/   # ElizaOS AI agent plugin
 ├── procgen/             # Procedural generation (terrain, biomes, vegetation)
+├── asset-forge/         # AI asset generation (GPT-4, MeshyAI)
 ├── duel-oracle-evm/     # EVM duel outcome oracle contracts
 ├── duel-oracle-solana/  # Solana duel outcome oracle program
 └── docs-site/           # Docusaurus documentation site
@@ -174,7 +174,7 @@ packages/
 2. **shared** - Depends on physx-js-webidl
 3. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
 
 > **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
 >
@@ -201,7 +201,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -267,7 +267,7 @@ Visual testing uses colored cube proxies:
 
 ### Production Code Only
 
-- No TODOs or \"will fill this out later\" - implement completely
+- No TODOs or "will fill this out later" - implement completely
 - No hardcoded data - use JSON files and general systems
 - No shortcuts or workarounds - fix root causes
 - Build toward the general case (many items, players, mobs)
@@ -349,7 +349,7 @@ All services have unique default ports to avoid conflicts:
 **Package-specific `.env` files**: Each package has its own `.env.example` with deployment documentation:
 
 | Package | File | Purpose |
-|---------|------|---------| 
+|---------|------|---------|
 | Server | `packages/server/.env.example` | Server deployment (Railway, Fly.io, Docker) |
 | Client | `packages/client/.env.example` | Client deployment (Vercel, Netlify, Pages) |
 | AssetForge | `packages/asset-forge/.env.example` | AssetForge deployment |
@@ -402,6 +402,60 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 ## Recent Changes (March 2026)
 
+### Mob Level Display Fix (March 27, 2026)
+
+**Change** (PR #1097): Fixed duplicate mob levels showing in right-click context menus.
+
+**Problem**: Mob names like "Bandit (Lv8)" would show as "Attack Bandit (Lv8) (Level: 8)" in context menus, displaying the level twice.
+
+**Fix**: Strip trailing `(Lv#)` suffix from mob display names before building context menu labels. The authoritative level from mob data is still shown in the full "(Level: X)" format.
+
+**Implementation** (`packages/shared/src/systems/client/interaction/handlers/MobInteractionHandler.ts`):
+```typescript
+private getDisplayName(name: string): string {
+  return name.replace(/\s*\(Lv\d+\)\s*$/u, "");
+}
+```
+
+**Impact**: Context menus now show clean mob names without duplicate level information.
+
+**Files Changed**: 2 files, 33 additions, 5 deletions
+
+### Home Teleport Polish (March 26, 2026)
+
+**Change** (PR #1095): Polished home teleport cast effects and cooldown flow.
+
+**Features**:
+- **Visual Cast Effects**: Dedicated channel-mode portal effect with veil and orbital rings
+- **Cooldown System**: 30-second cooldown with server-authoritative remaining time
+- **UI Integration**: Both `HomeTeleportButton` and `MinimapHomeTeleportOrb` show cooldown progress
+- **Smooth Animations**: Cast progress bar, cooldown refill visual, portal formation effects
+- **Terrain-Aware Anchoring**: Portal effect anchored to player's lowest bone position for grounded appearance
+
+**Constants** (`packages/shared/src/constants/GameConstants.ts`):
+```typescript
+export const HOME_TELEPORT_CONSTANTS = {
+  COOLDOWN_MS: 30 * 1000,        // 30 seconds (reduced from 15 minutes)
+  CAST_TIME_MS: 10 * 1000,       // 10 seconds (interruptible)
+  CAST_TIME_TICKS: 17,           // ~17 ticks at 600ms/tick
+} as const;
+```
+
+**New Utilities** (`packages/client/src/game/hud/homeTeleportUi.ts`):
+- `readHomeTeleportRemainingMs()` - Extract remaining cooldown from server event
+- `getHomeTeleportCooldownProgress()` - Calculate cooldown progress percentage
+
+**Server Changes** (`packages/server/src/systems/ServerNetwork/handlers/home-teleport.ts`):
+- `formatCooldownRemaining()` - Format cooldown as "Xm Ys" or "Xs"
+- Server now sends `remainingMs` in `homeTeleportFailed` packet when blocked by cooldown
+
+**Impact**: 
+- Polished teleport experience with clear visual feedback
+- Server-authoritative cooldown prevents client-side manipulation
+- Cooldown reduced from 15 minutes to 30 seconds for better gameplay flow
+
+**Files Changed**: 8 files, 649 additions, 53 deletions
+
 ### Player Death System Overhaul (March 26, 2026)
 
 **Change** (PR #1094): Complete rewrite of player death pipeline to fix SQLite deadlock, equipment duplication, and implement OSRS-style "keep 3 most valuable items" for safe zone deaths.
@@ -414,32 +468,79 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 3. **Event Migration**: All `PLAYER_DIED` subscribers migrated to `ENTITY_DEATH` (deprecated event)
 4. **Gravestone Privacy**: Loot items stripped from network broadcast, only sent to interacting player
 5. **Death Lock Recovery**: Persist kept items in death lock for crash recovery
-6. **Persist Retry Queue**: Single-retry queue for post-transaction DB persist failures
+6. **Persist Retry Queue**: Single-retry queue (bounded to 100 entries) for post-transaction DB persist failures
+7. **Duel Respawn Guard**: Block respawn during active duels to prevent escape exploit
+8. **Death Processing Guard**: Prevent respawn race while death transaction is in progress
 
 **New Utilities** (`packages/shared/src/systems/shared/combat/DeathUtils.ts`):
-- `sanitizeKilledBy()` - XSS/Unicode/injection protection for killer names
-- `splitItemsForSafeDeath()` - OSRS keep-3 with stack handling (O(n log n) on unique items)
-- `validatePosition()` - Position validation and clamping to world bounds
-- `isPositionInBounds()` - Bounds checking without clamping
-- `GRAVESTONE_ID_PREFIX` - Constant for gravestone entity ID filtering
+```typescript
+// XSS/Unicode/injection protection for killer names
+export function sanitizeKilledBy(killedBy: unknown): string
+
+// OSRS keep-3 with stack handling (O(n log n) on unique items)
+export function splitItemsForSafeDeath(
+  allItems: InventoryItem[],
+  keepCount: number,
+): { kept: InventoryItem[]; dropped: InventoryItem[] }
+
+// Position validation and clamping to world bounds
+export function validatePosition(position: {
+  x: number; y: number; z: number;
+}): { x: number; y: number; z: number } | null
+
+// Bounds checking without clamping
+export function isPositionInBounds(position: {
+  x: number; y: number; z: number;
+}): boolean
+
+// Gravestone entity ID prefix constant
+export const GRAVESTONE_ID_PREFIX = "gravestone_"
+```
 
 **New Types** (`packages/shared/src/systems/shared/combat/DeathTypes.ts`):
-- `PlayerSystemLike`, `DatabaseSystemLike`, `EquipmentSystemLike`
-- `TerrainSystemLike`, `NetworkLike`, `TickSystemLike`
-- `PlayerEntityLike`, `DeathLocationDataWithHeadstone`
+- `PlayerSystemLike` - Duck-typed interface for PlayerSystem
+- `DatabaseSystemLike` - Duck-typed interface for DatabaseSystem
+- `EquipmentSystemLike` - Duck-typed interface for EquipmentSystem
+- `TerrainSystemLike` - Duck-typed interface for TerrainSystem
+- `NetworkLike` - Duck-typed interface for network layer
+- `TickSystemLike` - Duck-typed interface for TickSystem
+- `PlayerEntityLike` - Duck-typed interface for player entities
+- `DeathLocationDataWithHeadstone` - Extended death location data
 
 **Breaking Changes**:
-- `PLAYER_DIED` event is deprecated - use `PLAYER_SET_DEAD` instead
+- `PLAYER_DIED` event is deprecated - use `PLAYER_SET_DEAD` for client death UI, or `ENTITY_DEATH` for server-side death processing
 - Death lock schema now includes `keptItems` field for crash recovery
+- `HeadstoneEntity.modify()` now syncs `lootItems` from network data (privacy fix)
+
+**Migration Guide**:
+```typescript
+// ❌ OLD (deprecated)
+world.on(EventType.PLAYER_DIED, (data: { playerId: string }) => {
+  // Handle player death
+});
+
+// ✅ NEW (use ENTITY_DEATH with type filter)
+world.on(EventType.ENTITY_DEATH, (data: { 
+  entityId: string; 
+  entityType: string;
+  killedBy?: string;
+  deathPosition?: { x: number; y: number; z: number };
+}) => {
+  if (data.entityType === 'player') {
+    // Handle player death
+  }
+});
+```
 
 **Impact**: 
 - Eliminates death softlock where players never respawn
 - Prevents equipment duplication on death
-- OSRS-accurate safe zone death mechanics
+- OSRS-accurate safe zone death mechanics (keep 3 most valuable items)
 - Robust crash recovery for death-window scenarios
 - Privacy-preserving gravestone loot (hidden until interaction)
+- Duel escape exploit prevented
 
-**Files Changed**: 40+ files, 3,000+ additions, 800+ deletions
+**Files Changed**: 23 files, 2,574 additions, 566 deletions
 
 ### Dialogue and Skilling Panel Polish (March 26, 2026)
 
@@ -452,11 +553,78 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 - **Quantity Selector**: Reusable component with preset buttons (1, 5, 10, All, X) and custom input mode
 - **Responsive Design**: Mobile and desktop variants with proper touch targets
 
+**New Components** (`packages/client/src/game/panels/skilling/SkillingPanelShared.tsx`):
+```typescript
+// Shared panel body with intro text and empty state
+export function SkillingPanelBody(props: {
+  theme: Theme;
+  children?: ReactNode;
+  emptyMessage?: string;
+  intro?: string;
+})
+
+// Shared section container with consistent styling
+export function SkillingSection(props: {
+  theme: Theme;
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+})
+
+// Reusable quantity selector with presets and custom input
+export function SkillingQuantitySelector(props: {
+  theme: Theme;
+  showCustomInput: boolean;
+  customQuantity: string;
+  lastCustomQuantity: number;
+  onCustomQuantityChange: (value: string) => void;
+  onCustomSubmit: () => void;
+  onCancelCustomInput: () => void;
+  onPresetQuantity: (quantity: number) => void;
+  allQuantity: number;
+  onShowCustomInput: () => void;
+})
+
+// Style helpers for consistent visual treatment
+export function getSkillingSelectableStyle(
+  theme: Theme,
+  selected: boolean,
+  disabled?: boolean,
+): CSSProperties
+
+export function getSkillingBadgeStyle(theme: Theme): CSSProperties
+```
+
 **Dialogue System Redesign**:
-- **DialoguePopupShell**: New dedicated modal shell for NPC dialogue with proper focus management
-- **DialogueCharacterPortrait**: Live 3D VRM portrait rendering in dialogue panels
+- **DialoguePopupShell**: New dedicated modal shell for NPC dialogue with proper focus management and ARIA attributes
+- **DialogueCharacterPortrait**: Live 3D VRM portrait rendering in dialogue panels using WebGPU viewport
 - **Service Handoff Fix**: Opening bank/store/tanner now properly closes dialogue instead of leaving terminal continue step
 - **Improved Layout**: Horizontal layout with portrait on left, dialogue text and responses on right
+
+**New Components** (`packages/client/src/game/panels/dialogue/`):
+```typescript
+// Dedicated modal shell for dialogue with focus trap
+export function DialoguePopupShell(props: {
+  visible: boolean;
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+  width?: number | string;
+  maxWidth?: number | string;
+  maxHeight?: number | string;
+  contentStyle?: CSSProperties;
+})
+
+// Live 3D VRM portrait renderer
+export const DialogueCharacterPortrait = React.memo(
+  function DialogueCharacterPortrait(props: {
+    world: ClientWorld;
+    npcEntityId?: string;
+    npcName: string;
+    className?: string;
+  })
+)
+```
 
 **Impact**:
 - Eliminates ~500 lines of duplicated styling across 5 skilling panels
@@ -467,25 +635,27 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 **Files Changed**: 15 files, 1,623 additions, 1,265 deletions
 
-### Home Teleport Feature (March 26, 2026)
-
-**Change** (PR #1095): Polished home teleport cast effects and cooldown flow.
-
-**Features**:
-- Visual cast effects with particle animations
-- Cooldown system with UI feedback
-- Minimap orb integration for quick access
-- Smooth teleport animation and camera transition
-
-**Impact**: Players can quickly return to home location with polished visual feedback.
-
 ### Game UI Tab Arrow Key Capture Fix (March 26, 2026)
 
 **Change** (PR #1092): Fixed arrow keys being consumed by in-game panel tabs, preventing camera controls from working.
 
 **Problem**: When a combined panel tab retained focus, pressing an arrow key would switch tabs instead of moving the camera.
 
-**Fix**: Added `reserveArrowKeys` prop to disable arrow key consumption for game windows while preserving tab navigation for non-game UI.
+**Fix**: Added `reserveArrowKeys` prop to `TabBar` component to disable arrow key consumption for game windows while preserving tab navigation for non-game UI.
+
+**Implementation** (`packages/client/src/ui/components/TabBar.tsx`):
+```typescript
+interface TabBarProps {
+  // ... other props
+  /** If true, arrow keys are not consumed (reserved for camera/game controls) */
+  reserveArrowKeys?: boolean;
+}
+
+// In keyboard handler:
+if (reserveArrowKeys && (key === 'ArrowLeft' || key === 'ArrowRight')) {
+  return; // Don't consume arrow keys - let camera controls handle them
+}
+```
 
 **Impact**: Arrow keys now control camera movement even when panel tabs have focus. Enter/Space still activate tabs for keyboard accessibility.
 
@@ -495,149 +665,33 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 **Change** (PR #1091): Added 8 missing server→client packet handlers to eliminate console errors.
 
-**Missing Handlers**: `onFletchingComplete`, `onCookingComplete`, `onSmeltingComplete`, `onSmithingComplete`, `onCraftingComplete`, `onTanningComplete`, `onCombatEnded`, `onQuestStarted`
+**Missing Handlers** (added to `ClientNetwork.ts`):
+- `onFletchingComplete` - Fletching batch finished
+- `onCookingComplete` - Cooking result with burn check
+- `onSmeltingComplete` - Smelting batch finished
+- `onSmithingComplete` - Smithing batch finished
+- `onCraftingComplete` - Crafting batch finished
+- `onTanningComplete` - Tanning batch finished
+- `onCombatEnded` - Combat session ended
+- `onQuestStarted` - Quest begun notification
+
+**Implementation**: Each handler forwards the packet data to the client world event bus so UI systems can react to these events.
 
 **Impact**: Eliminates "No handler for packet" errors, UI systems can react to skill completion and combat events.
+
+**Files Changed**: 1 file, 48 additions, 0 deletions
 
 ### Prayer Login Sync Fix (March 26, 2026)
 
 **Change** (PR #1090): Fixed prayer state synchronization on player login.
 
+**Problem**: Prayer points and active prayers were not syncing correctly between sessions, causing desync between client and server state.
+
+**Fix**: Properly sync prayer state during player login sequence.
+
 **Impact**: Prayer points and active prayers now sync correctly between sessions.
 
-### Equipment Panel Cross-Player Leak Fix (March 26, 2026)
-
-**Change** (PR #1089): Fixed equipment panel showing stale data from previously inspected players.
-
-**Problem**: Panel data was captured in closure at render time, causing stale data when switching between players.
-
-**Fix**: Recreate `renderPanel` function when panel data changes by including data in `useMemo` dependencies.
-
-**Impact**: Equipment panel always shows current player's data, no cross-contamination.
-
-### Comprehensive UI Panel Upgrade (March 26, 2026)
-
-**Change** (PR #1088): Major UI polish pass across combat, equipment, and inventory panels.
-
-**Features**:
-- Combat style banners with drag-to-action-bar support
-- Fixed combat style click handling on drag overlays
-- Stabilized combat banner width regardless of style count
-- Auto-retaliate toggle improvements
-- Optimistic UI updates for combat settings
-
-**Impact**: More responsive and polished combat UI with better drag-and-drop integration.
-
-### Performance & Scalability Overhaul (March 19-20, 2026)
-
-**PR #1064**: Major architectural changes to improve server tick reliability and support 50+ concurrent players with 25+ AI agents.
-
-**Key Changes**:
-1. **Server Runtime Migration**: Bun → Node.js 22+ (V8 incremental GC eliminates 500-1200ms stop-the-world pauses)
-2. **uWebSockets.js Integration**: Native pub/sub broadcasting on port 5556 (eliminates O(n) socket iteration)
-3. **Agent AI Worker Thread**: Decision logic runs off main thread (eliminates 200-600ms blocking)
-4. **BFS Pathfinding Optimization**: Global iteration budget, zero-allocation scratch tiles, per-tick walkability cache
-5. **Terrain System Optimization**: Low-res collision (16×16), time-budgeted processing, pre-baked walkability flags
-6. **Tick System Reliability**: Drift correction, health monitoring, per-handler timing
-
-**Impact**:
-- Tick blocking: 900-2400ms → 110-200ms (81-92% reduction)
-- Missed ticks: 3-5/min → 0 under normal load
-- Event loop blocking: 62.5% → <3%
-- Scalability: 20 players + 10 agents → 50+ players + 25+ agents
-
-**Breaking Changes**:
-- Server now requires Node.js 22+ (Bun no longer supported for server runtime)
-- WebSocket port changed from 5555 → 5556 (uWS, configurable with `UWS_PORT`)
-- Client `PUBLIC_WS_URL` must be updated to `ws://localhost:5556/ws`
-
-**Configuration**:
-```bash
-# Server runtime (REQUIRED)
-node >= 22.0.0
-
-# WebSocket transport
-UWS_ENABLED=true          # Enable uWS (default: true)
-UWS_PORT=5556             # uWS port (default: 5556)
-PUBLIC_WS_URL=ws://localhost:5556/ws
-
-# Agent AI worker thread
-EMBEDDED_BEHAVIOR_TICK_INTERVAL=8000  # Agent tick interval (ms)
-AGENT_STAGGER_OFFSET_MS=800           # Stagger offset (ms)
-MAX_AGENTS_PER_POLL=5                 # Max agents per poll cycle
-
-# BFS pathfinding
-MAX_BFS_ITERATIONS_PER_TICK=12000     # Global budget
-DEFAULT_MAX_ITERATIONS=4000           # Per-call limit
-
-# Terrain system
-SERVER_COLLISION_RESOLUTION=16        # Collision mesh resolution
-COLLISION_BUDGET_MS=8                 # Collision queue budget (ms)
-WALKABILITY_BUDGET_MS=4               # Walkability baking budget (ms)
-```
-
-**Files Changed**: 54 files, 6,502 additions, 1,164 deletions
-
-**Documentation**: See `docs/performance-march-2026.md` for complete details.
-
-### VRM Material Isolation Fix (March 17, 2026)
-
-**Change** (PR #1061, Commit 364d0a5): Isolated VRM clone materials to prevent highlight bleed across mob instances.
-
-**Problem**: `SkeletonUtils.clone()` shares material instances across all VRM clones, causing hover highlight on one mob to affect all mobs of the same type.
-
-**Fix**: Create fresh `MeshStandardNodeMaterial` per mesh in `cloneGLB()` so each entity has independent `outputNode`/uniforms. Textures remain shared by reference for memory efficiency.
-
-**Impact**: Each mob instance now has independent highlight state.
-
-### Mob AI Tick Processing Fix (March 17, 2026)
-
-**Change** (PR #1060, Commit a55079e): Wired mob AI tick processing into server tick loop to enable mob state machine transitions.
-
-**Problem**: `MobEntity.serverUpdate()` defers AI to `GameTickProcessor.runAITick()`, but `GameTickProcessor` was never instantiated — so mob AI state machines never received `update()` calls.
-
-**Fix**: Register mob AI tick handler at MOVEMENT priority in `ServerNetwork`, before mob tile movement, so AI decides movement targets and the movement system executes paths on the same tick.
-
-**Impact**: Mob AI state machines now function correctly (IDLE → WANDER → CHASE → ATTACK).
-
-### Dev Server Watcher CPU Fix (March 16, 2026)
-
-**Change** (PR #1034, Commit 7b5bf08): Fixed dev server watcher burning 100% CPU when idle.
-
-**Problem**: Two compounding issues caused the dev script to consume 100% CPU core while completely idle:
-1. `awaitWriteFinish` polls every watched file at 100ms — redundant since the script already debounces rebuilds itself
-2. Polling fallback does a full recursive directory walk every 1s
-
-**Fix**: Removed `awaitWriteFinish` (redundant with existing 200ms debounce), increased polling fallback interval from 1s to 5s.
-
-**Impact**: Eliminates 100% CPU usage when dev server is idle.
-
-### Docker Build Improvements (March 15, 2026)
-
-**Change** (PR #1033, Commit 7519105): Major Dockerfile improvements for production deployment.
-
-**Key Changes**:
-- **Bun 1.3.10 Upgrade**: Updated from 1.1.38 to support Vite 6+ builds
-- **Client Build**: Added `packages/client` build to Docker image (required for multi-service deployments)
-- **Workspace Symlinks**: Manually recreate Bun workspace symlinks after Docker COPY (COPY flattens symlinks)
-- **Per-Package node_modules**: Bun 1.3 no longer hoists all deps to root - explicitly copy package-level node_modules
-- **better-sqlite3 Removal**: Strip from manifests before install (segfaults under QEMU cross-compilation)
-
-**Impact**: Production Docker images now build successfully with Vite 6+.
-
-### Dependency Updates (March 19, 2026)
-
-**Major Updates**:
-- **Vite**: 6.4.1 → 8.0.0 (major version bump for build system)
-- **@vitejs/plugin-react**: 5.2.0 → 6.0.1 (React plugin compatibility)
-- **@types/three**: 0.182.0 → 0.183.1 (TypeScript definitions for Three.js 0.183.2)
-- **@vitest/coverage-v8**: 4.0.18 → 4.1.0 (test coverage tooling)
-- **jsdom**: 28.1.0 → 29.0.0 (testing environment)
-- **jest**: 29.7.0 → 30.3.0 (testing framework)
-- **@nomicfoundation/hardhat-ethers**: 3.1.3 → 4.0.6 (smart contract tooling)
-- **@pixiv/three-vrm**: 3.4.3 → 3.5.1 (VRM avatar support)
-- **@solana-mobile/wallet-standard-mobile**: 0.4.4 → 0.5.0 (mobile wallet integration)
-- **sqlite3**: 5.1.7 → 6.0.1 (SQLite database driver)
+**Files Changed**: 3 files, 28 additions, 12 deletions
 
 ## Troubleshooting
 
@@ -692,14 +746,29 @@ See [Port Allocation](#port-allocation) section for full port list.
 DELETE FROM death_locks WHERE player_id = 'player_<id>';
 ```
 
-**Prevention**: Death system now has robust retry logic and crash recovery. If issues persist, check:
+**Prevention**: Death system now has robust retry logic and crash recovery (as of PR #1094, March 26, 2026). If issues persist, check:
 - Database connection pool health
 - Transaction timeout settings
 - Death lock TTL (should auto-expire after 5 minutes)
 
+### Home Teleport Issues
+
+**Symptoms**: Teleport button shows incorrect cooldown state, or cast effect doesn't appear.
+
+**Diagnosis**:
+1. Check browser console for `HOME_TELEPORT_CAST_START`, `HOME_TELEPORT_FAILED`, `PLAYER_TELEPORTED` events
+2. Verify `HOME_TELEPORT_CONSTANTS.COOLDOWN_MS` is 30000 (30 seconds)
+3. Check server logs for cooldown rejection messages
+
+**Common Issues**:
+- **Cast effect missing**: Ensure `ClientTeleportEffectsSystem` is initialized and listening to events
+- **Cooldown stuck**: Server sends `remainingMs` in failed packet - check client is reading it correctly
+- **Portal not grounded**: Verify terrain system is ready and `getHeightAt()` returns valid values
+
 ## Additional Resources
 
 - [README.md](README.md) - Full project documentation
+- [AGENTS.md](AGENTS.md) - AI coding assistant instructions
 - [.cursor/rules/](.cursor/rules/) - Detailed development rules
 - [packages/shared/](packages/shared/) - Core engine source
 - Game Design Document: See `.cursor/rules/gdd.mdc`
