@@ -360,8 +360,165 @@ export const POSITION_VALIDATION = {
 
 ---
 
+## OSRS Keep-3 System (New in PR #1094)
+
+Safe zone deaths keep the 3 most valuable items (by manifest value):
+
+```typescript
+import { splitItemsForSafeDeath, ITEMS_KEPT_ON_DEATH } from './DeathUtils';
+
+// Get all items (inventory + equipment)
+const allItems = [...inventoryItems, ...equipmentItems];
+
+// Split into kept/dropped
+const { kept, dropped } = splitItemsForSafeDeath(allItems, ITEMS_KEPT_ON_DEATH);
+
+// Store kept items for respawn
+this.itemsKeptOnDeath.set(playerId, kept);
+
+// Create gravestone with dropped items
+await this.spawnGravestone(playerId, position, dropped, killedBy);
+```
+
+**Algorithm**:
+1. Tag each item with its manifest value
+2. Sort descending by value (most valuable first)
+3. Greedily assign keep-count without expanding stacks
+4. Split into kept/dropped lists
+
+**Example**:
+```typescript
+const allItems = [
+  { itemId: "dragon_scimitar", quantity: 1 },  // value: 60000
+  { itemId: "rune_platebody", quantity: 1 },   // value: 40000
+  { itemId: "shark", quantity: 10 },           // value: 800 each
+  { itemId: "coins", quantity: 50000 },        // value: 1 each
+];
+
+const { kept, dropped } = splitItemsForSafeDeath(allItems, 3);
+
+// kept = [dragon_scimitar, rune_platebody, 1 shark]
+// dropped = [9 sharks, 50000 coins]
+```
+
+**Reference**: [OSRS Wiki - Items Kept on Death](https://oldschool.runescape.wiki/w/Items_Kept_on_Death)
+
+---
+
+## Two-Phase Persist Pattern (New in PR #1094)
+
+**Problem**: Death transaction called `clearEquipmentAndReturn()` and `clearInventoryImmediate()` which each opened nested DB transactions, causing SQLite to deadlock.
+
+**Solution**: In-memory clear inside transaction, DB persist after transaction.
+
+```typescript
+// Inside transaction
+await databaseSystem.executeInTransaction(async (tx) => {
+  // Clear in-memory, skip DB persist
+  await equipmentSystem.clearEquipmentAndReturn(playerId, tx);
+  await inventorySystem.clearInventoryImmediate(playerId, true); // skipPersist=true
+  
+  // Create death lock
+  await deathStateManager.createDeathLock(playerId, { ... }, tx);
+});
+
+// After transaction (idempotent)
+await equipmentSystem.clearEquipmentImmediate(playerId);
+await inventorySystem.clearInventoryImmediate(playerId, false);
+```
+
+**Crash Recovery**: If server crashes between transaction commit and DB persist, death lock prevents reconnect inventory load. Items are not restored to player.
+
+**Persist Retry Queue**: Single-retry queue (bounded to 100 entries) handles transient DB failures. Emits `AUDIT_LOG` on retry failure.
+
+---
+
+## Gravestone Privacy (New in PR #1094)
+
+Gravestone loot items are hidden from network broadcast (OSRS-accurate):
+
+```typescript
+// HeadstoneEntity.getNetworkData()
+getNetworkData(): Record<string, unknown> {
+  return {
+    lootItemCount: this.lootItems.length, // Only count is broadcast
+    // lootItems NOT included (privacy)
+  };
+}
+
+// Full loot data sent only to interacting player
+world.network.sendTo(playerId, 'corpseLoot', {
+  corpseId: gravestoneId,
+  items: this.lootItems, // Full item list (targeted packet)
+});
+```
+
+**Impact**: Other players cannot see gravestone contents until interaction.
+
+---
+
+## Security Features (New in PR #1094)
+
+### Duel Escape Prevention
+
+```typescript
+// Block respawn during active duel
+if (duelSystem?.isPlayerInActiveDuel?.(playerId)) {
+  this.logger.warn("Blocked respawn request during active duel", { playerId });
+  return;
+}
+```
+
+**Guards**:
+- `handleRespawnRequest()` - Blocks manual respawn button
+- `initiateRespawn()` - Defense-in-depth guard
+
+### Position Validation
+
+```typescript
+import { validatePosition, isPositionInBounds } from './DeathUtils';
+
+// Validate and clamp position
+const validPosition = validatePosition(deathPosition);
+if (!validPosition) {
+  this.logger.error("Invalid death position (NaN/Infinity)", { playerId });
+  return;
+}
+
+// Log warning if clamped
+if (!isPositionInBounds(deathPosition)) {
+  this.logger.warn("Death position out of bounds, clamped", { playerId });
+}
+```
+
+### Killer Name Sanitization
+
+```typescript
+import { sanitizeKilledBy } from './DeathUtils';
+
+// Sanitize killer name (XSS/injection protection)
+const killedBy = sanitizeKilledBy(killedByRaw);
+
+// Store sanitized name
+await deathStateManager.createDeathLock(playerId, {
+  killedBy, // Safe for display
+  // ...
+});
+```
+
+**Attack Vectors Prevented**:
+- Homograph attacks (Cyrillic 'а' vs Latin 'a')
+- Zero-width characters (invisible manipulation)
+- BiDi overrides (text reversal)
+- XSS injection (script tags)
+- Buffer overflow (length capped at 64 chars)
+
+---
+
 ## Related Documentation
 
 - [Combat System](/wiki/game-systems/combat)
 - [Ground Items & Loot](/wiki/game-systems/loot)
 - [Database Schema](/wiki/engine/database)
+- [DeathUtils API](../../../docs/death-system-troubleshooting.md) - Troubleshooting guide
+- [OSRS Wiki - Death](https://oldschool.runescape.wiki/w/Death) - OSRS mechanics reference
