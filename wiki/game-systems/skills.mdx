@@ -772,32 +772,101 @@ if (existingSession) {
 This fix prevents the spam-click exploit where players could reset gathering timers by rapidly clicking the same resource.
 </Info>
 
-### Noted Items Tool Validation
+### Tool Validation System (Updated March 2026)
 
-Noted items (bank notes) cannot be used as skilling tools:
+**Manifest-Based Validation** (PR #1098): The gathering system now uses `tools.json` manifest as the single source of truth for tool-to-skill mappings.
 
+**Problem Solved**: Substring matching allowed pickaxes to cut trees and hatchets to mine rocks because "pickaxe" contains "axe".
+
+**Solution**: Each tool declares its skill explicitly in the manifest:
+
+```json
+// tools.json
+{
+  "id": "bronze_hatchet",
+  "skill": "woodcutting",
+  "levelRequired": 1,
+  "successRateLow": 0.25,
+  "successRateHigh": 0.75
+}
+```
+
+**Validation Logic**:
 ```typescript
 // From ToolUtils.ts
 export function itemMatchesToolCategory(
   itemId: string,
   category: string,
 ): boolean {
-  // Noted items are bank notes - cannot be used as tools
+  // 1. Reject noted items (bank notes cannot be used as tools)
   if (isNotedItemId(itemId)) {
     return false;
   }
-  // ... rest of validation
+
+  // 2. Fishing tools require exact match (not interchangeable)
+  if (isExactMatchFishingTool(category)) {
+    return lowerItemId === category;
+  }
+
+  // 3. Manifest lookup (primary path)
+  const toolData = getExternalTool(lowerItemId);
+  if (toolData) {
+    const expectedSkill = CATEGORY_TO_SKILL[category] ?? category;
+    return toolData.skill === expectedSkill;
+  }
+
+  // 4. Fallback with cross-skill guards
+  if (category === "hatchet") {
+    if (lowerItemId.includes("pickaxe") || lowerItemId.includes("pick")) {
+      return false; // Reject pickaxes for woodcutting
+    }
+    return lowerItemId.includes("hatchet");
+  }
+  if (category === "pickaxe") {
+    if (lowerItemId.includes("hatchet")) {
+      return false; // Reject hatchets for mining
+    }
+    return lowerItemId.includes("pickaxe") || lowerItemId.includes("pick");
+  }
+
+  // 5. Unknown category: reject (forces manifest completeness)
+  return false;
 }
 ```
 
-**Affected Tools**:
-- Pickaxes (mining)
-- Hatchets/axes (woodcutting)
-- Fishing rods, nets, harpoons (fishing)
+**Impact**:
+- Prevents cross-skill tool usage (pickaxe for woodcutting, hatchet for mining)
+- Eliminates false positives from combat weapons (battleaxe, greataxe)
+- Maintains OSRS-accurate fishing tool behavior (exact match required)
+- Forces all gathering tools to be in manifest for proper validation
+
+**Fishing Tool Exact Match**:
+```typescript
+// Fishing tools are NOT interchangeable (OSRS-accurate)
+itemMatchesToolCategory("fishing_rod", "fishing_rod");        // true
+itemMatchesToolCategory("fly_fishing_rod", "fishing_rod");    // false
+itemMatchesToolCategory("small_fishing_net", "fishing_rod");  // false
+```
+
+**Cross-Skill Prevention**:
+```typescript
+// Pickaxe cannot be used for woodcutting
+itemMatchesToolCategory("bronze_pickaxe", "hatchet");  // false
+
+// Hatchet cannot be used for mining
+itemMatchesToolCategory("bronze_hatchet", "pickaxe");  // false
+
+// Combat weapons rejected
+itemMatchesToolCategory("rune_battleaxe", "hatchet");  // false
+```
 
 <Warning>
-Noted items must be un-noted at a bank before they can be equipped or used for skilling.
+**Noted Items**: Bank notes cannot be used as tools. Un-note at a bank before using for skilling.
 </Warning>
+
+<Info>
+**Fallback Warnings**: If a tool is not in the manifest, the system logs a warning and uses fallback substring matching. Add all tools to `tools.json` to eliminate warnings and ensure proper validation.
+</Info>
 
 ---
 
