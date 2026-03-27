@@ -17,7 +17,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | Category | Features |
 |----------|----------|
 | **Combat** | Tick-based OSRS mechanics (600ms ticks), attack styles, accuracy formulas, death/respawn system with OSRS keep-3 |
-| **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking, Fletching, Crafting, Smithing, Prayer, Runecrafting + combat skills with XP/leveling |
+| **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking, Fletching, Crafting, Smithing, Prayer, Runecrafting + combat skills with XP/leveling, tick-based resource respawn |
 | **Economy** | 480-slot bank, shops, item weights, loot drops, gravestone system with privacy protection |
 | **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making, spectator mode |
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
