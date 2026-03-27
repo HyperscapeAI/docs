@@ -109,7 +109,88 @@ packages/
 
 ## Recent Changes (March 2026)
 
-### Tool Validation System Overhaul (March 27, 2026)
+### Tree Dissolve Transparency System (March 27, 2026)
+
+**Change** (PR #1101): Added dissolve transparency for depleted trees with smooth respawn animation.
+
+**Features**: Depleted trees become 80% transparent instantly on depletion and animate back to full opacity over 0.3s on respawn. Uses per-instance dissolve attributes (InstancedMesh) and batch color blue channel (BatchedMesh) to drive real alpha transparency in the TSL shader.
+
+**Key Implementation**:
+- **Shared Animation Module**: `DissolveAnimation.ts` provides `startDissolve()` and `tickDissolveAnims()` for both instancer types
+- **GPU Attribute Encoding**: Blue channel of batch color encodes `1.0 - dissolveVal` (1.0 = fully visible, 0.0 = fully dissolved)
+- **Dithered Discard**: Uses Bayer 4×4 screen-door dithering in `alphaTestNode` instead of alpha blending to keep trees in opaque render pass with full early-Z rejection
+- **LOD Transition Preservation**: Dissolve state carries over during LOD swaps to prevent visual pops
+- **Atomic Initial Dissolve**: Pass `initialDissolve` through `addInstance()` → `addToPool()` so depleted trees have GPU attribute set at pool insertion time (no 1-frame flash)
+
+**New Files**:
+- `packages/shared/src/systems/shared/world/DissolveAnimation.ts` - Shared dissolve animation state machine
+
+**Configuration** (`packages/shared/src/systems/shared/world/GPUMaterials.ts`):
+```typescript
+GPU_VEG_CONFIG = {
+  DISSOLVE_DURATION: 0.3,  // Animation duration (seconds)
+  DISSOLVE_MAX: 1.0,       // Max dissolve progress (not visual opacity)
+  FADE_START: 40,          // Distance fade start (meters)
+  FADE_END: 60,            // Distance fade end (meters)
+}
+```
+
+**Impact**: 
+- Visual feedback for resource depletion/respawn
+- No performance cost (opaque render pass with early-Z)
+- Smooth animations without visual pops during LOD transitions
+- Eliminates ~60 lines of duplication between instancer files
+
+### Tree Collision Proxy Improvements (March 27, 2026)
+
+**Change** (PR #1100): Use LOD2 model geometry for tree collision proxy instead of oversized invisible cylinder.
+
+**Problem**: The invisible cylinder hitbox was too large, causing ground clicks near trees to be intercepted by the collision proxy instead of registering as ground clicks.
+
+**Fix**: Replace cylinder with actual LOD2 mesh geometry so clicks only register on the visible tree silhouette. Falls back to tighter cylinder (0.25 radius factor) if LOD unavailable.
+
+**Key Features**:
+- **Geometry Caching**: Cache merged+scaled proxy geometry per `(sourceGeometries, scale)` to avoid redundant merges
+- **Multi-Part Merging**: Merge multi-part geometries (bark + leaves) into single proxy mesh
+- **Defensive Bounding Box**: Pre-compute `boundingBox` alongside `boundingSphere` to prevent lazy mutation by Three.js raycaster
+- **Float Key Safety**: Round scale key to 3 decimal places to prevent floating-point cache misses
+
+**New Functions** (`packages/shared/src/systems/shared/world/GLBTreeBatchedInstancer.ts`, `GLBTreeInstancer.ts`):
+- `getProxyGeometry()` - Returns stable source geometry refs for collision proxy (callers MUST clone before mutating)
+- `clearProxyGeometryCache()` - Dispose cached geometries during world teardown
+
+**Implementation**:
+```typescript
+// Get LOD2 geometry for collision proxy
+const proxyData = getProxyGeometry(entityId);
+if (proxyData) {
+  const merged = mergeGeometries(proxyData.geometries);
+  const scaled = merged.clone().scale(scale, scale, scale);
+  // Use scaled geometry for raycasting
+}
+```
+
+**Impact**: 
+- Clicks only register on visible tree silhouette
+- Prevents ground clicks near trees from being intercepted
+- More accurate interaction hitboxes
+- Cached geometry reduces CPU overhead
+
+### Resource Respawn System Changes (March 27, 2026)
+
+**Change** (PR #1099): Make resource respawn purely tick-based and use manifest `depleteChance` for mining.
+
+**Problem**: Legacy `setTimeout`-based respawn in `ResourceEntity.deplete()` was non-deterministic and didn't match OSRS tick-based mechanics. Mining used hardcoded `MINING_DEPLETE_CHANCE` constant instead of reading from manifest, preventing rune essence rocks (depleteChance: 0) from working correctly.
+
+**Fix**: Remove `setTimeout` respawn — respawn is now exclusively handled by `ResourceSystem.processRespawns()` via deterministic tick counting. Mining depletion now reads `depleteChance` from manifest.
+
+**Key Changes**:
+- **Tick-Based Respawn**: `ResourceSystem.processRespawns()` counts ticks since depletion and respawns at `respawnTicks` threshold
+- **Manifest depleteChance**: Mining reads `depleteChance` from resource manifest (0.0 = never depletes, 1.0 = always depletes)
+- **Removed Constants**: `MINING_DEPLETE_CHANCE` and `MINING_REDWOOD_DEPLETE_CHANCE` removed in favor of manifest values
+
+**Implementation**:
+```typescript\n// Manifest-based depletion (mining)\nconst depleteChance = resourceData.depleteChance ?? 1.0;\nif (Math.random() < depleteChance) {\n  resource.deplete();\n}\n\n// Tick-based respawn (ResourceSystem)\nif (ticksSinceDepleted >= resource.respawnTicks) {\n  resource.respawn();\n}\n```\n\n**Impact**: \n- OSRS-accurate tick-based respawn mechanics\n- Rune essence rocks (depleteChance: 0) never deplete per OSRS behavior\n- Deterministic respawn timing\n- Manifest-driven resource configuration\n\n**Tests**: Added tests for `depleteChance: 0` (essence rocks) and `depleteChance: 1.0` (regular ores).\n\n### Tool Validation System Overhaul (March 27, 2026)
 
 **Change** (PR #1098): Manifest-based tool validation to prevent cross-skill tool usage.
 
