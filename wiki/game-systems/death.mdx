@@ -109,30 +109,55 @@ async createDeathLock(
 
 ---
 
-## Death Flow
+## Death Flow (Updated March 2026)
 
-### Safe Zone Death
-
-1. Player HP reaches 0
-2. Items kept in inventory (no drop)
-3. Player respawns at nearest safe point
-4. Short death animation plays
-
-### Dangerous Zone Death
+### Safe Zone Death (OSRS Keep-3)
 
 1. Player HP reaches 0
-2. **Gravestone spawns** at death location
-3. Player's items stored in gravestone (15 minute timer)
-4. Player respawns at starter town
-5. Player can return to reclaim items
+2. **Transaction starts**:
+   - Clear equipment in-memory (skip DB persist)
+   - Clear inventory in-memory (skip DB persist)
+   - Split items: keep 3 most valuable, drop rest
+   - Create death lock with kept items
+   - Commit transaction
+3. **After transaction**:
+   - Persist equipment clear to DB (retry on failure)
+   - Persist inventory clear to DB (retry on failure)
+   - Emit `PLAYER_SET_DEAD` event
+4. **Respawn** (tick-based, deterministic):
+   - Return kept items to inventory
+   - Spawn gravestone with dropped items (5 minute timer)
+   - Teleport to spawn town
+   - Clear death lock
+5. Player can return to gravestone to reclaim dropped items
 
-### PvP Zone Death
+**Two-Phase Persist Pattern**: In-memory clear inside transaction, DB persist after transaction. Prevents SQLite deadlock from nested transactions.
 
-1. Player killed by another player
-2. **Items drop directly to ground**
-3. Loot protection for killer (100 ticks)
-4. After protection, anyone can loot
-5. Items despawn after 200 ticks
+### Wilderness Death
+
+1. Player HP reaches 0
+2. **Transaction starts**:
+   - Clear equipment in-memory
+   - Clear inventory in-memory
+   - All items marked for ground drop (no keep-3)
+   - Create death lock
+   - Commit transaction
+3. **After transaction**:
+   - Persist clears to DB
+   - Drop all items to ground immediately (no gravestone)
+   - Items despawn after 2 minutes
+4. **Respawn**:
+   - Teleport to spawn town
+   - No items returned
+   - Clear death lock after ground items despawn
+
+### Duel Arena Death
+
+1. Player HP reaches 0 in duel arena
+2. **No item drops** (inventory/equipment preserved)
+3. Death animation plays
+4. DuelSystem handles respawn and stakes
+5. No death lock created
 
 ---
 
