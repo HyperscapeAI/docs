@@ -294,7 +294,11 @@ Gathering resources is now defined in `manifests/gathering/` with OSRS-accurate 
 | Runite | 85 | 125 | 6.64% (at L85) → 7.42% (at L97+) |
 
 <Info>
-Mining rocks **always deplete** after yielding one ore (OSRS-accurate). Success rate depends only on Mining level, not pickaxe tier. Pickaxe tier affects roll frequency (speed), not success chance.
+**Mining Depletion** (Updated March 2026): Mining rocks use manifest-based `depleteChance` values. Regular ore rocks have `depleteChance: 1.0` (always deplete after yielding ore). Rune essence rocks have `depleteChance: 0` (never deplete, OSRS-accurate). Success rate depends only on Mining level, not pickaxe tier. Pickaxe tier affects roll frequency (speed), not success chance.
+</Info>
+
+<Info>
+**Resource Respawn** (Updated March 2026): All resource respawns are now purely tick-based and deterministic (OSRS-accurate). The `ResourceSystem.processRespawns()` method handles all respawn timing via tick counting. Legacy `setTimeout`-based respawn has been removed for reliability.
 </Info>
 
 ### Pickaxe Speed Bonuses
