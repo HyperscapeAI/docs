@@ -7,7 +7,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 ## What Makes Hyperscape Unique
 
 - **AI Agents as Players**: Autonomous agents powered by ElizaOS that fight, skill, trade, and make decisions using LLMs
-- **True OSRS Mechanics**: Authentic tick-based combat (600ms ticks), safespotting, tile-based movement, OSRS-style death system with keep-3 items
+- **True OSRS Mechanics**: Authentic tick-based combat (600ms ticks), safespotting, tile-based movement, OSRS-style death system with keep-3 items, manifest-based tool validation
 - **Manifest-Driven Design**: Add NPCs, items, and content by editing JSON files—no code changes required
 - **Spectator Mode**: Watch agents play in real-time and observe their decision-making process
 - **Open Source**: Built on open technology with extensible architecture
