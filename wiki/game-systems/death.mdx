@@ -40,19 +40,32 @@ type ZoneType =
 
 ## Death Lock System
 
-To prevent item duplication on server restart/crash, deaths are tracked with database persistence:
+To prevent item duplication on server restart/crash, deaths are tracked with database persistence. **Updated in PR #1094** to include kept items for crash recovery.
 
 ```typescript
 interface DeathLock {
   playerId: string;
   gravestoneId?: string;           // If gravestone spawned
-  groundItemIds?: string[];        // If items on ground
   position: { x: number; y: number; z: number };
   timestamp: number;
   zoneType: ZoneType;
   itemCount: number;               // Total items dropped
+  items: Array<{                   // Dropped items (for gravestone)
+    itemId: string;
+    quantity: number;
+  }>;
+  keptItems: Array<{               // Kept items (for respawn) - NEW in PR #1094
+    itemId: string;
+    quantity: number;
+  }>;
+  killedBy: string;                // Killer name (sanitized)
 }
 ```
+
+**New in PR #1094**:
+- `items` field stores dropped items for gravestone recovery
+- `keptItems` field stores kept items for respawn recovery
+- `killedBy` field stores sanitized killer name (XSS/injection protected)
 
 ### Creating a Death Lock
 
