@@ -400,7 +400,44 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 - **Mobile**: Capacitor 8.2.0 (Android, iOS)
 - **Smart Contracts**: Hardhat 3.1.11+, @nomicfoundation/hardhat-ethers 4.0.6 (ethers.js v6)
 
+## Recent Changes (April 2026)
+
+### Tailwind v3 Rollback (April 4, 2026)
+
+**Change** (PR #1105): Restored stable Tailwind v3 build pipeline after Tailwind v4 production artifact issues.
+
+**Problem**: Tailwind v4 continued to drop critical auth and character-screen utilities in the linux/amd64 Docker production artifact even after switching to the official Vite plugin and removing the manual fallback CSS. The generated production CSS was inconsistent with the verified Docker image output.
+
+**Fix**: Roll back the client to Tailwind v3 with the standard PostCSS pipeline so the generated production CSS is consistent across all build environments.
+
+**Key Changes**:
+- Reverted to `tailwindcss@^3.4.1` from v4 beta
+- Restored PostCSS-based build pipeline
+- Removed Tailwind v4 Vite plugin
+- Removed artifact verifier (no longer needed with stable v3 pipeline)
+
+**Impact**: 
+- Consistent CSS output across development and Docker production builds
+- No more missing utility classes in production
+- Stable build pipeline for deployment
+
 ## Recent Changes (March 2026)
+
+### UI Panel Tooltip Improvements (March 27, 2026)
+
+**Change** (PR #1102): Unified panel tooltips and bank equipment layout.
+
+**Features**: Consistent tooltip behavior across all UI panels with improved bank equipment grid layout.
+
+**Key Changes**:
+- **Unified Tooltips**: All panel tooltips now use consistent styling and positioning
+- **Bank Equipment Layout**: Improved equipment slot grid layout in bank interface
+- **Hover Effects**: Standardized hover effects across inventory, equipment, and bank panels
+
+**Impact**: 
+- More consistent user experience across all UI panels
+- Better visual feedback for interactive elements
+- Improved bank interface usability
 
 ### Tree Dissolve Transparency System (March 27, 2026)
 
