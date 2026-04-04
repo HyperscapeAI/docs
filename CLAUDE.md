@@ -598,6 +598,44 @@ if (ticksSinceDepleted >= resource.respawnTicks) {
 - Dedicated channel-mode portal effect with terrain-aware anchoring
 - Both `HomeTeleportButton` and `MinimapHomeTeleportOrb` show cooldown progress
 
+### Dialogue and Skilling Panel Polish (March 26, 2026)
+
+**Change** (PR #1093): Unified skilling panel layouts and redesigned NPC dialogue system with dedicated in-world panels.
+
+**Skilling Panel Improvements**:
+- **Shared Components**: `SkillingPanelBody`, `SkillingSection`, `SkillingQuantitySelector` in `SkillingPanelShared.tsx`
+- **Unified Layouts**: All skilling panels (Fletching, Cooking, Smelting, Smithing, Crafting, Tanning) use consistent styling
+- **Quantity Selector**: Reusable component with preset buttons (1, 5, 10, All, X) and custom input mode
+
+**Dialogue System Redesign**:
+- **DialoguePopupShell**: Dedicated modal shell for NPC dialogue with focus management
+- **DialogueCharacterPortrait**: Live 3D VRM portrait rendering in dialogue panels
+- **Service Handoff Fix**: Opening bank/store/tanner properly closes dialogue
+
+**Impact**: Eliminates ~500 lines of duplicated styling, more immersive NPC interactions.
+
+### Game UI Tab Arrow Key Capture Fix (March 26, 2026)
+
+**Change** (PR #1092): Fixed arrow keys being consumed by in-game panel tabs, preventing camera controls.
+
+**Fix**: Added `reserveArrowKeys` prop to disable arrow key consumption for game windows.
+
+**Impact**: Arrow keys now control camera movement even when panel tabs have focus.
+
+### Missing Packet Handlers Fix (March 26, 2026)
+
+**Change** (PR #1091): Added 8 missing server→client packet handlers.
+
+**Missing Handlers**: `onFletchingComplete`, `onCookingComplete`, `onSmeltingComplete`, `onSmithingComplete`, `onCraftingComplete`, `onTanningComplete`, `onCombatEnded`, `onQuestStarted`
+
+**Impact**: Eliminates "No handler for packet" errors.
+
+### Prayer Login Sync Fix (March 26, 2026)
+
+**Change** (PR #1090): Fixed prayer state synchronization on player login.
+
+**Impact**: Prayer points and active prayers now sync correctly between sessions.
+
 ### Player Death System Overhaul (March 26, 2026)
 
 **Change** (PR #1094): Complete rewrite of player death pipeline to fix SQLite deadlock, equipment duplication, and implement OSRS-style "keep 3 most valuable items" for safe zone deaths.
