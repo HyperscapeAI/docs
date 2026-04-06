@@ -272,8 +272,6 @@ If `inventoryActions` is not specified, the system falls back to type-based dete
       "baseCycleTicks": 8,
       "depleteChance": 1.0,
       "respawnTicks": 200,
-      "depletedModelPath": "asset://models/rocks/copper-rock-depleted.glb",
-      "depletedModelScale": 0.8,
       "harvestYield": [
         { 
           "itemId": "copper_ore", 
@@ -283,13 +281,37 @@ If `inventoryActions` is not specified, the system falls back to type-based dete
           "successRate": { "low": 100, "high": 256 }
         }
       ]
+    },
+    {
+      "id": "rock_rune_essence",
+      "name": "Rune essence",
+      "type": "mining_rock",
+      "harvestSkill": "mining",
+      "toolRequired": "bronze_pickaxe",
+      "levelRequired": 1,
+      "baseCycleTicks": 8,
+      "depleteChance": 0.0,
+      "respawnTicks": 0,
+      "harvestYield": [
+        { 
+          "itemId": "rune_essence", 
+          "quantity": 1, 
+          "chance": 1.0, 
+          "xpAmount": 5.0
+        }
+      ]
     }
   ]
 }
 ```
 
 <Info>
-**Mining Depletion**: Rocks always deplete after one ore (`depleteChance: 1.0`). The `depletedModelPath` and `depletedModelScale` define the visual appearance of depleted rocks.
+**Mining Depletion (Updated March 2026)**: Depletion is now manifest-driven via `depleteChance`:
+- `depleteChance: 1.0` — Always depletes on success (regular ores)
+- `depleteChance: 0.0` — Never depletes (rune essence rocks, OSRS-accurate)
+- `depleteChance: 0.125` — 1/8 chance to deplete (special rocks)
+
+Respawn is purely tick-based via `ResourceSystem.processRespawns()`. The legacy `setTimeout`-based respawn was removed in PR #1099.
 </Info>
 
 ### Gathering Resources
