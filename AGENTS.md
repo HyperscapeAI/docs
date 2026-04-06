@@ -420,7 +420,7 @@ RUN bun install --production
 - **@pixiv/three-vrm**: 3.4.3 → 3.5.1 (VRM avatar support)
 - **@solana-mobile/wallet-standard-mobile**: 0.4.4 → 0.5.0 (mobile wallet integration)
 - **sqlite3**: 5.1.7 → 6.0.1 (SQLite database driver)
-- **Tailwind CSS**: Rolled back from v4 beta to 3.4.1 (stable)
+- **Tailwind CSS**: Upgraded to 4.1.14 (stable, using @tailwindcss/postcss plugin)
 
 **Impact**:
 - Latest build tooling with improved performance and faster builds
