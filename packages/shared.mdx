@@ -178,6 +178,66 @@ Terrain generation offloaded to web workers for parallel processing:
 
 ## GPU-Instanced Rendering Systems
 
+### Tree Dissolve Transparency System (March 2026)
+
+<Info>
+**New Feature (PR #1101)**: Depleted trees use screen-door dithering to become ~70% transparent instantly on depletion, then animate back to full opacity over 0.3s on respawn.
+</Info>
+
+**Location**: `packages/shared/src/systems/shared/world/DissolveAnimation.ts`
+
+The dissolve system provides visual feedback for resource depletion and respawn using GPU-driven animations:
+
+```typescript
+import { startDissolve, tickDissolveAnims, type DissolveAnim } from './DissolveAnimation';
+
+// Animation state
+interface DissolveAnim {
+  direction: 1 | -1;  // 1 = dissolving out, -1 = appearing in
+  progress: number;   // 0.0 to DISSOLVE_MAX (1.0)
+}
+
+// Start dissolve animation
+startDissolve(
+  dissolveAnims,      // Map<string, DissolveAnim>
+  entityId,           // Entity to animate
+  direction,          // 1 = dissolve out, -1 = appear in
+  instant,            // true = jump to target, false = animate
+  applyDissolveValue  // Callback to write value to GPU
+);
+
+// Tick animations each frame
+tickDissolveAnims(
+  dissolveAnims,      // Map<string, DissolveAnim>
+  deltaTime,          // Frame delta in seconds
+  applyDissolveValue  // Callback to write value to GPU
+);
+```
+
+**Key Features:**
+- **Dual Encoding**: InstancedMesh uses `instanceDissolve` attribute, BatchedMesh uses batch color blue channel
+- **Screen-Door Dithering**: Uses Bayer 4×4 pattern in `alphaTestNode` to keep trees in opaque render pass
+- **LOD Preservation**: Dissolve state carries over during LOD transitions (no visual pops)
+- **Interrupt Handling**: Continues from current progress on direction reversal (no pops)
+- **Zero Allocation**: Reuses module-level `_completed` array to avoid per-frame allocation
+
+**Configuration** (`GPU_VEG_CONFIG`):
+```typescript
+{
+  DISSOLVE_DURATION: 0.3,  // Animation duration (seconds)
+  DISSOLVE_MAX: 1.0,       // Max dissolve progress
+  DISSOLVE_ALPHA_SCALE: 0.7,  // Fraction of fragments discarded (70%)
+}
+```
+
+**Performance:**
+- No alpha blending overhead (opaque render pass)
+- Full early-Z rejection
+- No transparency sorting required
+- Consistent performance regardless of dissolve state
+
+See [Visual Effects](/wiki/engine/visual-effects) for complete documentation.
+
 ### GLBTreeInstancer (commit 0871acb)
 
 InstancedMesh-based tree rendering system that replaces per-tree `scene.clone(true)` with shared InstancedMesh pools per LOD level.
