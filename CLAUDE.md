@@ -402,9 +402,52 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 ## Recent Changes (April 2026)
 
+### Docker Build Improvements (April 6, 2026)
+
+**Change** (PR #1105, Commits 192696d-976d075): Fixed Docker build issues and restored panel affordances.
+
+**Key Changes**:
+- **Bun Workspace Symlinks**: Added defensive `mkdir -p` for `packages/web3/node_modules` and `packages/client/node_modules` to prevent Docker COPY failures when Bun hoists workspace deps without materializing per-package node_modules
+- **Panel Affordances**: Restored visual affordances for UI panels that were accidentally removed
+- **Test Deploy Flow**: Aligned test deployment flow with production requirements
+
+**Impact**: 
+- Docker builds no longer fail due to missing node_modules directories
+- Consistent UI panel behavior across all interfaces
+- More reliable deployment pipeline
+
+### CI/CD Infrastructure Upgrades (April 6, 2026)
+
+**Change** (Commits 15e62b9-9d45fae): Upgraded GitHub Actions workflows to Node.js 24 runners.
+
+**Key Changes**:
+- Updated all GitHub Actions to use `node24` runners
+- Fixed workflow token usage for Claude review automation
+- Removed unused Foundry installations from CI pipeline
+- Switched Docker builds to use real Node.js instead of Bun for Vite builds
+
+**Impact**: 
+- Faster CI builds with latest GitHub runner infrastructure
+- More reliable Docker image builds
+- Reduced CI complexity and build times
+
+### Production Runtime Configuration (April 5, 2026)
+
+**Change** (Commits ba7f6f4-c95e51c): Aligned production runtime defaults with hyperscape.gg deployment.
+
+**Key Changes**:
+- **Production Defaults**: Server now defaults to `hyperscape.gg` for production runtime
+- **Local WebSocket**: Fixed local development to use correct WebSocket defaults
+- **Agent Runtime**: ElizaOS agents now use local Hyperscape uWS defaults for connection
+
+**Impact**: 
+- Simplified production deployment configuration
+- Better separation between local dev and production environments
+- AI agents connect correctly to local game server
+
 ### Tailwind v3 Rollback (April 4, 2026)
 
-**Change** (PR #1105): Restored stable Tailwind v3 build pipeline after Tailwind v4 production artifact issues.
+**Change** (PR #1105, Commit 07a8bc7): Restored stable Tailwind v3 build pipeline after Tailwind v4 production artifact issues.
 
 **Problem**: Tailwind v4 continued to drop critical auth and character-screen utilities in the linux/amd64 Docker production artifact even after switching to the official Vite plugin and removing the manual fallback CSS. The generated production CSS was inconsistent with the verified Docker image output.
 
