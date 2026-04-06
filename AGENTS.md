@@ -69,7 +69,7 @@ Hyperscape is a RuneScape-style MMORPG built on Three.js WebGPURenderer with TSL
   - **Server**: Node.js 22+ (migrated from Bun for V8 incremental GC - March 2026)
 - **Rendering**: WebGPU ONLY (Three.js WebGPURenderer + TSL)
 - **Engine**: Three.js 0.183.2, PhysX (WASM)
-- **UI**: React 19.2.0
+- **UI**: React 19.2.0, Tailwind CSS 3.4.1
 - **Server**: Fastify (HTTP), uWebSockets.js (game WebSocket), LiveKit (voice)
 - **Database**: PostgreSQL (production, connection pool: 20), Docker (local), sqlite3 6.0.1 (dev only)
 - **Testing**: Vitest 4.1.0+, Jest 30.3.0, Playwright (WebGPU-enabled browsers only)
@@ -107,245 +107,123 @@ packages/
 
 **Note**: The betting stack (`gold-betting-demo`, `evm-contracts`, `sim-engine`, `market-maker-bot`) has been split into a separate repository: [HyperscapeAI/hyperbet](https://github.com/HyperscapeAI/hyperbet)
 
-## Recent Changes (March 2026)
+## Recent Changes (April 2026)
 
-### UI Panel Tooltip Improvements (March 27, 2026)
+### Tailwind v3 Rollback (April 4, 2026)
 
-**Change** (PR #1102): Unified panel tooltips and bank equipment layout.
+**Change** (PR #1105): Restored stable Tailwind v3 build pipeline after Tailwind v4 production artifact issues.
 
-**Features**: Consistent tooltip behavior across all UI panels with improved bank equipment grid layout.
+**Problem**: Tailwind v4 dropped critical utilities in linux/amd64 Docker builds despite using official Vite plugin.
 
-**Key Changes**:
-- **Unified Tooltips**: All panel tooltips now use consistent styling and positioning
-- **Bank Equipment Layout**: Improved equipment slot grid layout in bank interface
-- **Hover Effects**: Standardized hover effects across inventory, equipment, and bank panels
+**Fix**: Rolled back to Tailwind v3 with standard PostCSS pipeline for consistent production CSS output.
 
 **Impact**: 
-- More consistent user experience across all UI panels
-- Better visual feedback for interactive elements
-- Improved bank interface usability
+- Stable CSS generation across all build environments
+- No more missing utility classes in production Docker images
+- Consistent auth and character screen styling
 
-### Tree Dissolve Transparency System (March 27, 2026)
+### Docker Build Fixes (April 6, 2026)
 
-**Change** (PR #1101): Added dissolve transparency for depleted trees with smooth respawn animation.
+**Change** (Commits fca9ffb-cb237b6): Fixed Docker build failures and CI pipeline issues.
 
-**Features**: Depleted trees become 80% transparent instantly on depletion and animate back to full opacity over 0.3s on respawn. Uses per-instance dissolve attributes (InstancedMesh) and batch color blue channel (BatchedMesh) to drive real alpha transparency in the TSL shader.
+**Key Changes**:
+- Added defensive `mkdir -p` for `packages/web3/node_modules` and `packages/client/node_modules` to prevent COPY failures when Bun hoists deps
+- Fixed empty downloads handling in CI
+- Resolved Railway auth drift issues
+- Switched Docker builds to use real Node.js for Vite builds
 
-**Key Implementation**:
-- **Shared Animation Module**: `DissolveAnimation.ts` provides `startDissolve()` and `tickDissolveAnims()` for both instancer types
-- **GPU Attribute Encoding**: Blue channel of batch color encodes `1.0 - dissolveVal` (1.0 = fully visible, 0.0 = fully dissolved)
-- **Dithered Discard**: Uses Bayer 4×4 screen-door dithering in `alphaTestNode` instead of alpha blending to keep trees in opaque render pass with full early-Z rejection
-- **LOD Transition Preservation**: Dissolve state carries over during LOD swaps to prevent visual pops
-- **Atomic Initial Dissolve**: Pass `initialDissolve` through `addInstance()` → `addToPool()` so depleted trees have GPU attribute set at pool insertion time (no 1-frame flash)
+**Impact**: 
+- Reliable Docker image builds
+- No more missing node_modules directory errors
+- Improved CI/CD stability
+
+### UI Panel Tooltip System (March 27, 2026)
+
+**Change** (PR #1102): Unified tooltip styling across all UI panels.
 
 **New Files**:
-- `packages/shared/src/systems/shared/world/DissolveAnimation.ts` - Shared dissolve animation state machine
+- `packages/client/src/ui/core/tooltip/tooltipStyles.ts` - Centralized tooltip style utilities
 
-**Configuration** (`packages/shared/src/systems/shared/world/GPUMaterials.ts`):
+**Key Functions**:
 ```typescript
-GPU_VEG_CONFIG = {
-  DISSOLVE_DURATION: 0.3,  // Animation duration (seconds)
-  DISSOLVE_MAX: 1.0,       // Max dissolve progress (not visual opacity)
-  FADE_START: 40,          // Distance fade start (meters)
-  FADE_END: 60,            // Distance fade end (meters)
-}
+getTooltipTitleStyle(theme, accentColor?)  // Title text styling
+getTooltipMetaStyle(theme)                 // Metadata/secondary text
+getTooltipBodyStyle(theme)                 // Body content
+getTooltipDividerStyle(theme, accentColor?) // Section dividers
+getTooltipTagStyle(theme)                  // Tag/badge styling
+getTooltipStatusStyle(theme, tone)         // Status indicators (success/danger/warning)
+```
+
+**Impact**: 
+- Consistent tooltip appearance across inventory, equipment, bank, spells, prayer, skills, trade, store, and loot panels
+- Eliminated ~500 lines of duplicated styling code
+- Better visual hierarchy and readability
+
+### Tree Dissolve Transparency (March 27, 2026)
+
+**Change** (PR #1101): Added screen-door dithered dissolve for depleted trees.
+
+**Features**: Depleted trees become ~70% transparent instantly, animate back to full opacity over 0.3s on respawn.
+
+**New Module**: `packages/shared/src/systems/shared/world/DissolveAnimation.ts`
+
+**Key APIs**:
+```typescript
+startDissolve(anims, entityId, direction, instant, applyFn)
+tickDissolveAnims(anims, deltaTime, applyFn)
+```
+
+**Configuration** (`GPU_VEG_CONFIG` in `GPUMaterials.ts`):
+```typescript
+DISSOLVE_DURATION: 0.3      // Animation duration (seconds)
+DISSOLVE_MAX: 1.0           // Max dissolve progress
+DISSOLVE_ALPHA_SCALE: 0.7   // Fraction of fragments discarded
 ```
 
 **Impact**: 
 - Visual feedback for resource depletion/respawn
-- No performance cost (opaque render pass with early-Z)
-- Smooth animations without visual pops during LOD transitions
-- Eliminates ~60 lines of duplication between instancer files
+- Stays in opaque render pass (no transparency sorting overhead)
+- Smooth LOD transitions without visual pops
 
-### Tree Collision Proxy Improvements (March 27, 2026)
+### Tree Collision Proxy (March 27, 2026)
 
-**Change** (PR #1100): Use LOD2 model geometry for tree collision proxy instead of oversized invisible cylinder.
+**Change** (PR #1100): Use LOD2 model geometry for tree collision instead of oversized cylinder.
 
-**Problem**: The invisible cylinder hitbox was too large, causing ground clicks near trees to be intercepted by the collision proxy instead of registering as ground clicks.
+**Problem**: Cylinder hitbox (0.4 radius factor) was too large, intercepting ground clicks near trees.
 
-**Fix**: Replace cylinder with actual LOD2 mesh geometry so clicks only register on the visible tree silhouette. Falls back to tighter cylinder (0.25 radius factor) if LOD unavailable.
+**Fix**: Use actual LOD2 mesh geometry for pixel-accurate collision. Falls back to tighter cylinder (0.25 radius) if LOD unavailable.
 
-**Key Features**:
-- **Geometry Caching**: Cache merged+scaled proxy geometry per `(sourceGeometries, scale)` to avoid redundant merges
-- **Multi-Part Merging**: Merge multi-part geometries (bark + leaves) into single proxy mesh
-- **Defensive Bounding Box**: Pre-compute `boundingBox` alongside `boundingSphere` to prevent lazy mutation by Three.js raycaster
-- **Float Key Safety**: Round scale key to 3 decimal places to prevent floating-point cache misses
-
-**New Functions** (`packages/shared/src/systems/shared/world/GLBTreeBatchedInstancer.ts`, `GLBTreeInstancer.ts`):
-- `getProxyGeometry()` - Returns stable source geometry refs for collision proxy (callers MUST clone before mutating)
-- `clearProxyGeometryCache()` - Dispose cached geometries during world teardown
-
-**Implementation**:
+**New APIs**:
 ```typescript
-// Get LOD2 geometry for collision proxy
-const proxyData = getProxyGeometry(entityId);
-if (proxyData) {
-  const merged = mergeGeometries(proxyData.geometries);
-  const scaled = merged.clone().scale(scale, scale, scale);
-  // Use scaled geometry for raycasting
-}
+// GLBTreeInstancer.ts, GLBTreeBatchedInstancer.ts
+getProxyGeometry(entityId): { geometries, yOffset } | null
+clearProxyGeometryCache(): void  // Call during world teardown
 ```
 
 **Impact**: 
 - Clicks only register on visible tree silhouette
-- Prevents ground clicks near trees from being intercepted
-- More accurate interaction hitboxes
+- Ground clicks near trees work correctly
 - Cached geometry reduces CPU overhead
 
-### Resource Respawn System Changes (March 27, 2026)
+### Resource Respawn System (March 27, 2026)
 
-**Change** (PR #1099): Make resource respawn purely tick-based and use manifest `depleteChance` for mining.
+**Change** (PR #1099): Made resource respawn purely tick-based, use manifest `depleteChance` for mining.
 
-**Problem**: Legacy `setTimeout`-based respawn in `ResourceEntity.deplete()` was non-deterministic and didn't match OSRS tick-based mechanics. Mining used hardcoded `MINING_DEPLETE_CHANCE` constant instead of reading from manifest, preventing rune essence rocks (depleteChance: 0) from working correctly.
+**Problem**: `setTimeout`-based respawn was non-deterministic. Mining used hardcoded `MINING_DEPLETE_CHANCE` instead of manifest values.
 
-**Fix**: Remove `setTimeout` respawn — respawn is now exclusively handled by `ResourceSystem.processRespawns()` via deterministic tick counting. Mining depletion now reads `depleteChance` from manifest.
-
-**Key Changes**:
-- **Tick-Based Respawn**: `ResourceSystem.processRespawns()` counts ticks since depletion and respawns at `respawnTicks` threshold
-- **Manifest depleteChance**: Mining reads `depleteChance` from resource manifest (0.0 = never depletes, 1.0 = always depletes)
-- **Removed Constants**: `MINING_DEPLETE_CHANCE` and `MINING_REDWOOD_DEPLETE_CHANCE` removed in favor of manifest values
-
-**Implementation**:
-```typescript\n// Manifest-based depletion (mining)\nconst depleteChance = resourceData.depleteChance ?? 1.0;\nif (Math.random() < depleteChance) {\n  resource.deplete();\n}\n\n// Tick-based respawn (ResourceSystem)\nif (ticksSinceDepleted >= resource.respawnTicks) {\n  resource.respawn();\n}\n```\n\n**Impact**: \n- OSRS-accurate tick-based respawn mechanics\n- Rune essence rocks (depleteChance: 0) never deplete per OSRS behavior\n- Deterministic respawn timing\n- Manifest-driven resource configuration\n\n**Tests**: Added tests for `depleteChance: 0` (essence rocks) and `depleteChance: 1.0` (regular ores).\n\n### Tool Validation System Overhaul (March 27, 2026)
-
-**Change** (PR #1098): Manifest-based tool validation to prevent cross-skill tool usage.
-
-**Problem**: Substring matching allowed pickaxes to cut trees and hatchets to mine rocks because "pickaxe" contains "axe". This violated OSRS mechanics where tools are skill-specific.
-
-**Fix**: Use `tools.json` manifest as single source of truth. Each tool declares its skill explicitly ("woodcutting", "mining", "fishing"). Manifest lookup prevents cross-skill usage.
-
-**Key Features**:
-- **Manifest-First Validation**: `getExternalTool()` lookup with explicit skill comparison
-- **Fallback Guards**: Substring fallback with symmetric exclusions (hatchet rejects "pickaxe", pickaxe rejects "hatchet")
-- **Warn-Once Logging**: Bounded Set (max 50 entries) prevents log flooding for unmanifested tools
-- **Fishing Tool Exact Match**: Fishing tools require exact ID match (not interchangeable like pickaxe tiers)
-
-**New Utilities** (`packages/shared/src/systems/shared/entities/gathering/ToolUtils.ts`):
-- `itemMatchesToolCategory()` - Manifest-based tool validation with fallback guards
-- `getToolCategory()` - Extract tool category from item ID
-- `CATEGORY_TO_SKILL` - Map tool categories to gathering skills
-- `_resetFallbackWarnings()` - Test helper for warning cache isolation
-
-**Implementation**:
-```typescript
-// Manifest-based validation (primary path)
-const toolData = getExternalTool(lowerItemId);
-if (toolData) {
-  const expectedSkill = CATEGORY_TO_SKILL[category] ?? category;
-  return toolData.skill === expectedSkill;
-}
-
-// Fallback with cross-skill guards
-if (category === "hatchet") {
-  if (lowerItemId.includes("pickaxe") || lowerItemId.includes("pick")) {
-    return false; // Reject pickaxes for woodcutting
-  }
-  return lowerItemId.includes("hatchet");
-}
-```
-
-**Impact**: 
-- Prevents cross-skill tool usage (pickaxe for woodcutting, hatchet for mining)
-- Forces all gathering tools to be in manifest for proper validation
-- Eliminates false positives from combat weapons (battleaxe, greataxe)
-- Maintains OSRS-accurate fishing tool behavior (exact match required)
-
-**Tests**: 15 new tests covering manifest validation, cross-skill rejection, fallback warnings, and fishing tool exact matching.
-
-### Gathering Tool Visual Display Fix (March 27, 2026)
-
-**Change** (Commit 1f789cb): Show correct tool in hand for all gathering skills, not just fishing.
-
-**Problem**: Fishing-only gate in `GATHERING_TOOL_SHOW/HIDE` events meant woodcutting and mining didn't display tools. A player with a pickaxe equipped and hatchet in inventory would visually swing the pickaxe at trees.
-
-**Fix**: Remove fishing-only gate so all gathering skills (woodcutting, mining, fishing) display the correct tool during gathering actions.
-
-**Impact**: 
-- Woodcutting now shows hatchet in hand (overrides equipped weapon)
-- Mining now shows pickaxe in hand (overrides equipped weapon)
-- Visual feedback matches actual tool being used
-
-### Mob Level Display Fix (March 27, 2026)
-
-**Change** (PR #1097): Fixed duplicate mob levels showing in right-click context menus.
-
-**Problem**: Mob names like "Bandit (Lv8)" would show as "Attack Bandit (Lv8) (Level: 8)", displaying the level twice.
-
-**Fix**: Strip trailing `(Lv#)` suffix from mob display names before building context menu labels.
-
-**Impact**: Context menus now show clean mob names without duplicate level information.
-
-### Home Teleport Polish (March 26, 2026)
-
-**Change** (PR #1095): Polished home teleport cast effects and cooldown flow.
-
-**Features**: Visual cast effects, cooldown system (30s), minimap orb integration, smooth teleport animation.
+**Fix**: Remove `setTimeout` entirely. Respawn handled by `ResourceSystem.processRespawns()` via tick counting. Mining reads `depleteChance` from manifest.
 
 **Key Changes**:
-- Cooldown reduced from 15 minutes to 30 seconds
-- Server sends `remainingMs` in cooldown rejection packets
-- Dedicated channel-mode portal effect with terrain-aware anchoring
-- Both `HomeTeleportButton` and `MinimapHomeTeleportOrb` show cooldown progress
+- Removed `MINING_DEPLETE_CHANCE` and `MINING_REDWOOD_DEPLETE_CHANCE` constants
+- Resources with `depleteChance: 0` never deplete (rune essence rocks)
+- Deterministic tick-based respawn timing
 
-### Player Death System Overhaul (March 26, 2026)
+**Impact**: 
+- OSRS-accurate resource mechanics
+- Rune essence rocks work correctly (never deplete)
+- Predictable respawn timing
 
-**Change** (PR #1094): Complete rewrite of player death pipeline to fix SQLite deadlock, equipment duplication, and implement OSRS-style "keep 3 most valuable items" for safe zone deaths.
-
-**Key Features**:
-- **Two-Phase Persist Pattern**: In-memory clear inside transaction, DB persist after transaction
-- **OSRS Keep-3 System**: Safe zone deaths keep 3 most valuable items (by manifest value)
-- **Event Migration**: `PLAYER_DIED` deprecated → use `PLAYER_SET_DEAD` or `ENTITY_DEATH`
-- **Gravestone Privacy**: Loot items hidden from broadcast, only sent to interacting player
-- **Death Lock Recovery**: Persist kept items in death lock for crash recovery
-- **Persist Retry Queue**: Single-retry queue for post-transaction DB persist failures
-
-**New Utilities** (`packages/shared/src/systems/shared/combat/DeathUtils.ts`):
-- `sanitizeKilledBy()` - XSS/Unicode/injection protection
-- `splitItemsForSafeDeath()` - OSRS keep-3 with stack handling
-- `validatePosition()` - Position validation and clamping
-- `GRAVESTONE_ID_PREFIX` - Constant for gravestone entity ID filtering
-
-**Breaking Changes**:
-- `PLAYER_DIED` event is deprecated - use `PLAYER_SET_DEAD` instead
-- Death lock schema now includes `keptItems` field
-
-### Dialogue and Skilling Panel Polish (March 26, 2026)
-
-**Change** (PR #1093): Unified skilling panel layouts and redesigned NPC dialogue system with dedicated in-world panels.
-
-**Skilling Panel Improvements**:
-- **Shared Components**: `SkillingPanelBody`, `SkillingSection`, `SkillingQuantitySelector` in `SkillingPanelShared.tsx`
-- **Unified Layouts**: All skilling panels (Fletching, Cooking, Smelting, Smithing, Crafting, Tanning) use consistent styling
-- **Quantity Selector**: Reusable component with preset buttons (1, 5, 10, All, X) and custom input mode
-
-**Dialogue System Redesign**:
-- **DialoguePopupShell**: Dedicated modal shell for NPC dialogue with focus management
-- **DialogueCharacterPortrait**: Live 3D VRM portrait rendering in dialogue panels
-- **Service Handoff Fix**: Opening bank/store/tanner properly closes dialogue
-
-**Impact**: Eliminates ~500 lines of duplicated styling, more immersive NPC interactions.
-
-### Game UI Tab Arrow Key Capture Fix (March 26, 2026)
-
-**Change** (PR #1092): Fixed arrow keys being consumed by in-game panel tabs, preventing camera controls.
-
-**Fix**: Added `reserveArrowKeys` prop to disable arrow key consumption for game windows.
-
-**Impact**: Arrow keys now control camera movement even when panel tabs have focus.
-
-### Missing Packet Handlers Fix (March 26, 2026)
-
-**Change** (PR #1091): Added 8 missing server→client packet handlers.
-
-**Missing Handlers**: `onFletchingComplete`, `onCookingComplete`, `onSmeltingComplete`, `onSmithingComplete`, `onCraftingComplete`, `onTanningComplete`, `onCombatEnded`, `onQuestStarted`
-
-**Impact**: Eliminates "No handler for packet" errors.
-
-### Prayer Login Sync Fix (March 26, 2026)
-
-**Change** (PR #1090): Fixed prayer state synchronization on player login.
-
-**Impact**: Prayer points and active prayers now sync correctly between sessions.
+## Recent Changes (March 2026)
 
 ### Performance & Scalability Overhaul (March 19-20, 2026)
 
@@ -542,6 +420,7 @@ RUN bun install --production
 - **@pixiv/three-vrm**: 3.4.3 → 3.5.1 (VRM avatar support)
 - **@solana-mobile/wallet-standard-mobile**: 0.4.4 → 0.5.0 (mobile wallet integration)
 - **sqlite3**: 5.1.7 → 6.0.1 (SQLite database driver)
+- **Tailwind CSS**: Rolled back from v4 beta to 3.4.1 (stable)
 
 **Impact**:
 - Latest build tooling with improved performance and faster builds
@@ -552,5 +431,6 @@ RUN bun install --production
 - Updated TypeScript definitions matching Three.js 0.183.2
 - Enhanced test coverage reporting with Vitest 4.1
 - SQLite 6.x with performance improvements and bug fixes
+- Stable Tailwind CSS build pipeline
 
 See CLAUDE.md for complete documentation.
