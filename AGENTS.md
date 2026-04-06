@@ -109,18 +109,18 @@ packages/
 
 ## Recent Changes (April 2026)
 
-### Tailwind v3 Rollback (April 4, 2026)
+### Tailwind CSS Updates (April 2026)
 
-**Change** (PR #1105): Restored stable Tailwind v3 build pipeline after Tailwind v4 production artifact issues.
+**Change** (PR #1105, subsequent updates): Tailwind CSS build pipeline stabilization.
 
-**Problem**: Tailwind v4 dropped critical utilities in linux/amd64 Docker builds despite using official Vite plugin.
+**Timeline**:
+- April 4: Temporarily rolled back to Tailwind v3.4.1 due to production artifact issues
+- Later: Upgraded to Tailwind v4.1.14 with `@tailwindcss/postcss` plugin
 
-**Fix**: Rolled back to Tailwind v3 with standard PostCSS pipeline for consistent production CSS output.
-
-**Impact**: 
+**Current State** (Tailwind v4.1.14):
+- Uses official `@tailwindcss/postcss` Vite plugin
 - Stable CSS generation across all build environments
-- No more missing utility classes in production Docker images
-- Consistent auth and character screen styling
+- Consistent auth and character screen styling in production Docker images
 
 ### Docker Build Fixes (April 6, 2026)
 
