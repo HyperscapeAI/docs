@@ -1,872 +1,639 @@
-# Hyperscape RPG Engine
+# Hyperscape Client
 
-A comprehensive RPG system built on the Hyperscape 3D multiplayer game engine, featuring RuneScape-inspired mechanics with AI-generated content.
+Web client for Hyperscape 3D multiplayer MMORPG, built with Vite, React 19, and Three.js WebGPU renderer.
 
 ## Overview
 
-The Hyperscape RPG is a persistent multiplayer RPG featuring:
-- Real-time combat with melee and ranged weapons
-- Skill-based progression system (9 skills)
-- Resource gathering and crafting
-- Banking and trading systems
-- Mob spawning and AI entities
-- Comprehensive UI with inventory, equipment, and banking interfaces
-- Dedicated streaming entry points for RTMP capture
+The Hyperscape client is a modern web-based 3D game client featuring:
+- **WebGPU Rendering**: Three.js 0.183.2 with TSL (Three Shading Language) shaders
+- **React 19 UI**: Modern React with hooks and concurrent features
+- **Real-time Multiplayer**: WebSocket connection to game server (uWebSockets.js on port 5556)
+- **VRM Avatars**: Custom player avatars with live 3D portraits
+- **Unified Tooltips**: Consistent tooltip styling across all UI panels
+- **Visual Effects**: Tree dissolve transparency, damage splats, teleport effects
+- **Mobile Support**: Capacitor integration for iOS and Android
 
 ## Quick Start
 
-### TL;DR - Get Playing Fast
-
-```bash
-cd packages/hyperscape
-bun install
-bun run dev
-# Open http://localhost:3333 and start playing!
-# (No auth setup needed for local development)
-```
-
 ### Prerequisites
 
-- Node.js 18+ or Bun 1.0+
-- Bun recommended for fastest installation
-- 4GB+ RAM (for PostgreSQL database and 3D rendering)
-- Modern browser with **WebGPU support** (Chrome 113+, Edge 113+, Safari 18+)
-
-**CRITICAL**: Hyperscape requires **WebGPU** (not WebGL). All materials use TSL (Three Shading Language) which only works with WebGPU. Check your browser support at [webgpureport.org](https://webgpureport.org).
+- **Bun 1.3.10+** (for package management and build)
+- **Modern Browser** with WebGPU support:
+  - Chrome 113+
+  - Edge 113+
+  - Safari 18+ (macOS 15+)
+  - Check support: [webgpureport.org](https://webgpureport.org)
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/hyperscapeai/hyperscape
-cd hyperscape/packages/hyperscape
-
-# Install dependencies
-bun install
-
-# Start the development server (Privy auth is OPTIONAL)
-bun run dev
-```
-
-The frontend will start on `http://localhost:3333` and backend on `http://localhost:5555`
-
-> **Note**: Authentication with Privy is **optional**. The app works perfectly fine without it for development/testing. Users will be anonymous but can still play. See "Authentication Setup" below to enable persistent accounts.
-
-### Streaming Entry Points
-
-Hyperscape includes dedicated entry points optimized for RTMP streaming capture:
-
-**Main Game Entry** (`index.html`):
-- Full UI with all panels and controls
-- Optimized for player interaction
-- URL: `http://localhost:3333/`
-
-**Streaming Entry** (`stream.html`):
-- Minimal UI optimized for streaming capture
-- Reduced overhead for better performance
-- Automatic viewport mode detection
-- Renderer health monitoring for capture pipeline
-- URL: `http://localhost:3333/stream.html` or `?page=stream`
-
-**Embedded Spectator**:
-- Spectator-only view with no player controls
-- Secure `postMessage` auth bootstrap
-- Origin validation for iframe parents
-- URL: `http://localhost:3333/?embedded=true&mode=spectator`
-
-**Viewport Mode Detection**:
-```typescript
-import { isStreamPageRoute, isEmbeddedSpectatorViewport, isStreamingLikeViewport } from '@hyperscape/shared/runtime/clientViewportMode';
-
-// Detect streaming capture mode
-if (isStreamPageRoute(window)) {
-  // Running in streaming mode - minimize UI
-}
-
-// Detect embedded spectator
-if (isEmbeddedSpectatorViewport(window)) {
-  // Running as spectator - disable player controls
-}
-
-// Detect any streaming-like viewport
-if (isStreamingLikeViewport(window)) {
-  // Optimize for streaming capture
-}
-```
-
-**Renderer Health Monitoring** (March 2026):
-```typescript
-// Exposed for capture pipeline health probes
-window.__HYPERSCAPE_STREAM_READY__: boolean
-window.__HYPERSCAPE_STREAM_RENDERER_HEALTH__: {
-  ready: boolean;
-  degradedReason: string | null;  // e.g., "loading_overlay_active", "arena_positions_invalid"
-  updatedAt: number;
-  phase: string | null;
-}
-window.__HYPERSCAPE_STREAM_BOOT_STATUS__: string | null  // "connecting" | "initializing" | "loading_assets" | "finalizing" | "error:*"
-```
-
-**Streaming Access Token Management** (March 2026):
-```typescript
-import { getStreamingAccessToken, primeStreamingAccessTokenFromWindow } from '@/lib/streamingAccessToken';
-
-// Extract token from URL hash (preferred) or query, scrub from URL
-primeStreamingAccessTokenFromWindow(window);  // Call before React mounts
-
-// Get cached token (no re-parsing)
-const token = getStreamingAccessToken();
-```
-
-**Embedded Auth Security** (March 2026):
-```typescript
-import { 
-  resolveTrustedEmbedOrigins, 
-  isTrustedEmbedOrigin,
-  parseHyperscapeAuthMessage,
-  applyHyperscapeAuthMessage 
-} from '@/lib/embeddedAuth';
-
-// Build trusted origin allowlist
-const trustedOrigins = resolveTrustedEmbedOrigins({
-  currentOrigin: window.location.origin,
-  publicAppUrl: import.meta.env.PUBLIC_APP_URL,
-  embedAllowedOrigins: import.meta.env.PUBLIC_EMBED_ALLOWED_ORIGINS,
-});
-
-// Validate postMessage origin
-window.addEventListener("message", (event) => {
-  if (!isTrustedEmbedOrigin(event.origin, trustedOrigins)) {
-    console.warn("Ignoring message from untrusted origin:", event.origin);
-    return;
-  }
-  
-  const message = parseHyperscapeAuthMessage(event.data);
-  if (message) {
-    applyHyperscapeAuthMessage(config, message);
-  }
-});
-```
-
-**Configuration**:
-```bash
-# Embed security (comma-separated allowlist)
-PUBLIC_EMBED_ALLOWED_ORIGINS=https://embed.example.com,https://partner.example.com
-
-# Referrer policy (prevents token leakage)
-# Added to stream.html: <meta name="referrer" content="same-origin" />
-```
-
-**Vite Multi-Page Build**:
-- Main game: `index.html` → `dist/index.html`
-- Streaming: `stream.html` → `dist/stream.html`
-- Separate bundles optimize for different use cases
-
-### Authentication Setup (Optional)
-
-> **⚠️ OPTIONAL**: You can skip this entire section for local development. The game works without authentication!
-
-Hyperscape uses **Privy** for user authentication, supporting wallet login, email, social accounts, and Farcaster. This enables:
-- 💾 **Persistent accounts** across devices
-- 🔐 **Secure authentication** via wallet, email, or social
-- 🎭 **Farcaster integration** for Frame deployment
-- 📊 **Progress tracking** tied to user identity
-
-If you want these features, follow the steps below. Otherwise, skip to "First Time Setup".
-
-#### 1. Get Privy Credentials
-
-1. Go to [Privy Dashboard](https://dashboard.privy.io/)
-2. Create a new app or select existing app
-3. **Enable Farcaster login** in Settings → Login Methods (if using Farcaster)
-4. Copy your credentials:
-   - App ID from Settings → Basics
-   - App Secret from Settings → API Keys
-
-#### 2. Configure Environment Variables
-
-Edit your `.env` file:
-
-```bash
-# Required: Privy App ID (get from dashboard.privy.io)
-PUBLIC_PRIVY_APP_ID=your-privy-app-id-here
-PRIVY_APP_ID=your-privy-app-id-here
-PRIVY_APP_SECRET=your-privy-app-secret-here
-
-# Optional: Farcaster Frame v2 deployment
-PUBLIC_ENABLE_FARCASTER=false
-PUBLIC_APP_URL=http://localhost:5555
-```
-
-#### 3. Start the Server
-
-```bash
-bun run dev
-```
-
-#### 4. Login Flow
-
-1. Open your browser to `http://localhost:3333`
-2. You'll see a login screen
-3. Click "Login to Play" 
-4. Choose your authentication method (wallet, email, Farcaster, etc.)
-5. After authentication, the game world will load
-6. Create your character and start playing!
-
-#### Development Without Authentication
-
-For local development/testing, you can skip authentication by not setting `PUBLIC_PRIVY_APP_ID`. The app will fall back to anonymous users with local tokens.
-
-```bash
-# In .env, leave these commented out or remove them:
-# PUBLIC_PRIVY_APP_ID=
-# PRIVY_APP_ID=
-# PRIVY_APP_SECRET=
-```
-
-Note: User progress will not persist across devices without authentication.
-
-#### Migrating Existing Installations
-
-If you're upgrading from a version without Privy:
-
-1. **Install new dependencies**:
-```bash
+cd packages/client
 bun install
 ```
-
-2. **Add Privy credentials** to `.env` (optional):
-```bash
-PUBLIC_PRIVY_APP_ID=your-app-id
-PRIVY_APP_ID=your-app-id
-PRIVY_APP_SECRET=your-secret
-```
-
-3. **Database migration** runs automatically on next server start
-   - New columns: `privyUserId`, `farcasterFid`
-   - Existing users continue to work with legacy tokens
-
-4. **Backward Compatibility**:
-   - ✅ Existing users keep their accounts
-   - ✅ Legacy auth tokens still work
-   - ✅ No breaking changes to existing deployments
-   - ✅ Privy is optional - app works without it
-
-### First Time Setup
-
-1. **Authenticate** using Privy (wallet, email, or social login)
-2. **Create character** - choose your name in-game
-3. **Explore** - Use WASD to move, click to interact with objects
-4. **Right-click** for context menus and advanced actions
-5. **Open menus** - Use left sidebar buttons for Inventory, Skills, Equipment, etc.
 
 ### Configuration
 
-Hyperscape uses environment variables for flexible deployment. The system works great with defaults for local development, but you can customize it for mobile, LAN testing, or production deployment.
-
-**Check your configuration**:
+Copy the example environment file:
 ```bash
-npm run config:check  # Desktop development
-npm run config:check:mobile  # Mobile development
+cp .env.example .env
 ```
 
-See [CONFIG.md](./CONFIG.md) for complete configuration documentation.
+**Required Configuration:**
+```env
+# Privy Authentication (required for persistent accounts)
+PUBLIC_PRIVY_APP_ID=your-privy-app-id
 
-### Mobile Development
+# Server URLs
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5556/ws  # Note: port 5556 for WebSocket
 
-Hyperscape supports iOS and Android through CapacitorJS.
-
-**Quick Start:**
-```bash
-# 1. Get your local IP for mobile connection
-npm run cap:ip
-
-# 2. Export the server URL (use command from step 1)
-export CAP_SERVER_URL="http://192.168.1.XXX:3333"
-
-# 3. Start dev server (separate terminal)
-npm run dev
-
-# 4. Open mobile app
-npm run ios:dev      # or android:dev
+# CDN URL
+PUBLIC_CDN_URL=http://localhost:8080
 ```
 
-See [MOBILE-QUICKSTART.md](./MOBILE-QUICKSTART.md) for quick reference or [MOBILE.md](./MOBILE.md) for complete documentation.
+**Optional Configuration:**
+```env
+# Farcaster Frame v2
+PUBLIC_ENABLE_FARCASTER=false
+PUBLIC_APP_URL=http://localhost:3333
 
-### Farcaster Frame v2 Deployment
+# LiveKit Voice Chat
+PUBLIC_LIVEKIT_URL=wss://your-livekit-server
 
-Deploy Hyperscape as a Farcaster mini-app (Frame v2):
-
-#### Prerequisites
-
-1. **Privy configured** with Farcaster login enabled
-2. **Public HTTPS URL** (required for Farcaster)
-3. **Frame metadata** configured
-
-#### Setup
-
-1. **Enable Farcaster in environment**:
-```bash
-PUBLIC_ENABLE_FARCASTER=true
-PUBLIC_APP_URL=https://your-game-domain.com
+# Development
+VITE_PORT=3333
 ```
 
-2. **Deploy to public URL**:
+### Running
+
+**Development:**
 ```bash
-# Build for production
-bun run build
-
-# Deploy to your hosting platform (Vercel, Railway, etc.)
-# Make sure both frontend and backend are accessible
-```
-
-3. **Configure Privy for Farcaster**:
-- In [Privy Dashboard](https://dashboard.privy.io/)
-- Go to Settings → Login Methods
-- Enable "Farcaster" login
-- Add your app's redirect URLs
-
-4. **Test your Frame**:
-- Use [Farcaster Developer Tools](https://farcaster.xyz/~/developers/mini-apps/embed)
-- Enter your app URL
-- Preview in the embedded viewer
-- Note: localhost won't work - use ngrok/Cloudflare tunnel for testing
-
-5. **Share your Frame**:
-- Share your app URL in any Farcaster client
-- Users can launch the mini-app directly from the Frame
-- Automatic Farcaster authentication for seamless onboarding
-
-#### Frame Features
-
-- **Auto-login**: Users are automatically authenticated with their Farcaster account
-- **Wallet integration**: Farcaster wallet (Warplet) is automatically connected
-- **Identity**: Player progress is tied to Farcaster FID
-- **Cross-platform**: Works in Farcaster mobile app and Warpcast
-
-#### Local Testing with Tunnel
-
-For local development testing as a Frame:
-
-```bash
-# Install ngrok or use Cloudflare tunnel
-npx ngrok http 5555
-
-# Update .env with ngrok URL
-PUBLIC_APP_URL=https://your-ngrok-url.ngrok.io
-
-# Restart server
 bun run dev
 ```
+Opens on `http://localhost:3333` with hot module replacement.
 
-## Account Management
-
-### User Authentication
-
-- **Account Creation**: Automatic on first login with Privy
-- **Identity Persistence**: Game progress tied to Privy user ID
-- **Multiple Devices**: Access your account from any device
-- **Account Linking**: Link multiple auth methods (wallet, email, social) to one account
-
-### Character Management
-
-- **Name Changes**: Update your character name in-game (Settings panel)
-- **Avatar**: Upload custom VRM avatars (future feature)
-- **Progress Tracking**: All skills, items, and progress saved to your account
-
-### Supported Login Methods
-
-- 🔐 **Wallet**: MetaMask, Coinbase Wallet, Rainbow, WalletConnect
-- 📧 **Email**: Magic link or OTP authentication
-- 🌐 **Social**: Google, Twitter, Discord (configured in Privy)
-- 🎭 **Farcaster**: Seamless login for Farcaster users
-
-### Account Security
-
-- All authentication handled by Privy (industry-standard security)
-- No passwords stored on Hyperscape servers
-- JWT tokens for secure session management
-- Automatic session refresh and token rotation
-
-## Game Systems
-
-### Combat System
-
-- **Melee Combat**: Equip weapons and click on enemies to attack
-- **Ranged Combat**: Requires bow + arrows equipped
-- **Auto-Attack**: Combat continues automatically when in range
-- **Damage System**: Based on Attack/Strength levels and equipment
-- **Death Mechanics**: Items drop at death location, respawn at nearest town
-
-### Skills System
-
-9 core skills with XP-based progression:
-
-1. **Attack** - Determines weapon accuracy and requirements
-2. **Strength** - Increases melee damage
-3. **Defense** - Reduces incoming damage, armor requirements
-4. **Constitution** - Determines health points
-5. **Ranged** - Bow accuracy and damage
-6. **Woodcutting** - Tree harvesting with hatchet
-7. **Fishing** - Fish gathering at water edges
-8. **Firemaking** - Create fires from logs
-9. **Cooking** - Process raw fish into food
-
-### Equipment System
-
-Three equipment tiers:
-- **Bronze** (Level 1+)
-- **Steel** (Level 10+) 
-- **Mithril** (Level 20+)
-
-Equipment slots:
-- Weapon, Shield, Helmet, Body, Legs, Arrows
-
-**Note**: Some armor items (bronze_full_helm, bronze_platelegs, bronze_kiteshield, leather_boots, leather_gloves, cape) don't have 3D models yet and will use placeholder visuals.
-
-### Economy
-
-- **Banking**: Unlimited storage in starter towns
-- **General Store**: Purchase tools and arrows
-- **Loot Drops**: Coins and equipment from defeated enemies
-- **No Player Trading**: MVP limitation
-
-## World Design
-
-### Map Structure
-
-- **Grid-based** terrain with height-mapped collision
-- **Multiple biomes**: Mistwood Valley, Goblin Wastes, Darkwood Forest, etc.
-- **Starter towns** with banks and stores (safe zones)
-- **Difficulty zones** with level-appropriate enemies
-
-### Mobs by Difficulty
-
-**Level 1**: Goblins, Bandits, Barbarians
-**Level 2**: Hobgoblins, Guards, Dark Warriors  
-**Level 3**: Black Knights, Ice Warriors, Dark Rangers
-
-## User Interface
-
-### Core UI Elements
-
-- **Account panel** (👤) - Login status, user info, logout, character name
-- **Combat panel** (⚔️) - Attack styles and combat stats
-- **Skills panel** (🧠) - Level progression and XP tracking
-- **Inventory** (🎒) - 28 slots, drag-and-drop items
-- **Equipment panel** (🛡️) - Worn items and stats
-- **Settings panel** (⚙️) - Graphics, audio, and display options
-- **Health/Stamina bars** - Displayed on minimap
-- **Banking interface** - Store/retrieve items (at banks)
-- **Store interface** - Purchase tools and supplies (at stores)
-
-### Controls
-
-- **Movement**: WASD keys or click-to-move
-- **Camera**: Mouse look (hold right-click to rotate, scroll to zoom)
-- **Interact**: Left-click on objects/NPCs
-- **Context menu**: Right-click for advanced actions
-- **UI Panels**: Click icons on left side of screen
-  - 👤 Account - Login, logout, character name
-  - ⚔️ Combat - Attack styles and combat level
-  - 🧠 Skills - View skill levels and XP
-  - 🎒 Inventory - Manage items (28 slots)
-  - 🛡️ Equipment - View/manage equipped gear
-  - ⚙️ Settings - Graphics, audio, preferences
-
-## Authentication Architecture
-
-### Privy Integration
-
-The authentication system uses Privy for secure, Web3-native user management:
-
-**Client-Side Components:**
-- `PrivyAuthManager.ts` - Authentication state management
-- `PrivyAuthProvider.tsx` - React context provider for Privy
-- `LoginScreen.tsx` - Pre-game login UI
-- `farcaster-frame-config.ts` - Farcaster Frame v2 metadata
-
-**Server-Side Components:**
-- `privy-auth.ts` - Token verification and user info extraction
-- Database migrations in `db.ts` - Adds `privyUserId` and `farcasterFid` columns
-
-**Authentication Flow:**
-
-```
-User Opens App
-     ↓
-Check Farcaster Context
-     ↓
-[Farcaster] → Auto-login    [Web/Mobile] → Show Login Screen
-     ↓                              ↓
-Privy Authentication (wallet, email, social, or Farcaster)
-     ↓
-Receive Access Token
-     ↓
-Connect to Server via WebSocket
-     ↓
-Server Verifies Token with Privy
-     ↓
-Load/Create User Account
-     ↓
-Spawn Player in World
+**Production Build:**
+```bash
+bun run build
+bun run preview  # Preview production build
 ```
 
-**Key Features:**
-- Zero-knowledge authentication (no passwords stored)
-- Multi-device account access
-- Wallet, email, and social login support
-- Farcaster integration for seamless Frame experience
-- Backward compatible with legacy anonymous users
-- CSRF protection for cross-origin requests (fixed March 2026)
+## Features
+
+### UI Systems
+
+- **Unified Tooltips** (March 2026): Consistent tooltip styling across all panels using centralized style utilities
+- **Bank System**: 480-slot bank with tabs, equipment deposit/withdraw, coin management
+- **Inventory**: 28-slot inventory with drag-and-drop, coin pouch, item stacking
+- **Equipment**: Paperdoll view with live 3D portrait, stat bonuses, drag-and-drop equipping
+- **Skills**: XP tracking, level progression, skill unlocks
+- **Prayer**: Prayer point management, active prayer tracking, drain rate display
+- **Spells**: Magic spellbook with rune requirements, autocast selection
+- **Combat**: Attack style selection, auto-retaliate toggle, combat level display
+- **Dialogue**: NPC dialogue with live 3D VRM portraits
+- **Home Teleport**: Visual cast effects, 30s cooldown, minimap orb integration
+- **Action Bar**: Drag-and-drop action slots with keyboard shortcuts (1-9, 0)
+
+### Visual Systems
+
+- **Tree Dissolve** (March 2026): Depleted trees become ~70% transparent with screen-door dithering, animate back to full opacity on respawn
+- **Damage Splats**: Floating damage numbers with color-coded hit types
+- **XP Drops**: Floating XP notifications with skill icons
+- **Teleport Effects**: Portal effects with terrain-aware anchoring
+- **Health Bars**: Overhead health bars for mobs and players
+- **Equipment Visuals**: Real-time equipment rendering on player avatars
+- **Projectiles**: Arrow and spell projectile rendering
+
+### Interaction Systems
+
+- **Context Menus**: Right-click menus for entities with action options
+- **Raycasting**: Accurate click detection using LOD2 geometry for trees (March 2026)
+- **Hover Highlights**: Entity highlighting on mouse hover
+- **Drag-and-Drop**: Inventory, equipment, bank, and action bar item management
+- **Keyboard Shortcuts**: Action bar slots (1-9, 0), panel hotkeys
+
+## Architecture
+
+### Core Components
+
+**GameClient** (`src/screens/GameClient.tsx`)
+- Main game container
+- World initialization
+- System coordination
+- Event handling
+
+**InterfaceManager** (`src/game/interface/InterfaceManager.tsx`)
+- Window management
+- Panel rendering
+- Modal coordination
+- Drag-and-drop context
+
+**ClientNetwork** (`packages/shared/src/systems/client/ClientNetwork.ts`)
+- WebSocket connection management
+- Packet handling
+- Network interpolation
+- Connection quality monitoring
+
+### UI Architecture
+
+**Tooltip System** (`src/ui/core/tooltip/`)
+- `CursorTooltip.tsx` - Cursor-following tooltip component
+- `tooltipStyles.ts` - Centralized style utilities (March 2026)
+  - `getTooltipTitleStyle()` - Title text styling
+  - `getTooltipMetaStyle()` - Metadata/secondary text
+  - `getTooltipBodyStyle()` - Body content
+  - `getTooltipDividerStyle()` - Section dividers
+  - `getTooltipTagStyle()` - Tag/badge styling
+  - `getTooltipStatusStyle()` - Status indicators
+
+**Panel System** (`src/game/panels/`)
+- Modular panel components
+- Shared styling utilities
+- Consistent layouts
+- Drag-and-drop integration
+
+**Theme System** (`src/ui/theme/`)
+- Centralized theme configuration
+- Dark mode support
+- Responsive breakpoints
+- Accessibility features
+
+### Rendering Pipeline
+
+**Three.js WebGPU** (`packages/shared/src/`)
+- WebGPURenderer (TSL shaders only)
+- Post-processing (bloom, tone mapping)
+- LOD system (3 levels for trees, buildings)
+- Instanced rendering (trees, rocks, grass)
+- Batched rendering (vegetation)
+
+**Visual Effects** (`packages/shared/src/systems/client/`)
+- `DamageSplatSystem.ts` - Floating damage numbers
+- `XPDropSystem.ts` - Floating XP notifications
+- `ClientTeleportEffectsSystem.ts` - Teleport portal effects
+- `ProjectileRenderer.ts` - Arrow and spell projectiles
+- `HealthBars.ts` - Overhead health bars
+
+**Material Systems** (`packages/shared/src/systems/shared/world/`)
+- `GPUMaterials.ts` - TSL shader materials
+- `DissolveAnimation.ts` - Tree dissolve transparency (March 2026)
+- `TreeLODMaterials.ts` - LOD-specific tree materials
 
 ## Development
-
-### Architecture
-
-The RPG is built using Hyperscape's Entity Component System:
-
-- **Systems**: Handle game logic (combat, inventory, etc.)
-- **Entities**: Players, mobs, items, world objects
-- **Components**: Data containers attached to entities
-- **Actions**: Player-initiated activities (attack, gather, etc.)
-
-### Key Systems
-
-- **PlayerSystem**: Player state management
-- **CombatSystem**: Battle mechanics and damage
-- **InventorySystem**: Item management
-- **XPSystem**: Skill progression
-- **MobNPCSystem**: Monster AI and spawning
-- **BankingSystem**: Storage and transactions
-- **StoreSystem**: Shop functionality
-- **ResourceSystem**: Gathering mechanics
-
-### UI Architecture (Updated March 2026)
-
-**Interface Manager**: Modular hook-based UI architecture replacing monolithic `Sidebar.tsx`
-
-**Core Hooks**:
-- **usePlayerData** (`src/hooks/usePlayerData.ts`) - Centralized player data subscription
-  - Eliminates duplicate event listeners
-  - Proper equality checks prevent cascading re-renders
-  - Provides `PlayerDataProvider` context for child components
-- **useModalPanels** (`src/hooks/useModalPanels.ts`) - Centralized modal panel state
-  - Manages bank, store, dialogue, crafting, and other modal panels
-  - Provides close handlers for all modal types
-  - Shared between desktop and mobile interfaces
-
-**Minimap Hooks**:
-- **useMinimapTerrainCache** (`src/game/hud/useMinimapTerrainCache.ts`) - Terrain rendering with biome coloring
-- **useMinimapEntityPips** (`src/game/hud/useMinimapEntityPips.ts`) - Entity markers with icon caching
-- **useMinimapWorldCaches** (`src/game/hud/useMinimapWorldCaches.ts`) - Road/town network caching
-
-**Usage Example**:
-```typescript
-import { PlayerDataProvider, usePlayerDataContext } from '@/hooks';
-
-// Wrap your component tree
-<PlayerDataProvider world={world}>
-  <YourComponent />
-</PlayerDataProvider>
-
-// Access player data in child components
-function YourComponent() {
-  const { inventory, equipment, playerStats, coins } = usePlayerDataContext();
-  // ... use player data
-}
-```
-
-**Design System**:
-- **Z-Index Hierarchy**: Centralized in `src/constants/tokens.ts`
-- **UI Constants**: Game-specific dimensions in `src/constants/ui.ts`
-- **Panel Styles**: Unified styling in `tokens.ts` with `getPanelStyle()` helper
-
-**See Also**: [docs/ui-modernization-march-2026.md](../../docs/ui-modernization-march-2026.md) for complete UI modernization details
 
 ### File Structure
 
 ```
-packages/client/src/
-├── screens/              # Main application screens
-│   ├── LoginScreen.tsx   # Authentication UI
+src/
+├── screens/                  # Top-level screens
+│   ├── GameClient.tsx        # Main game screen
+│   ├── LoginScreen.tsx       # Authentication screen
 │   ├── CharacterSelectScreen.tsx  # Character selection
-│   ├── GameClient.tsx    # Main game client
-│   ├── StreamingMode.tsx # Streaming capture mode
-│   └── UsernameSelectionScreen.tsx  # Character creation
-├── game/                 # Game UI components
-│   ├── panels/           # UI panels (inventory, skills, etc.)
-│   ├── hud/              # HUD elements (minimap, health bars)
-│   ├── interface/        # Interface management
-│   └── components/       # Reusable game components
-├── auth/                 # Authentication
-│   ├── PrivyAuthManager.ts  # Auth state management
-│   └── PrivyAuthProvider.tsx  # React context provider
-├── lib/                  # Utilities
-│   ├── api-client.ts     # HTTP API client (CSRF support)
-│   └── api-config.ts     # API URL configuration
-├── index.html            # Main game entry point
-└── stream.html           # Streaming entry point (March 2026)
+│   └── LoadingScreen.tsx     # Loading screen
+├── game/
+│   ├── interface/            # Interface management
+│   │   ├── InterfaceManager.tsx
+│   │   ├── WindowRenderer.tsx
+│   │   └── DragDropCoordinator.tsx
+│   ├── panels/               # UI panels
+│   │   ├── InventoryPanel.tsx
+│   │   ├── EquipmentPanel.tsx
+│   │   ├── BankPanel.tsx
+│   │   ├── SkillsPanel.tsx
+│   │   ├── PrayerPanel.tsx
+│   │   ├── SpellsPanel.tsx
+│   │   └── ...
+│   ├── hud/                  # HUD elements
+│   │   ├── Minimap.tsx
+│   │   ├── StatusBars.tsx
+│   │   ├── ContextMenu.tsx
+│   │   └── HomeTeleportButton.tsx
+│   └── systems/              # Client-side systems
+│       ├── InventoryActionDispatcher.ts
+│       └── ...
+├── ui/                       # Shared UI components
+│   ├── core/
+│   │   ├── tooltip/          # Tooltip system
+│   │   ├── drag/             # Drag-and-drop
+│   │   ├── window/           # Window management
+│   │   └── responsive/       # Responsive utilities
+│   ├── components/           # Reusable components
+│   ├── stores/               # Zustand stores
+│   └── theme/                # Theme configuration
+├── auth/                     # Authentication
+│   ├── PrivyAuthProvider.tsx
+│   ├── PrivyAuthManager.ts
+│   └── PlayerTokenManager.ts
+└── lib/                      # Utilities
+    ├── websocket-manager.ts
+    ├── api-client.ts
+    └── ...
 ```
+
+### Key Technologies
+
+- **Vite 8.0.0**: Build tool with HMR
+- **React 19.2.0**: UI framework
+- **Tailwind CSS 3.4.1**: Utility-first CSS (rolled back from v4 in April 2026)
+- **Three.js 0.183.2**: 3D rendering (WebGPU only)
+- **@pixiv/three-vrm 3.5.1**: VRM avatar support
+- **Zustand**: State management
+- **@dnd-kit**: Drag-and-drop
+- **Privy**: Authentication
+
+### Build Configuration
+
+**Vite Config** (`vite.config.ts`):
+- WebGPU polyfills
+- Asset optimization
+- Code splitting
+- Environment variable injection
+
+**Tailwind Config** (`tailwind.config.js`):
+- Custom color palette
+- Responsive breakpoints
+- Custom utilities
+- PostCSS pipeline (v3 stable)
 
 ## Testing
 
-The Hyperscape RPG includes a comprehensive unified test suite that validates all game systems through real browser automation and visual verification.
-
-### Unified Test Suite
-
-Run all tests with a single command:
+### E2E Tests
 
 ```bash
-# Run all tests (headless mode)
-bun run test
+# Run all E2E tests
+bun run test:e2e
 
-# Run with visible browser (for debugging)
-bun run test:headed
+# Run specific test
+bun run test:e2e -- combat.spec.ts
 
-# Run with detailed logging
-bun run test:verbose
+# Run with visible browser
+bun run test:e2e:headed
 ```
 
-### Test Categories
-
-Filter tests by category:
+### Unit Tests
 
 ```bash
-# Run only RPG-specific tests
-bun run test:rpg
+# Run unit tests
+bun run test:unit
 
-# Run only framework/engine tests
-bun run test:framework
-
-# Run only integration tests
-bun run test:integration
-
-# Run only gameplay scenario tests
-bun run test:gameplay
+# Run with coverage
+bun run test:coverage
 ```
-
-### Legacy Test Commands
-
-Individual test suites are still available:
-
-```bash
-# Legacy test commands (for specific debugging)
-bun run test:legacy:rpg           # RPG comprehensive tests
-bun run test:legacy:integration   # System integration tests
-bun run test:legacy:hyperscape    # Framework validation tests
-bun run test:legacy:gameplay      # Gameplay scenario tests
-```
-
-### Test Coverage
-
-The unified test suite includes:
-
-1. **🎮 RPG Comprehensive Tests** - Core gameplay mechanics
-   - Combat system (melee and ranged attacks)
-   - Inventory and equipment management
-   - Banking and store transactions
-   - Resource gathering and skill progression
-   - Death/respawn mechanics
-
-2. **🔗 RPG Integration Tests** - System integration validation
-   - Server startup and system initialization
-   - Player spawning and character creation
-   - Cross-system communication
-   - Database persistence
-   - UI integration
-
-3. **⚡ Hyperscape Framework Tests** - Engine and framework validation
-   - 3D rendering and WebGPU functionality
-   - Physics simulation and collision detection
-   - Network synchronization
-   - Asset loading and management
-
-4. **🎯 RPG Gameplay Tests** - Specific gameplay scenarios
-   - Complete quest workflows
-   - Multi-player interactions
-   - Edge case handling
-   - Performance validation
-
-### Test Results
-
-Test results are saved to `test-results.json` with detailed metrics:
-- Success/failure rates per test suite
-- Performance timing information
-- Error logs and screenshots
-- Coverage analysis
 
 ### Visual Testing
 
-Tests use colored cube proxies for visual verification:
-- 🔴 Players
-- 🟢 Goblins
-- 🔵 Items
-- 🟡 Trees
-- 🟣 Banks
-- 🟨 Stores
+Tests use Playwright with WebGPU-enabled browsers:
+- Screenshot comparison
+- Three.js scene introspection
+- Entity position verification
+- UI state validation
 
-## Production Deployment
+## Deployment
+
+### Vercel
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel --prod
+```
+
+**Environment Variables** (set in Vercel dashboard):
+- `PUBLIC_PRIVY_APP_ID`
+- `PUBLIC_API_URL`
+- `PUBLIC_WS_URL`
+- `PUBLIC_CDN_URL`
+
+### Cloudflare Pages
+
+```bash
+# Build
+bun run build
+
+# Deploy
+wrangler pages deploy dist
+```
+
+### Netlify
+
+```bash
+# Build
+bun run build
+
+# Deploy
+netlify deploy --prod --dir=dist
+```
+
+### Static Hosting
+
+The client is a static SPA that can be hosted anywhere:
+
+```bash
+# Build
+bun run build
+
+# Output: dist/
+# Upload dist/ to any static host (S3, GCS, Azure Storage, etc.)
+```
+
+**Requirements:**
+- Serve `index.html` for all routes (SPA routing)
+- Set CORS headers if API/WS on different domain
+- Configure environment variables via `env.js` or build-time injection
+
+## Configuration
 
 ### Environment Variables
 
-```bash
-# Required
-DATABASE_URL=postgresql://user:pass@host:5432/dbname
-WORLD_PATH=./world
-
-# Optional
-PUBLIC_CDN_URL=https://your-cdn.com
-LIVEKIT_API_KEY=your-livekit-key
-LIVEKIT_API_SECRET=your-livekit-secret
+**Required:**
+```env
+PUBLIC_PRIVY_APP_ID=your-app-id      # Privy authentication
+PUBLIC_API_URL=http://localhost:5555  # Game server HTTP
+PUBLIC_WS_URL=ws://localhost:5556/ws  # Game server WebSocket (port 5556!)
+PUBLIC_CDN_URL=http://localhost:8080  # Asset CDN
 ```
 
-### Database Setup
-
-The RPG uses PostgreSQL for persistence:
-
-```bash
-# Initialize database
-bun run db:init
-
-# Reset world state (WARNING: Deletes all player data)
-bun run db:reset
+**Optional:**
+```env
+PUBLIC_ENABLE_FARCASTER=false         # Farcaster Frame v2
+PUBLIC_APP_URL=http://localhost:3333  # App URL for Farcaster
+PUBLIC_LIVEKIT_URL=wss://...          # LiveKit voice chat
+VITE_PORT=3333                        # Dev server port
 ```
 
-### Performance Optimization
+### WebSocket Connection
 
-- **Instance Limits**: Recommended 50-100 concurrent players
-- **Memory Usage**: ~4GB RAM for full world with all systems
-- **CPU Usage**: Scales with player count and active combat
-- **Database**: PostgreSQL handles thousands of players efficiently (connection pool: 20)
+**Important**: The WebSocket server runs on port **5556** (uWebSockets.js), not 5555 (HTTP).
 
-## API Reference
+```env
+# Correct WebSocket URL
+PUBLIC_WS_URL=ws://localhost:5556/ws
 
-### State Queries
-
-Query game state via REST API:
-
-```bash
-# Get all available state queries
-GET /api/state
-
-# Get player stats
-GET /api/state/player-stats?playerId=123
-
-# Get world info
-GET /api/state/world-info
-```
-
-### Action Execution
-
-Execute actions via REST API:
-
-```bash
-# Get available actions for player
-GET /api/actions/available?playerId=123
-
-# Execute action
-POST /api/actions/attack
-{
-  "targetId": "goblin-456",
-  "playerId": "123"
-}
+# For production
+PUBLIC_WS_URL=wss://your-domain.com/ws
 ```
 
 ## Troubleshooting
 
-### Common Issues
+### WebGPU Not Available
 
-**Server won't start**
-- Check Node.js version (18+ required)
-- Verify PostgreSQL database permissions
-- Ensure port 5555 is available
+**Error:** "WebGPU is not supported in this browser"
 
-**Client connection fails**
-- Verify WebSocket connection (check browser dev tools)
-- Confirm server is running on correct port
-- Check firewall settings
+**Solutions:**
+1. Update browser to latest version (Chrome 113+, Edge 113+, Safari 18+)
+2. Check [webgpureport.org](https://webgpureport.org) for browser support
+3. Enable WebGPU in browser flags (if behind flag)
+4. Verify GPU drivers are up to date
 
-**WebGPU not available**
-- Update browser to Chrome 113+, Edge 113+, or Safari 18+
-- Check GPU drivers are up to date
-- Verify WebGPU support at [webgpureport.org](https://webgpureport.org)
-- **Note**: WebGL is NOT supported - WebGPU is required
+**Note:** WebGL is NOT supported. The game requires WebGPU.
 
-**Authentication issues**
-- Verify `PUBLIC_PRIVY_APP_ID` is set correctly in `.env`
-- Check that `PRIVY_APP_SECRET` matches your Privy dashboard
-- Ensure Privy app is configured to allow your domain in redirect URLs
-- For Farcaster: Enable Farcaster login in Privy dashboard settings
-- For mobile: Add `hyperscape://` scheme to Privy allowed redirect URIs
+### WebSocket Connection Failed
 
-**CSRF 403 errors** (cross-origin development)
-- Fixed in March 2026 (commit 0b1a0bd)
-- Ensure client includes Privy auth token in Authorization header
-- Verify server CSRF middleware allows localhost origins
+**Error:** "Failed to connect to game server"
 
-**Farcaster Frame not working**
-- Ensure `PUBLIC_ENABLE_FARCASTER=true` in `.env`
-- Verify your app is deployed to a public HTTPS URL
-- Check that meta tags are properly injected (view page source)
-- Test with [Farcaster Dev Tools](https://farcaster.xyz/~/developers/mini-apps/embed)
-- Make sure Farcaster login is enabled in Privy dashboard
+**Solutions:**
+1. Verify server is running on port 5556 (WebSocket)
+2. Check `PUBLIC_WS_URL` in `.env` points to port 5556
+3. Verify firewall allows WebSocket connections
+4. Check browser console for detailed error messages
 
-**OAuth redirects fail on mobile**
-- Add `hyperscape://` to Capacitor config schemes
-- Update Privy dashboard with mobile redirect URIs: `hyperscape://oauth-callback`
-- Rebuild and resync mobile apps after config changes
+### Assets Not Loading
 
-**Visual rendering issues**
-- Ensure WebGPU is supported in browser
-- Check for GPU driver updates
-- Try different browser if issues persist
-- **Note**: WebGL is NOT supported - WebGPU is required
+**Error:** 404 errors for models/textures
 
-**Performance problems**
-- Reduce concurrent player count
-- Monitor memory usage (4GB+ recommended)
-- Check database size and optimize if needed
+**Solutions:**
+1. Verify CDN is running: `curl http://localhost:8080/health`
+2. Start CDN: `bun run cdn:up` (from root directory)
+3. Check `PUBLIC_CDN_URL` in `.env`
+4. Verify assets exist in `../../assets/` directory
 
-**Streaming renderer health issues** (March 2026)
-- Check `window.__HYPERSCAPE_STREAM_RENDERER_HEALTH__` in browser console
-- Common `degradedReason` values:
-  - `"loading_overlay_active"` - Loading screen still visible
-  - `"arena_positions_invalid"` - Agents spawned at same position
-  - `"initialization_failed"` - World init error (check console)
-  - `"camera_target_unresolved"` - Camera hasn't locked to target yet
-- Verify `window.__HYPERSCAPE_STREAM_BOOT_STATUS__` is `null` when ready
-- Check browser console for WebGPU initialization errors
+### Tailwind CSS Missing Utilities
 
-**Embedded client auth failures** (March 2026)
-- Verify parent origin is in `PUBLIC_EMBED_ALLOWED_ORIGINS`
-- Check browser console for "Ignoring HYPERSCAPE_AUTH from untrusted origin" warnings
-- Ensure `HYPERSCAPE_AUTH` message includes required `authToken` field
-- Verify `event.source === window.parent` (messages from other frames are rejected)
-- Check `HYPERSCAPE_READY` is sent to correct target origin (not wildcard in production)
+**Error:** Missing utility classes in production build
 
-### Debug Mode
+**Solution:** This was fixed in April 2026 by rolling back to Tailwind v3. If you're on an older version:
+1. Update to latest: `git pull origin main`
+2. Reinstall dependencies: `bun install`
+3. Rebuild: `bun run build`
 
-Enable debug logging:
+The client now uses Tailwind CSS 3.4.1 with standard PostCSS pipeline for consistent production builds.
 
-```bash
-# Start with debug output
-DEBUG=hyperscape:* bun run dev
+### Authentication Issues
 
-# Enable RPG system debugging
-DEBUG=rpg:* bun run dev
+**Error:** Characters vanish on page refresh
+
+**Cause:** Missing Privy credentials - each refresh creates new anonymous user
+
+**Solution:**
+1. Get Privy App ID from [dashboard.privy.io](https://dashboard.privy.io)
+2. Set `PUBLIC_PRIVY_APP_ID` in `.env`
+3. Restart dev server
+
+### Performance Issues
+
+**Symptoms:** Low FPS, stuttering, high memory usage
+
+**Solutions:**
+1. Check GPU is being used (not software rendering)
+2. Reduce graphics settings in-game
+3. Close other GPU-intensive applications
+4. Update GPU drivers
+5. Check browser task manager for memory leaks
+
+### Mobile Build Issues
+
+**Error:** Capacitor sync fails
+
+**Solutions:**
+1. Build client first: `bun run build`
+2. Sync Capacitor: `npm run cap:sync`
+3. Verify Capacitor config in `capacitor.config.ts`
+
+## Recent Changes
+
+### April 2026
+
+- **Tailwind v3 Rollback** (PR #1105): Restored stable Tailwind v3 pipeline after v4 production issues
+  - Consistent CSS output across all build environments
+  - No more missing utility classes in Docker builds
+  - Standard PostCSS pipeline for reliability
+
+- **Unified Tooltips** (PR #1102): Centralized tooltip styling across all UI panels
+  - New `tooltipStyles.ts` with style utility functions
+  - Consistent appearance across inventory, equipment, bank, spells, prayer, skills, trade, store, loot
+  - Eliminated ~500 lines of duplicated styling code
+
+- **Bank Equipment Layout**: Improved equipment panel integration in bank interface
+  - Reuses shared `EquipmentPanel` component
+  - Bank-specific deposit actions
+  - Live 3D portrait preview
+  - Consistent layout with standalone equipment panel
+
+### March 2026
+
+- **Tree Dissolve Transparency** (PR #1101): Visual feedback for resource depletion/respawn
+  - Screen-door dithering (stays in opaque render pass)
+  - 0.3s smooth animation on respawn
+  - LOD transition preservation
+
+- **Tree Collision Improvements** (PR #1100): Accurate click detection using LOD2 geometry
+  - Clicks only register on visible tree silhouette
+  - Ground clicks near trees work correctly
+  - Geometry caching for performance
+
+- **Home Teleport Polish** (PR #1095): Visual effects and cooldown system
+  - 30s cooldown (reduced from 15 minutes)
+  - Portal effects with terrain anchoring
+  - Minimap orb integration
+
+- **Dialogue System Redesign** (PR #1093): Live NPC portraits and improved dialogue flow
+  - `DialoguePopupShell` - Dedicated modal for NPC dialogue
+  - `DialogueCharacterPortrait` - Live 3D VRM rendering
+  - Proper service handoff (bank/store/tanner)
+
+- **Arrow Key Fix** (PR #1092): Arrow keys no longer consumed by panel tabs
+  - Camera controls work even when tabs have focus
+  - Added `reserveArrowKeys` prop to game windows
+
+## API Reference
+
+### Tooltip Style Utilities
+
+```typescript
+import {
+  getTooltipTitleStyle,
+  getTooltipMetaStyle,
+  getTooltipBodyStyle,
+  getTooltipDividerStyle,
+  getTooltipTagStyle,
+  getTooltipStatusStyle,
+} from '@/ui/core/tooltip/tooltipStyles';
+
+// Title text
+const titleStyle = getTooltipTitleStyle(theme, accentColor?);
+
+// Metadata/secondary text
+const metaStyle = getTooltipMetaStyle(theme);
+
+// Body content
+const bodyStyle = getTooltipBodyStyle(theme);
+
+// Section dividers
+const dividerStyle = getTooltipDividerStyle(theme, accentColor?);
+
+// Tag/badge styling
+const tagStyle = getTooltipTagStyle(theme);
+
+// Status indicators (success/danger/warning/default)
+const statusStyle = getTooltipStatusStyle(theme, 'success');
 ```
 
-### Test Validation
+### Equipment Panel Props
 
-Verify installation with integration tests:
+```typescript
+interface EquipmentPanelProps {
+  equipment: PlayerEquipmentItems | null;
+  world?: ClientWorld;
+  slotActionLabel?: string;           // "Remove" or "Deposit"
+  onSlotAction?: (slotKey: string) => void;
+  footerButtons?: Array<{
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+  }>;
+  showBonuses?: boolean;              // Show stat bonuses
+  layoutVariant?: 'default' | 'bank'; // Layout mode
+  isVisible?: boolean;                // Visibility state
+}
+```
+
+### Dialogue System
+
+```typescript
+// DialoguePopupShell - Modal shell for NPC dialogue
+<DialoguePopupShell
+  isOpen={isOpen}
+  onClose={onClose}
+  npcName="Shopkeeper"
+  npcId="npc_lumbridge_shopkeeper"
+>
+  {/* Dialogue content */}
+</DialoguePopupShell>
+
+// DialogueCharacterPortrait - Live 3D VRM portrait
+<DialogueCharacterPortrait
+  npcId="npc_lumbridge_shopkeeper"
+  world={world}
+  compact={false}
+/>
+```
+
+## Performance
+
+### Optimization Strategies
+
+- **Code Splitting**: Lazy-loaded routes and panels
+- **Asset Optimization**: Compressed textures, LOD models
+- **Instanced Rendering**: Trees, rocks, grass use GPU instancing
+- **Batched Rendering**: Vegetation uses BatchedMesh for efficiency
+- **Memoization**: React.memo on expensive components
+- **Virtual Scrolling**: Large lists use virtual scrolling
+
+### Performance Targets
+
+- **Initial Load**: <5s on broadband
+- **FPS**: 60fps on mid-range hardware
+- **Memory**: <500MB for typical gameplay
+- **Network**: <100KB/s average bandwidth
+
+### Profiling
 
 ```bash
-# Quick health check
-bun run test:health
+# Build with profiling
+bun run build --mode=profiling
 
-# Full system validation
-bun run test:rpg:integration
+# Analyze bundle
+bun run analyze
+```
+
+## Mobile Development
+
+### Capacitor Setup
+
+```bash
+# Sync web build to native projects
+npm run cap:sync
+
+# Open in Xcode (iOS)
+npm run ios:dev
+
+# Open in Android Studio
+npm run android:dev
+```
+
+### Mobile-Specific Features
+
+- Touch controls
+- Responsive UI scaling
+- Mobile-optimized layouts
+- Reduced graphics settings
+- Battery optimization
+
+### Mobile Configuration
+
+```typescript
+// capacitor.config.ts
+{
+  appId: 'com.hyperscape.game',
+  appName: 'Hyperscape',
+  webDir: 'dist',
+  server: {
+    url: process.env.CAP_SERVER_URL,  // For local dev
+    cleartext: true
+  }
+}
 ```
 
 ## Contributing
@@ -874,30 +641,41 @@ bun run test:rpg:integration
 ### Development Setup
 
 1. Fork the repository
-2. Create feature branch: `git checkout -b feature/new-system`
-3. Run tests: `bun run test:rpg:integration`
-4. Commit changes: `git commit -am 'Add new system'`
-5. Push branch: `git push origin feature/new-system`
-6. Create Pull Request
+2. Create feature branch: `git checkout -b feature/new-ui`
+3. Make changes
+4. Run tests: `bun run test`
+5. Build: `bun run build`
+6. Commit: `git commit -am 'Add new UI feature'`
+7. Push: `git push origin feature/new-ui`
+8. Create Pull Request
 
 ### Code Standards
 
-- TypeScript for all new code
-- ESLint/Prettier for formatting
-- Comprehensive tests required for new features
-- Follow existing system patterns
-- Document public APIs
+- **TypeScript**: All new code must be TypeScript
+- **No `any` types**: ESLint will reject them
+- **React 19 patterns**: Use hooks, avoid class components
+- **Accessibility**: ARIA labels, keyboard navigation
+- **Performance**: Memoize expensive components
+- **Testing**: E2E tests for new features
+
+### UI Guidelines
+
+- Use centralized tooltip styles from `tooltipStyles.ts`
+- Follow existing panel layout patterns
+- Maintain consistent spacing and colors
+- Support both desktop and mobile layouts
+- Test with keyboard navigation
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT
 
 ## Support
 
-- **Issues**: GitHub Issues for bug reports
-- **Documentation**: In-code comments and this README
-- **Community**: Discord server for discussions
+- **Documentation**: See [CLAUDE.md](../../CLAUDE.md) for development guidelines
+- **Issues**: Report bugs in main Hyperscape repository
+- **Discord**: Join community for support
 
 ---
 
-Built with ❤️ using Hyperscape, Three.js, and modern web technologies.
+Built with ❤️ using Vite, React, Three.js, and WebGPU.
