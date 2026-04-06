@@ -165,19 +165,40 @@ MINING_SUCCESS_RATES: {
 
 ## Rock Depletion
 
-### 100% Depletion on Success
+### Manifest-Based Depletion (March 2026)
 
-When you successfully mine ore, the rock has a **1/8 chance to deplete**:
+<Info>
+**Breaking Change (PR #1099)**: Mining depletion now reads `depleteChance` from the manifest instead of using a hardcoded constant. This enables OSRS-accurate behavior for special rocks like rune essence.
+</Info>
+
+When you successfully mine ore, the rock has a **chance to deplete** based on the manifest:
 
 ```typescript
-// From ResourceSystem.ts
+// From ResourceSystem.ts (March 2026)
 if (resource.type === "ore" || resource.skillRequired === "mining") {
-  const roll = Math.random();
-  shouldDeplete = roll < GATHERING_CONSTANTS.MINING_DEPLETE_CHANCE; // 0.125 = 1/8
+  const depleteChance = tuned.depleteChance ?? 1.0;
+  if (depleteChance <= 0) {
+    shouldDeplete = false;  // Never depletes (e.g., rune essence)
+  } else {
+    const roll = Math.random();
+    shouldDeplete = roll < depleteChance;
+  }
 }
 ```
 
-### Respawn Timing
+**Common Depletion Rates:**
+
+| Rock Type | depleteChance | Behavior |
+|-----------|---------------|----------|
+| Regular ores (copper, iron, coal) | 1.0 | Always depletes on success |
+| Rune essence | 0.0 | Never depletes (continuous mining) |
+| Special rocks | 0.125 | 1/8 chance to deplete |
+
+### Tick-Based Respawn (March 2026)
+
+<Info>
+**Breaking Change (PR #1099)**: Resource respawn is now purely tick-based. The legacy `setTimeout`-based respawn was removed for deterministic OSRS-accurate timing.
+</Info>
 
 Rocks respawn after a configured number of ticks (from manifest):
 
@@ -185,9 +206,15 @@ Rocks respawn after a configured number of ticks (from manifest):
 {
   "id": "ore_iron",
   "respawnTicks": 10,  // 10 ticks = 6 seconds
-  "depleteChance": 0.125
+  "depleteChance": 1.0  // Always depletes
 }
 ```
+
+**Respawn System:**
+- `ResourceSystem.processRespawns()` counts ticks since depletion
+- Respawns when `ticksSinceDepleted >= respawnTicks`
+- Deterministic and server-authoritative
+- No more `setTimeout` timers (removed for reliability)
 
 **Common Respawn Times:**
 
