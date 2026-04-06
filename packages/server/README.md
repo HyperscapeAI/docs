@@ -1,115 +1,47 @@
 # Hyperscape Server
 
-Production-ready game server for Hyperscape 3D multiplayer worlds with PostgreSQL backend.
+Production-ready game server for Hyperscape 3D multiplayer worlds with PostgreSQL backend and uWebSockets.js for high-performance WebSocket communication.
 
 ## ✅ Status: FULLY OPERATIONAL
 
-The server has been successfully migrated to PostgreSQL and is production-ready with:
-- PostgreSQL database with automatic migrations
-- 54 mobs + 5 NPCs spawning at startup  
-- Character creation and multi-character support
-- Complete persistence layer (inventory, equipment, skills, position)
-- Real-time multiplayer via uWebSockets.js (port 5556)
-- 15 registered game actions
-
-## Recent Changes (March 2026)
-
-### Server Runtime Migration (March 19-20, 2026)
-
-**Breaking Change**: Server now requires **Node.js 22+** (migrated from Bun).
-
-**Why**: V8 incremental GC eliminates 500-1200ms stop-the-world pauses that were blocking game ticks. Bun's GC caused 3-5 missed ticks per minute under load.
-
-**Impact**:
-- Tick blocking: 900-2400ms → 110-200ms (81-92% reduction)
-- Missed ticks: 3-5/min → 0 under normal load
-- Event loop blocking: 62.5% → <3%
-- Scalability: 20 players + 10 agents → 50+ players + 25+ agents
-
-**Migration**:
-```bash
-# Install Node.js 22+
-nvm install 22
-nvm use 22
-
-# Server now runs with Node.js
-node dist/index.js
-```
-
-### uWebSockets.js Integration (March 19-20, 2026)
-
-**Breaking Change**: WebSocket port changed from **5555 → 5556**.
-
-**Why**: Native pub/sub broadcasting eliminates O(n) socket iteration. Fastify WebSocket required iterating all sockets for each broadcast.
-
-**Configuration**:
-```bash
-# Server (packages/server/.env)
-UWS_ENABLED=true          # Enable uWS (default: true)
-UWS_PORT=5556             # uWS port (default: 5556)
-
-# Client (packages/client/.env)
-PUBLIC_WS_URL=ws://localhost:5556/ws  # Update from 5555 to 5556
-```
-
-**Impact**:
-- Broadcast performance: O(n) → O(1) with native pub/sub
-- Eliminates socket iteration overhead
-- Better scalability for 50+ concurrent players
-
-### Player Death System Overhaul (March 26, 2026)
-
-**Change**: Complete rewrite of player death pipeline to fix SQLite deadlock, equipment duplication, and implement OSRS-style "keep 3 most valuable items" for safe zone deaths.
-
-**Key Features**:
-- Two-phase persist pattern (in-memory clear inside tx, DB persist after)
-- OSRS keep-3 system (safe zone deaths keep 3 most valuable items)
-- Death lock recovery (persist kept items for crash recovery)
-- Persist retry queue (single-retry for post-tx DB failures)
-- Gravestone privacy (loot items hidden from broadcast)
-
-**New Database Table**:
-```sql
-CREATE TABLE death_locks (
-  player_id TEXT PRIMARY KEY,
-  death_position_x REAL NOT NULL,
-  death_position_y REAL NOT NULL,
-  death_position_z REAL NOT NULL,
-  kept_items TEXT NOT NULL,  -- JSON array of InventoryItem
-  created_at INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL
-);
-```
-
-**Breaking Changes**:
-- `PLAYER_DIED` event deprecated → use `PLAYER_SET_DEAD`
-- Death lock schema includes `keptItems` field
-
-**Documentation**: See `docs/death-system-architecture.md` for complete details.
+The server has been successfully migrated to Node.js 22+ with uWebSockets.js and is production-ready with:
+- **Node.js 22+ Runtime**: V8 incremental GC eliminates stop-the-world pauses (March 2026)
+- **uWebSockets.js**: Native pub/sub broadcasting on port 5556 for efficient multiplayer
+- **PostgreSQL Database**: Full persistence with automatic migrations
+- **Worker Thread AI**: Agent decision logic runs off main thread (200-600ms blocking eliminated)
+- **Tick-Based Systems**: OSRS-accurate resource respawn, combat, and movement
+- **54+ mobs + 5 NPCs** spawning at startup  
+- **Character creation** and multi-character support
+- **Complete persistence** layer (inventory, equipment, skills, position, bank, death locks)
+- **Real-time multiplayer** via uWebSockets.js (port 5556)
+- **15+ registered game actions**
 
 ## Features
 
+- **Node.js 22+ Runtime** - V8 incremental GC for stable tick performance
+- **uWebSockets.js** - High-performance WebSocket server on port 5556
 - **PostgreSQL Database** - Full persistence with automatic migrations
-- **uWebSockets.js** - High-performance WebSocket transport (port 5556)
+- **Worker Thread AI** - Agent behavior runs off main thread
+- **Tick System** - Deterministic 600ms OSRS-style game ticks
 - **Docker Integration** - Automatic local PostgreSQL via Docker (optional)
-- **Asset Serving** - Efficient static asset delivery
+- **Asset Serving** - Efficient static asset delivery via CDN
 - **Character System** - Multi-character support per account
 - **Authentication** - Optional Privy authentication with Farcaster support
 - **LiveKit Voice** - Optional voice chat integration
-- **Agent AI Worker** - Off-thread AI decision processing
+- **Death System** - OSRS-style keep-3 items with gravestone privacy
+- **Resource System** - Tick-based respawn with manifest-driven depletion
 
 ## Quick Start
 
 ### Prerequisites
 
 - **Node.js 22+** (required for server runtime)
-- **Bun 1.3.10+** (for build tasks)
+- **Bun 1.3.10+** (for package management and build tasks)
 - **Docker Desktop** (for local PostgreSQL) OR external PostgreSQL instance
 
 ### Installation
 
-```bash
-cd packages/server
+```bash\ncd packages/server
 bun install
 ```
 
@@ -132,10 +64,11 @@ DATABASE_URL=postgresql://user:pass@host:5432/dbname
 USE_LOCAL_POSTGRES=false
 ```
 
-**WebSocket Configuration**:
+**WebSocket Configuration:**
 ```env
 UWS_ENABLED=true          # Enable uWebSockets.js (default: true)
 UWS_PORT=5556             # WebSocket port (default: 5556)
+PUBLIC_WS_URL=ws://localhost:5556/ws  # Client WebSocket URL
 ```
 
 ### Running
@@ -153,7 +86,7 @@ This automatically starts:
 **Production Build:**
 ```bash
 bun run build
-node dist/index.js  # Use Node.js 22+, not Bun
+bun run start
 ```
 
 ### CDN Server
@@ -197,7 +130,7 @@ The server uses PostgreSQL with automatic migrations. On first run:
 
 1. If `USE_LOCAL_POSTGRES=true`, Docker will start a PostgreSQL container
 2. Migrations run automatically on startup
-3. Tables are created: users, characters, players, inventory, equipment, death_locks, etc.
+3. Tables are created: users, characters, players, inventory, equipment, bank, death_locks, etc.
 
 ### Manual Database Operations
 
@@ -228,37 +161,48 @@ bunx drizzle-kit generate  # Generate migration files
 bunx drizzle-kit migrate   # Run pending migrations
 ```
 
-**Current migrations**: 51 migrations (see `src/database/migrations/`)
+**Current schema includes:**
+- Users and authentication (Privy integration)
+- Characters (multi-character support)
+- Players (active game sessions)
+- Inventory and equipment
+- Bank storage with tabs
+- Skills and XP tracking
+- Death locks (crash recovery)
+- Quest progress
+- NPC kill tracking
+- Activity logs
 
 ## Architecture
 
 ### Core Systems
 
 **ServerNetwork** (`src/systems/ServerNetwork/index.ts`)
-- WebSocket connection handling (uWebSockets.js on port 5556)
+- uWebSockets.js connection handling (port 5556)
 - Player spawning and lifecycle
 - Character selection flow
 - Message routing and broadcasting
-- Tick system integration
+- Tick system integration (600ms OSRS ticks)
+- Mob AI tick processing
 
 **DatabaseSystem** (`src/systems/DatabaseSystem/index.ts`)
-- PostgreSQL connection management
+- PostgreSQL connection management (pool size: 20)
 - Character CRUD operations
 - Player data persistence
 - Inventory and equipment management
-
-**PlayerDeathSystem** (`packages/shared/src/systems/shared/combat/PlayerDeathSystem.ts`)
-- Death processing with two-phase persist
-- OSRS keep-3 system for safe zone deaths
+- Bank operations with tab support
 - Death lock management
-- Gravestone creation and loot handling
-- Persist retry queue
 
 **TickSystem** (`src/systems/TickSystem.ts`)
-- 600ms tick loop (OSRS-accurate)
-- Drift correction
-- Health monitoring
-- Per-handler timing
+- Deterministic 600ms game ticks
+- Drift correction and health monitoring
+- Per-handler timing and diagnostics
+- Priority-based tick ordering
+
+**ResourceSystem** (`packages/shared/src/systems/shared/entities/ResourceSystem.ts`)
+- Tick-based resource respawn (no setTimeout)
+- Manifest-driven depletion chance
+- OSRS-accurate gathering mechanics
 
 ### Character System
 
@@ -272,6 +216,33 @@ The server supports multiple characters per account:
 ```
 Login → Character List → Select/Create Character → Enter World → Spawn as Player
 ```
+
+### Performance Architecture (March 2026)
+
+**Server Runtime**: Node.js 22+ with V8 incremental GC
+- Eliminates 500-1200ms stop-the-world GC pauses
+- Tick blocking reduced from 900-2400ms to 110-200ms (81-92% reduction)
+- Missed ticks reduced from 3-5/min to 0 under normal load
+
+**uWebSockets.js Integration**:
+- Native pub/sub broadcasting (eliminates O(n) socket iteration)
+- Dedicated WebSocket port 5556 (HTTP on 5555)
+- Efficient binary message framing
+
+**Agent AI Worker Thread**:
+- Decision logic runs off main thread
+- Eliminates 200-600ms blocking from main tick loop
+- Supports 25+ concurrent AI agents
+
+**BFS Pathfinding Optimization**:
+- Global iteration budget (12,000 per tick)
+- Zero-allocation scratch tiles
+- Per-tick walkability cache
+
+**Terrain System Optimization**:
+- Low-res collision mesh (16×16)
+- Time-budgeted processing (8ms collision, 4ms walkability)
+- Pre-baked walkability flags
 
 ## API Endpoints
 
@@ -287,7 +258,7 @@ Login → Character List → Select/Create Character → Enter World → Spawn a
 
 ### WebSocket
 
-- `GET /ws` - WebSocket connection for real-time gameplay (port 5556)
+- `GET /ws` - WebSocket connection for real-time gameplay (uWebSockets.js on port 5556)
 
 ### Actions (HTTP API)
 
@@ -307,7 +278,7 @@ Login → Character List → Select/Create Character → Enter World → Spawn a
 
 ```env
 PORT=5555                    # HTTP server port
-UWS_PORT=5556                # WebSocket server port
+UWS_PORT=5556                # WebSocket server port (uWebSockets.js)
 WORLD=world                  # World directory path
 ```
 
@@ -326,41 +297,18 @@ POSTGRES_PORT=5432
 DATABASE_URL=postgresql://user:pass@host:5432/dbname
 ```
 
-### WebSocket Transport
+### WebSocket
 
 ```env
-UWS_ENABLED=true             # Enable uWebSockets.js (default: true)
-UWS_PORT=5556                # WebSocket port (default: 5556)
-```
-
-### Agent AI Worker
-
-```env
-EMBEDDED_BEHAVIOR_TICK_INTERVAL=8000  # Agent tick interval (ms)
-AGENT_STAGGER_OFFSET_MS=800           # Stagger offset (ms)
-MAX_AGENTS_PER_POLL=5                 # Max agents per poll cycle
-```
-
-### BFS Pathfinding
-
-```env
-MAX_BFS_ITERATIONS_PER_TICK=12000     # Global budget
-DEFAULT_MAX_ITERATIONS=4000           # Per-call limit
-```
-
-### Terrain System
-
-```env
-SERVER_COLLISION_RESOLUTION=16        # Collision mesh resolution
-COLLISION_BUDGET_MS=8                 # Collision queue budget (ms)
-WALKABILITY_BUDGET_MS=4               # Walkability baking budget (ms)
+UWS_ENABLED=true                      # Enable uWebSockets.js (default: true)
+UWS_PORT=5556                         # WebSocket port (default: 5556)
+PUBLIC_WS_URL=ws://localhost:5556/ws  # Client WebSocket URL
 ```
 
 ### Assets
 
 ```env
 PUBLIC_CDN_URL=http://localhost:8080    # CDN URL for static assets
-PUBLIC_WS_URL=ws://localhost:5556/ws    # WebSocket URL (port 5556)
 ```
 
 ### Authentication (Optional)
@@ -384,6 +332,29 @@ PUBLIC_APP_URL=https://your-domain.com
 LIVEKIT_API_KEY=your-key
 LIVEKIT_API_SECRET=your-secret
 PUBLIC_LIVEKIT_URL=wss://your-livekit-server
+```
+
+### Agent AI Configuration
+
+```env
+EMBEDDED_BEHAVIOR_TICK_INTERVAL=8000  # Agent tick interval (ms)
+AGENT_STAGGER_OFFSET_MS=800           # Stagger offset (ms)
+MAX_AGENTS_PER_POLL=5                 # Max agents per poll cycle
+```
+
+### Pathfinding Configuration
+
+```env
+MAX_BFS_ITERATIONS_PER_TICK=12000     # Global BFS budget per tick
+DEFAULT_MAX_ITERATIONS=4000           # Per-call BFS limit
+```
+
+### Terrain System Configuration
+
+```env
+SERVER_COLLISION_RESOLUTION=16        # Collision mesh resolution
+COLLISION_BUDGET_MS=8                 # Collision queue budget (ms)
+WALKABILITY_BUDGET_MS=4               # Walkability baking budget (ms)
 ```
 
 ### Monitoring & Alerting (Optional)
@@ -412,12 +383,11 @@ docker run -p 5555:5555 -p 5556:5556 \
   hyperscape-server
 ```
 
-**Note**: Expose both port 5555 (HTTP) and 5556 (WebSocket).
-
 ### Traditional Hosting
 
 Requirements:
 - Node.js 22+ (required for server runtime)
+- Bun 1.3.10+ (for build tasks)
 - PostgreSQL 16+ (local or managed)
 - Reverse proxy (nginx, caddy) for SSL
 
@@ -425,10 +395,7 @@ Requirements:
 # Build
 bun run build
 
-# Run with Node.js (not Bun)
-node dist/index.js
-
-# Or use process manager
+# Run with process manager
 pm2 start dist/index.js --name hyperscape-server
 ```
 
@@ -436,12 +403,12 @@ pm2 start dist/index.js --name hyperscape-server
 
 **Staging:**
 ```bash
-NODE_ENV=staging node dist/index.js
+NODE_ENV=staging bun run start
 ```
 
 **Production:**
 ```bash
-NODE_ENV=production node dist/index.js
+NODE_ENV=production bun run start
 ```
 
 ### Rollback
@@ -494,34 +461,7 @@ Then restart the server.
 SELECT * FROM config WHERE key = 'version';
 ```
 
-Should be at migration 51 or higher. If not, restart server to run migrations.
-
-### Player Death Issues
-
-**Symptoms**: Player stuck in death animation, never respawns.
-
-**Diagnosis**:
-1. Check server logs for `DEATH_PERSIST_DESYNC` tag
-2. Check for `AUDIT_LOG` events
-3. Query death locks: `SELECT * FROM death_locks WHERE player_id = ?`
-
-**Recovery**:
-```sql
--- Clear stuck death lock
-DELETE FROM death_locks WHERE player_id = 'player_<id>';
-```
-
-**Prevention**: Update to latest version (March 26, 2026+). Death system now has robust retry logic and crash recovery.
-
-### WebSocket Connection Issues
-
-**Error:** Client can't connect to WebSocket
-
-**Solutions:**
-1. Verify `UWS_PORT=5556` in server `.env`
-2. Verify `PUBLIC_WS_URL=ws://localhost:5556/ws` in client `.env`
-3. Check firewall allows port 5556
-4. Check server logs for uWS startup errors
+Should be at latest migration version. If not, restart server to run migrations.
 
 ### Docker Issues
 
@@ -538,41 +478,92 @@ DATABASE_URL=postgresql://user:pass@host:5432/dbname
 USE_LOCAL_POSTGRES=false
 ```
 
+### WebSocket Connection Issues
+
+**Error:** Client can't connect to WebSocket
+
+**Solutions:**
+1. Verify `UWS_PORT=5556` in server `.env`
+2. Verify `PUBLIC_WS_URL=ws://localhost:5556/ws` in client `.env`
+3. Check firewall allows port 5556
+4. Ensure uWebSockets.js is enabled: `UWS_ENABLED=true`
+
+### Player Death Issues
+
+**Symptoms**: Player stuck in death animation, never respawns, or equipment duplicates
+
+**Diagnosis**:
+1. Check server logs for `DEATH_PERSIST_DESYNC` tag (DB persist failures)
+2. Check for `AUDIT_LOG` events (reconnect with active death lock)
+3. Verify death lock is cleared: `SELECT * FROM death_locks WHERE player_id = ?`
+
+**Recovery**:
+```sql
+-- Clear stuck death lock (use player's character ID)
+DELETE FROM death_locks WHERE player_id = 'player_<id>';
+```
+
+**Prevention**: Death system has robust retry logic and crash recovery (PR #1094, March 26, 2026).
+
+### Tick Performance Issues
+
+**Symptoms**: Missed ticks, laggy gameplay, high event loop blocking
+
+**Diagnosis**:
+1. Check server logs for tick timing diagnostics
+2. Monitor event loop lag: `GET /status` endpoint shows tick health
+3. Check agent count (reduce if >25 concurrent agents)
+
+**Solutions**:
+1. Ensure Node.js 22+ is being used (not Bun for server runtime)
+2. Verify uWebSockets.js is enabled (`UWS_ENABLED=true`)
+3. Reduce `MAX_BFS_ITERATIONS_PER_TICK` if pathfinding is bottleneck
+4. Increase `COLLISION_BUDGET_MS` if terrain processing is slow
+5. Check agent worker thread is running (logs should show `[AgentWorker]` messages)
+
 ## Development
 
 ### Code Structure
 
 ```
 src/
-├── index.ts              # Main server entry point
-├── main.ts               # Server initialization
-├── startup/              # Startup modules
-│   ├── http-server.ts    # Fastify HTTP server (port 5555)
-│   ├── uws-server.ts     # uWebSockets.js server (port 5556)
-│   ├── database.ts       # Database initialization
-│   └── world.ts          # World initialization
-├── systems/              # Game systems
-│   ├── ServerNetwork/    # Network layer & player lifecycle
-│   ├── DatabaseSystem/   # Database operations
-│   ├── TickSystem.ts     # 600ms tick loop
-│   └── PlayerDeathSystem.ts  # Death processing (in shared)
-├── database/             # Database layer
-│   ├── client.ts         # PostgreSQL client
-│   ├── schema.ts         # Drizzle schema
-│   ├── migrations/       # Migration files
-│   └── repositories/     # Data access layer
-├── eliza/                # ElizaOS agent integration
-│   ├── AgentManager.ts   # Agent lifecycle
-│   └── worker/           # Agent AI worker thread
-└── streaming/            # Streaming & RTMP
-    ├── stream-capture.ts # Browser capture
-    └── rtmp-bridge.ts    # RTMP streaming
+├── index.ts                      # Main server entry point
+├── main.ts                       # Server initialization
+├── systems/
+│   ├── ServerNetwork/            # Network layer & player lifecycle
+│   │   ├── index.ts              # Main network system
+│   │   ├── tile-movement.ts      # Tile-based movement
+│   │   ├── mob-tile-movement.ts  # Mob movement
+│   │   └── handlers/             # Packet handlers
+│   ├── DatabaseSystem/           # Database operations
+│   ├── TickSystem.ts             # 600ms game tick system
+│   ├── DuelSystem/               # Duel arena mechanics
+│   └── StreamingDuelScheduler/   # Streaming duel orchestration
+├── database/
+│   ├── client.ts                 # PostgreSQL connection
+│   ├── schema.ts                 # Drizzle schema definitions
+│   ├── repositories/             # Data access layer
+│   └── migrations/               # Database migrations
+├── eliza/                        # ElizaOS AI agent integration
+│   ├── AgentManager.ts           # Agent lifecycle
+│   ├── EmbeddedHyperscapeService.ts  # Agent game interface
+│   └── worker/                   # Worker thread for AI
+├── streaming/                    # Streaming infrastructure
+│   ├── browser-capture.ts        # Playwright capture
+│   ├── rtmp-bridge.ts            # FFmpeg RTMP streaming
+│   └── stream-destinations.ts    # Multi-platform streaming
+└── startup/                      # Server initialization
+    ├── config.ts                 # Environment configuration
+    ├── database.ts               # Database initialization
+    ├── http-server.ts            # Fastify HTTP server
+    ├── uws-server.ts             # uWebSockets.js server
+    └── world.ts                  # World initialization
 ```
 
 ### Running Tests
 
 ```bash
-npm test
+bun test
 ```
 
 ### Linting
@@ -599,34 +590,6 @@ Output: `dist/index.js` (bundled server)
 
 Adjust in `src/database/client.ts` if needed.
 
-### Tick System
-
-- Tick rate: 600ms (OSRS-accurate)
-- Drift correction: Enabled
-- Health monitoring: Logs missed ticks
-- Per-handler timing: Tracks slow handlers
-
-### Agent AI Worker
-
-- Runs off main thread (eliminates 200-600ms blocking)
-- Tick interval: 8000ms (configurable)
-- Stagger offset: 800ms (prevents thundering herd)
-- Max agents per poll: 5 (configurable)
-
-### BFS Pathfinding
-
-- Global iteration budget: 12,000 per tick
-- Per-call limit: 4,000 iterations
-- Zero-allocation scratch tiles
-- Per-tick walkability cache
-
-### Terrain System
-
-- Collision resolution: 16×16 (low-res for performance)
-- Collision budget: 8ms per tick
-- Walkability budget: 4ms per tick
-- Pre-baked walkability flags
-
 ### Asset Caching
 
 Assets are served with aggressive caching:
@@ -635,6 +598,20 @@ Cache-Control: public, max-age=31536000, immutable
 ```
 
 For development, disable browser cache or use incognito mode.
+
+### Tick Performance Targets
+
+- **Tick Duration**: 600ms (OSRS-accurate)
+- **Tick Processing**: <200ms (target: 110-200ms)
+- **Event Loop Blocking**: <3% (down from 62.5% pre-optimization)
+- **Missed Ticks**: 0 under normal load (50 players + 25 agents)
+
+### Scalability Limits
+
+- **Players**: 50+ concurrent (tested)
+- **AI Agents**: 25+ concurrent (tested)
+- **Mobs**: 100+ active (tested)
+- **Resources**: 500+ trees/rocks (tested)
 
 ## Security
 
@@ -659,28 +636,39 @@ Admin commands require:
 
 ### Rate Limiting
 
-Not implemented yet. Consider adding:
-- Connection rate limiting (websocket)
-- API endpoint rate limiting
-- Upload size limits (currently 50MB)
+Implemented rate limiting:
+- Connection rate limiting (WebSocket)
+- Action rate limiting (combat, gathering, etc.)
+- Upload size limits (50MB)
 
-### Death System Security
+## Recent Changes
 
-- Server-only processing (client attempts logged)
-- Input sanitization (`sanitizeKilledBy()` prevents XSS/injection)
-- Position validation (prevents NaN/Infinity exploits)
-- Duel guard (prevents respawn during active duel)
-- Gravestone privacy (loot items hidden from broadcast)
+### April 2026
+
+- **Docker Build Fixes**: Added defensive `mkdir -p` for workspace node_modules to prevent COPY failures
+- **CI/CD Upgrades**: Migrated to Node.js 24 GitHub Actions runners
+- **Production Defaults**: Server defaults to hyperscape.gg for production runtime
+- **Tailwind v3 Rollback**: Restored stable Tailwind v3 pipeline after v4 production issues
+
+### March 2026
+
+- **Server Runtime Migration**: Bun → Node.js 22+ for V8 incremental GC (PR #1064)
+- **uWebSockets.js Integration**: Native pub/sub on port 5556 (PR #1064)
+- **Agent AI Worker Thread**: Off-thread decision logic (PR #1064)
+- **Tick System Overhaul**: Drift correction, health monitoring (PR #1064)
+- **Resource Respawn**: Tick-based respawn, manifest depleteChance (PR #1099)
+- **Death System Rewrite**: Two-phase persist, OSRS keep-3, gravestone privacy (PR #1094)
+- **Prayer Sync Fix**: Fixed prayer state synchronization on login (PR #1090)
+- **Packet Handlers**: Added 8 missing server→client handlers (PR #1091)
+
+See [CLAUDE.md](../../CLAUDE.md) for complete changelog.
 
 ## Support
 
-- **Documentation:** See `docs/` for detailed guides
-  - `docs/death-system-architecture.md` - Death system documentation
-  - `docs/performance-march-2026.md` - Performance overhaul details
-  - `docs/migrations/player-died-event-migration.md` - Event migration guide
+- **Documentation:** See [CLAUDE.md](../../CLAUDE.md) for detailed development guidelines
+- **Performance:** See `docs/performance-march-2026.md` for optimization details
 - **Issues:** Report bugs in the main Hyperscape repository
-- **CLAUDE.md:** Development guidelines and recent changes
 
 ## License
 
-MIT - See LICENSE file
+MIT
