@@ -1,0 +1,451 @@
+---
+title: "Visual Effects"
+description: "Tree dissolve transparency, screen-door dithering, and GPU-driven visual effects"
+icon: "sparkles"
+---
+
+# Visual Effects
+
+Hyperscape uses GPU-driven visual effects for resource depletion, respawn animations, and environmental feedback. All effects use TSL (Three Shading Language) shaders that require WebGPU.
+
+<Info>
+Visual effects code lives in `packages/shared/src/systems/shared/world/` and uses the `DissolveAnimation` state machine for smooth transitions.
+</Info>
+
+---
+
+## Tree Dissolve Transparency (March 2026)
+
+<Info>
+**New Feature (PR #1101)**: Depleted trees use screen-door dithering to become ~70% transparent instantly on depletion, then animate back to full opacity over 0.3s on respawn.
+</Info>
+
+### Overview
+
+The tree dissolve system provides visual feedback for resource depletion and respawn:
+
+- **Instant Depletion**: Tree becomes 70% transparent immediately when depleted
+- **Smooth Respawn**: Animates from transparent to opaque over 0.3 seconds
+- **Performance**: Uses screen-door dithering in opaque render pass (no alpha blending overhead)
+- **LOD Preservation**: Dissolve state carries over during LOD transitions (no visual pops)
+
+### Implementation
+
+**Dual Encoding Strategy:**
+
+The system supports both InstancedMesh and BatchedMesh rendering:
+
+| Instancer Type | Encoding Method | Attribute |
+|----------------|-----------------|-----------|
+| **InstancedMesh** | Per-instance float attribute | `instanceDissolve` |
+| **BatchedMesh** | Batch color blue channel | `vBatchColor.z = 1.0 - dissolveVal` |
+
+**Shared Animation Module:**
+
+`packages/shared/src/systems/shared/world/DissolveAnimation.ts` provides the state machine:
+
+```typescript
+import { startDissolve, tickDissolveAnims } from './DissolveAnimation';
+
+// Start dissolve animation
+startDissolve(
+  dissolveAnims,      // Map<string, DissolveAnim>
+  entityId,           // Entity to animate
+  direction,          // 1 = dissolve out, -1 = appear in
+  instant,            // true = jump to target, false = animate
+  applyDissolveValue  // Callback to write value to GPU
+);
+
+// Tick animations each frame
+tickDissolveAnims(
+  dissolveAnims,      // Map<string, DissolveAnim>
+  deltaTime,          // Frame delta in seconds
+  applyDissolveValue  // Callback to write value to GPU
+);
+```
+
+**Animation State:**
+
+```typescript
+interface DissolveAnim {
+  direction: 1 | -1;  // 1 = dissolving out, -1 = appearing in
+  progress: number;   // 0.0 to DISSOLVE_MAX (1.0)
+}
+```
+
+### Configuration
+
+Dissolve timing is configured in `GPU_VEG_CONFIG`:
+
+```typescript
+// From packages/shared/src/systems/shared/world/GPUMaterials.ts
+export const GPU_VEG_CONFIG = {
+  DISSOLVE_DURATION: 0.3,  // Animation duration (seconds)
+  DISSOLVE_MAX: 1.0,       // Max dissolve progress (not visual opacity)
+  DISSOLVE_ALPHA_SCALE: 0.7,  // Fraction of fragments discarded (70%)
+  FADE_START: 40,          // Distance fade start (meters)
+  FADE_END: 60,            // Distance fade end (meters)
+};
+```
+
+**Configuration Notes:**
+- `DISSOLVE_DURATION`: Animation duration in seconds (0.3s = ~18 frames at 60fps)
+- `DISSOLVE_MAX`: Animation progress ceiling (always 1.0)
+- `DISSOLVE_ALPHA_SCALE`: Fraction of fragments discarded via dithering (0.7 = 70% transparent)
+
+<Warning>
+**Precision Limit**: BatchedMesh encodes dissolve in a Uint8 blue channel (~256 levels). At 0.3s duration this provides smooth animation. Increasing `DISSOLVE_DURATION` significantly (>2s) may cause visible banding. InstancedMesh uses Float32 and has no precision limit.
+</Warning>
+
+### Shader Implementation
+
+The dissolve effect uses **screen-door dithering** in the `alphaTestNode`:
+
+```typescript
+// From GPUMaterials.ts - createDissolveMaterial()
+if (options.enableDepletionDissolve) {
+  const dissolveVal = options.batched
+    ? clamp(sub(float(1.0), varyingProperty("vec3", "vBatchColor").z), 0.0, 1.0)
+    : attribute("instanceDissolve", "float");
+    
+  const dissolveAmount = mul(dissolveVal, float(GPU_VEG_CONFIG.DISSOLVE_ALPHA_SCALE));
+  const hasDissolve = step(float(0.001), dissolveAmount);
+  const dissolveDiscard = mul(
+    mul(step(ditherValue, dissolveAmount), hasDissolve),
+    float(2.0)
+  );
+  threshold = max(threshold, dissolveDiscard);
+}
+```
+
+**Dithering Pattern:**
+
+Uses Bayer 4×4 matrix for screen-door transparency:
+
+```
+0/16  8/16  2/16  10/16
+12/16 4/16  14/16 6/16
+3/16  11/16 1/16  9/16
+15/16 7/16  13/16 5/16
+```
+
+Fragments are discarded proportional to `dissolveVal`, creating a stippled transparency effect that keeps trees in the opaque render pass with full early-Z rejection.
+
+### Performance Benefits
+
+**Opaque Pass Preservation:**
+- Trees stay in opaque render pass (no transparency sorting)
+- Full early-Z rejection (fragments behind opaque geometry are culled)
+- No fill-rate cost from alpha blending
+- Consistent performance regardless of dissolve state
+
+**Batch Color Channel Layout (BatchedMesh):**
+- **R channel**: Highlight intensity (1.0 = normal, >1.0 = highlighted)
+- **G channel**: Highlight intensity (same as R)
+- **B channel**: `1.0 - dissolveVal` (1.0 = fully visible, 0.0 = fully dissolved)
+
+<Warning>
+The blue channel is reserved for dissolve state. Any code that sets batch colors must preserve the blue channel value or use the `applyHighlightColor()` helper which reads-modifies-writes correctly.
+</Warning>
+
+### LOD Transition Handling
+
+Dissolve state is preserved when trees swap between LOD levels:
+
+```typescript
+// From GLBTreeInstancer.ts - LOD transition
+let wasDissolve = 0;
+if (oldPool && oldPool.slots.has(slot.entityId)) {
+  const oldIdx = oldPool.slots.get(slot.entityId)!;
+  wasDissolve = oldPool.dissolveData[oldIdx];
+}
+if (oldPool) removeFromPool(oldPool, slot.entityId);
+
+// Add to new LOD pool with preserved dissolve state
+if (newPool) {
+  const mat = composeInstanceMatrix(slot.position, slot.rotation, slot.scale, slot.yOffset);
+  addToPool(newPool, slot.entityId, mat, wasDissolve);
+}
+```
+
+This prevents visual pops when a dissolving tree transitions between LOD0/LOD1/LOD2.
+
+### API Reference
+
+**GLBTreeInstancer / GLBTreeBatchedInstancer:**
+
+```typescript
+/**
+ * Start a dissolve animation or apply instant dissolve.
+ * 
+ * @param entityId - Tree entity ID
+ * @param direction - 1 = dissolve out (depletion), -1 = appear in (respawn)
+ * @param instant - true = jump to target immediately, false = animate over DISSOLVE_DURATION
+ */
+export function startDissolve(
+  entityId: string,
+  direction: 1 | -1,
+  instant?: boolean
+): void;
+
+/**
+ * Update dissolve animations and flush GPU attributes.
+ * Called each frame by TreeGLBVisualStrategy.update().
+ * 
+ * @param deltaTime - Frame delta in seconds
+ */
+export function updateGLBTreeInstancer(deltaTime: number): void;
+export function updateGLBTreeBatchedInstancer(deltaTime: number): void;
+```
+
+**DissolveAnimation Module:**
+
+```typescript
+/**
+ * Shared dissolve animation state machine.
+ * Location: packages/shared/src/systems/shared/world/DissolveAnimation.ts
+ */
+
+export interface DissolveAnim {
+  direction: 1 | -1;  // 1 = dissolving out, -1 = appearing in
+  progress: number;   // 0.0 to DISSOLVE_MAX
+}
+
+/**
+ * Start or instantly apply a dissolve.
+ * If an animation is already in progress, continues from current progress
+ * instead of resetting (prevents visual pops on interrupted animations).
+ */
+export function startDissolve(
+  anims: Map<string, DissolveAnim>,
+  entityId: string,
+  direction: 1 | -1,
+  instant: boolean,
+  applyFn: (entityId: string, value: number) => void
+): void;
+
+/**
+ * Advance all active dissolve animations by deltaTime.
+ * Completed animations are removed from the map.
+ */
+export function tickDissolveAnims(
+  anims: Map<string, DissolveAnim>,
+  deltaTime: number,
+  applyFn: (entityId: string, value: number) => void
+): void;
+```
+
+### Usage Example
+
+```typescript
+import { startDissolve } from './DissolveAnimation';
+
+// Depletion: instant dissolve to 70% transparent
+async onDepleted(ctx: ResourceVisualContext): Promise<boolean> {
+  startBatchedDissolve(ctx.id, 1, true);  // direction=1, instant=true
+  return true;
+}
+
+// Respawn: animate from transparent to opaque over 0.3s
+async onRespawn(ctx: ResourceVisualContext): Promise<void> {
+  startBatchedDissolve(ctx.id, -1);  // direction=-1, instant=false (default)
+}
+
+// Update loop: tick animations each frame
+update(_ctx: ResourceVisualContext, deltaTime: number): void {
+  updateGLBTreeBatchedInstancer(deltaTime);
+}
+```
+
+---
+
+## Tree Collision Proxy (March 2026)
+
+<Info>
+**Improvement (PR #1100)**: Tree collision detection now uses actual LOD2 model geometry instead of oversized cylinders.
+</Info>
+
+### Problem
+
+The old system used invisible cylinder hitboxes with 0.4 radius factor, which were much larger than the visible tree silhouette. Ground clicks near trees were being intercepted by the collision proxy instead of registering as ground clicks.
+
+### Solution
+
+Replace cylinder with actual LOD2 mesh geometry so clicks only register on the visible tree silhouette:
+
+```typescript
+// From TreeGLBVisualStrategy.ts
+function createCollisionProxy(ctx: ResourceVisualContext, scale: number, batched: boolean): void {
+  // Get LOD2 geometry for pixel-accurate collision
+  const proxyData = batched
+    ? getBatchedProxyGeometry(ctx.id)
+    : getInstancedProxyGeometry(ctx.id);
+    
+  const cachedGeometry = proxyData
+    ? getOrCreateProxyGeometry(proxyData.geometries, scale)
+    : null;
+    
+  if (cachedGeometry && proxyData) {
+    // Use actual model geometry
+    geometry = cachedGeometry;
+    yPos = proxyData.yOffset * scale;
+  } else {
+    // Fallback: tighter cylinder (0.25 radius factor)
+    const radius = Math.max(fullRadius * 0.25, 0.3);
+    geometry = new THREE.CylinderGeometry(radius, radius, height, 6);
+    yPos = height / 2;
+  }
+}
+```
+
+### Geometry Caching
+
+Proxy geometries are cached per `(sourceGeometries, scale)` to avoid redundant merges:
+
+```typescript
+/**
+ * Cache merged+scaled proxy geometry to avoid redundant work.
+ * Cleared on world teardown via clearProxyGeometryCache().
+ */
+const _proxyGeometryCache = new Map<
+  THREE.BufferGeometry[],
+  Map<number, THREE.BufferGeometry>
+>();
+
+export function clearProxyGeometryCache(): void {
+  for (const scaleMap of _proxyGeometryCache.values()) {
+    for (const geo of scaleMap.values()) geo.dispose();
+  }
+  _proxyGeometryCache.clear();
+}
+```
+
+**Cache Features:**
+- **Float Key Safety**: Scale rounded to 3 decimal places to prevent floating-point cache misses
+- **Multi-Part Merging**: Combines bark and leaves into single proxy mesh
+- **Defensive Bounding Box**: Pre-computes `boundingBox` and `boundingSphere` to prevent lazy mutation by Three.js raycaster
+- **Memory Management**: Cache cleared during world teardown to prevent GPU buffer leaks
+
+### API Reference
+
+**GLBTreeInstancer / GLBTreeBatchedInstancer:**
+
+```typescript
+/**
+ * Get proxy geometry for collision detection.
+ * Returns the lowest-available LOD geometries (prefers LOD2 → LOD1 → LOD0).
+ * 
+ * IMPORTANT: Returned geometries are shared by the instancer pool.
+ * Callers MUST clone before mutating.
+ * 
+ * @returns Geometry array and yOffset for alignment, or null if entity not found
+ */
+export function getProxyGeometry(
+  entityId: string
+): { geometries: THREE.BufferGeometry[]; yOffset: number } | null;
+
+/**
+ * Clear the proxy geometry cache and dispose all cached geometries.
+ * Must be called during world teardown to prevent GPU buffer leaks.
+ */
+export function clearProxyGeometryCache(): void;
+```
+
+### Benefits
+
+- **Accurate Click Detection**: Clicks only register on visible tree silhouette
+- **No Ground Click Interception**: Ground clicks near trees work correctly
+- **Memory Efficient**: Cached geometry shared across all trees with same model+scale
+- **Graceful Fallback**: Uses tighter cylinder (0.25 radius) if LOD unavailable
+
+---
+
+## Screen-Door Dithering
+
+Screen-door dithering is a technique that creates transparency effects while keeping geometry in the opaque render pass:
+
+### How It Works
+
+Instead of using alpha blending (which requires transparency sorting and disables early-Z), fragments are **discarded** based on a dither pattern:
+
+```glsl
+// Bayer 4×4 dither matrix
+const mat4 bayerMatrix = mat4(
+  0.0/16.0,  8.0/16.0,  2.0/16.0, 10.0/16.0,
+  12.0/16.0, 4.0/16.0, 14.0/16.0,  6.0/16.0,
+  3.0/16.0, 11.0/16.0,  1.0/16.0,  9.0/16.0,
+  15.0/16.0, 7.0/16.0, 13.0/16.0,  5.0/16.0
+);
+
+// Get dither value for current screen pixel
+vec2 pixelPos = mod(gl_FragCoord.xy, 4.0);
+float ditherValue = bayerMatrix[int(pixelPos.y)][int(pixelPos.x)];
+
+// Discard fragments based on dissolve amount
+if (ditherValue < dissolveAmount) {
+  discard;
+}
+```
+
+### Benefits
+
+| Feature | Alpha Blending | Screen-Door Dithering |
+|---------|----------------|----------------------|
+| **Render Pass** | Transparent (sorted) | Opaque (unsorted) |
+| **Early-Z** | Disabled | Enabled |
+| **Fill Rate** | High (overdraw) | Low (early rejection) |
+| **Sorting** | Required | Not required |
+| **Performance** | Slower | Faster |
+
+**Visual Quality:**
+
+At 0.3s animation duration (60fps = ~18 frames), the dithering pattern is barely noticeable and provides smooth visual feedback without the performance cost of true transparency.
+
+---
+
+## GPU Vegetation Config
+
+All vegetation visual effects are configured via `GPU_VEG_CONFIG`:
+
+```typescript
+// From packages/shared/src/systems/shared/world/GPUMaterials.ts
+export const GPU_VEG_CONFIG = {
+  // Distance fade (LOD culling)
+  FADE_START: 40,          // Distance where fade begins (meters)
+  FADE_END: 60,            // Distance where fully dissolved (meters)
+  
+  // Near camera fade (prevent clipping)
+  NEAR_CAMERA_FADE_START: 0.1,
+  NEAR_CAMERA_FADE_END: 0.05,
+  
+  // Tree depletion dissolve
+  DISSOLVE_DURATION: 0.3,  // Respawn animation duration (seconds)
+  DISSOLVE_MAX: 1.0,       // Animation progress ceiling
+  DISSOLVE_ALPHA_SCALE: 0.7,  // Fraction of fragments discarded
+} as const;
+```
+
+### Distance Fade
+
+Trees automatically fade out at distance using the same Bayer dithering pattern:
+
+- **FADE_START (40m)**: Trees begin to fade
+- **FADE_END (60m)**: Trees fully dissolved (culled)
+
+This provides smooth LOD transitions without pop-in artifacts.
+
+### Near Camera Fade
+
+Trees near the camera fade to prevent clipping through the viewport:
+
+- **NEAR_CAMERA_FADE_START (0.1m)**: Begin fade
+- **NEAR_CAMERA_FADE_END (0.05m)**: Fully transparent
+
+---
+
+## Related Documentation
+
+- [Tree Collision Proxy](/wiki/game-systems/collision#tree-collision-proxy) - Collision detection improvements
+- [Resource System](/wiki/game-systems/skills#resource-gathering) - Resource depletion and respawn
+- [GPU Materials](/packages/shared#gpu-materials) - TSL shader system
+- [WebGPU Rendering](/wiki/client/overview#webgpu-renderer) - Rendering pipeline
