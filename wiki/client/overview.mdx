@@ -138,6 +138,112 @@ export function GameClient({ characterId }: { characterId: string }) {
 
 ## UI Components
 
+### Unified Tooltip System (March 2026)
+
+<Info>
+**New Feature (PR #1102)**: Unified tooltip styling system with consistent behavior across all UI panels.
+</Info>
+
+The tooltip system provides centralized style utilities for consistent tooltip appearance:
+
+**Location**: `packages/client/src/ui/core/tooltip/tooltipStyles.ts`
+
+**Style Functions:**
+
+```typescript
+import {
+  getTooltipTitleStyle,
+  getTooltipMetaStyle,
+  getTooltipBodyStyle,
+  getTooltipDividerStyle,
+  getTooltipTagStyle,
+  getTooltipStatusStyle,
+} from '@/ui/core/tooltip/tooltipStyles';
+
+// Title text (primary content)
+const titleStyle = getTooltipTitleStyle(theme);
+// Returns: { color, fontWeight: 700, fontSize: "13px", lineHeight: 1.2 }
+
+// Meta text (secondary info like level requirements)
+const metaStyle = getTooltipMetaStyle(theme);
+// Returns: { color: muted, fontSize: "11px", lineHeight: 1.3 }
+
+// Body text (descriptions)
+const bodyStyle = getTooltipBodyStyle(theme);
+// Returns: { color: secondary, fontSize: "11px", lineHeight: 1.45 }
+
+// Divider line with spacing
+const dividerStyle = getTooltipDividerStyle(theme, accentColor);
+// Returns: { borderTop, marginTop: "8px", paddingTop: "8px" }
+
+// Tag/badge styling
+const tagStyle = getTooltipTagStyle(theme);
+// Returns: { display, padding, borderRadius, background, border, color, fontSize }
+
+// Status indicators (success/danger/warning)
+const statusStyle = getTooltipStatusStyle(theme, "success");
+// Returns: { marginTop, padding, borderRadius, background, border, color, fontSize, textAlign, fontWeight }
+```
+
+**Usage Example:**
+
+```typescript
+import { CursorTooltip } from '@/ui';
+import { getTooltipTitleStyle, getTooltipMetaStyle } from '@/ui/core/tooltip/tooltipStyles';
+
+function ItemSlot({ item }) {
+  const theme = useTheme();
+  const [hoverState, setHoverState] = useState(null);
+  
+  return (
+    <>
+      <button
+        onMouseEnter={(e) => setHoverState({ x: e.clientX, y: e.clientY })}
+        onMouseMove={(e) => setHoverState({ x: e.clientX, y: e.clientY })}
+        onMouseLeave={() => setHoverState(null)}
+      >
+        {item.icon}
+      </button>
+      
+      {hoverState && (
+        <CursorTooltip
+          visible={true}
+          position={hoverState}
+          estimatedSize={{ width: 180, height: 48 }}
+          style={{ zIndex: theme.zIndex.tooltip }}
+        >
+          <div style={getTooltipTitleStyle(theme)}>
+            {item.name}
+          </div>
+          <div style={{ ...getTooltipMetaStyle(theme), marginTop: "4px" }}>
+            {item.description}
+          </div>
+        </CursorTooltip>
+      )}
+    </>
+  );
+}
+```
+
+**Panels Using Unified Tooltips:**
+- Inventory Panel
+- Equipment Panel
+- Bank Panel
+- Skills Panel
+- Prayer Panel
+- Spells Panel
+- Store Panel
+- Trade Panel
+- Duel Panel
+- Action Bar
+- Loot Window
+
+**Benefits:**
+- Consistent visual language across all UI
+- Centralized style management
+- Easy theme customization
+- Reduced code duplication (~500 lines eliminated)
+
 ### Core UI (CoreUI.tsx)
 
 The main UI wrapper that renders HUD elements and game panels:
