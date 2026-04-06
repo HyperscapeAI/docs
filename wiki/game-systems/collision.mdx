@@ -557,6 +557,127 @@ describe('CollisionMatrix', () => {
 
 ---
 
+## Tree Collision Proxy (March 2026)
+
+<Info>
+**Improvement (PR #1100)**: Tree collision detection now uses actual LOD2 model geometry instead of oversized cylinders for pixel-accurate click detection.
+</Info>
+
+### Problem
+
+The old system used invisible cylinder hitboxes with 0.4 radius factor, which were much larger than the visible tree silhouette. This caused ground clicks near trees to be intercepted by the collision proxy instead of registering as ground clicks.
+
+### Solution
+
+Replace cylinder with actual LOD2 mesh geometry so clicks only register on the visible tree silhouette:
+
+```typescript
+// From TreeGLBVisualStrategy.ts
+function createCollisionProxy(ctx: ResourceVisualContext, scale: number, batched: boolean): void {
+  // Get LOD2 geometry for pixel-accurate collision
+  const proxyData = batched
+    ? getBatchedProxyGeometry(ctx.id)
+    : getInstancedProxyGeometry(ctx.id);
+    
+  const cachedGeometry = proxyData
+    ? getOrCreateProxyGeometry(proxyData.geometries, scale)
+    : null;
+    
+  if (cachedGeometry && proxyData) {
+    // Use actual model geometry
+    geometry = cachedGeometry;
+    yPos = proxyData.yOffset * scale;
+  } else {
+    // Fallback: tighter cylinder (0.25 radius factor, down from 0.4)
+    const radius = Math.max(fullRadius * 0.25, 0.3);
+    geometry = new THREE.CylinderGeometry(radius, radius, height, 6);
+    yPos = height / 2;
+  }
+}
+```
+
+### Geometry Merging
+
+Multi-part tree models (bark + leaves) are merged into a single collision proxy:
+
+```typescript
+/**
+ * Merge multiple BufferGeometry parts into one for the collision proxy.
+ * Only copies position + index — normals/UVs are unnecessary for raycasting.
+ */
+function mergeGeometries(parts: THREE.BufferGeometry[]): THREE.BufferGeometry | null {
+  // Filter out any parts missing position data
+  const valid = parts.filter((g) => g.getAttribute("position"));
+  if (valid.length === 0) return null;
+  
+  // Single-part: return shared geometry directly (caller must clone)
+  if (valid.length === 1) return valid[0];
+  
+  // Multi-part: merge positions and indices
+  // ... (see TreeGLBVisualStrategy.ts for full implementation)
+}
+```
+
+### Proxy Geometry Cache
+
+Merged geometries are cached per `(sourceGeometries, scale)` to avoid redundant work:
+
+```typescript
+// Cache key: (geometry array reference, rounded scale)
+const key = Math.round(scale * 1000) / 1000;  // Round to 3 decimals
+let scaleMap = _proxyGeometryCache.get(sourceGeometries);
+
+if (scaleMap?.has(key)) {
+  return scaleMap.get(key);  // Return cached geometry
+}
+
+// Create, cache, and return new merged+scaled geometry
+const merged = mergeGeometries(sourceGeometries);
+const scaled = merged.clone().scale(scale, scale, scale);
+scaled.computeBoundingBox();
+scaled.computeBoundingSphere();
+scaleMap.set(key, scaled);
+```
+
+**Cache Features:**
+- **Float Key Safety**: Scale rounded to 3 decimal places prevents floating-point cache misses
+- **Defensive Bounds**: Pre-computes `boundingBox` and `boundingSphere` to prevent lazy mutation by Three.js raycaster
+- **Memory Management**: Cache cleared during world teardown via `clearProxyGeometryCache()`
+
+<Warning>
+Proxy geometries are **shared** across all trees with the same model+scale. The geometry must not be mutated. The proxy mesh is invisible and used only for raycasting, so Three.js internals won't modify it in normal operation.
+</Warning>
+
+### API Reference
+
+```typescript
+/**
+ * Get proxy geometry for collision detection.
+ * Returns the lowest-available LOD geometries (prefers LOD2 → LOD1 → LOD0).
+ * 
+ * IMPORTANT: Returned geometries are shared by the instancer pool.
+ * Callers MUST clone before mutating.
+ */
+export function getProxyGeometry(
+  entityId: string
+): { geometries: THREE.BufferGeometry[]; yOffset: number } | null;
+
+/**
+ * Clear the proxy geometry cache and dispose all cached geometries.
+ * Must be called during world teardown to prevent GPU buffer leaks.
+ */
+export function clearProxyGeometryCache(): void;
+```
+
+### Benefits
+
+- **Accurate Click Detection**: Clicks only register on visible tree silhouette
+- **No Ground Click Interception**: Ground clicks near trees work correctly
+- **Memory Efficient**: Cached geometry shared across all trees with same model+scale
+- **Graceful Fallback**: Uses tighter cylinder (0.25 radius) if LOD unavailable
+
+---
+
 ## Related Documentation
 
 <CardGroup cols={2}>
