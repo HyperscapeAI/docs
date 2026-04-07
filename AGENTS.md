@@ -109,6 +109,50 @@ packages/
 
 ## Recent Changes (April 2026)
 
+### Client Runtime Environment Hydration (April 7, 2026)
+
+**Change** (Commits 8753bb6, ebbb9ed): Fixed auth configuration to resolve from runtime environment.
+
+**Problem**: Client auth config was reading from build-time environment variables, causing auth failures in production when runtime env differed from build env.
+
+**Fix**: Hydrate runtime environment before auth bootstrap. Auth config now resolves from `window.__RUNTIME_ENV__` injected at runtime via `public/env.js`.
+
+**Key Changes**:
+- `packages/client/src/lib/api-config.ts` now reads from runtime env
+- Auth bootstrap waits for runtime env hydration
+- Production deployments (Railway, Cloudflare) inject runtime config correctly
+
+**Impact**:
+- Auth works correctly in production environments
+- Runtime configuration overrides build-time defaults
+- Fixes "Invalid Privy App ID" errors in deployed environments
+
+### Railway Production Defaults (April 5-6, 2026)
+
+**Change** (Commits ba7f6f4, bc647e3, 4fd1d44): Aligned production runtime defaults for hyperscape.gg deployment.
+
+**Key Changes**:
+- Production API defaults to `https://hyperscape.gg` for server runtime
+- Local development defaults to `ws://localhost:5556/ws` for agent runtime
+- Railway deployment uses Debian Trixie runtime for uWebSockets.js GLIBC 2.38+ requirement
+- Restored Railway deployment targets after CI fixes
+
+**Configuration**:
+```bash
+# Production (Railway)
+PUBLIC_API_URL=https://hyperscape.gg
+PUBLIC_WS_URL=wss://hyperscape.gg/ws
+
+# Local development
+PUBLIC_API_URL=http://localhost:5555
+PUBLIC_WS_URL=ws://localhost:5556/ws
+```
+
+**Impact**:
+- Simplified production deployment configuration
+- Consistent defaults across environments
+- uWebSockets.js works correctly on Railway with Trixie runtime
+
 ### Tailwind CSS Updates (April 2026)
 
 **Change** (PR #1105, subsequent updates): Tailwind CSS build pipeline stabilization.
@@ -136,6 +180,19 @@ packages/
 - Reliable Docker image builds
 - No more missing node_modules directory errors
 - Improved CI/CD stability
+
+### CI/CD Workflow Updates (April 6, 2026)
+
+**Change** (Commits 15e62b9, 9d45fae, 5dbd8b9): Updated GitHub Actions workflows for Node.js 24 runners.
+
+**Key Changes**:
+- Upgraded actions to support Node.js 24 runners
+- Fixed Claude code review workflow token permissions
+- Updated workflow dependencies for latest GitHub Actions environment
+
+**Impact**:
+- CI/CD pipelines compatible with latest GitHub infrastructure
+- Improved workflow reliability and performance
 
 ### UI Panel Tooltip System (March 27, 2026)
 
