@@ -193,20 +193,31 @@ Each NPC has these properties (from `types/entities/npc-mob-types.ts`):
 
 **Vegetation**:
 ```
-/assets/trees/
-├── mushroom.glb                 → Giant mushroom
-├── bamboo_01.glb - bamboo_04.glb (+ LOD variants) → Bamboo trees
-├── birch_01.glb - birch_05.glb (+ LOD variants)   → Birch trees with white bark
-├── cactus01.glb - cactus08.glb (+ LOD variants)   → Desert cacti
-├── chinaPine_01.glb - chinaPine_04.glb (+ LOD)    → China pine trees
-├── coconut_01.glb - coconut_05.glb (+ LOD)        → Coconut palms
-├── dead_01.glb - dead_06.glb (+ LOD variants)     → Dead/withered trees
-├── fir_01.glb - fir_04.glb (+ LOD variants)       → Fir trees
-├── knotwood_01.glb - knotwood_04.glb (+ LOD)      → Knotwood trees (warm amber leaves #C4832A)
-├── maple_01.glb - maple_03.glb (+ LOD variants)   → Maple trees (vermillion red-orange leaves #D04838)
-├── oak_01.glb - oak_04.glb (+ LOD variants)       → Oak trees
-├── palm_01.glb - palm_05.glb (+ LOD variants)     → Desert palms
-└── pine_01.glb - pine_03.glb (+ LOD variants)     → Pine trees
+/assets/models/trees/
+├── bamboo/
+│   ├── bamboo_01.glb - bamboo_04.glb (+ LOD variants) → Bamboo trees
+├── banana/
+│   ├── banana_01.glb - banana_05.glb (+ LOD variants) → Banana trees
+├── dead/
+│   ├── dead_01.glb - dead_04.glb (+ LOD variants)     → Dead/withered trees
+├── eucalyptus/
+│   ├── eucalyptus_01.glb - eucalyptus_05.glb (+ LOD)  → Eucalyptus trees
+├── general/
+│   ├── general_01.glb - general_06.glb (+ LOD)        → General trees
+├── magic/
+│   ├── magic_01.glb - magic_02.glb (+ LOD variants)   → Magic trees
+├── mahogany/
+│   ├── mahogany_01.glb - mahogany_02.glb (+ LOD)      → Mahogany trees
+├── maple/
+│   ├── maple_01.glb - maple_04.glb (+ LOD variants)   → Maple trees
+├── oak/
+│   ├── oak_01.glb - oak_02.glb (+ LOD variants)       → Oak trees
+├── palm/
+│   ├── palm_01.glb - palm_05.glb (+ LOD variants)     → Desert palms
+├── pine/
+│   ├── pine_01.glb - pine_05.glb (+ LOD variants)     → Pine trees
+└── pine_dead/
+    ├── pine_dead_01.glb - pine_dead_03.glb (+ LOD)    → Dead pine trees
 ```
 
 **Miscellaneous Items** (`models/misc/`):
@@ -802,22 +813,17 @@ interface VegetationLayer {
 ```
 
 **Recent Updates**:
-- **165 tree model variants** added across 12 tree types (bamboo, birch, cactus, chinaPine, coconut, dead, fir, knotwood, maple, oak, palm, pine) with 3 LOD levels each
-- **Tree model depth normalization**: All fir variants aligned to fir_03's minY (-59.46), all maple variants aligned to maple_01's minY (-114.76) to prevent floating
-- **Maple tree recoloring**: Leaves changed to warm vermillion red-orange (#D04838)
-- **Knotwood tree recoloring**: Leaves changed from golden-yellow to warm amber (#C4832A)
-- **Terrain biome textures** added for TerrainShader rendering (grass, dirt, cliff, desert, snow variants)
-- **Woodcutting manifest updated**: Replaced 8 generic trees with 12 new tree types using `modelVariants` arrays
+- **Tree model reorganization** (April 2026): All tree models moved from flat `models/trees/*.glb` to per-type subdirectories (`oak/`, `maple/`, `pine/`, etc.) matching `asset://` path convention
+- **New tree types added**: eucalyptus, general, magic, mahogany, banana
+- **Removed tree types**: birch, cactus, chinaPine, coconut, fir, knotwood, pine_snow, windSwept, yucca
+- **Pine tree model updates** (April 2026): All 5 pine tree variants (pine_01–05) updated with LOD1 and LOD2 levels, model-bounds manifest updated to match new geometry
+- **Grass texture update** (April 2026): Hue shifted from 116.5° to 87.5° (yellow-green to olive-green), saturation reduced from 0.686 to 0.538, value darkened from 0.557 to 0.522. New avg sRGB: (0.393, 0.522, 0.241)
+- **Woodcutting manifest updated**: Now uses 12 tree types with `modelVariants` arrays pointing to per-type subdirectories
 - **Biomes manifest updated**: Removed stale `tree1` vegetation layers (trees now managed via TreeTypes.ts + woodcutting manifest)
-- **Wind Pine tree type** added for tundra biome (split from dead tree variants)
 - Mushroom vegetation added to all biomes with varying densities (2-30)
 - Tree density reduced in plains biome (8 → 5)
 - Mushroom clustering varies by biome (cluster size 3-8)
 - Firemaking fire 3D model added (`models/firemaking-fire/firemaking-fire.glb`)
-- Tree model scales adjusted for better visual proportions (March 2026)
-- Fir and maple model root depths normalized to prevent floating (March 2026)
-  - All fir variants aligned to fir_03's minY (-59.46)
-  - All maple variants aligned to maple_01's minY (-114.76)
 
 ---
 
