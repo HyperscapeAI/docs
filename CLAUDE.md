@@ -403,6 +403,143 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 ## Recent Changes (April 2026)
 
+### Terrain & Tree Visual Overhaul (April 5-7, 2026)
+
+**Change** (PR #1126, Commits 1bf2342-3bb9875): Complete rewrite of tree rendering system with vertex-color-driven shaders, terrain color tuning, and water shader improvements.
+
+**Tree System Overhaul**:
+
+1. **Vertex-Color Shader** (Commit 1bf2342):
+   - Trees now use vertex colors for material properties:
+     - **R channel**: Leaf mask (0 = bark, 1 = leaf) — drives wind animation and SSS
+     - **G channel**: Ambient occlusion — darkens crevices and modulates snow weight
+     - **B channel**: Unused (reserved for future features)
+   - **4-Band Toon Lighting**: Quantized Ghibli-style lighting with hard-edged shadow/mid/bright bands
+   - **Subsurface Scattering (SSS)**: Optional leaf translucency when backlit (controlled by `ENABLE_TREE_SSS` toggle)
+   - **Fresnel Rim**: Hard-edged rim highlights on leaves for silhouette definition
+   - **Wind Animation**: Vertex displacement driven by leaf mask, auto-scales to model height
+   - **Snow System**: Biome-driven snow coverage with cubic falloff at boundaries
+
+2. **Per-Instance Frustum Culling** (Commit a5cf0cb):
+   - Uses `BatchedMesh.setVisibleAt()` for per-tree frustum + distance culling
+   - Builds world-space bounding sphere per slot each frame (center at tree mid-height, radius from modelHeight/radius + 4m buffer)
+   - Marks off-screen or >1200m instances invisible
+   - Safe with `sortObjects=false` — `setVisibleAt` marks slots without removing them, so indirect drawIndex→instanceId mapping never shifts
+   - Fixes tree-swap bug seen with `perObjectFrustumCulled=true`
+
+3. **Model Cache Fix** (Commit 1bf2342):
+   - Fixed serialization to correctly slice typed-array views instead of copying entire underlying ArrayBuffer
+   - Store `colorItemSize` for RGBA vertex colors (was missing, causing corruption)
+   - Bumped processed model cache version to invalidate corrupted entries
+   - Removed broken cache-busting in `resolveURL`, use dev-appropriate Cache-Control headers instead
+
+4. **Tree Type Cleanup** (Commits cb59c60, bdb086c):
+   - Removed unused Willow and Fir tree types (no GLB assets, no manifest entries, no biome configs)
+   - Updated biome allocations to match available tree models
+   - Clarified module-level doc comments with concrete file paths
+
+**Terrain Shader Updates** (Commits 4eb855f, 3bb9875):
+
+1. **Grass/Dirt Balance**:
+   - Lowered `DIRT_THRESHOLD` to show more dirt coverage on flat terrain
+   - Updated `TERRAIN_BIOME_TEXTURES.dirt` fallback sRGB to match new `dirt.png` (0.55, 0.48, 0.36)
+   - Updated GPU non-textured `FOREST_DIRT`/`FOREST_DIRT_DARK` linear constants to match new texture
+   - Updated CPU replica `_FOREST_DIRT` to match new dirt.png average color
+
+2. **Grass Color Fix**:
+   - Fixed hardcoded `_FOREST_DIRT`/`_FOREST_DIRT_DARK` linear values in `GrassWorker` string
+   - Was old yellow-sandy `lin(0.82, 0.64, 0.34)`, now matches new dirt.png
+   - This was the root cause of yellow grass roots on brown dirt terrain
+
+3. **Grass Texture Remap** (Commit 3bb9875):
+   - Remapped `grass.png` to olive-green hue (87.5°) matching reference screenshot
+   - Reduced saturation and slightly darker value
+   - Synced `TerrainShader` `_FOREST_GRASS` fallback and `GrassWorker` pre-linearized constants to new grass texture average sRGB (0.39, 0.52, 0.24)
+
+4. **Biome Tuning** (Commits 4eb855f, d3d9286):
+   - Reduced forest tree density and widened cluster spacing for less crowded forests
+   - Normalized scale variation across all biomes to [1.0, 1.2]
+   - Tuned forest/canyon grass configs: `maxSlope`, `minGrassWeight`, `heightScale`, `patchScale`
+   - Forest: reweighted general/oak/mahogany, added pine (high-altitude), palm+banana (water-affinity)
+   - Canyon: added maple and magic tree types
+   - Tightened forest `clusterSpacing` 200→100 for denser forest clusters
+
+**Water Shader Improvements** (Commits 09f2399, baeb870, 3bb9875):
+
+1. **Flow-Mapped Normals** (Commit 09f2399):
+   - Replaced fixed 4-layer scrolling normals with two-phase flow crossfade (FlowUVW technique from cloud-sea shader)
+   - Loads `waterNormal.png` and `noise28.png` textures with procedural fallbacks
+   - Organic, non-repeating water surface motion
+
+2. **Color Palette** (Commits baeb870, 3bb9875):
+   - Shifted from bright blue to dark green-blue teal
+   - Shallow water: sRGB display (0.276, 0.541, 0.595)
+   - Deep water: darker teal with less grey/red, boosted green channel
+   - Updated foam color to match cooler teal tone
+
+3. **River Carving** (Commit af4f07c):
+   - Removed hardcoded river carving from canyon height function
+   - Canyon water features now controlled purely by `rivers`/`lakes`/`lakesFalloff` config params like other biomes
+
+**Post-Processing** (Commit e00b380):
+- Disabled color grading and depth blur effects (commented out in `createPostProcessing` config)
+- Keeps post-processing pipeline wired up for future use
+
+**UI Fixes** (Commit ecbd30c):
+- Restored minimap accidentally hidden during frustum culling work
+
+**Memory Leak Fixes** (Commit c72f0d1):
+- **WorkerPool**: Track active tasks per worker and reject them on `terminate()` so in-flight promises no longer dangle
+- **GLBTreeBatchedInstancer**: Guard against duplicate `addInstance` for same entityId; make `addToPool` atomic
+- **GLBTreeInstancer**: Add `MAX_INSTANCES` capacity check; guard duplicate entityId; clone attributes in `createSharedGeometry`
+- **ProcgenTreeInstancer**: Use `tracked.preset` in `removeInstance`; add capacity guard in `showInMesh`
+- **GrassVisualManager**: Add destroyed flag to guard async callbacks; cancel `workerInflight`/`pendingLodSwap` on prune/destroy/invalidate/rebuild
+
+**Key Files Changed**:
+- `packages/shared/src/systems/shared/world/GLBTreeBatchedInstancer.ts` - Per-instance frustum culling, dissolve system, batch color channel layout
+- `packages/shared/src/systems/shared/world/GLBTreeInstancer.ts` - Dissolve support for InstancedMesh trees
+- `packages/shared/src/systems/shared/world/DissolveAnimation.ts` - Shared dissolve state machine
+- `packages/shared/src/systems/shared/world/GPUMaterials.ts` - Vertex-color tree shader with toon lighting, SSS, wind
+- `packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts` - Updated tree distributions, removed Willow/Fir
+- `packages/shared/src/systems/shared/world/TerrainShader.ts` - Grass/dirt color updates
+- `packages/shared/src/utils/workers/GrassWorker.ts` - Fixed dirt color constants
+- `packages/shared/src/systems/shared/world/WaterSystem.ts` - Flow-mapped normals, teal color palette
+- `packages/shared/src/utils/rendering/ModelCache.ts` - Fixed typed-array serialization
+- `packages/shared/src/constants/TreeTypes.ts` - Removed Willow and Fir enum values
+
+**Configuration** (`GPU_VEG_CONFIG` in `GPUMaterials.ts`):
+```typescript
+DISSOLVE_DURATION: 0.3      // Respawn animation duration (seconds)
+DISSOLVE_MAX: 1.0           // Max dissolve progress (animation ceiling)
+DISSOLVE_ALPHA_SCALE: 0.7   // Fraction of fragments discarded when dissolved
+FADE_START: 1000            // Distance where far fade begins (meters)
+FADE_END: 1200              // Distance where fully invisible (meters)
+```
+
+**Batch Color Channel Layout** (BatchedMesh trees):
+```typescript
+// R = highlight intensity (1.0 = normal, >1.0 = highlighted via HL_COLOR_INTENSITY)
+// G = biome snow weight (0.0 = no snow, 1.0 = full snow) — set once on add/LOD swap
+// B = 1.0 - dissolveVal (1.0 = fully visible, 0.0 = fully dissolved)
+```
+
+**Tree Vertex Color Convention**:
+```typescript
+// R = leafMask (0 = bark, 1 = leaf) — wind animation, SSS when ENABLE_TREE_SSS
+// G = AO (ambient occlusion) — darkening + snow weight modulation
+// B = unused (reserved for future features)
+```
+
+**Impact**:
+- Photorealistic tree rendering with toon-shaded foliage
+- Smooth resource depletion/respawn feedback
+- Improved terrain color accuracy matching reference screenshots
+- Organic water motion without repetitive patterns
+- Better performance via per-instance frustum culling (1200m max render distance)
+- Eliminated tree type confusion (Willow/Fir had no assets)
+- Fixed memory leaks in worker pools and instancer systems
+- Consistent grass/dirt colors across GPU shader and CPU worker code
+
 ### Client Auth Configuration (April 7, 2026)
 
 **Change** (Commit ebbb9ed): Resolve auth config from runtime environment instead of build-time.
