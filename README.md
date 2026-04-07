@@ -24,7 +24,7 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 | **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
 | **Tech** | VRM avatars, WebSocket networking (uWebSockets.js), PostgreSQL persistence, PhysX physics, WebGPU rendering with TSL shaders |
 | **UI** | Unified tooltips across all panels, live NPC dialogue portraits, drag-and-drop action bars, home teleport system with visual effects |
-| **Visuals** | Tree dissolve transparency on depletion/respawn, LOD-based collision detection, screen-door dithering effects |
+| **Visuals** | Vertex-color tree shaders with toon lighting + SSS + wind, flow-mapped water normals, screen-door dissolve for resource depletion, per-instance frustum culling, terrain color tuning |
 
 ## Quick Start
 
