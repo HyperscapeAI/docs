@@ -109,6 +109,66 @@ packages/
 
 ## Recent Changes (April 2026)
 
+### Terrain & Tree Visual Overhaul (April 5-7, 2026)
+
+**Change** (PR #1126, Commits 1bf2342-3bb9875): Complete rewrite of tree rendering system with vertex-color-driven shaders, terrain color tuning, and water shader improvements.
+
+**Tree System Overhaul**:
+- **Vertex-Color Shader**: Trees now use vertex colors (R=leaf mask, G=AO, B=unused) for 4-band toon lighting with SSS, rim highlights, and wind animation
+- **Per-Instance Frustum Culling**: `BatchedMesh.setVisibleAt()` provides per-tree frustum + distance culling without breaking instance ordering
+- **Dissolve Transparency**: Depleted trees dissolve to ~70% transparency via screen-door dithering, animate back over 0.3s on respawn
+- **Model Cache Fix**: Fixed serialization to correctly slice typed-array views instead of copying entire ArrayBuffer
+- **Tree Type Cleanup**: Removed unused Willow and Fir tree types, updated biome allocations
+
+**Terrain Shader Updates**:
+- **Grass/Dirt Balance**: Lowered `DIRT_THRESHOLD` to show more dirt on flat terrain, updated fallback colors to match new `dirt.png` (sRGB 0.55, 0.48, 0.36)
+- **Grass Color Fix**: Fixed yellow grass roots on brown dirt by updating `GrassWorker` hardcoded dirt constants to match new texture
+- **Biome Tuning**: Reduced forest tree density, normalized scale variation to [1.0, 1.2], tuned grass configs (maxSlope, minGrassWeight, heightScale, patchScale)
+
+**Water Shader Improvements**:
+- **Flow-Mapped Normals**: Replaced fixed 4-layer scrolling normals with two-phase flow crossfade (FlowUVW technique) for organic, non-repeating water motion
+- **Color Palette**: Shifted from bright blue to dark green-blue teal (shallow: sRGB 0.276, 0.541, 0.595; deep: darker teal)
+- **Texture Loading**: Added `waterNormal.png` and `noise28.png` with procedural fallbacks
+
+**Post-Processing**:
+- Disabled color grading and depth blur effects (commented out in `createPostProcessing` config)
+- Minimap restored after being accidentally hidden during frustum culling work
+
+**Key Files Changed**:
+- `packages/shared/src/systems/shared/world/GLBTreeBatchedInstancer.ts` - Per-instance frustum culling, dissolve system
+- `packages/shared/src/systems/shared/world/GLBTreeInstancer.ts` - Dissolve support for InstancedMesh trees
+- `packages/shared/src/systems/shared/world/DissolveAnimation.ts` - Shared dissolve state machine
+- `packages/shared/src/systems/shared/world/GPUMaterials.ts` - Vertex-color tree shader with toon lighting, SSS, wind
+- `packages/shared/src/systems/shared/world/TerrainBiomeTypes.ts` - Updated tree distributions, removed Willow/Fir
+- `packages/shared/src/systems/shared/world/TerrainShader.ts` - Grass/dirt color updates
+- `packages/shared/src/utils/workers/GrassWorker.ts` - Fixed dirt color constants
+- `packages/shared/src/systems/shared/world/WaterSystem.ts` - Flow-mapped normals, teal color palette
+- `packages/shared/src/utils/rendering/ModelCache.ts` - Fixed typed-array serialization
+
+**Configuration** (`GPU_VEG_CONFIG` in `GPUMaterials.ts`):
+```typescript
+DISSOLVE_DURATION: 0.3      // Respawn animation duration (seconds)
+DISSOLVE_MAX: 1.0           // Max dissolve progress (animation ceiling)
+DISSOLVE_ALPHA_SCALE: 0.7   // Fraction of fragments discarded when dissolved
+FADE_START: 1000            // Distance where far fade begins (meters)
+FADE_END: 1200              // Distance where fully invisible (meters)
+```
+
+**Batch Color Channel Layout** (BatchedMesh trees):
+```typescript
+// R = highlight intensity (1.0 = normal, >1.0 = highlighted)
+// G = biome snow weight (0.0 = no snow, 1.0 = full snow)
+// B = 1.0 - dissolveVal (1.0 = fully visible, 0.0 = fully dissolved)
+```
+
+**Impact**:
+- Photorealistic tree rendering with toon-shaded foliage
+- Smooth resource depletion/respawn feedback
+- Improved terrain color accuracy matching reference screenshots
+- Organic water motion without repetitive patterns
+- Better performance via per-instance frustum culling
+- Eliminated tree type confusion (Willow/Fir had no assets)
+
 ### Client Runtime Environment Hydration (April 7, 2026)
 
 **Change** (Commits 8753bb6, ebbb9ed): Fixed auth configuration to resolve from runtime environment.
