@@ -402,6 +402,22 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 ## Recent Changes (April 2026)
 
+### Production Runtime Configuration (April 5, 2026)
+
+**Change** (Commits ba7f6f4-c95e51c): Aligned production runtime defaults with hyperscape.gg deployment.
+
+**Key Changes**:
+- **Production Defaults**: Server now defaults to `hyperscape.gg` for production runtime URLs
+- **Local WebSocket**: Fixed local development to use correct WebSocket defaults (port 5556)
+- **Agent Runtime**: ElizaOS agents now use local Hyperscape uWS defaults for connection
+- **Client Routing**: Fixed hyperscape.gg production client routing for proper asset loading
+
+**Impact**: 
+- Simplified production deployment configuration (fewer env vars needed)
+- Better separation between local dev and production environments
+- AI agents connect correctly to local game server during development
+- Production deployments work out-of-the-box with hyperscape.gg
+
 ### CI/CD Infrastructure Upgrades (April 6, 2026)
 
 **Change** (Commits 15e62b9-9d45fae): Upgraded GitHub Actions workflows to Node.js 24 runners.
