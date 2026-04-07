@@ -174,7 +174,7 @@ packages/
 2. **shared** - Depends on physx-js-webidl
 3. **All other packages** - Depend on shared
 
-The `turbo.json` configuration handles this automatically via `dependsOn: ["^build"]`.
+The `turbo.json` configuration handles this automatically via `dependsOn: [\"^build\"]`.
 
 > **TODO(AUDIT-004): CIRCULAR DEPENDENCY - shared ↔ procgen**
 >
@@ -201,7 +201,7 @@ All game logic runs through systems, not entity methods. Entities are just data 
 
 ### RPG Implementation Architecture
 
-**Important**: Despite references to "Hyperscape apps (.hyp)" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
+**Important**: Despite references to \"Hyperscape apps (.hyp)\" in development rules, `.hyp` files **do not currently exist**. This is an aspirational architecture pattern for future development.
 
 **Current Implementation**:
 The RPG is built directly into [packages/shared/src/](packages/shared/src/) using:
@@ -267,7 +267,7 @@ Visual testing uses colored cube proxies:
 
 ### Production Code Only
 
-- No TODOs or "will fill this out later" - implement completely
+- No TODOs or \"will fill this out later\" - implement completely
 - No hardcoded data - use JSON files and general systems
 - No shortcuts or workarounds - fix root causes
 - Build toward the general case (many items, players, mobs)
@@ -365,13 +365,12 @@ PRIVY_APP_SECRET=...             # For Privy auth
 # Client (packages/client/.env)
 PUBLIC_PRIVY_APP_ID=...          # Must match server's PRIVY_APP_ID
 PUBLIC_API_URL=https://...       # Point to your server
-PUBLIC_WS_URL=wss://...          # Point to your server WebSocket (port 5556) (port 5556)
+PUBLIC_WS_URL=wss://...          # Point to your server WebSocket (port 5556)
 ```
 
 **Split deployment** (client and server on different hosts):
 - `PUBLIC_PRIVY_APP_ID` (client) must equal `PRIVY_APP_ID` (server)
 - `PUBLIC_WS_URL` and `PUBLIC_API_URL` must point to your server
-- WebSocket port is 5556 (uWebSockets.js), not 5555 (HTTP)
 - WebSocket port is 5556 (uWebSockets.js), not 5555 (HTTP)
 
 ## Package Manager
@@ -391,7 +390,7 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
   - **Server**: Node.js 22+ (migrated from Bun for V8 incremental GC - March 2026)
 - **Rendering**: WebGPU ONLY (Three.js WebGPURenderer + TSL shaders) - NO WebGL
 - **Engine**: Three.js 0.183.2, PhysX (WASM)
-- **UI**: React 19.2.0, styled-components
+- **UI**: React 19.2.0, Tailwind CSS 3.4.19
 - **Server**: Fastify (HTTP), uWebSockets.js (game WebSocket), LiveKit (voice)
 - **Database**: PostgreSQL (production, connection pool: 20), Docker (local), sqlite3 6.0.1 (dev only)
 - **Testing**: Vitest 4.1.0+, Jest 30.3.0, Playwright (WebGPU-enabled browsers only)
@@ -403,18 +402,49 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 ## Recent Changes (April 2026)
 
-### Production Runtime Configuration (April 5, 2026)
+### Client Auth Configuration (April 7, 2026)
 
-**Change** (Commits ba7f6f4-c95e51c): Aligned production runtime defaults with hyperscape.gg deployment.
+**Change** (Commit ebbb9ed): Resolve auth config from runtime environment instead of build-time.
 
-**Key Changes**:
-- **Production Defaults**: Server now defaults to `hyperscape.gg` for production runtime URLs
-- **Local WebSocket**: Fixed local development to use correct WebSocket defaults (port 5556)
-- **Agent Runtime**: ElizaOS agents now use local Hyperscape uWS defaults for connection
-- **Client Routing**: Fixed hyperscape.gg production client routing for proper asset loading
+**Problem**: Client auth configuration was baked into the build at compile time, making it impossible to change Privy App ID without rebuilding the entire client bundle.
+
+**Fix**: Auth config now resolves from runtime environment via `window.ENV` object populated by `/env.js` endpoint.
 
 **Impact**: 
-- Simplified production deployment configuration (fewer env vars needed)
+- Production deployments can update auth configuration without rebuilding client
+- Better separation between build-time and runtime configuration
+- Simplified deployment workflow for auth provider changes
+
+### Docker Runtime Migration (April 7, 2026)
+
+**Change** (Commit 4fd1d44): Use Debian Trixie runtime for uWebSockets.js compatibility.
+
+**Problem**: uWebSockets.js requires GLIBC ≥ 2.38, which is not available in Debian Bookworm (GLIBC 2.36).
+
+**Fix**: Switched Docker runtime from `node:22-bookworm-slim` to `node:22-trixie-slim` to provide GLIBC 2.38+ for uWebSockets.js native bindings.
+
+**Impact**: 
+- Production Docker images now support uWebSockets.js for high-performance WebSocket handling
+- Enables 50+ concurrent players with 25+ AI agents (from March 2026 performance overhaul)
+- Required for production deployment with uWS-based networking
+
+**Configuration**:
+```dockerfile
+FROM node:22-trixie-slim AS runtime
+```
+
+### Production Runtime Defaults (April 5-6, 2026)
+
+**Change** (Commits ba7f6f4-bc647e3): Restored Railway deployment targets and production API defaults.
+
+**Key Changes**:
+- **Production Defaults**: Server defaults to `hyperscape.gg` for production runtime URLs
+- **Railway Targets**: Restored Railway deployment configuration for dev/prod environments
+- **Local WebSocket**: Fixed local development to use correct WebSocket defaults (port 5556)
+- **Agent Runtime**: ElizaOS agents use local Hyperscape uWS defaults for connection
+
+**Impact**: 
+- Simplified production deployment (fewer env vars needed)
 - Better separation between local dev and production environments
 - AI agents connect correctly to local game server during development
 - Production deployments work out-of-the-box with hyperscape.gg
@@ -435,320 +465,196 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 - Reduced CI complexity and build times
 - Better automation workflow reliability
 
-### Docker Build Improvements (April 6, 2026)
+### Docker Build Fixes (April 6, 2026)
 
-**Change** (Commits fca9ffb-cb237b6, 192696d-976d075): Fixed Docker build failures and restored panel affordances.
-
-**Key Changes**:
-- **Bun Workspace Symlinks**: Added defensive `mkdir -p` for `packages/web3/node_modules` and `packages/client/node_modules` to prevent Docker COPY failures when Bun hoists workspace deps without materializing per-package node_modules
-- **Panel Affordances**: Restored visual affordances for UI panels that were accidentally removed
-- **Test Deploy Flow**: Aligned test deployment flow with production requirements
-
-**Impact**: 
-- Docker builds no longer fail due to missing node_modules directories
-- Consistent UI panel behavior across all interfaces
-- More reliable deployment pipeline
-
-### CI/CD Infrastructure Upgrades (April 6, 2026)
-
-**Change** (Commits 15e62b9-9d45fae): Upgraded GitHub Actions workflows to Node.js 24 runners.
+**Change** (Commits fca9ffb-cb237b6): Fixed Docker build failures and CI pipeline issues.
 
 **Key Changes**:
-- Updated all GitHub Actions to use `node24` runners
-- Fixed workflow token usage for Claude review automation
-- Removed unused Foundry installations from CI pipeline
-- Switched Docker builds to use real Node.js instead of Bun for Vite builds
+- **Defensive Directory Creation**: Added `mkdir -p` for `packages/web3/node_modules` and `packages/client/node_modules` to prevent COPY failures when Bun hoists deps without materializing per-package node_modules
+- **Empty Downloads Handling**: Fixed CI pipeline to handle empty download artifacts gracefully
+- **Railway Auth Drift**: Resolved Railway authentication drift issues in deployment pipeline
+- **Node.js for Vite**: Switched Docker builds to use real Node.js for Vite builds instead of Bun's Node compatibility shim
+
+**Implementation** (`Dockerfile.server`):
+```dockerfile
+# Bun may hoist workspace deps without materializing per-package node_modules.
+# Create every runtime COPY source explicitly so missing dirs don't break builds.
+RUN mkdir -p \
+    packages/server/node_modules \
+    packages/shared/node_modules \
+    packages/procgen/node_modules \
+    packages/impostors/node_modules \
+    packages/plugin-hyperscape/node_modules \
+    packages/web3/node_modules \
+    packages/client/node_modules
+```
 
 **Impact**: 
-- Faster CI builds with latest GitHub runner infrastructure
-- More reliable Docker image builds
-- Reduced CI complexity and build times
+- Reliable Docker image builds across all environments
+- No more missing node_modules directory errors
+- Improved CI/CD stability
+- Production deployments work consistently
 
-### Production Runtime Configuration (April 5, 2026)
-
-**Change** (Commits ba7f6f4-c95e51c): Aligned production runtime defaults with hyperscape.gg deployment.
-
-**Key Changes**:
-- **Production Defaults**: Server now defaults to `hyperscape.gg` for production runtime
-- **Local WebSocket**: Fixed local development to use correct WebSocket defaults
-- **Agent Runtime**: ElizaOS agents now use local Hyperscape uWS defaults for connection
-
-**Impact**: 
-- Simplified production deployment configuration
-- Better separation between local dev and production environments
-- AI agents connect correctly to local game server
-
-### Tailwind CSS v4 Upgrade (April 2026)
+### Tailwind CSS Stabilization (April 2026)
 
 **Change** (PR #1105, subsequent updates): Tailwind CSS build pipeline stabilization.
 
 **Timeline**:
-- April 4: Temporarily rolled back to Tailwind v3.4.1 due to production artifact issues
-- Later: Upgraded to Tailwind v4.1.14 with `@tailwindcss/postcss` plugin
+- April 4: Temporarily rolled back to Tailwind v3.4.19 due to production artifact issues with v4
+- Current: Stable on Tailwind v3.4.19 with standard PostCSS pipeline
 
-**Current State** (Tailwind v4.1.14):
-- Uses official `@tailwindcss/postcss` Vite plugin
+**Current State** (Tailwind v3.4.19):
+- Uses standard PostCSS pipeline with `tailwindcss` plugin
 - Stable CSS generation across all build environments
 - Consistent auth and character screen styling in production Docker images
+- All critical utilities (inset-0, gap-2, p-6, bg-black/80, shadow-2xl) reliably generated
 
-**Key Changes**:
-- Upgraded to `tailwindcss@^4.1.14` with official PostCSS plugin
-- Added `@tailwindcss/postcss@^4.1.14` for Vite integration
-- Removed manual CSS fallback workarounds
-- Stable production artifact generation
+**Configuration** (`packages/client/postcss.config.js`):
+```javascript
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+```
 
 **Impact**: 
 - Consistent CSS output across development and Docker production builds
 - No more missing utility classes in production
-- Latest Tailwind v4 features and performance improvements
 - Stable build pipeline for deployment
+- Reliable auth and character screen styling
 
 ## Recent Changes (March 2026)
 
-### UI Panel Tooltip Improvements (March 27, 2026)
+### UI Panel Tooltip System (March 27, 2026)
 
-**Change** (PR #1102): Unified panel tooltips and bank equipment layout.
+**Change** (PR #1102): Unified tooltip styling across all UI panels.
 
-**Features**: Consistent tooltip behavior across all UI panels with improved bank equipment grid layout.
+**Features**: Centralized tooltip style utilities for consistent appearance across inventory, equipment, bank, spells, prayer, skills, trade, store, and loot panels.
 
-**Key Changes**:
-- **Unified Tooltips**: All panel tooltips now use consistent styling and positioning
-- **Bank Equipment Layout**: Improved equipment slot grid layout in bank interface
-- **Hover Effects**: Standardized hover effects across inventory, equipment, and bank panels
+**New Module**: `packages/client/src/ui/core/tooltip/tooltipStyles.ts`
+
+**Key Functions**:
+```typescript
+getTooltipTitleStyle(theme, accentColor?)  // Title text styling
+getTooltipMetaStyle(theme)                 // Metadata/secondary text
+getTooltipBodyStyle(theme)                 // Body content
+getTooltipDividerStyle(theme, accentColor?) // Section dividers
+getTooltipTagStyle(theme)                  // Tag/badge styling
+getTooltipStatusStyle(theme, tone)         // Status indicators (success/danger/warning)
+```
+
+**Usage Example**:
+```typescript
+import { getTooltipTitleStyle, getTooltipMetaStyle } from '@/ui/core/tooltip/tooltipStyles';
+
+<CursorTooltip visible={true} position={hoverState}>
+  <div style={getTooltipTitleStyle(theme)}>
+    {itemName}
+  </div>
+  <div style={getTooltipMetaStyle(theme)}>
+    {itemDescription}
+  </div>
+</CursorTooltip>
+```
 
 **Impact**: 
-- More consistent user experience across all UI panels
-- Better visual feedback for interactive elements
-- Improved bank interface usability
+- Consistent tooltip appearance across all UI panels
+- Eliminated ~500 lines of duplicated styling code
+- Better visual hierarchy and readability
+- Easier to maintain and update tooltip styles globally
 
-### Tree Dissolve Transparency System (March 27, 2026)
+### Tree Dissolve Transparency (March 27, 2026)
 
-**Change** (PR #1101): Added dissolve transparency for depleted trees with smooth respawn animation.
+**Change** (PR #1101): Added screen-door dithered dissolve for depleted trees.
 
-**Features**: Depleted trees become 80% transparent instantly on depletion and animate back to full opacity over 0.3s on respawn. Uses per-instance dissolve attributes (InstancedMesh) and batch color blue channel (BatchedMesh) to drive real alpha transparency in the TSL shader.
+**Features**: Depleted trees become ~70% transparent instantly on depletion and animate back to full opacity over 0.3s on respawn.
 
-**Key Implementation**:
-- **Shared Animation Module**: `DissolveAnimation.ts` provides `startDissolve()` and `tickDissolveAnims()` for both instancer types
-- **GPU Attribute Encoding**: Blue channel of batch color encodes `1.0 - dissolveVal` (1.0 = fully visible, 0.0 = fully dissolved)
-- **Dithered Discard**: Uses Bayer 4×4 screen-door dithering in `alphaTestNode` instead of alpha blending to keep trees in opaque render pass with full early-Z rejection
-- **LOD Transition Preservation**: Dissolve state carries over during LOD swaps to prevent visual pops
-- **Atomic Initial Dissolve**: Pass `initialDissolve` through `addInstance()` → `addToPool()` so depleted trees have GPU attribute set at pool insertion time (no 1-frame flash)
+**New Module**: `packages/shared/src/systems/shared/world/DissolveAnimation.ts`
 
-**New Files**:
-- `packages/shared/src/systems/shared/world/DissolveAnimation.ts` - Shared dissolve animation state machine
-
-**Configuration** (`packages/shared/src/systems/shared/world/GPUMaterials.ts`):
+**Key APIs**:
 ```typescript
-GPU_VEG_CONFIG = {
-  DISSOLVE_DURATION: 0.3,  // Animation duration (seconds)
-  DISSOLVE_MAX: 1.0,       // Max dissolve progress (not visual opacity)
-  FADE_START: 40,          // Distance fade start (meters)
-  FADE_END: 60,            // Distance fade end (meters)
-}
+// Start or instantly apply a dissolve animation
+startDissolve(anims, entityId, direction, instant, applyFn)
+
+// Advance all active dissolve animations by deltaTime
+tickDissolveAnims(anims, deltaTime, applyFn)
 ```
+
+**Configuration** (`GPU_VEG_CONFIG` in `GPUMaterials.ts`):
+```typescript
+DISSOLVE_DURATION: 0.3      // Animation duration (seconds)
+DISSOLVE_MAX: 1.0           // Max dissolve progress
+DISSOLVE_ALPHA_SCALE: 0.7   // Fraction of fragments discarded
+```
+
+**Implementation Details**:
+- **Encoding**: Blue channel of batch color encodes `1.0 - dissolveVal` (BatchedMesh), or dedicated `instanceDissolve` attribute (InstancedMesh)
+- **Dithering**: Uses Bayer 4×4 screen-door dithering in `alphaTestNode` to discard fragments
+- **Opaque Pass**: Trees stay in opaque render pass (no transparency sorting overhead)
+- **LOD Preservation**: Dissolve state carries over during LOD transitions to prevent visual pops
+- **Atomic Initial State**: `initialDissolve` parameter on `addInstance()` prevents 1-frame flash
 
 **Impact**: 
 - Visual feedback for resource depletion/respawn
-- No performance cost (opaque render pass with early-Z)
-- Smooth animations without visual pops during LOD transitions
+- Stays in opaque render pass (no transparency sorting overhead)
+- Smooth LOD transitions without visual pops
 - Eliminates ~60 lines of duplication between instancer files
 
-### Tree Collision Proxy Improvements (March 27, 2026)
+### Tree Collision Proxy (March 27, 2026)
 
-**Change** (PR #1100): Use LOD2 model geometry for tree collision proxy instead of oversized cylinder.
+**Change** (PR #1100): Use LOD2 model geometry for tree collision instead of oversized cylinder.
 
-**Problem**: Trees used an invisible cylinder hitbox with 0.4 radius factor, which was much larger than the visible tree silhouette. Ground clicks near trees were being intercepted by the collision proxy.
+**Problem**: Cylinder hitbox (0.4 radius factor) was too large, intercepting ground clicks near trees.
 
-**Fix**: Replace cylinder with actual LOD2 mesh geometry so clicks only register on the visible tree silhouette. Multi-part geometries (bark + leaves) are merged into a single proxy mesh. Falls back to tighter cylinder (0.25 radius factor) if LOD unavailable.
+**Fix**: Use actual LOD2 mesh geometry for pixel-accurate collision. Falls back to tighter cylinder (0.25 radius) if LOD unavailable.
 
-**Key Features**:
-- **Geometry-Based Proxy**: Uses actual LOD2 model geometry for accurate collision detection
-- **Multi-Part Merging**: Combines bark and leaves into single proxy mesh
-- **Proxy Geometry Cache**: Cache merged+scaled proxy geometry to avoid redundant merges
-- **Shared Geometry Safety**: Proxy mesh geometry is shared (read-only) - callers must clone before mutating
-- **Cache Cleanup**: `clearProxyGeometryCache()` disposes cached geometries during world teardown
-
-**New Functions** (`packages/shared/src/systems/shared/world/GLBTreeInstancer.ts`, `GLBTreeBatchedInstancer.ts`):
+**New APIs**:
 ```typescript
-/**
- * Get proxy geometry for collision detection.
- * CALLERS MUST CLONE BEFORE MUTATING - geometry is shared across all instances.
- */
-export function getProxyGeometry(): THREE.BufferGeometry[] | undefined
-
-/**
- * Clear the proxy geometry cache and dispose all cached geometries.
- */
-export function clearProxyGeometryCache(): void
+// GLBTreeInstancer.ts, GLBTreeBatchedInstancer.ts
+getProxyGeometry(entityId): { geometries, yOffset } | null
+clearProxyGeometryCache(): void  // Call during world teardown
 ```
-
-**Impact**:
-- Accurate click detection on tree silhouettes
-- Ground clicks near trees no longer intercepted
-- Memory-efficient geometry caching
-
-### Resource Respawn System Overhaul (March 27, 2026)
-
-**Change** (PR #1099): Made resource respawn purely tick-based and use manifest `depleteChance` for mining.
-
-**Problem**: Legacy `setTimeout`-based respawn was unreliable and non-deterministic. Mining used hardcoded `MINING_DEPLETE_CHANCE` constant instead of manifest values, preventing rune essence rocks (depleteChance: 0) from working correctly.
-
-**Fix**: Remove `setTimeout` respawn entirely. Respawn is now exclusively handled by `ResourceSystem.processRespawns()` via deterministic tick counting (OSRS-accurate). Mining depletion now reads `depleteChance` from manifest.
-
-**Key Changes**:
-- **Tick-Based Respawn**: `ResourceSystem.processRespawns()` is the single source of truth for respawn timing
-- **Manifest Depletion**: Mining reads `depleteChance` from manifest instead of hardcoded constant
-- **Rune Essence Support**: Resources with `depleteChance: 0` never deplete (OSRS-accurate)
 
 **Implementation**:
 ```typescript
-// Manifest-based depletion (mining)
-const depleteChance = resourceData.depleteChance ?? 1.0;
-if (Math.random() < depleteChance) {
-  resource.deplete();
-}
-
-// Tick-based respawn (ResourceSystem)
-if (ticksSinceDepleted >= resource.respawnTicks) {
-  resource.respawn();
-}
+// Merge multi-part geometries (bark + leaves) into single proxy
+const merged = mergeGeometries(sourceGeometries);
+const scaled = merged.clone();
+scaled.scale(scale, scale, scale);
+scaled.computeBoundingBox();
+scaled.computeBoundingSphere();
 ```
 
-**Impact**: 
-- OSRS-accurate tick-based respawn mechanics
-- Rune essence rocks (depleteChance: 0) never deplete per OSRS behavior
-- Deterministic respawn timing
-
-### Tool Validation System Overhaul (March 27, 2026)
-
-**Change** (PR #1098): Manifest-based tool validation to prevent cross-skill tool usage.
-
-**Problem**: Substring matching allowed pickaxes to cut trees and hatchets to mine rocks because "pickaxe" contains "axe". This violated OSRS mechanics where tools are skill-specific.
-
-**Fix**: Use `tools.json` manifest as single source of truth. Each tool declares its skill explicitly ("woodcutting", "mining", "fishing"). Manifest lookup prevents cross-skill usage.
-
-**Key Features**:
-- **Manifest-First Validation**: Primary path uses `getExternalTool()` lookup with explicit skill comparison
-- **Fallback Guards**: Hatchet fallback rejects items containing "pickaxe"/"pick", pickaxe fallback rejects "hatchet"
-- **Warn-Once Logging**: Bounded Set (max 50 entries) prevents log flooding for unmanifested tools
-- **Fishing Tool Exact Match**: Fishing tools require exact ID match (not interchangeable like pickaxe tiers)
-
-**New Utilities** (`packages/shared/src/systems/shared/entities/gathering/ToolUtils.ts`):
-- `itemMatchesToolCategory()` - Manifest-based tool validation with fallback guards
-- `getToolCategory()` - Extract tool category from item ID
-- `CATEGORY_TO_SKILL` - Map tool categories to gathering skills
-- `_resetFallbackWarnings()` - Test helper for warning cache isolation
+**Caching Strategy**:
+- Cache merged+scaled proxy geometry per `(sourceGeometries, scale)` tuple
+- Avoids redundant merge/clone/scale work for trees sharing same model variant and scale
+- Cache cleared on world teardown via `clearProxyGeometryCache()`
 
 **Impact**: 
-- Prevents cross-skill tool usage (pickaxe for woodcutting, hatchet for mining)
-- Forces all gathering tools to be in manifest for proper validation
-- Eliminates false positives from combat weapons (battleaxe, greataxe)
-- Maintains OSRS-accurate fishing tool behavior (exact match required)
+- Clicks only register on visible tree silhouette
+- Ground clicks near trees work correctly
+- Cached geometry reduces CPU overhead
+- Memory-efficient (shared geometry references)
 
-### Gathering Tool Visual Display Fix (March 27, 2026)
+### Resource Respawn System (March 27, 2026)
 
-**Change** (Commit 1f789cb): Show correct tool in hand for all gathering skills, not just fishing.
+**Change** (PR #1099): Made resource respawn purely tick-based, use manifest `depleteChance` for mining.
 
-**Problem**: Fishing-only gate in `GATHERING_TOOL_SHOW/HIDE` events meant woodcutting and mining didn't display tools. A player with a pickaxe equipped and hatchet in inventory would visually swing the pickaxe at trees.
+**Problem**: `setTimeout`-based respawn was non-deterministic. Mining used hardcoded `MINING_DEPLETE_CHANCE` instead of manifest values.
 
-**Fix**: Remove fishing-only gate so all gathering skills (woodcutting, mining, fishing) display the correct tool during gathering actions.
-
-**Impact**: 
-- Woodcutting now shows hatchet in hand (overrides equipped weapon)
-- Mining now shows pickaxe in hand (overrides equipped weapon)
-- Visual feedback matches actual tool being used
-
-### Mob Level Display Fix (March 27, 2026)
-
-**Change** (PR #1097): Fixed duplicate mob levels showing in right-click context menus.
-
-**Problem**: Mob names like "Bandit (Lv8)" would show as "Attack Bandit (Lv8) (Level: 8)", displaying the level twice.
-
-**Fix**: Strip trailing `(Lv#)` suffix from mob display names before building context menu labels.
-
-**Impact**: Context menus now show clean mob names without duplicate level information.
-
-### Home Teleport Polish (March 26, 2026)
-
-**Change** (PR #1095): Polished home teleport cast effects and cooldown flow.
-
-**Features**: Visual cast effects, cooldown system (30s), minimap orb integration, smooth teleport animation.
+**Fix**: Remove `setTimeout` entirely. Respawn handled by `ResourceSystem.processRespawns()` via tick counting. Mining reads `depleteChance` from manifest.
 
 **Key Changes**:
-- Cooldown reduced from 15 minutes to 30 seconds
-- Server sends `remainingMs` in cooldown rejection packets
-- Dedicated channel-mode portal effect with terrain-aware anchoring
-- Both `HomeTeleportButton` and `MinimapHomeTeleportOrb` show cooldown progress
+- Removed `MINING_DEPLETE_CHANCE` and `MINING_REDWOOD_DEPLETE_CHANCE` constants
+- Resources with `depleteChance: 0` never deplete (rune essence rocks)
+- Deterministic tick-based respawn timing
 
-### Dialogue and Skilling Panel Polish (March 26, 2026)
-
-**Change** (PR #1093): Unified skilling panel layouts and redesigned NPC dialogue system with dedicated in-world panels.
-
-**Skilling Panel Improvements**:
-- **Shared Components**: `SkillingPanelBody`, `SkillingSection`, `SkillingQuantitySelector` in `SkillingPanelShared.tsx`
-- **Unified Layouts**: All skilling panels (Fletching, Cooking, Smelting, Smithing, Crafting, Tanning) use consistent styling
-- **Quantity Selector**: Reusable component with preset buttons (1, 5, 10, All, X) and custom input mode
-
-**Dialogue System Redesign**:
-- **DialoguePopupShell**: Dedicated modal shell for NPC dialogue with focus management
-- **DialogueCharacterPortrait**: Live 3D VRM portrait rendering in dialogue panels
-- **Service Handoff Fix**: Opening bank/store/tanner properly closes dialogue
-
-**Impact**: Eliminates ~500 lines of duplicated styling, more immersive NPC interactions.
-
-### Game UI Tab Arrow Key Capture Fix (March 26, 2026)
-
-**Change** (PR #1092): Fixed arrow keys being consumed by in-game panel tabs, preventing camera controls.
-
-**Fix**: Added `reserveArrowKeys` prop to disable arrow key consumption for game windows.
-
-**Impact**: Arrow keys now control camera movement even when panel tabs have focus.
-
-### Missing Packet Handlers Fix (March 26, 2026)
-
-**Change** (PR #1091): Added 8 missing server→client packet handlers.
-
-**Missing Handlers**: `onFletchingComplete`, `onCookingComplete`, `onSmeltingComplete`, `onSmithingComplete`, `onCraftingComplete`, `onTanningComplete`, `onCombatEnded`, `onQuestStarted`
-
-**Impact**: Eliminates "No handler for packet" errors.
-
-### Prayer Login Sync Fix (March 26, 2026)
-
-**Change** (PR #1090): Fixed prayer state synchronization on player login.
-
-**Impact**: Prayer points and active prayers now sync correctly between sessions.
-
-### Player Death System Overhaul (March 26, 2026)
-
-**Change** (PR #1094): Complete rewrite of player death pipeline to fix SQLite deadlock, equipment duplication, and implement OSRS-style "keep 3 most valuable items" for safe zone deaths.
-
-**Key Features**:
-- **Two-Phase Persist Pattern**: In-memory clear inside transaction, DB persist after transaction
-- **OSRS Keep-3 System**: Safe zone deaths keep 3 most valuable items (by manifest value)
-- **Event Migration**: `PLAYER_DIED` deprecated → use `PLAYER_SET_DEAD` or `ENTITY_DEATH`
-- **Gravestone Privacy**: Loot items hidden from broadcast, only sent to interacting player
-- **Death Lock Recovery**: Persist kept items in death lock for crash recovery
-- **Persist Retry Queue**: Single-retry queue for post-transaction DB persist failures
-
-**New Utilities** (`packages/shared/src/systems/shared/combat/DeathUtils.ts`):
-- `sanitizeKilledBy()` - XSS/Unicode/injection protection
-- `splitItemsForSafeDeath()` - OSRS keep-3 with stack handling
-- `validatePosition()` - Position validation and clamping
-- `GRAVESTONE_ID_PREFIX` - Constant for gravestone entity ID filtering
-
-**Breaking Changes**:
-- `PLAYER_DIED` event is deprecated - use `PLAYER_SET_DEAD` instead
-- Death lock schema now includes `keptItems` field
-
-## Package Manager
-
-This project uses **Bun** (v1.3.10+) as the package manager and runtime for client/build tasks.
-
-**Server Runtime**: Node.js 22+ (migrated from Bun in March 2026 for V8 incremental GC)
-
-- Install: `bun install` (NOT `npm install`)
-- Run scripts: `bun run <script>` or `bun <file>`
-- Some commands use `npm` prefix for Turbo workspace filtering
+**Impact**: 
+- OSRS-accurate resource mechanics
+- Rune essence rocks work correctly (never deplete)
+- Predictable respawn timing
 
 ## Troubleshooting
 
@@ -788,39 +694,33 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Tests spawn their own Hyperscape instances
 - Visual tests require WebGPU support (headful browser with GPU access)
 
-### Player Death Issues
+### Docker Build Failures
 
-**Symptoms**: Player plays death animation but never respawns, or equipment duplicates on death.
+**Symptoms**: `COPY failed: file not found` errors for `packages/*/node_modules` directories.
 
-**Diagnosis**:
-1. Check server logs for `DEATH_PERSIST_DESYNC` tag (DB persist failures)
-2. Check for `AUDIT_LOG` events (reconnect with active death lock, persist retry failures)
-3. Verify death lock is cleared after respawn: `SELECT * FROM death_locks WHERE player_id = ?`
+**Cause**: Bun may hoist workspace dependencies without materializing per-package `node_modules` directories.
 
-**Recovery**:
-```sql
--- Clear stuck death lock (use player's character ID)
-DELETE FROM death_locks WHERE player_id = 'player_<id>';
+**Fix**: The `Dockerfile.server` now includes defensive `mkdir -p` commands to create all required directories before COPY operations.
+
+**Verification**:
+```bash
+# Build Docker image locally to test
+docker build --platform linux/amd64 -f Dockerfile.server -t hyperscape:test .
 ```
 
-**Prevention**: Death system now has robust retry logic and crash recovery (as of PR #1094, March 26, 2026). If issues persist, check:
-- Database connection pool health
-- Transaction timeout settings
-- Death lock TTL (should auto-expire after 5 minutes)
+### Tailwind CSS Missing Utilities
 
-### Home Teleport Issues
+**Symptoms**: Auth screen or character screen appears unstyled in production Docker builds.
 
-**Symptoms**: Teleport button shows incorrect cooldown state, or cast effect doesn't appear.
+**Cause**: Tailwind v4 had issues with utility generation in linux/amd64 Docker builds.
 
-**Diagnosis**:
-1. Check browser console for `HOME_TELEPORT_CAST_START`, `HOME_TELEPORT_FAILED`, `PLAYER_TELEPORTED` events
-2. Verify `HOME_TELEPORT_CONSTANTS.COOLDOWN_MS` is 30000 (30 seconds)
-3. Check server logs for cooldown rejection messages
+**Current State**: Project uses stable Tailwind v3.4.19 with standard PostCSS pipeline.
 
-**Common Issues**:
-- **Cast effect missing**: Ensure `ClientTeleportEffectsSystem` is initialized and listening to events
-- **Cooldown stuck**: Server sends `remainingMs` in failed packet - check client is reading it correctly
-- **Portal not grounded**: Verify terrain system is ready and `getHeightAt()` returns valid values
+**Verification**:
+```bash
+# Check generated CSS includes critical utilities
+grep -E "inset-0|gap-2|p-6|bg-black/80|shadow-2xl" packages/client/dist/assets/*.css
+```
 
 ## Additional Resources
 
