@@ -445,23 +445,29 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 - Better separation between local dev and production environments
 - AI agents connect correctly to local game server
 
-### Tailwind v3 Rollback (April 4, 2026)
+### Tailwind CSS v4 Upgrade (April 2026)
 
-**Change** (PR #1105, Commit 07a8bc7): Restored stable Tailwind v3 build pipeline after Tailwind v4 production artifact issues.
+**Change** (PR #1105, subsequent updates): Tailwind CSS build pipeline stabilization.
 
-**Problem**: Tailwind v4 continued to drop critical auth and character-screen utilities in the linux/amd64 Docker production artifact even after switching to the official Vite plugin and removing the manual fallback CSS. The generated production CSS was inconsistent with the verified Docker image output.
+**Timeline**:
+- April 4: Temporarily rolled back to Tailwind v3.4.1 due to production artifact issues
+- Later: Upgraded to Tailwind v4.1.14 with `@tailwindcss/postcss` plugin
 
-**Fix**: Roll back the client to Tailwind v3 with the standard PostCSS pipeline so the generated production CSS is consistent across all build environments.
+**Current State** (Tailwind v4.1.14):
+- Uses official `@tailwindcss/postcss` Vite plugin
+- Stable CSS generation across all build environments
+- Consistent auth and character screen styling in production Docker images
 
 **Key Changes**:
-- Reverted to `tailwindcss@^3.4.1` from v4 beta
-- Restored PostCSS-based build pipeline
-- Removed Tailwind v4 Vite plugin
-- Removed artifact verifier (no longer needed with stable v3 pipeline)
+- Upgraded to `tailwindcss@^4.1.14` with official PostCSS plugin
+- Added `@tailwindcss/postcss@^4.1.14` for Vite integration
+- Removed manual CSS fallback workarounds
+- Stable production artifact generation
 
 **Impact**: 
 - Consistent CSS output across development and Docker production builds
 - No more missing utility classes in production
+- Latest Tailwind v4 features and performance improvements
 - Stable build pipeline for deployment
 
 ## Recent Changes (March 2026)
