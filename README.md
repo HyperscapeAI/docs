@@ -280,6 +280,12 @@ bun install
 bun run build
 ```
 
+**Docker build failures (missing node_modules):**
+This was fixed in April 2026. If you're building an older commit, the Dockerfile now includes defensive `mkdir -p` commands for all workspace packages. Update to latest `main` branch.
+
+**Tailwind CSS missing utilities in production:**
+This was fixed in April 2026 by rolling back to Tailwind v3.4.19. If you see missing styles in production Docker builds, verify you're on the latest version with stable Tailwind v3.
+
 **Player death issues (stuck in death animation, never respawns):**
 This was fixed in PR #1094 (March 26, 2026). If you're on an older version, update to latest. If the issue persists:
 ```sql
