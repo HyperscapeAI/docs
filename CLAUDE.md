@@ -391,7 +391,7 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
   - **Server**: Node.js 22+ (migrated from Bun for V8 incremental GC - March 2026)
 - **Rendering**: WebGPU ONLY (Three.js WebGPURenderer + TSL shaders) - NO WebGL
 - **Engine**: Three.js 0.183.2, PhysX (WASM)
-- **UI**: React 19.2.0, Tailwind CSS 3.4.19
+- **UI**: React 19.2.0, Tailwind CSS 3.4.19 (stable PostCSS pipeline)
 - **Server**: Fastify (HTTP), uWebSockets.js (game WebSocket), LiveKit (voice)
 - **Database**: PostgreSQL (production, connection pool: 20), Docker (local), sqlite3 6.0.1 (dev only)
 - **Testing**: Vitest 4.1.0+, Jest 30.3.0, Playwright (WebGPU-enabled browsers only)
