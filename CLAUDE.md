@@ -336,6 +336,7 @@ All services have unique default ports to avoid conflicts:
 | 3402 | Docusaurus | (hardcoded) | `bun run docs:dev` |
 | 5555 | Game Server (HTTP) | `PORT` | `bun run dev` |
 | 5556 | Game Server (WebSocket) | `UWS_PORT` | `bun run dev` |
+| 4001 | ElizaOS API | `ELIZA_PORT` | `bun run dev:ai` |
 
 ### Environment Variables
 
