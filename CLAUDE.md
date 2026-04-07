@@ -540,18 +540,67 @@ FADE_END: 1200              // Distance where fully invisible (meters)
 - Fixed memory leaks in worker pools and instancer systems
 - Consistent grass/dirt colors across GPU shader and CPU worker code
 
-### Client Auth Configuration (April 7, 2026)
+### Client Runtime Environment Hydration (April 7, 2026)
 
-**Change** (Commit ebbb9ed): Resolve auth config from runtime environment instead of build-time.
+**Change** (Commits 8753bb6, ebbb9ed): Fixed auth configuration to resolve from runtime environment.
 
-**Problem**: Client auth configuration was baked into the build at compile time, making it impossible to change Privy App ID without rebuilding the entire client bundle.
+**Problem**: Client auth config was reading from build-time environment variables (`import.meta.env.PUBLIC_PRIVY_APP_ID`), causing auth failures in production when runtime env differed from build env. This made it impossible to deploy the same client bundle to multiple environments with different Privy App IDs.
 
-**Fix**: Auth config now resolves from runtime environment via `window.ENV` object populated by `/env.js` endpoint.
+**Fix**: Hydrate runtime environment before auth bootstrap. Auth config now resolves from `window.__RUNTIME_ENV__` injected at runtime via `public/env.js`.
+
+**Implementation** (`packages/client/src/lib/api-config.ts`):
+```typescript
+// Runtime environment resolution with fallback chain
+export function resolveApiConfig({
+  browserHref,
+  browserHostname,
+  runtimeEnv,    // window.__RUNTIME_ENV__ from /env.js
+  buildEnv,      // import.meta.env.* from Vite
+  prod,
+}: ApiConfigResolutionInput): {
+  cdnUrl: string;
+  elizaOsUrl: string;
+  gameApiUrl: string;
+  gameWsUrl: string;
+} {
+  // Runtime env takes precedence over build env
+  const resolvedGameApiUrl =
+    normalize(runtimeEnv?.PUBLIC_API_URL) ??
+    normalize(buildEnv?.PUBLIC_API_URL) ??
+    defaultGameApiUrl;
+  // ... similar for other URLs
+}
+```
+
+**Auth Bootstrap** (`packages/client/src/auth/PrivyAuthProvider.tsx`):
+```typescript
+// Wait for runtime env hydration before initializing Privy
+useEffect(() => {
+  if (!window.__RUNTIME_ENV__) {
+    // Runtime env not yet loaded, wait for next render
+    return;
+  }
+  
+  // Refresh API config from runtime env
+  refreshApiConfig();
+  
+  // Now safe to initialize Privy with runtime config
+  initializePrivy();
+}, [window.__RUNTIME_ENV__]);
+```
+
+**Key Changes**:
+- `packages/client/src/lib/api-config.ts` now reads from runtime env with fallback to build env
+- Auth bootstrap waits for runtime env hydration before initializing Privy
+- Production deployments (Railway, Cloudflare) inject runtime config correctly via `/env.js` endpoint
+- `public/env.js` is generated at server startup with current environment variables
 
 **Impact**: 
-- Production deployments can update auth configuration without rebuilding client
-- Better separation between build-time and runtime configuration
-- Simplified deployment workflow for auth provider changes
+- Auth works correctly in production environments
+- Runtime configuration overrides build-time defaults
+- Fixes "Invalid Privy App ID" errors in deployed environments
+- Same client bundle can be deployed to multiple environments (dev/staging/prod)
+- No client rebuild needed to change auth provider configuration
 
 ### Docker Runtime Migration (April 7, 2026)
 
