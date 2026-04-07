@@ -402,9 +402,25 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 ## Recent Changes (April 2026)
 
+### CI/CD Infrastructure Upgrades (April 6, 2026)
+
+**Change** (Commits 15e62b9-9d45fae): Upgraded GitHub Actions workflows to Node.js 24 runners.
+
+**Key Changes**:
+- Updated all GitHub Actions to use `node24` runners for improved performance
+- Fixed workflow token usage for Claude review automation
+- Removed unused Foundry installations from CI pipeline to reduce build times
+- Switched Docker builds to use real Node.js instead of Bun for Vite builds (better stability)
+
+**Impact**: 
+- Faster CI builds with latest GitHub runner infrastructure
+- More reliable Docker image builds with Node.js-based Vite compilation
+- Reduced CI complexity and build times
+- Better automation workflow reliability
+
 ### Docker Build Improvements (April 6, 2026)
 
-**Change** (PR #1105, Commits 192696d-976d075): Fixed Docker build issues and restored panel affordances.
+**Change** (Commits fca9ffb-cb237b6, 192696d-976d075): Fixed Docker build failures and restored panel affordances.
 
 **Key Changes**:
 - **Bun Workspace Symlinks**: Added defensive `mkdir -p` for `packages/web3/node_modules` and `packages/client/node_modules` to prevent Docker COPY failures when Bun hoists workspace deps without materializing per-package node_modules
