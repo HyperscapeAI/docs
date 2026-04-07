@@ -372,6 +372,7 @@ PUBLIC_WS_URL=wss://...          # Point to your server WebSocket (port 5556) (p
 - `PUBLIC_PRIVY_APP_ID` (client) must equal `PRIVY_APP_ID` (server)
 - `PUBLIC_WS_URL` and `PUBLIC_API_URL` must point to your server
 - WebSocket port is 5556 (uWebSockets.js), not 5555 (HTTP)
+- WebSocket port is 5556 (uWebSockets.js), not 5555 (HTTP)
 
 ## Package Manager
 
