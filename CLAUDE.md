@@ -365,7 +365,7 @@ PRIVY_APP_SECRET=...             # For Privy auth
 # Client (packages/client/.env)
 PUBLIC_PRIVY_APP_ID=...          # Must match server's PRIVY_APP_ID
 PUBLIC_API_URL=https://...       # Point to your server
-PUBLIC_WS_URL=wss://...          # Point to your server WebSocket (port 5556)
+PUBLIC_WS_URL=wss://...          # Point to your server WebSocket (port 5556) (port 5556)
 ```
 
 **Split deployment** (client and server on different hosts):
