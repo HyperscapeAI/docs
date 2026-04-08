@@ -337,6 +337,19 @@ FADE_END: 1200              // Distance where fully invisible (meters)
 - Centralized constants prevent drift between procgen and game runtime
 - More natural tree placement with Poisson disk sampling
 
+### Resource LOD Asset Inference Fix (April 8, 2026)
+
+**Change** (Commit de65585): Stop inferring missing resource LOD assets to prevent runtime errors.
+
+**Problem**: The resource system was attempting to infer LOD asset paths for resources that don't have LOD models, causing 404 errors and visual glitches when resources were loaded.
+
+**Fix**: Only load explicitly defined LOD assets from the resource manifest. If a resource doesn't have LOD1/LOD2 defined, use the base model for all LOD levels instead of inferring paths.
+
+**Impact**:
+- Eliminates 404 errors for missing LOD assets
+- Resources without LOD models render correctly at all distances
+- Cleaner asset loading pipeline without inference logic
+
 ### Client Runtime Environment Hydration (April 7, 2026)
 
 **Change** (Commits 8753bb6, ebbb9ed): Fixed auth configuration to resolve from runtime environment.
