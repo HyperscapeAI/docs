@@ -403,6 +403,318 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 ## Recent Changes (April 2026)
 
+### Armor Pipeline POC (April 5-8, 2026)
+
+**Change** (PR #1142, Commits 3b265f3-4e7f4be): Complete armor generation pipeline for AssetForge with shell extraction, AI texturing, rigging, and publish-to-game workflow.
+
+**Scope**: 26 files changed, +12,109 additions, -8 deletions across asset-forge and shared packages.
+
+**Core Features**:
+
+#### 1. Shell Extraction (POC-1)
+Extracts body-fitting armor shells from VRM avatars by bone weight analysis with curvature-adaptive offset, boundary tapering, and constrained smooth.
+
+**New Module**: `packages/asset-forge/src/services/armor-pipeline/ShellExtractionService.ts` (2,058 lines)
+
+**Key Features**:
+- **Bone Weight Analysis**: Assigns vertices to equipment slots (helmet, body, legs, boots, gloves) based on VRM humanoid bone weights
+- **Marching Triangles**: Splits boundary triangles at bone-weight isolines for smooth slot transitions (eliminates jagged edges)
+- **Curvature-Adaptive Offset**: Clamps offset at high-curvature areas (armpits, groin) to prevent self-intersection
+- **Boundary Tapering**: Gradual falloff at shell edges (0.5 → 1.0 over 3 rings) for smooth transitions
+- **Body-Constrained Laplacian Smooth**: Enforces minimum distance from body surface while smoothing
+- **UV Seam Bridging**: Averages normals at coincident vertices to prevent cracks at UV seams
+- **Bulk Classes**: Four thickness presets (skin: 1mm, cloth: 5mm, leather: 12mm, plate: 30mm) + custom offset support
+
+**API**:
+```typescript
+const service = new ShellExtractionService();
+const result = await service.extractShells(
+  vrmUrl,
+  ['helmet', 'body', 'legs', 'boots', 'gloves'],
+  ['skin', 'cloth', 'leather', 'plate'],
+  (progress) => console.log(progress.message),
+  customOffsetM, // optional custom thickness in meters
+);
+
+// Export shell as GLB with optional pre-painting
+const glbBlob = await service.exportShellAsGLB(
+  shell,
+  '#cd7f32', // bronze color (optional)
+  0.85,      // metalness (optional)
+);
+```
+
+**Configuration** (`BULK_OFFSETS` in `types.ts`):
+```typescript
+skin: 0.001    // ~1mm
+cloth: 0.005   // ~5mm
+leather: 0.012 // ~12mm
+plate: 0.03    // ~30mm
+```
+
+#### 2. AI Texturing (POC-2)
+Meshy AI retexture integration with server-side shell hosting and polling-based task completion.
+
+**New Modules**:
+- `packages/asset-forge/server/services/armor-pipeline/ShellTextureService.ts` (300 lines)
+- `packages/asset-forge/src/services/armor-pipeline/ArmorTextureService.ts` (190 lines)
+
+**Server Routes** (`packages/asset-forge/server/routes/armor-pipeline.ts`):
+- `POST /api/armor-pipeline/texture-shell` — Upload shell GLB + start AI texture generation
+- `POST /api/armor-pipeline/texture-shell-batch` — Batch retexture for multiple tiers (bronze → dragon)
+- `GET /api/armor-pipeline/texture-status/:taskId` — Poll task status
+- `GET /api/armor-pipeline/texture-download/:taskId` — Download textured result
+- `POST /api/armor-pipeline/publish-to-game` — Publish rigged GLB to game model directory + update manifest
+
+**Key Features**:
+- **Base64 Data URI Upload**: Sends shell GLB as base64 data URI to Meshy (no public URL/ngrok needed)
+- **Pre-Painting**: Shells are pre-painted with target color (e.g., bronze #cd7f32) so Meshy sees "bronze metallic object" instead of "grey body shape"
+- **Shape-Override Prompts**: Prefix prompts with "medieval plate armor, hard metallic surface, not skin, not clothing, not a body" to override Meshy's body-shape semantic interpretation
+- **Detail Levels**: Five ornamentation levels (plain → intricate) control AI texture complexity
+- **OSRS Tier Presets**: Eight material tiers (bronze, iron, steel, black, mithril, adamant, rune, dragon) with hex codes for color accuracy
+- **Batch Generation**: Generate all 8 tiers from one shell with staggered API calls (2s delay between requests)
+
+**Security**:
+- **SSRF Protection**: Download URLs validated against Meshy/Tripo domain allowlists
+- **Path Traversal Prevention**: `path.basename()` sanitization on all file paths
+- **Localhost-Only Publish**: `/publish-to-game` restricted to localhost requests via `server.requestIP()` check
+- **Content-Length Guards**: 100MB max download size on Meshy/Tripo results
+- **Private IP Blocking**: `isValidPublicUrl()` blocks RFC 1918, link-local, loopback, CGN ranges
+
+**API**:
+```typescript
+const service = new ArmorTextureService();
+
+// Single texture
+const { taskId } = await service.startTexture(
+  glbBlob,
+  'shell_body_plate.glb',
+  'bronze metal armor plate, warm copper-gold #cd7f32 color',
+  { enablePBR: true, aiModel: 'meshy-6' },
+);
+
+// Batch tiers
+const tasks = await service.startBatchTexture(
+  glbBlob,
+  'shell_body_plate.glb',
+  [
+    { tierId: 'bronze', prompt: 'bronze metal...' },
+    { tierId: 'iron', prompt: 'iron metal...' },
+    // ... up to 10 tiers
+  ],
+  { enablePBR: true, aiModel: 'meshy-6' },
+);
+
+// Poll until complete
+const status = await service.waitForCompletion(taskId, (s) => {
+  console.log(`${s.status} ${s.progress}%`);
+});
+
+// Download result
+const downloadUrl = service.getDownloadUrl(taskId);
+```
+
+#### 3. Tripo 3D Pipeline (Experimental)
+Tripo 3D AI integration for segment → per-part texture pipeline and 3D attachment generation.
+
+**New Modules**:
+- `packages/asset-forge/server/services/armor-pipeline/TripoService.ts` (757 lines)
+- `packages/asset-forge/src/services/armor-pipeline/ArmorTripoService.ts` (306 lines)
+
+**Server Routes** (`packages/asset-forge/server/routes/tripo-pipeline.ts`):
+- `POST /api/tripo/upload-and-segment` — Upload shell → import → segment → return part names
+- `POST /api/tripo/texture-part` — Texture specific parts with custom prompts
+- `POST /api/tripo/complete` — Reassemble model after per-part texturing
+- `POST /api/tripo/texture-shell` — Upload shell → import → texture (whole model, no segments)
+- `POST /api/tripo/text-to-model` — Generate 3D model from text prompt
+- `GET /api/tripo/task/:taskId` — Poll task status
+- `GET /api/tripo/download/:taskId` — Download result (proxied to avoid URL expiry)
+- `GET /api/tripo/balance` — Check account balance
+
+**Key Features**:
+- **STS Upload**: Uses AWS Security Token Service for direct S3 upload (no server proxy)
+- **Mesh Segmentation**: Automatically discovers armor parts (shoulders, chest, back, arms, waist, legs)
+- **Per-Part Texturing**: Assign different prompts to each part (e.g., "ornate pauldrons" for shoulders, "engraved breastplate" for chest)
+- **Granular Retry**: Texture chain state persists in localStorage so failures resume from last successful step (no credit waste)
+- **3D Attachments**: Generate rigid pieces (pauldrons, crests, guards) via text-to-model and parent to VRM bones
+- **Bone Attachment System**: Position, rotate, and scale 3D pieces on specific bones with real-time preview
+
+**Attachment Slots** (`ATTACHMENT_SLOTS` in `constants.ts`):
+```typescript
+left_pauldron, right_pauldron, chest_emblem, back_piece,
+belt_buckle, left_knee, right_knee, helmet_crest,
+left_gauntlet, right_gauntlet
+```
+
+**API**:
+```typescript
+const service = new ArmorTripoService();
+
+// Upload + segment
+const { segmentTaskId, partNames } = await service.uploadAndSegment(
+  glbBlob,
+  'shell_body_plate.glb',
+);
+
+// Texture parts with different prompts
+const { taskId } = await service.startTexturePart(
+  segmentTaskId,
+  ['chest', 'shoulders'],
+  'ornate metal with engraved crest',
+  { quality: 'detailed' },
+);
+
+// Wait for completion
+await service.waitForCompletion(taskId, (s) => {
+  console.log(`${s.status} ${s.progress}%`);
+});
+
+// Reassemble
+const { taskId: completeId } = await service.startMeshCompletion(taskId);
+await service.waitForCompletion(completeId);
+
+// Download
+const downloadUrl = service.getDownloadUrl(completeId);
+```
+
+#### 4. Shell Re-Rigging (POC-3)
+Transfers bone weights from original shells to textured meshes with bounding box alignment for Meshy's model normalization.
+
+**New Module**: `packages/asset-forge/src/services/armor-pipeline/ShellRiggingService.ts` (469 lines)
+
+**Key Features**:
+- **Fast-Path Direct Copy**: When vertex counts match (Meshy `enable_original_uv=true`), directly copy skinIndex/skinWeight attributes
+- **Nearest-Vertex Fallback**: When vertex counts differ, find nearest source vertex for each destination vertex and copy weights
+- **Bounding Box Alignment**: Scales and translates textured geometry to match original shell (handles Meshy centering/normalization)
+- **Full Skeleton Export**: Exports complete VRM skeleton with original bone indices preserved for game's simple skeleton swap
+- **Metadata Embedding**: Embeds `userData.hyperscape` with bone attachment info for game's `EquipmentVisualSystem`
+
+**API**:
+```typescript
+const service = new ShellRiggingService();
+
+const result = await service.rigTexturedShell(
+  originalShell,
+  texturedGlbUrl,
+  targetSkeleton, // optional: bind to preview VRM skeleton
+);
+
+// Export as game-ready GLB
+const glbBlob = await service.exportRiggedGLB(result);
+
+// Publish to game
+const response = await service.publishToGame(glbBlob, {
+  itemId: 'bronze_platebody',
+  slot: 'body',
+  itemName: 'Bronze Platebody',
+  tier: 'bronze',
+  bonuses: { defence: 10 },
+});
+```
+
+#### 5. Multi-Piece Armor Kit
+Texture individual slots, accumulate in kit, rig all pieces onto same VRM skeleton with per-piece visibility toggles.
+
+**New Components**:
+- `packages/asset-forge/src/pages/ArmorPipelinePage.tsx` (295 lines) — Main pipeline orchestrator
+- `packages/asset-forge/src/components/ArmorPipeline/ShellGeneratorTab.tsx` (538 lines) — Shell extraction UI
+- `packages/asset-forge/src/components/ArmorPipeline/TextureGeneratorTab.tsx` (1,566 lines) — Texture generation UI
+- `packages/asset-forge/src/components/ArmorPipeline/TierGeneratorTab.tsx` (786 lines) — Batch tier generation UI
+- `packages/asset-forge/src/components/ArmorPipeline/TripoGeneratorTab.tsx` (1,727 lines) — Tripo pipeline wizard
+- `packages/asset-forge/src/components/ArmorPipeline/ArmorPreviewTab.tsx` (806 lines) — Rigging + animation preview
+- `packages/asset-forge/src/components/ArmorPipeline/ShellPreviewViewer.tsx` (917 lines) — Three.js viewer with animation support
+
+**Workflow**:
+1. **Extract** — Generate shells from VRM avatar (all slots × all bulk classes)
+2. **Texture** — Apply materials (solid color, AI texture, or batch tiers)
+3. **Tiers** — Batch-generate bronze → dragon variants from one shell
+4. **Rig & Preview** — Re-rig textured pieces onto animated VRM skeleton
+5. **Publish** — Export to game's model directory + update armor manifest
+
+**Shared Extraction Cache**: Single extraction result shared across Shell, Texture, and Tier tabs to avoid re-extracting the same avatar multiple times.
+
+**Animation Preview**: Mixamo walk/run retargeted to VRM via normalized bone pipeline, driving both ghost avatar and all armor pieces simultaneously.
+
+#### 6. Game Equipment Rendering Fixes
+Fixed equipment rendering to work correctly with armor pipeline output.
+
+**Key Changes** (`packages/shared/src/systems/client/EquipmentVisualHelpers.ts`):
+- **Zero Metalness**: Set `metalness = 0` on all equipment materials (game has no environment map, so metallic PBR materials appear black)
+- **RenderOrder Fix**: Set `renderOrder = 100` on equipment meshes to render on top of player silhouette (renderOrder 50)
+- **DoubleSide Materials**: Ensure all equipment materials use `THREE.DoubleSide` for correct rendering
+
+**WORKAROUND Comment**:
+```typescript
+// WORKAROUND: The game has no environment map (scene.environment = null), so
+// metallic PBR materials appear black — they derive color from reflections,
+// not diffuse light. Zero metalness to show base color.
+// TODO: Revert this when an environment map / IBL probe is added to the scene.
+```
+
+**Impact**: 
+- Armor pipeline GLBs render correctly in-game
+- Equipment appears on top of player body (not underneath)
+- Metallic materials show base color instead of appearing black
+
+#### 7. Environment Variables
+
+**New Variables** (`packages/asset-forge/.env.example`):
+```bash
+# Tripo 3D AI (for 3D generation & retexturing) - https://www.tripo3d.ai
+# API key starts with tsk_
+TRIPO_API_KEY=your_tripo_api_key
+
+# Public URL for shell GLB hosting (Meshy needs to fetch the model)
+# For local dev: use ngrok (e.g., https://abc123.ngrok.io)
+# For production: your deployed server URL
+# PUBLIC_URL=https://your-server.example.com
+```
+
+**Updated Variables**:
+```bash
+# CORS defaults to false (deny) in production when FRONTEND_URL unset
+FRONTEND_URL=http://localhost:5173
+```
+
+**Key Files Changed**:
+- `packages/asset-forge/server/api-elysia.ts` — Armor/Tripo route registration, temp-shells static serving, CORS defaults
+- `packages/asset-forge/server/routes/armor-pipeline.ts` — Meshy texture endpoints + publish-to-game (520 lines, new)
+- `packages/asset-forge/server/routes/tripo-pipeline.ts` — Tripo segment/texture/complete endpoints (342 lines, new)
+- `packages/asset-forge/src/services/armor-pipeline/ShellExtractionService.ts` — Shell extraction algorithm (2,058 lines, new)
+- `packages/asset-forge/src/services/armor-pipeline/ShellRiggingService.ts` — Weight transfer + GLB export (469 lines, new)
+- `packages/asset-forge/src/services/armor-pipeline/ShellTextureService.ts` — Meshy API client (300 lines, new)
+- `packages/asset-forge/src/services/armor-pipeline/TripoService.ts` — Tripo API client with STS upload (757 lines, new)
+- `packages/asset-forge/src/services/armor-pipeline/ArmorTextureService.ts` — Client-side Meshy wrapper (190 lines, new)
+- `packages/asset-forge/src/services/armor-pipeline/ArmorTripoService.ts` — Client-side Tripo wrapper (306 lines, new)
+- `packages/asset-forge/src/services/armor-pipeline/types.ts` — Shared types (137 lines, new)
+- `packages/asset-forge/src/services/armor-pipeline/constants.ts` — Avatars, slots, tiers, attachments (270 lines, new)
+- `packages/asset-forge/src/pages/ArmorPipelinePage.tsx` — Main pipeline UI (295 lines, new)
+- `packages/asset-forge/src/components/ArmorPipeline/*.tsx` — Six new UI components (6,340 lines total)
+- `packages/shared/src/systems/client/EquipmentVisualHelpers.ts` — Metalness fix + renderOrder
+
+**Impact**:
+- Complete armor generation pipeline from VRM avatar to game-ready GLB
+- No public URL/ngrok needed for local development (base64 data URI upload)
+- Batch tier generation (8 OSRS tiers from one shell in ~5 minutes)
+- Experimental Tripo pipeline for per-part texturing and 3D attachments
+- Game-ready GLB export with full skeleton and metadata
+- Publish-to-game workflow updates armor manifest automatically
+
+**Security Hardening** (7 rounds of fixes):
+- Path traversal prevention via `path.basename()` and `SAFE_PATH_RE` regex
+- SSRF domain allowlists for Meshy/Tripo/S3 downloads
+- Localhost-only publish endpoint with `server.requestIP()` validation
+- Content-Disposition header sanitization to prevent header injection
+- Private IP blocking in `isValidPublicUrl()` (RFC 1918, link-local, loopback, CGN)
+- Task ID format validation before URL interpolation
+- Content-Length guards on all downloads (100MB max)
+
+**Known Limitations**:
+- Meshy retexture costs ~$0.20 per piece, takes 2-5 minutes
+- Tripo segment + texture costs ~$0.40-0.80 per shell, takes 3-8 minutes
+- Nearest-vertex weight transfer is O(n×m) brute-force (slow on high-poly meshes)
+- No authentication on armor/tripo endpoints (localhost dev only)
+
 ### Terrain & Tree Visual Overhaul (April 5-7, 2026)
 
 **Change** (PR #1126, Commits 1bf2342-3bb9875): Complete rewrite of tree rendering system with vertex-color-driven shaders, terrain color tuning, and water shader improvements.
