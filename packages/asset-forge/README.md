@@ -255,6 +255,7 @@ Complete armor generation workflow:
 
 ## API Endpoints
 
+### Asset Management
 - `GET /api/assets` - List all assets
 - `GET /api/assets/:id/model` - Download asset model
 - `POST /api/generation/start` - Start new generation
@@ -262,6 +263,23 @@ Complete armor generation workflow:
 - `POST /api/fitting/preview` - Preview armor fitting
 - `POST /api/hand-rigging/process` - Process hand rigging
 - `GET /api/health` - Health check endpoint
+
+### Armor Pipeline (New - April 2026)
+- `POST /api/armor-pipeline/texture-shell` - Upload shell GLB + start AI texture generation
+- `POST /api/armor-pipeline/texture-shell-batch` - Batch retexture for multiple tiers
+- `GET /api/armor-pipeline/texture-status/:taskId` - Check texture generation task status
+- `GET /api/armor-pipeline/texture-download/:taskId` - Download textured shell GLB result
+- `POST /api/armor-pipeline/publish-to-game` - Publish rigged armor to game model directory (localhost only)
+
+### Tripo Pipeline (Experimental - April 2026)
+- `POST /api/tripo/upload-and-segment` - Upload shell → import → segment → return part names
+- `POST /api/tripo/texture-part` - Texture specific parts with custom prompts
+- `POST /api/tripo/complete` - Reassemble model after per-part texturing
+- `POST /api/tripo/texture-shell` - Upload shell → import → texture (whole model)
+- `POST /api/tripo/text-to-model` - Generate 3D model from text prompt
+- `GET /api/tripo/task/:taskId` - Check Tripo task status
+- `GET /api/tripo/download/:taskId` - Download Tripo result GLB (proxied)
+- `GET /api/tripo/balance` - Check Tripo account balance
 
 ## Scripts
 
