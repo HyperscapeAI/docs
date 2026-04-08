@@ -109,6 +109,145 @@ packages/
 
 ## Recent Changes (April 2026)
 
+### Autonomous Agent Quest System + LLM-Driven Behavior (April 8, 2026)
+
+**Change** (PR #1124, Commit c7908a9): Complete autonomous agent system with quest progression, LLM decision-making, dashboard overhaul, and streaming duel enhancements.
+
+**Scope**: 99 files changed, +16,116 additions, -1,943 deletions across server, client, and shared packages.
+
+**Core Features**:
+
+#### 1. Autonomous Quest System
+Agents independently progress through all quest stage types without human intervention:
+- **kill** — Target selection, combat engagement, prayer management
+- **gather** — Resource identification, tool equipping, collection
+- **interact** — Station usage (furnace, anvil, range, altar, spinning wheel)
+- **craft/smelt/smith/fletch/cook/tan/runecraft** — Full production pipeline
+- **dialogue** — NPC conversation progression
+- **travel** — World map navigation with stuck detection
+
+Quest stall detection shelves stuck quests after ~96s of no progress and retries after cooldown. Completion failure tracking prevents infinite loops on unreachable NPCs.
+
+#### 2. LLM-Driven Behavior Decisions
+**New Module**: `packages/server/src/eliza/llmBehaviorDecision.ts` (1,300 lines)
+
+Replaces `pickBehaviorAction()` with an LLM call that receives:
+- Inventory (scored by relevance, capped at 24 items)
+- Nearby entities (scored and capped at 16)
+- Active/available quests with stage progress
+- Station positions, agent identity/vision, skill levels
+- Other agents' goals (multi-agent coordination to avoid duplicated effort)
+- Recent action history (stuck-loop detection)
+
+Returns structured JSON: `action`, `reasoning`, `goal` update, multi-step `plan[]`, and chain-of-thought `thinking` for the dashboard.
+
+**Fallback Strategy**: Falls back to scripted behavior on timeout (4s), parse failure, or during combat.
+
+**Performance**: LLM calls run non-blocking — fired after each tick, result consumed on the next tick. Zero event loop blocking (was 1.5s/tick before the fix).
+
+#### 3. Dashboard Interop
+**New Module**: `packages/server/src/eliza/dashboardInterop.ts` (2,300 lines)
+
+- `recordAgentThought()` — Logs decision points with type (situation/thinking/evaluation/decision/action) and decision path (llm/scripted/planner)
+- `syncEmbeddedAgentDashboardForTick()` — Pushes real-time agent state to dashboard clients
+- `resolveDashboardIntent()` — Parses operator chat commands into agent actions
+- `ensureEmbeddedAgentCharacterVision()` — Initializes agent identity narrative
+- `findWorldMapMoveTarget()` — Resolves destination names to world coordinates
+- Batched persistence to `agent_thoughts` table (10s flush interval)
+
+#### 4. Agent Worker Thread Overhaul
+**Updated Modules**: `AgentBehaviorEngine.ts` (+1,100 lines), `AgentBehaviorBridge.ts` (+650 lines)
+
+- Worker thread handles all scripted decision logic (quest management, inventory, equipment, shopping, eating)
+- Bridge applies results on main thread: side effects first, then action execution
+- Persistent navigation with stuck detection (position delta + distance-to-target tracking, 4-tick threshold)
+- Combat interrupts during navigation (quest mobs and nearby aggro)
+- Operator command grace period (30s) skips LLM override
+
+#### 5. Streaming Duel Enhancements
+
+**DuelCombatAI** — LLM combat strategy planning:
+- `planStrategy()` generates approach (aggressive/defensive/balanced/outlast), attack style, prayer selection
+- Trash talk system: HP milestone taunts, ambient taunts every 5-12 ticks, LLM-generated with scripted fallbacks
+- Desperation logic for all combat roles
+- Protection prayer switching based on opponent weapon type
+
+**StreamingDuelScheduler** — Expanded lifecycle:
+- Per-agent duel eligibility via `agent_mappings.streaming_duel_enabled` DB column
+- `streamingDuelEligibilityDb.ts` shared lookup for consistent eligibility checks
+- Duel history persistence (`streaming_duel_history` table) with damage stats
+
+**Client streaming overlay**:
+- `CombatLog.tsx` — Live fight event feed (hits, heals, criticals, kills)
+- `PostFightStatsCard.tsx` — Per-fight stat breakdown
+- `StreamingBettingRail.tsx` — Parimutuel betting CTA
+- Enhanced `AgentStatsDisplay`, `StreamingOverlay`, `VictoryOverlay`
+
+#### 6. Dashboard & Viewport Fixes
+
+**Spectator viewfinder**:
+- Fixed region subscriptions for embedded agents (no socket adapter) — spectators now receive entity updates when agents move
+- Fixed `spectatorsByPlayer` map not being passed to `ConnectionHandler` (caused TypeError crash → reconnect flicker loop)
+- Dashboard follow mode prevents streaming scheduler from hijacking camera to duel arena
+- Entity lookup by character UUID (not just network ID) for spectator snapshots
+- Player entities included in spectator snapshots (were missing from `world.entities.players`)
+
+**Dashboard UI**:
+- Viewport stays mounted across tab switches (CSS visibility toggle)
+- Auto-activates live viewfinder when selected agent is running
+- Agent memories, timeline, logs, and runs panels reworked
+- `formatDashboardAgentReply.ts` — Normalize API response payloads
+
+#### 7. Shared Package Changes
+- **PlayerRemote**: Nametag sprites (floating name above characters, gold for agents)
+- **EquipmentVisualSystem**: Hide melee weapon during magic/ranged attack animations
+- **ClientCameraSystem**: Dashboard follow mode, cinematic HP-delta camera punch/shake
+- **QuestSystem**: Manifest-driven quest definitions, stage-based progression, quest points
+- **UIRenderer**: 4x resolution canvas pool for crisp nametag textures
+- **ClientNetwork**: Inventory pruner uses setTimeout chain (stops when idle), embedded spectator auth token passthrough
+
+#### 8. API Endpoints (15+ new)
+- `POST /api/agents/credentials` — Generate 7-day agent JWT
+- `POST /api/agents/wallet-auth` — Wallet-based agent auth
+- `GET/POST/PATCH/DELETE /api/agents/mappings` — Full CRUD for agent-account mappings
+- `POST /api/agents/:id/message` — Send chat commands to agents
+- `GET /api/agents/:id/goal` / `POST .../goal` / `.../goal/unlock` / `.../goal/stop` / `.../goal/resume` — Goal management
+- `GET /api/agents/:id/quests` — Quest state with progress
+- `GET /api/agents/:id/activity` — Recent activity log
+- `GET /api/agents/:id/quick-actions` — Available agent actions
+- `POST /api/spectator/token` — Spectator view token generation
+
+#### 9. Database Migrations
+- **0052**: `streaming_duel_history` — Duel results with damage stats, indexed for leaderboard queries
+- **0053**: `agent_mappings.streaming_duel_enabled` — Per-agent duel opt-out
+- **0054**: `agent_thoughts` — Persistent agent reasoning for dashboard + post-game analysis
+
+**Environment Variables**:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `EMBEDDED_AGENT_LLM_BEHAVIOR` | `true` | Set `false` to disable LLM decisions, use pure scripted |
+| `STREAMING_AGENT_FORCE_DUEL_LOBBY_SPAWN` | `false` | Override DB eligibility check for local dev |
+| `AUTO_START_AGENTS_MAX` | `2` | Cap on auto-started agents from DB |
+
+**Key Files Changed**:
+- `packages/server/src/eliza/llmBehaviorDecision.ts` — LLM decision engine (new, 1,300 lines)
+- `packages/server/src/eliza/dashboardInterop.ts` — Dashboard integration (new, 2,300 lines)
+- `packages/server/src/eliza/managers/AgentBehaviorTicker.ts` — Quest/inventory/equipment management
+- `packages/server/src/duel/DuelCombatAI.ts` — LLM combat strategy + trash talk
+- `packages/client/src/game/dashboard/AgentViewportChat.tsx` — Live 3D viewfinder + chat sidebar
+- `packages/client/src/components/streaming/CombatLog.tsx` — Live fight event feed (new, 361 lines)
+- `packages/client/src/components/streaming/PostFightStatsCard.tsx` — Per-fight stats (new, 177 lines)
+- `packages/client/src/components/streaming/StreamingBettingRail.tsx` — Betting CTA (new, 107 lines)
+
+**Impact**:
+- Agents autonomously complete all 7 quest types without human intervention
+- LLM reasoning visible in dashboard for debugging and analysis
+- Multi-agent coordination prevents duplicate effort
+- Streaming duel system with full combat analytics and betting integration
+- Dashboard viewfinder provides live 3D spectator view with chat
+- Zero event loop blocking from LLM calls (non-blocking architecture)
+
 ### Terrain & Tree Visual Overhaul (April 5-7, 2026)
 
 **Change** (PR #1126, Commits 1bf2342-3bb9875): Complete rewrite of tree rendering system with vertex-color-driven shaders, terrain color tuning, and water shader improvements.
