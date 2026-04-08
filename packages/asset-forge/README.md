@@ -148,22 +148,43 @@ The app will be available at `http://localhost:3400`
 asset-forge/
 ├── src/                    # React application source
 │   ├── components/         # UI components
-│   │   ├── VFX/           # VFX catalog components (NEW)
+│   │   ├── VFX/           # VFX catalog components
+│   │   ├── ArmorPipeline/ # Armor pipeline UI (NEW - April 2026)
+│   │   │   ├── ShellGeneratorTab.tsx      # Shell extraction
+│   │   │   ├── TextureGeneratorTab.tsx    # AI texturing
+│   │   │   ├── TierGeneratorTab.tsx       # Batch tier generation
+│   │   │   ├── TripoGeneratorTab.tsx      # Tripo pipeline wizard
+│   │   │   ├── ArmorPreviewTab.tsx        # Rigging + animation
+│   │   │   └── ShellPreviewViewer.tsx     # Three.js viewer
 │   │   ├── Generation/    # Asset generation UI
 │   │   ├── ArmorFitting/  # Armor fitting tools
 │   │   └── HandRigging/   # Hand rigging tools
-│   ├── services/          # Core services (AI, fitting, rigging)
+│   ├── services/          # Core services
+│   │   ├── armor-pipeline/ # Armor pipeline services (NEW - April 2026)
+│   │   │   ├── ShellExtractionService.ts  # Shell extraction (2,058 lines)
+│   │   │   ├── ShellRiggingService.ts     # Weight transfer + export
+│   │   │   ├── ArmorTextureService.ts     # Meshy client
+│   │   │   ├── ArmorTripoService.ts       # Tripo client
+│   │   │   ├── types.ts                   # Shared types
+│   │   │   └── constants.ts               # Avatars, slots, tiers
+│   │   └── ...            # Other services
 │   ├── pages/             # Main application pages
-│   │   └── VFXPage.tsx    # VFX catalog browser (NEW)
+│   │   ├── ArmorPipelinePage.tsx # Armor pipeline (NEW - April 2026)
+│   │   └── VFXPage.tsx    # VFX catalog browser
 │   ├── hooks/             # Custom React hooks
 │   ├── store/             # Zustand state management
 │   └── data/              # Static data
-│       └── vfx-catalog.ts # VFX effect definitions (NEW)
+│       └── vfx-catalog.ts # VFX effect definitions
 ├── server/                # Elysia backend
 │   ├── api-elysia.ts     # API endpoints
 │   ├── services/         # Backend services
+│   │   └── armor-pipeline/ # Armor pipeline services (NEW - April 2026)
+│   │       ├── ShellTextureService.ts # Meshy API integration
+│   │       └── TripoService.ts        # Tripo API integration
 │   ├── routes/           # API routes
-│   └── db/               # Database layer (NEW)
+│   │   ├── armor-pipeline.ts # Armor routes (NEW - April 2026)
+│   │   └── tripo-pipeline.ts # Tripo routes (NEW - April 2026)
+│   └── db/               # Database layer
 │       ├── db.ts         # Drizzle client
 │       └── schema/       # Database schemas
 ├── gdd-assets/           # Generated 3D assets
@@ -171,6 +192,8 @@ asset-forge/
 │       ├── *.glb         # 3D model files
 │       ├── concept-art.png
 │       └── metadata.json
+├── temp-shells/          # Temporary shell GLBs (NEW - April 2026)
+│   └── .gitkeep
 └── scripts/              # Utility scripts
     └── build-services.mjs # Service build script
 ```
