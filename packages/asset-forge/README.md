@@ -391,6 +391,49 @@ bun run build:services
 | 3400 | Frontend UI | `ASSET_FORGE_PORT` |
 | 3401 | Backend API | `ASSET_FORGE_API_PORT` |
 
+## Recent Updates
+
+### Armor Pipeline (April 2026) - PR #1142
+Complete armor generation pipeline with three integrated AI services:
+
+**Shell Extraction**:
+- VRM bone weight analysis with marching triangles for smooth boundaries
+- Curvature-adaptive offset prevents self-intersection
+- Four bulk classes + custom thickness support
+- UV seam bridging eliminates cracks
+
+**AI Texturing**:
+- Meshy AI integration with base64 data URI upload (no public URL needed)
+- Pre-painting with target color for accurate AI interpretation
+- OSRS tier presets (bronze → dragon) with hex codes
+- Detail levels (plain → intricate) control ornamentation
+- Batch tier generation (8 tiers in ~5 minutes)
+- Solid color mode for instant materials (no API cost)
+
+**Tripo 3D Pipeline** (Experimental):
+- Mesh segmentation discovers armor parts automatically
+- Per-part texturing with custom prompts
+- Text-to-model for 3D attachments (pauldrons, crests, guards)
+- Bone-parented attachments with transform controls
+- Granular retry with localStorage session caching
+
+**Re-Rigging**:
+- Automatic bone weight transfer (fast-path or nearest-vertex fallback)
+- Bounding box alignment for Meshy-normalized geometry
+- Full skeleton export with original bone indices
+- Multi-piece armor kit with animation preview
+- Publish-to-game workflow updates armor manifest
+
+**Security Hardening** (7 rounds of fixes):
+- Path traversal prevention, SSRF domain allowlists
+- Localhost-only publish, Content-Length guards
+- Private IP blocking, task ID validation
+- Content-Disposition header sanitization
+
+**New Routes**: 8 armor-pipeline endpoints, 8 tripo-pipeline endpoints
+**New Services**: 5 server services, 5 client services
+**New Components**: 6 UI tabs (4,340 lines total)
+
 ## Troubleshooting
 
 ### ESLint Crashes
