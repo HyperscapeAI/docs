@@ -200,13 +200,36 @@ asset-forge/
 - Adjust positioning and scaling
 - Export fitted models
 
-### 5. Hand Rigging (`/hand-rigging`)
+### 5. Armor Pipeline (`/armor-pipeline`) - **New April 2026**
+Complete armor generation workflow:
+- **Extract Tab**: Generate body-fitting shells from VRM avatars
+- **Texture Tab**: Apply solid colors or AI textures to shells
+- **Tiers Tab**: Batch-generate bronze → dragon tier variants
+- **Rig & Preview Tab**: Re-rig textured armor onto animated VRM skeleton
+- **Tripo Lab Tab**: Experimental per-part texturing + 3D attachments
+
+**Workflow**:
+1. Select VRM avatar and equipment slots
+2. Extract shells at desired bulk class (skin/cloth/leather/plate)
+3. Apply textures (instant solid color, AI texture, or batch tiers)
+4. Rig all pieces onto VRM skeleton
+5. Preview with walk/run animations
+6. Publish to game's model directory
+
+**Features**:
+- No public URL needed (base64 data URI upload)
+- Shared extraction cache across tabs
+- Multi-piece armor kit with visibility toggles
+- Standalone GLB upload for rigging external models
+- Bone attachment system for 3D accessories
+
+### 6. Hand Rigging (`/hand-rigging`)
 - Upload weapon models
 - AI-powered hand pose detection
 - Automatic grip point calculation
 - Export rigged weapons
 
-### 6. VFX Catalog (`/vfx`) - **New February 2026**
+### 7. VFX Catalog (`/vfx`) - **New February 2026**
 - **Live Three.js Previews**: Real-time rendering of all game effects
 - **Sidebar Catalog**: Organized by category (spells, projectiles, particles, combat HUD)
 - **Effect Categories**:
