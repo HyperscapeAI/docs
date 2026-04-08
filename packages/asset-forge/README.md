@@ -125,6 +125,7 @@ cp .env.example .env
 ```bash
 OPENAI_API_KEY=your-openai-api-key
 MESHY_API_KEY=your-meshy-api-key
+TRIPO_API_KEY=your-tripo-api-key  # Optional: for Tripo 3D pipeline
 ```
 
 ### Running the Application
