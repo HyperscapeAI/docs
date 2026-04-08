@@ -302,13 +302,40 @@ FADE_END: 1200              // Distance where fully invisible (meters)
 // B = 1.0 - dissolveVal (1.0 = fully visible, 0.0 = fully dissolved)
 ```
 
+**Grass System Simplification**:
+- **Replaced Compute Shader Pipeline**: Removed 3 compute shaders + SpriteNodeMaterial with single vertex shader mesh approach
+- **New GrassVisualManager**: Centralized grass LOD management, worker-based instance generation, quad-tree integration
+- **Worker-Based Generation**: `GrassWorker.ts` generates grass instances off main thread with terrain color matching
+- **LOD System**: Multi-tier LOD with distance-based transitions (configurable per biome)
+- **Performance**: Reduced GPU overhead by eliminating compute shader dispatch, improved CPU-side culling
+
+**Terrain Constants Centralization**:
+- **New Module**: `packages/procgen/src/terrain/constants.ts` — Single source of truth for terrain defaults
+- **Water Level Alignment**: `GAME_WATER_LEVEL = 16` matches `TERRAIN_CONSTANTS.WATER_THRESHOLD` in shared package
+- **Procgen Defaults**: `DEFAULT_MAX_HEIGHT = 30`, `DEFAULT_WATER_THRESHOLD = 5.4` (standalone procgen scale)
+- **Consistent Imports**: All procgen files now import from centralized constants instead of hardcoding values
+
+**Sky & Lighting Improvements**:
+- **LightingConfig.ts**: Centralized all lighting constants (sun colors, ambient, toon bands, fog)
+- **Day/Night Cycle**: Enhanced sky system with cloud billboards, sun/moon positioning, atmospheric scattering
+- **Fog Tuning**: Adjusted fog distances (400-800m) and colors to match new terrain palette
+- **Camera Far Plane**: Increased from 800 to 10,000 for distant terrain visibility
+
+**Biome Resource Generation**:
+- **Poisson Disk Sampling**: Replaced rejection sampling with Poisson disk for better tree distribution (O(n) vs O(n×attempts))
+- **Water Affinity System**: Trees can prefer water-adjacent placement with configurable search radius and max distance
+- **Species Zoning**: Per-biome tree type distributions with altitude and water proximity rules
+- **Tree Type Updates**: Removed Willow/Fir (no assets), added Eucalyptus, General, Magic, Mahogany
+
 **Impact**:
 - Photorealistic tree rendering with toon-shaded foliage
 - Smooth resource depletion/respawn feedback
 - Improved terrain color accuracy matching reference screenshots
 - Organic water motion without repetitive patterns
-- Better performance via per-instance frustum culling
+- Better performance via per-instance frustum culling and simplified grass pipeline
 - Eliminated tree type confusion (Willow/Fir had no assets)
+- Centralized constants prevent drift between procgen and game runtime
+- More natural tree placement with Poisson disk sampling
 
 ### Client Runtime Environment Hydration (April 7, 2026)
 
