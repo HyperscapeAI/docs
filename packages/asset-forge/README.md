@@ -17,8 +17,46 @@ A comprehensive React/Vite application for AI-powered 3D asset generation, riggi
 - Metadata management and asset organization
 - GLB/GLTF format support
 
+### 🛡️ **Armor Pipeline** (New - April 2026)
+Complete armor generation pipeline from VRM avatar to game-ready GLB:
+
+**POC-1: Shell Extraction**
+- Extract body-fitting armor shells from VRM avatars by bone weight analysis
+- Curvature-adaptive offset prevents self-intersection at concavities
+- Boundary tapering for smooth transitions at shell edges
+- Four bulk classes (skin, cloth, leather, plate) + custom thickness support
+- Marching triangles algorithm for smooth slot boundaries
+
+**POC-2: AI Texturing**
+- Meshy AI retexture integration with base64 data URI upload (no ngrok needed)
+- Pre-painting with target color for accurate AI interpretation
+- OSRS tier presets (bronze → dragon) with hex codes for color consistency
+- Detail levels (plain → intricate) control ornamentation amount
+- Batch tier generation (8 tiers from one shell in ~5 minutes)
+- Solid color mode for instant uniform materials (no API cost)
+
+**POC-3: Shell Re-Rigging**
+- Automatic bone weight transfer from original shell to textured mesh
+- Fast-path direct copy when vertex counts match
+- Nearest-vertex fallback for Meshy-modified geometry
+- Bounding box alignment handles Meshy centering/normalization
+- Full skeleton export with original bone indices for game compatibility
+- Multi-piece armor kit with per-piece visibility toggles
+- Animation preview (Mixamo walk/run retargeted to VRM)
+
+**Tripo 3D Pipeline** (Experimental)
+- Mesh segmentation discovers armor parts automatically
+- Per-part texturing with custom prompts (e.g., "ornate pauldrons" for shoulders)
+- 3D attachment generation via text-to-model (pauldrons, crests, guards)
+- Bone-parented attachments with position/rotation/scale controls
+- Granular retry with localStorage session caching (no credit waste)
+
+**Publish to Game**
+- One-click export to game's model directory
+- Automatic armor manifest updates
+- Metadata embedding for equipment system integration
+
 ### 🤖 **Advanced Rigging & Fitting**
-- **Armor Fitting System**: Automatically fit armor pieces to character models
 - **Hand Rigging**: AI-powered hand pose detection and weapon rigging
 - Weight transfer and mesh deformation
 - Bone mapping and skeleton alignment
