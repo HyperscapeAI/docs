@@ -250,7 +250,9 @@ Returns structured JSON: `action`, `reasoning`, `goal` update, multi-step `plan[
 
 ### Terrain & Tree Visual Overhaul (April 5-7, 2026)
 
-**Change** (PR #1126, Commits 1bf2342-3bb9875): Complete rewrite of tree rendering system with vertex-color-driven shaders, terrain color tuning, and water shader improvements.
+**Change** (PR #1126, Commits 1bf2342-3bb9875): Complete rewrite of tree rendering system with vertex-color-driven shaders, terrain color tuning, water shader improvements, and grass system simplification.
+
+**Scope**: 82 files changed, +7,099 additions, -5,078 deletions across shared, procgen, server, and client packages.
 
 **Tree System Overhaul**:
 - **Vertex-Color Shader**: Trees now use vertex colors (R=leaf mask, G=AO, B=unused) for 4-band toon lighting with SSS, rim highlights, and wind animation
