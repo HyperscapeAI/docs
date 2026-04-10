@@ -109,6 +109,170 @@ packages/
 
 ## Recent Changes (April 2026)
 
+### Vegetation Model Caching Fixes (April 10, 2026)
+
+**Change** (PR #1144, Commits aca6e95, a5405da, 8af2566): Fixed mushroom disappearance and tree texture corruption on fresh GLTF load.
+
+**Scope**: 3 files changed, +230 additions, -60 deletions in shared package.
+
+**Problems Fixed**:
+
+1. **Mushroom Disappearance**: GLTF files often store geometry using `InterleavedBufferAttribute`, where multiple attributes share one interleaved `ArrayBuffer`. `serializeScene` was calling `.array` on these attributes and passing the entire interleaved buffer (all attributes combined) as if it were a single attribute. On deserialization, vertex counts were fractional/NaN, bounding boxes were corrupted, and `modelBaseOffset = NaN` caused every instance to be rejected by `addInstanceToChunk`.
+
+2. **Tree Texture Corruption**: Three.js WebGPU has two texture upload paths:
+   - `DataTexture` → `writeTexture` (raw byte copy, no transformation)
+   - `ImageBitmapTexture` (fresh GLTF) → `copyExternalImageToTexture` (browser applies a color-space decode step)
+   
+   The `copyExternalImageToTexture` path performs a browser-side sRGB decode during upload, which corrupts the stored values when the destination is an `rgba8unorm-srgb` texture. `DataTexture` (from IndexedDB cache) uses `writeTexture` which copies bytes directly and renders correctly.
+
+**Fixes**:
+
+**ModelCache.ts** (`packages/shared/src/utils/rendering/ModelCache.ts`):
+- **`extractAttr()` helper**: Deinterleaves `InterleavedBufferAttribute` by reading each component individually via `getComponent()`, producing contiguous typed arrays. Matches source typed array constructor (e.g., Uint16Array for skinIndex) instead of hardcoding Float32Array.
+- **`ensureDataTexture()` helper**: Converts `ImageBitmapTexture` to `DataTexture` so all textures use WebGPU's `writeTexture` upload path (raw byte copy) instead of `copyExternalImageToTexture` (browser-side colorspace decode). Forwards `minFilter`, `magFilter`, `generateMipmaps`, `repeat`, `offset` to prevent mipmap/aliasing regression.
+- **Fast DataTexture path**: `textureToPixelData()` now reads DataTexture pixel data directly without canvas round-trip.
+
+**GPUMaterials.ts** (`packages/shared/src/systems/shared/world/GPUMaterials.ts`):
+- **Smooth diffuse ramp**: Replaced 4-band toon shading with continuous smoothstep diffuse ramp (warm highlights → cool shadows) plus narrow warm-tinted shadow terminator band.
+- **Softened rim light**: Changed from binary step to smoothstep falloff for smoother edge highlights.
+
+**Key Files Changed**:
+- `packages/shared/src/utils/rendering/ModelCache.ts` — Interleaved buffer deinterleaving, ImageBitmapTexture → DataTexture conversion
+- `packages/shared/src/systems/shared/world/GPUMaterials.ts` — Smooth diffuse ramp tree shader
+- `packages/shared/src/systems/shared/world/VegetationSystem.ts` — Consistent bracing, improved logging
+
+**Impact**:
+- Mushrooms render correctly after cache clear (no more disappearing vegetation)
+- Tree textures render consistently between fresh GLTF loads and cached loads
+- Smoother tree lighting with continuous diffuse ramp instead of hard toon bands
+- Proper mipmap filtering on all textures (no pixelation at distance)
+
+### Armor Pipeline POC3 (April 6-8, 2026)
+
+**Change** (PR #1142, Commits 87a4c6e-515c48c): Complete armor generation pipeline from VRM avatar to game-ready GLB.
+
+**Scope**: 26 files changed, +12,109 additions, -8 deletions in asset-forge package.
+
+**Core Features**:
+
+#### 1. Shell Extraction System
+**New Module**: `packages/asset-forge/src/services/armor-pipeline/ShellExtractionService.ts` (2,058 lines)
+
+Extracts body-fitting armor shells from VRM avatars by bone weight analysis:
+- **Exclusive Region Assignment**: Each vertex belongs to exactly one equipment slot (helmet/body/legs/boots/gloves) based on highest bone weight
+- **Marching Triangles**: Splits boundary triangles at bone-weight isolines for smooth slot transitions (no jagged edges)
+- **Curvature-Adaptive Offset**: Clamps offset at high-curvature areas (armpits, groin) to prevent self-intersection
+- **Body-Constrained Laplacian Smooth**: Smooths shell surface while enforcing minimum distance from body
+- **Boundary Tapering**: Gradual falloff at shell edges (0.5 → 1.0 over 3 rings) for smooth transitions
+- **UV Seam Bridging**: Averages normals and positions across coincident vertices to prevent cracks
+
+**Bulk Classes** (shell thickness):
+```typescript
+BULK_OFFSETS = {
+  skin: 0.001,    // ~1mm
+  cloth: 0.005,   // ~5mm
+  leather: 0.012, // ~12mm
+  plate: 0.03,    // ~30mm
+}
+```
+
+#### 2. AI Texturing Integration
+**Meshy Pipeline** (`ShellTextureService.ts`, `ArmorTextureService.ts`):
+- Upload shell GLB as base64 data URI (no public URL needed)
+- Retexture via Meshy API with text prompts or style reference images
+- Batch tier generation (bronze → dragon) with staggered API calls
+- Pre-painting shells with target color improves AI accuracy
+
+**Tripo Pipeline** (`TripoService.ts`, `ArmorTripoService.ts`):
+- STS S3 upload with AWS Signature V4 (no SDK dependency)
+- Segment → per-part texture → reassemble workflow
+- Text-to-model generation for 3D attachments (pauldrons, crests, guards)
+- Bone-parented attachments with position/rotation/scale controls
+- Session persistence via localStorage for retry resilience
+
+**Material Presets**:
+- **OSRS Tiers**: Bronze, Iron, Steel, Black, Mithril, Adamant, Rune, Dragon (solid colors with hex codes for Meshy-6 accuracy)
+- **Fantasy Detailed**: Iron Plate, Leather, Cloth Robe, Steel Ornate, Mithril Elven, Dragon Scale (detailed AI prompts)
+- **Detail Levels**: Plain → Minimal → Moderate → Ornate → Intricate (controls ornamentation amount)
+
+#### 3. Automatic Rigging System
+**New Module**: `packages/asset-forge/src/services/armor-pipeline/ShellRiggingService.ts` (469 lines)
+
+Re-rigs textured shells by transferring bone weights from original shell:
+- **Fast Path**: Vertex counts match → direct attribute copy (expected with `enable_original_uv`)
+- **Fallback**: Vertex counts differ → nearest-vertex weight transfer by position distance
+- **Full Skeleton Export**: Exports complete VRM skeleton with original bone indices preserved so game's simple skeleton swap works correctly
+- **Publish to Game**: Writes rigged GLB to `packages/server/world/assets/models/` and updates `armor.json` manifest
+
+#### 4. UI Components
+**New Components**:
+- `ShellGeneratorTab.tsx` (538 lines) — Extract shells from VRM avatars with region/shell/all-shells view modes
+- `TextureGeneratorTab.tsx` (1,566 lines) — Apply solid colors, AI textures, or batch tier generation
+- `TierGeneratorTab.tsx` (786 lines) — Batch-generate bronze → dragon tier variants with editable per-tier prompts
+- `TripoGeneratorTab.tsx` (1,727 lines) — Experimental Tripo pipeline with segment → texture → attachments wizard
+- `ArmorPreviewTab.tsx` (806 lines) — Rig textured armor and preview on animated avatar with publish-to-game
+- `ShellPreviewViewer.tsx` (917 lines) — WebGPU 3D viewer with orbit controls, animation retargeting, bone attachments
+
+**Shared Extraction Cache**: Single extraction result shared across Shell, Texture, and Tier tabs to avoid re-extracting the same avatar multiple times.
+
+#### 5. API Endpoints
+**New Routes** (`packages/asset-forge/server/routes/`):
+- `POST /api/armor-pipeline/texture-shell` — Upload shell GLB + start Meshy retexture
+- `POST /api/armor-pipeline/texture-shell-batch` — Batch retexture for multiple tiers
+- `GET /api/armor-pipeline/texture-status/:taskId` — Poll texture task status
+- `GET /api/armor-pipeline/texture-download/:taskId` — Download textured result (proxied)
+- `POST /api/armor-pipeline/publish-to-game` — Publish rigged GLB to game model directory (localhost-only)
+- `POST /api/tripo/upload-and-segment` — Upload → import → segment → return part names
+- `POST /api/tripo/texture-part` — Texture specific parts with custom prompts
+- `POST /api/tripo/complete` — Reassemble model after per-part texturing
+- `POST /api/tripo/texture-shell` — Whole-model texture (no segments)
+- `POST /api/tripo/text-to-model` — Generate 3D model from text prompt
+- `GET /api/tripo/task/:taskId` — Poll Tripo task status
+- `GET /api/tripo/download/:taskId` — Download Tripo result (proxied)
+- `GET /api/tripo/balance` — Check Tripo account balance
+
+**Security Features**:
+- Path traversal prevention via `SAFE_PATH_RE` regex and `path.basename()` sanitization
+- SSRF validation on download URLs (domain allowlists for Meshy/Tripo/S3)
+- Localhost-only restriction on `/publish-to-game` endpoint via `server.requestIP()`
+- Private IP blocking in `isValidPublicUrl()` (RFC 1918, link-local, loopback, CGN)
+- Content-Length guards (100MB max) on external downloads
+- Task ID format validation before URL interpolation
+
+#### 6. Equipment Visual System Updates
+**Updated Module**: `packages/shared/src/systems/client/EquipmentVisualHelpers.ts`
+
+- **Metalness Override**: Zero metalness on all equipment materials (game has no environment map, so metallic PBR materials appear black)
+- **Render Order Fix**: Equipment renderOrder set to 100 to render on top of player silhouette (renderOrder 50)
+- **Double-Sided Materials**: Ensure DoubleSide rendering on multi-material meshes
+
+**Environment Variables**:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `MESHY_API_KEY` | — | Meshy AI API key for retexturing (required for Meshy pipeline) |
+| `TRIPO_API_KEY` | — | Tripo 3D AI API key (required for Tripo pipeline) |
+| `PUBLIC_URL` | — | Public URL for shell GLB hosting (Meshy needs to fetch models) |
+| `FRONTEND_URL` | `http://localhost:5173` | Frontend URL for CORS (defaults to false in production if unset) |
+
+**Key Files Changed**:
+- `packages/asset-forge/server/routes/armor-pipeline.ts` — Meshy retexture + publish-to-game endpoints (new, 520 lines)
+- `packages/asset-forge/server/routes/tripo-pipeline.ts` — Tripo segment/texture/text-to-model endpoints (new, 342 lines)
+- `packages/asset-forge/server/services/armor-pipeline/ShellTextureService.ts` — Meshy API wrapper (new, 300 lines)
+- `packages/asset-forge/server/services/armor-pipeline/TripoService.ts` — Tripo API wrapper with STS S3 upload (new, 757 lines)
+- `packages/asset-forge/src/services/armor-pipeline/ShellExtractionService.ts` — Shell extraction from VRM (new, 2,058 lines)
+- `packages/asset-forge/src/services/armor-pipeline/ShellRiggingService.ts` — Automatic rigging (new, 469 lines)
+- `packages/asset-forge/src/pages/ArmorPipelinePage.tsx` — Main pipeline UI (new, 295 lines)
+- `packages/shared/src/systems/client/EquipmentVisualHelpers.ts` — Metalness override + renderOrder fix
+
+**Impact**:
+- Complete armor pipeline from VRM avatar to game-ready GLB
+- AI-powered texturing with Meshy and Tripo 3D
+- Automatic rigging preserves perfect body fit
+- Batch tier generation (8 OSRS tiers in one click)
+- 3D bone attachments for unique armor pieces
+- One-click publish to game model directory
+
 ### Autonomous Agent Quest System + LLM-Driven Behavior (April 8, 2026)
 
 **Change** (PR #1124, Commit c7908a9): Complete autonomous agent system with quest progression, LLM decision-making, dashboard overhaul, and streaming duel enhancements.
