@@ -20,15 +20,15 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 
 | Category | Features |
 |----------|----------|
-| **Combat** | Tick-based OSRS mechanics (600ms ticks), attack styles, accuracy formulas, death/respawn system with OSRS keep-3, LLM combat strategy planning with trash talk |
-| **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking, Fletching, Crafting, Smithing, Prayer, Runecrafting + combat skills with XP/leveling, tick-based resource respawn |
+| **Combat** | Tick-based OSRS mechanics (600ms ticks), attack styles, accuracy formulas, death/respawn system with OSRS keep-3, LLM combat strategy planning with trash talk, protection prayer switching |
+| **Skills** | Woodcutting, Mining, Fishing, Cooking, Firemaking, Fletching, Crafting, Smithing, Prayer, Runecrafting + combat skills with XP/leveling, tick-based resource respawn, manifest-driven quest system |
 | **Economy** | 480-slot bank, shops, item weights, loot drops, gravestone system with privacy protection |
-| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making with scripted fallback, autonomous quest completion (kill/gather/craft/dialogue/travel), multi-agent coordination, live dashboard with 3D viewfinder |
-| **Content** | JSON manifests for NPCs, items, stores, world areas—no code required |
-| **Tech** | VRM avatars, WebSocket networking (uWebSockets.js), PostgreSQL persistence, PhysX physics, WebGPU rendering with TSL shaders |
-| **UI** | Unified tooltips across all panels, live NPC dialogue portraits, drag-and-drop action bars, home teleport system with visual effects, streaming duel overlay with combat log |
-| **Visuals** | Vertex-color tree shaders with toon lighting + SSS + wind, flow-mapped water normals, screen-door dissolve for resource depletion, per-instance frustum culling, terrain color tuning |
-| **Asset Tools** | Armor pipeline: shell extraction from VRM, AI texturing (Meshy/Tripo), automatic rigging, batch tier generation, 3D bone attachments, publish-to-game workflow |
+| **AI Agents** | ElizaOS-powered autonomous gameplay, LLM decision-making with scripted fallback (non-blocking), autonomous quest completion (kill/gather/craft/dialogue/travel/interact), multi-agent coordination, live dashboard with 3D viewfinder, agent thought persistence |
+| **Content** | JSON manifests for NPCs, items, stores, world areas, quests—no code required |
+| **Tech** | VRM avatars, WebSocket networking (uWebSockets.js), PostgreSQL persistence, PhysX physics, WebGPU rendering with TSL shaders, worker-based terrain generation |
+| **UI** | Unified tooltips across all panels, live NPC dialogue portraits, drag-and-drop action bars, home teleport system with visual effects, streaming duel overlay with combat log, nametag sprites |
+| **Visuals** | Smooth diffuse ramp tree shaders with SSS + wind, flow-mapped water normals with teal palette, screen-door dissolve for resource depletion, per-instance frustum culling, Poisson disk tree placement, centralized lighting config |
+| **Asset Tools** | Armor pipeline: shell extraction from VRM with marching triangles, AI texturing (Meshy/Tripo), automatic rigging, batch tier generation (bronze→dragon), 3D bone attachments, publish-to-game workflow |
 
 ## Quick Start
 
