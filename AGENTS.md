@@ -488,9 +488,28 @@ FADE_END: 1200              // Distance where fully invisible (meters)
 
 **Biome Resource Generation**:
 - **Poisson Disk Sampling**: Replaced rejection sampling with Poisson disk for better tree distribution (O(n) vs O(n×attempts))
-- **Water Affinity System**: Trees can prefer water-adjacent placement with configurable search radius and max distance
+- **Water Affinity System**: Trees can prefer water-adjacent placement with configurable `waterSearchRadius` (default 40m) and `waterMaxDistance` (default 30m)
 - **Species Zoning**: Per-biome tree type distributions with altitude and water proximity rules
-- **Tree Type Updates**: Removed Willow/Fir (no assets), added Eucalyptus, General, Magic, Mahogany
+- **Tree Type Updates**: Removed Willow/Fir (no assets), added Eucalyptus, General, Magic, Mahogany, Banana, PineDead
+- **Forest Density Tuning**: Reduced tree density, normalized scale variation to [1.0, 1.2], tightened cluster spacing (200→100m)
+
+**Visual Manager Architecture**:
+- **WaterVisualManager**: Manages water mesh lifecycle, flow-mapped normal updates, quad-tree integration
+- **GrassVisualManager**: Handles grass LOD tiers, worker-based generation, chunk visibility
+- **TerrainVisualManager**: Coordinates terrain mesh generation, collision baking, walkability processing
+- **CompositeQuadTreeListener**: Shared quad-tree for all visual managers (terrain, water, grass)
+
+**Day/Night Cycle Enhancements**:
+- **Cloud Billboards**: Procedural cloud sprites with sun/moon positioning
+- **Atmospheric Scattering**: Enhanced sky gradient with time-of-day color shifts
+- **Fog Tuning**: Adjusted fog distances (400-800m) and colors to match terrain palette
+- **Camera Far Plane**: Increased from 800 to 10,000 for distant terrain visibility
+
+**LOD Distance Changes**:
+- Tree LOD1: 30m → 800m
+- Tree LOD2: 60m → 1000m
+- Tree fade: 180m → 1800m
+- Fog: 60-150m → 400-800m
 
 **Impact**:
 - Photorealistic tree rendering with toon-shaded foliage
