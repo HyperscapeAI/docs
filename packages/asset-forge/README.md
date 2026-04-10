@@ -1,6 +1,6 @@
-# 3D Asset Forge
+# AssetForge
 
-A comprehensive React/Vite application for AI-powered 3D asset generation, rigging, and fitting. Built for the Hyperscape RPG, this system combines OpenAI's GPT-4 and DALL-E with Meshy.ai to create game-ready 3D models from text descriptions.
+AI-powered 3D asset generation and armor pipeline for Hyperscape. Built with React, Vite, and Elysia, this system combines OpenAI, Meshy AI, and Tripo 3D to create game-ready 3D models from text descriptions.
 
 ## Features
 
@@ -11,133 +11,97 @@ A comprehensive React/Vite application for AI-powered 3D asset generation, riggi
 - Material variant generation (bronze, steel, mithril, etc.)
 - Batch generation capabilities
 
+### 🛡️ **Armor Pipeline (POC3)**
+Complete armor generation pipeline from VRM avatar to game-ready GLB:
+
+**Shell Extraction**:
+- Extract body-fitting armor shells from VRM avatars by bone weight analysis
+- Marching triangles algorithm for smooth slot boundaries
+- Curvature-adaptive offset with body-constrained Laplacian smoothing
+- Multiple bulk classes: skin (1mm), cloth (5mm), leather (12mm), plate (30mm)
+- UV seam bridging to prevent cracks
+
+**AI Texturing**:
+- **Meshy Pipeline**: Upload shell as base64 data URI, retexture with text prompts or style reference images
+- **Tripo Pipeline**: Segment → per-part texture → reassemble workflow with STS S3 upload
+- **Batch Tier Generation**: Generate all 8 OSRS tiers (bronze → dragon) in one click
+- **Material Presets**: OSRS solid colors + fantasy detailed styles
+- **Detail Levels**: Plain → Minimal → Moderate → Ornate → Intricate
+
+**Automatic Rigging**:
+- Transfer bone weights from original shell to textured mesh
+- Fast path (vertex count match) or fallback (nearest-vertex transfer)
+- Full skeleton export with original bone indices preserved
+- Publish to game model directory + update armor manifest
+
+**3D Bone Attachments** (Tripo):
+- Generate 3D armor pieces from text prompts (pauldrons, crests, guards)
+- Parent to VRM skeleton bones with position/rotation/scale controls
+- Text-to-model generation for unique armor pieces
+
 ### 🎮 **3D Asset Management**
-- Interactive 3D viewer with Three.js
+- Interactive 3D viewer with Three.js WebGPU renderer
 - Asset library with categorization and filtering
 - Metadata management and asset organization
 - GLB/GLTF format support
-
-### 🛡️ **Armor Pipeline** (New - April 2026)
-Complete armor generation pipeline from VRM avatar to game-ready GLB:
-
-**POC-1: Shell Extraction**
-- Extract body-fitting armor shells from VRM avatars by bone weight analysis
-- Curvature-adaptive offset prevents self-intersection at concavities
-- Boundary tapering for smooth transitions at shell edges
-- Four bulk classes (skin, cloth, leather, plate) + custom thickness support
-- Marching triangles algorithm for smooth slot boundaries
-
-**POC-2: AI Texturing**
-- Meshy AI retexture integration with base64 data URI upload (no ngrok needed)
-- Pre-painting with target color for accurate AI interpretation
-- OSRS tier presets (bronze → dragon) with hex codes for color consistency
-- Detail levels (plain → intricate) control ornamentation amount
-- Batch tier generation (8 tiers from one shell in ~5 minutes)
-- Solid color mode for instant uniform materials (no API cost)
-
-**POC-3: Shell Re-Rigging**
-- Automatic bone weight transfer from original shell to textured mesh
-- Fast-path direct copy when vertex counts match
-- Nearest-vertex fallback for Meshy-modified geometry
-- Bounding box alignment handles Meshy centering/normalization
-- Full skeleton export with original bone indices for game compatibility
-- Multi-piece armor kit with per-piece visibility toggles
-- Animation preview (Mixamo walk/run retargeted to VRM)
-
-**Tripo 3D Pipeline** (Experimental)
-- Mesh segmentation discovers armor parts automatically
-- Per-part texturing with custom prompts (e.g., "ornate pauldrons" for shoulders)
-- 3D attachment generation via text-to-model (pauldrons, crests, guards)
-- Bone-parented attachments with position/rotation/scale controls
-- Granular retry with localStorage session caching (no credit waste)
-
-**Publish to Game**
-- One-click export to game's model directory
-- Automatic armor manifest updates
-- Metadata embedding for equipment system integration
-
-### 🤖 **Advanced Rigging & Fitting**
-- **Hand Rigging**: AI-powered hand pose detection and weapon rigging
-- Weight transfer and mesh deformation
-- Bone mapping and skeleton alignment
-
-### ✨ **VFX Catalog Browser** (New - February 2026)
-- Live Three.js previews of all game effects
-- Comprehensive effect library:
-  - Combat spells (fire, ice, lightning)
-  - Projectiles (arrows, magic bolts)
-  - Particle systems (glow, fishing, teleport)
-  - Combat HUD effects (damage splats, XP drops)
-- **Detail Panels** for each effect:
-  - Color swatches and gradients
-  - Parameter tables (lifetime, scale, velocity)
-  - Layer breakdowns (particles, beams, rings)
-  - Phase timelines (gather, erupt, sustain, fade)
-- **Interactive Controls**:
-  - Play/pause animations
-  - Adjust camera angle
-  - Toggle effect layers
-  - Export effect configurations
 
 ### 🔧 **Processing Tools**
 - Sprite generation from 3D models
 - Vertex color extraction
 - T-pose extraction from animated models
 - Asset normalization and optimization
+- Procedural terrain/vegetation generation
 
 ## Tech Stack
 
-- **Frontend**: React 18, TypeScript, Vite
-- **3D Graphics**: Three.js (WebGPU), React Three Fiber, Drei
-- **State Management**: Zustand, Immer
-- **AI Integration**: OpenAI API, Meshy.ai API
-- **ML/Computer Vision**: TensorFlow.js, MediaPipe (hand detection)
-- **Backend**: Elysia (Bun-native server)
-- **Styling**: Tailwind CSS
-- **Build Tool**: Bun
-- **Database**: SQLite (via Drizzle ORM)
+- **Frontend**: React 19, TypeScript, Vite 8.0
+- **3D Graphics**: Three.js 0.183.2 (WebGPU), OrbitControls
+- **Backend**: Elysia (Bun), Node.js 22+
+- **AI Integration**: OpenAI API, Meshy AI, Tripo 3D
+- **3D Processing**: @gltf-transform/core, @pixiv/three-vrm
+- **Styling**: Tailwind CSS 4.1.14
+- **Build Tool**: Bun 1.3.10+
 
 ## Getting Started
 
 ### Prerequisites
-- Bun runtime (v1.1.38+)
-- API keys for OpenAI and Meshy.ai
+- Bun 1.3.10+ (for client/build tasks)
+- Node.js 22+ (for server runtime)
+- API keys for OpenAI, Meshy AI, and/or Tripo 3D
 
 ### Installation
 
-1. Clone the repository
-```bash
-git clone https://github.com/HyperscapeAI/hyperscape.git
-cd hyperscape/packages/asset-forge
-```
-
-2. Install dependencies
+1. Install dependencies from monorepo root:
 ```bash
 bun install
 ```
 
-3. Create a `.env` file from the example
+2. Create `.env` file:
 ```bash
-cp .env.example .env
+cp packages/asset-forge/.env.example packages/asset-forge/.env
 ```
 
-4. Add your API keys to `.env`
+3. Add your API keys to `.env`:
 ```bash
-OPENAI_API_KEY=your-openai-api-key
-MESHY_API_KEY=your-meshy-api-key
-TRIPO_API_KEY=your-tripo-api-key  # Optional: for Tripo 3D pipeline
+# Required for AI texturing
+MESHY_API_KEY=your_meshy_api_key
+
+# Required for Tripo pipeline
+TRIPO_API_KEY=your_tripo_api_key
+
+# Required for text generation
+OPENAI_API_KEY=your_openai_api_key
+# OR
+AI_GATEWAY_API_KEY=your_vercel_api_key
 ```
 
 ### Running the Application
 
-Start both frontend and backend services:
+From monorepo root:
 ```bash
-# Start everything (frontend + backend)
-bun run dev
-
-# Or run separately:
-bun run dev:ui        # Frontend only (port 3400)
-bun run dev:api       # Backend only (port 3401)
+bun run dev:forge       # AssetForge only (ports 3400, 3401)
+# OR
+bun run dev:with-forge  # Game + AssetForge (client + server + forge)
 ```
 
 The app will be available at `http://localhost:3400`
@@ -146,404 +110,217 @@ The app will be available at `http://localhost:3400`
 
 ```
 asset-forge/
-├── src/                    # React application source
-│   ├── components/         # UI components
-│   │   ├── VFX/           # VFX catalog components
-│   │   ├── ArmorPipeline/ # Armor pipeline UI (NEW - April 2026)
-│   │   │   ├── ShellGeneratorTab.tsx      # Shell extraction
-│   │   │   ├── TextureGeneratorTab.tsx    # AI texturing
-│   │   │   ├── TierGeneratorTab.tsx       # Batch tier generation
-│   │   │   ├── TripoGeneratorTab.tsx      # Tripo pipeline wizard
-│   │   │   ├── ArmorPreviewTab.tsx        # Rigging + animation
-│   │   │   └── ShellPreviewViewer.tsx     # Three.js viewer
-│   │   ├── Generation/    # Asset generation UI
-│   │   ├── ArmorFitting/  # Armor fitting tools
-│   │   └── HandRigging/   # Hand rigging tools
-│   ├── services/          # Core services
-│   │   ├── armor-pipeline/ # Armor pipeline services (NEW - April 2026)
-│   │   │   ├── ShellExtractionService.ts  # Shell extraction (2,058 lines)
-│   │   │   ├── ShellRiggingService.ts     # Weight transfer + export
-│   │   │   ├── ArmorTextureService.ts     # Meshy client
-│   │   │   ├── ArmorTripoService.ts       # Tripo client
-│   │   │   ├── types.ts                   # Shared types
-│   │   │   └── constants.ts               # Avatars, slots, tiers
-│   │   └── ...            # Other services
-│   ├── pages/             # Main application pages
-│   │   ├── ArmorPipelinePage.tsx # Armor pipeline (NEW - April 2026)
-│   │   └── VFXPage.tsx    # VFX catalog browser
-│   ├── hooks/             # Custom React hooks
-│   ├── store/             # Zustand state management
-│   └── data/              # Static data
-│       └── vfx-catalog.ts # VFX effect definitions
-├── server/                # Elysia backend
-│   ├── api-elysia.ts     # API endpoints
-│   ├── services/         # Backend services
-│   │   └── armor-pipeline/ # Armor pipeline services (NEW - April 2026)
-│   │       ├── ShellTextureService.ts # Meshy API integration
-│   │       └── TripoService.ts        # Tripo API integration
-│   ├── routes/           # API routes
-│   │   ├── armor-pipeline.ts # Armor routes (NEW - April 2026)
-│   │   └── tripo-pipeline.ts # Tripo routes (NEW - April 2026)
-│   └── db/               # Database layer
-│       ├── db.ts         # Drizzle client
-│       └── schema/       # Database schemas
-├── gdd-assets/           # Generated 3D assets
-│   └── [asset-name]/     # Individual asset folders
-│       ├── *.glb         # 3D model files
-│       ├── concept-art.png
-│       └── metadata.json
-├── temp-shells/          # Temporary shell GLBs (NEW - April 2026)
-│   └── .gitkeep
-└── scripts/              # Utility scripts
-    └── build-services.mjs # Service build script
+├── src/                          # React application source
+│   ├── components/
+│   │   └── ArmorPipeline/       # Armor pipeline UI components
+│   │       ├── ShellGeneratorTab.tsx      # Shell extraction
+│   │       ├── TextureGeneratorTab.tsx    # AI texturing
+│   │       ├── TierGeneratorTab.tsx       # Batch tier generation
+│   │       ├── TripoGeneratorTab.tsx      # Tripo experimental pipeline
+│   │       ├── ArmorPreviewTab.tsx        # Rigging + preview
+│   │       └── ShellPreviewViewer.tsx     # WebGPU 3D viewer
+│   ├── services/
+│   │   └── armor-pipeline/      # Armor pipeline services
+│   │       ├── ShellExtractionService.ts  # Shell extraction (2,058 lines)
+│   │       ├── ShellRiggingService.ts     # Automatic rigging (469 lines)
+│   │       ├── ArmorTextureService.ts     # Meshy client (190 lines)
+│   │       ├── ArmorTripoService.ts       # Tripo client (306 lines)
+│   │       ├── types.ts                   # Shared types
+│   │       └── constants.ts               # Material presets, avatars
+│   ├── pages/                   # Main application pages
+│   └── utils/                   # Utilities
+├── server/                      # Elysia backend
+│   ├── api-elysia.ts           # Main API server
+│   ├── routes/
+│   │   ├── armor-pipeline.ts   # Meshy retexture + publish (520 lines)
+│   │   └── tripo-pipeline.ts   # Tripo segment/texture/text-to-model (342 lines)
+│   └── services/
+│       └── armor-pipeline/
+│           ├── ShellTextureService.ts  # Meshy API wrapper (300 lines)
+│           └── TripoService.ts         # Tripo API wrapper (757 lines)
+├── gdd-assets/                 # Generated 3D assets
+├── temp-images/                # Temporary image storage
+├── temp-shells/                # Temporary shell GLB storage
+└── public/
+    └── game-assets/avatars/    # VRM avatars (symlink to server assets)
 ```
 
 ## Main Features
 
-### 1. Asset Generation (`/generation`)
+### 1. Armor Pipeline (`/armor-pipeline`)
+
+**Step 1: Extract** — Extract body-fitting shells from VRM avatars
+- Select avatar (male/female variants)
+- Choose equipment slots (helmet, body, legs, boots, gloves)
+- Select bulk class (skin, cloth, leather, plate)
+- View regions, single shell, or all shells
+- Export shells as GLB
+
+**Step 2: Texture** — Apply materials and AI textures
+- **Solid Color**: Instant programmatic PBR materials (OSRS tier colors)
+- **AI Texture**: Meshy retexture with text prompts (OSRS or fantasy presets)
+- **All Tiers**: Generate all 8 OSRS tiers side-by-side for comparison
+- Detail level control (plain → intricate)
+- Add textured pieces to armor kit
+
+**Step 3: Tiers** — Batch-generate bronze → dragon tier variants
+- Same shell geometry, different tier textures
+- Editable per-tier prompts
+- Parallel Meshy API calls (~$0.20/tier, 2-5 min each)
+- Preview and download individual tiers
+
+**Step 4: Rig & Preview** — Re-rig textured armor and preview on animated avatar
+- Rig all kit pieces with one click
+- Preview on animated avatar (walk, run, T-pose)
+- Publish to game model directory + update armor manifest
+- Export rigged GLBs
+
+**Tripo Lab** (Experimental) — Tripo AI texturing & 3D attachments
+- Upload → segment → per-part texture → reassemble
+- Text-to-model generation for 3D attachments
+- Bone-parented attachments (pauldrons, crests, guards)
+- Position/rotation/scale controls per attachment
+- Session persistence for retry resilience
+
+### 2. Asset Generation (`/generation`)
 - Text-to-3D model pipeline
 - Prompt enhancement with GPT-4
 - Concept art generation
 - 3D model creation via Meshy.ai
 - Material variant generation
 
-### 2. Asset Library (`/assets`)
+### 3. Asset Library (`/assets`)
 - Browse and manage generated assets
 - Filter by type, tier, and category
 - 3D preview with rotation controls
 - Export and download assets
 
-### 3. Equipment System (`/equipment`)
-- Manage weapon and armor sets
-- Preview equipment combinations
-- Configure equipment properties
+### 4. Procedural Generators
+- **Building Generator**: Procedural building generation
+- **Vegetation Generator**: Tree and plant placement
+- **Grass Generator**: Grass instance generation
+- **Flower Generator**: Flower placement
+- **Roads Generator**: Road network generation
 
-### 4. Armor Fitting (`/armor-fitting`)
-- Upload character models
-- Automatically fit armor pieces
-- Adjust positioning and scaling
-- Export fitted models
-
-### 5. Armor Pipeline (`/armor-pipeline`) - **New April 2026**
-Complete armor generation workflow:
-- **Extract Tab**: Generate body-fitting shells from VRM avatars
-- **Texture Tab**: Apply solid colors or AI textures to shells
-- **Tiers Tab**: Batch-generate bronze → dragon tier variants
-- **Rig & Preview Tab**: Re-rig textured armor onto animated VRM skeleton
-- **Tripo Lab Tab**: Experimental per-part texturing + 3D attachments
-
-**Workflow**:
-1. Select VRM avatar and equipment slots
-2. Extract shells at desired bulk class (skin/cloth/leather/plate)
-3. Apply textures (instant solid color, AI texture, or batch tiers)
-4. Rig all pieces onto VRM skeleton
-5. Preview with walk/run animations
-6. Publish to game's model directory
-
-**Features**:
-- No public URL needed (base64 data URI upload)
-- Shared extraction cache across tabs
-- Multi-piece armor kit with visibility toggles
-- Standalone GLB upload for rigging external models
-- Bone attachment system for 3D accessories
-
-### 6. Hand Rigging (`/hand-rigging`)
-- Upload weapon models
-- AI-powered hand pose detection
-- Automatic grip point calculation
-- Export rigged weapons
-
-### 7. VFX Catalog (`/vfx`) - **New February 2026**
-- **Live Three.js Previews**: Real-time rendering of all game effects
-- **Sidebar Catalog**: Organized by category (spells, projectiles, particles, combat HUD)
-- **Effect Categories**:
-  - **Combat Spells**: Fire blast, ice shard, lightning bolt, earth spike
-  - **Projectiles**: Arrows (wood, iron, steel, mithril, adamant, rune)
-  - **Glow Particles**: Fishing spots, resource nodes, interactive objects
-  - **Teleport Effects**: Multi-phase beam with helix spirals and shockwaves
-  - **Combat HUD**: Damage splats, XP drops, level-up notifications
-- **Detail Panels**:
-  - **Colors**: Gradient swatches with hex codes
-  - **Parameters**: Lifetime, scale, velocity, particle count
-  - **Layers**: Breakdown of visual components (beams, rings, particles)
-  - **Phases**: Timeline of animation stages (gather, erupt, sustain, fade)
-- **Interactive Controls**:
-  - Play/pause effect animations
-  - Rotate camera view
-  - Toggle individual layers
-  - Copy effect configurations
-  - Export to JSON
-
-**Implementation**: `src/pages/VFXPage.tsx`, `src/components/VFX/`, `src/data/vfx-catalog.ts`
+### 5. World Builder (`/world`)
+- Visual world editing
+- Terrain manipulation
+- Asset placement
+- Export world data
 
 ## API Endpoints
 
-### Asset Management
+### Armor Pipeline
+- `POST /api/armor-pipeline/texture-shell` - Upload shell + start Meshy retexture
+- `POST /api/armor-pipeline/texture-shell-batch` - Batch retexture for multiple tiers
+- `GET /api/armor-pipeline/texture-status/:taskId` - Poll texture task status
+- `GET /api/armor-pipeline/texture-download/:taskId` - Download textured result
+- `POST /api/armor-pipeline/publish-to-game` - Publish rigged GLB to game (localhost-only)
+
+### Tripo Pipeline
+- `POST /api/tripo/upload-and-segment` - Upload → import → segment → return part names
+- `POST /api/tripo/texture-part` - Texture specific parts with custom prompts
+- `POST /api/tripo/complete` - Reassemble model after per-part texturing
+- `POST /api/tripo/texture-shell` - Whole-model texture (no segments)
+- `POST /api/tripo/text-to-model` - Generate 3D model from text prompt
+- `GET /api/tripo/task/:taskId` - Poll Tripo task status
+- `GET /api/tripo/download/:taskId` - Download Tripo result (proxied)
+- `GET /api/tripo/balance` - Check Tripo account balance
+
+### Legacy Endpoints
 - `GET /api/assets` - List all assets
 - `GET /api/assets/:id/model` - Download asset model
 - `POST /api/generation/start` - Start new generation
 - `POST /api/retexture/start` - Generate material variants
-- `POST /api/fitting/preview` - Preview armor fitting
-- `POST /api/hand-rigging/process` - Process hand rigging
-- `GET /api/health` - Health check endpoint
-
-### Armor Pipeline (New - April 2026)
-- `POST /api/armor-pipeline/texture-shell` - Upload shell GLB + start AI texture generation
-- `POST /api/armor-pipeline/texture-shell-batch` - Batch retexture for multiple tiers
-- `GET /api/armor-pipeline/texture-status/:taskId` - Check texture generation task status
-- `GET /api/armor-pipeline/texture-download/:taskId` - Download textured shell GLB result
-- `POST /api/armor-pipeline/publish-to-game` - Publish rigged armor to game model directory (localhost only)
-
-### Tripo Pipeline (Experimental - April 2026)
-- `POST /api/tripo/upload-and-segment` - Upload shell → import → segment → return part names
-- `POST /api/tripo/texture-part` - Texture specific parts with custom prompts
-- `POST /api/tripo/complete` - Reassemble model after per-part texturing
-- `POST /api/tripo/texture-shell` - Upload shell → import → texture (whole model)
-- `POST /api/tripo/text-to-model` - Generate 3D model from text prompt
-- `GET /api/tripo/task/:taskId` - Check Tripo task status
-- `GET /api/tripo/download/:taskId` - Download Tripo result GLB (proxied)
-- `GET /api/tripo/balance` - Check Tripo account balance
 
 ## Scripts
 
-- `bun run dev` - Start both frontend and backend development servers
-- `bun run dev:ui` - Start frontend only (port 3400)
-- `bun run dev:api` - Start backend only (port 3401)
-- `bun run build` - Build for production
-- `bun run start` - Start production backend services
-- `bun run assets:audit` - Audit asset library
-- `bun run assets:normalize` - Normalize 3D models
-- `bun run assets:extract-tpose` - Extract T-poses from models
+```bash
+# Development
+bun run dev              # Start frontend dev server (port 3400)
+bun run dev:backend      # Start backend API server (port 3401)
+bun run dev:all          # Start both frontend and backend
+
+# Production
+bun run build            # Build for production
+bun run start            # Start production backend
+
+# Asset Management
+bun run assets:audit     # Audit asset library
+bun run assets:normalize # Normalize 3D models
+bun run assets:extract-tpose # Extract T-poses from models
+```
 
 ## Configuration
 
-The system uses JSON-based configuration for:
-- Material presets (`public/prompts/material-presets.json`)
-- Asset metadata (stored with each asset)
-- Generation prompts and styles (`public/prompts/`)
-- VFX effect definitions (`src/data/vfx-catalog.ts`)
+### Environment Variables
 
-## TypeScript Configuration
+See `.env.example` for all available options. Key variables:
 
-**Module Resolution**: Uses `moduleResolution: "bundler"` to support Three.js WebGPU exports.
-
-**Strict Mode**: Enabled - all callback parameters require explicit type annotations.
-
-**Example** (traverse callbacks):
-```typescript
-// ❌ FORBIDDEN (TypeScript strict mode error)
-object.traverse((child) => {
-  if (child.isMesh) { ... }
-});
-
-// ✅ CORRECT
-import type { Object3D } from 'three';
-object.traverse((child: Object3D) => {
-  if (child.isMesh) { ... }
-});
-```
-
-## ESLint Configuration
-
-**Known Issue**: `eslint-plugin-import@2.32.0` is incompatible with ESLint 10 (uses removed `sourceCode.getTokenOrCommentBefore` API).
-
-**Workaround**: The `import/order` rule is disabled in `eslint.config.mjs`:
-```javascript
-rules: {
-  'import/order': 'off', // Disabled due to ESLint 10 incompatibility
-}
-```
-
-**Lint Command**: Uses `eslint src` instead of `eslint . --ext .ts,.tsx` (deprecated `--ext` flag).
-
-## Database Integration (New - February 2026)
-
-Asset Forge now includes a SQLite database for persistent storage:
-
-**Features:**
-- Asset metadata persistence
-- Generation history tracking
-- User preferences storage
-- Batch operation logging
-
-**Schema**: `server/db/schema/assets.schema.ts`
-
-**Migrations**: `server/db/migrations/`
-
-**Usage**:
-```typescript
-import { db } from './server/db/db';
-import { assets } from './server/db/schema';
-
-// Query assets
-const allAssets = await db.select().from(assets);
-
-// Insert asset
-await db.insert(assets).values({
-  name: 'Iron Sword',
-  type: 'weapon',
-  tier: 'iron',
-  // ...
-});
-```
-
-## Development Notes
-
-### Build Process
-
-The backend services are built using `scripts/build-services.mjs`:
-
-**Changes (February 2026)**:
-- Uses `bunx tsc` instead of `npx tsc` (Vast.ai deployment containers only have Bun installed)
-- Ensures TypeScript compiler is available via Bun's package runner
-
-**Build Command**:
 ```bash
-bun run build:services
+# AI Services (Backend)
+MESHY_API_KEY=your_meshy_api_key
+TRIPO_API_KEY=your_tripo_api_key
+OPENAI_API_KEY=your_openai_api_key
+AI_GATEWAY_API_KEY=your_vercel_api_key  # Alternative to OpenAI
+
+# Server Configuration
+ASSET_FORGE_API_PORT=3401
+NODE_ENV=development
+FRONTEND_URL=http://localhost:5173
+
+# Armor Pipeline
+PUBLIC_URL=https://your-server.example.com  # For Meshy shell hosting (optional)
+
+# AI Services (Frontend - must be prefixed with VITE_)
+VITE_OPENAI_API_KEY=your_openai_api_key
+VITE_MESHY_API_KEY=your_meshy_api_key
+VITE_GENERATION_API_URL=/api
 ```
 
-### Hot Reload
+### Material Presets
 
-- **Frontend**: Vite HMR (instant updates)
-- **Backend**: Manual restart required (or use `--watch` flag)
+The armor pipeline includes predefined material presets:
 
-### Port Configuration
+**OSRS Tiers** (solid colors with hex codes):
+- Bronze (#cd7f32), Iron (#6b6b6b), Steel (#b8b8b8), Black (#2a2a2a)
+- Mithril (#4a7ab5), Adamant (#2d6b3f), Rune (#3db8c4), Dragon (#8b1a1a)
 
-| Port | Service | Env Var |
-|------|---------|---------|
-| 3400 | Frontend UI | `ASSET_FORGE_PORT` |
-| 3401 | Backend API | `ASSET_FORGE_API_PORT` |
+**Fantasy Detailed** (AI-generated textures):
+- Iron Plate, Leather, Cloth Robe, Steel Ornate, Mithril Elven, Dragon Scale
 
-## Recent Updates
+## Security
 
-### Armor Pipeline (April 2026) - PR #1142
-Complete armor generation pipeline with three integrated AI services:
-
-**Shell Extraction**:
-- VRM bone weight analysis with marching triangles for smooth boundaries
-- Curvature-adaptive offset prevents self-intersection
-- Four bulk classes + custom thickness support
-- UV seam bridging eliminates cracks
-
-**AI Texturing**:
-- Meshy AI integration with base64 data URI upload (no public URL needed)
-- Pre-painting with target color for accurate AI interpretation
-- OSRS tier presets (bronze → dragon) with hex codes
-- Detail levels (plain → intricate) control ornamentation
-- Batch tier generation (8 tiers in ~5 minutes)
-- Solid color mode for instant materials (no API cost)
-
-**Tripo 3D Pipeline** (Experimental):
-- Mesh segmentation discovers armor parts automatically
-- Per-part texturing with custom prompts
-- Text-to-model for 3D attachments (pauldrons, crests, guards)
-- Bone-parented attachments with transform controls
-- Granular retry with localStorage session caching
-
-**Re-Rigging**:
-- Automatic bone weight transfer (fast-path or nearest-vertex fallback)
-- Bounding box alignment for Meshy-normalized geometry
-- Full skeleton export with original bone indices
-- Multi-piece armor kit with animation preview
-- Publish-to-game workflow updates armor manifest
-
-**Security Hardening** (7 rounds of fixes):
-- Path traversal prevention, SSRF domain allowlists
-- Localhost-only publish, Content-Length guards
-- Private IP blocking, task ID validation
-- Content-Disposition header sanitization
-
-**New Routes**: 8 armor-pipeline endpoints, 8 tripo-pipeline endpoints
-**New Services**: 5 server services, 5 client services
-**New Components**: 6 UI tabs (4,340 lines total)
+The armor pipeline includes multiple security layers:
+- Path traversal prevention via `SAFE_PATH_RE` regex and `path.basename()` sanitization
+- SSRF validation on download URLs (domain allowlists for Meshy/Tripo/S3)
+- Localhost-only restriction on `/publish-to-game` endpoint
+- Private IP blocking (RFC 1918, link-local, loopback, CGN)
+- Content-Length guards (100MB max) on external downloads
+- Task ID format validation before URL interpolation
 
 ## Troubleshooting
 
-### ESLint Crashes
+**Meshy API errors:**
+- Verify `MESHY_API_KEY` is set in `.env`
+- Check Meshy account balance at https://www.meshy.ai
+- Review server logs for detailed error messages
 
-**Symptom**: `eslint . --ext .ts,.tsx` crashes with "sourceCode.getTokenOrCommentBefore is not a function"
+**Tripo API errors:**
+- Verify `TRIPO_API_KEY` is set in `.env`
+- Check Tripo account balance: `GET /api/tripo/balance`
+- Tripo download URLs expire quickly (60s-5min) — always re-fetch task status before downloading
 
-**Cause**: `eslint-plugin-import@2.32.0` incompatible with ESLint 10
+**Shell extraction fails:**
+- Ensure VRM avatars are in `packages/server/world/assets/avatars/`
+- Create symlink: `ln -s ../../../server/world/assets/avatars packages/asset-forge/public/game-assets/avatars`
+- Verify VRM file is valid (not corrupted)
 
-**Solution**: Use `bun run lint` (runs `eslint src` without `--ext` flag)
-
-### TypeScript Errors in Three.js Code
-
-**Symptom**: "Parameter 'child' implicitly has an 'any' type"
-
-**Cause**: TypeScript strict mode requires explicit types for callback parameters
-
-**Solution**: Add type annotations:
-```typescript
-import type { Object3D } from 'three';
-object.traverse((child: Object3D) => { ... });
-```
-
-### Three.js WebGPU Import Errors
-
-**Symptom**: "Cannot find module 'three/webgpu'"
-
-**Cause**: `moduleResolution: "node"` can't resolve Three.js exports map
-
-**Solution**: Already fixed - `tsconfig.json` uses `moduleResolution: "bundler"`
-
-### Build Fails on Vast.ai
-
-**Symptom**: "tsc: command not found" during `bun run build:services`
-
-**Cause**: Vast.ai containers only have Bun installed (no npm/npx)
-
-**Solution**: Already fixed - `scripts/build-services.mjs` uses `bunx tsc` instead of `npx tsc`
-
-## Recent Updates (February 2026)
-
-### VFX Catalog Browser (PR #939)
-- New `/vfx` page with live Three.js effect previews
-- Sidebar catalog of all game effects organized by category
-- Detail panels showing colors, parameters, layers, and phase timelines
-- Interactive controls for playing, pausing, and exporting effects
-
-### TypeScript Strict Mode Fixes
-- Added explicit type annotations for all traverse callbacks
-- Updated `moduleResolution` to `"bundler"` for Three.js WebGPU support
-- Fixed implicit `any` types throughout codebase
-
-### ESLint Configuration
-- Disabled incompatible `import/order` rule (eslint-plugin-import@2.32.0 + ESLint 10)
-- Updated lint command to use `eslint src` (removed deprecated `--ext` flag)
-
-### Build System
-- Updated `build-services.mjs` to use `bunx tsc` for Vast.ai compatibility
-- Ensures TypeScript compiler available via Bun's package runner
-
-### Database Integration
-- Added SQLite database via Drizzle ORM
-- Asset metadata persistence
-- Generation history tracking
-- Migration system for schema updates
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and linting: `bun test && bun run lint`
-5. Submit a pull request
+**Publish to game fails:**
+- Endpoint is localhost-only for security
+- Verify you're running AssetForge on the same machine as the game server
+- Check `packages/server/world/assets/models/` directory permissions
 
 ## License
 
-This project is licensed under the MIT License.
-
-## Acknowledgments
-
-- Built for the Hyperscape RPG project
-- Powered by OpenAI and Meshy.ai APIs
-- Uses Three.js (WebGPU) for 3D visualization
-- VFX catalog inspired by Unity VFX Graph and Unreal Niagara
-
-## Related Documentation
-
-- **Main Project**: `../../README.md`
-- **Development Guide**: `../../CLAUDE.md`
-- **VFX System**: `src/data/vfx-catalog.ts`
-- **Database Schema**: `server/db/schema/`
+MIT
