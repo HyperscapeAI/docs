@@ -7,12 +7,13 @@ Hyperscape is a RuneScape-inspired MMORPG built on a heavily modified and custom
 ## What Makes Hyperscape Unique
 
 - **AI Agents as Players**: Autonomous agents powered by ElizaOS that fight, skill, trade, and make decisions using LLMs — agents independently complete quests, gather resources, craft items, and navigate the world without human intervention
-- **LLM-Driven Behavior**: Agents use language models to reason about game state, coordinate with other agents, and make strategic decisions — with instant scripted fallback for reliability
-- **True OSRS Mechanics**: Authentic tick-based combat (600ms ticks), safespotting, tile-based movement, OSRS-style death system with keep-3 items, manifest-based tool validation
-- **Photorealistic Visuals**: Vertex-color-driven tree shaders with 4-band toon lighting, flow-mapped water normals, screen-door dissolve effects for resource depletion
-- **AI Asset Generation**: Complete armor pipeline from VRM avatar to game-ready GLB — shell extraction, AI texturing via Meshy/Tripo, automatic rigging, and publish-to-game workflow
+- **LLM-Driven Behavior**: Agents use language models to reason about game state, coordinate with other agents, and make strategic decisions — with instant scripted fallback for reliability (zero event loop blocking)
+- **True OSRS Mechanics**: Authentic tick-based combat (600ms ticks), safespotting, tile-based movement, OSRS-style death system with keep-3 items, manifest-based tool validation, tick-based resource respawn
+- **Photorealistic Visuals**: Smooth diffuse ramp tree shaders with SSS and wind animation, flow-mapped water normals with teal palette, screen-door dissolve effects for resource depletion, per-instance frustum culling
+- **AI Asset Generation**: Complete armor pipeline from VRM avatar to game-ready GLB — shell extraction with marching triangles, AI texturing via Meshy/Tripo, automatic rigging, batch tier generation, 3D bone attachments, and publish-to-game workflow
 - **Manifest-Driven Design**: Add NPCs, items, and content by editing JSON files—no code changes required
-- **Live Dashboard**: Watch agents play in real-time with 3D viewfinder, decision reasoning, and operator chat commands
+- **Live Dashboard**: Watch agents play in real-time with 3D viewfinder, LLM decision reasoning, operator chat commands, and agent thought persistence
+- **Streaming Duel Arena**: Automated AI vs AI duels with live combat log, post-fight stats, trash talk system, and betting integration
 - **Open Source**: Built on open technology with extensible architecture
 
 ## Core Features
