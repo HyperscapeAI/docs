@@ -468,10 +468,11 @@ FADE_END: 1200              // Distance where fully invisible (meters)
 
 **Grass System Simplification**:
 - **Replaced Compute Shader Pipeline**: Removed 3 compute shaders + SpriteNodeMaterial with single vertex shader mesh approach
-- **New GrassVisualManager**: Centralized grass LOD management, worker-based instance generation, quad-tree integration
+- **New GrassVisualManager**: Centralized grass LOD management, worker-based instance generation, quad-tree integration (`packages/shared/src/systems/shared/world/GrassVisualManager.ts`, 1,232 lines)
 - **Worker-Based Generation**: `GrassWorker.ts` generates grass instances off main thread with terrain color matching
 - **LOD System**: Multi-tier LOD with distance-based transitions (configurable per biome)
 - **Performance**: Reduced GPU overhead by eliminating compute shader dispatch, improved CPU-side culling
+- **Terrain Color CPU Mirror**: `computeTerrainColorCPU()` provides CPU-side terrain color calculation matching GPU shader for grass color consistency
 
 **Terrain Constants Centralization**:
 - **New Module**: `packages/procgen/src/terrain/constants.ts` — Single source of truth for terrain defaults
