@@ -403,6 +403,102 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 
 ## Recent Changes (April 2026)
 
+### Vegetation Model Caching Fixes (April 10, 2026)
+
+**Change** (PR #1144, Commits aca6e95, a5405da, 8af2566): Fixed mushroom disappearance and tree texture corruption on fresh GLTF load.
+
+**Scope**: 3 files changed, +230 additions, -60 deletions in shared package.
+
+**Problems Fixed**:
+
+1. **Mushroom Disappearance**: GLTF files often store geometry using `InterleavedBufferAttribute`, where multiple attributes share one interleaved `ArrayBuffer`. `serializeScene` was calling `.array` on these attributes and passing the entire interleaved buffer (all attributes combined) as if it were a single attribute. On deserialization, vertex counts were fractional/NaN, bounding boxes were corrupted, and `modelBaseOffset = NaN` caused every instance to be rejected by `addInstanceToChunk`.
+
+2. **Tree Texture Corruption**: Three.js WebGPU has two texture upload paths:
+   - `DataTexture` → `writeTexture` (raw byte copy, no transformation)
+   - `ImageBitmapTexture` (fresh GLTF) → `copyExternalImageToTexture` (browser applies a color-space decode step)
+   
+   The `copyExternalImageToTexture` path performs a browser-side sRGB decode during upload, which corrupts the stored values when the destination is an `rgba8unorm-srgb` texture. `DataTexture` (from IndexedDB cache) uses `writeTexture` which copies bytes directly and renders correctly.
+
+**Fixes**:
+
+**ModelCache.ts** (`packages/shared/src/utils/rendering/ModelCache.ts`):
+- **`extractAttr()` helper**: Deinterleaves `InterleavedBufferAttribute` by reading each component individually via `getComponent()`, producing contiguous typed arrays. Matches source typed array constructor (e.g., Uint16Array for skinIndex) instead of hardcoding Float32Array.
+- **`ensureDataTexture()` helper**: Converts `ImageBitmapTexture` to `DataTexture` so all textures use WebGPU's `writeTexture` upload path (raw byte copy) instead of `copyExternalImageToTexture` (browser-side colorspace decode). Forwards `minFilter`, `magFilter`, `generateMipmaps`, `repeat`, `offset` to prevent mipmap/aliasing regression.
+- **Fast DataTexture path**: `textureToPixelData()` now reads DataTexture pixel data directly without canvas round-trip.
+
+**GPUMaterials.ts** (`packages/shared/src/systems/shared/world/GPUMaterials.ts`):
+- **Smooth diffuse ramp**: Replaced 4-band toon shading with continuous smoothstep diffuse ramp (warm highlights → cool shadows) plus narrow warm-tinted shadow terminator band.
+- **Softened rim light**: Changed from binary step to smoothstep falloff for smoother edge highlights.
+
+**Key Files Changed**:
+- `packages/shared/src/utils/rendering/ModelCache.ts` — Interleaved buffer deinterleaving, ImageBitmapTexture → DataTexture conversion
+- `packages/shared/src/systems/shared/world/GPUMaterials.ts` — Smooth diffuse ramp tree shader
+- `packages/shared/src/systems/shared/world/VegetationSystem.ts` — Consistent bracing, improved logging
+
+**Impact**:
+- Mushrooms render correctly after cache clear (no more disappearing vegetation)
+- Tree textures render consistently between fresh GLTF loads and cached loads
+- Smoother tree lighting with continuous diffuse ramp instead of hard toon bands
+- Proper mipmap filtering on all textures (no pixelation at distance)
+
+### Day/Night Cycle Duration Fix (April 10, 2026)
+
+**Change** (PR #1143, Commit 740ee24): Restored day/night cycle duration and AO dark floor.
+
+**Problem**: Accidental changes during terrain refactor caused day/night cycle to run 3× too fast and tree AO to be too bright.
+
+**Fix**: 
+- `DAY_CYCLE.DURATION_SEC` restored to 240s (was 80s)
+- `AO_DARK` floor in tree shader restored to 0.4 (was accidentally changed)
+
+**Impact**: 
+- Day/night cycle runs at correct speed (4 minutes per full cycle)
+- Tree ambient occlusion darkening restored to proper intensity
+
+### CI/Test Stability Fixes (April 10, 2026)
+
+**Change** (Commits a16b67d, d185d6e, dc98a63, 7f8e438, 4167d16): Resolved lint, typecheck, and test failures across the codebase.
+
+**Key Fixes**:
+
+**Shared Package**:
+- Added `EntityOccupancyMap` to barrel export (`packages/shared/src/index.ts`)
+- Fixed `TileMovementManager` test to align with actual `processPlayerTick` behavior (path-follow + clear-on-arrival)
+- Updated `GPUMaterials` test expectations to match current LODConfig values (tree fade=1800, extended distances)
+- Fixed `BuildingTerrainInteraction` WATER_THRESHOLD: 8.0 → 16 (actual value from TERRAIN_CONSTANTS)
+- Fixed `CookingCalculator` burn chance test to account for MAX_BURN_CHANCE=0.55 cap
+- Updated `LODQuality` tree draw distance bound: 300 → 2000
+- Fixed `DuelSystem` ejection test: lobby → starter area (0,0) per actual code
+
+**Server Package**:
+- Fixed `DuelCombatAI`: added "prayer" to combatRole union
+- Fixed `connection-handler`: Map value type, serialize return type, spectator position type
+- Fixed `StreamingDuelScheduler`: replaced `db.query` with `db.select` pattern (avoids schema generic)
+- Fixed `streamingDuelEligibilityDb`: column name to match schema (`streamingDuelEnabled`)
+- Exported `isActiveStreamingDuelContestant` from `agentRecovery`
+- Removed empty else block in `EmbeddedHyperscapeService` (lint error)
+- Removed duplicate `getWorld()` method in `EmbeddedHyperscapeService`
+
+**Asset-Forge Package**:
+- Fixed `ShellPreviewViewer` lint: capture `ref.current` in local vars for cleanup, add proper deps to `useImperativeHandle`
+- Fixed `TextureGeneratorTab` lint: remove unnecessary `detailLevel` dep, rename unused loop var `i` → `_i`
+- Fixed `AgentViewportChat` lint: remove 3 unused eslint-disable directives
+
+**Test Fixes**:
+- Fixed `AgentBehaviorEngine` test: unique characterIds per test to avoid module-level Map contamination, add missing `stationPositions` field, fix goal expectation
+- Fixed `ModelCache` lint: cast `out.buffer` to `ArrayBuffer` (ArrayBufferLike not assignable in strict mode)
+- Removed unused eslint-disable directives in `dashboardInterop.ts`
+
+**Submodule Cleanup**:
+- Removed orphaned `.claude/worktrees` gitlinks (were committed as mode 160000 submodules with no .gitmodules URL)
+- Added `.claude/worktrees/` to `.gitignore`
+
+**Impact**:
+- CI builds pass reliably
+- All tests pass with correct expectations
+- Lint and typecheck errors resolved
+- Cleaner git history without orphaned submodule references
+
 ### Armor Pipeline POC (April 5-8, 2026)
 
 **Change** (PR #1142, Commits 3b265f3-4e7f4be): Complete armor generation pipeline for AssetForge with shell extraction, AI texturing, rigging, and publish-to-game workflow.
