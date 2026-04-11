@@ -1289,6 +1289,48 @@ See [Port Allocation](#port-allocation) section for full port list.
 - Tests spawn their own Hyperscape instances
 - Visual tests require WebGPU support (headful browser with GPU access)
 
+**Common Test Failures**:
+
+1. **TileMovementManager test fails**: Test expectations must match actual `processPlayerTick` behavior (path-follow + clear-on-arrival). If test expects path to persist after arrival, update to expect cleared path.
+
+2. **GPUMaterials test fails**: LODConfig values change frequently. Update test expectations to match current values in `LODConfig.ts` (e.g., tree fade=1800, not 180).
+
+3. **CookingCalculator burn chance test fails**: Account for `MAX_BURN_CHANCE=0.55` cap when testing burn probabilities.
+
+4. **DuelSystem ejection test fails**: Players are ejected to starter area (0,0), not duel lobby. Update test expectations accordingly.
+
+5. **AgentBehaviorEngine test contamination**: Use unique `characterId` per test to avoid module-level Map contamination between tests. Add missing required fields like `stationPositions`.
+
+### CI/Lint Failures
+
+**Common Issues**:
+
+1. **Missing barrel exports**: If you add a new class/type to shared package, add it to `packages/shared/src/index.ts` barrel export.
+
+2. **Unused eslint-disable directives**: Remove `// eslint-disable-next-line` comments that are no longer needed after fixing the underlying issue.
+
+3. **Empty else blocks**: ESLint rejects empty `else {}` blocks with `--max-warnings 0`. Either add logic or remove the else block.
+
+4. **Duplicate methods**: Check for duplicate method definitions in classes (e.g., multiple `getWorld()` methods).
+
+5. **Type mismatches**: 
+   - Use `db.select()` pattern instead of `db.query()` to avoid schema generic issues
+   - Cast `ArrayBufferLike` to `ArrayBuffer` in strict mode when needed
+   - Ensure union types include all possible values (e.g., "prayer" in combatRole union)
+
+### Vegetation Rendering Issues
+
+**Mushrooms disappearing after cache clear**:
+- Fixed in April 2026 (PR #1144)
+- If you see this on older commits, update to latest main
+- Root cause: `InterleavedBufferAttribute` serialization was copying entire interleaved buffer instead of deinterleaving
+
+**Tree textures look wrong on first load**:
+- Fixed in April 2026 (PR #1144)
+- If you see this on older commits, update to latest main
+- Root cause: `ImageBitmapTexture` uses `copyExternalImageToTexture` which applies browser-side sRGB decode, corrupting colors
+- Solution: All textures now converted to `DataTexture` for consistent `writeTexture` upload path
+
 ### Docker Build Failures
 
 **Symptoms**: `COPY failed: file not found` errors for `packages/*/node_modules` directories.
