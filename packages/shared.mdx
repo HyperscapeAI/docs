@@ -761,12 +761,14 @@ import {
 | `@pixiv/three-vrm` | 3.5.3 | VRM avatar support |
 | `@hyperscape/physx-js-webidl` | workspace | Physics |
 | `@hyperscape/procgen` | workspace (devDep) | Procedural generation (type resolution only) |
-| `react` | ^19.2.0 | UI components |
+| `react` | 19.2.7 | UI components |
 | `styled-components` | ^6.1.19 | CSS-in-JS |
 | `fastify` | ^5.0.0 | HTTP server (server builds) |
 | `livekit-client` | ^2.9.9 | Voice chat |
-| `zod` | 4.3.6 | Schema validation |
-| `dotenv` | 17.3.1 | Environment variables |
+| `msgpackr` | 2.0.2 | Binary serialization for networking |
+| `lucide-react` | 1.8.0 | Icon library |
+| `dotenv` | 17.4.2 | Environment variables |
+| `commander` | 15.0.0 | CLI argument parsing |
 
 <Note>
   **Procgen Dependency**: The `@hyperscape/procgen` package is listed as a devDependency (not a regular dependency) to break the circular dependency cycle. This allows TypeScript to find module declarations during type checking without creating a build cycle in Turbo. The import still resolves at runtime since both packages are always installed together in the workspace.
