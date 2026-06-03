@@ -23,6 +23,63 @@ rss: true
   Subscribe via [RSS](/changelog/rss.xml) for updates.
 </Info>
 
+<Update label="Dependency Updates" description="June 2026" date="2026-06-03">
+
+### 📦 Major Dependency Updates (June 3, 2026)
+
+Batch merge of 30+ Dependabot dependency updates (PRs #1199–#1230).
+
+**Three.js & Graphics:**
+- **Three.js**: 0.183.2 → 0.184.0 (shared, plugin-hyperia) — WebGPU renderer improvements and TSL shader enhancements
+- **@types/three**: 0.183.1 → 0.184.1 (plugin-hyperia)
+- **@pixiv/three-vrm**: 3.5.1 → 3.5.3 — VRM avatar patch update
+
+**React:**
+- **react**: 19.2.5 → 19.2.7 (all packages) — bug fixes and stability improvements
+- **react-dom**: 19.2.5 → 19.2.7 (all packages)
+
+**Networking & Serialization:**
+- **uWebSockets.js**: v20.64.0 → v20.68.0 — performance and stability improvements
+- **msgpackr**: 1.11.12 → 2.0.2 (**major version**) — MessagePack serialization library used for network packets
+- **uuid**: 13.0.2 → 14.0.0 (**major version**) — UUID generation library
+
+**State Management:**
+- **immer**: 10.2.0 → 11.1.8 (**major version**) — immutable state updates library
+
+**Testing:**
+- **puppeteer**: 24.43.1 → 25.1.0 (**major version**) — browser automation for streaming
+- **jsdom**: 29.0.2 → 29.1.1 — test environment DOM implementation
+
+**Server & CLI:**
+- **commander**: 14.0.3 → 15.0.0 (**major version**) — CLI argument parsing
+- **@fastify/multipart**: 9.4.0 → 10.0.0 (**major version**) — multipart upload handling
+- **@fastify/static**: 8.3.0 → 9.1.2 (**major version**) — static file serving
+- **concurrently**: 9.2.1 → 10.0.3 (**major version**, asset-forge) — concurrent process runner
+
+**Build & Lint:**
+- **eslint-plugin-react-hooks**: 5.2.0 → 7.1.1 (**major version**, asset-forge)
+
+**Docker:**
+- **oven/bun**: 1.3.10-alpine → 1.3.14-alpine (server Dockerfile)
+
+**GitHub Actions:**
+- `softprops/action-gh-release`: 2 → 3
+- `actions/configure-pages`: 5 → 6
+- `actions/upload-pages-artifact`: 3 → 5
+- `android-actions/setup-android`: 3 → 4
+- `actions/github-script`: 8 → 9
+- `appleboy/ssh-action`: 1.0.3 → 1.2.5
+
+**Migration Notes:**
+
+- **uuid 14.0.0**: Review any direct `uuid` usage for API changes. The `v4()` function is unchanged.
+- **msgpackr 2.0.2**: Major version — if using msgpackr directly (not through the game's networking layer), review the [changelog](https://github.com/kriszyp/msgpackr/releases).
+- **immer 11.x**: Review the [immer v11 migration guide](https://immerjs.github.io/immer/update-patterns) if using immer in custom code.
+- **@fastify/multipart 10.0.0**: Check route handlers that use multipart uploads for API changes.
+- **commander 15.0.0**: Review the [commander changelog](https://github.com/tj/commander.js/blob/master/CHANGELOG.md) if using commander in custom scripts.
+
+</Update>
+
 <Update label="Dependency Updates & Bug Fixes" description="March 2026" date="2026-03-19">
 
 ### 📦 Major Dependency Updates (March 19, 2026)
