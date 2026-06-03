@@ -30,7 +30,7 @@ This is a hard requirement due to our use of TSL (Three Shading Language) for al
 ### Browser Requirements
 - Chrome 113+ (recommended)
 - Edge 113+
-- Safari 18+ (macOS 15+) - Safari 17 support was removed
+- Safari 18+ (macOS 15+) — Safari 17 support was removed
 - Firefox (behind flag, not recommended)
 
 ### Server/Streaming Requirements
