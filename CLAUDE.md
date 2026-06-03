@@ -409,7 +409,7 @@ This project uses **Bun** (v1.3.14+) as the package manager and runtime for clie
 
 ### Dependency Updates (June 3, 2026)
 
-**Change** (PRs #1159–#1199, merged via `shaw/dependabot-merge-main`): Batch merge of 20 Dependabot dependency updates.
+**Change** (PRs #1199–#1230, merged via `shaw/dependabot-merge-main`): Batch merge of 30+ Dependabot dependency updates.
 
 **Key Upgrades**:
 
