@@ -404,6 +404,83 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 - **Smart Contracts**: Hardhat 3.1.11+, @nomicfoundation/hardhat-ethers 4.0.6 (ethers.js v6)
 - **Utilities**: dotenv 17.4.2, msgpackr 2.0.2 (plugin-hyperia)
 
+## Recent Changes (June 2026)
+
+### Dependency Updates (June 3, 2026)
+
+**Change** (PRs #1159–#1199, merged via `shaw/dependabot-merge-main`): Batch merge of 20 Dependabot dependency updates.
+
+**Key Upgrades**:
+
+#### TypeScript 6.0.3 (Major Version — server, plugin-hyperia)
+- **PR #1182** (server), **PR #1180** (plugin-hyperia): `typescript` `5.9.3` → `6.0.3`
+- TypeScript 6.0 is a major release. Review the [TypeScript 6.0 announcement](https://devblogs.microsoft.com/typescript/announcing-typescript-6-0/) for breaking changes before upgrading other packages.
+- Other packages (shared, client, asset-forge) remain on TypeScript 5.x until explicitly upgraded.
+
+#### uWebSockets.js v20.64.0 (server)
+- **PR #1181**: `uWebSockets.js` `v20.60.0` → `v20.64.0`
+- **Performance**: v20.63.0 introduces 17% higher req/sec for String argument methods (requires Node.js 24+)
+- **New APIs**: `getRemotePort`, `getProxiedRemotePort`, `onDataV2`, `collectBody` helper
+- **Zero-cost address lookup**: `getRemoteAddress()` and `getRemoteAddressAsText()` are now zero-cost
+- **Stability**: v20.62.0 disables WebSocket.send V8 fastcall variant and `UWS_REMOTE_ADDRESS_USERSPACE` (suspected instability)
+
+#### lucide-react 1.8.0 (Major Version — client, shared, asset-forge)
+- **PR #1176**: `lucide-react` `0.577.0` → `1.8.0`
+- This is a **major version bump** (0.x → 1.x). The `text-select` icon was renamed to `square-dashed-text`.
+- If you use `TextSelect` from lucide-react, update to `SquareDashedText`.
+- New icons added: `bookmark-off`, `map-pin-search`, `radio-off`.
+
+#### @fastify/static 9.x (Major Version — server, shared, root)
+- **PR #1183** (server), **PR #1167** (shared), **PR #1175** (root): `@fastify/static` `8.3.0` → `9.1.x`
+- Major version bump. Review the [@fastify/static changelog](https://github.com/fastify/fastify-static/blob/main/CHANGELOG.md) for breaking changes.
+
+#### @fastify/multipart 10.0.0 (Major Version — server)
+- **PR #1173**: `@fastify/multipart` `9.4.0` → `10.0.0`
+- Major version bump. Review the [@fastify/multipart changelog](https://github.com/fastify/fastify-multipart/blob/main/CHANGELOG.md) for breaking changes.
+
+#### dotenv 17.4.2 (Major Version — root)
+- **PR #1171**: `dotenv` `16.6.1` → `17.4.2`
+- Major version bump. Review the [dotenv changelog](https://github.com/motdotla/dotenv/blob/master/CHANGELOG.md) for breaking changes.
+
+#### jsdom 29.0.2 (Major Version — shared dev)
+- **PR #1166**: `jsdom` `27.0.1` → `29.0.2`
+- Major version bump for test environment. Review the [jsdom changelog](https://github.com/jsdom/jsdom/blob/main/Changelog.md) for breaking changes.
+
+#### Bun Docker Image 1.3.14 (server Dockerfile)
+- **PR #1199**: `oven/bun` Docker image `1.3.10-alpine` → `1.3.14-alpine`
+- Applies to both builder and runtime stages in `packages/server/Dockerfile`.
+
+#### Three.js 0.184.0 (plugin-hyperia)
+- **PR #1195**: `three` `0.183.2` → `0.184.0` (plugin-hyperia only)
+- **PR #1196**: `@types/three` `0.183.1` → `0.184.1` (plugin-hyperia only)
+- Client and shared packages remain on Three.js 0.183.2.
+
+#### React DOM 19.2.5 (all packages)
+- **PR #1170**: `react-dom` `19.2.4` → `19.2.5` (patch — adds RSC cycle protections)
+
+#### msgpackr 2.0.2 (plugin-hyperia)
+- **PR #1197**: `msgpackr` `1.11.12` → `2.0.2`
+
+#### ElizaOS plugin-goals 2.0.0-alpha.10 (root, server)
+- **PR #1174** (root), **PR #1169** (server): `@elizaos/plugin-goals` `2.0.0-alpha.9` → `2.0.0-alpha.10`
+
+#### GitHub Actions Updates
+- **PR #1192**: `android-actions/setup-android` `3` → `4`
+- **PR #1191**: `actions/github-script` `8` → `9`
+- **PR #1190**: `appleboy/ssh-action` `1.0.3` → `1.2.5`
+
+**Migration Notes**:
+
+If you encounter issues after these updates:
+
+1. **TypeScript 6.0 errors**: TypeScript 6.0 has stricter type checking. Run `bun run typecheck` in `packages/server` and `packages/plugin-hyperia` to identify any new type errors.
+
+2. **lucide-react icon renames**: Search for `TextSelect` imports and replace with `SquareDashedText`.
+
+3. **@fastify/static or @fastify/multipart breaking changes**: Check route handlers that use file serving or multipart uploads for API changes.
+
+4. **uWebSockets.js v20.62.0 stability**: If you were relying on `UWS_REMOTE_ADDRESS_USERSPACE` or the WebSocket.send V8 fastcall variant, these are now disabled. Use standard `getRemoteAddress()` instead.
+
 ## Recent Changes (April 2026)
 
 ### Vegetation Model Caching Fixes (April 10, 2026)
