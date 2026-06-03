@@ -387,19 +387,22 @@ This project uses **Bun** (v1.3.10+) as the package manager and runtime for clie
 ## Tech Stack
 
 - **Runtime**: 
-  - **Client/Build**: Bun v1.3.10+ (upgraded from 1.1.38 for Vite 6+ compatibility)
+  - **Client/Build**: Bun v1.3.14+ (Docker image: `oven/bun:1.3.14-alpine`)
   - **Server**: Node.js 22+ (migrated from Bun for V8 incremental GC - March 2026)
 - **Rendering**: WebGPU ONLY (Three.js WebGPURenderer + TSL shaders) - NO WebGL
-- **Engine**: Three.js 0.183.2, PhysX (WASM)
-- **UI**: React 19.2.0, Tailwind CSS 3.4.19 (stable PostCSS pipeline)
-- **Server**: Fastify (HTTP), uWebSockets.js (game WebSocket), LiveKit (voice)
+- **Engine**: Three.js 0.183.2 (client/shared), Three.js 0.184.0 (plugin-hyperia), PhysX (WASM)
+- **UI**: React 19.2.5, Tailwind CSS 3.4.19 (stable PostCSS pipeline), lucide-react 1.8.0
+- **Server**: Fastify (HTTP), uWebSockets.js v20.64.0 (game WebSocket), LiveKit (voice)
+- **Server Plugins**: @fastify/static 9.1.2, @fastify/multipart 10.0.0
 - **Database**: PostgreSQL (production, connection pool: 20), Docker (local), sqlite3 6.0.1 (dev only)
-- **Testing**: Vitest 4.1.0+, Jest 30.3.0, Playwright (WebGPU-enabled browsers only)
+- **Testing**: Vitest 4.1.0+, Jest 30.3.0, Playwright (WebGPU-enabled browsers only), jsdom 29.0.2
 - **Build**: Vite 8.0.0, @vitejs/plugin-react 6.0.1, Turbo, esbuild
-- **AI**: ElizaOS `alpha` tag (aligned with latest alpha releases)
+- **TypeScript**: 6.0.3 (server, plugin-hyperia), 5.x (other packages)
+- **AI**: ElizaOS `alpha` tag (aligned with latest alpha releases), @elizaos/plugin-goals 2.0.0-alpha.10
 - **Streaming**: FFmpeg (system preferred over ffmpeg-static), Playwright Chromium, RTMP
 - **Mobile**: Capacitor 8.2.0 (Android, iOS)
 - **Smart Contracts**: Hardhat 3.1.11+, @nomicfoundation/hardhat-ethers 4.0.6 (ethers.js v6)
+- **Utilities**: dotenv 17.4.2, msgpackr 2.0.2 (plugin-hyperia)
 
 ## Recent Changes (April 2026)
 
