@@ -413,59 +413,72 @@ This project uses **Bun** (v1.3.14+) as the package manager and runtime for clie
 
 **Key Upgrades**:
 
-#### TypeScript 6.0.3 (Major Version — server, plugin-hyperia)
-- **PR #1182** (server), **PR #1180** (plugin-hyperia): `typescript` `5.9.3` → `6.0.3`
-- TypeScript 6.0 is a major release. Review the [TypeScript 6.0 announcement](https://devblogs.microsoft.com/typescript/announcing-typescript-6-0/) for breaking changes before upgrading other packages.
-- Other packages (shared, client, asset-forge) remain on TypeScript 5.x until explicitly upgraded.
+#### Three.js 0.184.0 (shared, plugin-hyperia)
+- **PR #1220** (shared), **PR #1218** (client), **PR #1195** (plugin-hyperia): `three` `0.183.2` → `0.184.0`
+- **PR #1196**: `@types/three` `0.183.1` → `0.184.1` (plugin-hyperia)
+- Three.js 0.184.0 includes WebGPU renderer improvements and TSL shader enhancements.
 
-#### uWebSockets.js v20.64.0 (server)
-- **PR #1181**: `uWebSockets.js` `v20.60.0` → `v20.64.0`
-- **Performance**: v20.63.0 introduces 17% higher req/sec for String argument methods (requires Node.js 24+)
-- **New APIs**: `getRemotePort`, `getProxiedRemotePort`, `onDataV2`, `collectBody` helper
-- **Zero-cost address lookup**: `getRemoteAddress()` and `getRemoteAddressAsText()` are now zero-cost
-- **Stability**: v20.62.0 disables WebSocket.send V8 fastcall variant and `UWS_REMOTE_ADDRESS_USERSPACE` (suspected instability)
+#### React 19.2.7 (all packages)
+- **PR #1229** (root), **PR #1222** (shared), **PR #1221** (client), **PR #1213** (asset-forge): `react` `19.2.5` → `19.2.7`
+- **PR #1226** (root), **PR #1205** (client): `react-dom` `19.2.5` → `19.2.7`
+- Patch release with bug fixes and stability improvements.
 
-#### lucide-react 1.8.0 (Major Version — client, shared, asset-forge)
-- **PR #1176**: `lucide-react` `0.577.0` → `1.8.0`
-- This is a **major version bump** (0.x → 1.x). The `text-select` icon was renamed to `square-dashed-text`.
-- If you use `TextSelect` from lucide-react, update to `SquareDashedText`.
-- New icons added: `bookmark-off`, `map-pin-search`, `radio-off`.
+#### uWebSockets.js v20.68.0 (server)
+- **PR #1228** (root), **PR #1227** (server): `uWebSockets.js` `v20.64.0` → `v20.68.0`
+- Performance and stability improvements. Review the [uWebSockets.js releases](https://github.com/uNetworking/uWebSockets.js/releases) for details.
 
-#### @fastify/static 9.x (Major Version — server, shared, root)
-- **PR #1183** (server), **PR #1167** (shared), **PR #1175** (root): `@fastify/static` `8.3.0` → `9.1.x`
-- Major version bump. Review the [@fastify/static changelog](https://github.com/fastify/fastify-static/blob/main/CHANGELOG.md) for breaking changes.
+#### uuid 14.0.0 (Major Version — server)
+- **PR #1230** (root), **PR #1204** (server): `uuid` `13.0.2` → `14.0.0`
+- Major version bump. Review the [uuid changelog](https://github.com/uuidjs/uuid/blob/main/CHANGELOG.md) for breaking changes.
 
-#### @fastify/multipart 10.0.0 (Major Version — server)
-- **PR #1173**: `@fastify/multipart` `9.4.0` → `10.0.0`
+#### msgpackr 2.0.2 (Major Version — shared, client, server, plugin-hyperia)
+- **PR #1223** (shared), **PR #1216** (client), **PR #1207** (server), **PR #1197** (plugin-hyperia): `msgpackr` `1.11.12` → `2.0.2`
+- Major version bump for the MessagePack serialization library used for network packets.
+
+#### immer 11.1.8 (Major Version — root, asset-forge)
+- **PR #1217** (root), **PR #1206** (asset-forge): `immer` `10.2.0` → `11.1.8`
+- Major version bump. Review the [immer changelog](https://github.com/immerjs/immer/blob/main/CHANGELOG.md) for breaking changes.
+
+#### puppeteer 25.1.0 (Major Version — root)
+- **PR #1224**: `puppeteer` `24.43.1` → `25.1.0`
+- Major version bump for the browser automation library used in streaming.
+
+#### jsdom 29.1.1 (shared, client)
+- **PR #1225** (root), **PR #1214** (shared), **PR #1208** (client): `jsdom` `29.0.2` → `29.1.1`
+- Minor version update with bug fixes for the test environment.
+
+#### @pixiv/three-vrm 3.5.3 (shared)
+- **PR #1215**: `@pixiv/three-vrm` `3.5.1` → `3.5.3`
+- Patch update for VRM avatar support.
+
+#### commander 15.0.0 (Major Version — server)
+- **PR #1219** (root), **PR #1203** (server): `commander` `14.0.3` → `15.0.0`
+- Major version bump for the CLI argument parsing library.
+
+#### @fastify/multipart 10.0.0 (Major Version — shared)
+- **PR #1211**: `@fastify/multipart` `9.4.0` → `10.0.0` (shared package)
 - Major version bump. Review the [@fastify/multipart changelog](https://github.com/fastify/fastify-multipart/blob/main/CHANGELOG.md) for breaking changes.
 
-#### dotenv 17.4.2 (Major Version — root)
-- **PR #1171**: `dotenv` `16.6.1` → `17.4.2`
-- Major version bump. Review the [dotenv changelog](https://github.com/motdotla/dotenv/blob/master/CHANGELOG.md) for breaking changes.
+#### @fastify/static 9.1.2 (server)
+- **PR #1183**: `@fastify/static` `8.3.0` → `9.1.2` (server)
+- Major version bump. Review the [@fastify/static changelog](https://github.com/fastify/fastify-static/blob/main/CHANGELOG.md) for breaking changes.
 
-#### jsdom 29.0.2 (Major Version — shared dev)
-- **PR #1166**: `jsdom` `27.0.1` → `29.0.2`
-- Major version bump for test environment. Review the [jsdom changelog](https://github.com/jsdom/jsdom/blob/main/Changelog.md) for breaking changes.
+#### concurrently 10.0.3 (Major Version — asset-forge)
+- **PR #1212**: `concurrently` `9.2.1` → `10.0.3` (asset-forge)
+- Major version bump for the concurrent process runner.
+
+#### eslint-plugin-react-hooks 7.1.1 (Major Version — asset-forge)
+- **PR #1209**: `eslint-plugin-react-hooks` `5.2.0` → `7.1.1` (asset-forge)
+- Major version bump for the React hooks ESLint plugin.
 
 #### Bun Docker Image 1.3.14 (server Dockerfile)
 - **PR #1199**: `oven/bun` Docker image `1.3.10-alpine` → `1.3.14-alpine`
 - Applies to both builder and runtime stages in `packages/server/Dockerfile`.
 
-#### Three.js 0.184.0 (plugin-hyperia)
-- **PR #1195**: `three` `0.183.2` → `0.184.0` (plugin-hyperia only)
-- **PR #1196**: `@types/three` `0.183.1` → `0.184.1` (plugin-hyperia only)
-- Client and shared packages remain on Three.js 0.183.2.
-
-#### React DOM 19.2.5 (all packages)
-- **PR #1170**: `react-dom` `19.2.4` → `19.2.5` (patch — adds RSC cycle protections)
-
-#### msgpackr 2.0.2 (plugin-hyperia)
-- **PR #1197**: `msgpackr` `1.11.12` → `2.0.2`
-
-#### ElizaOS plugin-goals 2.0.0-alpha.10 (root, server)
-- **PR #1174** (root), **PR #1169** (server): `@elizaos/plugin-goals` `2.0.0-alpha.9` → `2.0.0-alpha.10`
-
 #### GitHub Actions Updates
+- **PR #1202**: `softprops/action-gh-release` `2` → `3`
+- **PR #1201**: `actions/configure-pages` `5` → `6`
+- **PR #1200**: `actions/upload-pages-artifact` `3` → `5`
 - **PR #1192**: `android-actions/setup-android` `3` → `4`
 - **PR #1191**: `actions/github-script` `8` → `9`
 - **PR #1190**: `appleboy/ssh-action` `1.0.3` → `1.2.5`
@@ -474,13 +487,15 @@ This project uses **Bun** (v1.3.14+) as the package manager and runtime for clie
 
 If you encounter issues after these updates:
 
-1. **TypeScript 6.0 errors**: TypeScript 6.0 has stricter type checking. Run `bun run typecheck` in `packages/server` and `packages/plugin-hyperia` to identify any new type errors.
+1. **uuid 14.0.0**: Review any code that uses `uuid` for API changes. The `v4()` function signature is unchanged but other exports may differ.
 
-2. **lucide-react icon renames**: Search for `TextSelect` imports and replace with `SquareDashedText`.
+2. **msgpackr 2.0.2**: Major version bump — if you use msgpackr directly (not through the game's networking layer), review the [msgpackr changelog](https://github.com/kriszyp/msgpackr/releases) for breaking changes.
 
-3. **@fastify/static or @fastify/multipart breaking changes**: Check route handlers that use file serving or multipart uploads for API changes.
+3. **immer 11.x**: If you use immer in custom code, review the [immer v11 migration guide](https://immerjs.github.io/immer/update-patterns).
 
-4. **uWebSockets.js v20.62.0 stability**: If you were relying on `UWS_REMOTE_ADDRESS_USERSPACE` or the WebSocket.send V8 fastcall variant, these are now disabled. Use standard `getRemoteAddress()` instead.
+4. **@fastify/multipart 10.0.0**: Check route handlers that use multipart uploads for API changes.
+
+5. **commander 15.0.0**: If you use commander in custom scripts, review the [commander changelog](https://github.com/tj/commander.js/blob/master/CHANGELOG.md) for breaking changes.
 
 ## Recent Changes (April 2026)
 
