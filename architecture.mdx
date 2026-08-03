@@ -657,7 +657,7 @@ The codebase includes TODO comments tracking architectural refactoring opportuni
 The build system handles circular dependencies between packages gracefully:
 
 **procgen ↔ shared circular dependency (FIXED):**
-- **Previous Issue**: `@hyperscape/shared` imports from `@hyperscape/procgen`, procgen imports from shared
+- **Previous Issue**: `@hyperia/shared` imports from `@hyperia/procgen`, procgen imports from shared
 - **Solution** (commits 3b9c0f2, 05c2892):
   - Removed cross-references entirely from both package.json files
   - Added procgen as devDependency in shared for TypeScript type resolution
