@@ -78,7 +78,7 @@
     "raiseIssue": true
   },
   "api": {
-    "baseUrl": "https://api.hyperscape.lol",
+    "baseUrl": "https://api.hyperia.gg",
     "playground": {
       "mode": "simple"
     },
