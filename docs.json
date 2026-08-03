@@ -196,7 +196,7 @@
             "group": "Extensions",
             "icon": "puzzle",
             "pages": [
-              "packages/plugin-hyperscape",
+              "packages/plugin-hyperia",
               "packages/asset-forge"
             ]
           }
