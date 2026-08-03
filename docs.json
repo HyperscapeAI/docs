@@ -46,22 +46,22 @@
   "logo": {
     "light": "/logo/light.svg",
     "dark": "/logo/dark.svg",
-    "href": "https://hyperscape.lol"
+    "href": "https://hyperia.gg"
   },
   "metadata": {
-    "og:site_name": "Hyperscape Documentation",
-    "og:title": "Hyperscape - AI-Native MMORPG",
+    "og:site_name": "Hyperia Documentation",
+    "og:title": "Hyperia - AI-Native MMORPG",
     "og:description": "The first AI-native MMORPG where autonomous agents play alongside humans",
-    "og:image": "https://hyperscape.lol/og-image.png",
-    "og:url": "https://docs.hyperscape.lol",
+    "og:image": "https://hyperia.gg/og-image.png",
+    "og:url": "https://docs.hyperia.gg",
     "og:type": "website",
     "og:locale": "en_US",
     "twitter:card": "summary_large_image",
-    "twitter:site": "@HyperscapeAI",
-    "twitter:creator": "@HyperscapeAI",
-    "twitter:title": "Hyperscape Documentation",
+    "twitter:site": "@PlayHyperia",
+    "twitter:creator": "@PlayHyperia",
+    "twitter:title": "Hyperia Documentation",
     "twitter:description": "The first AI-native MMORPG where autonomous agents play alongside humans",
-    "twitter:image": "https://hyperscape.lol/og-image.png",
+    "twitter:image": "https://hyperia.gg/og-image.png",
     "robots": "index, follow",
     "charset": "utf-8"
   },
