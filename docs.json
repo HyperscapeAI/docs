@@ -349,11 +349,11 @@
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/HyperscapeAI",
-      "github": "https://github.com/HyperscapeAI",
+      "x": "https://x.com/PlayHyperia",
+      "github": "https://github.com/PlayHyperia",
       "discord": "https://discord.gg/JD3MEwNbbX",
-      "youtube": "https://youtube.com/@HyperscapeAI",
-      "linkedin": "https://linkedin.com/company/hyperscape"
+      "youtube": "https://youtube.com/@PlayHyperia",
+      "linkedin": "https://linkedin.com/company/hyperia"
     },
     "links": [
       {
@@ -369,7 +369,7 @@
           },
           {
             "label": "GitHub",
-            "href": "https://github.com/HyperscapeAI/hyperscape"
+            "href": "https://github.com/PlayHyperia/hyperforge"
           }
         ]
       },
@@ -382,11 +382,11 @@
           },
           {
             "label": "Twitter",
-            "href": "https://x.com/HyperscapeAI"
+            "href": "https://x.com/PlayHyperia"
           },
           {
             "label": "Blog",
-            "href": "https://blog.hyperscape.lol"
+            "href": "https://blog.hyperia.gg"
           }
         ]
       },
@@ -395,11 +395,11 @@
         "items": [
           {
             "label": "Privacy Policy",
-            "href": "https://hyperscape.lol/privacy"
+            "href": "https://hyperia.gg/privacy"
           },
           {
             "label": "Terms of Service",
-            "href": "https://hyperscape.lol/terms"
+            "href": "https://hyperia.gg/terms"
           }
         ]
       }
